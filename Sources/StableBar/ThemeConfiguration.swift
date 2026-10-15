@@ -8,12 +8,18 @@ struct ConfigurationContext: Sendable, Equatable {
     var app = ""
 }
 
-struct ConfigurationProfile: Decodable {
+struct ConfigurationProfile: Codable, Equatable {
     let name: String
-    let when: ProfileConditions?
-    let configuration: [String: ConfigurationValue]
+    var when: ProfileConditions?
+    var configuration: [String: ConfigurationValue]
 
     enum CodingKeys: String, CodingKey, CaseIterable { case name, when, configuration }
+
+    init(name: String, when: ProfileConditions?, configuration: [String: ConfigurationValue]) {
+        self.name = name
+        self.when = when
+        self.configuration = configuration
+    }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
@@ -24,14 +30,16 @@ struct ConfigurationProfile: Decodable {
     }
 }
 
-struct ProfileConditions: Decodable {
-    let appearance: String?
-    let onBattery: Bool?
-    let displayCount: Int?
-    let externalDisplay: Bool?
-    let app: String?
+struct ProfileConditions: Codable, Equatable {
+    var appearance: String?
+    var onBattery: Bool?
+    var displayCount: Int?
+    var externalDisplay: Bool?
+    var app: String?
 
     enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app }
+
+    init() {}
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)

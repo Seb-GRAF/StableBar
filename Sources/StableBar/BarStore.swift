@@ -9,7 +9,7 @@ final class BarStore: NSObject {
     var activeApp = NSWorkspace.shared.frontmostApplication
     var activeDisplayID = 1
     var scripts: [String: ScriptWidget] = [:]
-    let aerospace = AeroSpace()
+    let workspaceStore = WorkspaceStore()
     let popup = WidgetPopup()
     let configurationURL: URL
     var onConfigurationChange: (() -> Void)?
@@ -17,6 +17,8 @@ final class BarStore: NSObject {
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
     var activeProfiles: [String] = []
+    var profiles: [ConfigurationProfile] = []
+    var pinnedProfile: String?
     var sessionEdits: [ConfigurationEdit] = []
     var context = ConfigurationContext()
     private var providers: [String: ScriptWidget] = [:]
@@ -45,13 +47,13 @@ final class BarStore: NSObject {
             forName: LaunchCommand.reloadNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.reloadConfiguration() }
             }
-        aerospace.onWorkspaceChange = { [weak self] in
+        workspaceStore.onWorkspaceChange = { [weak self] in
             guard let self else { return }
             popup.close()
-            let focused = aerospace.workspaces.first(where: \.isFocused)
+            let focused = workspaceStore.workspaces.first(where: \.isFocused)
             refreshScripts(for: "workspace", environment: ["INFO": focused?.name ?? "", "SID": String(focused?.monitor ?? activeDisplayID)])
         }
-        aerospace.onModeChange = { [weak self] mode in
+        workspaceStore.onModeChange = { [weak self] mode in
             self?.refreshScripts(for: "aerospaceMode", environment: ["INFO": mode])
         }
         do {
@@ -126,7 +128,7 @@ final class BarStore: NSObject {
         for edit in edits {
             try edit.validateTargets(in: ids)
             root = try edit.applying(to: root, widgetIDs: &ids)
-            if edit.action == .profile || edit.action == .package {
+            if edit.action == .profile || edit.action == .profiles || edit.action == .package {
                 ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
             }
         }
@@ -154,6 +156,8 @@ final class BarStore: NSObject {
     }
 
     private func apply(_ next: Configuration) {
+        profiles = configurationLoader.profiles
+        pinnedProfile = configurationLoader.pinnedProfile
         if effectiveDocument == configurationLoader.document {
             origins = configurationLoader.origins
             activeProfiles = configurationLoader.activeProfiles
@@ -205,10 +209,13 @@ final class BarStore: NSObject {
             default: break
             }
         }
-        let needsAeroSpace = next.widgets.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) }
-        let hadAeroSpace = previous.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) }
-        if needsAeroSpace && !hadAeroSpace { aerospace.start() }
-        if !needsAeroSpace && hadAeroSpace { aerospace.stop() }
+        let needsWorkspaces = next.widgets.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) }
+        let hadWorkspaces = previous.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) }
+        let sourceChanged = workspaceStore.source != next.workspaceSource
+        workspaceStore.source = next.workspaceSource
+        if sourceChanged { workspaceStore.workspaces = []; workspaceStore.error = nil }
+        if needsWorkspaces && (!hadWorkspaces || sourceChanged) { workspaceStore.start() }
+        if !needsWorkspaces && hadWorkspaces { workspaceStore.stop() }
         configuration = next
         effectiveDocument = configurationLoader.document
         origins = configurationLoader.origins
@@ -216,7 +223,8 @@ final class BarStore: NSObject {
         configurationError = nil
         let center = DistributedNotificationCenter.default()
         for observer in eventObservers { center.removeObserver(observer) }
-        let events = Set(next.widgets.filter(\.enabled).flatMap(\.events) + usedProviders.flatMap { next.providers[$0]!.events })
+        let events = Set(next.widgets.filter(\.enabled).flatMap(\.events) + usedProviders.flatMap { next.providers[$0]!.events }
+                         + (needsWorkspaces && next.workspaceSource == .yabai ? ["yabai"] : []))
         eventObservers = events.map { event in
             center.addObserver(forName: Notification.Name(event), object: nil, queue: .main) { [weak self] notification in
                 var environment = withoutShellVariables(notification.userInfo as? [String: String] ?? [:])
@@ -334,6 +342,7 @@ final class BarStore: NSObject {
     }
 
     func refreshScripts(for event: String, environment: [String: String] = [:]) {
+        if event == "yabai" { workspaceStore.trigger() }
         var refreshed = Set<ObjectIdentifier>()
         for widget in configuration?.widgets ?? [] {
             let providerEvents: [String]
@@ -385,7 +394,7 @@ final class BarStore: NSObject {
         popup.close()
         reloadTask?.cancel()
         configurationWatcher.stop()
-        aerospace.stop()
+        workspaceStore.stop()
         for script in scripts.values { script.stop() }
         providers.removeAll()
         scripts.removeAll()

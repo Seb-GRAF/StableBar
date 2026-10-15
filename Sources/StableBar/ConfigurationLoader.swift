@@ -182,6 +182,8 @@ struct ConfigurationLoader {
     private(set) var document: [String: ConfigurationValue] = [:]
     private(set) var origins: [String: ConfigurationOrigin] = [:]
     private(set) var activeProfiles: [String] = []
+    private(set) var profiles: [ConfigurationProfile] = []
+    private(set) var pinnedProfile: String?
     private(set) var matchesApps = false
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private var packageSources: [String: URL] = [:]
@@ -216,9 +218,10 @@ struct ConfigurationLoader {
     mutating func finish(_ input: ConfigurationLayer, context: ConfigurationContext) throws -> [String: ConfigurationValue] {
         var layer = input
         activeProfiles = []
-        let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []
+        profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []
         matchesApps = profiles.contains { $0.when?.app != nil }
         let selected = try layer.values["profile"].flatMap { try $0.decoded(String?.self) }
+        pinnedProfile = selected
         var names = Set<String>()
         for profile in profiles {
             guard names.insert(profile.name).inserted else { throw ThemeConfigurationError.duplicateProfile(profile.name) }

@@ -112,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.refreshContext()
         updatePanels()
         if store.configuration?.widgets.contains(where: { $0.enabled && ($0.content == .workspaces || $0.display == .active) }) == true {
-            store.aerospace.start()
+            store.workspaceStore.start()
         }
     }
 
@@ -170,8 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addItem("Set up StableBar…", action: #selector(showSetup), to: menu)
         addItem("Open configuration file…", action: #selector(openConfiguration), to: menu)
         addItem("Reload configuration", action: #selector(reloadConfiguration), to: menu)
-        addItem("Reconnect AeroSpace", action: #selector(reconnect), to: menu)
-        if let error = store.configurationError ?? store.aerospace.error {
+        addItem("Reconnect \(store.workspaceStore.source.title)", action: #selector(reconnect), to: menu)
+        if let error = store.configurationError ?? store.workspaceStore.error {
             menu.addItem(.separator())
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")
         }
@@ -188,7 +188,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showSetup() { setup.show(store: store) }
     @objc private func openConfiguration() { store.openConfiguration() }
     @objc private func reloadConfiguration() { store.reloadConfiguration() }
-    @objc private func reconnect() { store.aerospace.start() }
+    @objc private func reconnect() { store.workspaceStore.start() }
     @objc private func quit() { NSApp.terminate(nil) }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

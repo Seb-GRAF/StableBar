@@ -192,8 +192,8 @@ struct SetupView: View {
                 HStack(alignment: .top, spacing: 14) {
                     Image(systemName: "rectangle.3.group").font(.title2).frame(width: 28)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("AeroSpace · Optional").font(.headline)
-                        Text("Workspace widgets use AeroSpace. Grant Accessibility access to AeroSpace in its own setup, not to StableBar. To keep windows clear of the bar, set \(Text("gaps.outer.top = \(String(format: "%g", store.configuration?.bar.height ?? 40))").monospaced()) in AeroSpace's configuration.")
+                        Text("Window manager · Optional").font(.headline)
+                        Text("Workspace widgets use AeroSpace or yabai. Grant Accessibility access to your window manager in its own setup. To keep windows clear of the bar, set \(Text("gaps.outer.top = \(String(format: "%g", store.configuration?.bar.height ?? 40))").monospaced()) in AeroSpace's configuration, or use yabai's external_bar setting.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 8)
@@ -264,7 +264,7 @@ struct SetupView: View {
             var loader = ConfigurationLoader()
             preview.configuration = try loader.load(store.configurationURL, data: data, context: store.context)
             preview.scripts = store.scripts
-            preview.aerospace.workspaces = store.aerospace.workspaces
+            preview.workspaceStore.workspaces = store.workspaceStore.workspaces
             error = nil
         } catch {
             self.error = errorMessage(error)

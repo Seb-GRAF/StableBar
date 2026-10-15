@@ -82,7 +82,7 @@ private extension WidgetContent {
         switch self {
         case .spacer: ["type": .string("spacer")]
         case let .provider(name): ["type": .string("provider"), "provider": .string(name)]
-        case .workspaces: ["type": .string("aerospace")]
+        case .workspaces: ["type": .string("workspaces")]
         case .activeApp: ["type": .string("activeApp")]
         case let .clock(format): ["type": .string("clock"), "format": .string(format)]
         case let .text(text): ["type": .string("text"), "text": .string(text)]
@@ -102,6 +102,7 @@ private struct ConfigurationEditorView: View {
     @State private var editor: ConfigurationEditor
     @State private var advanced = "{}"
     @State private var showsBar = false
+    @State private var showsProfiles = false
     @Environment(\.colorScheme) private var colorScheme
 
     init(store: BarStore) {
@@ -113,17 +114,30 @@ private struct ConfigurationEditorView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HSplitView {
-                sidebar.frame(minWidth: 210, maxWidth: 280)
-                Group {
-                    if let widget = widgets.first(where: { $0.id == editor.selectedID }) {
-                        inspector(widget)
-                    } else {
-                        ContentUnavailableView("Select a widget", systemImage: "sidebar.left",
-                                               description: Text("Choose a widget to change how it looks and where it sits."))
+            Picker("Edit", selection: $showsProfiles) {
+                Text("Widgets").tag(false)
+                Text("Profiles").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+            .padding(12)
+            Divider()
+            if showsProfiles {
+                ProfilesView(editor: editor)
+            } else {
+                HSplitView {
+                    sidebar.frame(minWidth: 210, maxWidth: 280)
+                    Group {
+                        if let widget = widgets.first(where: { $0.id == editor.selectedID }) {
+                            inspector(widget)
+                        } else {
+                            ContentUnavailableView("Select a widget", systemImage: "sidebar.left",
+                                                   description: Text("Choose a widget to change how it looks and where it sits."))
+                        }
                     }
+                    .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
             }
             if let error = editor.error ?? store.configurationError {
                 Label(error, systemImage: "exclamationmark.triangle.fill")

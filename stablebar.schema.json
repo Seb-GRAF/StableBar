@@ -7,6 +7,10 @@
     "$schema": {
       "type": "string"
     },
+    "workspaceSource": {
+      "type": "string",
+      "enum": ["aerospace", "yabai"]
+    },
     "includes": {
       "$ref": "#/definitions/strings",
       "description": "Files to compose before this one, relative to this file."
@@ -758,6 +762,7 @@
             {
               "enum": [
                 "aerospace",
+                "workspaces",
                 "activeApp",
                 "clock",
                 "text",

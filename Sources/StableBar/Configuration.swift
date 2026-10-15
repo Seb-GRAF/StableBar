@@ -275,7 +275,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         switch try values.decode(String.self, forKey: .type) {
         case "spacer": content = .spacer
         case "provider": content = .provider(try values.decode(String.self, forKey: .provider))
-        case "aerospace": content = .workspaces
+        case "aerospace", "workspaces": content = .workspaces
         case "activeApp": content = .activeApp
         case "clock": content = .clock(format: try values.decodeIfPresent(String.self, forKey: .format) ?? "EEE d MMM  HH:mm")
         case "text": content = .text(try values.decode(String.self, forKey: .text))
@@ -336,6 +336,7 @@ struct BarSettings: Decodable, Sendable {
 }
 
 struct Configuration: Decodable, Sendable {
+    let workspaceSource: WorkspaceSource
     let bar: BarSettings
     let defaults: WidgetStyle
     let widgets: [WidgetConfiguration]
@@ -345,11 +346,12 @@ struct Configuration: Decodable, Sendable {
     let providers: [String: ProviderConfiguration]
     let groups: [String: WidgetGroupConfiguration]
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case bar, defaults, widgets, popups, templates, widgetOverrides, environment, providers, groups }
+    enum CodingKeys: String, CodingKey, CaseIterable { case workspaceSource, bar, defaults, widgets, popups, templates, widgetOverrides, environment, providers, groups }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self, allowing: ["$schema", "tokens", "packages"])
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        workspaceSource = try values.decodeIfPresent(WorkspaceSource.self, forKey: .workspaceSource) ?? .aerospace
         bar = try values.decodeIfPresent(BarSettings.self, forKey: .bar) ?? BarSettings()
         defaults = try values.decodeIfPresent(WidgetStyle.self, forKey: .defaults) ?? WidgetStyle()
         let templates = try values.decodeIfPresent([String: [String: ConfigurationValue]].self, forKey: .templates) ?? [:]

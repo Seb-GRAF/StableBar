@@ -8,13 +8,13 @@ The default configuration includes a System Settings shortcut, the active app an
 
 Open `StableBar.dmg`, drag StableBar to Applications, then open the app. The first launch walks you through a bar preview, widget appearance, placement, clock format, and opening at login. Setup is also available from the menu-bar icon or by right-clicking the bar.
 
-The starter bar needs no special permissions. Scripts that control other apps may prompt for Automation access when used; setup links to the relevant System Settings. AeroSpace manages its own Accessibility permission. Opening at login uses macOS Login Items and is off until you enable it.
+The starter bar needs no special permissions. Scripts that control other apps may prompt for Automation access when used; setup links to the relevant System Settings. AeroSpace and yabai manage their own Accessibility permission. Opening at login uses macOS Login Items and is off until you enable it.
 
 Widgets follow the system's light or dark mode unless you pick a fixed appearance, which sets the global widget colors; individual widget styles still take precedence. Setup preserves custom widgets, scripts, and other settings. Closing setup leaves it available on the next launch. New configurations place the bar below the macOS menu bar; existing configurations retain their position.
 
 ## Build and run
 
-Requires macOS 14+ and Xcode's Swift 6 toolchain. Optional workspace widgets require AeroSpace 0.21+ on your login shell's `PATH`.
+Requires macOS 14+ and Xcode's Swift 6 toolchain. Optional workspace widgets require AeroSpace 0.21+ or yabai on your login shell's `PATH`.
 
 Quit the running app before rebuilding its bundle.
 
@@ -29,7 +29,7 @@ For development checks:
 swift test
 ```
 
-The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. Right-click the bar or use its macOS menu-bar icon to open the configuration, reload it, reconnect AeroSpace or quit.
+The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. Right-click the bar or use its macOS menu-bar icon to open the configuration, reload it, reconnect the workspace source or quit.
 
 ### Build an installer
 
@@ -68,6 +68,7 @@ Unknown properties are errors, so a misspelled key cannot be silently ignored. T
 
 - `bar`: `height`, `offset`, `inset`, `spacing`, `background`, `animationDuration` (seconds), `displayScale`.
 - `defaults`: styles inherited by every widget.
+- `workspaceSource`: `aerospace` (default) or `yabai`, for workspace widgets and active-display tracking.
 - `widgets`: ordered widget definitions with unique `id`, `type`, `position` and optional `style`, `icon`, `onClick`, `menu`, `popup`.
 - `position`: `left`, `notchLeft`, `center`, `notchRight` or `right`.
 - Colors: `#RRGGBB` or `#RRGGBBAA` (alpha last).
@@ -160,6 +161,8 @@ Profiles match `appearance` (`light` or `dark`), `onBattery`, `displayCount`, `e
 
 Set `"profile": "laptop"` to apply only that profile, regardless of its conditions. Remove `profile` to resume automatic matching, or set it to `null` to override a manual profile inherited from a module. The inspector reports active profiles and the file, template, override and token sources behind effective widget properties.
 
+In **Customize StableBar → Editor → Profiles**, add profiles, edit their conditions and configuration, or choose Automatic matching or a pinned profile. Changes use the editor's Undo, Redo, Save and Discard controls. Editing profiles imported from another file writes the full profile list into the main file, preserving their order and configuration; the imported file stays unchanged.
+
 Setup, the editor and the command line save changes into the main file's ordinary keys and never edit imported files. A widget defined in the main file, including inside one of its profiles, is changed, removed or reordered where it is defined. A widget from an include or package gets an entry in the main file's `widgetOverrides`; removing it sets `enabled` to `false`. Bar and default-style changes merge into `bar` and `defaults`. Untouched parts of the file keep their formatting and key order. An active profile still applies on top of these changes.
 
 When every widget comes from the main file's `widgets` array, reordering changes that array. Otherwise the order is saved in `widgetOrder`: listed IDs come first, unlisted widgets keep their relative order, and IDs that are not currently present, such as widgets of an inactive profile, are skipped.
@@ -211,7 +214,7 @@ Package selections in modules merge by package ID, with later modules and the ro
 
 `notchLeft` ends before the notch and `notchRight` starts after it. `bar.notchSpacing` controls the gap on each side (16 by default). The notch comes from the screen's unobscured top areas; `bar.notchWidth` can override its width. On screens without a notch, `notchLeft`, `center` and `notchRight` form one centered group, measured from the visible content. Hidden groups leave no gap. With a notch, `center` remains at the screen's center and should be left empty.
 
-Each widget accepts `display`: `"all"` (default), `"active"`, `"main"`, `"builtIn"`, `"external"`, `"notched"`, `"unnotched"`, or an array of screen numbers, for example `[1, 2]`. Numbers are one-based positions in `NSScreen.screens`, matching AeroSpace and SketchyBar; they can change when displays are rearranged. `active` follows AeroSpace focus. Use `aerospace list-monitors --format '%{monitor-name}|%{monitor-appkit-nsscreen-screens-id}'` to list them.
+Each widget accepts `display`: `"all"` (default), `"active"`, `"main"`, `"builtIn"`, `"external"`, `"notched"`, `"unnotched"`, or an array of screen numbers, for example `[1, 2]`. Numbers are one-based positions in `NSScreen.screens`, matching AeroSpace and SketchyBar; they can change when displays are rearranged. `active` follows the configured workspace source's focus. With AeroSpace, use `aerospace list-monitors --format '%{monitor-name}|%{monitor-appkit-nsscreen-screens-id}'` to list them. yabai display IDs are mapped to these screen numbers, independently of yabai's display ordering.
 
 Set `bar.displayScale` to `{ "builtIn": 0.85, "external": 1 }` to shrink the laptop bar while keeping external displays at their original size. Each factor scales the bar height, widgets, text and spacing; omitted display types use `1`. Factors must be positive, and other keys are rejected. The bar offset and popup sizes stay in screen points. This setting also works inside automatic profiles.
 
@@ -262,7 +265,7 @@ Widgets and blocks accept `animation` with `duration` in seconds and `curve`: `l
 
 ### Workspace appearance
 
-An `aerospace` widget accepts `workspace` with:
+A `workspaces` widget (also accepted as `aerospace`) accepts `workspace` with:
 
 - `indicator`: `background` (default), `underline` or `none`.
 - `indicatorStyle`: underline `height`, `width`, `background`, `cornerRadius`, `offsetX`, `offsetY`.
@@ -369,7 +372,7 @@ The **Packages** tab reviews local folders and their declared commands, edits ty
 
 | Type | Content | Additional fields |
 | --- | --- | --- |
-| `aerospace` | Occupied or visible workspaces on this display, with app icons; click to switch | — |
+| `workspaces` (or `aerospace`) | Occupied or visible workspaces on this display, with app icons; click to switch | — |
 | `activeApp` | Frontmost app name and icon | — |
 | `clock` | Local date/time, updated each minute, or each second when the format shows seconds | `format`: DateFormatter format |
 | `text` | Static text and optional icon | `text` |
@@ -378,6 +381,32 @@ The **Packages** tab reviews local folders and their declared commands, edits ty
 | `system`, `network`, `battery`, `audio` | Native CPU and memory, network, battery or audio output data | — |
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace. Active-app updates come from NSWorkspace notifications.
+
+### yabai workspaces
+
+Set the source at the top level of your configuration:
+
+```json
+{
+  "workspaceSource": "yabai",
+  "widgets": [{ "id": "spaces", "type": "workspaces", "position": "left" }]
+}
+```
+
+StableBar reads spaces, windows and displays at startup. Space numbers, app icons, focus animations, `workspace` styling and `"display": "active"` use the same view as AeroSpace. Clicking a space runs `yabai -m space --focus NUMBER`.
+
+Add these [yabai signals](https://github.com/koekeishiya/yabai/blob/master/doc/yabai.asciidoc#signal) to `~/.yabairc` to refresh after changes:
+
+```sh
+for event in space_changed space_created space_destroyed display_changed display_added display_removed display_moved \
+             window_created window_destroyed window_focused window_moved window_minimized window_deminimized \
+             application_hidden application_visible system_woke; do
+  yabai -m signal --add label="stablebar-$event" event="$event" \
+    action='/Applications/StableBar.app/Contents/MacOS/StableBar --trigger yabai'
+done
+```
+
+Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` if you use a different configuration. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
 
 ## Create a widget
 
@@ -613,7 +642,8 @@ For new native widget types, add a case to `WidgetContent`, decode its settings 
 - [ConfigurationEditor.swift](Sources/StableBar/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
 - [NativeMetrics.swift](Sources/StableBar/NativeMetrics.swift): public macOS metric sources.
 - [WidgetPackage.swift](Sources/StableBar/WidgetPackage.swift): local package inspection, installation and version selection.
-- [AeroSpace.swift](Sources/StableBar/AeroSpace.swift): event subscription and workspace actions.
+- [Workspaces.swift](Sources/StableBar/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
+- [Yabai.swift](Sources/StableBar/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
 - [ScriptWidget.swift](Sources/StableBar/ScriptWidget.swift): custom widget output and refresh tasks.
 - [BarView.swift](Sources/StableBar/BarView.swift): native rendering and selection animation.
 - [LayoutConfiguration.swift](Sources/StableBar/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
@@ -648,3 +678,7 @@ Skills for coding agents live in [.agents/skills](.agents/skills), one folder pe
 | [triage](.agents/skills/triage/SKILL.md) | Checks a bug report or feature request against issues, pull requests, `main` and releases, and drafts a GitHub issue when nothing covers it. It posts only what you asked it to file or approved. |
 
 To add a skill, create `.agents/skills/<name>/SKILL.md` with `name` and `description` front matter.
+
+## License
+
+StableBar is available under the [MIT License](LICENSE), including commercial use and redistribution.

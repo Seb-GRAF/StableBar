@@ -135,38 +135,56 @@ import Testing
     #expect(snapshot[2].apps.isEmpty)
 }
 
+@Test func yabaiSnapshotMapsDisplaysAndAppWindowsToWorkspaces() throws {
+    let spaces = Data(#"[{"index":10,"display":1,"has-focus":false,"is-visible":false},{"index":2,"display":1,"has-focus":true,"is-visible":true},{"index":1,"display":2,"has-focus":false,"is-visible":true}]"#.utf8)
+    let windows = Data(#"[{"pid":41,"app":"Safari","space":1},{"pid":42,"app":"Finder","space":1},{"pid":43,"app":"Safari","space":1},{"pid":41,"app":"Safari","space":2}]"#.utf8)
+    let displays = Data(#"[{"id":80,"index":1},{"id":90,"index":2}]"#.utf8)
+    let snapshot = try yabaiSnapshot(spaces: spaces, windows: windows, displays: displays, screenIDs: [90, 80],
+                                     bundleIDs: [41: "com.apple.Safari", 42: "com.apple.finder", 43: "com.apple.Safari"])
+    #expect(snapshot.map(\.name) == ["1", "2", "10"])
+    #expect(snapshot.map(\.monitor) == [1, 2, 2])
+    #expect(snapshot[1].isFocused)
+    #expect(snapshot[0].isVisible)
+    #expect(snapshot[0].apps.map(\.bundleID) == ["com.apple.finder", "com.apple.Safari"])
+    #expect(snapshot[1].apps.count == 1)
+    #expect(snapshot[2].apps.isEmpty)
+    let disconnected = try yabaiSnapshot(spaces: spaces, windows: windows, displays: displays, screenIDs: [90], bundleIDs: [:])
+    #expect(disconnected.map(\.name) == ["1"])
+    #expect(disconnected[0].apps.map(\.name) == ["Finder", "Safari"])
+}
+
 @Test @MainActor func displayedWorkspacesKeepEmptyVisibleSpacesOnTheirMonitor() {
-    let aerospace = AeroSpace()
-    aerospace.workspaces = [
+    let workspaceStore = WorkspaceStore()
+    workspaceStore.workspaces = [
         Workspace(name: "1", isFocused: false, isVisible: false, monitor: 1,
                   apps: [WorkspaceApp(workspace: "1", name: "Finder", bundleID: "com.apple.finder")]),
         Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1),
         Workspace(name: "3", isFocused: true, isVisible: true, monitor: 1),
         Workspace(name: "4", isFocused: false, isVisible: true, monitor: 2)
     ]
-    #expect(aerospace.workspaces(on: 1, showEmpty: false).map(\.name) == ["1", "3"])
-    #expect(aerospace.workspaces(on: 1, showEmpty: true).map(\.name) == ["1", "2", "3"])
-    #expect(aerospace.workspaces(on: 2, showEmpty: false).map(\.name) == ["4"])
-    #expect(aerospace.workspaces(on: 3, showEmpty: false).isEmpty)
+    #expect(workspaceStore.workspaces(on: 1, showEmpty: false).map(\.name) == ["1", "3"])
+    #expect(workspaceStore.workspaces(on: 1, showEmpty: true).map(\.name) == ["1", "2", "3"])
+    #expect(workspaceStore.workspaces(on: 2, showEmpty: false).map(\.name) == ["4"])
+    #expect(workspaceStore.workspaces(on: 3, showEmpty: false).isEmpty)
 
-    aerospace.workspaces[2] = Workspace(name: "3", isFocused: false, isVisible: false, monitor: 1)
-    #expect(aerospace.workspaces(on: 1, showEmpty: false).map(\.name) == ["1"])
+    workspaceStore.workspaces[2] = Workspace(name: "3", isFocused: false, isVisible: false, monitor: 1)
+    #expect(workspaceStore.workspaces(on: 1, showEmpty: false).map(\.name) == ["1"])
 }
 
 @Test @MainActor func workspaceRowGrowsWhenAnEmptyWorkspaceAppears() throws {
-    let aerospace = AeroSpace()
-    aerospace.workspaces = [
+    let workspaceStore = WorkspaceStore()
+    workspaceStore.workspaces = [
         Workspace(name: "1", isFocused: false, isVisible: false, monitor: 1,
                   apps: [WorkspaceApp(workspace: "1", name: "Finder", bundleID: "com.apple.finder")]),
         Workspace(name: "2", isFocused: true, isVisible: true, monitor: 1,
                   apps: [WorkspaceApp(workspace: "2", name: "Finder", bundleID: "com.apple.finder")])
     ]
-    let view = WorkspaceView(aerospace: aerospace, monitor: 1,
+    let view = WorkspaceView(workspaceStore: workspaceStore, monitor: 1,
                              appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), animationDuration: 0)
     let initialWidth = try #require(ImageRenderer(content: view).nsImage).size.width
-    aerospace.workspaces[1] = Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1,
-                                       apps: aerospace.workspaces[1].apps)
-    aerospace.workspaces.append(Workspace(name: "3", isFocused: true, isVisible: true, monitor: 1))
+    workspaceStore.workspaces[1] = Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1,
+                                       apps: workspaceStore.workspaces[1].apps)
+    workspaceStore.workspaces.append(Workspace(name: "3", isFocused: true, isVisible: true, monitor: 1))
     let expandedWidth = try #require(ImageRenderer(content: view).nsImage).size.width
     let renderer = ImageRenderer(content: view)
     renderer.proposedSize = ProposedViewSize(width: initialWidth, height: nil)

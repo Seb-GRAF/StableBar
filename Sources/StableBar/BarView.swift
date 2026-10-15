@@ -21,11 +21,11 @@ struct BarView: View {
                         return (center - width / 2)...(center + width / 2)
                     } ?? range
                 }
-                let activeID = store.aerospace.workspaces.first(where: \.isFocused)?.monitor ?? store.activeDisplayID
+                let activeID = store.workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? store.activeDisplayID
                 let widgets = config.widgets.filter { widget in
                     let output = store.scripts[widget.id]?.output
-                    if widget.content == .workspaces && widget.layout == nil && store.aerospace.error == nil
-                        && store.aerospace.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true).isEmpty {
+                    if widget.content == .workspaces && widget.layout == nil && store.workspaceStore.error == nil
+                        && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true).isEmpty {
                         return false
                     }
                     return widget.enabled && (output?.display ?? widget.display).includes(display, activeID: activeID)
@@ -102,8 +102,8 @@ struct BarView: View {
             Button("Set up StableBar…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
             Button("Open configuration file…") { store.openConfiguration() }
             Button("Reload configuration") { store.reloadConfiguration() }
-            Button("Reconnect AeroSpace") { store.aerospace.start() }
-            if let error = store.configurationError ?? store.aerospace.error {
+            Button("Reconnect \(store.workspaceStore.source.title)") { store.workspaceStore.start() }
+            if let error = store.configurationError ?? store.workspaceStore.error {
                 Divider()
                 Text(error)
             }
@@ -132,8 +132,8 @@ struct BarView: View {
                         let popup = widgetPopup(widget, store: store)
                         let command = store.scripts[widget.id]?.output.onClick ?? widget.onClick
                         if widget.content == .workspaces && popup == nil && command == nil {
-                            ForEach(store.aerospace.workspaces.filter { $0.monitor == display.id }) { workspace in
-                                Button("Workspace \(workspace.name)") { store.aerospace.select(workspace) }
+                            ForEach(store.workspaceStore.workspaces.filter { $0.monitor == display.id }) { workspace in
+                                Button("Workspace \(workspace.name)") { store.workspaceStore.select(workspace) }
                             }
                         } else {
                             Button(overflowTitle(widget)) {
@@ -325,7 +325,7 @@ struct WidgetView: View {
         } else {
             switch widget.content {
             case .workspaces:
-                WorkspaceView(aerospace: store.aerospace, monitor: monitor,
+                WorkspaceView(workspaceStore: store.workspaceStore, monitor: monitor,
                               appearance: appearance, animationDuration: animationDuration,
                               configuration: widget.workspace, animation: widget.animation, defaults: widget.style.inheriting(defaults))
             case .activeApp:
@@ -412,7 +412,7 @@ struct Sparkline: Shape {
 }
 
 struct WorkspaceView: View {
-    let aerospace: AeroSpace
+    let workspaceStore: WorkspaceStore
     let monitor: Int
     let appearance: WidgetAppearance
     let animationDuration: Double
@@ -424,7 +424,7 @@ struct WorkspaceView: View {
     @State private var hoveredWorkspace: String?
 
     var body: some View {
-        let workspaces = aerospace.workspaces(on: monitor, showEmpty: configuration?.showEmpty == true)
+        let workspaces = workspaceStore.workspaces(on: monitor, showEmpty: configuration?.showEmpty == true)
         let indicator = configuration?.indicator ?? .background
         let indicatorStyle = configuration?.indicatorStyle ?? WidgetStyle()
         HStack(spacing: appearance.spacing) {
@@ -437,7 +437,7 @@ struct WorkspaceView: View {
                 let style = (stateStyle ?? WidgetStyle()).inheriting(base)
                 let appStateStyle = workspace.isFocused ? configuration?.focusedAppStyle : workspace.isVisible ? configuration?.visibleAppStyle : nil
                 let appStyle = (appStateStyle ?? WidgetStyle()).inheriting(configuration?.appStyle ?? WidgetStyle())
-                Button { aerospace.select(workspace) } label: {
+                Button { workspaceStore.select(workspace) } label: {
                     HStack(spacing: style.spacing ?? 4) {
                         Text(workspace.name)
                         if configuration?.showApps != false {
@@ -489,7 +489,7 @@ struct WorkspaceView: View {
                 .accessibilityLabel("Workspace \(workspace.name)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
                 .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
             }
-            if let error = aerospace.error {
+            if let error = workspaceStore.error {
                 Image(systemName: "exclamationmark.triangle").help(error)
             }
         }

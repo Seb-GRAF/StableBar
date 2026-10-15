@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 import os
 
@@ -35,6 +35,12 @@ private struct AeroSpaceEvent: Decodable {
     let mode: String?
 }
 
+enum WorkspaceSource: String, Decodable, Sendable {
+    case aerospace, yabai
+
+    var title: String { self == .aerospace ? "AeroSpace" : "yabai" }
+}
+
 func workspaceSnapshot(workspaces: Data, windows: Data) throws -> [Workspace] {
     let apps = try JSONDecoder().decode([WorkspaceApp].self, from: windows)
     return try JSONDecoder().decode([Workspace].self, from: workspaces)
@@ -49,7 +55,8 @@ func workspaceSnapshot(workspaces: Data, windows: Data) throws -> [Workspace] {
 }
 
 @MainActor @Observable
-final class AeroSpace {
+final class WorkspaceStore {
+    var source = WorkspaceSource.aerospace
     var workspaces: [Workspace] = []
     var error: String?
     var onWorkspaceChange: (() -> Void)?
@@ -66,6 +73,15 @@ final class AeroSpace {
 
     func start() {
         stop()
+        if source == .yabai {
+            task = Task {
+                do { try await refresh() }
+                catch {
+                    if !Task.isCancelled { self.error = error.localizedDescription }
+                }
+            }
+            return
+        }
         task = Task {
             while !Task.isCancelled {
                 do {
@@ -127,14 +143,28 @@ final class AeroSpace {
 
     private func refresh() async throws {
         let executable = try executable()
-        async let spaces = runCommand(executable, arguments: [
-            "list-workspaces", "--all", "--format",
-            "%{workspace} %{workspace-is-focused} %{workspace-is-visible} %{monitor-appkit-nsscreen-screens-id}", "--json"
-        ])
-        async let windows = runCommand(executable, arguments: [
-            "list-windows", "--all", "--format", "%{workspace} %{app-name} %{app-bundle-id}", "--json"
-        ])
-        let snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows)
+        let snapshot: [Workspace]
+        switch source {
+        case .aerospace:
+            async let spaces = runCommand(executable, arguments: [
+                "list-workspaces", "--all", "--format",
+                "%{workspace} %{workspace-is-focused} %{workspace-is-visible} %{monitor-appkit-nsscreen-screens-id}", "--json"
+            ])
+            async let windows = runCommand(executable, arguments: [
+                "list-windows", "--all", "--format", "%{workspace} %{app-name} %{app-bundle-id}", "--json"
+            ])
+            snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows)
+        case .yabai:
+            async let spaces = runCommand(executable, arguments: ["-m", "query", "--spaces"])
+            async let windows = runCommand(executable, arguments: ["-m", "query", "--windows"])
+            async let displays = runCommand(executable, arguments: ["-m", "query", "--displays"])
+            let screens = NSScreen.screens.map { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value }
+            let bundleIDs = NSWorkspace.shared.runningApplications.reduce(into: [Int32: String]()) { result, app in
+                result[app.processIdentifier] = app.bundleIdentifier
+            }
+            snapshot = try await yabaiSnapshot(spaces: spaces, windows: windows, displays: displays,
+                                               screenIDs: screens, bundleIDs: bundleIDs)
+        }
         try Task.checkCancellation()
         let previousWorkspace = workspaces.first(where: \.isFocused)?.name
         if workspaces != snapshot { workspaces = snapshot }
@@ -145,7 +175,9 @@ final class AeroSpace {
     func select(_ workspace: Workspace) {
         Task {
             do {
-                _ = try await runCommand(executable(), arguments: ["workspace", workspace.name])
+                let arguments = source == .aerospace ? ["workspace", workspace.name] : ["-m", "space", "--focus", workspace.name]
+                _ = try await runCommand(executable(), arguments: arguments)
+                if source == .yabai { try await refresh() }
             } catch {
                 self.error = error.localizedDescription
             }
@@ -154,14 +186,19 @@ final class AeroSpace {
 
     private func executable() throws -> String {
         let directories = shellEnvironment.withLock { $0["PATH"] ?? "" }.split(separator: ":")
-        guard let directory = directories.first(where: { FileManager.default.isExecutableFile(atPath: "\($0)/aerospace") }) else {
-            throw CommandFailure(message: "AeroSpace is not on your login shell's PATH.")
+        guard let directory = directories.first(where: { FileManager.default.isExecutableFile(atPath: "\($0)/\(source.rawValue)") }) else {
+            throw CommandFailure(message: "\(source.title) is not on your login shell's PATH.")
         }
-        return "\(directory)/aerospace"
+        return "\(directory)/\(source.rawValue)"
+    }
+
+    func trigger() {
+        if source == .yabai && task != nil { start() }
     }
 
     func stop() {
         task?.cancel()
+        task = nil
         if let process, process.isRunning { process.terminate() }
         process = nil
     }

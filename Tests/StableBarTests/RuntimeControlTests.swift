@@ -2,6 +2,81 @@ import Foundation
 import Testing
 @testable import StableBar
 
+@Test @MainActor func profileEditsPreserveImportsAndSupportPinningUndoAndSave() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appending(path: "config.json")
+    let module = directory.appending(path: "profiles.json")
+    let imported = Data(#"{"profile":"dark","profiles":[{"name":"dark","when":{"appearance":"dark"},"configuration":{"bar":{"height":48}}},{"name":"light","when":{"appearance":"light"},"configuration":{"bar":{"height":32}}}]}"#.utf8)
+    try imported.write(to: module)
+    let original = Data(#"{"includes":["profiles.json"],"widgets":[]}"#.utf8)
+    try original.write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let editor = ConfigurationEditor(store: store)
+    #expect(store.pinnedProfile == "dark")
+    #expect(store.configuration?.bar.height == 48)
+    editor.change(ConfigurationEdit(action: .profile))
+    #expect(store.pinnedProfile == nil)
+    #expect(store.activeProfiles == ["light"])
+    #expect(store.configuration?.bar.height == 32)
+    var profiles = store.profiles
+    profiles[1].when?.onBattery = true
+    editor.change(ConfigurationEdit(action: .profiles, profiles: profiles))
+    #expect(store.activeProfiles.isEmpty)
+    #expect(store.configuration?.bar.height == 40)
+    editor.undo()
+    #expect(store.activeProfiles == ["light"])
+    editor.redo()
+    #expect(store.activeProfiles.isEmpty)
+    editor.change(ConfigurationEdit(action: .profile, name: "light"))
+    #expect(store.configuration?.bar.height == 32)
+    editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [
+        ConfigurationProfile(name: "work", when: nil, configuration: ["bar": .object(["height": .number(36)])])
+    ]))
+    #expect(store.profiles.map(\.name) == ["dark", "light", "work"])
+    editor.change(ConfigurationEdit(action: .profile, name: "work"))
+    #expect(store.configuration?.bar.height == 36)
+    #expect(try Data(contentsOf: url) == original)
+    editor.save()
+    #expect(editor.error == nil)
+    #expect(store.sessionEdits.isEmpty)
+    #expect(try Data(contentsOf: module) == imported)
+    store.reloadConfiguration()
+    #expect(store.pinnedProfile == "work")
+    #expect(store.profiles[1].when?.onBattery == true)
+    editor.change(ConfigurationEdit(action: .profile))
+    editor.discard()
+    #expect(store.pinnedProfile == "work")
+    #expect(store.configuration?.bar.height == 36)
+    editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [store.profiles[0]]))
+    #expect(editor.error != nil)
+    #expect(store.profiles.count == 3)
+    #expect(store.sessionEdits.isEmpty)
+}
+
+@Test @MainActor func profilesUpdateEvenWhenEffectiveSettingsStayTheSame() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try Data(#"{"widgets":[]}"#.utf8).write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let editor = ConfigurationEditor(store: store)
+    let original = store.effectiveDocument
+    editor.change(ConfigurationEdit(action: .profiles, profiles: [ConfigurationProfile(name: "work", when: nil, configuration: [:])]))
+    #expect(store.effectiveDocument == original)
+    #expect(store.profiles.map(\.name) == ["work"])
+    editor.change(ConfigurationEdit(action: .profile, name: "work"))
+    #expect(store.pinnedProfile == "work")
+    editor.undo()
+    #expect(store.pinnedProfile == nil)
+    editor.discard()
+    #expect(store.profiles.isEmpty)
+}
+
 @Test @MainActor func batchesAreAtomicAndPersistenceKeepsImportedFiles() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
