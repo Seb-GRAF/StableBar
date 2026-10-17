@@ -300,11 +300,15 @@ struct WidgetView: View {
         let style = resolution.style(hovered: hovered, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let animation = output?.animation ?? widget.animation ?? WidgetAnimation(duration: animationDuration)
-        let tile = content(resolution, open: isOpen)
+        let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: 0,
+                                 bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: 0)
+        // Workspace buttons include vertical padding so their selection fills the tile.
+        let hasWorkspaceCells = widget.content == .workspaces && widget.layout == nil
+        let tile = content(resolution, open: isOpen, padding: padding)
             .padding(.leading, style.paddingLeading ?? appearance.paddingHorizontal)
             .padding(.trailing, style.paddingTrailing ?? appearance.paddingHorizontal)
-            .padding(.top, style.paddingTop ?? appearance.paddingVertical)
-            .padding(.bottom, style.paddingBottom ?? appearance.paddingVertical)
+            .padding(.top, hasWorkspaceCells ? 0 : padding.top)
+            .padding(.bottom, hasWorkspaceCells ? 0 : padding.bottom)
             .frame(width: appearance.width, height: style.height.map { CGFloat($0) })
             .frame(minWidth: style.minWidth.map { CGFloat($0) }, maxWidth: style.maxWidth.map { CGFloat($0) })
             .contentShape(Rectangle())
@@ -380,12 +384,12 @@ struct WidgetView: View {
     }
 
     @ViewBuilder
-    private func content(_ resolution: ResolvedWidgetStyle, open: Bool) -> some View {
+    private func content(_ resolution: ResolvedWidgetStyle, open: Bool, padding: EdgeInsets) -> some View {
         switch widget.content {
         case .workspaces where widget.layout == nil:
             WorkspaceView(workspaceStore: store.workspaceStore, monitor: monitor,
                           appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
-                          animationDuration: animationDuration,
+                          animationDuration: animationDuration, padding: padding,
                           configuration: widget.workspace, animation: widget.animation, defaults: resolution.base,
                           modeAliases: store.configuration?.modeAliases ?? [:], widgetID: widget.id)
         case .spacer where widget.layout == nil:
@@ -470,6 +474,7 @@ struct WorkspaceView: View {
     let monitor: Int
     let appearance: WidgetAppearance
     let animationDuration: Double
+    var padding = EdgeInsets()
     var configuration: WorkspaceConfiguration?
     var animation: WidgetAnimation?
     var defaults = WidgetStyle()
@@ -520,7 +525,17 @@ struct WorkspaceView: View {
                     .foregroundStyle(style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground))
                     .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 7)
                     .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 7)
-                    .frame(width: style.width.map { CGFloat($0) }, height: style.height ?? 22)
+                    .frame(width: style.width.map { CGFloat($0) }, height: style.height.map { CGFloat($0) })
+                    .overlay(alignment: .bottom) {
+                        if indicator == .underline && workspace.isVisible && styles.underline.placement != .belowBar {
+                            RoundedRectangle(cornerRadius: styles.underline.cornerRadius ?? 0)
+                                .fill(styles.underline.background?.color ?? appearance.accent)
+                                .frame(width: styles.underline.width.map { CGFloat($0) }, height: styles.underline.height ?? 2)
+                                .matchedGeometryEffect(id: "workspace-underline", in: selection)
+                                .offset(x: styles.underline.offsetX ?? 0, y: styles.underline.offsetY ?? 0)
+                        }
+                    }
+                    .padding(padding)
                     .background {
                         if indicator == .background && workspace.isFocused {
                             RoundedRectangle(cornerRadius: styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
@@ -529,15 +544,6 @@ struct WorkspaceView: View {
                         } else if indicator == .background && workspace.isVisible {
                             RoundedRectangle(cornerRadius: styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
                                 .strokeBorder(styles.resting.borderColor?.color ?? appearance.accent, lineWidth: styles.resting.borderWidth ?? 1)
-                        }
-                    }
-                    .overlay(alignment: .bottom) {
-                        if indicator == .underline && workspace.isVisible && styles.underline.placement != .belowBar {
-                            RoundedRectangle(cornerRadius: styles.underline.cornerRadius ?? 0)
-                                .fill(styles.underline.background?.color ?? appearance.accent)
-                                .frame(width: styles.underline.width.map { CGFloat($0) }, height: styles.underline.height ?? 2)
-                                .matchedGeometryEffect(id: "workspace-underline", in: selection)
-                                .offset(x: styles.underline.offsetX ?? 0, y: styles.underline.offsetY ?? 0)
                         }
                     }
                     .anchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchor in
@@ -559,7 +565,7 @@ struct WorkspaceView: View {
                 .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
             }
             if let error = workspaceStore.error {
-                Image(systemName: "exclamationmark.triangle").help(error)
+                Image(systemName: "exclamationmark.triangle").padding(padding).help(error)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
