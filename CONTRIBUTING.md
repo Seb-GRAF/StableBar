@@ -43,6 +43,8 @@ Both release channels come from `main`:
 
 Both jobs use the CI run number, which only goes up, so a stable build always numbers higher than the betas before it.
 
+Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their stamped version and build number. Other app builds get Development metadata from the checkout's Git revision, including changes since its nearest release tag and a `-dirty` suffix for local changes. Without Git metadata, the version is `0.0.0-dev`. This changes only the built app's plist; the tracked release plist stays untouched.
+
 ## Agent skills
 
 Skills for coding agents live in [.agents/skills](.agents/skills), one folder per skill with a `SKILL.md`. Codex reads that directory, and `.claude/skills` links to it for Claude Code. Invoke a skill by name (`/triage` in Claude Code, `$triage` in Codex) or describe the task and let the agent choose it.

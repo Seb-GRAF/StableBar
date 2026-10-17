@@ -23,6 +23,8 @@ Quit the running app before rebuilding its bundle.
 open dist/StableBar.app
 ```
 
+Local app builds show **Development** in **Customize → About**, with the source revision and a `-dirty` suffix when the checkout has changes. A local rebuild of beta source is still a development build; install the beta DMG for its published version and build number.
+
 For development checks:
 
 ```sh
@@ -665,7 +667,7 @@ Changes in these sections apply to the bar immediately, like command-line edits 
 
 **Diagnostics** shows the composed widget configuration, role and resolved style, ordered presentation layers and their source paths (including role/workspace defaults and tokens), AeroSpace mode/alias states and connection errors, what the widget shows (its `text`, `icon`, `fields` and `temporaryFields`), provider output and data state, the provider's data source and the events it sends, graph samples, command stdout/stderr, timing, CPU time and failure/restart counts. Run a refresh, invoke the widget’s click command, or send an event. Inspecting a hidden provider resumes it while Diagnostics is visible. Closing the window restores its visibility policy.
 
-**About** shows the installed app's release channel (Stable or Beta), full version and build number. Builds without version metadata show Development.
+**About** shows a released app's channel (Stable or Beta), full version and build number. Local app builds show Development and their source revision; builds without version metadata show Development with the version unavailable.
 
 ## Built-in widgets
 
