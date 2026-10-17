@@ -156,7 +156,7 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
         try await runCommand("/usr/bin/perl", arguments: ["-MPOSIX", "-e", """
             POSIX::setpgid(0, getpgrp(getppid()));
             open(my $marker, '>', $ARGV[0] . '.tmp');
-            print $marker $$;
+            print $marker "$$ ", getpgrp(0);
             close($marker);
             rename($ARGV[0] . '.tmp', $ARGV[0]);
             exec('/bin/sleep', '3');
@@ -167,9 +167,12 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
         if FileManager.default.fileExists(atPath: marker.path) { break }
         try await Task.sleep(for: .milliseconds(5))
     }
-    let process = try #require(Int32(String(contentsOf: marker, encoding: .utf8)))
+    let identity = try String(contentsOf: marker, encoding: .utf8).split(separator: " ").compactMap { Int32($0) }
+    try #require(identity.count == 2)
+    let process = identity[0]
     defer { kill(process, SIGKILL) }
-    #expect(getpgid(process) == getpgrp())
+    // The timeout can reap the process before this task resumes, so read the group it recorded while alive.
+    #expect(identity[1] == getpgrp())
     let start = ContinuousClock.now
     if !timeout { task.cancel() }
     do {
