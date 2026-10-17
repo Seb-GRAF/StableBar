@@ -97,7 +97,7 @@ jobs:
           VERSION: ${{ steps.next.outputs.version }}
         run: |
           ./scripts/set-version.sh "$VERSION" "$GITHUB_RUN_NUMBER"
-          ./scripts/package.sh
+          STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
       - name: Publish the beta
         if: steps.next.outputs.version
         env:

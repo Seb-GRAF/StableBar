@@ -5,7 +5,7 @@ swift build -c release
 app="${1:-dist/StableBar.app}"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp .build/release/StableBar "$app/Contents/MacOS/StableBar"
-cp Resources/Info.plist "$app/Contents/Info.plist"
+./scripts/prepare-app-info.sh "$app/Contents/Info.plist"
 cp Resources/config.json "$app/Contents/Resources/config.json"
 cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 rm -rf "$app/Contents/Resources/themes"
