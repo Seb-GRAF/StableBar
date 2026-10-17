@@ -12,7 +12,7 @@ struct ProfilesView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("Matching", selection: Binding(get: { store.pinnedProfile }, set: {
-                editor.change(ConfigurationEdit(action: .profile, name: $0))
+                if $0 != store.pinnedProfile { editor.change(ConfigurationEdit(action: .profile, name: $0)) }
             })) {
                 Text("Automatic").tag(Optional<String>.none)
                 ForEach(store.profiles, id: \.name) { profile in
@@ -130,8 +130,9 @@ struct ProfilesView: View {
         .formStyle(.grouped)
     }
 
-    private func condition<Value>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>) -> Binding<Value?> {
+    private func condition<Value: Equatable>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>) -> Binding<Value?> {
         Binding(get: { profile.when?[keyPath: key] }, set: { value in
+            guard value != profile.when?[keyPath: key] else { return }
             var edited = profile
             var conditions = profile.when ?? ProfileConditions()
             conditions[keyPath: key] = value

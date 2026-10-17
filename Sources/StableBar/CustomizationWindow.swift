@@ -367,7 +367,9 @@ private struct WidgetsView: View {
                     editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["role": .null]))
                 } : nil) {
                     Picker("Presentation role", selection: Binding(get: { widget.role?.rawValue ?? "" }, set: {
-                        editor.set(["role": $0.isEmpty ? .null : .string($0)])
+                        if $0 != (widget.role?.rawValue ?? "") {
+                            editor.set(["role": $0.isEmpty ? .null : .string($0)])
+                        }
                     })) {
                         Text("None").tag("")
                         ForEach(PresentationRole.allCases, id: \.rawValue) { Text($0.rawValue.capitalized).tag($0.rawValue) }
@@ -449,8 +451,8 @@ private struct WidgetsView: View {
     }
 
     private func string(_ key: String, fallback: String = "") -> Binding<String> {
-        Binding(get: { if case let .string(value) = editor.selected[key] { value } else { fallback } },
-                set: { editor.set([key: .string($0)]) })
+        let value = if case let .string(value) = editor.selected[key] { value } else { fallback }
+        return Binding(get: { value }, set: { if $0 != value { editor.set([key: .string($0)]) } })
     }
 }
 
@@ -504,8 +506,9 @@ struct StyleFields {
 
     func font(_ families: [String]) -> some View {
         row("Font", "fontName") { _ in
-            let name = if case let .string(name) = values["fontName"] { name } else { "system" }
-            Picker("Font", selection: Binding(get: { name }, set: { set(["fontName": .string($0)]) })) {
+            let selection = stringBinding("fontName", default: "system")
+            let name = selection.wrappedValue
+            Picker("Font", selection: selection) {
                 Text("System").tag("system")
                 Divider()
                 ForEach(name == "system" || families.contains(name) ? families : [name] + families, id: \.self) { Text($0).tag($0) }
@@ -517,8 +520,7 @@ struct StyleFields {
 
     func choice(_ title: String, _ key: String, choices: [String], default fallback: String) -> some View {
         row(title, key) { _ in
-            let value = if case let .string(value) = values[key] { value } else { fallback }
-            Picker(title, selection: Binding(get: { value }, set: { set([key: .string($0)]) })) {
+            Picker(title, selection: stringBinding(key, default: fallback)) {
                 ForEach(choices, id: \.self) { Text($0.capitalized).tag($0) }
             }
             .labelsHidden()
@@ -528,13 +530,17 @@ struct StyleFields {
 
     func weight() -> some View {
         row("Weight", "fontWeight") { _ in
-            let weight = if case let .string(weight) = values["fontWeight"] { weight } else { "medium" }
-            Picker("Weight", selection: Binding(get: { weight }, set: { set(["fontWeight": .string($0)]) })) {
+            Picker("Weight", selection: stringBinding("fontWeight", default: "medium")) {
                 ForEach(fontWeights, id: \.name) { Text($0.name.capitalized).tag($0.name) }
             }
             .labelsHidden()
             .fixedSize()
         }
+    }
+
+    func stringBinding(_ key: String, default fallback: String) -> Binding<String> {
+        let value = if case let .string(value) = values[key] { value } else { fallback }
+        return Binding(get: { value }, set: { if $0 != value { set([key: .string($0)]) } })
     }
 
     private func row<Control: View>(_ title: String, _ key: String, @ViewBuilder control: (ConfigurationOrigin?) -> Control) -> some View {
@@ -582,10 +588,15 @@ struct TokenPicker: View {
     let color: HexColor
     let set: (ConfigurationValue) -> Void
 
-    var body: some View {
-        Picker("Color", selection: Binding(get: { token ?? "" }, set: {
+    var selection: Binding<String> {
+        Binding(get: { token ?? "" }, set: {
+            guard $0 != (token ?? "") else { return }
             set($0.isEmpty ? color.configurationValue : .string("@token.\($0)"))
-        })) {
+        })
+    }
+
+    var body: some View {
+        Picker("Color", selection: selection) {
             ForEach(themeTokens, id: \.name) { Text($0.title).tag($0.name) }
             if let token, !themeTokens.contains(where: { $0.name == token }) { Text(token).tag(token) }
             Divider()

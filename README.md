@@ -655,7 +655,7 @@ Open **Customize StableBar…** from the menu-bar icon or by right-clicking the 
 
 **Widgets** lists your widgets by position; drag to reorder them. Change a widget's position, icon, text, clock format or transition, its colors, font and shape, or edit its properties as JSON. A color either follows one of the theme's colors, such as Text or Accent, or is a custom light and dark pair.
 
-Each style control says where its value comes from: a theme, a package, an included file, a template, a profile or your configuration. A value set in your configuration shows **Reset to default**, which removes it so the theme's or the inherited value applies again.
+Each style control says where its value comes from: a theme, a package, an included file, a template, a profile or your configuration. Opening a menu or selecting its current value leaves it unchanged. A value set in your configuration shows **Reset to default**, which removes it so the theme's or the inherited value applies again.
 
 Changes in these sections apply to the bar immediately, like command-line edits without `--persist`. Undo and redo step through them, **Save** writes them to your configuration and **Discard** returns to the saved file. A change that would make the configuration invalid is rejected and its error is shown.
 

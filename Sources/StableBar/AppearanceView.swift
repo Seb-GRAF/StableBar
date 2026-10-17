@@ -49,7 +49,9 @@ struct AppearanceView: View {
                 }
                 .padding(.vertical, 4)
                 Picker("Appearance", selection: Binding(get: { store.configuration?.bar.appearance }, set: {
-                    editor.change(ConfigurationEdit(action: .bar, properties: ["appearance": $0.map { .string($0.rawValue) } ?? .null]))
+                    if $0 != store.configuration?.bar.appearance {
+                        editor.change(ConfigurationEdit(action: .bar, properties: ["appearance": $0.map { .string($0.rawValue) } ?? .null]))
+                    }
                 })) {
                     Text("Automatic").tag(BarAppearance?.none)
                     Text("Light").tag(BarAppearance?.some(.light))
