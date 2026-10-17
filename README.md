@@ -647,7 +647,7 @@ A batch validates the whole resulting configuration before replacing the running
 
 ### Customize
 
-Open **Customize StableBar…** from the menu-bar icon or by right-clicking the bar, reopen the running app, or run `StableBar --customize`. Its sidebar has six sections.
+Open **Customize StableBar…** from the menu-bar icon or by right-clicking the bar, reopen the running app, or run `StableBar --customize`. Its sidebar has seven sections.
 
 **General** opens the configuration file in your editor, shows it in Finder or reloads it, runs setup again, and reconnects the workspace source.
 
@@ -664,6 +664,8 @@ Changes in these sections apply to the bar immediately, like command-line edits 
 **Packages** reviews local folders and [store](#store) packages and their declared commands, edits typed settings, installs versions and enables a chosen version. Enabling a theme makes it the active theme; themes have no commands to review. Select an older installed version to roll back, or **Uninstall…** to remove one.
 
 **Diagnostics** shows the composed widget configuration, role and resolved style, ordered presentation layers and their source paths (including role/workspace defaults and tokens), AeroSpace mode/alias states and connection errors, what the widget shows (its `text`, `icon`, `fields` and `temporaryFields`), provider output and data state, the provider's data source and the events it sends, graph samples, command stdout/stderr, timing, CPU time and failure/restart counts. Run a refresh, invoke the widget’s click command, or send an event. Inspecting a hidden provider resumes it while Diagnostics is visible. Closing the window restores its visibility policy.
+
+**About** shows the installed app's release channel (Stable or Beta), full version and build number. Builds without version metadata show Development.
 
 ## Built-in widgets
 

@@ -28,7 +28,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 }
 
 private enum CustomizationSection: String, CaseIterable, Identifiable {
-    case general = "General", appearance = "Appearance", widgets = "Widgets", profiles = "Profiles", packages = "Packages", diagnostics = "Diagnostics"
+    case general = "General", appearance = "Appearance", widgets = "Widgets", profiles = "Profiles", packages = "Packages", diagnostics = "Diagnostics", about = "About"
 
     var id: Self { self }
 
@@ -40,6 +40,7 @@ private enum CustomizationSection: String, CaseIterable, Identifiable {
         case .profiles: "person.crop.square"
         case .packages: "shippingbox"
         case .diagnostics: "stethoscope"
+        case .about: "info.circle"
         }
     }
 }
@@ -70,6 +71,7 @@ private struct CustomizationView: View {
                 case .profiles: ProfilesView(editor: editor)
                 case .packages: PackagesView(store: store)
                 case .diagnostics: DiagnosticsView(store: store)
+                case .about: AboutView()
                 }
                 if [.appearance, .widgets, .profiles].contains(section ?? .appearance) {
                     if let error = editor.error ?? store.configurationError {
