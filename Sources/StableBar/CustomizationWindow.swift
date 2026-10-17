@@ -409,6 +409,7 @@ private struct WidgetsView: View {
                 style.weight()
                 style.number("Font size", "fontSize", default: 12)
                 style.number("Horizontal padding", "paddingHorizontal", default: 10)
+                style.number("Vertical padding", "paddingVertical", default: 6)
                 style.number("Corner radius", "cornerRadius", default: 14)
                 style.number("Border width", "borderWidth", default: 1)
             }
