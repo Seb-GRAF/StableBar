@@ -31,8 +31,8 @@ final class ConfigurationHistory {
     var canUndo: Bool { hasPendingChanges || !undoSteps.isEmpty }
     var canRedo: Bool { !hasPendingChanges && !redoSteps.isEmpty }
 
-    func change(_ edit: ConfigurationEdit, control name: String? = nil) throws {
-        try change(control: control(for: edit, name: name)) { edit }
+    func change(_ edit: ConfigurationEdit) throws {
+        try change(control: control(for: edit)) { edit }
     }
 
     func setProfileCondition<Value: Equatable>(_ name: String, _ key: WritableKeyPath<ProfileConditions, Value?>,
@@ -59,13 +59,14 @@ final class ConfigurationHistory {
     }
 
     private func change(control: Control?, edit: @escaping () throws -> ConfigurationEdit) throws {
-        if hasPendingChanges && (control == nil || control != pendingControl) { try flush() }
+        if hasPendingChanges && (control == nil || control != pendingControl) { store.flushCustomization() }
         checkForExternalChanges()
         try store.setCustomizationEdits([edit()])
         pendingEdit = edit
         pendingControl = control
         redoSteps.removeAll()
         error = nil
+        notice = nil
         if control == nil { try flush() }
         else {
             writeTask?.cancel()
@@ -83,27 +84,41 @@ final class ConfigurationHistory {
         writeTask?.cancel()
         writeTask = nil
         guard hasPendingChanges else { return }
-        checkForExternalChanges()
-        let before = try Data(contentsOf: store.configurationURL)
-        let after = try store.customizationData(pendingEdits(), editing: before)
-        try store.writeCustomization(after, replacing: before)
-        if before != after { undoSteps.append(Step(before: before, after: after)) }
-        lastFile = after
-        pendingControl = nil
-        pendingEdit = nil
-        error = nil
+        do {
+            checkForExternalChanges()
+            let before = try Data(contentsOf: store.configurationURL)
+            let after = try store.customizationData(pendingEdits(), editing: before)
+            try store.writeCustomization(after, replacing: before)
+            if before != after { undoSteps.append(Step(before: before, after: after)) }
+            lastFile = after
+            pendingControl = nil
+            pendingEdit = nil
+            error = nil
+            notice = nil
+        } catch {
+            let message = "The pending Customize change could not be saved and was discarded. \(errorMessage(error))"
+            discardPendingChange()
+            self.error = message
+            FileHandle.standardError.write(Data("\(message)\n".utf8))
+            throw CommandFailure(message: message)
+        }
     }
 
     func undo() throws {
-        // Check before flushing too: an outside edit must never make Undo save a stale preview.
-        if checkForExternalChanges() {
-            writeTask?.cancel()
-            try store.setCustomizationEdits([])
-            pendingControl = nil
-            pendingEdit = nil
+        let changedOutside = checkForExternalChanges()
+        if hasPendingChanges {
+            let step: Step?
+            if !changedOutside, let before = try? Data(contentsOf: store.configurationURL),
+               let after = try? store.customizationData(pendingEdits(), editing: before), before != after {
+                step = Step(before: before, after: after)
+            } else { step = nil }
+            discardPendingChange()
+            if let step { redoSteps.append(step) }
+            error = nil
+            if !changedOutside { notice = nil }
             return
         }
-        try flush()
+        if changedOutside { return }
         guard let step = undoSteps.last else { return }
         guard try restore(step.before) else { return }
         undoSteps.removeLast()
@@ -120,21 +135,27 @@ final class ConfigurationHistory {
     }
 
     func saveCommandLineChanges() throws {
-        try flush()
+        store.flushCustomization()
         try store.applyEdits([], persist: true)
-        checkForExternalChanges()
+        let current = try Data(contentsOf: store.configurationURL)
+        if current != lastFile {
+            undoSteps.removeAll()
+            redoSteps.removeAll()
+        }
+        lastFile = current
         error = nil
+        notice = nil
     }
 
     func discardCommandLineChanges() throws {
-        try flush()
+        store.flushCustomization()
         try store.setSessionEdits([])
         error = nil
     }
 
     @discardableResult
     func checkForExternalChanges() -> Bool {
-        guard let current = try? Data(contentsOf: store.configurationURL) else { return false }
+        let current = try? Data(contentsOf: store.configurationURL)
         defer { lastFile = current }
         guard let lastFile, current != lastFile else { return false }
         let hadHistory = canUndo || !redoSteps.isEmpty
@@ -142,6 +163,16 @@ final class ConfigurationHistory {
         redoSteps.removeAll()
         if hadHistory { notice = "Undo history was cleared because the configuration file changed outside Customize." }
         return hadHistory
+    }
+
+    func clearNotice() { notice = nil }
+
+    private func discardPendingChange() {
+        writeTask?.cancel()
+        writeTask = nil
+        pendingControl = nil
+        pendingEdit = nil
+        store.discardCustomizationEdits()
     }
 
     func dropUnavailableHistory() {
@@ -159,11 +190,11 @@ final class ConfigurationHistory {
         try store.writeCustomization(data, replacing: current)
         lastFile = data
         error = nil
+        notice = nil
         return true
     }
 
-    private func control(for edit: ConfigurationEdit, name: String?) -> Control? {
-        if let name { return Control(action: edit.action, id: edit.id, paths: [], name: name) }
+    private func control(for edit: ConfigurationEdit) -> Control? {
         guard [.set, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .modeAliases].contains(edit.action),
               let properties = edit.properties else { return nil }
         return Control(action: edit.action, id: edit.id, paths: propertyPaths(properties), name: nil)

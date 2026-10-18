@@ -32,8 +32,8 @@ final class ConfigurationEditor {
         return [:]
     }
 
-    func change(_ edit: ConfigurationEdit, control: String? = nil) {
-        do { try history.change(edit, control: control) }
+    func change(_ edit: ConfigurationEdit) {
+        do { try history.change(edit) }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }
@@ -65,7 +65,7 @@ final class ConfigurationEditor {
 
     func addProfile(name: String) {
         do {
-            try history.flush()
+            store.flushCustomization()
             let profiles = try store.customizationProfiles() + [ConfigurationProfile(name: name, when: nil, configuration: [:])]
             change(ConfigurationEdit(action: .profiles, profiles: profiles))
         } catch { self.error = errorMessage(error) }
@@ -73,7 +73,7 @@ final class ConfigurationEditor {
 
     func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
         do {
-            try history.flush()
+            store.flushCustomization()
             var profiles = try store.customizationProfiles()
             guard let index = profiles.firstIndex(where: { $0.name == name }) else {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")

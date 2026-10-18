@@ -6,6 +6,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
     private weak var store: BarStore?
     private var window: NSWindow?
 
+    init(store: BarStore? = nil) { self.store = store }
+
     func show(store: BarStore) {
         self.store = store
         store.setInspectorOpen(true)
@@ -24,18 +26,22 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         window!.makeKeyAndOrderFront(nil)
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool { store?.flushCustomization() ?? true }
-
     func windowWillClose(_ notification: Notification) {
         store?.flushCustomization()
+        store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
     }
 }
 
-private enum CustomizationSection: String, CaseIterable, Identifiable {
+enum CustomizationSection: String, CaseIterable, Identifiable {
     case general = "General", appearance = "Appearance", widgets = "Widgets", profiles = "Profiles", packages = "Packages", diagnostics = "Diagnostics"
 
     var id: Self { self }
+
+    func bannerError(customization: String?, configuration: String?) -> String? {
+        if [.appearance, .widgets, .profiles].contains(self) { return customization ?? configuration }
+        return customization == configuration ? nil : customization
+    }
 
     var symbol: String {
         switch self {
@@ -76,7 +82,7 @@ private struct CustomizationView: View {
                 case .packages: PackagesView(store: store)
                 case .diagnostics: DiagnosticsView(store: store)
                 }
-                if let error = editor.error ?? store.configurationError {
+                if let error = (section ?? .appearance).bannerError(customization: editor.error, configuration: store.configurationError) {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.red)

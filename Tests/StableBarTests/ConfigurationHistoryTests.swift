@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import StableBar
 
@@ -176,9 +177,116 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertTrue(store.sessionEdits.isEmpty)
         XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(48)]))
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("Temporary"))
+        XCTAssertNil(editor.history.notice)
+        XCTAssertFalse(editor.history.canUndo)
+        store.reloadConfiguration()
+        XCTAssertNil(editor.history.notice)
         try editor.history.undo()
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("Temporary"))
         XCTAssertEqual(store.configuration?.bar.height, 48)
+    }
+
+    @MainActor func testHistoryNoticeClearsAfterASuccessfulChangeOrPendingUndo() throws {
+        for undoPending in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            let history = fixture.store.customizationHistory
+            try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
+            if !undoPending { try history.flush() }
+            let external = Data(#"{"bar":{"height":55},"widgets":[]}"#.utf8)
+            try external.write(to: fixture.url)
+            fixture.store.reloadConfiguration()
+            XCTAssertNotNil(history.notice)
+            if undoPending {
+                try history.undo()
+                XCTAssertEqual(try Data(contentsOf: fixture.url), external)
+            } else {
+                try history.change(ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(16)]))
+                XCTAssertNil(history.notice)
+                try history.flush()
+                XCTAssertTrue(history.canUndo)
+                try history.undo()
+                XCTAssertNil(history.notice)
+                try history.redo()
+            }
+            XCTAssertNil(history.notice)
+        }
+    }
+
+    @MainActor func testClosingCustomizeClearsTheHistoryNotice() throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let history = fixture.store.customizationHistory
+        try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
+        try history.flush()
+        try Data(#"{"widgets":[]}"#.utf8).write(to: fixture.url)
+        fixture.store.reloadConfiguration()
+        XCTAssertNotNil(history.notice)
+        CustomizationWindow(store: fixture.store).windowWillClose(Notification(name: NSWindow.willCloseNotification))
+        XCTAssertNil(history.notice)
+    }
+
+    func testConfigurationErrorBannerKeepsItsOriginalSectionsAndAvoidsDiagnosticDuplicates() {
+        for section in CustomizationSection.allCases {
+            let originalSection = [.appearance, .widgets, .profiles].contains(section)
+            XCTAssertEqual(section.bannerError(customization: nil, configuration: "File error"), originalSection ? "File error" : nil)
+            XCTAssertEqual(section.bannerError(customization: "Save error", configuration: "File error"), "Save error")
+            XCTAssertEqual(section.bannerError(customization: "File error", configuration: "File error"), originalSection ? "File error" : nil)
+        }
+    }
+
+    @MainActor func testReorderingAndEditingSavedWidgetsKeepsCommandLineWidgetsTemporary() throws {
+        let fixture = try Fixture(configuration: #"{"widgets":[{"id":"a","type":"text","position":"left","text":"A"},{"id":"b","type":"text","position":"left","text":"B"}]}"#)
+        defer { fixture.close() }
+        let store = fixture.store
+        let temporary = ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+                                                                      "position": .string("left"), "text": .string("Temporary")])
+        try store.applyEdits([temporary], persist: false)
+        let history = store.customizationHistory
+        try history.change(ConfigurationEdit(action: .reorder, ids: ["b", "temporary", "a"]))
+        XCTAssertEqual(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self).compactMap { $0["id"] }, [.string("b"), .string("a")])
+        XCTAssertNil(try fixture.document()["widgetOrder"])
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a", "temporary"])
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        try history.undo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "temporary"])
+        try history.redo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a", "temporary"])
+        try history.change(ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Saved")]))
+        try history.flush()
+        XCTAssertEqual(store.configuration?.widgets.first(where: { $0.id == "a" })?.content, .text("Saved"))
+        XCTAssertEqual(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self).count, 2)
+        XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Temporary"))
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        store.reloadConfiguration()
+        XCTAssertNil(store.configurationError)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a", "temporary"])
+    }
+
+    @MainActor func testEditingCommandLineOnlyWidgetsExplainsHowToProceed() throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let store = fixture.store
+        try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+                                                                          "position": .string("left"), "text": .string("Temporary")])], persist: false)
+        let original = try Data(contentsOf: fixture.url)
+        let editor = ConfigurationEditor(store: store)
+        editor.selectedID = "temporary"
+        for action in [ConfigurationEdit.Action.set, .remove, .unset] {
+            editor.change(ConfigurationEdit(action: action, id: "temporary", properties: ["text": .string("Saved")]))
+            XCTAssertEqual(editor.error, "Save or discard command-line changes before editing this widget.")
+            XCTAssertFalse(editor.history.hasPendingChanges)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            XCTAssertEqual(store.sessionEdits.count, 1)
+            XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Temporary"))
+        }
+        editor.saveCommandLineChanges()
+        XCTAssertNil(editor.error)
+        editor.set(["text": .string("Saved")])
+        try editor.history.flush()
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Saved"))
+        XCTAssertTrue(store.sessionEdits.isEmpty)
     }
 
     @MainActor func testCommandLineNoticeDiscardLeavesSavedCustomizeHistory() throws {
@@ -210,21 +318,145 @@ final class ConfigurationHistoryTests: XCTestCase {
         }
     }
 
-    @MainActor func testFailedFlushKeepsPendingChangeAndCanRetry() throws {
+    @MainActor func testRemovedPendingTargetsDoNotBlockUndoChangesCloseQuitOrCommands() throws {
+        try assertRecovery(from: .removedProfile)
+        try assertRecovery(from: .removedWidget)
+    }
+
+    @MainActor func testDeletedFileDoesNotLeaveABlockingPendingChange() throws {
+        try assertRecovery(from: .deletedFile)
+    }
+
+    @MainActor func testUnreadableFileDoesNotLeaveABlockingPendingChange() throws {
+        try assertRecovery(from: .unreadableFile)
+    }
+
+    @MainActor func testTimerDiscardsFailedPendingChangesWithoutWritingThemLater() async throws {
+        for failure in PendingFailure.allCases {
+            let fixture = try recoveryFixture()
+            defer { fixture.close() }
+            let history = fixture.store.customizationHistory
+            try beginPendingChange(failure, in: fixture)
+            let repair = try breakFile(failure, in: fixture)
+            fixture.store.reloadConfiguration()
+            try await Task.sleep(for: .milliseconds(650))
+            XCTAssertFalse(history.hasPendingChanges, "\(failure)")
+            XCTAssertTrue(history.error?.contains("could not be saved and was discarded") == true)
+            XCTAssertTrue(history.undoSteps.isEmpty)
+            try history.undo()
+            try repair()
+            fixture.store.reloadConfiguration()
+            XCTAssertNil(fixture.store.configurationError)
+            XCTAssertFalse(history.hasPendingChanges)
+            XCTAssertFalse(history.canUndo)
+            XCTAssertNotEqual(fixture.store.configuration?.widgets.first?.content, .text("Pending"))
+            XCTAssertNil(fixture.store.profiles.first?.when?.app)
+        }
+    }
+
+    @MainActor func testUndoDiscardsPendingChangesWithoutSavingAndKeepsSafeRedo() throws {
         let fixture = try Fixture()
         defer { fixture.close() }
-        let original = try Data(contentsOf: fixture.url)
         let history = fixture.store.customizationHistory
         try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
-        try FileManager.default.removeItem(at: fixture.url)
-        XCTAssertFalse(fixture.store.flushCustomization())
-        XCTAssertNotNil(history.error)
-        XCTAssertTrue(history.hasPendingChanges)
-        XCTAssertTrue(history.undoSteps.isEmpty)
-        try original.write(to: fixture.url)
-        XCTAssertTrue(fixture.store.flushCustomization())
-        XCTAssertNil(history.error)
+        let original = try Data(contentsOf: fixture.url)
+        try history.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        XCTAssertEqual(fixture.store.configuration?.bar.height, 40)
+        XCTAssertFalse(history.hasPendingChanges)
+        XCTAssertFalse(history.canUndo)
+        XCTAssertTrue(history.canRedo)
+        try history.redo()
+        XCTAssertEqual(fixture.store.configuration?.bar.height, 48)
         XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(48)]))
+    }
+
+    @MainActor private func assertRecovery(from failure: PendingFailure) throws {
+        for action in ["undo", "change", "close", "quit", "command"] {
+            let fixture = try recoveryFixture()
+            defer { fixture.close() }
+            let store = fixture.store
+            let history = store.customizationHistory
+            try beginPendingChange(failure, in: fixture)
+            let repair = try breakFile(failure, in: fixture)
+            defer { try? repair() }
+            store.reloadConfiguration()
+            XCTAssertNotNil(store.configurationError)
+            let unavailable = failure == .deletedFile || failure == .unreadableFile
+            switch action {
+            case "undo": try history.undo()
+            case "change":
+                let edit = ConfigurationEdit(action: .bar, properties: ["height": .number(48)])
+                if unavailable { XCTAssertThrowsError(try history.change(edit)) }
+                else { try history.change(edit); try history.flush() }
+            case "close":
+                CustomizationWindow(store: store).windowWillClose(Notification(name: NSWindow.willCloseNotification))
+            case "quit":
+                XCTAssertEqual(AppDelegate(store: store).applicationShouldTerminate(NSApplication.shared), .terminateNow)
+            default:
+                for request in [RuntimeRequest(action: .reload), RuntimeRequest(action: .reset),
+                                RuntimeRequest(action: .batch, edits: [ConfigurationEdit(action: .bar, properties: ["height": .number(52)])])] {
+                    if unavailable { XCTAssertThrowsError(try store.handle(request)) }
+                    else { _ = try store.handle(request) }
+                }
+            }
+            XCTAssertFalse(history.hasPendingChanges, "\(failure), \(action)")
+            if unavailable {
+                XCTAssertNotEqual(store.configuration?.widgets.first?.content, .text("Pending"))
+                XCTAssertNil(store.profiles.first?.when?.app)
+            }
+            try repair()
+            store.reloadConfiguration()
+            XCTAssertNil(store.configurationError)
+            XCTAssertFalse(history.hasPendingChanges)
+            try history.undo()
+            try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(49)]))
+            try history.flush()
+            XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(49)]))
+            for request in [RuntimeRequest(action: .reload), RuntimeRequest(action: .reset),
+                            RuntimeRequest(action: .batch, edits: [ConfigurationEdit(action: .bar, properties: ["height": .number(53)])])] {
+                XCTAssertNoThrow(try store.handle(request))
+            }
+            CustomizationWindow(store: store).windowWillClose(Notification(name: NSWindow.willCloseNotification))
+            XCTAssertEqual(AppDelegate(store: store).applicationShouldTerminate(NSApplication.shared), .terminateNow)
+            XCTAssertFalse(history.hasPendingChanges)
+        }
+    }
+
+    private enum PendingFailure: CaseIterable {
+        case removedProfile, removedWidget, deletedFile, unreadableFile
+    }
+
+    @MainActor private func recoveryFixture() throws -> Fixture {
+        try Fixture(configuration: #"{"bar":{"height":40},"widgets":[{"id":"a","type":"text","position":"left","text":"A"}],"profiles":[{"name":"work","configuration":{}}]}"#)
+    }
+
+    @MainActor private func beginPendingChange(_ failure: PendingFailure, in fixture: Fixture) throws {
+        let history = fixture.store.customizationHistory
+        if failure == .removedProfile {
+            try history.setProfileCondition("work", \.app, value: "com.pending", control: "app")
+        } else {
+            try history.change(ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Pending")]))
+        }
+    }
+
+    @MainActor private func breakFile(_ failure: PendingFailure, in fixture: Fixture) throws -> () throws -> Void {
+        let original = try Data(contentsOf: fixture.url)
+        switch failure {
+        case .removedProfile, .removedWidget:
+            var document = try fixture.document()
+            if failure == .removedProfile { document["profiles"] = nil }
+            else { document["widgets"] = .array([]) }
+            try configurationData(document).write(to: fixture.url)
+            return {}
+        case .deletedFile:
+            try FileManager.default.removeItem(at: fixture.url)
+            return { if !FileManager.default.fileExists(atPath: fixture.url.path) { try original.write(to: fixture.url) } }
+        case .unreadableFile:
+            try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: fixture.url.path)
+            XCTAssertThrowsError(try Data(contentsOf: fixture.url))
+            return { try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fixture.url.path) }
+        }
     }
 
     @MainActor func testInvalidChangeLeavesFileAndHistoryIntact() throws {

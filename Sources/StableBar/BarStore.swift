@@ -23,6 +23,7 @@ final class BarStore: NSObject {
     var pinnedProfile: String?
     var sessionEdits: [ConfigurationEdit] = []
     private(set) var customizationEdits: [ConfigurationEdit] = []
+    private var customizationBase: (Configuration, ConfigurationLoader)?
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self)
     var context = ConfigurationContext()
     private(set) var presentations: [String: WidgetPresentation] = [:]
@@ -120,6 +121,7 @@ final class BarStore: NSObject {
 
     func reloadConfiguration() {
         defer { configurationWatcher.watch(configurationLoader.dependencies) }
+        customizationHistory.checkForExternalChanges()
         do {
             let base = try configurationLoader.load(configurationURL, context: context)
             let next: Configuration
@@ -135,7 +137,6 @@ final class BarStore: NSObject {
                 let root = try editedDocument([])
                 next = try configurationLoader.load(configurationURL, data: configurationData(root), context: context)
             }
-            customizationHistory.checkForExternalChanges()
             apply(next)
         } catch {
             configurationError = errorMessage(error)
@@ -160,7 +161,7 @@ final class BarStore: NSObject {
     }
 
     func applyEdits(_ edits: [ConfigurationEdit], persist: Bool) throws {
-        try customizationHistory.flush()
+        flushCustomization()
         let allEdits = sessionEdits + edits
         let root = try editedDocument(edits)
         let data = try configurationData(root)
@@ -188,6 +189,20 @@ final class BarStore: NSObject {
     }
 
     func customizationData(_ edits: [ConfigurationEdit], editing original: Data) throws -> Data {
+        var edits = edits
+        if !sessionEdits.isEmpty {
+            var loader = configurationLoader
+            let savedIDs = try loader.load(configurationURL, data: original, context: context).widgets.map(\.id)
+            let temporaryIDs = Set(try configurationReplayingSession(over: original).0.widgets.map(\.id)).subtracting(savedIDs)
+            for index in edits.indices {
+                if edits[index].action == .reorder {
+                    edits[index].ids = edits[index].ids?.filter { !temporaryIDs.contains($0) }
+                } else if [.set, .remove, .unset].contains(edits[index].action),
+                          let id = edits[index].id, temporaryIDs.contains(id) {
+                    throw CommandFailure(message: "Save or discard command-line changes before editing this widget.")
+                }
+            }
+        }
         let root = try editedDocument(edits, data: original, replaying: [])
         var loader = configurationLoader
         _ = try loader.load(configurationURL, data: configurationData(root), context: context)
@@ -195,12 +210,27 @@ final class BarStore: NSObject {
     }
 
     func setCustomizationEdits(_ edits: [ConfigurationEdit]) throws {
-        let data = try customizationData(edits, editing: Data(contentsOf: configurationURL))
+        let original = try Data(contentsOf: configurationURL)
+        let data = try customizationData(edits, editing: original)
         let (next, loader) = try configurationReplayingSession(over: data)
+        if customizationEdits.isEmpty { customizationBase = try configurationReplayingSession(over: original) }
         customizationEdits = edits
         configurationLoader = loader
         apply(next)
         configurationWatcher.watch(loader.dependencies)
+    }
+
+    func discardCustomizationEdits() {
+        customizationEdits = []
+        let base = customizationBase
+        customizationBase = nil
+        reloadConfiguration()
+        if let error = configurationError, let (next, loader) = base {
+            configurationLoader = loader
+            apply(next)
+            configurationError = error
+            configurationWatcher.watch(loader.dependencies)
+        }
     }
 
     func writeCustomization(_ data: Data, replacing original: Data) throws {
@@ -210,6 +240,7 @@ final class BarStore: NSObject {
         }
         try data.write(to: configurationURL, options: .atomic)
         customizationEdits = []
+        customizationBase = nil
         configurationLoader = loader
         apply(next)
         configurationWatcher.watch(loader.dependencies)
@@ -244,7 +275,7 @@ final class BarStore: NSObject {
         let directory = try packages.directory(id: id, version: version)
         let manifest = try packages.manifest(at: directory)
         var loader = ConfigurationLoader()
-        try customizationHistory.flush()
+        flushCustomization()
         let document = try loader.compose(configurationURL, data: configurationData(
             editedDocument([], replaying: fromCustomization ? [] : sessionEdits)), context: context)
         var selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []

@@ -155,8 +155,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panels: [CGDirectDisplayID: BarPanel] = [:]
     private var statusItem: NSStatusItem!
 
-    init(configurationURL: URL) {
-        store = BarStore(configurationURL: configurationURL)
+    convenience init(configurationURL: URL) {
+        self.init(store: BarStore(configurationURL: configurationURL))
+    }
+
+    init(store: BarStore) {
+        self.store = store
         super.init()
     }
 
@@ -284,7 +288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        store.flushCustomization() ? .terminateNow : .terminateCancel
+        store.flushCustomization()
+        return .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {
