@@ -3,6 +3,7 @@ import SwiftUI
 
 struct PackagesView: View {
     let store: BarStore
+    var indexURL: URL = PackageIndex.url
     var reviewing: WidgetPackageInspection?
     var onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)?
     @State private var installed: [WidgetPackageManifest] = []
@@ -24,9 +25,14 @@ struct PackagesView: View {
     }
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
             if reviewing != nil {
-                if let inspection { packageDetails(inspection) }
+                if let inspection {
+                    packageDetails(inspection)
+                } else if error == nil {
+                    ProgressView("Loading package…")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
                 if let error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red).textSelection(.enabled).padding(12)
@@ -35,6 +41,7 @@ struct PackagesView: View {
                 browser
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             perform {
                 try loadInstalled()
@@ -61,7 +68,7 @@ struct PackagesView: View {
                         downloading = key
                         Task {
                             do {
-                                let directory = try await packages.download(entry, from: PackageIndex.url)
+                                let directory = try await packages.download(entry, from: indexURL)
                                 guard downloading == key else { return }
                                 downloading = nil
                                 perform { try select(directory, from: entry) }
@@ -418,7 +425,7 @@ struct PackagesView: View {
 
     private func loadStore() async {
         do {
-            storeEntries = try await PackageIndex.load(from: PackageIndex.url).packages
+            storeEntries = try await PackageIndex.load(from: indexURL).packages
             storeError = nil
         } catch {
             storeError = errorMessage(error)
