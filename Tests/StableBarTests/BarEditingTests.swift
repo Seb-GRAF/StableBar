@@ -564,6 +564,30 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(editing.canUndo)
     }
 
+    @MainActor func testUndoAndRedoUseTheTypedCharacterInsteadOfTheUSKeyPosition() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        store.barEditing.remove("a")
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        func event(_ code: UInt16, _ character: String, _ modifiers: NSEvent.ModifierFlags) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: character,
+                charactersIgnoringModifiers: character, isARepeat: false, keyCode: code))
+        }
+        XCTAssertFalse(BarEditingKeyboard.handle(try event(6, "y", .command), store: store, keyWindow: panel))
+        XCTAssertEqual(store.configuration?.widgets.count, 0)
+        XCTAssertTrue(BarEditingKeyboard.handle(try event(16, "z", .command), store: store, keyWindow: panel))
+        XCTAssertEqual(store.configuration?.widgets.count, 1)
+        XCTAssertTrue(BarEditingKeyboard.handle(try event(16, "Z", [.command, .shift]), store: store, keyWindow: panel))
+        XCTAssertEqual(store.configuration?.widgets.count, 0)
+        XCTAssertFalse(panel.isVisible)
+    }
+
     @MainActor func testUndoShortcutsLeaveOtherWindowsSheetsAndTextInputAlone() throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
         defer { fixture.close() }
@@ -597,12 +621,12 @@ final class BarEditingTests: XCTestCase {
             panel.isEditingBar = true
         }
         for modifiers: NSEvent.ModifierFlags in [[], .shift, [.command, .option], [.command, .control]] {
-            XCTAssertFalse(store.barEditing.handleKey(6, modifiers: modifiers))
+            XCTAssertFalse(store.barEditing.handleKey(6, charactersIgnoringModifiers: "z", modifiers: modifiers))
         }
         XCTAssertEqual(store.configuration?.widgets.count, 0)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         store.barEditing.end()
-        XCTAssertFalse(store.barEditing.handleKey(6, modifiers: .command))
+        XCTAssertFalse(store.barEditing.handleKey(6, charactersIgnoringModifiers: "z", modifiers: .command))
     }
 
     func testPositionMenusUseMacOSTitleCase() {

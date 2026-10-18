@@ -68,10 +68,11 @@ final class BarEditing {
     }
 
     @discardableResult
-    func handleKey(_ keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) -> Bool {
+    func handleKey(_ keyCode: UInt16, charactersIgnoringModifiers: String? = nil, modifiers: NSEvent.ModifierFlags = []) -> Bool {
         guard isActive else { return false }
         if keyCode == 53, modifiers.isEmpty { end(); return true }
-        guard keyCode == 6, modifiers == .command || modifiers == [.command, .shift] else { return false }
+        guard charactersIgnoringModifiers?.lowercased() == "z",
+              modifiers == .command || modifiers == [.command, .shift] else { return false }
         if modifiers.contains(.shift) { redo() } else { undo() }
         return true
     }

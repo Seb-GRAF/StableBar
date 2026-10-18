@@ -21,7 +21,8 @@ final class BarEditingKeyboard {
     static func handle(_ event: NSEvent, store: BarStore, keyWindow: NSWindow? = NSApp?.keyWindow) -> Bool {
         guard event.type == .keyDown, let panel = keyWindow as? BarPanel, panel.isEditingBar,
               panel.attachedSheet == nil, !(panel.firstResponder is NSTextView), !(panel.firstResponder is NSTextField) else { return false }
-        return store.barEditing.handleKey(event.keyCode, modifiers: event.modifierFlags.intersection([.shift, .command, .control, .option]))
+        return store.barEditing.handleKey(event.keyCode, charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+            modifiers: event.modifierFlags.intersection([.shift, .command, .control, .option]))
     }
 
     func stop() {
