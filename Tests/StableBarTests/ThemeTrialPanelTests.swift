@@ -7,10 +7,27 @@ final class ThemeTrialPanelTests: XCTestCase {
         let frames = [CGRect(x: 0, y: 0, width: 1440, height: 900),
                       CGRect(x: -1920, y: 0, width: 1920, height: 1080),
                       CGRect(x: 0, y: 900, width: 2560, height: 1440)]
-        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: 200, y: 850), frames: frames), 0)
-        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: -1000, y: 1000), frames: frames), 1)
-        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: 2000, y: 2000), frames: frames), 2)
-        XCTAssertNil(ThemeTrialPlacement.screenIndex(at: CGPoint(x: -3000, y: 0), frames: frames))
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: 200, y: 850), frames: frames, mainIndex: 0, barIndices: [0, 1, 2]), 0)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: -1000, y: 1000), frames: frames, mainIndex: 0, barIndices: [0, 1, 2]), 1)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: 2000, y: 2000), frames: frames, mainIndex: 0, barIndices: [0, 1, 2]), 2)
+        let edges = [(CGPoint(x: -1000, y: 1080), 1), (CGPoint(x: 2560, y: 2340), 2),
+                     (CGPoint(x: 0, y: 900), 0), (CGPoint(x: -1920, y: 0), 1)]
+        for (point, index) in edges {
+            XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: point, frames: frames, mainIndex: 0, barIndices: [0, 1, 2]),
+                           index)
+        }
+    }
+
+    func testScreenChoiceFallsBackToMainThenFirstBarAndRequiresABar() {
+        let frames = [CGRect(x: 0, y: 0, width: 1440, height: 900),
+                      CGRect(x: -1920, y: 0, width: 1920, height: 1080)]
+        let outside = CGPoint(x: -3000, y: 2000)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: outside, frames: frames, mainIndex: 1, barIndices: [0, 1]), 1)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: outside, frames: frames, mainIndex: nil, barIndices: [0, 1]), 0)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: outside, frames: frames, mainIndex: 1, barIndices: [0]), 0)
+        XCTAssertEqual(ThemeTrialPlacement.screenIndex(at: CGPoint(x: -1000, y: 500), frames: frames, mainIndex: 0, barIndices: [0]), 0)
+        XCTAssertNil(ThemeTrialPlacement.screenIndex(at: outside, frames: frames, mainIndex: 0, barIndices: []))
+        XCTAssertNil(ThemeTrialPlacement.screenIndex(at: outside, frames: [], mainIndex: nil, barIndices: []))
     }
 
     func testPanelCentersBelowTheChosenBarAndTracksThemeDimensionsAndOutsideUnderlines() {

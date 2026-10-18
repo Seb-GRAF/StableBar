@@ -2,8 +2,12 @@ import AppKit
 import SwiftUI
 
 enum ThemeTrialPlacement {
-    static func screenIndex(at point: CGPoint, frames: [CGRect]) -> Int? {
-        frames.firstIndex { $0.contains(point) }
+    static func screenIndex(at point: CGPoint, frames: [CGRect], mainIndex: Int?, barIndices: [Int]) -> Int? {
+        let available = barIndices.filter { frames.indices.contains($0) }
+        return available.first {
+            let frame = frames[$0]
+            return point.x >= frame.minX && point.x <= frame.maxX && point.y >= frame.minY && point.y <= frame.maxY
+        } ?? available.first { $0 == mainIndex } ?? available.first
     }
 
     static func frame(size: CGSize, bar: CGRect, geometry: BarGeometry?, visibleFrame: CGRect) -> CGRect {
@@ -132,7 +136,7 @@ private struct ThemeTrialView: View {
                 Button("Keep") { trial.keep(); changed() }
                     .accessibilityLabel("Keep this theme")
                     .keyboardShortcut(.defaultAction)
-                    .disabled(trial.choice == nil)
+                    .disabled(!trial.canKeep)
             }
         }
         .padding(16)

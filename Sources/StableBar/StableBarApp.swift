@@ -160,8 +160,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.init(store: BarStore(configurationURL: configurationURL))
     }
 
-    init(store: BarStore) {
+    init(store: BarStore, panels: [CGDirectDisplayID: BarPanel] = [:]) {
         self.store = store
+        self.panels = panels
         super.init()
     }
 
@@ -273,7 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
-        addItem("Try Themes…", action: #selector(tryThemes), to: menu)
+        if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
         if let error = store.configurationError ?? store.workspaceStore.error {
             menu.addItem(.separator())
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")
@@ -290,7 +291,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showCustomization() { customization.show(store: store) }
     @objc private func tryThemes() {
         let screens = NSScreen.screens
-        guard let index = ThemeTrialPlacement.screenIndex(at: NSEvent.mouseLocation, frames: screens.map(\.frame)) else { return }
+        let barIndices = screens.indices.filter { index in
+            let id = (screens[index].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value
+            return panels[id] != nil
+        }
+        guard let index = ThemeTrialPlacement.screenIndex(at: NSEvent.mouseLocation, frames: screens.map(\.frame),
+                                                         mainIndex: screens.firstIndex { $0 === NSScreen.main },
+                                                         barIndices: barIndices) else { return }
         showThemeTrial(on: screens[index])
     }
 

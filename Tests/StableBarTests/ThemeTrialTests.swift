@@ -46,6 +46,98 @@ final class ThemeTrialTests: XCTestCase {
         trial.cancel()
     }
 
+    @MainActor func testGalleryAndTrialSaveIdenticalThemeEditsIncludingMainFileSettingsAndInheritedThemes() async throws {
+        let cases: [(main: String, included: String, key: String, properties: [String: ConfigurationValue]?)] = [
+            (#"{"widgets":[]}"#, "{}", "built-in", nil),
+            (#"{"theme":{"id":"terminal"},"widgets":[]}"#, "{}", "built-in", nil),
+            (#"{"widgets":[]}"#, "{}", "terminal", ["id": .string("terminal")]),
+            (#"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}},"widgets":[]}"#,
+             "{}", "test-theme/1", ["id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(48)])]),
+            (#"{"includes":["included.json"],"widgets":[]}"#, #"{"theme":{"id":"terminal"}}"#,
+             "built-in", ["id": .string("built-in")]),
+            (#"{"includes":["included.json"],"widgets":[]}"#,
+             #"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}}}"#,
+             "test-theme/1", ["id": .string("test-theme"), "version": .string("1")])
+        ]
+        for scenario in cases {
+            let fixture = try ThemeGalleryFixture(scenario.main)
+            defer { fixture.close() }
+            _ = try installSizedTheme(in: fixture)
+            let includedURL = fixture.directory.appending(path: "included.json")
+            try fixture.write(scenario.included, to: includedURL)
+            let included = try Data(contentsOf: includedURL)
+            let original = try Data(contentsOf: fixture.url)
+            let store = try loadedStore(fixture)
+            defer { store.stop() }
+            let gallery = ThemeGallery(store: store)
+            await gallery.refresh()
+            let choice = try XCTUnwrap(gallery.choices.first { $0.key == scenario.key })
+            let edit = try store.themeEdit(for: choice)
+            XCTAssertEqual(edit.action, .theme)
+            XCTAssertEqual(edit.properties, scenario.properties)
+            var ids: [String] = []
+            let expected = try edit.applying(to: fixture.document(), widgetIDs: &ids)
+            gallery.select(choice)
+            XCTAssertNil(gallery.errors[choice.key])
+            let galleryDocument = try fixture.document()
+            XCTAssertEqual(galleryDocument, expected)
+            if store.customizationHistory.canUndo { try store.customizationHistory.undo() }
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            let trial = ThemeTrial(store: store)
+            for _ in trial.choices.indices {
+                if trial.choice?.key == choice.key { break }
+                trial.next()
+                XCTAssertNil(trial.error)
+            }
+            XCTAssertEqual(trial.choice?.key, choice.key)
+            XCTAssertEqual(try store.themeEdit(for: choice).properties, edit.properties)
+            trial.keep()
+            XCTAssertNil(trial.error)
+            XCTAssertFalse(trial.isActive)
+            XCTAssertEqual(try fixture.document(), galleryDocument)
+            XCTAssertEqual(try Data(contentsOf: includedURL), included)
+        }
+    }
+
+    @MainActor func testKeepingCurrentThemeNeverSavesPendingCommandLineSettings() async throws {
+        for savedSettings in ["", #", "settings":{"size":48}"#] {
+            let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"test-theme","version":"1"\#(savedSettings)},"widgets":[]}"#)
+            defer { fixture.close() }
+            let installed = try installSizedTheme(in: fixture)
+            let original = try Data(contentsOf: fixture.url)
+            let store = try loadedStore(fixture)
+            defer { store.stop() }
+            let edit = ConfigurationEdit(action: .theme, properties: [
+                "id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(63)])
+            ])
+            try store.setSessionEdits([edit])
+            let gallery = ThemeGallery(store: store)
+            await gallery.refresh()
+            XCTAssertEqual(gallery.previews[installed.key]?.store.configuration?.bar.height, 63)
+            gallery.select(installed)
+            XCTAssertNil(gallery.errors[installed.key])
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            let trial = ThemeTrial(store: store)
+            XCTAssertEqual(trial.choice?.key, installed.key)
+            trial.next()
+            trial.previous()
+            XCTAssertNil(trial.error)
+            XCTAssertEqual(store.configuration?.bar.height, 63)
+            try store.applyEdits([ConfigurationEdit(action: .theme, properties: [
+                "id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(71)])
+            ])], persist: false)
+            let pending = try encodedEdits(store)
+            XCTAssertEqual(store.configuration?.bar.height, 71)
+            trial.keep()
+            XCTAssertNil(trial.error)
+            XCTAssertFalse(trial.isActive)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            XCTAssertEqual(store.configuration?.bar.height, 71)
+            XCTAssertEqual(try encodedEdits(store), pending)
+            XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        }
+    }
+
     @MainActor func testCancelRestoresEveryComposedLayerAndLeavesAllFilesAndHistoryUntouched() throws {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"theme":{"id":"terminal"},"templates":{"label":{"type":"text","position":"left","style":{"paddingHorizontal":7}}},"widgets":[{"id":"label","template":"label","text":"Label"}],"widgetOverrides":{"label":{"style":{"fontSize":17}}},"profiles":[{"name":"work","configuration":{"bar":{"inset":19}}}]}"#)
         defer { fixture.close() }
@@ -322,11 +414,15 @@ final class ThemeTrialTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertNotNil(trial.error)
-        XCTAssertTrue(trial.choice?.isBuiltIn == true)
+        XCTAssertEqual(trial.choice?.key, invalid.key)
+        XCTAssertFalse(trial.canKeep)
+        trial.keep()
+        XCTAssertTrue(trial.isActive)
         XCTAssertEqual(store.effectiveDocument, document)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         trial.next()
         XCTAssertNil(trial.error)
+        XCTAssertTrue(trial.canKeep)
         try FileManager.default.removeItem(at: fixture.url)
         trial.keep()
         XCTAssertNotNil(trial.error)
@@ -335,6 +431,58 @@ final class ThemeTrialTests: XCTestCase {
         try original.write(to: fixture.url)
         trial.cancel()
         XCTAssertEqual(store.effectiveDocument, document)
+    }
+
+    @MainActor func testNavigationPassesTwoBrokenThemesAndKeepsTheLastGoodLookUntilAnotherWorks() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let broken = try ["broken-a", "broken-b"].map { id in
+            let choice = try fixture.theme(#"{"bar":{"height":55}}"#, id: id)
+            try fixture.write(#"{"environment":{"INVALID":"theme"}}"#, to: choice.directory.appending(path: "config.json"))
+            return choice
+        }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let original = try Data(contentsOf: fixture.url)
+        let baseline = store.effectiveDocument
+        let trial = ThemeTrial(store: store)
+        trial.previous()
+        XCTAssertEqual(trial.choice?.key, broken[1].key)
+        XCTAssertEqual(trial.choice?.title, broken[1].title)
+        XCTAssertFalse(trial.canKeep)
+        XCTAssertNotNil(trial.error)
+        XCTAssertEqual(store.effectiveDocument, baseline)
+        trial.previous()
+        XCTAssertEqual(trial.choice?.key, broken[0].key)
+        XCTAssertEqual(trial.position, "9 of 10")
+        XCTAssertFalse(trial.canKeep)
+        XCTAssertNotNil(trial.error)
+        XCTAssertTrue(trial.handleKey(36))
+        XCTAssertTrue(trial.isActive)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        trial.previous()
+        XCTAssertEqual(trial.choice?.key, "terminal")
+        XCTAssertTrue(trial.canKeep)
+        XCTAssertNil(trial.error)
+        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        let lastGood = store.effectiveDocument
+        for choice in broken {
+            trial.next()
+            XCTAssertEqual(trial.choice?.key, choice.key)
+            XCTAssertFalse(trial.canKeep)
+            XCTAssertNotNil(trial.error)
+            XCTAssertEqual(store.effectiveDocument, lastGood)
+        }
+        trial.next()
+        XCTAssertTrue(trial.choice?.isBuiltIn == true)
+        XCTAssertTrue(trial.canKeep)
+        XCTAssertNil(trial.error)
+        XCTAssertNil(store.configuration?.defaults.fontName)
+        trial.cancel()
+        XCTAssertEqual(store.effectiveDocument, baseline)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
     }
 
     @MainActor func testPreviewSnapshotStoresStillNeverApplyOrRunThemeTrials() throws {
@@ -350,20 +498,50 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertTrue(store.providers.isEmpty)
     }
 
-    @MainActor func testMenuBarMenuOffersTryThemes() throws {
+    @MainActor func testMenuBarMenuHidesTryThemesWhenNoBarExists() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         let menu = NSMenu()
-        AppDelegate(store: store).menuWillOpen(menu)
+        let delegate = AppDelegate(store: store)
+        delegate.menuWillOpen(menu)
+        XCTAssertFalse(menu.items.contains { $0.title == "Try Themes…" })
+        try fixture.write("{", to: fixture.url)
+        let failed = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+        defer { failed.stop() }
+        failed.reloadConfiguration()
+        XCTAssertNotNil(failed.configurationError)
+        AppDelegate(store: failed).menuWillOpen(menu)
+        XCTAssertFalse(menu.items.contains { $0.title == "Try Themes…" })
+    }
+
+    @MainActor func testMenuBarMenuOffersTryThemesWhenABarExists() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let bar = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { bar.close() }
+        let menu = NSMenu()
+        let delegate = AppDelegate(store: store, panels: [1: bar])
+        delegate.menuWillOpen(menu)
         let item = try XCTUnwrap(menu.items.first { $0.title == "Try Themes…" })
         XCTAssertNotNil(item.action)
+        XCTAssertFalse(bar.isVisible)
     }
 
     private var pendingEdits: [ConfigurationEdit] {
         [ConfigurationEdit(action: .bar, properties: ["margin": .number(9)]),
          ConfigurationEdit(action: .set, id: "label", properties: ["text": .string("Temporary")])]
+    }
+
+    private func installSizedTheme(in fixture: ThemeGalleryFixture) throws -> ThemeChoice {
+        let source = try fixture.theme(#"{"bar":{"height":"@setting.size"}}"#, install: false)
+        try fixture.write(#"{"id":"test-theme","name":"Test theme","version":"1","kind":"theme","entry":"config.json","settings":{"size":{"type":"number","default":40}}}"#,
+                          to: source.directory.appending(path: "package.json"))
+        let installed = try fixture.packages.install(source.directory)
+        return ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
     }
 
     @MainActor private func loadedStore(_ fixture: ThemeGalleryFixture) throws -> BarStore {

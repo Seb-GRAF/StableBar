@@ -332,6 +332,35 @@ final class BarStore: NSObject {
         }
     }
 
+    var selectedThemeKey: String {
+        let selection = try? effectiveDocument["theme"]?.decoded(WidgetPackageSelection.self)
+        return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
+    }
+
+    func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
+        // Saving uses only the main file's own settings; previews can supply the temporary composition.
+        let document = try previewDocument ?? editedMainDocument(replaying: customizationEdits)
+        let selection = try document["theme"]?.decoded(WidgetPackageSelection.self)
+        return selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:]
+    }
+
+    func themeEdit(for choice: ThemeChoice) throws -> ConfigurationEdit {
+        var edit = choice.edit
+        if choice.isBuiltIn {
+            let root = try editedDocument([edit], replaying: [])
+            var loader = ConfigurationLoader()
+            loader.themesDirectory = themesDirectory
+            let document = try loader.compose(configurationURL, data: configurationData(root), context: context)
+            if let inherited = try document["theme"]?.decoded(WidgetPackageSelection.self), inherited.enabled {
+                edit.properties = choice.selection
+            }
+        } else {
+            let settings = try themeSettings(for: choice)
+            if !settings.isEmpty { edit.properties?["settings"] = .object(settings) }
+        }
+        return edit
+    }
+
     func tryTheme(_ choice: ThemeChoice) throws {
         guard !isPreview, normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
@@ -350,8 +379,7 @@ final class BarStore: NSObject {
     private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
         var loader = ConfigurationLoader()
         loader.themesDirectory = themesDirectory
-        let selection = try configurationLoader.document["theme"]?.decoded(WidgetPackageSelection.self)
-        let settings = selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:]
+        let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
         let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
                                    context: context, previewTheme: layer)

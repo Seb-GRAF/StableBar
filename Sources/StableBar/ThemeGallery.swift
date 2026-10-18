@@ -27,11 +27,7 @@ final class ThemeGallery {
         self.compose = compose
     }
 
-    var selectedKey: String {
-        let selection = try? store.effectiveDocument["theme"]?.decoded(WidgetPackageSelection.self)
-        guard let selection, selection.enabled else { return "built-in" }
-        return selection.key
-    }
+    var selectedKey: String { store.selectedThemeKey }
 
     var storeThemes: [PackageIndex.Entry] {
         entries.filter { entry in
@@ -70,23 +66,23 @@ final class ThemeGallery {
 
     private func buildPreviews(generation: Int) async {
         do {
-            let document = try store.editedMainDocument()
-            let context = store.context
             let model = ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory)
             let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                                        themesDirectory: store.themesDirectory)
             let downloaded = Array(downloaded.values)
-            let selection = try? store.effectiveDocument["theme"]?.decoded(WidgetPackageSelection.self)
+            let choices = await Task.detached { catalog.choices }.value
+            let document = try store.editedMainDocument()
+            let context = store.context
+            let uninstalled = downloaded.filter { choice in !choices.contains { $0.key == choice.key } }
+            let requests = try (choices + uninstalled).map { choice in
+                ThemePreview.Request(model: model, choice: choice, document: document, context: context,
+                                     settings: try store.themeSettings(for: choice, in: store.effectiveDocument))
+            }
             let compose = compose
-            let (choices, results) = await Task.detached {
-                let choices = catalog.choices
-                let uninstalled = downloaded.filter { choice in !choices.contains { $0.key == choice.key } }
-                let results = (choices + uninstalled).map { choice in
-                    let request = ThemePreview.Request(model: model, choice: choice, document: document, context: context,
-                                                       settings: selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:])
-                    return (choice.key, Result { try compose(request) })
+            let results = await Task.detached {
+                requests.map { request in
+                    (request.choice.key, Result { try compose(request) })
                 }
-                return (choices, results)
             }.value
             guard self.generation == generation, !Task.isCancelled else { return }
             if results.contains(where: { (try? $0.1.get().changesAppearance(from: context, to: store.context)) == true }) {
@@ -108,7 +104,8 @@ final class ThemeGallery {
             let context = store.context
             let request = ThemePreview.Request(
                 model: ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory),
-                choice: choice, document: try store.editedMainDocument(), context: context, settings: settings(for: choice))
+                choice: choice, document: try store.editedMainDocument(), context: context,
+                settings: try store.themeSettings(for: choice, in: store.effectiveDocument))
             let compose = compose
             let result = await Task.detached { Result { try compose(request) } }.value
             guard self.generation == generation, !Task.isCancelled else { return }
@@ -141,7 +138,7 @@ final class ThemeGallery {
             var context = store.context
             if let appearance = store.configuration?.bar.appearance { context.appearance = appearance.rawValue }
             let model = ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory)
-            let theme = try model.layer(for: selected, settings: settings(for: selected), context: context)
+            let theme = try model.layer(for: selected, settings: store.themeSettings(for: selected, in: store.effectiveDocument), context: context)
             let main = try store.editedMainDocument(replaying: store.customizationEdits)
             overrides = ThemeOverrides(main: main, theme: theme.values, widgets: store.configuration?.widgets ?? [],
                                        activeProfiles: store.activeProfiles)
@@ -150,17 +147,7 @@ final class ThemeGallery {
 
     func select(_ choice: ThemeChoice) {
         perform(on: choice.key) {
-            var edit = choice.edit
-            if choice.isBuiltIn {
-                let root = try store.editedDocument([edit], replaying: [])
-                var loader = ConfigurationLoader()
-                loader.themesDirectory = store.themesDirectory
-                let document = try loader.compose(store.configurationURL, data: configurationData(root), context: store.context)
-                if let inherited = try document["theme"]?.decoded(WidgetPackageSelection.self), inherited.enabled {
-                    edit.properties = choice.selection
-                }
-            }
-            try store.customizationHistory.change(edit)
+            try store.customizationHistory.change(store.themeEdit(for: choice))
         }
         configurationChanged()
     }
@@ -198,14 +185,8 @@ final class ThemeGallery {
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             if !choices.contains(where: { $0.key == choice.key }) { choices.append(choice) }
             progress[key] = "Applying…"
-            perform(on: key) { try store.customizationHistory.change(choice.edit) }
+            perform(on: key) { try store.customizationHistory.change(store.themeEdit(for: choice)) }
         } catch { errors[key] = errorMessage(error) }
-    }
-
-    private func settings(for choice: ThemeChoice) -> [String: ConfigurationValue] {
-        let selection = try? store.effectiveDocument["theme"]?.decoded(WidgetPackageSelection.self)
-        guard let selection, selection.key == choice.key else { return [:] }
-        return selection.settings
     }
 
     private func perform(on key: String, _ action: () throws -> Void) {
