@@ -36,6 +36,7 @@ final class BarEditing {
     var insertion: BarEditInsertion?
     var error: String?
     private(set) var errorDisplayID: Int?
+    private var measuredHeights: [Int: CGFloat] = [:]
 
     init(store: BarStore) { self.store = store }
 
@@ -53,6 +54,7 @@ final class BarEditing {
         store.popup.close()
         error = nil
         errorDisplayID = nil
+        measuredHeights = [:]
         isActive = true
         store.onConfigurationChange?()
     }
@@ -64,6 +66,7 @@ final class BarEditing {
         isActive = false
         error = nil
         errorDisplayID = nil
+        measuredHeights = [:]
         store.onConfigurationChange?()
     }
 
@@ -129,8 +132,17 @@ final class BarEditing {
     func geometry(for display: BarDisplay) -> BarGeometry? {
         guard let config = store.configuration else { return nil }
         if !isActive { return config.barGeometry(for: display) }
-        return BarGeometry(layoutHeight: max(config.bar.height * config.bar.scale(for: display), 84 + 2 * config.bar.margin),
+        return BarGeometry(layoutHeight: max(config.bar.height * config.bar.scale(for: display),
+                                            (measuredHeights[display.id] ?? 64 * config.bar.scale(for: display)) + 2 * config.bar.margin),
                            margin: config.bar.margin, outsideExtent: 0)
+    }
+
+    func measure(height: CGFloat, on displayID: Int) {
+        guard isActive, height.isFinite, height > 0 else { return }
+        let height = ceil(height)
+        guard measuredHeights[displayID] != height else { return }
+        measuredHeights[displayID] = height
+        store.onConfigurationChange?()
     }
 
     /// Frames and pointer share the section viewport's coordinates, including its scroll offset.
@@ -210,34 +222,85 @@ private enum BarEditContent {
     }
 }
 
-/// All five positions stay reachable. The normal planner supplies their actual screen order
-/// and centering; each section scrolls instead of overflowing its widgets.
+/// The normal planner supplies screen order and centering. Reserve the controls before fitting
+/// sections, and shorten only sections wider than their share of the available space.
 struct BarEditLayout {
     let sections: [WidgetPosition: BarPlacement]
     let done: BarPlacement
+    let scrolling: Set<WidgetPosition>
 
-    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:]) {
+    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:],
+         contentWidths: [WidgetPosition: CGFloat] = [:]) {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
-        let spacing: CGFloat = 6
-        let doneWidth: CGFloat = 114
+        let spacing: CGFloat = 6 * scale
+        let doneWidth: CGFloat = 114 * scale
         let doneSpace = doneWidth + spacing
         let notch = display.notch.map { range in
             let center: CGFloat = (range.lowerBound + range.upperBound) / 2 - CGFloat(bar.margin)
             let half: CGFloat = bar.notchWidth.map { CGFloat($0) * scale / 2 } ?? (range.upperBound - range.lowerBound) / 2
             return (center - half)...(center + half)
         }
+        let preferred = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
+            ($0, max(1, preferredWidths[$0] ?? 64 * scale))
+        })
+        let content = preferred.merging(contentWidths) { preferred, content in min(preferred, max(1, content)) }
+        var widths = preferred
+        let notchSpacing = CGFloat(bar.notchSpacing) * scale
+        if let notch {
+            Self.fit([.left, .notchLeft], capacity: max(inset, notch.lowerBound - notchSpacing) - inset - spacing,
+                     content: content, widths: &widths)
+            Self.fit([.notchRight, .center, .right],
+                     capacity: width - inset - min(width - inset, notch.upperBound + notchSpacing) - doneSpace - 2 * spacing,
+                     content: content, widths: &widths)
+        } else {
+            Self.fit(WidgetPosition.allCases, capacity: width - 2 * inset - doneSpace - 4 * spacing, content: content, widths: &widths)
+        }
         let items = WidgetPosition.allCases.map { position in
             BarLayoutItem(id: position.rawValue, position: position,
-                          width: max(118, preferredWidths[position] ?? 118) + (position == .right ? doneSpace : 0), canOverflow: false)
+                          width: widths[position]! + (position == .right ? doneSpace : 0), canOverflow: false)
         }
-        let plan = AdaptiveBarPlanner(inset: inset, spacing: spacing, notchSpacing: CGFloat(bar.notchSpacing) * scale, notch: notch)
+        let plan = AdaptiveBarPlanner(inset: inset, spacing: spacing, notchSpacing: notchSpacing, notch: notch)
             .plan(width: width, items: items)
-        sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
+        let sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
             plan.placements[position.rawValue].map {
                 (position, BarPlacement(x: $0.x, width: max(0, $0.width - (position == .right ? doneSpace : 0))))
             }
         })
+        self.sections = sections
         done = BarPlacement(x: max(0, width - inset - doneWidth), width: doneWidth)
+        scrolling = Set(WidgetPosition.allCases.filter { sections[$0]!.width < content[$0]! - 0.5 })
+    }
+
+    private static func fit(_ positions: [WidgetPosition], capacity: CGFloat, content: [WidgetPosition: CGFloat],
+                            widths: inout [WidgetPosition: CGFloat]) {
+        // Shorten a heading before scrolling widgets that would otherwise fit.
+        let excess = max(0, positions.reduce(CGFloat.zero) { $0 + widths[$1]! } - max(0, capacity))
+        let slack = positions.reduce(CGFloat.zero) { $0 + max(0, widths[$1]! - content[$1]!) }
+        if slack > 0 {
+            for position in positions { widths[position]! -= (widths[position]! - content[position]!) * min(1, excess / slack) }
+        }
+        var remaining = max(0, capacity)
+        for (index, position) in positions.sorted(by: { widths[$0]! < widths[$1]! }).enumerated() {
+            let width = min(widths[position]!, remaining / CGFloat(positions.count - index))
+            widths[position] = width
+            remaining -= width
+        }
+    }
+}
+
+struct BarEditOverflow: Equatable {
+    let leading: Bool
+    let trailing: Bool
+
+    init(bounds: CGRect, viewportWidth: CGFloat) {
+        leading = !bounds.isNull && bounds.minX < -0.5
+        trailing = !bounds.isNull && bounds.maxX > viewportWidth + 0.5
+    }
+
+    static func offset(from current: CGFloat, deltaX: CGFloat, deltaY: CGFloat, precise: Bool,
+                       contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
+        let delta = abs(deltaX) > abs(deltaY) ? deltaX : deltaY
+        return min(max(0, current - delta * (precise ? 1 : 10)), max(0, contentWidth - viewportWidth))
     }
 }
