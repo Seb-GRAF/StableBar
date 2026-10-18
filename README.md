@@ -399,7 +399,7 @@ StableBar ships with eight themes. Each has light and dark colors and follows th
 | **Minimal** | `minimal` | No backgrounds: text with a soft shadow sits on the wallpaper. |
 | **Terminal** | `terminal` | Menlo, square corners and outlined widgets on a solid strip, in Gruvbox colors. |
 
-Choose one in setup or in **Customize → Appearance**. Appearance's full-width cards show your own widgets, current text and icons with each theme's bar, colors, fonts and corners, in the appearance your bar uses now. Previews scale the bar to fit; very busy bars keep both ends visible and fade out the middle. They reuse the latest output without running scripts or starting providers. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
+Choose one in setup or in **Customize → Appearance**. Appearance's full-width cards show your own widgets, current text and icons with each theme's bar, colors, fonts and corners, in the appearance your bar uses now. Small bars fill the card with widgets in their positions. Wider bars scale to fit; very busy bars keep both ends visible and fade out the middle. They reuse the latest output without running scripts or starting providers. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
 
 ```json
 { "theme": { "id": "slate" } }
