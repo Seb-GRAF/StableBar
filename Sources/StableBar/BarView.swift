@@ -122,6 +122,7 @@ struct BarView: View {
         .contextMenu {
             Text("StableBar")
             Button("Customize StableBar…") { store.onCustomize?() }
+            Button("Try Themes…") { store.onTryThemes?(display.id) }
             if let error = store.configurationError ?? store.workspaceStore.error {
                 Divider()
                 Text(error)

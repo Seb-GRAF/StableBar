@@ -150,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store: BarStore
     private let setup = SetupWindow()
     private let customization = CustomizationWindow()
+    private let themeTrial = ThemeTrialPanel()
     private var control: RuntimeControl?
     private var systemContext: SystemContext?
     private var panels: [CGDirectDisplayID: BarPanel] = [:]
@@ -172,6 +173,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
         store.onConfigurationChange = { [weak self] in self?.updatePanels() }
         store.onCustomize = { [weak self] in self?.showCustomization() }
+        store.onTryThemes = { [weak self] displayID in
+            let screens = NSScreen.screens
+            guard screens.indices.contains(displayID - 1) else { return }
+            self?.showThemeTrial(on: screens[displayID - 1])
+        }
         do {
             let control = RuntimeControl { [store] in try store.handle($0) }
             try control.start(url: store.configurationURL)
@@ -197,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func screensChanged() {
+        themeTrial.cancel()
         store.popup.close()
         store.retainDisplays(Set(NSScreen.screens.map { BarDisplay(screen: $0).id }))
         store.refreshContext()
@@ -258,6 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                             barFrame: panel.drawingFrame, desktopTop: screens[0].frame.maxY))
         }
         store.windowClearance.update(enabled: config.bar.keepWindowsClear, displays: clearanceDisplays)
+        themeTrial.reposition()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -265,6 +273,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
+        addItem("Try Themes…", action: #selector(tryThemes), to: menu)
         if let error = store.configurationError ?? store.workspaceStore.error {
             menu.addItem(.separator())
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")
@@ -279,6 +288,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showCustomization() { customization.show(store: store) }
+    @objc private func tryThemes() {
+        let screens = NSScreen.screens
+        guard let index = ThemeTrialPlacement.screenIndex(at: NSEvent.mouseLocation, frames: screens.map(\.frame)) else { return }
+        showThemeTrial(on: screens[index])
+    }
+
+    private func showThemeTrial(on screen: NSScreen) {
+        let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value
+        guard let bar = panels[id] else { return }
+        themeTrial.show(store: store, bar: bar, screen: screen)
+    }
+
     @objc func showSetup() { setup.show(store: store) }
     @objc private func quit() { NSApp.terminate(nil) }
 
@@ -288,11 +309,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        themeTrial.cancel()
         store.flushCustomization()
         return .terminateNow
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        themeTrial.cancel()
         control?.stop()
         systemContext?.stop()
         store.stop()

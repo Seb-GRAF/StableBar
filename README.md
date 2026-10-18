@@ -29,7 +29,7 @@ For development checks:
 swift test
 ```
 
-The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. Right-click the bar or use its macOS menu-bar icon to open **Customize StableBar** or quit. **Customize → General** opens or reloads the configuration file, runs setup again and reconnects the workspace source.
+The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. Right-click the bar or use its macOS menu-bar icon to open **Customize StableBar**, **Try Themes…** or quit. **Customize → General** opens or reloads the configuration file, runs setup again and reconnects the workspace source.
 
 ### Download a release
 
@@ -404,6 +404,8 @@ Choose one in setup or in **Customize → Appearance**. Appearance's cards show 
 ```json
 { "theme": { "id": "slate" } }
 ```
+
+To try themes on your real bar, choose **Try Themes…** from the bar's right-click menu or its menu-bar icon. A small panel opens below the bar on that screen. Use **←** and **→** or the arrow buttons to cycle through Built-in and your installed themes; every display changes together. **Return** or **Keep** saves the shown theme, and **Undo** in Customize reverses it. **Esc**, **Cancel** or a click outside restores the previous look without saving. Quitting while trying also leaves the saved theme alone. Temporary command-line changes stay applied and unsaved throughout.
 
 Without `theme`, StableBar uses Built-in. Built-in also loads under every other theme, so a theme only needs what it changes: one that defines only tokens restyles widgets through Built-in's `defaults`, and anything it leaves out keeps Built-in's value.
 

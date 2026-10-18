@@ -17,6 +17,7 @@ final class BarStore: NSObject {
     let registry: DataSourceRegistry
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
+    var onTryThemes: ((Int) -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
     var widgetPackageNames: [String: String] = [:]
@@ -40,6 +41,9 @@ final class BarStore: NSObject {
     private var inspectedWidgetID: String?
     private var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
+    // A trial changes the displayed composition, never the saved or command-line edits.
+    private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
+    private var triedTheme: ThemeChoice?
     private var managesConnections = false
     private let configurationWatcher = ConfigurationWatcher()
     private var reloadTask: Task<Void, Never>?
@@ -317,13 +321,51 @@ final class BarStore: NSObject {
     }
 
     private func apply(_ next: Configuration) {
+        normalComposition = (next, configurationLoader)
+        if let triedTheme {
+            do {
+                let (preview, loader) = try configurationTryingTheme(triedTheme)
+                display(preview, loader: loader)
+            } catch { configurationError = errorMessage(error) }
+        } else {
+            display(next, loader: configurationLoader)
+        }
+    }
+
+    func tryTheme(_ choice: ThemeChoice) throws {
+        guard !isPreview, normalComposition != nil else {
+            throw CommandFailure(message: "Load a bar before trying themes.")
+        }
+        let (next, loader) = try configurationTryingTheme(choice)
+        triedTheme = choice
+        display(next, loader: loader)
+    }
+
+    func endThemeTrial() {
+        guard triedTheme != nil else { return }
+        triedTheme = nil
+        if let normalComposition { display(normalComposition.configuration, loader: normalComposition.loader) }
+    }
+
+    private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = themesDirectory
+        let selection = try configurationLoader.document["theme"]?.decoded(WidgetPackageSelection.self)
+        let settings = selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:]
+        let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
+        let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
+                                   context: context, previewTheme: layer)
+        return (next, loader)
+    }
+
+    private func display(_ next: Configuration, loader: ConfigurationLoader) {
         guard !isPreview else { return }
-        profiles = configurationLoader.profiles
-        pinnedProfile = configurationLoader.pinnedProfile
-        widgetPackageNames = configurationLoader.widgetPackageNames
-        if effectiveDocument == configurationLoader.document {
-            origins = configurationLoader.origins
-            activeProfiles = configurationLoader.activeProfiles
+        profiles = loader.profiles
+        pinnedProfile = loader.pinnedProfile
+        widgetPackageNames = loader.widgetPackageNames
+        if effectiveDocument == loader.document {
+            origins = loader.origins
+            activeProfiles = loader.activeProfiles
             configurationError = nil
             return
         }
@@ -381,9 +423,9 @@ final class BarStore: NSObject {
         configuration = next
         managesConnections = true
         preparePresentations()
-        effectiveDocument = configurationLoader.document
-        origins = configurationLoader.origins
-        activeProfiles = configurationLoader.activeProfiles
+        effectiveDocument = loader.document
+        origins = loader.origins
+        activeProfiles = loader.activeProfiles
         configurationError = nil
         let center = DistributedNotificationCenter.default()
         for observer in eventObservers { center.removeObserver(observer) }
@@ -686,6 +728,7 @@ final class BarStore: NSObject {
     }
 
     func stop() {
+        endThemeTrial()
         flushCustomization()
         managesConnections = false
         popup.close()
