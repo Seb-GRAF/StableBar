@@ -88,12 +88,15 @@ struct ThemePreviewSizing {
     let width: CGFloat
     let scale: CGFloat
     let clipsMiddle: Bool
+    let isMeasured: Bool
 
-    init(naturalWidth: CGFloat, availableWidth: CGFloat) {
+    init(naturalSize: CGSize, availableWidth: CGFloat) {
+        let naturalWidth = naturalSize.width
         let width = max(0, availableWidth)
         self.width = max(naturalWidth, width)
         scale = naturalWidth > 0 ? min(1, max(Self.minimumScale, width / naturalWidth)) : 1
         clipsMiddle = naturalWidth * Self.minimumScale > width
+        isMeasured = naturalSize.height > 0
     }
 }
 
@@ -109,16 +112,19 @@ private struct ThemeBarThumbnail: View {
 
     var body: some View {
         GeometryReader { viewport in
-            let sizing = ThemePreviewSizing(naturalWidth: naturalSize.width, availableWidth: viewport.size.width)
-            if sizing.clipsMiddle {
-                HStack(spacing: 0) {
-                    end(sizing: sizing, size: viewport.size, leading: true)
-                    end(sizing: sizing, size: viewport.size, leading: false)
+            let sizing = ThemePreviewSizing(naturalSize: naturalSize, availableWidth: viewport.size.width)
+            Group {
+                if sizing.clipsMiddle {
+                    HStack(spacing: 0) {
+                        end(sizing: sizing, size: viewport.size, leading: true)
+                        end(sizing: sizing, size: viewport.size, leading: false)
+                    }
+                } else {
+                    scaledBar(sizing)
+                        .frame(width: viewport.size.width, height: viewport.size.height)
                 }
-            } else {
-                scaledBar(sizing)
-                    .frame(width: viewport.size.width, height: viewport.size.height)
             }
+            .opacity(sizing.isMeasured ? 1 : 0)
         }
         .overlay {
             ThemeBarPreview(store: store, date: date)

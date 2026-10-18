@@ -4,21 +4,21 @@ import XCTest
 
 final class ThemeCardTests: XCTestCase {
     func testNarrowPreviewFillsTheCardWhileWidePreviewsStillScale() {
-        let narrow = ThemePreviewSizing(naturalWidth: 200, availableWidth: 580)
+        let narrow = ThemePreviewSizing(naturalSize: CGSize(width: 200, height: 40), availableWidth: 580)
         XCTAssertEqual(narrow.width, 580)
         XCTAssertEqual(narrow.width * narrow.scale, 580)
         XCTAssertEqual(narrow.scale, 1)
-        let wide = ThemePreviewSizing(naturalWidth: 800, availableWidth: 580)
+        let wide = ThemePreviewSizing(naturalSize: CGSize(width: 800, height: 40), availableWidth: 580)
         XCTAssertEqual(wide.width, 800)
         XCTAssertEqual(wide.width * wide.scale, 580, accuracy: 0.001)
         XCTAssertEqual(wide.scale, 0.725, accuracy: 0.001)
     }
 
     func testPreviewSizingKeepsBarsThatFitAtTheirNaturalScale() {
-        let sizing = ThemePreviewSizing(naturalWidth: 200, availableWidth: 580)
+        let sizing = ThemePreviewSizing(naturalSize: CGSize(width: 200, height: 40), availableWidth: 580)
         XCTAssertEqual(sizing.scale, 1)
         XCTAssertFalse(sizing.clipsMiddle)
-        XCTAssertEqual(ThemePreviewSizing(naturalWidth: 0, availableWidth: 580).scale, 1)
+        XCTAssertEqual(ThemePreviewSizing(naturalSize: .zero, availableWidth: 580).scale, 1)
     }
 
     func testNarrowPreviewKeepsLeftCenterAndRightGroupsInPosition() throws {
@@ -31,18 +31,28 @@ final class ThemeCardTests: XCTestCase {
     }
 
     func testPreviewSizingUniformlyScalesTheWholeBarToFit() {
-        let sizing = ThemePreviewSizing(naturalWidth: 800, availableWidth: 580)
+        let sizing = ThemePreviewSizing(naturalSize: CGSize(width: 800, height: 40), availableWidth: 580)
         XCTAssertEqual(sizing.scale, 0.725, accuracy: 0.001)
         XCTAssertFalse(sizing.clipsMiddle)
-        let boundary = ThemePreviewSizing(naturalWidth: 1160, availableWidth: 580)
+        let boundary = ThemePreviewSizing(naturalSize: CGSize(width: 1160, height: 40), availableWidth: 580)
         XCTAssertEqual(boundary.scale, ThemePreviewSizing.minimumScale)
         XCTAssertFalse(boundary.clipsMiddle)
     }
 
     func testPreviewSizingKeepsBothEndsAtHalfScaleWhenTheBarIsTooWide() {
-        let sizing = ThemePreviewSizing(naturalWidth: 2400, availableWidth: 580)
+        let sizing = ThemePreviewSizing(naturalSize: CGSize(width: 2400, height: 40), availableWidth: 580)
         XCTAssertEqual(sizing.scale, 0.5)
         XCTAssertTrue(sizing.clipsMiddle)
+    }
+
+    func testUnmeasuredPreviewsStayHiddenUntilTheirSizeArrives() {
+        for width: CGFloat in [280, 580] {
+            XCTAssertFalse(ThemePreviewSizing(naturalSize: .zero, availableWidth: width).isMeasured)
+            for naturalWidth: CGFloat in [0, 200, 800, 2400] {
+                XCTAssertTrue(ThemePreviewSizing(naturalSize: CGSize(width: naturalWidth, height: 40), availableWidth: width).isMeasured)
+            }
+            XCTAssertFalse(ThemePreviewSizing(naturalSize: CGSize(width: 2400, height: 0), availableWidth: width).isMeasured)
+        }
     }
 
     @MainActor func testWidePreviewCardFitsItsProposedWidth() throws {
