@@ -42,9 +42,8 @@ struct WidgetAddView: View {
                     if let choice = choices.first(where: { ids.contains($0.id) }), let basic = choice.basicChoice {
                         Button(choice.basicActionTitle) { add(basic) }
                     }
-                }
-                .onTapGesture(count: 2) {
-                    if let choice = choices.first(where: { $0.id == selected }) { add(choice) }
+                } primaryAction: { ids in
+                    if let choice = choices.first(where: { ids.contains($0.id) }) { add(choice) }
                 }
                 if let error = setup.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
