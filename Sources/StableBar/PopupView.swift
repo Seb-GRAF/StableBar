@@ -399,9 +399,10 @@ struct ProgressRule: View {
     @State private var fraction = 0.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.staticPreviewDate) private var staticPreviewDate
 
     var body: some View {
-        let still = reduceMotion || measuring
+        let still = reduceMotion || measuring || staticPreviewDate != nil
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: cornerRadius).fill(track)

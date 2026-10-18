@@ -198,12 +198,14 @@ struct ConfigurationLoader {
     private var packageSources: [String: URL] = [:]
 
     mutating func load(_ url: URL, data: Data? = nil,
-                       context: ConfigurationContext = ConfigurationContext()) throws -> Configuration {
-        try ConfigurationValue.object(compose(url, data: data, context: context)).decoded(Configuration.self)
+                       context: ConfigurationContext = ConfigurationContext(),
+                       previewTheme: ConfigurationLayer? = nil) throws -> Configuration {
+        try ConfigurationValue.object(compose(url, data: data, context: context, previewTheme: previewTheme)).decoded(Configuration.self)
     }
 
     mutating func compose(_ url: URL, data: Data? = nil,
-                          context: ConfigurationContext = ConfigurationContext()) throws -> [String: ConfigurationValue] {
+                          context: ConfigurationContext = ConfigurationContext(),
+                          previewTheme: ConfigurationLayer? = nil) throws -> [String: ConfigurationValue] {
         dependencies = []
         activeProfiles = []
         packageSources = [:]
@@ -216,7 +218,9 @@ struct ConfigurationLoader {
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
-        if let theme = try base.values["theme"]?.decoded(WidgetPackageSelection.self, at: "theme"), theme.enabled {
+        if let previewTheme {
+            try layer.merge(previewTheme)
+        } else if let theme = try base.values["theme"]?.decoded(WidgetPackageSelection.self, at: "theme"), theme.enabled {
             try layer.merge(theme.version == nil ? readBundledTheme(theme) : readSelectedPackage(theme, from: packageStore, theme: true))
         }
         try layer.merge(base)

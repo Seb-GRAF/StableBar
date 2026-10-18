@@ -1,15 +1,14 @@
 import AppKit
 import SwiftUI
 
-let themeTokens: [(name: String, title: String)] = [
-    ("surface", "Surface"), ("surfaceRaised", "Raised surface"), ("text", "Text"), ("textMuted", "Muted text"),
-    ("accent", "Accent"), ("track", "Track"), ("hairline", "Hairline"), ("warning", "Warning"), ("critical", "Critical")
-]
-
 struct AppearanceView: View {
     let editor: ConfigurationEditor
-    @State private var themes: [ThemeChoice] = []
-    @State private var looks: [String: Configuration] = [:]
+    @State private var gallery: ThemeGallery
+
+    init(editor: ConfigurationEditor) {
+        self.editor = editor
+        _gallery = State(initialValue: ThemeGallery(store: editor.store))
+    }
     @State private var fontFamilies = NSFontManager.shared.availableFontFamilies
     @State private var selectedRole = PresentationRole.time
     @State private var modeName = ""
@@ -18,8 +17,6 @@ struct AppearanceView: View {
     private var store: BarStore { editor.store }
 
     var body: some View {
-        let theme = try? store.effectiveDocument["theme"]?.decoded(WidgetPackageSelection.self)
-        let selected = theme?.enabled == true ? theme?.key : nil
         let tokens = document("tokens")
         let defaults = StyleFields(store: store, path: "defaults", values: document("defaults"),
                                    set: { editor.change(ConfigurationEdit(action: .defaults, properties: $0)) },
@@ -37,17 +34,39 @@ struct AppearanceView: View {
                                    unset: { unset(["bar": .object(["style": .object($0)])]) })
         Form {
             Section {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                    ThemeCard(title: "Built-in", look: looks[""], isSelected: selected == nil, mode: store.modePresentation) {
-                        editor.change(ConfigurationEdit(action: .theme))
-                    }
-                    ForEach(themes, id: \.key) { choice in
-                        ThemeCard(title: choice.title, look: looks[choice.key], isSelected: selected == choice.key, mode: store.modePresentation) {
-                            editor.change(ConfigurationEdit(action: .theme, properties: choice.selection))
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+                    ForEach(gallery.choices, id: \.key) { choice in
+                        ThemeCard(title: choice.title, look: gallery.previews[choice.key], store: store,
+                                  isSelected: gallery.selectedKey == choice.key, error: gallery.errors[choice.key]) {
+                            gallery.select(choice)
                         }
                     }
                 }
                 .padding(.vertical, 4)
+                if gallery.storeUnavailable {
+                    Text("The Store is unavailable. Your installed themes are ready to use.")
+                        .font(.callout).foregroundStyle(.secondary)
+                } else if !gallery.storeThemes.isEmpty {
+                    Text("From the Store").font(.headline)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+                        ForEach(gallery.storeThemes, id: \.versionKey) { entry in
+                            ThemeCard(title: entry.name, look: gallery.previews[entry.versionKey], store: store,
+                                      progress: gallery.progress[entry.versionKey], error: gallery.errors[entry.versionKey], isStore: true) {
+                                Task { await gallery.get(entry) }
+                            }
+                        }
+                    }
+                }
+                if !gallery.overrides.values.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Your settings override this theme in \(gallery.overrides.values.count) places.").font(.headline)
+                        Text(gallery.overrides.values.map(\.title).joined(separator: ", "))
+                            .font(.callout).foregroundStyle(.secondary)
+                        Button("Reset them") { editor.change(gallery.overrides.resetEdit) }
+                            .accessibilityLabel("Reset your settings that override this theme")
+                    }
+                    .padding(.vertical, 8)
+                }
                 Picker("Appearance", selection: Binding(get: { store.configuration?.bar.appearance }, set: {
                     if $0 != store.configuration?.bar.appearance {
                         editor.change(ConfigurationEdit(action: .bar, properties: ["appearance": $0.map { .string($0.rawValue) } ?? .null]))
@@ -61,7 +80,7 @@ struct AppearanceView: View {
             } header: {
                 Text("Theme")
             } footer: {
-                Text("Automatic follows the system’s light or dark mode. Install other themes in Packages.")
+                Text("Automatic follows the system’s light or dark mode. Choose a theme to apply and save it.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
@@ -77,7 +96,7 @@ struct AppearanceView: View {
             } header: {
                 Text("Theme colors")
             } footer: {
-                Text("Changes are saved in your configuration’s tokens, so every widget, popup and package that uses a color follows.")
+                Text("Every widget, popup and package that uses a theme color follows your changes.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section("All widgets") {
@@ -185,7 +204,10 @@ struct AppearanceView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear(perform: loadThemes)
+        .onAppear { gallery.refresh() }
+        .task { await gallery.loadStore() }
+        .onChange(of: store.effectiveDocument) { _, _ in gallery.refresh() }
+        .onChange(of: store.context) { _, _ in gallery.refresh() }
     }
 
     private func document(_ key: String) -> [String: ConfigurationValue] {
@@ -202,87 +224,5 @@ struct AppearanceView: View {
 
     private func unset(_ properties: [String: ConfigurationValue]) {
         editor.change(ConfigurationEdit(action: .unset, properties: properties))
-    }
-
-    private func loadThemes() {
-        themes = themeChoices(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
-        var loader = ConfigurationLoader()
-        looks = [:]
-        looks[""] = try? loader.load(store.configurationURL, data: Data("{}".utf8))
-        for theme in themes {
-            looks[theme.key] = try? loader.load(store.configurationURL, data: JSONEncoder().encode(["theme": ConfigurationValue.object(theme.selection)]))
-        }
-    }
-}
-
-private struct ThemeCard: View {
-    let title: String
-    let look: Configuration?
-    let isSelected: Bool
-    let mode: ModePresentation
-    let select: () -> Void
-
-    var body: some View {
-        Button(action: select) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 0) {
-                    preview.environment(\.colorScheme, .light)
-                    preview.environment(\.colorScheme, .dark)
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: isSelected ? 2 : 1)
-                }
-                HStack(spacing: 4) {
-                    Text(title)
-                    if isSelected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
-                }
-                .font(.callout)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-
-    private var preview: some View {
-        ZStack(alignment: .top) {
-            Color(nsColor: .underPageBackgroundColor)
-            if let look {
-                let tile = WidgetAppearance(look.roleStyle(.time).inheriting(look.defaults).resolved(for: StyleStates(mode: mode)), defaults: WidgetStyle())
-                let bar = look.bar.style.resolved(for: StyleStates(mode: mode))
-                HStack(spacing: tile.spacing) {
-                    Circle().fill(tile.accent).frame(width: 7, height: 7)
-                    Text("9:41")
-                }
-                .font(tile.font)
-                .foregroundStyle(tile.foreground)
-                .padding(.horizontal, tile.paddingHorizontal)
-                .padding(.vertical, tile.paddingVertical)
-                .background(tile.background, in: RoundedRectangle(cornerRadius: tile.cornerRadius))
-                .overlay {
-                    RoundedRectangle(cornerRadius: tile.cornerRadius).strokeBorder(tile.borderColor, lineWidth: tile.borderWidth)
-                }
-                .shadow(color: tile.shadowColor, radius: tile.shadowRadius, y: 1)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background((bar.background ?? look.bar.background).color, in: RoundedRectangle(cornerRadius: bar.cornerRadius ?? 0))
-                .overlay { BarBorder(style: bar) }
-                .overlay(alignment: .bottomLeading) {
-                    if let workspace = try? look.workspaceDefaults.merging(nil), workspace.indicator == .underline {
-                        let underline = workspace.cellStyle(.focused, mode: mode).underline
-                        if underline.placement == .belowBar {
-                            (underline.background?.color ?? tile.accent)
-                                .frame(width: 20, height: max(0, underline.height ?? 2))
-                                .offset(x: look.bar.inset, y: max(0, underline.height ?? 2) + (underline.offsetY ?? 0))
-                                .allowsHitTesting(false)
-                        }
-                    }
-                }
-                .padding(look.bar.margin)
-                .frame(height: look.bar.height)
-            }
-        }
-        .frame(height: 56)
     }
 }

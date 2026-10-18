@@ -217,7 +217,7 @@ struct MeasuringCopy: ViewModifier {
     }
 }
 
-private struct BarUnitView: View {
+struct BarUnitView: View {
     let unit: BarUnit
     let config: Configuration
     let store: BarStore
@@ -277,6 +277,7 @@ struct WidgetView: View {
     let store: BarStore
     let monitor: Int
     let animationDuration: Double
+    @Environment(\.staticPreviewDate) private var staticPreviewDate
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -359,7 +360,7 @@ struct WidgetView: View {
             }
         }
         .background {
-            if !measuring { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
+            if !measuring && staticPreviewDate == nil { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
         }
         .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
             if !measuring { anchors.widgets[widget.id] = BarWidgetAnchor(bounds: bounds, unit: unitID) }
@@ -402,7 +403,9 @@ struct WidgetView: View {
     /// `content` drawn for the time the widget shows: a clock's, redrawn on its schedule, otherwise now.
     @ViewBuilder
     private func timed<Content: View>(@ViewBuilder _ content: @escaping (Date) -> Content) -> some View {
-        if case let .clock(format) = widget.content {
+        if let staticPreviewDate {
+            content(staticPreviewDate)
+        } else if case let .clock(format) = widget.content {
             TimelineView(clockSchedule(format)) { context in content(context.date) }
         } else {
             content(.now)

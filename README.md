@@ -365,6 +365,8 @@ A package whose `package.json` sets `"kind": "widgets"` contains no commands, so
 StableBar --install-package nord
 ```
 
+**Customize → Appearance** also shows uninstalled themes under **From the Store**. Their previews use the downloaded theme and your current bar. Choose **Get** to download, check, install and select a theme in one step; progress and any error appear on its card. Themes run no commands and skip the command review. Store previews and downloads are cached while StableBar runs. If the Store is unavailable, your installed themes still work.
+
 A store package whose version is newer than every version you have installed is marked **Update**. Install it and enable the new version; the old one stays installed, so you can roll back. When the new version runs commands, contacts hosts or uses macOS permissions that the enabled version does not, StableBar lists them and asks before enabling it.
 
 Every store package is open source in [stablebar-packages](https://github.com/Seb-GRAF/stablebar-packages), and that repository's CI builds and publishes the archives, not the package's author. Themes and packages that contain no commands are published once they pass CI. A maintainer reads every version of a package that runs commands before it is published. StableBar downloads the index and the archives over HTTPS and checks each archive against the SHA-256 in the index before reviewing it.
@@ -397,7 +399,7 @@ StableBar ships with eight themes. Each has light and dark colors and follows th
 | **Minimal** | `minimal` | No backgrounds: text with a soft shadow sits on the wallpaper. |
 | **Terminal** | `terminal` | Menlo, square corners and outlined widgets on a solid strip, in Gruvbox colors. |
 
-Choose one in setup or in **Customize → Appearance**, whose cards show each theme's bar, widgets and font, or select a theme that ships with StableBar by its ID:
+Choose one in setup or in **Customize → Appearance**. Appearance's cards show your own widgets, current text and icons with each theme's bar, colors, fonts and corners, in the appearance your bar uses now. The previews shorten the bar to fit and reuse its latest output without running scripts or starting providers. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
 
 ```json
 { "theme": { "id": "slate" } }
@@ -415,7 +417,9 @@ Install your own theme like any other package, then select it with its version:
 { "theme": { "id": "my-theme", "version": "1.0.0" } }
 ```
 
-Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Packages**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. A `profiles` array in a later layer replaces the theme's profiles, like any array. **Built-in** in setup and Customize removes `theme`.
+Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Packages**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. A `profiles` array in a later layer replaces the theme's profiles, like any array. **Built-in** in setup removes `theme`. In Appearance it removes the main file’s selection, or selects Built-in explicitly when an included file chooses another theme.
+
+When your main file sets values that the selected theme also sets, Appearance names them below the gallery. **Reset them** removes those values in one saved, undoable change. This includes bar dimensions, shared styles and a widget’s own style where it overrides the theme’s defaults or that widget’s role. Theme color changes count too, including colors inherited from Built-in. Active profiles in your main file are included; included files, templates and packages are left alone. The Light/Dark/Automatic choice is kept. Other settings still follow the usual layer order.
 
 [Tonhalle Line](examples/packages/tonhalle-line) is an installable theme with a 38 pt Helvetica strip in forest ink and warm paper, a matching light palette, and brass warning colors. Version **1.1.0** adds a Light 16 pt `time` role, popup heading/key/value/button/meter roles, a 2 pt workspace underline below the strip, and a four-edge brass outline for `mode.command`. Other labels remain 13 pt regular; a `secondary` date stays smaller. Install its folder through **Customize → Packages**, then select it in Appearance:
 
@@ -655,7 +659,7 @@ Open **Customize StableBar…** from the menu-bar icon or by right-clicking the 
 
 **General** opens the configuration file in your editor, shows it in Finder or reloads it, runs setup again, and reconnects the workspace source.
 
-**Appearance** chooses the [theme](#themes), keeps the bar light or dark or lets it follow the system, and edits the theme's colors. Each theme color has a light and a dark value; changing one saves it in your configuration's `tokens`, so every widget, popup and package that uses the color follows. **All widgets** sets the default colors, shadow, font, weight, size, padding and corners. **Popups** sets their background, border, shadow and weight, which apply over All widgets. **Bar** sets the bar's background, border color, width and edges, corners, size and position. Together they reach every property the themes that ship with StableBar set, so you can build any of their looks here.
+**Appearance** previews your own bar in each [theme](#themes); click a card to select it or **Get** a theme from the Store. A notice names your settings that override the chosen theme, with **Reset them** to let its values apply. Appearance also keeps the bar light or dark or lets it follow the system, and edits the theme's colors. Each theme color has a light and a dark value; changing one saves it in your configuration's `tokens`, so every widget, popup and package that uses the color follows. **All widgets** sets the default colors, shadow, font, weight, size, padding and corners. **Popups** sets their background, border, shadow and weight, which apply over All widgets. **Bar** sets the bar's background, border color, width and edges, corners, size and position. Together they reach every property the themes that ship with StableBar set, so you can build any of their looks here.
 
 **Widgets** lists your widgets by position; drag to reorder them. Change a widget's position, icon, text, clock format or transition, its colors, font and shape, or edit its properties as JSON. A color either follows one of the theme's colors, such as Text or Accent, or is a custom light and dark pair.
 

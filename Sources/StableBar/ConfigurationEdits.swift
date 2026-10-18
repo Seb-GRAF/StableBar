@@ -134,7 +134,15 @@ private func removing(_ keys: [String: ConfigurationValue], from object: [String
         if case let .object(nested) = value, !nested.isEmpty {
             if case let .object(current) = result[key] {
                 let remaining = removing(nested, from: current)
-                result[key] = remaining.isEmpty ? nil : .object(remaining)
+                result[key] = remaining.isEmpty && key != "configuration" ? nil : .object(remaining)
+            } else if case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
+                // A root unset can address several named definitions in one undoable change.
+                let identity = key == "widgets" ? "id" : "name"
+                result[key] = .array(current.map { value in
+                    guard case let .object(definition) = value, case let .string(id) = definition[identity],
+                          case let .object(mask) = nested[id] else { return value }
+                    return .object(removing(mask, from: definition))
+                })
             }
         } else {
             result[key] = nil

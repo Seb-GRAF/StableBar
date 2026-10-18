@@ -9,10 +9,11 @@ struct ScrollingText: View {
     @State private var start = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.staticPreviewDate) private var staticPreviewDate
 
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || measuring || textWidth <= geometry.size.width)) { context in
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || measuring || staticPreviewDate != nil || textWidth <= geometry.size.width)) { context in
                 let distance = max(textWidth - geometry.size.width, 0)
                 let travel = distance / speed
                 let elapsed = context.date.timeIntervalSince(start).truncatingRemainder(dividingBy: travel * 2 + 2)
@@ -28,7 +29,7 @@ struct ScrollingText: View {
                             Color.clear.onChange(of: textGeometry.size.width, initial: true) { textWidth = textGeometry.size.width }
                         }
                     }
-                    .offset(x: reduceMotion ? 0 : -offset)
+                    .offset(x: reduceMotion || staticPreviewDate != nil ? 0 : -offset)
             }
         }
         .frame(height: fontSize * 1.3)

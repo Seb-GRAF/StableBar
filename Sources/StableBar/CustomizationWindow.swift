@@ -673,7 +673,7 @@ extension BarStore {
         let text: String
         if file == configurationURL.standardizedFileURL.path {
             text = "your configuration"
-        } else if let themes = bundledThemesDirectory?.standardizedFileURL.path, file.hasPrefix(themes + "/") {
+        } else if let themes = themesDirectory?.standardizedFileURL.path, file.hasPrefix(themes + "/") {
             let id = file.dropFirst(themes.count + 1).prefix { $0 != "/" }
             text = id == "built-in" ? "the Built-in theme" : "the \(id.capitalized) theme"
         } else if file.hasPrefix(packages + "/") {

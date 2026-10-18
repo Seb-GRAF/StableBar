@@ -25,6 +25,9 @@ final class BarStore: NSObject {
     private(set) var customizationEdits: [ConfigurationEdit] = []
     private var customizationBase: (Configuration, ConfigurationLoader)?
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self)
+    @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
+        packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")))
+    var themesDirectory: URL? { configurationLoader.themesDirectory }
     var context = ConfigurationContext()
     private(set) var presentations: [String: WidgetPresentation] = [:]
     private(set) var barStyle = WidgetStyle()
@@ -165,7 +168,7 @@ final class BarStore: NSObject {
         let allEdits = sessionEdits + edits
         let root = try editedDocument(edits)
         let data = try configurationData(root)
-        var loader = ConfigurationLoader()
+        var loader = configurationLoader
         let next = try loader.load(configurationURL, data: data, context: context)
         if persist { try configurationData(root, editing: Data(contentsOf: configurationURL)).write(to: configurationURL, options: .atomic) }
         sessionEdits = persist ? [] : allEdits
@@ -725,6 +728,12 @@ final class WidgetPresentation {
 
     func setPopupAnchor(_ anchor: ObjectIdentifier?) {
         if popupAnchor != anchor { popupAnchor = anchor }
+    }
+
+    func setStaticTemporaryFields(_ fields: [String: String]?) {
+        expiry?.cancel()
+        expiry = nil
+        temporaryFields = fields
     }
 
     /// Shows the `temporary` of a new output for its duration. `output` numbers the output, so the
