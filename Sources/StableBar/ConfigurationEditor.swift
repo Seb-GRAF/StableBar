@@ -7,15 +7,41 @@ final class ConfigurationEditor {
     var history: ConfigurationHistory { store.customizationHistory }
     var undoSteps: [ConfigurationHistory.Step] { history.undoSteps }
     var redoSteps: [ConfigurationHistory.Step] { history.redoSteps }
-    var selectedID: String?
+    private var selection: String?
+    var selectedID: String? {
+        get { selection }
+        set {
+            guard newValue != selection else { return }
+            finishEditing()
+            selection = newValue
+        }
+    }
+    var section: CustomizationSection? = .appearance
+    @ObservationIgnored private let endEditing: () -> Void
+    @ObservationIgnored private var endingEditing = false
     var error: String? {
         get { history.error }
         set { history.error = newValue }
     }
 
-    init(store: BarStore) {
+    init(store: BarStore, endEditing: @escaping () -> Void = { NSApp?.keyWindow?.endEditing(for: nil) }) {
         self.store = store
-        selectedID = store.configuration?.widgets.first?.id
+        self.endEditing = endEditing
+        selection = store.configuration?.widgets.first?.id
+    }
+
+    /// Commit field-editor text before changing its widget or replacing the document it edits.
+    func finishEditing() {
+        guard !endingEditing else { return }
+        endingEditing = true
+        endEditing()
+        endingEditing = false
+    }
+
+    func showWidget(_ id: String) {
+        guard store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
+        selectedID = id
+        section = .widgets
     }
 
     var selected: [String: ConfigurationValue] {
@@ -41,6 +67,7 @@ final class ConfigurationEditor {
     }
 
     func change(_ edit: ConfigurationEdit) {
+        if edit.action == .remove { finishEditing() }
         do { try history.change(edit) }
         catch { self.error = errorMessage(error) }
         keepSelection()
@@ -96,12 +123,14 @@ final class ConfigurationEditor {
     }
 
     func undo() {
+        finishEditing()
         do { try history.undo() }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }
 
     func redo() {
+        finishEditing()
         do { try history.redo() }
         catch { self.error = errorMessage(error) }
         keepSelection()
@@ -113,12 +142,13 @@ final class ConfigurationEditor {
     }
 
     func discardCommandLineChanges() {
+        finishEditing()
         do { try history.discardCommandLineChanges() }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }
 
-    private func keepSelection() {
+    func keepSelection() {
         if store.configuration?.widgets.contains(where: { $0.id == selectedID }) != true {
             selectedID = store.configuration?.widgets.first?.id
         }

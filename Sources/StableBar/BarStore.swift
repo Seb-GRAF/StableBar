@@ -17,7 +17,10 @@ final class BarStore: NSObject {
     let registry: DataSourceRegistry
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
+    var onCustomizeWidget: ((String) -> Void)?
+    var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
+    var onEndThemeTrial: (() -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
     var widgetPackageNames: [String: String] = [:]
@@ -28,6 +31,7 @@ final class BarStore: NSObject {
     private(set) var customizationEdits: [ConfigurationEdit] = []
     private var customizationBase: (Configuration, ConfigurationLoader)?
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self)
+    @ObservationIgnored lazy var barEditing = BarEditing(store: self)
     @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
         packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")))
     var themesDirectory: URL? { configurationLoader.themesDirectory }
@@ -123,16 +127,23 @@ final class BarStore: NSObject {
 
     private func scheduleReload() {
         reloadTask?.cancel()
+        let generation = configurationWatcher.generation
         reloadTask = Task {
             do {
                 try await Task.sleep(for: .milliseconds(150))
+                guard configurationWatcher.generation == generation else { return }
                 reloadConfiguration()
             } catch {}
         }
     }
 
     func reloadConfiguration() {
+        readConfiguration(leavingEditMode: true)
+    }
+
+    private func readConfiguration(leavingEditMode: Bool) {
         guard !isPreview else { return }
+        if leavingEditMode { barEditing.end() }
         defer { configurationWatcher.watch(configurationLoader.dependencies) }
         customizationHistory.checkForExternalChanges()
         do {
@@ -242,7 +253,7 @@ final class BarStore: NSObject {
         customizationEdits = []
         let base = customizationBase
         customizationBase = nil
-        reloadConfiguration()
+        readConfiguration(leavingEditMode: false)
         if let error = configurationError, let (next, loader) = base {
             configurationLoader = loader
             apply(next)
@@ -579,8 +590,12 @@ final class BarStore: NSObject {
 
     func handle(_ request: RuntimeRequest) throws -> ConfigurationValue {
         switch request.action {
-        case .customize: onCustomize?()
-        case .reload: try applyEdits([], persist: false)
+        case .customize:
+            if let id = request.id { onCustomizeWidget?(id) }
+            else { onCustomize?() }
+        case .reload:
+            barEditing.end()
+            try applyEdits([], persist: false)
         case .batch: try applyEdits(request.edits ?? [], persist: request.persist)
         case .uninstallPackage:
             guard let id = request.id, let version = request.version else {
@@ -722,7 +737,7 @@ final class BarStore: NSObject {
     @discardableResult
     func runAction(_ command: String, widget: WidgetConfiguration,
                    event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
-        guard !isPreview else { return Task {} }
+        guard barEditing.allowsWidgetActions else { return Task {} }
         let id = UUID()
         let script = scripts[widget.id]
         let environment = commandEnvironment(widget, configuration: configuration!)
@@ -756,6 +771,7 @@ final class BarStore: NSObject {
     }
 
     func stop() {
+        barEditing.end()
         endThemeTrial()
         flushCustomization()
         managesConnections = false

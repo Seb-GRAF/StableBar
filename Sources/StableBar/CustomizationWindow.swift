@@ -5,10 +5,11 @@ import SwiftUI
 final class CustomizationWindow: NSObject, NSWindowDelegate {
     private weak var store: BarStore?
     private var window: NSWindow?
+    private var editor: ConfigurationEditor?
 
     init(store: BarStore? = nil) { self.store = store }
 
-    func show(store: BarStore) {
+    func show(store: BarStore, widgetID: String? = nil) {
         self.store = store
         store.setInspectorOpen(true)
         if window == nil {
@@ -18,15 +19,20 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             window.delegate = self
             window.minSize = NSSize(width: 900, height: 600)
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: CustomizationView(store: store))
+            let editor = ConfigurationEditor(store: store, endEditing: { [weak window] in window?.endEditing(for: nil) })
+            self.editor = editor
+            store.onEndCustomizationEditing = { [weak editor] in editor?.finishEditing() }
+            window.contentView = NSHostingView(rootView: CustomizationView(store: store, editor: editor))
             window.center()
             self.window = window
         }
+        if let widgetID { editor?.showWidget(widgetID) }
         NSApp.activate(ignoringOtherApps: true)
         window!.makeKeyAndOrderFront(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
+        editor?.finishEditing()
         store?.flushCustomization()
         store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
@@ -57,17 +63,12 @@ enum CustomizationSection: String, CaseIterable, Identifiable {
 
 private struct CustomizationView: View {
     let store: BarStore
-    @State private var editor: ConfigurationEditor
-    @State private var section: CustomizationSection? = .appearance
-
-    init(store: BarStore) {
-        self.store = store
-        _editor = State(initialValue: ConfigurationEditor(store: store))
-    }
+    @Bindable var editor: ConfigurationEditor
+    private var section: CustomizationSection? { editor.section }
 
     var body: some View {
         HStack(spacing: 0) {
-            List(CustomizationSection.allCases, selection: $section) { section in
+            List(CustomizationSection.allCases, selection: $editor.section) { section in
                 Label(section.rawValue, systemImage: section.symbol)
             }
             .listStyle(.sidebar)
@@ -107,6 +108,7 @@ private struct CustomizationView: View {
                 }
             }
         }
+        .onChange(of: store.configuration?.widgets.map(\.id)) { editor.keepSelection() }
     }
 
     private var footer: some View {

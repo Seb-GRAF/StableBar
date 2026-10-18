@@ -72,6 +72,7 @@ struct WidgetsView: View {
             Group {
                 if let widget = widgets.first(where: { $0.id == editor.selectedID }) {
                     inspector(widget)
+                        .id(widget.id)
                 } else {
                     ContentUnavailableView("Select a widget", systemImage: "sidebar.left",
                                            description: Text("Choose a widget to change how it looks and where it sits."))
@@ -101,6 +102,13 @@ struct WidgetsView: View {
     private var sidebar: some View {
         let names = displayNames
         return VStack(spacing: 0) {
+            HStack {
+                Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
+                    .accessibilityLabel(store.barEditing.menuTitle)
+                Spacer()
+            }
+            .padding(8)
+            Divider()
             List(selection: $editor.selectedID) {
                 ForEach(positions, id: \.self) { position in
                     let section = widgets.filter { $0.position == position }

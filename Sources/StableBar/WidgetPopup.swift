@@ -40,6 +40,7 @@ final class WidgetPopup {
 
     func toggle(_ popup: PopupConfiguration, widget: WidgetConfiguration, defaults: WidgetStyle,
                 store: BarStore, anchor: NSView) {
+        guard store.barEditing.allowsWidgetActions else { return }
         if self.anchor === anchor && widgetID == widget.id {
             close()
             return

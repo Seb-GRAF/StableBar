@@ -439,9 +439,11 @@ struct ConfigurationLoader {
 final class ConfigurationWatcher {
     var onChange: (() -> Void)?
     private var sources: [DispatchSourceFileSystemObject] = []
+    private(set) var generation = 0
 
     func watch(_ urls: Set<URL>) {
         stop()
+        let generation = generation
         var targets = urls
         for url in urls {
             var directory = url.deletingLastPathComponent()
@@ -456,7 +458,10 @@ final class ConfigurationWatcher {
             let source = DispatchSource.makeFileSystemObjectSource(
                 fileDescriptor: descriptor, eventMask: [.write, .rename, .delete], queue: .main)
             source.setEventHandler { [weak self] in
-                Task { @MainActor in self?.onChange?() }
+                Task { @MainActor in
+                    guard let self, self.generation == generation else { return }
+                    self.onChange?()
+                }
             }
             source.setCancelHandler { close(descriptor) }
             source.resume()
@@ -465,6 +470,7 @@ final class ConfigurationWatcher {
     }
 
     func stop() {
+        generation += 1
         for source in sources { source.cancel() }
         sources.removeAll()
     }

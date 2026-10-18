@@ -31,6 +31,7 @@ struct PopupView: View {
                                                      values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
                                                      styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
                                                      roles: store.configuration?.roles ?? [:], open: { target in
+                    guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     target.open()
                 }, states: states) { command, environment in

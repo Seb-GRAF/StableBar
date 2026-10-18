@@ -104,6 +104,10 @@ final class WidgetSetup {
         try store.customizationHistory.change(WidgetPlacement.move(id, by: offset, widgets: widgets))
     }
 
+    func remove(_ id: String) throws {
+        try store.customizationHistory.change(ConfigurationEdit(action: .remove, id: id))
+    }
+
     private func requireSavedWidget(_ id: String, widgets: [WidgetConfiguration]) throws {
         guard let widget = widgets.first(where: { $0.id == id }) else { return }
         var loader = ConfigurationLoader()

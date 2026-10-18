@@ -1,0 +1,494 @@
+import AppKit
+import XCTest
+@testable import StableBar
+
+final class BarEditingTests: XCTestCase {
+    private let laptop = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)
+    private let external = BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)
+
+    @MainActor func testEveryDisplayRevealsDisabledOutputHiddenAndExcludedWidgetsWithoutChangingTheirSettings() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"off","type":"text","text":"Off","position":"left","enabled":false},
+                    {"id":"output","type":"script","command":"true","position":"center"},
+                    {"id":"screen","type":"clock","position":"notchRight","display":"external"},
+                    {"id":"spaces","type":"workspaces","position":"notchLeft"},
+                    {"id":"visible","type":"clock","position":"right"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let script = ScriptWidget()
+        script.output = ScriptOutput(text: "", hidden: true)
+        store.scripts["output"] = script
+        store.updatePresentations()
+        let before = try Data(contentsOf: fixture.url)
+        let document = store.effectiveDocument
+        let editing = store.barEditing
+        XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
+        XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
+        XCTAssertEqual(editing.menuTitle, "Edit Bar")
+        editing.begin()
+        XCTAssertEqual(editing.menuTitle, "Finish Editing Bar")
+        for display in [laptop, external] {
+            let entries = editing.entries(on: display)
+            XCTAssertEqual(entries.map(\.id), ["off", "output", "screen", "spaces", "visible"])
+            XCTAssertTrue(entries[0].visibility.reasons.contains(.disabled))
+            XCTAssertTrue(entries[1].visibility.reasons.contains(.output))
+            XCTAssertEqual(entries[2].visibility.isHidden, display.isBuiltIn)
+            XCTAssertTrue(entries[3].visibility.reasons.contains(.workspaces))
+            XCTAssertTrue(entries.filter { $0.visibility.isHidden }.allSatisfy(\.usesPlaceholder))
+            XCTAssertTrue(entries.allSatisfy { !$0.name.isEmpty })
+        }
+        XCTAssertEqual(store.effectiveDocument, document)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        XCTAssertFalse(script.diagnostics.running)
+        XCTAssertNil(store.scripts["off"])
+        editing.end()
+        XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
+        XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
+        XCTAssertEqual(store.presentations["output"]?.hidden, true)
+        XCTAssertEqual(store.configuration?.widgets[0].enabled, false)
+    }
+
+    @MainActor func testEmptyWidgetsHaveDistinctNamedPlaceholdersAndOutputDisplaySelectionWins() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"widget-00000001","type":"text","text":"","position":"left"},
+                    {"id":"widget-00000002","type":"text","text":"","position":"left"},
+                    {"id":"spacer","type":"spacer","position":"center"},
+                    {"id":"script","type":"script","command":"true","display":"external","position":"right"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        XCTAssertTrue(store.barEditing.entries(on: laptop).allSatisfy(\.usesPlaceholder))
+        XCTAssertEqual(store.barEditing.entries(on: laptop).prefix(2).map(\.name), ["Text 1", "Text 2"])
+        let script = ScriptWidget()
+        script.output = ScriptOutput(text: "Hello", display: .builtIn)
+        store.scripts["script"] = script
+        store.updatePresentations()
+        XCTAssertFalse(try XCTUnwrap(store.barEditing.entries(on: laptop).last).usesPlaceholder)
+        XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: external).last).visibility.isHidden)
+        store.barEditing.end()
+        XCTAssertTrue(store.barEditing.widgets(on: laptop).contains { $0.id == "script" })
+        XCTAssertFalse(store.barEditing.widgets(on: external).contains { $0.id == "script" })
+    }
+
+    func testAllFiveSectionsIncludeEmptyPositionsAndMatchEachDisplaysPhysicalOrder() throws {
+        let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"inset":8}"#.utf8))
+        let widths: [WidgetPosition: CGFloat] = [.left: 180, .notchLeft: 140, .center: 150, .notchRight: 130, .right: 170]
+        for display in [laptop, external] {
+            let layout = BarEditLayout(width: 1512, display: display, bar: bar, preferredWidths: widths)
+            XCTAssertEqual(Set(layout.sections.keys), Set(WidgetPosition.allCases))
+            let ordered = layout.sections.sorted { $0.value.x < $1.value.x }
+            XCTAssertEqual(ordered.map(\.key), display.notch == nil
+                           ? [.left, .notchLeft, .center, .notchRight, .right] : [.left, .notchLeft, .notchRight, .center, .right])
+            for (index, item) in ordered.enumerated() {
+                XCTAssertGreaterThan(item.value.width, 0)
+                XCTAssertGreaterThanOrEqual(item.value.x, 0)
+                XCTAssertLessThanOrEqual(item.value.x + item.value.width, layout.done.x)
+                if index > 0 { XCTAssertGreaterThan(item.value.x, ordered[index - 1].value.x + ordered[index - 1].value.width) }
+                if let notch = display.notch {
+                    XCTAssertTrue(item.value.x + item.value.width <= notch.lowerBound || item.value.x >= notch.upperBound)
+                }
+            }
+            if display.notch == nil {
+                let first = try XCTUnwrap(layout.sections[.notchLeft])
+                let last = try XCTUnwrap(layout.sections[.notchRight])
+                XCTAssertEqual((first.x + last.x + last.width) / 2, 1512 / 2, accuracy: 0.01)
+            }
+        }
+    }
+
+    func testCrowdedSectionsStayAvailableWithoutOverflowAndRespectScaledNotchOverrides() throws {
+        let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"margin":4,"notchWidth":200,"displayScale":{"builtIn":1.2}}"#.utf8))
+        let layout = BarEditLayout(width: 1504, display: laptop, bar: bar,
+                                   preferredWidths: Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { ($0, 2000) }))
+        XCTAssertEqual(layout.sections.count, 5)
+        for (position, frame) in layout.sections {
+            XCTAssertGreaterThan(frame.width, 0)
+            if [.left, .notchLeft].contains(position) { XCTAssertLessThanOrEqual(frame.x + frame.width, 632) }
+            else { XCTAssertGreaterThanOrEqual(frame.x, 872) }
+        }
+    }
+
+    @MainActor func testDropIndexUsesFrameMidpointsAndNeverSplitsOrTargetsTheMovingGroup() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair"},
+        {"id":"b","type":"clock","position":"left","group":"pair"},{"id":"c","type":"clock","position":"left"},
+        {"id":"d","type":"clock","position":"right"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editing = store.barEditing
+        let frames = ["a": CGRect(x: -40, y: 0, width: 40, height: 30), "b": CGRect(x: 4, y: 0, width: 40, height: 30),
+                      "c": CGRect(x: 60, y: 0, width: 40, height: 30)]
+        XCTAssertNil(editing.dropTarget("d", on: 2, position: .left, x: 0, frames: frames))
+        editing.begin()
+        let beforeGroup = try XCTUnwrap(editing.dropTarget("d", on: 2, position: .left, x: 1, frames: frames))
+        XCTAssertEqual(beforeGroup.before, "a")
+        XCTAssertEqual(beforeGroup.index, 0)
+        XCTAssertEqual(beforeGroup.x, -43)
+        let afterGroup = try XCTUnwrap(editing.dropTarget("d", on: 2, position: .left, x: 3, frames: frames))
+        XCTAssertEqual(afterGroup.before, "c")
+        XCTAssertEqual(afterGroup.index, 2)
+        XCTAssertEqual(afterGroup.x, 57)
+        let end = try XCTUnwrap(editing.dropTarget("d", on: 2, position: .left, x: 80, frames: frames))
+        XCTAssertNil(end.before)
+        XCTAssertEqual(end.index, 3)
+        XCTAssertEqual(end.x, 103)
+        XCTAssertEqual(editing.dropTarget("b", on: 1, position: .left, x: 0, frames: frames)?.before, "c")
+        XCTAssertEqual(editing.dropTarget("b", on: 1, position: .left, x: 0, frames: frames)?.index, 0)
+        XCTAssertEqual(editing.dropTarget("d", on: 2, position: .center, x: 500, frames: [:])?.index, 0)
+        XCTAssertNil(editing.dropTarget("missing", on: 2, position: .left, x: 0, frames: frames))
+    }
+
+    @MainActor func testDropMovesTheWholeGroupOnceAcrossDisplaysAndPositionsAndUndoKeepsEditing() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair"},{"id":"b","type":"clock","position":"left","group":"pair"},{"id":"c","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        let before = try Data(contentsOf: fixture.url)
+        let editing = store.barEditing
+        editing.begin()
+        let payload = editing.dragSession.begin("b")
+        let target = try XCTUnwrap(editing.dropTarget("b", on: 2, position: .notchRight, x: 0, frames: [:]))
+        editing.insertion = target
+        XCTAssertTrue(editing.drop(payload, at: target))
+        XCTAssertFalse(editing.drop(payload, at: target))
+        XCTAssertNil(editing.insertion)
+        XCTAssertNil(editing.dragSession.active)
+        XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.notchRight, .notchRight])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try await Task.sleep(for: .milliseconds(350))
+        XCTAssertTrue(editing.isActive, "An edit's own file notification must not leave edit mode")
+        try store.customizationHistory.undo()
+        XCTAssertTrue(editing.isActive)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configuration?.bar.height, 50)
+    }
+
+    @MainActor func testAddAndRemoveUseSharedSetupAndSavedUndoHistoryWithoutSavingCommandLineChanges() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        store.barEditing.begin()
+        let before = try Data(contentsOf: fixture.url)
+        let added = await WidgetSetup(store: store).add(try XCTUnwrap(WidgetAddCatalog.builtIns.first { $0.id == "text" }), to: .notchLeft)
+        let id = try XCTUnwrap(added)
+        XCTAssertTrue(store.barEditing.entries(on: external).contains { $0.id == id && $0.widget.position == .notchLeft })
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        store.barEditing.remove(id)
+        XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == id })
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
+        try store.customizationHistory.undo()
+        XCTAssertTrue(store.barEditing.widgets(on: laptop).contains { $0.id == id })
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertNil(try fixture.document()["bar"])
+        XCTAssertEqual(store.sessionEdits.count, 1)
+    }
+
+    @MainActor func testRemovingPackageWidgetDisablesItAndLeavesItsSourceAndHiddenPlaceholderIntact() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let source = fixture.directory.appending(path: "source")
+        try fixture.write(#"{"id":"note","name":"Note","version":"1","kind":"widgets","entry":"config.json"}"#,
+                          to: source.appending(path: "package.json"))
+        try fixture.write(#"{"widgets":[{"id":"note","type":"text","text":"Note","position":"right"}]}"#,
+                          to: source.appending(path: "config.json"))
+        let installed = try fixture.packages.install(source)
+        let store = try fixture.store()
+        defer { store.stop() }
+        _ = try WidgetSetup(store: store).enable(installed, settings: [:], position: .left)
+        let packageFile = installed.directory.appending(path: "config.json")
+        let before = try Data(contentsOf: packageFile)
+        store.barEditing.begin()
+        store.barEditing.remove("note")
+        XCTAssertNil(store.barEditing.error)
+        let entry = try XCTUnwrap(store.barEditing.entries(on: laptop).first)
+        XCTAssertEqual(entry.id, "note")
+        XCTAssertFalse(entry.widget.enabled)
+        XCTAssertTrue(entry.usesPlaceholder)
+        XCTAssertTrue(entry.visibility.reasons.contains(.disabled))
+        XCTAssertEqual(try Data(contentsOf: packageFile), before)
+        try store.customizationHistory.undo()
+        XCTAssertEqual(store.configuration?.widgets.first?.enabled, true)
+        store.barEditing.end()
+        XCTAssertEqual(store.barEditing.widgets(on: laptop).map(\.id), ["note"])
+    }
+
+    @MainActor func testClicksSelectCustomizeInsteadOfActionsAndAllMouseActionsResumeAfterDone() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"right","onClick":"true","popup":{"style":{},"layout":{"type":"text","text":"Popup"}},"actions":{"rightClick":"true","middleClick":"true","scrollUp":"true","scrollDown":"true","mouseEntered":"true","mouseExited":"true"}},{"id":"open","type":"text","text":"Open","position":"left","open":"com.apple.finder"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let widget = try XCTUnwrap(store.configuration?.widgets.first)
+        let marker = fixture.directory.appending(path: "actions")
+        let command = "printf x >> '\(marker.path)'"
+        var selected: String?
+        store.onCustomizeWidget = { selected = $0 }
+        store.barEditing.begin()
+        store.barEditing.select("a")
+        XCTAssertEqual(selected, "a")
+        selected = nil
+        store.barEditing.select("missing")
+        XCTAssertNil(selected)
+        XCTAssertFalse(store.barEditing.allowsWidgetActions)
+        store.popup.toggle(try XCTUnwrap(widget.popup), widget: widget, defaults: WidgetStyle(), store: store, anchor: NSView())
+        XCTAssertFalse(store.popup.isOpen)
+        for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
+            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        store.barEditing.end()
+        XCTAssertTrue(store.barEditing.allowsWidgetActions)
+        store.barEditing.select("a")
+        XCTAssertNil(selected)
+        for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
+            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+        }
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "xxxxx")
+        XCTAssertEqual(store.configuration?.widgets.first?.onClick, widget.onClick)
+        XCTAssertNotNil(store.configuration?.widgets.first?.popup)
+        XCTAssertEqual(store.configuration?.widgets.first?.actions?.rightClick, "true")
+    }
+
+    @MainActor func testEscapeDoneReloadInvalidReloadAndStopAlwaysRestoreNormalVisibilityAndGeometry() throws {
+        for exit in ["escape", "done", "reload", "runtime reload", "invalid reload", "stop"] {
+            let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"off","type":"clock","position":"right","enabled":false}]}"#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            let normal = try XCTUnwrap(store.barEditing.geometry(for: laptop))
+            store.barEditing.begin()
+            XCTAssertEqual(store.barEditing.widgets(on: external).count, 1)
+            XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: laptop)).layoutHeight, normal.layoutHeight)
+            let payload = store.barEditing.dragSession.begin("off")
+            store.barEditing.insertion = store.barEditing.dropTarget("off", on: 1, position: .left, x: 0, frames: [:])
+            XCTAssertFalse(store.barEditing.handleKey(36))
+            switch exit {
+            case "escape": XCTAssertTrue(store.barEditing.handleKey(53))
+            case "done": store.barEditing.end()
+            case "reload": store.reloadConfiguration()
+            case "runtime reload": _ = try store.handle(RuntimeRequest(action: .reload))
+            case "invalid reload": try fixture.write("{", to: fixture.url); store.reloadConfiguration()
+            default: store.stop()
+            }
+            XCTAssertFalse(store.barEditing.isActive, exit)
+            XCTAssertTrue(store.barEditing.allowsWidgetActions, exit)
+            XCTAssertTrue(store.barEditing.widgets(on: external).isEmpty, exit)
+            XCTAssertNil(store.barEditing.insertion, exit)
+            XCTAssertFalse(store.barEditing.dragSession.accepts(payload), exit)
+            XCTAssertEqual(store.barEditing.geometry(for: laptop), normal, exit)
+            XCTAssertFalse(store.barEditing.handleKey(53))
+        }
+    }
+
+    @MainActor func testThemeTrialsAndEditingEndEachOtherWithoutSavingAndPreviewsNeverEnterEditMode() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+        store.reloadConfiguration()
+        defer { store.stop() }
+        let before = try Data(contentsOf: fixture.url)
+        let normal = store.effectiveDocument
+        let trial = ThemeTrial(store: store)
+        trial.previous()
+        XCTAssertNotEqual(store.effectiveDocument, normal)
+        store.onEndThemeTrial = { trial.cancel() }
+        store.barEditing.begin()
+        XCTAssertFalse(trial.isActive)
+        XCTAssertEqual(store.effectiveDocument, normal)
+        XCTAssertTrue(store.barEditing.isActive)
+        let next = ThemeTrial(store: store)
+        XCTAssertFalse(store.barEditing.isActive)
+        next.cancel()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        let preview = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
+        preview.barEditing.begin()
+        XCTAssertFalse(preview.barEditing.isActive)
+        XCTAssertFalse(preview.barEditing.allowsWidgetActions)
+        XCTAssertEqual(preview.barEditing.geometry(for: laptop), preview.configuration?.barGeometry(for: laptop))
+    }
+
+    @MainActor func testBarPanelOnlyAcceptsKeyboardFocusWhileEditingAndRuntimeCanOpenOneWidget() throws {
+        _ = NSApplication.shared
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        XCTAssertFalse(panel.canBecomeKey)
+        XCTAssertFalse(panel.canBecomeMain)
+        panel.isEditingBar = true
+        XCTAssertTrue(panel.canBecomeKey)
+        XCTAssertFalse(panel.canBecomeMain)
+        panel.isEditingBar = false
+        XCTAssertFalse(panel.canBecomeKey)
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        var id: String?
+        var generic = false
+        store.onCustomizeWidget = { id = $0 }
+        store.onCustomize = { generic = true }
+        _ = try store.handle(RuntimeRequest(action: .customize, id: "clock"))
+        XCTAssertEqual(id, "clock")
+        XCTAssertFalse(generic)
+        _ = try store.handle(RuntimeRequest(action: .customize))
+        XCTAssertTrue(generic)
+    }
+
+    @MainActor func testMenuBarEntryStartsAndFinishesEditingAndIsAbsentWithoutABar() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        let menu = NSMenu()
+        AppDelegate(store: store).menuWillOpen(menu)
+        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar" })
+        let delegate = AppDelegate(store: store, panels: [1: panel])
+        delegate.menuWillOpen(menu)
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Edit Bar" })
+        XCTAssertEqual(menu.items[try XCTUnwrap(menu.items.firstIndex { $0 === item }) - 1].title, "Try Themes…")
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
+        XCTAssertTrue(store.barEditing.isActive)
+        delegate.menuWillOpen(menu)
+        let done = try XCTUnwrap(menu.items.first { $0.title == "Finish Editing Bar" })
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(done.action), to: done.target, from: done))
+        XCTAssertFalse(store.barEditing.isActive)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    @MainActor func testEscapeHandlingAcceptsAnUnmodifiedKeyAndLeavesOtherShortcutsAlone() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        for (code, modifiers) in [(UInt16(53), NSEvent.ModifierFlags.command), (53, .control), (53, .option), (36, [])] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                                                     windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                     isARepeat: false, keyCode: code))
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store))
+            XCTAssertTrue(store.barEditing.isActive)
+        }
+        let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                  windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                  isARepeat: false, keyCode: 53))
+        XCTAssertTrue(BarEditingKeyboard.handle(escape, store: store))
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store))
+    }
+
+    @MainActor func testEmptyCustomLayoutsAndTransparentWidgetsUsePlaceholdersUntilTheirContentReturns() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"empty","type":"text","text":"","position":"left","layout":{"type":"row","children":[{"type":"field","field":"text","hideWhenEmpty":"text"}]}},
+        {"id":"transparent","type":"text","text":"Hello","position":"right","style":{"opacity":0}}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        XCTAssertTrue(store.barEditing.entries(on: laptop).allSatisfy(\.usesPlaceholder))
+        try store.customizationHistory.change([
+            ConfigurationEdit(action: .set, id: "empty", properties: ["text": .string("Here")]),
+            ConfigurationEdit(action: .set, id: "transparent", properties: ["style": .object(["opacity": .number(1)])])
+        ])
+        XCTAssertTrue(store.barEditing.entries(on: external).allSatisfy { !$0.usesPlaceholder })
+    }
+
+    @MainActor func testMovesWithinASectionAndKeyboardMovesShareTheSameUndoableGroupLogic() throws {
+        let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair"},{"id":"b","type":"clock","position":"left","group":"pair"},{"id":"c","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let before = try Data(contentsOf: fixture.url)
+        store.barEditing.begin()
+        store.barEditing.move("b", to: .left)
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["c", "a", "b"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        store.barEditing.move("b", by: -1)
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "c"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
+        try store.customizationHistory.undo()
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+    }
+
+    @MainActor func testExternalFileWatcherEndsEditingAndSessionOnlyWidgetsCannotBeSavedByMovingThem() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right","enabled":false}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+                                                                             "position": .string("right"), "text": .string("Temporary")])])
+        let before = try Data(contentsOf: fixture.url)
+        store.barEditing.begin()
+        store.barEditing.move("temporary", to: .left, on: 2)
+        XCTAssertNotNil(store.barEditing.error)
+        XCTAssertEqual(store.barEditing.errorDisplayID, 2)
+        XCTAssertTrue(store.barEditing.isActive)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        try fixture.write(#"{"widgets":[{"id":"clock","type":"clock","position":"left","enabled":false}]}"#, to: fixture.url)
+        for _ in 0..<100 {
+            if !store.barEditing.isActive { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(store.barEditing.isActive)
+        XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
+        XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == "clock" })
+        XCTAssertTrue(store.barEditing.allowsWidgetActions)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+    }
+
+    @MainActor func testRevealingAndMovingDisabledCommandsNeverStartsThemOrEnablesThem() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let marker = fixture.directory.appending(path: "must-not-run")
+        try fixture.write("""
+        {"widgets":[{"id":"off","type":"script","command":"touch '\(marker.path)'","enabled":false,"position":"right"}]}
+        """, to: fixture.url)
+        let store = BarStore(configurationURL: fixture.url, themesDirectory: nil)
+        defer { store.stop() }
+        store.reloadConfiguration()
+        store.barEditing.begin()
+        XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: laptop).first).usesPlaceholder)
+        store.setVisibleWidgets(ids: ["off"], displayID: 1)
+        store.barEditing.move("off", to: .left)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertTrue(store.barEditing.isActive)
+        XCTAssertEqual(store.configuration?.widgets.first?.enabled, false)
+        XCTAssertTrue(store.scripts.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        store.barEditing.end()
+        XCTAssertTrue(store.barEditing.widgets(on: laptop).isEmpty)
+    }
+
+    @MainActor func testSavingAnEditInvalidatesAnAlreadyScheduledDirectoryNotification() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([])
+        store.barEditing.begin()
+        try fixture.write("Installed package", to: fixture.directory.appending(path: "new-package"))
+        try await Task.sleep(for: .milliseconds(60))
+        store.barEditing.move("clock", to: .left)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertTrue(store.barEditing.isActive)
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
+    }
+}

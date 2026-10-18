@@ -12,6 +12,7 @@ final class ThemeTrial {
 
     init(store: BarStore) {
         self.store = store
+        store.barEditing.end()
         choices = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                                themesDirectory: store.themesDirectory).choices
         selectedIndex = choices.firstIndex { $0.key == store.selectedThemeKey } ?? 0
