@@ -20,192 +20,61 @@ final class ThemePreviewTests: XCTestCase {
         XCTAssertEqual(themeChoices(packages: fixture.packages.directory, themesDirectory: fixture.themes).map(\.key), Array(choices.dropFirst()).map(\.key))
     }
 
-    @MainActor func testEachPreviewUsesTheUserLayersAndLatestOutputWithoutStartingAnything() async throws {
-        let fixture = try ThemeGalleryFixture()
+    func testSamplesUseOnlyTheThemeAndDifferBetweenBuiltInMenuBarSlateAndTerminal() throws {
+        let fixture = try ThemeGalleryFixture(##"{"defaults":{"fontSize":99},"bar":{"margin":90},"widgets":[]}"##)
         defer { fixture.close() }
-        let marker = fixture.directory.appending(path: "must-not-exist")
-        try fixture.write(#"{"widgets":[{"id":"included","type":"text","position":"left","text":"My included label","icon":"star"}]}"#,
-                          to: fixture.directory.appending(path: "included.json"))
-        try fixture.write("""
-        {"includes":["included.json"],"bar":{"appearance":"dark"},
-         "templates":{"note":{"type":"text","position":"left","text":"My template"}},
-         "widgets":[{"id":"note","template":"note"},{"id":"clock","type":"clock","position":"right","role":"time"},
-                    {"id":"script","type":"script","command":"touch '\(marker.path)'","position":"right"},
-                    {"id":"native","type":"battery","position":"right"}],
-         "widgetOverrides":{"included":{"text":"My current label"}},
-         "profiles":[{"name":"dark","when":{"appearance":"dark"},"configuration":{"defaults":{"fontSize":17}}}]}
-        """, to: fixture.url)
-        let store = try fixture.store()
-        let script = ScriptWidget()
-        script.output = ScriptOutput(text: "My current output", icon: "bolt", value: 0.4)
-        script.samples = [0.2, 0.4]
-        var updates = 0
-        script.onUpdate = { updates += 1 }
-        store.scripts["script"] = script
-        store.scripts["native"] = ScriptWidget()
-        store.scripts["native"]?.output = ScriptOutput(text: "72%", icon: "battery.75percent")
-        store.preparePresentations()
-        store.presentations["script"]?.show(try ConfigurationValue.object(["fields": .object(["text": .string("Current overlay")]), "duration": .number(60)]).decoded(TemporaryOutput.self), output: 1)
-        store.workspaceStore.acceptMode("command")
-        store.workspaceStore.workspaces = [Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1)]
-        let model = ThemePreview(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        for choice in ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices {
-            let configuration = try model.configuration(for: choice, document: fixture.document(), context: store.context)
-            XCTAssertEqual(configuration.widgets.map(\.id), ["included", "note", "clock", "script", "native"])
-            XCTAssertEqual(configuration.defaults.fontSize, 17)
-            XCTAssertEqual(configuration.widgets[0].content, .text("My current label"))
-            let preview = ThemePreview.snapshot(configuration, from: store)
-            XCTAssertEqual(preview.label(for: configuration.widgets[3]).text, "My current output")
-            XCTAssertEqual(preview.label(for: configuration.widgets[3]).icon, "bolt")
-            XCTAssertEqual(preview.label(for: configuration.widgets[4]).text, "72%")
-            XCTAssertEqual(preview.scripts["script"]?.samples, [0.2, 0.4])
-            XCTAssertFalse(preview.scripts["script"] === script)
-            XCTAssertEqual(preview.workspaceStore.workspaces, store.workspaceStore.workspaces)
-            XCTAssertEqual(preview.workspaceStore.mode, "command")
-            XCTAssertFalse(preview.workspaceStore.isRunning)
-            XCTAssertTrue(ThemePreview.usesDarkAppearance(configuration, context: store.context))
-            XCTAssertEqual(preview.presentations.count, 5)
-            XCTAssertEqual(preview.presentations["script"]?.temporaryFields, ["text": "Current overlay"])
-            XCTAssertNil(preview.presentations["script"]?.expiry)
-            XCTAssertEqual(preview.presentations["script"]?.style.base.foreground, configuration.defaults.foreground)
+        let choices = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices
+        var looks: [String: Configuration] = [:]
+        for choice in choices {
+            let preview = try ThemePreview(choice: choice, themesDirectory: fixture.themes)
+            looks[choice.key] = preview.light
+            XCTAssertTrue(preview.light.widgets.isEmpty)
+            XCTAssertTrue(preview.dark.widgets.isEmpty)
+            XCTAssertTrue(preview.light.providers.isEmpty)
+            XCTAssertNotEqual(preview.light.defaults.fontSize, 99)
+            XCTAssertNotEqual(preview.light.bar.margin, 90)
         }
-        script.onUpdate?()
-        XCTAssertEqual(updates, 1)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
-        XCTAssertEqual(store.scripts.count, 2)
+        let builtIn = try XCTUnwrap(looks["built-in"])
+        let menuBar = try XCTUnwrap(looks["menu-bar"])
+        XCTAssertNil(builtIn.bar.style.background)
+        XCTAssertNotNil(builtIn.defaults.background)
+        XCTAssertNotNil(menuBar.bar.style.background)
+        XCTAssertNil(menuBar.defaults.background)
+        let slate = try XCTUnwrap(looks["slate"])
+        let terminal = try XCTUnwrap(looks["terminal"])
+        XCTAssertEqual(slate.defaults.cornerRadius, 8)
+        XCTAssertEqual(terminal.defaults.cornerRadius, 0)
+        XCTAssertNotEqual(slate.defaults.accent, terminal.defaults.accent)
+        XCTAssertEqual(terminal.defaults.fontName, "Menlo")
     }
 
-    func testPreviewReplacesAnIncludedThemeAndComposesDownloadedThemeBeforeUserOverrides() throws {
-        let fixture = try ThemeGalleryFixture(##"{"includes":["included.json"],"defaults":{"fontSize":22},"widgets":[{"id":"clock","type":"clock","position":"right"}]}"##)
+    func testDownloadedThemeUsesItsConfigurationOverBuiltInWithoutUserLayers() throws {
+        let fixture = try ThemeGalleryFixture(##"{"includes":["missing.json"],"defaults":{"fontSize":99},"widgets":[]}"##)
         defer { fixture.close() }
-        try fixture.write(#"{"theme":{"id":"terminal"}}"#, to: fixture.directory.appending(path: "included.json"))
-        let downloaded = try fixture.theme(##"{"tokens":{"text":"#123456"},"bar":{"height":29,"style":{"cornerRadius":7}},"defaults":{"foreground":"@token.text","fontSize":14}}"##, install: false)
-        let model = ThemePreview(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        let configuration = try model.configuration(for: downloaded, document: fixture.document(), context: ConfigurationContext())
-        XCTAssertEqual(configuration.defaults.foreground, HexColor(0x123456ff))
-        XCTAssertEqual(configuration.defaults.fontSize, 22)
-        XCTAssertEqual(configuration.bar.height, 29)
-        XCTAssertEqual(configuration.bar.style.cornerRadius, 7)
-        XCTAssertNil(configuration.defaults.fontName)
+        let choice = try fixture.theme(##"{"tokens":{"text":"#123456"},"bar":{"height":29,"style":{"cornerRadius":7}},"defaults":{"foreground":"@token.text","fontSize":14}}"##, install: false)
+        let preview = try ThemePreview(choice: choice, themesDirectory: fixture.themes)
+        for look in [preview.light, preview.dark] {
+            XCTAssertEqual(look.defaults.foreground, HexColor(0x123456ff))
+            XCTAssertEqual(look.defaults.fontSize, 14)
+            XCTAssertEqual(look.bar.height, 29)
+            XCTAssertEqual(look.bar.style.cornerRadius, 7)
+            XCTAssertNotNil(look.defaults.background, "Unspecified styling inherits Built-in")
+            XCTAssertTrue(look.widgets.isEmpty)
+        }
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.packages.directory.path))
-        let builtIn = ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices[0]
-        let original = try model.configuration(for: builtIn, document: fixture.document(), context: ConfigurationContext())
-        XCTAssertNil(original.defaults.fontName)
-        XCTAssertEqual(original.defaults.foreground, HexColor(light: 0x1d1d1fff, dark: 0xf5f5f7ff))
     }
 
-    func testThemeLayerUsesOnlyItsOwnPropertiesAndActiveProfilesWithoutRequiringBuiltInTokens() throws {
+    func testSampleCachesLightAndDarkThemeProfilesAndRoleAndWorkspaceStyles() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
-        let theme = try fixture.theme(##"""
-        {"defaults":{"foreground":"@token.text"},
-         "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}}]}
-        """##, install: false)
-        let model = ThemePreview(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        let light = try model.layer(for: theme, context: ConfigurationContext())
-        XCTAssertNil(light.values["tokens"])
-        XCTAssertNil(light.values["bar"])
-        let dark = try model.layer(for: theme, context: ConfigurationContext(appearance: "dark"))
-        XCTAssertEqual(dark.values["bar"], .object(["height": .number(30)]))
-        XCTAssertNil(dark.values["profiles"])
+        let choice = try fixture.theme(##"{"roles":{"time":{"fontSize":18}},"workspaceDefaults":{"indicator":"underline","indicatorStyle":{"height":3,"placement":"belowBar"}},"profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}}]}"##, install: false)
+        let preview = try ThemePreview(choice: choice, themesDirectory: fixture.themes)
+        XCTAssertEqual(preview.configuration(for: .light).bar.height, 40)
+        XCTAssertEqual(preview.configuration(for: .dark).bar.height, 30)
+        XCTAssertEqual(preview.light.roleStyle(.time).fontSize, 18)
+        let workspace = try XCTUnwrap(preview.light.workspaceDefaults.merging(nil))
+        XCTAssertEqual(workspace.indicator, .underline)
+        XCTAssertEqual(workspace.cellStyle(.focused).underline.height, 3)
+        XCTAssertEqual(workspace.cellStyle(.focused).underline.placement, .belowBar)
     }
-
-    func testPreviewAppearanceFollowsTheBarChoiceThenTheSystem() throws {
-        let configuration = try ConfigurationValue.object(["widgets": .array([])]).decoded(Configuration.self)
-        XCTAssertFalse(ThemePreview.usesDarkAppearance(configuration, context: ConfigurationContext()))
-        XCTAssertTrue(ThemePreview.usesDarkAppearance(configuration, context: ConfigurationContext(appearance: "dark")))
-        let light = try ConfigurationValue.object(["widgets": .array([]), "bar": .object(["appearance": .string("light")])]).decoded(Configuration.self)
-        let dark = try ConfigurationValue.object(["widgets": .array([]), "bar": .object(["appearance": .string("dark")])]).decoded(Configuration.self)
-        XCTAssertFalse(ThemePreview.usesDarkAppearance(light, context: ConfigurationContext(appearance: "dark")))
-        XCTAssertTrue(ThemePreview.usesDarkAppearance(dark, context: ConfigurationContext()))
-    }
-
-    func testContextRefreshUsesAppearanceBeforeProfilesAndIgnoresPinnedConditions() throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        let choice = try fixture.theme(#"{"profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"appearance":"dark"}}}]}"#)
-        let model = ThemePreview(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        let dark = ConfigurationContext(appearance: "dark")
-        let light = ConfigurationContext()
-        let automatic = try model.compose(for: choice, document: fixture.document(), context: dark)
-        XCTAssertEqual(automatic.configuration.bar.appearance, .dark)
-        XCTAssertTrue(automatic.changesAppearance(from: dark, to: light))
-        var document = try fixture.document()
-        document["bar"] = .object(["appearance": .string("light")])
-        let fixed = try model.compose(for: choice, document: document, context: dark)
-        XCTAssertFalse(fixed.changesAppearance(from: dark, to: light))
-        document["bar"] = nil
-        document["profile"] = .string("night")
-        let pinned = try model.compose(for: choice, document: document, context: dark)
-        XCTAssertFalse(pinned.changesAppearance(from: dark, to: light))
-    }
-    @MainActor func testCompactPreviewKeepsVisibleWidgetsInPositionOrderAndPreservesGroups() throws {
-        let fixture = try ThemeGalleryFixture(#"""
-        {"groups":{"status":{"style":{"spacing":3}}},"widgets":[
-         {"id":"clock","type":"clock","position":"right"},
-         {"id":"first","type":"text","text":"First","position":"left","group":"status"},
-         {"id":"second","type":"text","text":"Second","position":"left","group":"status"},
-         {"id":"center","type":"text","text":"Center","position":"center"},
-         {"id":"space","type":"spacer","position":"left"},
-         {"id":"disabled","type":"text","text":"Disabled","position":"left","enabled":false},
-         {"id":"hidden","type":"script","command":"echo must-not-run","position":"left"},
-         {"id":"external","type":"text","text":"External","position":"right","display":"external"},
-         {"id":"workspaces","type":"workspaces","position":"notchLeft"}]}
-        """#)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        store.activeDisplayID = 2
-        store.workspaceStore.workspaces = [Workspace(name: "Work", isFocused: true, isVisible: true, monitor: 2)]
-        store.scripts["hidden"] = ScriptWidget()
-        store.scripts["hidden"]?.output = ScriptOutput(text: "Hidden", hidden: true)
-        let preview = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
-        let display = BarDisplay(id: 2, isBuiltIn: false, isMain: true, notch: nil)
-        let units = ThemePreview.units(in: preview, display: display)
-        XCTAssertEqual(units.map(\.id), ["group:status", "widget:workspaces", "widget:center", "widget:clock", "widget:external"])
-        XCTAssertEqual(units[0].widgets.map(\.id), ["first", "second"])
-        XCTAssertEqual(units[0].style?.spacing, 3)
-        let builtIn = BarDisplay(id: 1, isBuiltIn: true, isMain: false, notch: nil)
-        XCTAssertEqual(ThemePreview.units(in: preview, display: builtIn).map(\.id), ["group:status", "widget:center", "widget:clock"])
-        XCTAssertFalse(preview.workspaceStore.isRunning)
-        store.scripts["hidden"]?.output.text = "Newest output"
-        XCTAssertEqual(preview.scripts["hidden"]?.output.text, "Hidden")
-        let latest = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
-        XCTAssertEqual(latest.scripts["hidden"]?.output.text, "Newest output")
-    }
-
-    @MainActor func testPreviewRefusesActionCommandsAndRuntimeStarts() async throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        let marker = fixture.directory.appending(path: "must-not-run")
-        let command = "touch '\(marker.path)'"
-        try fixture.write("""
-        {"widgets":[{"id":"script","type":"script","position":"left","command":"\(command)","events":["test"]},
-                    {"id":"battery","type":"battery","position":"right"}]}
-        """, to: fixture.url)
-        let source = try fixture.store()
-        defer { source.stop() }
-        let preview = ThemePreview.snapshot(try XCTUnwrap(source.configuration), from: source)
-        defer { preview.stop() }
-        let widget = try XCTUnwrap(preview.configuration?.widgets.first)
-        await preview.runAction(command, widget: widget).value
-        XCTAssertTrue(preview.isPreview)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
-        XCTAssertTrue(preview.actionErrors.isEmpty)
-        var workspaceLookups = 0
-        preview.workspaceStore.executablePath = { workspaceLookups += 1; return "/usr/bin/false" }
-        preview.start()
-        preview.reloadConfiguration()
-        try preview.applyEdits([], persist: false)
-        preview.refreshScripts(for: "test")
-        preview.workspaceStore.start()
-        preview.workspaceStore.select(Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1))
-        preview.workspaceStore.receive(AeroSpaceEvent(event: "focus-changed", mode: nil))
-        await Task.yield()
-        XCTAssertTrue(preview.scripts.isEmpty)
-        XCTAssertTrue(preview.providers.isEmpty)
-        XCTAssertFalse(preview.workspaceStore.isRunning)
-        XCTAssertEqual(workspaceLookups, 0)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
-    }
-
 }

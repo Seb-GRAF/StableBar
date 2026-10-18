@@ -142,3 +142,18 @@ private func friendly(_ value: String) -> String {
         .lowercased()
     return spaced.prefix(1).uppercased() + spaced.dropFirst()
 }
+
+extension ThemeChoice {
+    /// Raw theme values keep token references intact for the override notice.
+    func overrideLayer(settings: [String: ConfigurationValue] = [:], context: ConfigurationContext) throws -> ConfigurationLayer {
+        var loader = ConfigurationLoader()
+        var layer = try loader.readPackage(at: directory, manifest: manifest, settings: settings)
+        for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
+            if profile.when?.matches(context) ?? true {
+                try layer.merge(ConfigurationLayer(values: profile.configuration, origins: [:]))
+            }
+        }
+        layer.values["profiles"] = nil
+        return layer
+    }
+}

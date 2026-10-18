@@ -10,7 +10,6 @@ final class BarStore: NSObject {
     var activeDisplayID = 1
     var scripts: [String: ScriptWidget] = [:]
     let workspaceStore: WorkspaceStore
-    let isPreview: Bool
     let windowClearance = WindowClearance()
     let popup: WidgetPopup
     let configurationURL: URL
@@ -58,14 +57,13 @@ final class BarStore: NSObject {
     private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
     init(configurationURL: URL = LaunchCommand.configurationURL, registry: DataSourceRegistry = .builtIn,
-         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory, isPreview: Bool = false,
+         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory,
          customizationSaveDelay: Duration = .milliseconds(500)) {
         self.configurationURL = configurationURL
         self.customizationSaveDelay = customizationSaveDelay
         self.registry = registry
         self.popup = popup
-        self.isPreview = isPreview
-        workspaceStore = WorkspaceStore(isPreview: isPreview)
+        workspaceStore = WorkspaceStore()
         super.init()
         configurationLoader.themesDirectory = themesDirectory
         configurationWatcher.onChange = { [weak self] in self?.scheduleReload() }
@@ -76,7 +74,6 @@ final class BarStore: NSObject {
     }
 
     func start() {
-        guard !isPreview else { return }
         context = SystemContext.current()
         reloadObserver = DistributedNotificationCenter.default().addObserver(
             forName: LaunchCommand.reloadNotification, object: nil, queue: .main) { [weak self] _ in
@@ -144,7 +141,6 @@ final class BarStore: NSObject {
     }
 
     private func readConfiguration(leavingEditMode: Bool) {
-        guard !isPreview else { return }
         if leavingEditMode { barEditing.end() }
         defer { configurationWatcher.watch(configurationLoader.dependencies) }
         customizationHistory.checkForExternalChanges()
@@ -383,7 +379,7 @@ final class BarStore: NSObject {
     var clearanceConfiguration: Configuration? { normalComposition?.configuration ?? configuration }
 
     func tryTheme(_ choice: ThemeChoice) throws {
-        guard !isPreview, normalComposition != nil else {
+        guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
         let (next, loader) = try configurationTryingTheme(choice)
@@ -408,7 +404,6 @@ final class BarStore: NSObject {
     }
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
-        guard !isPreview else { return }
         profiles = loader.profiles
         pinnedProfile = loader.pinnedProfile
         widgetPackageNames = loader.widgetPackageNames
@@ -579,7 +574,6 @@ final class BarStore: NSObject {
     }
 
     private func updateSuspension() {
-        guard !isPreview else { return }
         var visible = visibleWidgets.values.reduce(into: Set<String>()) { $0.formUnion($1) }
         if let popupWidgetID { visible.insert(popupWidgetID) }
         if inspectorOpen, let inspectedWidgetID { visible.insert(inspectedWidgetID) }
@@ -618,7 +612,7 @@ final class BarStore: NSObject {
             guard !script.diagnostics.suspended else {
                 throw CommandFailure(message: "Widget is suspended. Open it in Diagnostics or make a consumer visible before refreshing.")
             }
-            if !isPreview { script.refresh(ScriptEvent(sender: "manual")) }
+            script.refresh(ScriptEvent(sender: "manual"))
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
@@ -729,7 +723,6 @@ final class BarStore: NSObject {
     }
 
     func refreshScripts(for event: String, environment: [String: String] = [:], skipping sender: ScriptWidget? = nil) {
-        guard !isPreview else { return }
         if event == BuiltInEvent.yabai.rawValue { workspaceStore.trigger() }
         var refreshed = Set<ObjectIdentifier>()
         if let sender { refreshed.insert(ObjectIdentifier(sender)) }
@@ -841,12 +834,6 @@ final class WidgetPresentation {
 
     func setPopupAnchor(_ anchor: ObjectIdentifier?) {
         if popupAnchor != anchor { popupAnchor = anchor }
-    }
-
-    func setStaticTemporaryFields(_ fields: [String: String]?) {
-        expiry?.cancel()
-        expiry = nil
-        temporaryFields = fields
     }
 
     /// Shows the `temporary` of a new output for its duration. `output` numbers the output, so the

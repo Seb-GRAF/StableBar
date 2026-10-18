@@ -36,7 +36,8 @@ struct AppearanceView: View {
             Section {
                 LazyVStack(spacing: 12) {
                     ForEach(gallery.choices, id: \.key) { choice in
-                        ThemeCard(title: choice.title, snapshot: gallery.previews[choice.key],
+                        ThemeCard(title: choice.title, look: gallery.previews[choice.key]?.configuration(for: gallery.previewAppearance),
+                                  appearance: gallery.previewAppearance,
                                   isSelected: gallery.selectedKey == choice.key, error: gallery.error(for: choice.key)) {
                             gallery.select(choice)
                         }
@@ -50,7 +51,8 @@ struct AppearanceView: View {
                     Text("From the Store").font(.headline)
                     LazyVStack(spacing: 12) {
                         ForEach(gallery.storeThemes, id: \.versionKey) { entry in
-                            ThemeCard(title: entry.name, snapshot: gallery.previews[entry.versionKey],
+                            ThemeCard(title: entry.name, look: gallery.previews[entry.versionKey]?.configuration(for: gallery.previewAppearance),
+                                      appearance: gallery.previewAppearance,
                                       progress: gallery.progress[entry.versionKey], error: gallery.error(for: entry.versionKey), isStore: true) {
                                 Task { await gallery.get(entry) }
                             }
@@ -206,8 +208,8 @@ struct AppearanceView: View {
         .formStyle(.grouped)
         .task { await gallery.refresh(); await gallery.loadStore() }
         .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
-        .onChange(of: store.configurationError) { _, _ in gallery.configurationErrorChanged() }
-        .onChange(of: store.context) { previous, _ in gallery.contextChanged(from: previous) }
+        .onChange(of: store.configurationError) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.context) { _, _ in gallery.contextChanged() }
     }
 
     private func document(_ key: String) -> [String: ConfigurationValue] {

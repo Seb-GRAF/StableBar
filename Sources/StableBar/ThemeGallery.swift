@@ -6,15 +6,14 @@ final class ThemeGallery {
     private let store: BarStore
     private let client: PackageStoreClient
     private let refreshDelay: Duration
-    private let compose: @Sendable (ThemePreview.Request) throws -> ThemePreview.Composition
-    private var compositions: [String: ThemePreview.Composition] = [:]
+    private let loadPreview: @Sendable (ThemeChoice, URL?) throws -> ThemePreview
     private var generation = 0
-    private var configurationUnavailable = false
+    private var overrideError: String?
     @ObservationIgnored private(set) var refreshTask: Task<Void, Never>?
     private var downloaded: [String: ThemeChoice] = [:]
     private var entries: [PackageIndex.Entry] = []
     private(set) var choices: [ThemeChoice] = []
-    private(set) var previews: [String: ThemePreview.Snapshot] = [:]
+    private(set) var previews: [String: ThemePreview] = [:]
     private(set) var previewErrors: [String: String] = [:]
     private(set) var errors: [String: String] = [:]
     private(set) var progress: [String: String] = [:]
@@ -22,11 +21,11 @@ final class ThemeGallery {
     private(set) var overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
 
     init(store: BarStore, client: PackageStoreClient? = nil, refreshDelay: Duration = .milliseconds(250),
-         compose: @escaping @Sendable (ThemePreview.Request) throws -> ThemePreview.Composition = { try $0.compose() }) {
+         loadPreview: @escaping @Sendable (ThemeChoice, URL?) throws -> ThemePreview = { try ThemePreview(choice: $0, themesDirectory: $1) }) {
         self.store = store
         self.client = client ?? store.packageStoreClient
         self.refreshDelay = refreshDelay
-        self.compose = compose
+        self.loadPreview = loadPreview
     }
 
     var selectedKey: String { store.selectedThemeKey }
@@ -37,25 +36,20 @@ final class ThemeGallery {
         }
     }
 
-    func error(for key: String) -> String? { errors[key] ?? previewErrors[key] }
+    func error(for key: String) -> String? {
+        errors[key] ?? previewErrors[key] ?? (key == selectedKey ? overrideError : nil)
+    }
 
     func configurationChanged() {
         updateOverrides()
         scheduleRefresh()
     }
 
-    func configurationErrorChanged() {
-        guard configurationUnavailable, store.configurationError == nil else { return }
-        configurationChanged()
+    var previewAppearance: BarAppearance {
+        store.configuration?.bar.appearance ?? (store.context.appearance == "dark" ? .dark : .light)
     }
 
-    func contextChanged(from previous: ConfigurationContext) {
-        guard !configurationUnavailable else { return }
-        guard (compositions.isEmpty && previous != store.context)
-            || compositions.values.contains(where: { $0.changesAppearance(from: previous, to: store.context) }) else { return }
-        updateOverrides()
-        scheduleRefresh()
-    }
+    func contextChanged() { updateOverrides() }
 
     private func scheduleRefresh() {
         refreshTask?.cancel()
@@ -75,96 +69,60 @@ final class ThemeGallery {
     }
 
     private func buildPreviews(generation: Int) async {
-        do {
-            let model = ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory)
-            let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                                       themesDirectory: store.themesDirectory)
-            let downloaded = Array(downloaded.values)
-            let choices = await Task.detached { catalog.choices }.value
-            guard self.generation == generation, !Task.isCancelled else { return }
-            self.choices = choices
-            let document = try store.editedMainDocument()
-            try store.validateCustomization(configurationData(document))
-            configurationUnavailable = false
-            let context = store.context
-            let uninstalled = downloaded.filter { choice in !choices.contains { $0.key == choice.key } }
-            let requests = try (choices + uninstalled).map { choice in
-                ThemePreview.Request(model: model, choice: choice, document: document, context: context,
-                                     settings: try store.themeSettings(for: choice, in: store.effectiveDocument))
+        let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                   themesDirectory: store.themesDirectory)
+        let choices = await Task.detached { catalog.choices }.value
+        guard self.generation == generation, !Task.isCancelled else { return }
+        self.choices = choices
+        let uninstalled = downloaded.values.filter { choice in !choices.contains { $0.key == choice.key } }
+        let missing = (choices + uninstalled).filter { previews[$0.key] == nil }
+        let loadPreview = loadPreview
+        let themesDirectory = store.themesDirectory
+        let results = await Task.detached {
+            missing.map { choice in
+                (choice.key, Result { try loadPreview(choice, themesDirectory) })
             }
-            let compose = compose
-            let results = await Task.detached {
-                requests.map { request in
-                    (request.choice.key, Result { try compose(request) })
-                }
-            }.value
-            guard self.generation == generation, !Task.isCancelled else { return }
-            if results.contains(where: { (try? $0.1.get().changesAppearance(from: context, to: store.context)) == true }) {
-                scheduleRefresh()
-                return
-            }
-            self.choices = choices
-            let available = Set(choices.map(\.key) + self.downloaded.values.map(\.key))
-            previews = previews.filter { available.contains($0.key) }
-            compositions = compositions.filter { available.contains($0.key) }
-            for (key, result) in results { accept(result, key: key, context: context) }
-            updateOverrides()
-        } catch {
-            guard self.generation == generation, !Task.isCancelled else { return }
-            configurationUnavailable = true
-            previews = [:]
-            compositions = [:]
-            let message = "Previews are unavailable. \(errorMessage(error))"
-            for key in choices.map(\.key) + downloaded.values.map(\.key) { previewErrors[key] = message }
-        }
+        }.value
+        guard self.generation == generation, !Task.isCancelled else { return }
+        let available = Set(choices.map(\.key) + downloaded.values.map(\.key))
+        previews = previews.filter { available.contains($0.key) }
+        previewErrors = previewErrors.filter { available.contains($0.key) }
+        for (key, result) in results { accept(result, key: key) }
+        updateOverrides()
     }
 
     private func buildPreview(_ choice: ThemeChoice) async {
-        do {
-            let generation = generation
-            let context = store.context
-            let request = ThemePreview.Request(
-                model: ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory),
-                choice: choice, document: try store.editedMainDocument(), context: context,
-                settings: try store.themeSettings(for: choice, in: store.effectiveDocument))
-            let compose = compose
-            let result = await Task.detached { Result { try compose(request) } }.value
-            guard self.generation == generation, !Task.isCancelled else { return }
-            if (try? result.get().changesAppearance(from: context, to: store.context)) == true {
-                scheduleRefresh()
-                return
-            }
-            accept(result, key: choice.key, context: context)
-        } catch { previewErrors[choice.key] = errorMessage(error) }
+        let generation = generation
+        let loadPreview = loadPreview
+        let themesDirectory = store.themesDirectory
+        let result = await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
+        guard self.generation == generation, !Task.isCancelled else { return }
+        accept(result, key: choice.key)
     }
 
-    private func accept(_ result: Result<ThemePreview.Composition, Error>, key: String, context: ConfigurationContext) {
+    private func accept(_ result: Result<ThemePreview, Error>, key: String) {
         switch result {
-        case let .success(composition):
+        case let .success(preview):
             previewErrors[key] = nil
-            compositions[key] = composition
-            let snapshot = ThemePreview.snapshot(composition.configuration, from: store)
-            snapshot.context = context
-            previews[key] = ThemePreview.Snapshot(store: snapshot)
+            previews[key] = preview
         case let .failure(error):
             previews[key] = nil
-            compositions[key] = nil
             previewErrors[key] = errorMessage(error)
         }
     }
 
     private func updateOverrides() {
+        overrideError = nil
         overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
         guard let selected = choices.first(where: { $0.key == selectedKey }) else { return }
         do {
             var context = store.context
             if let appearance = store.configuration?.bar.appearance { context.appearance = appearance.rawValue }
-            let model = ThemePreview(configurationURL: store.configurationURL, themesDirectory: store.themesDirectory)
-            let theme = try model.layer(for: selected, settings: store.themeSettings(for: selected, in: store.effectiveDocument), context: context)
+            let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument), context: context)
             let main = try store.editedMainDocument(replaying: store.customizationEdits)
             overrides = ThemeOverrides(main: main, theme: theme.values, widgets: store.configuration?.widgets ?? [],
                                        activeProfiles: store.activeProfiles)
-        } catch { previewErrors[selectedKey] = errorMessage(error) }
+        } catch { overrideError = errorMessage(error) }
     }
 
     func select(_ choice: ThemeChoice) {

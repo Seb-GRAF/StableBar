@@ -41,8 +41,8 @@ final class BarEditing {
     init(store: BarStore) { self.store = store }
 
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar" }
-    var isAvailable: Bool { !store.isPreview && store.configuration != nil }
-    var allowsWidgetActions: Bool { !store.isPreview && !isActive }
+    var isAvailable: Bool { store.configuration != nil }
+    var allowsWidgetActions: Bool { !isActive }
 
     func toggle() { if isActive { end() } else { begin() } }
 

@@ -1,6 +1,5 @@
 import XCTest
 import os
-import Observation
 @testable import StableBar
 
 final class ThemeGalleryTests: XCTestCase {
@@ -46,9 +45,9 @@ final class ThemeGalleryTests: XCTestCase {
         await gallery.loadStore()
         XCTAssertFalse(gallery.storeUnavailable)
         XCTAssertEqual(gallery.storeThemes.map(\.id), [entry.id])
-        XCTAssertEqual(gallery.previews[entry.versionKey]?.store.configuration?.bar.height, 31)
-        XCTAssertEqual(gallery.previews[entry.versionKey]?.store.configuration?.defaults.fontSize, 19)
-        XCTAssertEqual(gallery.previews[entry.versionKey]?.store.configuration?.widgets.map(\.id), ["clock"])
+        XCTAssertEqual(gallery.previews[entry.versionKey]?.light.bar.height, 31)
+        XCTAssertEqual(gallery.previews[entry.versionKey]?.light.defaults.fontSize, 19)
+        XCTAssertEqual(gallery.previews[entry.versionKey]?.light.widgets.map(\.id), [])
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.packages.directory.path))
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         // A ready preview is cached: Get works even if its archive is no longer available.
@@ -188,116 +187,86 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertEqual(gallery.errors[entry.versionKey], actionError)
     }
 
-    @MainActor func testRefreshBuildsOneStaticSnapshotPerThemeOffTheMainThread() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"script","type":"script","command":"must-not-run","position":"left"}]}"#)
+    @MainActor func testGalleryBuildsThemeOnlyLooksOffMainThreadAndNeverStartsScriptsOrProviders() async throws {
+        let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
+        let marker = fixture.directory.appending(path: "must-not-exist")
+        try fixture.write("""
+        {"defaults":{"fontSize":99},"widgets":[
+         {"id":"script","type":"script","command":"touch '\(marker.path)'","position":"left"},
+         {"id":"battery","type":"battery","position":"right"}]}
+        """, to: fixture.url)
         let store = try fixture.store()
         defer { store.stop() }
-        store.scripts["script"] = ScriptWidget()
-        store.scripts["script"]?.output = ScriptOutput(text: "First")
-        store.preparePresentations()
         let calls = OSAllocatedUnfairLock(initialState: [(String, Bool)]())
-        let gallery = ThemeGallery(store: store, compose: { request in
-            calls.withLock { $0.append((request.choice.key, Thread.isMainThread)) }
-            return try request.compose()
+        let gallery = ThemeGallery(store: store, loadPreview: { choice, themes in
+            calls.withLock { $0.append((choice.key, Thread.isMainThread)) }
+            return try ThemePreview(choice: choice, themesDirectory: themes)
         })
         await gallery.refresh()
         XCTAssertEqual(calls.withLock { $0.map(\.0).sorted() }, gallery.choices.map(\.key).sorted())
         XCTAssertFalse(calls.withLock { $0.contains { $0.1 } })
-        let first = try XCTUnwrap(gallery.previews["built-in"])
-        let invalidated = OSAllocatedUnfairLock(initialState: false)
-        withObservationTracking {
-            _ = gallery.previews["built-in"]?.store.scripts["script"]?.output
-        } onChange: { invalidated.withLock { $0 = true } }
-        store.scripts["script"]?.output.text = "Second"
-        store.workspaceStore.workspaces = [Workspace(name: "New", isFocused: true, isVisible: true, monitor: 1)]
-        XCTAssertFalse(invalidated.withLock { $0 })
-        XCTAssertTrue(gallery.previews["built-in"]?.store === first.store)
-        XCTAssertEqual(first.store.scripts["script"]?.output.text, "First")
-        XCTAssertEqual(calls.withLock { $0.count }, gallery.choices.count)
-        await gallery.refresh()
-        XCTAssertEqual(calls.withLock { $0.count }, gallery.choices.count * 2)
-        XCTAssertFalse(gallery.previews["built-in"]?.store === first.store)
-        XCTAssertEqual(gallery.previews["built-in"]?.store.scripts["script"]?.output.text, "Second")
-        XCTAssertEqual(gallery.previews["built-in"]?.store.workspaceStore.workspaces.first?.name, "New")
+        XCTAssertEqual(gallery.previews.count, gallery.choices.count)
+        for preview in gallery.previews.values {
+            XCTAssertNotEqual(preview.light.defaults.fontSize, 99)
+            XCTAssertTrue(preview.light.widgets.isEmpty)
+            XCTAssertTrue(preview.dark.providers.isEmpty)
+        }
+        XCTAssertTrue(store.scripts.isEmpty)
+        XCTAssertTrue(store.providers.isEmpty)
+        XCTAssertFalse(store.workspaceStore.isRunning)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
     }
 
-    @MainActor func testChangesRefreshOverridesImmediatelyAndComposeOnceAfterABurst() async throws {
+    @MainActor func testChangesRefreshOverridesImmediatelyWithoutRebuildingCachedLooks() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
         let calls = OSAllocatedUnfairLock(initialState: [String]())
-        let gallery = ThemeGallery(store: store, refreshDelay: .milliseconds(20), compose: { request in
-            calls.withLock { $0.append(request.choice.key) }
-            return try request.compose()
+        let gallery = ThemeGallery(store: store, refreshDelay: .milliseconds(20), loadPreview: { choice, themes in
+            calls.withLock { $0.append(choice.key) }
+            return try ThemePreview(choice: choice, themesDirectory: themes)
         })
         await gallery.refresh()
-        let first = try XCTUnwrap(gallery.previews["built-in"])
         for color in ["#111111", "#222222", "#333333"] {
             try store.customizationHistory.change(ConfigurationEdit(action: .tokens, properties: ["text": .string(color)]))
             gallery.configurationChanged()
             XCTAssertEqual(gallery.overrides.values.map(\.path), [["tokens", "text"]])
-            XCTAssertTrue(gallery.previews["built-in"]?.store === first.store)
         }
-        XCTAssertEqual(calls.withLock { $0.count }, gallery.choices.count)
         await gallery.refreshTask?.value
-        XCTAssertEqual(calls.withLock { $0.count }, gallery.choices.count * 2)
-        XCTAssertEqual(gallery.previews["built-in"]?.store.configuration?.defaults.foreground, HexColor(0x333333ff))
+        await gallery.refresh()
+        XCTAssertEqual(calls.withLock { $0.count }, gallery.choices.count)
+        XCTAssertEqual(gallery.previews["built-in"]?.light.defaults.foreground, HexColor(light: 0x1d1d1fff, dark: 0xf5f5f7ff))
         XCTAssertTrue(store.customizationHistory.hasPendingChanges)
         try store.customizationHistory.flush()
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
     }
 
-    @MainActor func testOnlyContextChangesThatAffectAppearanceRefreshPreviews() async throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        let conditional = try fixture.theme(#"{"profiles":[{"name":"editor","when":{"app":"editor"},"configuration":{"bar":{"height":77}}}]}"#)
-        let store = try fixture.store()
-        defer { store.stop() }
-        let calls = OSAllocatedUnfairLock(initialState: 0)
-        let gallery = ThemeGallery(store: store, refreshDelay: .zero, compose: { request in
-            calls.withLock { $0 += 1 }
-            return try request.compose()
-        })
-        await gallery.refresh()
-        var previous = store.context
-        store.context.app = "other app"
-        store.context.onBattery.toggle()
-        store.context.displayCount += 1
-        store.context.externalDisplay.toggle()
-        gallery.contextChanged(from: previous)
-        XCTAssertNil(gallery.refreshTask)
-        XCTAssertEqual(calls.withLock { $0 }, gallery.choices.count)
-        previous = store.context
-        store.context.app = "editor"
-        gallery.contextChanged(from: previous)
-        await gallery.refreshTask?.value
-        XCTAssertEqual(calls.withLock { $0 }, gallery.choices.count * 2)
-        XCTAssertEqual(gallery.previews[conditional.key]?.store.configuration?.bar.height, 77)
-        previous = store.context
-        store.context.appearance = "dark"
-        gallery.contextChanged(from: previous)
-        await gallery.refreshTask?.value
-        XCTAssertEqual(calls.withLock { $0 }, gallery.choices.count * 3)
-        XCTAssertEqual(gallery.previews["built-in"]?.store.context.appearance, "dark")
+    @MainActor func testAppearanceFollowsTheBarChoiceThenTheSystemWithoutRebuildingLooks() async throws {
+        for appearance in ["light", "dark", "automatic"] {
+            let fixture = try ThemeGalleryFixture(appearance == "automatic" ? #"{"widgets":[]}"# : #"{"bar":{"appearance":"\#(appearance)"},"widgets":[]}"#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            let calls = OSAllocatedUnfairLock(initialState: 0)
+            let gallery = ThemeGallery(store: store, loadPreview: { choice, themes in
+                calls.withLock { $0 += 1 }
+                return try ThemePreview(choice: choice, themesDirectory: themes)
+            })
+            await gallery.refresh()
+            for system in ["light", "dark"] {
+                store.context.appearance = system
+                store.context.app = "another app"
+                gallery.contextChanged()
+                XCTAssertEqual(gallery.previewAppearance.rawValue, appearance == "automatic" ? system : appearance)
+                XCTAssertNil(gallery.refreshTask)
+                XCTAssertEqual(calls.withLock { $0 }, gallery.choices.count)
+            }
+        }
     }
 
-    @MainActor func testFixedAppearanceIgnoresSystemAppearanceChanges() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"bar":{"appearance":"light"},"widgets":[]}"#)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        let gallery = ThemeGallery(store: store)
-        await gallery.refresh()
-        let previous = store.context
-        store.context.appearance = "dark"
-        gallery.contextChanged(from: previous)
-        XCTAssertNil(gallery.refreshTask)
-        XCTAssertEqual(gallery.previews["built-in"]?.store.context.appearance, "light")
-    }
-
-    @MainActor func testOneStoreDownloadBuildsOnlyItsOwnPreviewAndKeepsLocalSnapshots() async throws {
+    @MainActor func testStoreDownloadBuildsOnlyItsVersionAndKeepsLocalLooksCached() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let index = LocalPackageIndex(fixture: fixture)
@@ -306,48 +275,45 @@ final class ThemeGalleryTests: XCTestCase {
         defer { store.stop() }
         let calls = OSAllocatedUnfairLock(initialState: [String]())
         let gallery = ThemeGallery(store: store,
-            client: PackageStoreClient(packages: fixture.packages, indexURL: index.url), compose: { request in
-                calls.withLock { $0.append(request.choice.key) }
-                return try request.compose()
+            client: PackageStoreClient(packages: fixture.packages, indexURL: index.url), loadPreview: { choice, themes in
+                calls.withLock { $0.append(choice.key) }
+                return try ThemePreview(choice: choice, themesDirectory: themes)
             })
         await gallery.refresh()
-        let local = gallery.previews.mapValues { $0.store }
         let initialCount = calls.withLock { $0.count }
         await gallery.loadStore()
         XCTAssertEqual(calls.withLock { Array($0.dropFirst(initialCount)) }, [entry.versionKey])
-        for (key, store) in local { XCTAssertTrue(gallery.previews[key]?.store === store) }
         XCTAssertNotNil(gallery.previews[entry.versionKey])
         await gallery.loadStore()
+        await gallery.refresh()
         XCTAssertEqual(calls.withLock { $0.count }, initialCount + 1)
     }
 
-    @MainActor func testAnOlderBackgroundRefreshCannotReplaceNewerSnapshots() async throws {
+    @MainActor func testInstalledVersionsHaveSeparateCachedSampleLooks() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
+        let first = try fixture.theme(#"{"defaults":{"fontSize":14}}"#)
+        let source = fixture.directory.appending(path: "sources/test-theme")
+        try fixture.write(#"{"id":"test-theme","name":"Test theme","version":"2","kind":"theme","entry":"config.json"}"#,
+                          to: source.appending(path: "package.json"))
+        try fixture.write(#"{"defaults":{"fontSize":23}}"#, to: source.appending(path: "config.json"))
+        _ = try fixture.packages.install(source)
         let store = try fixture.store()
         defer { store.stop() }
-        let started = AsyncStream<Void>.makeStream()
-        let release = DispatchSemaphore(value: 0)
-        defer { release.signal() }
-        let pause = OSAllocatedUnfairLock(initialState: true)
-        let gallery = ThemeGallery(store: store, refreshDelay: .zero, compose: { request in
-            let shouldPause = pause.withLock { value in let previous = value; value = false; return previous }
-            if shouldPause { started.continuation.yield(()); release.wait() }
-            return try request.compose()
+        let calls = OSAllocatedUnfairLock(initialState: [String]())
+        let gallery = ThemeGallery(store: store, loadPreview: { choice, themes in
+            calls.withLock { $0.append(choice.key) }
+            return try ThemePreview(choice: choice, themesDirectory: themes)
         })
-        let firstRefresh = Task { await gallery.refresh() }
-        for await _ in started.stream { break }
-        try store.customizationHistory.change(ConfigurationEdit(action: .tokens, properties: ["text": .string("#123456")]))
-        gallery.configurationChanged()
-        await gallery.refreshTask?.value
-        let latest = try XCTUnwrap(gallery.previews["built-in"])
-        XCTAssertEqual(latest.store.configuration?.defaults.foreground, HexColor(0x123456ff))
-        release.signal()
-        await firstRefresh.value
-        XCTAssertTrue(gallery.previews["built-in"]?.store === latest.store)
+        await gallery.refresh()
+        await gallery.refresh()
+        XCTAssertEqual(gallery.previews[first.key]?.light.defaults.fontSize, 14)
+        XCTAssertEqual(gallery.previews["test-theme/2"]?.light.defaults.fontSize, 23)
+        XCTAssertEqual(calls.withLock { $0.filter { $0 == first.key }.count }, 1)
+        XCTAssertEqual(calls.withLock { $0.filter { $0 == "test-theme/2" }.count }, 1)
     }
 
-    @MainActor func testAContextChangeDuringBackgroundCompositionRefreshesTheResult() async throws {
+    @MainActor func testAnOlderBackgroundRefreshCannotReplaceNewerLooks() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try fixture.store()
@@ -356,53 +322,39 @@ final class ThemeGalleryTests: XCTestCase {
         let release = DispatchSemaphore(value: 0)
         defer { release.signal() }
         let pause = OSAllocatedUnfairLock(initialState: true)
-        let gallery = ThemeGallery(store: store, refreshDelay: .zero, compose: { request in
+        let gallery = ThemeGallery(store: store, refreshDelay: .zero, loadPreview: { choice, themes in
             let shouldPause = pause.withLock { value in let previous = value; value = false; return previous }
-            if shouldPause { started.continuation.yield(()); release.wait() }
-            return try request.compose()
+            let preview = try ThemePreview(choice: choice, themesDirectory: themes)
+            if shouldPause { started.continuation.yield(()); release.wait(); throw CommandFailure(message: "Old failure") }
+            return preview
         })
         let firstRefresh = Task { await gallery.refresh() }
         for await _ in started.stream { break }
-        store.context.appearance = "dark"
+        await gallery.refresh()
         release.signal()
         await firstRefresh.value
-        await gallery.refreshTask?.value
         XCTAssertEqual(gallery.previews.count, gallery.choices.count)
-        XCTAssertEqual(gallery.previews["built-in"]?.store.context.appearance, "dark")
+        XCTAssertTrue(gallery.previewErrors.isEmpty)
     }
 
-    @MainActor func testBrokenInitialConfigurationKeepsCardsAndWaitsForConfigurationRecovery() async throws {
-        for broken in ["{", #"{"widgets":[{"id":"a","type":"missing","position":"left"}]}"#] {
-            let fixture = try ThemeGalleryFixture()
-            defer { fixture.close() }
-            let store = try fixture.store()
-            defer { store.stop() }
-            try fixture.write(broken, to: fixture.url)
-            store.reloadConfiguration()
-            XCTAssertNotNil(store.configurationError)
-            let calls = OSAllocatedUnfairLock(initialState: 0)
-            let gallery = ThemeGallery(store: store, refreshDelay: .zero, compose: { request in
-                calls.withLock { $0 += 1 }
-                return try request.compose()
-            })
-            await gallery.refresh()
-            XCTAssertFalse(gallery.choices.isEmpty)
-            XCTAssertEqual(gallery.previewErrors.count, gallery.choices.count)
-            XCTAssertTrue(gallery.previewErrors.values.allSatisfy { $0.contains("Previews are unavailable") })
-            XCTAssertTrue(gallery.previews.isEmpty)
-            let previous = store.context
-            store.context.appearance = "dark"
-            gallery.contextChanged(from: previous)
-            XCTAssertNil(gallery.refreshTask)
-            XCTAssertEqual(calls.withLock { $0 }, 0)
-            try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
-            store.reloadConfiguration()
-            XCTAssertNil(store.configurationError)
-            gallery.configurationErrorChanged()
-            await gallery.refreshTask?.value
-            XCTAssertEqual(gallery.previews.count, gallery.choices.count)
-            XCTAssertTrue(gallery.previewErrors.isEmpty)
-        }
+    @MainActor func testBrokenUserConfigurationDoesNotPreventThemeSamples() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try fixture.write("{", to: fixture.url)
+        store.reloadConfiguration()
+        XCTAssertNotNil(store.configurationError)
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        XCTAssertEqual(gallery.previews.count, gallery.choices.count)
+        XCTAssertFalse(gallery.previews.isEmpty)
+        XCTAssertNotNil(gallery.error(for: gallery.selectedKey))
+        try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
+        store.reloadConfiguration()
+        gallery.contextChanged()
+        XCTAssertNil(gallery.error(for: gallery.selectedKey))
+        XCTAssertTrue(gallery.previewErrors.isEmpty)
     }
 
     @MainActor func testSuccessfulPreviewClearsOnlyItsPreviewErrorAndKeepsGetErrors() async throws {
@@ -411,9 +363,9 @@ final class ThemeGalleryTests: XCTestCase {
         let store = try fixture.store()
         defer { store.stop() }
         let fails = OSAllocatedUnfairLock(initialState: true)
-        let gallery = ThemeGallery(store: store, compose: { request in
+        let gallery = ThemeGallery(store: store, loadPreview: { choice, themes in
             if fails.withLock({ $0 }) { throw CommandFailure(message: "Brief preview failure") }
-            return try request.compose()
+            return try ThemePreview(choice: choice, themesDirectory: themes)
         })
         await gallery.refresh()
         XCTAssertEqual(gallery.previewErrors.count, gallery.choices.count)
@@ -421,7 +373,6 @@ final class ThemeGalleryTests: XCTestCase {
         await gallery.refresh()
         XCTAssertTrue(gallery.previewErrors.isEmpty)
         XCTAssertEqual(gallery.previews.count, gallery.choices.count)
-
         let index = LocalPackageIndex(fixture: fixture)
         let entry = try await index.add(checksum: String(repeating: "0", count: 64))
         let actions = ThemeGallery(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
@@ -431,5 +382,4 @@ final class ThemeGalleryTests: XCTestCase {
         await actions.refresh()
         XCTAssertEqual(actions.errors[entry.versionKey], error)
     }
-
 }

@@ -436,7 +436,7 @@ final class BarEditingTests: XCTestCase {
         }
     }
 
-    @MainActor func testThemeTrialsAndEditingEndEachOtherWithoutSavingAndPreviewsNeverEnterEditMode() throws {
+    @MainActor func testThemeTrialsAndEditingEndEachOtherWithoutSaving() throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
@@ -457,11 +457,6 @@ final class BarEditingTests: XCTestCase {
         next.cancel()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
-        let preview = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
-        preview.barEditing.begin()
-        XCTAssertFalse(preview.barEditing.isActive)
-        XCTAssertFalse(preview.barEditing.allowsWidgetActions)
-        XCTAssertEqual(preview.barEditing.geometry(for: laptop), preview.configuration?.barGeometry(for: laptop))
     }
 
     @MainActor func testBarPanelOnlyAcceptsKeyboardFocusWhileEditingAndRuntimeCanOpenOneWidget() throws {
@@ -513,7 +508,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
-    @MainActor func testEditBarIsUnavailableWithoutConfigurationOrInAPreview() throws {
+    @MainActor func testEditBarIsUnavailableWithoutConfiguration() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url)
@@ -531,8 +526,6 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(store.barEditing.isAvailable)
         delegate.menuWillOpen(menu)
         XCTAssertTrue(menu.items.contains { $0.title == "Edit Bar" })
-        let preview = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
-        XCTAssertFalse(preview.barEditing.isAvailable)
     }
 
     @MainActor func testLeavingEditModeReleasesOnlyTheKeyBarAndKeepsItsVisibility() {

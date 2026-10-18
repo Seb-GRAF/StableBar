@@ -191,7 +191,7 @@ final class ThemeTrialTests: XCTestCase {
             try store.setSessionEdits([edit])
             let gallery = ThemeGallery(store: store)
             await gallery.refresh()
-            XCTAssertEqual(gallery.previews[installed.key]?.store.configuration?.bar.height, 63)
+            XCTAssertEqual(gallery.previews[installed.key]?.light.bar.height, 40)
             gallery.select(installed)
             XCTAssertNil(gallery.errors[installed.key])
             XCTAssertEqual(try Data(contentsOf: fixture.url), original)
@@ -561,19 +561,6 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.effectiveDocument, baseline)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
-    }
-
-    @MainActor func testPreviewSnapshotStoresStillNeverApplyOrRunThemeTrials() throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, isPreview: true)
-        defer { store.stop() }
-        store.reloadConfiguration()
-        let choice = try XCTUnwrap(ThemeCatalog(packages: fixture.packages.directory, themesDirectory: fixture.themes).choices.last)
-        XCTAssertThrowsError(try store.tryTheme(choice))
-        XCTAssertNil(store.configuration)
-        XCTAssertTrue(store.scripts.isEmpty)
-        XCTAssertTrue(store.providers.isEmpty)
     }
 
     @MainActor func testMenuBarMenuHidesTryThemesWhenNoBarExists() throws {

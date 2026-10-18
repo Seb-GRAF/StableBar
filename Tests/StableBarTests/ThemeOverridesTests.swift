@@ -129,4 +129,19 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
+
+    func testThemeLayerUsesOnlyItsOwnPropertiesAndActiveProfilesWithoutRequiringBuiltInTokens() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let theme = try fixture.theme(##"""
+        {"defaults":{"foreground":"@token.text"},
+         "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}}]}
+        """##, install: false)
+        let light = try theme.overrideLayer(context: ConfigurationContext())
+        XCTAssertNil(light.values["tokens"])
+        XCTAssertNil(light.values["bar"])
+        let dark = try theme.overrideLayer(context: ConfigurationContext(appearance: "dark"))
+        XCTAssertEqual(dark.values["bar"], .object(["height": .number(30)]))
+        XCTAssertNil(dark.values["profiles"])
+    }
 }

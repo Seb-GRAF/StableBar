@@ -13,7 +13,7 @@ struct BarView: View {
 
     var body: some View {
         Group {
-            if store.barEditing.isActive, !store.isPreview {
+            if store.barEditing.isActive {
                 BarEditView(store: store, display: display)
             } else if let config = store.configuration {
                 let scale = CGFloat(config.bar.scale(for: display))
@@ -272,7 +272,6 @@ struct WidgetView: View {
     let store: BarStore
     let monitor: Int
     let animationDuration: Double
-    @Environment(\.staticPreviewDate) private var staticPreviewDate
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -309,7 +308,7 @@ struct WidgetView: View {
             .frame(minWidth: style.minWidth.map { CGFloat($0) }, maxWidth: style.maxWidth.map { CGFloat($0) })
             .contentShape(Rectangle())
         Group {
-            if store.isPreview || staticPreviewDate != nil || store.barEditing.isActive {
+            if store.barEditing.isActive {
                 tile.allowsHitTesting(false)
             } else if let popup = widgetPopup(widget, store: store) {
                 Button {
@@ -350,7 +349,7 @@ struct WidgetView: View {
             }
         }
         .overlay {
-            if store.barEditing.allowsWidgetActions && staticPreviewDate == nil, let actions = widget.actions {
+            if store.barEditing.allowsWidgetActions, let actions = widget.actions {
                 WidgetActionCapture(actions: actions, display: monitor) { command, context in
                     store.runAction(command, widget: widget,
                                     event: ScriptEvent(sender: context.sender, environment: context.environment))
@@ -358,7 +357,7 @@ struct WidgetView: View {
             }
         }
         .background {
-            if !measuring && store.barEditing.allowsWidgetActions && staticPreviewDate == nil { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
+            if !measuring && store.barEditing.allowsWidgetActions { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
         }
         .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
             if !measuring { anchors.widgets[widget.id] = BarWidgetAnchor(bounds: bounds, unit: unitID) }
@@ -366,7 +365,7 @@ struct WidgetView: View {
         .offset(x: style.offsetX ?? 0, y: style.offsetY ?? 0)
         .opacity(style.opacity ?? 1)
         .onHover { inside in
-            guard store.barEditing.allowsWidgetActions && staticPreviewDate == nil else { return }
+            guard store.barEditing.allowsWidgetActions else { return }
             hovered = inside
             if let command = inside ? widget.actions?.mouseEntered : widget.actions?.mouseExited {
                 runAction(command, sender: inside ? "mouse.entered" : "mouse.exited")
@@ -402,9 +401,7 @@ struct WidgetView: View {
     /// `content` drawn for the time the widget shows: a clock's, redrawn on its schedule, otherwise now.
     @ViewBuilder
     private func timed<Content: View>(@ViewBuilder _ content: @escaping (Date) -> Content) -> some View {
-        if let staticPreviewDate {
-            content(staticPreviewDate)
-        } else if case let .clock(format) = widget.content {
+        if case let .clock(format) = widget.content {
             TimelineView(clockSchedule(format)) { context in content(context.date) }
         } else {
             content(.now)
