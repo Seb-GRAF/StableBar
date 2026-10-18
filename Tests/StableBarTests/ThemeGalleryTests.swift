@@ -178,6 +178,14 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertEqual(gallery.selectedKey, "test-theme/1")
         XCTAssertTrue(gallery.choices.contains { $0.key == entry.versionKey })
+        let actionError = gallery.errors[entry.versionKey]
+        try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":[]}"#, to: fixture.url)
+        store.reloadConfiguration()
+        gallery.configurationChanged()
+        await gallery.refreshTask?.value
+        XCTAssertNotNil(gallery.previews[entry.versionKey])
+        XCTAssertNil(gallery.previewErrors[entry.versionKey])
+        XCTAssertEqual(gallery.errors[entry.versionKey], actionError)
     }
 
     @MainActor func testRefreshBuildsOneStaticSnapshotPerThemeOffTheMainThread() async throws {
@@ -361,6 +369,67 @@ final class ThemeGalleryTests: XCTestCase {
         await gallery.refreshTask?.value
         XCTAssertEqual(gallery.previews.count, gallery.choices.count)
         XCTAssertEqual(gallery.previews["built-in"]?.store.context.appearance, "dark")
+    }
+
+    @MainActor func testBrokenInitialConfigurationKeepsCardsAndWaitsForConfigurationRecovery() async throws {
+        for broken in ["{", #"{"widgets":[{"id":"a","type":"missing","position":"left"}]}"#] {
+            let fixture = try ThemeGalleryFixture()
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            try fixture.write(broken, to: fixture.url)
+            store.reloadConfiguration()
+            XCTAssertNotNil(store.configurationError)
+            let calls = OSAllocatedUnfairLock(initialState: 0)
+            let gallery = ThemeGallery(store: store, refreshDelay: .zero, compose: { request in
+                calls.withLock { $0 += 1 }
+                return try request.compose()
+            })
+            await gallery.refresh()
+            XCTAssertFalse(gallery.choices.isEmpty)
+            XCTAssertEqual(gallery.previewErrors.count, gallery.choices.count)
+            XCTAssertTrue(gallery.previewErrors.values.allSatisfy { $0.contains("Previews are unavailable") })
+            XCTAssertTrue(gallery.previews.isEmpty)
+            let previous = store.context
+            store.context.appearance = "dark"
+            gallery.contextChanged(from: previous)
+            XCTAssertNil(gallery.refreshTask)
+            XCTAssertEqual(calls.withLock { $0 }, 0)
+            try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
+            store.reloadConfiguration()
+            XCTAssertNil(store.configurationError)
+            gallery.configurationErrorChanged()
+            await gallery.refreshTask?.value
+            XCTAssertEqual(gallery.previews.count, gallery.choices.count)
+            XCTAssertTrue(gallery.previewErrors.isEmpty)
+        }
+    }
+
+    @MainActor func testSuccessfulPreviewClearsOnlyItsPreviewErrorAndKeepsGetErrors() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let fails = OSAllocatedUnfairLock(initialState: true)
+        let gallery = ThemeGallery(store: store, compose: { request in
+            if fails.withLock({ $0 }) { throw CommandFailure(message: "Brief preview failure") }
+            return try request.compose()
+        })
+        await gallery.refresh()
+        XCTAssertEqual(gallery.previewErrors.count, gallery.choices.count)
+        fails.withLock { $0 = false }
+        await gallery.refresh()
+        XCTAssertTrue(gallery.previewErrors.isEmpty)
+        XCTAssertEqual(gallery.previews.count, gallery.choices.count)
+
+        let index = LocalPackageIndex(fixture: fixture)
+        let entry = try await index.add(checksum: String(repeating: "0", count: 64))
+        let actions = ThemeGallery(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        await actions.get(entry)
+        let error = try XCTUnwrap(actions.errors[entry.versionKey])
+        await actions.refreshTask?.value
+        await actions.refresh()
+        XCTAssertEqual(actions.errors[entry.versionKey], error)
     }
 
 }

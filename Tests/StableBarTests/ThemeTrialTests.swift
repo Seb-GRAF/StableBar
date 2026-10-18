@@ -57,7 +57,7 @@ final class ThemeTrialTests: XCTestCase {
              "built-in", ["id": .string("built-in")]),
             (#"{"includes":["included.json"],"widgets":[]}"#,
              #"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}}}"#,
-             "test-theme/1", ["id": .string("test-theme"), "version": .string("1")])
+             "test-theme/1", ["id": .string("test-theme"), "version": .string("1"), "settings": .null])
         ]
         for scenario in cases {
             let fixture = try ThemeGalleryFixture(scenario.main)
@@ -97,6 +97,84 @@ final class ThemeTrialTests: XCTestCase {
             XCTAssertEqual(try fixture.document(), galleryDocument)
             XCTAssertEqual(try Data(contentsOf: includedURL), included)
         }
+    }
+
+
+    @MainActor func testVersionedIncludedThemeSettingsDoNotLeakIntoGalleryOrTrialSelections() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
+        defer { fixture.close() }
+        _ = try installSizedTheme(in: fixture)
+        let other = try fixture.theme(#"{"bar":{"height":61}}"#, id: "other")
+        let includedURL = fixture.directory.appending(path: "included.json")
+        try fixture.write(#"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}}}"#, to: includedURL)
+        let included = try Data(contentsOf: includedURL)
+        let original = try Data(contentsOf: fixture.url)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        for key in ["built-in", "terminal", other.key] {
+            let choice = try XCTUnwrap(gallery.choices.first { $0.key == key })
+            for trialSelection in [false, true] {
+                if trialSelection {
+                    let trial = ThemeTrial(store: store)
+                    for _ in trial.choices.indices {
+                        if trial.choice?.key == key { break }
+                        trial.next()
+                        XCTAssertNil(trial.error)
+                    }
+                    trial.keep()
+                    XCTAssertNil(trial.error)
+                    XCTAssertFalse(trial.isActive)
+                } else {
+                    gallery.select(choice)
+                    XCTAssertNil(gallery.errors[key])
+                }
+                XCTAssertEqual(store.selectedThemeKey, key)
+                let selection = try XCTUnwrap(fixture.document()["theme"]?.decoded([String: ConfigurationValue].self))
+                XCTAssertEqual(selection["settings"], .null)
+                XCTAssertEqual(selection["version"], choice.isBundled ? .null : .string("1"))
+                XCTAssertEqual(try Data(contentsOf: includedURL), included)
+                try store.customizationHistory.undo()
+                XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+                XCTAssertEqual(store.configuration?.bar.height, 48)
+            }
+        }
+    }
+
+    @MainActor func testClearanceUsesSavedCompositionDuringTrialAndChangesOnlyWhenKept() throws {
+        let fixture = try ThemeGalleryFixture(#"{"bar":{"keepWindowsClear":true},"widgets":[]}"#)
+        defer { fixture.close() }
+        let theme = try fixture.theme(#"{"bar":{"height":95,"offset":30,"keepWindowsClear":false}}"#)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let frame = CGRect(x: 0, y: 0, width: 1512, height: 982)
+        let display = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: nil)
+        let app = AppDelegate(store: store)
+        let clearance = { app.clearanceDisplay(frame: frame, visibleFrame: frame, display: display, desktopTop: frame.maxY) }
+        let before = try XCTUnwrap(clearance())
+        let trial = ThemeTrial(store: store)
+        for _ in trial.choices.indices {
+            if trial.choice?.key == theme.key { break }
+            trial.next()
+        }
+        XCTAssertNil(trial.error)
+        XCTAssertEqual(store.configuration?.bar.height, 95)
+        XCTAssertEqual(clearance(), before)
+        XCTAssertEqual(store.clearanceConfiguration?.bar.keepWindowsClear, true)
+        trial.cancel()
+        XCTAssertEqual(clearance(), before)
+        let keeping = ThemeTrial(store: store)
+        for _ in keeping.choices.indices {
+            if keeping.choice?.key == theme.key { break }
+            keeping.next()
+        }
+        keeping.keep()
+        XCTAssertNil(keeping.error)
+        let kept = try XCTUnwrap(clearance())
+        XCTAssertNotEqual(kept, before)
+        XCTAssertEqual(kept.barFrame.height, 95)
+        XCTAssertEqual(kept.barFrame.minY, 30)
     }
 
     @MainActor func testKeepingCurrentThemeNeverSavesPendingCommandLineSettings() async throws {

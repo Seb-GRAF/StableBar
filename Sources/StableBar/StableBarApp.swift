@@ -239,6 +239,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.send(.wake)
     }
 
+    func clearanceDisplay(frame: CGRect, visibleFrame: CGRect, display: BarDisplay, desktopTop: CGFloat) -> WindowClearanceDisplay? {
+        guard let configuration = store.clearanceConfiguration else { return nil }
+        return WindowClearanceDisplay(frame: frame, visibleFrame: visibleFrame, configuration: configuration,
+                                      display: display, desktopTop: desktopTop)
+    }
+
     private func updatePanels() {
         guard let config = store.configuration else { return }
         let screens = NSScreen.screens
@@ -281,11 +287,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.setFrame(NSRect(x: screen.frame.minX, y: top - config.bar.offset - height,
                                   width: screen.frame.width, height: height), display: true)
             panel.orderFrontRegardless()
-            clearanceDisplays.append(WindowClearanceDisplay(frame: screen.frame, visibleFrame: screen.visibleFrame,
-                                                            configuration: config, display: BarDisplay(screen: screen),
-                                                            desktopTop: screens[0].frame.maxY))
+            if let clearance = clearanceDisplay(frame: screen.frame, visibleFrame: screen.visibleFrame,
+                                                      display: BarDisplay(screen: screen), desktopTop: screens[0].frame.maxY) {
+                clearanceDisplays.append(clearance)
+            }
         }
-        store.windowClearance.update(enabled: config.bar.keepWindowsClear, displays: clearanceDisplays)
+        store.windowClearance.update(enabled: store.clearanceConfiguration?.bar.keepWindowsClear == true, displays: clearanceDisplays)
         if store.barEditing.isActive {
             if editingKeyboard.start(store: store) {
                 let screen = screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main

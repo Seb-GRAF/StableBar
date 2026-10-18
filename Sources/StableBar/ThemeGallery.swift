@@ -9,11 +9,13 @@ final class ThemeGallery {
     private let compose: @Sendable (ThemePreview.Request) throws -> ThemePreview.Composition
     private var compositions: [String: ThemePreview.Composition] = [:]
     private var generation = 0
+    private var configurationUnavailable = false
     @ObservationIgnored private(set) var refreshTask: Task<Void, Never>?
     private var downloaded: [String: ThemeChoice] = [:]
     private var entries: [PackageIndex.Entry] = []
     private(set) var choices: [ThemeChoice] = []
     private(set) var previews: [String: ThemePreview.Snapshot] = [:]
+    private(set) var previewErrors: [String: String] = [:]
     private(set) var errors: [String: String] = [:]
     private(set) var progress: [String: String] = [:]
     private(set) var storeUnavailable = false
@@ -35,12 +37,20 @@ final class ThemeGallery {
         }
     }
 
+    func error(for key: String) -> String? { errors[key] ?? previewErrors[key] }
+
     func configurationChanged() {
         updateOverrides()
         scheduleRefresh()
     }
 
+    func configurationErrorChanged() {
+        guard configurationUnavailable, store.configurationError == nil else { return }
+        configurationChanged()
+    }
+
     func contextChanged(from previous: ConfigurationContext) {
+        guard !configurationUnavailable else { return }
         guard (compositions.isEmpty && previous != store.context)
             || compositions.values.contains(where: { $0.changesAppearance(from: previous, to: store.context) }) else { return }
         updateOverrides()
@@ -71,7 +81,11 @@ final class ThemeGallery {
                                        themesDirectory: store.themesDirectory)
             let downloaded = Array(downloaded.values)
             let choices = await Task.detached { catalog.choices }.value
+            guard self.generation == generation, !Task.isCancelled else { return }
+            self.choices = choices
             let document = try store.editedMainDocument()
+            try store.validateCustomization(configurationData(document))
+            configurationUnavailable = false
             let context = store.context
             let uninstalled = downloaded.filter { choice in !choices.contains { $0.key == choice.key } }
             let requests = try (choices + uninstalled).map { choice in
@@ -95,7 +109,14 @@ final class ThemeGallery {
             compositions = compositions.filter { available.contains($0.key) }
             for (key, result) in results { accept(result, key: key, context: context) }
             updateOverrides()
-        } catch { errors[selectedKey] = errorMessage(error) }
+        } catch {
+            guard self.generation == generation, !Task.isCancelled else { return }
+            configurationUnavailable = true
+            previews = [:]
+            compositions = [:]
+            let message = "Previews are unavailable. \(errorMessage(error))"
+            for key in choices.map(\.key) + downloaded.values.map(\.key) { previewErrors[key] = message }
+        }
     }
 
     private func buildPreview(_ choice: ThemeChoice) async {
@@ -114,12 +135,13 @@ final class ThemeGallery {
                 return
             }
             accept(result, key: choice.key, context: context)
-        } catch { errors[choice.key] = errorMessage(error) }
+        } catch { previewErrors[choice.key] = errorMessage(error) }
     }
 
     private func accept(_ result: Result<ThemePreview.Composition, Error>, key: String, context: ConfigurationContext) {
         switch result {
         case let .success(composition):
+            previewErrors[key] = nil
             compositions[key] = composition
             let snapshot = ThemePreview.snapshot(composition.configuration, from: store)
             snapshot.context = context
@@ -127,7 +149,7 @@ final class ThemeGallery {
         case let .failure(error):
             previews[key] = nil
             compositions[key] = nil
-            errors[key] = errorMessage(error)
+            previewErrors[key] = errorMessage(error)
         }
     }
 
@@ -142,7 +164,7 @@ final class ThemeGallery {
             let main = try store.editedMainDocument(replaying: store.customizationEdits)
             overrides = ThemeOverrides(main: main, theme: theme.values, widgets: store.configuration?.widgets ?? [],
                                        activeProfiles: store.activeProfiles)
-        } catch { errors[selectedKey] = errorMessage(error) }
+        } catch { previewErrors[selectedKey] = errorMessage(error) }
     }
 
     func select(_ choice: ThemeChoice) {

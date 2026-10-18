@@ -358,21 +358,29 @@ final class BarStore: NSObject {
     }
 
     func themeEdit(for choice: ThemeChoice) throws -> ConfigurationEdit {
+        var inheritedRoot = try editedMainDocument(replaying: [])
+        inheritedRoot["theme"] = nil
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = themesDirectory
+        let document = try loader.compose(configurationURL, data: configurationData(inheritedRoot), context: context)
+        let inherited = try document["theme"]?.decoded(WidgetPackageSelection.self)
         var edit = choice.edit
         if choice.isBuiltIn {
-            let root = try editedDocument([edit], replaying: [])
-            var loader = ConfigurationLoader()
-            loader.themesDirectory = themesDirectory
-            let document = try loader.compose(configurationURL, data: configurationData(root), context: context)
-            if let inherited = try document["theme"]?.decoded(WidgetPackageSelection.self), inherited.enabled {
-                edit.properties = choice.selection
-            }
+            if inherited?.enabled == true { edit.properties = choice.selection }
         } else {
             let settings = try themeSettings(for: choice)
             if !settings.isEmpty { edit.properties?["settings"] = .object(settings) }
         }
+        if edit.properties != nil {
+            if choice.isBundled, inherited?.version != nil { edit.properties?["version"] = .null }
+            if edit.properties?["settings"] == nil, inherited?.settings.isEmpty == false {
+                edit.properties?["settings"] = .null
+            }
+        }
         return edit
     }
+
+    var clearanceConfiguration: Configuration? { normalComposition?.configuration ?? configuration }
 
     func tryTheme(_ choice: ThemeChoice) throws {
         guard !isPreview, normalComposition != nil else {

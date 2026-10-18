@@ -339,12 +339,12 @@ final class BarEditingTests: XCTestCase {
                                  (external, CGRect(x: -1920, y: 982, width: 1920, height: 1080))] {
             let config = try XCTUnwrap(store.configuration)
             let normal = config.barGeometry(for: display)
-            let clearance = { WindowClearanceDisplay(frame: frame, visibleFrame: frame, configuration: config,
-                                                     display: display, desktopTop: 2062) }
-            let before = clearance()
+            let app = AppDelegate(store: store)
+            let clearance = { app.clearanceDisplay(frame: frame, visibleFrame: frame, display: display, desktopTop: 2062) }
+            let before = try XCTUnwrap(clearance())
             store.barEditing.begin()
             XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: display)).panelHeight, normal.panelHeight)
-            let during = clearance()
+            let during = try XCTUnwrap(clearance())
             XCTAssertEqual(during, before)
             XCTAssertEqual(during.barFrame.height, normal.panelHeight)
             XCTAssertEqual(during.barFrame.minY, 2062 - frame.maxY + config.bar.offset)

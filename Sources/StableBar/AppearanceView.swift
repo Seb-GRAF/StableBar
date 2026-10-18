@@ -37,7 +37,7 @@ struct AppearanceView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
                     ForEach(gallery.choices, id: \.key) { choice in
                         ThemeCard(title: choice.title, snapshot: gallery.previews[choice.key],
-                                  isSelected: gallery.selectedKey == choice.key, error: gallery.errors[choice.key]) {
+                                  isSelected: gallery.selectedKey == choice.key, error: gallery.error(for: choice.key)) {
                             gallery.select(choice)
                         }
                     }
@@ -51,7 +51,7 @@ struct AppearanceView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
                         ForEach(gallery.storeThemes, id: \.versionKey) { entry in
                             ThemeCard(title: entry.name, snapshot: gallery.previews[entry.versionKey],
-                                      progress: gallery.progress[entry.versionKey], error: gallery.errors[entry.versionKey], isStore: true) {
+                                      progress: gallery.progress[entry.versionKey], error: gallery.error(for: entry.versionKey), isStore: true) {
                                 Task { await gallery.get(entry) }
                             }
                         }
@@ -206,6 +206,7 @@ struct AppearanceView: View {
         .formStyle(.grouped)
         .task { await gallery.refresh(); await gallery.loadStore() }
         .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
+        .onChange(of: store.configurationError) { _, _ in gallery.configurationErrorChanged() }
         .onChange(of: store.context) { previous, _ in gallery.contextChanged(from: previous) }
     }
 

@@ -53,11 +53,17 @@ struct ThemeCard: View {
         }
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    var previewColorScheme: ColorScheme {
+        guard let snapshot, let configuration = snapshot.store.configuration else { return colorScheme }
+        return ThemePreview.usesDarkAppearance(configuration, context: snapshot.store.context) ? .dark : .light
+    }
+
     private var preview: some View {
         Group {
-            if let snapshot, let configuration = snapshot.store.configuration {
+            if let snapshot, snapshot.store.configuration != nil {
                 ThemeBarPreview(store: snapshot.store, date: snapshot.date)
-                    .environment(\.colorScheme, ThemePreview.usesDarkAppearance(configuration, context: snapshot.store.context) ? .dark : .light)
             } else {
                 RoundedRectangle(cornerRadius: 8).fill(.quaternary)
                     .overlay { Text(isStore && error == nil ? "Loading preview…" : "Preview unavailable").font(.caption).foregroundStyle(.secondary) }
@@ -70,6 +76,7 @@ struct ThemeCard: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(isSelected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: isSelected ? 2 : 1)
         }
+        .environment(\.colorScheme, previewColorScheme)
         .accessibilityHidden(true)
     }
 }
