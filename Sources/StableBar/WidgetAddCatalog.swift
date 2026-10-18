@@ -9,6 +9,15 @@ struct WidgetAddChoice: Identifiable, Sendable {
     var package: PackageIndex.Entry?
     var isScript = false
 
+    var basicChoice: WidgetAddChoice? {
+        guard package != nil, properties != nil else { return nil }
+        var choice = self
+        choice.package = nil
+        return choice
+    }
+
+    var basicActionTitle: String { "Add Basic \(name)" }
+
     func matches(_ search: String) -> Bool {
         search.isEmpty || "\(name) \(description) \(package == nil ? "Built in" : "Store")".localizedCaseInsensitiveContains(search)
     }

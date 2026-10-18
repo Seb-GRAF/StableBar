@@ -396,7 +396,12 @@ struct PackagesView: View {
 
     private func select(_ directory: URL, from entry: PackageIndex.Entry? = nil) throws {
         let manifest = try packages.manifest(at: directory)
-        let supplied = selections.first { $0.id == manifest.id && $0.version == manifest.version }?.settings ?? [:]
+        let supplied: [String: ConfigurationValue]
+        if reviewing != nil {
+            supplied = try WidgetSetup(store: store).savedSettings(for: manifest)
+        } else {
+            supplied = selections.first { $0.id == manifest.id && $0.version == manifest.version }?.settings ?? [:]
+        }
         let values = try manifest.values(supplied)
         let reviewed = try packages.inspect(directory, settings: values)
         settings = values

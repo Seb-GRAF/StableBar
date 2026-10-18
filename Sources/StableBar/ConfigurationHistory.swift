@@ -177,6 +177,7 @@ final class ConfigurationHistory {
     }
 
     func clearNotice() { notice = nil }
+    func showNotice(_ message: String) { notice = message }
 
     private func discardPendingChange() {
         writeTask?.cancel()

@@ -14,12 +14,24 @@ final class WidgetSetup {
     private(set) var choices = WidgetAddCatalog.compose()
     private(set) var storeUnavailable = false
     private(set) var isAdding = false
+    private(set) var requestStarted = false
     var review: Review?
     var error: String?
 
     init(store: BarStore, client: PackageStoreClient? = nil) {
         self.store = store
         self.client = client ?? store.packageStoreClient
+    }
+
+    func beginSheet() {
+        requestStarted = false
+        review = nil
+        error = nil
+    }
+
+    func cancelReview() {
+        review = nil
+        requestStarted = false
     }
 
     func load() async {
@@ -33,7 +45,8 @@ final class WidgetSetup {
     }
 
     func add(_ choice: WidgetAddChoice, to position: WidgetPosition) async -> String? {
-        guard !isAdding else { return nil }
+        guard !requestStarted else { return nil }
+        requestStarted = true
         isAdding = true
         defer { isAdding = false }
         do {
@@ -45,19 +58,32 @@ final class WidgetSetup {
                     return nil
                 }
                 let installed = try await client.installWithoutReview(entry)
-                let selections = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
-                let settings = selections.first { $0.id == entry.id && $0.version == entry.version }?.settings ?? [:]
+                let settings = try savedSettings(for: installed.manifest)
                 return try enable(installed, settings: settings, position: position)
             }
             let id = "widget-" + UUID().uuidString.prefix(8).lowercased()
-            guard let edit = choice.add(position: position, id: id) else { return nil }
+            guard let edit = choice.add(position: position, id: id) else {
+                throw CommandFailure(message: "Choose a widget to add.")
+            }
             try store.customizationHistory.change(edit)
             return id
         } catch {
+            requestStarted = false
             self.error = errorMessage(error)
             // History reports a write failure too; keep Add errors at their point of use.
             store.customizationHistory.error = nil
             return nil
+        }
+    }
+
+    func savedSettings(for manifest: WidgetPackageManifest) throws -> [String: ConfigurationValue] {
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = store.themesDirectory
+        let root = try store.editedDocument([], replaying: store.customizationEdits)
+        let document = try loader.compose(store.configurationURL, data: configurationData(root), context: store.context)
+        let selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        return (selections.first { $0.id == manifest.id }?.settings ?? [:]).filter { name, value in
+            manifest.settings[name]?.accepts(value) == true
         }
     }
 
@@ -79,6 +105,24 @@ final class WidgetSetup {
         let ids = Set(packageConfiguration.widgets.map(\.id))
         let added = configured.widgets.filter { ids.contains($0.id) }
         guard !added.isEmpty else { throw CommandFailure(message: "This package has no widgets for the current setup.") }
+        let selections = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        if selections.contains(where: { $0.id == inspection.manifest.id && $0.enabled }),
+           let existing = store.configuration?.widgets.first(where: { ids.contains($0.id) && $0.enabled }) {
+            let previous = store.configuration?.widgets ?? []
+            var edits = [selection]
+            for widget in previous where ids.contains(widget.id) {
+                if configured.widgets.first(where: { $0.id == widget.id })?.position != widget.position {
+                    edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: ["position": .string(widget.position.rawValue)]))
+                }
+            }
+            let configuredIDs = configured.widgets.map(\.id)
+            let previousIDs = previous.map(\.id)
+            let order = previousIDs.filter { configuredIDs.contains($0) } + configuredIDs.filter { !previousIDs.contains($0) }
+            if order != configuredIDs { edits.append(ConfigurationEdit(action: .reorder, ids: order)) }
+            try store.customizationHistory.change(edits)
+            store.customizationHistory.showNotice("\(inspection.manifest.name) is already on the bar. Its widget is selected.")
+            return existing.id
+        }
         var edits = [selection]
         for widget in added {
             edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: ["position": .string(position.rawValue), "enabled": .bool(true)]))

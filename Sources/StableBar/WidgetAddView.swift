@@ -25,7 +25,7 @@ struct WidgetAddView: View {
                 }
                 Divider()
                 HStack {
-                    Button("Back") { setup.review = nil }
+                    Button("Back", action: setup.cancelReview)
                     Spacer()
                 }.padding(12)
             } else {
@@ -38,8 +38,13 @@ struct WidgetAddView: View {
                         ForEach(choices.filter(\.isScript)) { choice in row(choice) }
                     }
                 }
-                .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
-                    if let choice = choices.first(where: { ids.contains($0.id) }) { add(choice) }
+                .contextMenu(forSelectionType: String.self) { ids in
+                    if let choice = choices.first(where: { ids.contains($0.id) }), let basic = choice.basicChoice {
+                        Button(choice.basicActionTitle) { add(basic) }
+                    }
+                }
+                .onTapGesture(count: 2) {
+                    if let choice = choices.first(where: { $0.id == selected }) { add(choice) }
                 }
                 if let error = setup.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
@@ -54,12 +59,12 @@ struct WidgetAddView: View {
                         if let choice = choices.first(where: { $0.id == selected }) { add(choice) }
                     }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(setup.isAdding || !choices.contains { $0.id == selected })
+                    .disabled(setup.requestStarted || !choices.contains { $0.id == selected })
                 }.padding(16)
             }
         }
         .frame(width: 680, height: 620)
-        .task { setup.review = nil; setup.error = nil; await setup.load() }
+        .task { setup.beginSheet(); await setup.load() }
     }
 
     private func row(_ choice: WidgetAddChoice) -> some View {
@@ -75,6 +80,11 @@ struct WidgetAddView: View {
         .padding(.vertical, 4)
         .tag(choice.id)
         .accessibilityElement(children: .combine)
+        .accessibilityActions {
+            if let basic = choice.basicChoice {
+                Button(choice.basicActionTitle) { add(basic) }
+            }
+        }
     }
 
     private func add(_ choice: WidgetAddChoice) {

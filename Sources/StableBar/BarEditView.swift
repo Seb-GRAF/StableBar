@@ -44,7 +44,10 @@ struct BarEditView: View {
             .frame(height: geometry.layoutHeight)
             .background(.regularMaterial)
             .sheet(isPresented: $adding) {
-                WidgetAddView(setup: setup, store: store, position: addPosition) { _ in adding = false }
+                WidgetAddView(setup: setup, store: store, position: addPosition) { id in
+                    adding = false
+                    if store.customizationHistory.notice != nil { store.barEditing.select(id) }
+                }
             }
             .alert("Couldn’t change widget", isPresented: Binding(get: {
                 store.barEditing.error != nil && store.barEditing.errorDisplayID == display.id

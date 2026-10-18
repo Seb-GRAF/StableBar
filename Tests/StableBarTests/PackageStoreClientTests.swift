@@ -7,10 +7,10 @@ struct LocalPackageIndex {
     var url: URL { fixture.directory.appending(path: "store/index.json") }
 
     func add(id: String = "store-theme", kind: String? = "theme", configuration: String = #"{"bar":{"height":31}}"#,
-             checksum: String? = nil, listedKind: String? = nil, settings: String = "{}") async throws -> PackageIndex.Entry {
+             checksum: String? = nil, listedKind: String? = nil, settings: String = "{}", version: String = "1") async throws -> PackageIndex.Entry {
         let source = fixture.directory.appending(path: "sources/\(id)")
         let kindField = kind.map { #", "kind":"\#($0)""# } ?? ""
-        try fixture.write(#"{"id":"\#(id)","name":"Store theme","version":"1","entry":"config.json","settings":\#(settings)\#(kindField)}"#,
+        try fixture.write(#"{"id":"\#(id)","name":"Store theme","version":"\#(version)","entry":"config.json","settings":\#(settings)\#(kindField)}"#,
                           to: source.appending(path: "package.json"))
         try fixture.write(configuration, to: source.appending(path: "config.json"))
         let archive = url.deletingLastPathComponent().appending(path: "\(id).tar.gz")
@@ -20,7 +20,7 @@ struct LocalPackageIndex {
         let indexKind = (listedKind ?? kind).map { #", "kind":"\#($0)""# } ?? ""
         try fixture.write(#"""
         {"packages":[{"id":"future","kind":"future-kind"},
-         {"id":"\#(id)","name":"Store theme","version":"1","archive":"\#(id).tar.gz","sha256":"\#(hash)",
+         {"id":"\#(id)","name":"Store theme","version":"\#(version)","archive":"\#(id).tar.gz","sha256":"\#(hash)",
           "source":"https://example.com/package","future":true\#(indexKind)}],"future":true}
         """#, to: url)
         return try await PackageIndex.load(from: url).packages[0]
