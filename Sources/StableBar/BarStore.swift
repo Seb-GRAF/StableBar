@@ -22,6 +22,8 @@ final class BarStore: NSObject {
     var profiles: [ConfigurationProfile] = []
     var pinnedProfile: String?
     var sessionEdits: [ConfigurationEdit] = []
+    private(set) var customizationEdits: [ConfigurationEdit] = []
+    @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self)
     var context = ConfigurationContext()
     private(set) var presentations: [String: WidgetPresentation] = [:]
     private(set) var barStyle = WidgetStyle()
@@ -121,23 +123,31 @@ final class BarStore: NSObject {
         do {
             let base = try configurationLoader.load(configurationURL, context: context)
             let next: Configuration
-            if sessionEdits.isEmpty { next = base }
+            if !customizationEdits.isEmpty {
+                let edits = try customizationHistory.pendingEdits()
+                let data = try customizationData(edits, editing: Data(contentsOf: configurationURL))
+                let (preview, loader) = try configurationReplayingSession(over: data)
+                customizationEdits = edits
+                configurationLoader = loader
+                next = preview
+            } else if sessionEdits.isEmpty { next = base }
             else {
                 let root = try editedDocument([])
                 next = try configurationLoader.load(configurationURL, data: configurationData(root), context: context)
             }
+            customizationHistory.checkForExternalChanges()
             apply(next)
         } catch {
             configurationError = errorMessage(error)
         }
     }
 
-    func editedDocument(_ edits: [ConfigurationEdit]) throws -> [String: ConfigurationValue] {
-        let data = try Data(contentsOf: configurationURL)
+    func editedDocument(_ edits: [ConfigurationEdit], data: Data? = nil, replaying: [ConfigurationEdit]? = nil) throws -> [String: ConfigurationValue] {
+        let data = try data ?? Data(contentsOf: configurationURL)
         var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
-        var loader = ConfigurationLoader()
+        var loader = configurationLoader
         var ids: [String] = []
-        for edit in sessionEdits { root = try edit.applying(to: root, widgetIDs: &ids) }
+        for edit in replaying ?? (customizationEdits + sessionEdits) { root = try edit.applying(to: root, widgetIDs: &ids) }
         ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
         for edit in edits {
             try edit.validateTargets(in: ids)
@@ -150,6 +160,7 @@ final class BarStore: NSObject {
     }
 
     func applyEdits(_ edits: [ConfigurationEdit], persist: Bool) throws {
+        try customizationHistory.flush()
         let allEdits = sessionEdits + edits
         let root = try editedDocument(edits)
         let data = try configurationData(root)
@@ -169,12 +180,73 @@ final class BarStore: NSObject {
         catch { sessionEdits = previous; throw error }
     }
 
-    func uninstallPackage(id: String, version: String) throws {
+    func customizationProfiles(includingPending: Bool = true) throws -> [ConfigurationProfile] {
+        let root = try editedDocument([], replaying: includingPending ? customizationEdits : [])
+        var loader = configurationLoader
+        _ = try loader.load(configurationURL, data: configurationData(root), context: context)
+        return loader.profiles
+    }
+
+    func customizationData(_ edits: [ConfigurationEdit], editing original: Data) throws -> Data {
+        let root = try editedDocument(edits, data: original, replaying: [])
+        var loader = configurationLoader
+        _ = try loader.load(configurationURL, data: configurationData(root), context: context)
+        return try configurationData(root, editing: original)
+    }
+
+    func setCustomizationEdits(_ edits: [ConfigurationEdit]) throws {
+        let data = try customizationData(edits, editing: Data(contentsOf: configurationURL))
+        let (next, loader) = try configurationReplayingSession(over: data)
+        customizationEdits = edits
+        configurationLoader = loader
+        apply(next)
+        configurationWatcher.watch(loader.dependencies)
+    }
+
+    func writeCustomization(_ data: Data, replacing original: Data) throws {
+        let (next, loader) = try configurationReplayingSession(over: data)
+        guard try Data(contentsOf: configurationURL) == original else {
+            throw CommandFailure(message: "The configuration file changed. Try your change again.")
+        }
+        try data.write(to: configurationURL, options: .atomic)
+        customizationEdits = []
+        configurationLoader = loader
+        apply(next)
+        configurationWatcher.watch(loader.dependencies)
+    }
+
+    func validateCustomization(_ data: Data) throws {
+        var loader = configurationLoader
+        _ = try loader.load(configurationURL, data: data, context: context)
+    }
+
+    private func configurationReplayingSession(over data: Data) throws -> (Configuration, ConfigurationLoader) {
+        try validateCustomization(data)
+        let root = try editedDocument([], data: data, replaying: sessionEdits)
+        var loader = configurationLoader
+        let next = try loader.load(configurationURL, data: configurationData(root), context: context)
+        return (next, loader)
+    }
+
+    @discardableResult
+    func flushCustomization() -> Bool {
+        do {
+            try customizationHistory.flush()
+            return true
+        } catch {
+            customizationHistory.error = errorMessage(error)
+            return false
+        }
+    }
+
+    func uninstallPackage(id: String, version: String, fromCustomization: Bool = false) throws {
         let packages = WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages"))
         let directory = try packages.directory(id: id, version: version)
         let manifest = try packages.manifest(at: directory)
         var loader = ConfigurationLoader()
-        let document = try loader.compose(configurationURL, data: configurationData(editedDocument([])), context: context)
+        try customizationHistory.flush()
+        let document = try loader.compose(configurationURL, data: configurationData(
+            editedDocument([], replaying: fromCustomization ? [] : sessionEdits)), context: context)
         var selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
         if let theme = document["theme"] { selections.append(try theme.decoded(WidgetPackageSelection.self)) }
         var edits: [ConfigurationEdit] = []
@@ -183,8 +255,20 @@ final class BarStore: NSObject {
                 "id": .string(id), "version": .string(version), "enabled": .bool(false), "settings": .object(selection.settings)
             ]))
         }
-        try applyEdits(edits, persist: true)
+        if fromCustomization {
+            let data = try customizationData(edits, editing: Data(contentsOf: configurationURL))
+            let (_, preview) = try configurationReplayingSession(over: data)
+            var active = try preview.document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+            if let theme = preview.document["theme"] { active.append(try theme.decoded(WidgetPackageSelection.self)) }
+            guard !active.contains(where: { $0.id == id && $0.version == version && $0.enabled }) else {
+                throw CommandFailure(message: "Save or discard command-line changes before uninstalling this version.")
+            }
+            for edit in edits { try customizationHistory.change(edit) }
+        } else {
+            try applyEdits(edits, persist: true)
+        }
         try FileManager.default.removeItem(at: directory)
+        if fromCustomization { customizationHistory.dropUnavailableHistory() }
     }
 
     private func apply(_ next: Configuration) {
@@ -552,6 +636,7 @@ final class BarStore: NSObject {
     }
 
     func stop() {
+        flushCustomization()
         managesConnections = false
         popup.close()
         windowClearance.stop()

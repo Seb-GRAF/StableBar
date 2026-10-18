@@ -52,9 +52,7 @@ struct ProfilesView: View {
                     HStack {
                         TextField("New profile name", text: $newName)
                         Button("Add", systemImage: "plus") {
-                            editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [
-                                ConfigurationProfile(name: newName, when: nil, configuration: [:])
-                            ]))
+                            editor.addProfile(name: newName)
                             if editor.error == nil { selectedName = newName; newName = "" }
                         }
                         .labelStyle(.iconOnly)
@@ -86,24 +84,24 @@ struct ProfilesView: View {
                     .foregroundStyle(.secondary)
             }
             Section("Conditions") {
-                Picker("Appearance", selection: condition(profile, \.appearance)) {
+                Picker("Appearance", selection: condition(profile, \.appearance, control: "appearance")) {
                     Text("Any").tag(Optional<String>.none)
                     Text("Light").tag(Optional("light"))
                     Text("Dark").tag(Optional("dark"))
                 }
-                Picker("Power", selection: condition(profile, \.onBattery)) {
+                Picker("Power", selection: condition(profile, \.onBattery, control: "onBattery")) {
                     Text("Any").tag(Optional<Bool>.none)
                     Text("Battery").tag(Optional(true))
                     Text("Power adapter").tag(Optional(false))
                 }
-                TextField("Display count", value: condition(profile, \.displayCount), format: .number, prompt: Text("Any"))
-                Picker("External display", selection: condition(profile, \.externalDisplay)) {
+                TextField("Display count", value: condition(profile, \.displayCount, control: "displayCount"), format: .number, prompt: Text("Any"))
+                Picker("External display", selection: condition(profile, \.externalDisplay, control: "externalDisplay")) {
                     Text("Any").tag(Optional<Bool>.none)
                     Text("Connected").tag(Optional(true))
                     Text("Disconnected").tag(Optional(false))
                 }
                 TextField("Focused app", text: Binding(get: { profile.when?.app ?? "" }, set: {
-                    condition(profile, \.app).wrappedValue = $0.isEmpty ? nil : $0
+                    condition(profile, \.app, control: "app").wrappedValue = $0.isEmpty ? nil : $0
                 }), prompt: Text("Any, or a bundle identifier"))
             }
             Section("Configuration") {
@@ -118,9 +116,8 @@ struct ProfilesView: View {
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
                 Button("Apply configuration") {
                     do {
-                        var edited = profile
-                        edited.configuration = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(configuration.utf8))
-                        replace(edited)
+                        editor.setProfileConfiguration(name: profile.name, configuration:
+                            try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(configuration.utf8)))
                     } catch { editor.error = errorMessage(error) }
                 }
                 Text("Edits are saved in the main configuration file; included files stay unchanged.")
@@ -130,19 +127,10 @@ struct ProfilesView: View {
         .formStyle(.grouped)
     }
 
-    private func condition<Value: Equatable>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>) -> Binding<Value?> {
+    private func condition<Value: Equatable>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>, control: String) -> Binding<Value?> {
         Binding(get: { profile.when?[keyPath: key] }, set: { value in
             guard value != profile.when?[keyPath: key] else { return }
-            var edited = profile
-            var conditions = profile.when ?? ProfileConditions()
-            conditions[keyPath: key] = value
-            edited.when = conditions
-            replace(edited)
+            editor.setProfileCondition(profile.name, key, value: value, control: control)
         })
     }
-
-    private func replace(_ profile: ConfigurationProfile) {
-        editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles.map { $0.name == profile.name ? profile : $0 }))
-    }
-
 }

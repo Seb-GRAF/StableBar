@@ -22,7 +22,7 @@ import Testing
         #expect(store.sessionEdits.isEmpty)
         #expect(editor.undoSteps.isEmpty)
         #expect(store.origins == origins)
-        editor.save()
+        try editor.history.flush()
         #expect(editor.error == nil)
         #expect(try Data(contentsOf: url) == original)
     }
@@ -53,8 +53,8 @@ import Testing
         let initial = try customizationFields(editor, action: .defaults)
         initial.stringBinding("fontWeight", default: "medium").wrappedValue = "bold"
         #expect(editor.store.configuration?.defaults.fontWeight == "bold")
-        #expect(editor.store.sessionEdits.count == 1)
-        #expect(editor.undoSteps.count == 1)
+        #expect(editor.store.customizationEdits.count == 1)
+        #expect(editor.history.canUndo)
         editor.undo()
         let restored = try customizationFields(editor, action: .defaults)
         restored.stringBinding("fontWeight", default: "medium").wrappedValue = "regular"
@@ -65,7 +65,7 @@ import Testing
         let edited = try customizationFields(editor, action: .defaults)
         edited.stringBinding("fontWeight", default: "medium").wrappedValue = "bold"
         #expect(editor.store.configuration?.defaults.fontWeight == "bold")
-        #expect(editor.store.sessionEdits.count == 1)
+        #expect(editor.store.customizationEdits.isEmpty)
         #expect(editor.undoSteps.count == 1)
     }
 }
@@ -106,7 +106,7 @@ import Testing
         #expect(editor.error == nil)
         #expect(editor.store.origins["defaults.foreground"]?.token == "text")
         #expect(editor.store.configuration?.defaults.foreground == color)
-        #expect(editor.store.sessionEdits.count == 1)
+        #expect(editor.store.customizationEdits.count == 1)
         let changed = TokenPicker(token: editor.store.origins["defaults.foreground"]?.token, color: color) {
             editor.change(ConfigurationEdit(action: .defaults, properties: ["foreground": $0]))
         }
@@ -114,8 +114,8 @@ import Testing
         #expect(editor.error == nil)
         #expect(editor.store.origins["defaults.foreground"]?.token == nil)
         #expect(editor.store.configuration?.defaults.foreground == color)
-        #expect(editor.store.sessionEdits.last?.properties?["foreground"] == color.configurationValue)
-        #expect(editor.undoSteps.count == 1)
+        #expect(editor.store.customizationEdits.last?.properties?["foreground"] == color.configurationValue)
+        #expect(editor.history.canUndo)
     }
 }
 

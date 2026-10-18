@@ -24,7 +24,12 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         window!.makeKeyAndOrderFront(nil)
     }
 
-    func windowWillClose(_ notification: Notification) { store?.setInspectorOpen(false) }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { store?.flushCustomization() ?? true }
+
+    func windowWillClose(_ notification: Notification) {
+        store?.flushCustomization()
+        store?.setInspectorOpen(false)
+    }
 }
 
 private enum CustomizationSection: String, CaseIterable, Identifiable {
@@ -71,17 +76,26 @@ private struct CustomizationView: View {
                 case .packages: PackagesView(store: store)
                 case .diagnostics: DiagnosticsView(store: store)
                 }
-                if [.appearance, .widgets, .profiles].contains(section ?? .appearance) {
-                    if let error = editor.error ?? store.configurationError {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                            .font(.callout)
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(.red.opacity(0.1))
-                    }
+                if let error = editor.error ?? store.configurationError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(.red.opacity(0.1))
+                }
+                if let notice = editor.history.notice {
+                    Text(notice)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                }
+                if !store.sessionEdits.isEmpty { commandLineNotice }
+                if [.appearance, .widgets, .profiles, .packages].contains(section ?? .appearance) {
                     Divider()
                     footer
                 }
@@ -93,31 +107,35 @@ private struct CustomizationView: View {
         HStack(spacing: 10) {
             ControlGroup {
                 Button("Undo", systemImage: "arrow.uturn.backward", action: editor.undo)
-                    .keyboardShortcut("z").disabled(editor.undoSteps.isEmpty).help("Undo")
+                    .keyboardShortcut("z").disabled(!editor.history.canUndo).help("Undo")
                 Button("Redo", systemImage: "arrow.uturn.forward", action: editor.redo)
-                    .keyboardShortcut("z", modifiers: [.command, .shift]).disabled(editor.redoSteps.isEmpty).help("Redo")
+                    .keyboardShortcut("z", modifiers: [.command, .shift]).disabled(!editor.history.canRedo).help("Redo")
             }
             .labelStyle(.iconOnly)
             .fixedSize()
-            Group {
-                if store.sessionEdits.isEmpty {
-                    Text("All changes saved")
-                } else {
-                    Text("^[\(store.sessionEdits.count) unsaved change](inflect: true)")
-                }
-            }
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            Text(editor.history.hasPendingChanges ? "Saving changes…" : "All changes saved")
+                .font(.callout)
+                .foregroundStyle(.secondary)
             Spacer()
-            Button("Discard", action: editor.discard).disabled(store.sessionEdits.isEmpty)
-            Button("Save", action: editor.save)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut("s")
-                .disabled(store.sessionEdits.isEmpty)
         }
         .controlSize(.large)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private var commandLineNotice: some View {
+        HStack(spacing: 10) {
+            Text("Command-line changes are temporary. Save or discard them separately.")
+                .font(.callout)
+            Spacer()
+            Button("Discard", action: editor.discardCommandLineChanges)
+                .accessibilityLabel("Discard command-line changes")
+            Button("Save", action: editor.saveCommandLineChanges)
+                .accessibilityLabel("Save command-line changes")
+                .keyboardShortcut("s")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 }
 

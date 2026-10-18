@@ -294,7 +294,7 @@ Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, other
 
 Set `"profile": "laptop"` to apply only that profile, regardless of its conditions. Remove `profile` to resume automatic matching, or set it to `null` to override a manual profile inherited from a module. **Customize → Diagnostics** reports active profiles and the file, template, override and token sources behind effective widget properties.
 
-In **Customize StableBar → Profiles**, add profiles, edit their conditions and configuration, or choose Automatic matching or a pinned profile. Changes use Customize's Undo, Redo, Save and Discard controls. Editing profiles imported from another file writes the full profile list into the main file, preserving their order and configuration; the imported file stays unchanged.
+In **Customize StableBar → Profiles**, add profiles, edit their conditions and configuration, or choose Automatic matching or a pinned profile. Changes save automatically and can be undone or redone. Editing profiles imported from another file writes the full profile list into the main file, preserving their order and configuration; the imported file stays unchanged.
 
 Setup, the editor and the command line save changes into the main file's ordinary keys and never edit imported files. A widget defined in the main file, including inside one of its profiles, is changed, removed or reordered where it is defined. A widget from an include or package gets an entry in the main file's `widgetOverrides`; removing it sets `enabled` to `false`. Bar and default-style changes merge into `bar` and `defaults`. Untouched parts of the file keep their formatting and key order. An active profile still applies on top of these changes.
 
@@ -331,7 +331,7 @@ Widgets, templates and providers receive `PACKAGE_DIR`, the absolute path of the
 
 Packages install atomically into `packages/<id>/<version>` beside the main configuration. Existing versions cannot be overwritten. Configuration includes and static image paths stay inside the package; traversal and symlinks escaping the folder are rejected. Static image paths are resolved relative to the package folder, including token references. Package commands can run arbitrary code as your user; review the files as well as the displayed command strings before enabling an unfamiliar package.
 
-Select an installed version in **Customize → Packages** and choose **Uninstall…** to delete its files. If selected, that version is disabled in the root configuration, including when its selection comes from an include; an uninstalled theme falls back to Built-in. Other installed versions, saved settings and Keychain secrets are kept for reuse. To delete a saved token, use **Remove** beside it and save before uninstalling. Uninstall saves current configuration edits and checks that the configuration still loads before deleting files. It cannot be undone in Customize. The command line uses the running bar for the same operation, without a confirmation prompt:
+Select an installed version in **Customize → Packages** and choose **Uninstall…** to delete its files. If selected, that version is disabled in the root configuration, including when its selection comes from an include; an uninstalled theme falls back to Built-in. Other installed versions, saved settings and Keychain secrets are kept for reuse. To delete a saved token, use **Remove** beside it and save before uninstalling. Uninstall checks that the configuration still loads before deleting files. It cannot be undone in Customize; history that needs the deleted files is cleared. Temporary command-line changes stay unsaved. Save or discard them first if they still use that version. The command-line operation always saves current configuration edits and uses the running bar, without a confirmation prompt:
 
 ```sh
 StableBar --uninstall-package local-clock 1.0.0
@@ -629,7 +629,7 @@ StableBar --reset
 StableBar --customize
 ```
 
-Changes are live for the current session and appear as unsaved changes in the editor. Add `--persist` to save the session changes into the root file. `--reset` discards unsaved session changes and reloads the files. Session edits reapply over external file changes. Imports and package source files are preserved.
+Command-line changes are live for the current session. Customize shows a notice with **Save** and **Discard** for these temporary changes. Changes made in Customize save separately and leave temporary command-line changes applied on top. Add `--persist` to save the session changes into the root file. `--reset` discards unsaved session changes and reloads the files. Session edits reapply over external file changes. Imports and package source files are preserved.
 
 Use one batch for changes that must appear together:
 
@@ -661,7 +661,7 @@ Open **Customize StableBar…** from the menu-bar icon or by right-clicking the 
 
 Each style control says where its value comes from: a theme, a package, an included file, a template, a profile or your configuration. Opening a menu or selecting its current value leaves it unchanged. A value set in your configuration shows **Reset to default**, which removes it so the theme's or the inherited value applies again.
 
-Changes in these sections apply to the bar immediately, like command-line edits without `--persist`. Undo and redo step through them, **Save** writes them to your configuration and **Discard** returns to the saved file. A change that would make the configuration invalid is rejected and its error is shown.
+Changes in Appearance, Widgets, Profiles and Packages apply to the bar immediately and save automatically to your main configuration file. Typing or dragging a control saves when you pause; closing Customize or quitting StableBar saves any pending changes. **Undo** (⌘Z) and **Redo** (⇧⌘Z) restore saved changes, with one step per burst. If the file changes outside Customize, affected history is cleared so Undo cannot overwrite those changes. A change that would make the configuration invalid is rejected and its error is shown.
 
 **Profiles** edits [profiles](#theme-tokens-and-automatic-profiles), including role styles, workspace defaults and mode aliases in its configuration JSON, and chooses automatic matching or a pinned profile.
 

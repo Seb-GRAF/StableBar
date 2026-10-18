@@ -4,10 +4,14 @@ import Observation
 @MainActor @Observable
 final class ConfigurationEditor {
     let store: BarStore
-    var undoSteps: [[ConfigurationEdit]] = []
-    var redoSteps: [[ConfigurationEdit]] = []
+    var history: ConfigurationHistory { store.customizationHistory }
+    var undoSteps: [ConfigurationHistory.Step] { history.undoSteps }
+    var redoSteps: [ConfigurationHistory.Step] { history.redoSteps }
     var selectedID: String?
-    var error: String?
+    var error: String? {
+        get { history.error }
+        set { history.error = newValue }
+    }
 
     init(store: BarStore) {
         self.store = store
@@ -28,20 +32,9 @@ final class ConfigurationEditor {
         return [:]
     }
 
-    func change(_ edit: ConfigurationEdit) {
-        let previous = store.sessionEdits
-        let merging = [.set, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .modeAliases].contains(edit.action) && previous.last.map {
-            $0.action == edit.action && $0.id == edit.id && propertyPaths($0.properties!) == propertyPaths(edit.properties!)
-        } == true
-        do {
-            if merging { try store.setSessionEdits(previous.dropLast() + [edit]) }
-            else { try store.applyEdits([edit], persist: false) }
-            if !merging { undoSteps.append(previous) }
-            redoSteps.removeAll()
-            error = nil
-        } catch {
-            self.error = errorMessage(error)
-        }
+    func change(_ edit: ConfigurationEdit, control: String? = nil) {
+        do { try history.change(edit, control: control) }
+        catch { self.error = errorMessage(error) }
         keepSelection()
     }
 
@@ -63,38 +56,53 @@ final class ConfigurationEditor {
         set(changedProperties(from: current, to: properties))
     }
 
+    func setProfileCondition<Value: Equatable>(_ name: String, _ key: WritableKeyPath<ProfileConditions, Value?>,
+                                               value: Value?, control: String) {
+        do { try history.setProfileCondition(name, key, value: value, control: control) }
+        catch { self.error = errorMessage(error) }
+        keepSelection()
+    }
+
+    func addProfile(name: String) {
+        do {
+            try history.flush()
+            let profiles = try store.customizationProfiles() + [ConfigurationProfile(name: name, when: nil, configuration: [:])]
+            change(ConfigurationEdit(action: .profiles, profiles: profiles))
+        } catch { self.error = errorMessage(error) }
+    }
+
+    func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
+        do {
+            try history.flush()
+            var profiles = try store.customizationProfiles()
+            guard let index = profiles.firstIndex(where: { $0.name == name }) else {
+                throw CommandFailure(message: "Save command-line changes before editing this profile.")
+            }
+            profiles[index].configuration = configuration
+            change(ConfigurationEdit(action: .profiles, profiles: profiles))
+        } catch { self.error = errorMessage(error) }
+    }
+
     func undo() {
-        guard let previous = undoSteps.popLast() else { return }
-        redoSteps.append(store.sessionEdits)
-        restore(previous)
+        do { try history.undo() }
+        catch { self.error = errorMessage(error) }
+        keepSelection()
     }
 
     func redo() {
-        guard let next = redoSteps.popLast() else { return }
-        undoSteps.append(store.sessionEdits)
-        restore(next)
+        do { try history.redo() }
+        catch { self.error = errorMessage(error) }
+        keepSelection()
     }
 
-    func save() {
-        do {
-            try store.applyEdits([], persist: true)
-            undoSteps = []
-            redoSteps = []
-            error = nil
-        } catch { self.error = errorMessage(error) }
+    func saveCommandLineChanges() {
+        do { try history.saveCommandLineChanges() }
+        catch { self.error = errorMessage(error) }
     }
 
-    func discard() {
-        undoSteps = []
-        redoSteps = []
-        restore([])
-    }
-
-    private func restore(_ edits: [ConfigurationEdit]) {
-        do {
-            try store.setSessionEdits(edits)
-            error = nil
-        } catch { self.error = errorMessage(error) }
+    func discardCommandLineChanges() {
+        do { try history.discardCommandLineChanges() }
+        catch { self.error = errorMessage(error) }
         keepSelection()
     }
 
@@ -102,13 +110,6 @@ final class ConfigurationEditor {
         if store.configuration?.widgets.contains(where: { $0.id == selectedID }) != true {
             selectedID = store.configuration?.widgets.first?.id
         }
-    }
-}
-
-private func propertyPaths(_ properties: [String: ConfigurationValue], prefix: String = "") -> Set<String> {
-    properties.reduce(into: []) { paths, property in
-        if case let .object(object) = property.value { paths.formUnion(propertyPaths(object, prefix: prefix + property.key + ".")) }
-        else { paths.insert(prefix + property.key) }
     }
 }
 

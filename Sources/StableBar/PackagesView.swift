@@ -349,14 +349,14 @@ struct PackagesView: View {
         .confirmationDialog("Uninstall \(manifest.name) \(manifest.version)?", isPresented: $confirmingUninstall) {
             Button("Uninstall Version \(manifest.version)", role: .destructive) {
                 perform {
-                    try store.uninstallPackage(id: manifest.id, version: manifest.version)
+                    try store.uninstallPackage(id: manifest.id, version: manifest.version, fromCustomization: true)
                     self.inspection = nil
                     storeEntry = nil
                     try loadInstalled()
                 }
             }
         } message: {
-            Text("This version’s files will be deleted and it will be disabled if selected. Current configuration edits will be saved. Other versions, saved settings and Keychain secrets will be kept.")
+            Text("This version’s files will be deleted and it will be disabled if selected. Other versions, saved settings and Keychain secrets will be kept.")
         }
     }
 
@@ -419,7 +419,7 @@ struct PackagesView: View {
             "id": .string(manifest.id), "version": .string(manifest.version),
             "enabled": .bool(enabled), "settings": .object(settings)
         ])
-        try store.applyEdits([edit], persist: true)
+        try store.customizationHistory.change(edit)
         if enabled {
             for (name, value) in secrets {
                 try savePackageSecret(value, account: "\(manifest.id)/\(name)")

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import StableBar
 
-@Test @MainActor func profileEditsPreserveImportsAndSupportPinningUndoAndSave() throws {
+@Test @MainActor func profileEditsPreserveImportsAndSupportPinningUndoAndAutomaticSaving() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -39,8 +39,8 @@ import Testing
     #expect(store.profiles.map(\.name) == ["dark", "light", "work"])
     editor.change(ConfigurationEdit(action: .profile, name: "work"))
     #expect(store.configuration?.bar.height == 36)
-    #expect(try Data(contentsOf: url) == original)
-    editor.save()
+    #expect(try Data(contentsOf: url) != original)
+    try editor.history.flush()
     #expect(editor.error == nil)
     #expect(store.sessionEdits.isEmpty)
     #expect(try Data(contentsOf: module) == imported)
@@ -48,7 +48,7 @@ import Testing
     #expect(store.pinnedProfile == "work")
     #expect(store.profiles[1].when?.onBattery == true)
     editor.change(ConfigurationEdit(action: .profile))
-    editor.discard()
+    editor.undo()
     #expect(store.pinnedProfile == "work")
     #expect(store.configuration?.bar.height == 36)
     editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [store.profiles[0]]))
@@ -73,7 +73,7 @@ import Testing
     #expect(store.pinnedProfile == "work")
     editor.undo()
     #expect(store.pinnedProfile == nil)
-    editor.discard()
+    editor.undo()
     #expect(store.profiles.isEmpty)
 }
 
@@ -135,7 +135,8 @@ import Testing
     let editor = ConfigurationEditor(store: store)
     editor.set(["position": .string("right")])
     #expect(store.configuration?.widgets[0].position == .right)
-    #expect(store.sessionEdits.count == 2)
+    #expect(store.sessionEdits.count == 1)
+    #expect(store.customizationEdits.count == 1)
     editor.undo()
     #expect(store.configuration?.widgets[0].position == .left)
     editor.redo()
@@ -145,7 +146,7 @@ import Testing
     editor.selectedID = "new"
     editor.undo()
     #expect(editor.selectedID == "a")
-    editor.save()
+    editor.saveCommandLineChanges()
     #expect(store.configuration?.bar.height == 50)
     #expect(store.configuration?.widgets[0].position == .right)
     #expect(store.sessionEdits.isEmpty)
@@ -213,9 +214,9 @@ import Testing
     let editor = ConfigurationEditor(store: store)
     editor.set(["text": .string("Edited base")])
     #expect(editor.error == nil)
-    editor.save()
+    try editor.history.flush()
     #expect(editor.error == nil)
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.sessionEdits.count == 3)
     store.context.appearance = "light"
     store.reloadConfiguration()
     #expect(store.configurationError == nil)
@@ -256,10 +257,11 @@ import Testing
     #expect(store.configuration?.widgets[0].style.minWidth == 80)
     editor.set(["style": .object(["minWidth": .number(80)])])
     #expect(editor.error == nil)
-    editor.discard()
+    editor.undo()
     #expect(store.sessionEdits.isEmpty)
     for size in [13.0, 14, 15] { editor.set(["style": .object(["fontSize": .number(size)])]) }
-    #expect(store.sessionEdits.count == 1)
+    #expect(store.customizationEdits.count == 1)
+    #expect(store.sessionEdits.isEmpty)
     #expect(store.configuration?.widgets[0].style.fontSize == 15)
     editor.set(["text": .string("Other")])
     editor.undo()
@@ -473,7 +475,7 @@ import Testing
     #expect(try drawn("a") == HexColor(0x222222ff))
     #expect(try drawn("b") == HexColor(0x123456ff))
     #expect(row("a")! == ("widgets.a.style.states.hover.background", "theme.json (template label)", HexColor(0x222222ff)))
-    editor.save()
+    try editor.history.flush()
     #expect(try JSONDecoder().decode(ConfigurationValue.self, from: Data(contentsOf: root))
         == JSONDecoder().decode(ConfigurationValue.self, from: original))
 }
