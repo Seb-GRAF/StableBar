@@ -36,7 +36,7 @@ struct AppearanceView: View {
             Section {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
                     ForEach(gallery.choices, id: \.key) { choice in
-                        ThemeCard(title: choice.title, look: gallery.previews[choice.key], store: store,
+                        ThemeCard(title: choice.title, snapshot: gallery.previews[choice.key],
                                   isSelected: gallery.selectedKey == choice.key, error: gallery.errors[choice.key]) {
                             gallery.select(choice)
                         }
@@ -50,7 +50,7 @@ struct AppearanceView: View {
                     Text("From the Store").font(.headline)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
                         ForEach(gallery.storeThemes, id: \.versionKey) { entry in
-                            ThemeCard(title: entry.name, look: gallery.previews[entry.versionKey], store: store,
+                            ThemeCard(title: entry.name, snapshot: gallery.previews[entry.versionKey],
                                       progress: gallery.progress[entry.versionKey], error: gallery.errors[entry.versionKey], isStore: true) {
                                 Task { await gallery.get(entry) }
                             }
@@ -59,7 +59,7 @@ struct AppearanceView: View {
                 }
                 if !gallery.overrides.values.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Your settings override this theme in \(gallery.overrides.values.count) places.").font(.headline)
+                        Text(gallery.overrides.notice).font(.headline)
                         Text(gallery.overrides.values.map(\.title).joined(separator: ", "))
                             .font(.callout).foregroundStyle(.secondary)
                         Button("Reset them") { editor.change(gallery.overrides.resetEdit) }
@@ -204,10 +204,9 @@ struct AppearanceView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { gallery.refresh() }
-        .task { await gallery.loadStore() }
-        .onChange(of: store.effectiveDocument) { _, _ in gallery.refresh() }
-        .onChange(of: store.context) { _, _ in gallery.refresh() }
+        .task { await gallery.refresh(); await gallery.loadStore() }
+        .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
+        .onChange(of: store.context) { previous, _ in gallery.contextChanged(from: previous) }
     }
 
     private func document(_ key: String) -> [String: ConfigurationValue] {

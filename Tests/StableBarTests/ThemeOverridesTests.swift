@@ -2,6 +2,21 @@ import XCTest
 @testable import StableBar
 
 final class ThemeOverridesTests: XCTestCase {
+    func testNoticeUsesSingularAndPluralAndLabelsUseNaturalSentenceCase() {
+        let main: [String: ConfigurationValue] = [
+            "defaults": .object(["paddingHorizontal": .number(4), "offsetY": .number(2), "iconSize": .number(12), "borderEdges": .string("all")]),
+            "tokens": .object(["text": .object(["light": .string("#111111"), "dark": .string("#222222")])])
+        ]
+        let overrides = ThemeOverrides(main: main, theme: main, widgets: [])
+        XCTAssertEqual(overrides.values.map(\.title), [
+            "All widgets: border edges", "All widgets: icon size", "All widgets: vertical offset", "All widgets: horizontal padding",
+            "Text color in dark mode", "Text color in light mode"
+        ])
+        XCTAssertEqual(overrides.notice, "Your settings override this theme in 6 places.")
+        let single = ThemeOverrides(main: ["bar": .object(["height": .number(40)])], theme: ["bar": .object(["height": .number(32)])], widgets: [])
+        XCTAssertEqual(single.notice, "Your settings override this theme in 1 place.")
+    }
+
     func testStarterDimensionsCountOnlyWhenTheSelectedThemeSetsThem() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -11,7 +26,7 @@ final class ThemeOverridesTests: XCTestCase {
             "height": .number(40), "inset": .number(0), "spacing": .number(4), "appearance": .string("dark")
         ])], widgets: [])
         XCTAssertEqual(result.values.map(\.path), [["bar", "height"], ["bar", "inset"], ["bar", "spacing"]])
-        XCTAssertEqual(result.values.map(\.title), ["Bar height", "Bar: Side inset", "Bar: Spacing"])
+        XCTAssertEqual(result.values.map(\.title), ["Bar height", "Bar: side inset", "Bar: spacing"])
         XCTAssertTrue(ThemeOverrides(main: main, theme: [:], widgets: []).values.isEmpty)
     }
 
@@ -37,7 +52,7 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertEqual(Set(result.values.map { $0.path.joined(separator: ".") }), [
             "widgets.clock.style.foreground", "widgets.clock.style.fontSize", "widgetOverrides.included.style.foreground"
         ])
-        XCTAssertTrue(result.values.contains { $0.title == "Clock: Text color" })
+        XCTAssertTrue(result.values.contains { $0.title == "Clock: text color" })
         XCTAssertFalse(result.values.contains { $0.path.contains("templates") || $0.path.contains("appearance") })
     }
 
@@ -65,8 +80,8 @@ final class ThemeOverridesTests: XCTestCase {
         let configuration = try loader.load(fixture.url)
         let overrides = ThemeOverrides(main: main, theme: theme, widgets: configuration.widgets)
         XCTAssertEqual(overrides.values.count, 10)
-        XCTAssertTrue(overrides.values.contains { $0.title == "Text: Light color" })
-        XCTAssertTrue(overrides.values.contains { $0.title == "Workspaces: Indicator" })
+        XCTAssertTrue(overrides.values.contains { $0.title == "Text color in light mode" })
+        XCTAssertTrue(overrides.values.contains { $0.title == "Workspaces: indicator" })
         var ids = configuration.widgets.map(\.id)
         let reset = try overrides.resetEdit.applying(to: main, widgetIDs: &ids)
         XCTAssertEqual(overrides.resetEdit.action, .unset)
@@ -81,7 +96,7 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertEqual(try fixture.document(), main)
     }
 
-    @MainActor func testResetIsOneSavedUndoableChangeAndLeavesIncludedFilesAndCommandLineEditsAlone() throws {
+    @MainActor func testResetIsOneSavedUndoableChangeAndLeavesIncludedFilesAndCommandLineEditsAlone() async throws {
         let fixture = try ThemeGalleryFixture(##"""
         {"includes":["included.json"],"theme":{"id":"test-theme","version":"1"},"bar":{"height":48,"appearance":"dark"},
          "tokens":{"text":"#112233"},"widgets":[{"id":"clock","type":"clock","position":"right","style":{"foreground":"#ffffff"}}],
@@ -98,7 +113,7 @@ final class ThemeOverridesTests: XCTestCase {
         defer { store.stop() }
         try store.setSessionEdits([ConfigurationEdit(action: .bar, properties: ["margin": .number(11)])])
         let gallery = ThemeGallery(store: store)
-        gallery.refresh()
+        await gallery.refresh()
         XCTAssertEqual(gallery.overrides.values.count, 5)
         try store.customizationHistory.change(gallery.overrides.resetEdit)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -107,7 +122,7 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertEqual(store.configuration?.bar.spacing, 4)
         XCTAssertEqual(store.configuration?.bar.margin, 11)
         XCTAssertNil(try fixture.document()["bar"]?.decoded([String: ConfigurationValue].self)["margin"])
-        gallery.refresh()
+        await gallery.refresh()
         XCTAssertTrue(gallery.overrides.values.isEmpty)
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         try store.customizationHistory.undo()

@@ -8,6 +8,10 @@ struct ThemeOverride: Equatable {
 struct ThemeOverrides {
     let values: [ThemeOverride]
 
+    var notice: String {
+        "Your settings override this theme in \(values.count) \(values.count == 1 ? "place" : "places")."
+    }
+
     init(main: [String: ConfigurationValue], theme: [String: ConfigurationValue],
          widgets: [WidgetConfiguration], activeProfiles: [String] = []) {
         var found: [ThemeOverride] = []
@@ -47,7 +51,7 @@ struct ThemeOverrides {
                 }
                 for property in overlapping(own, style) {
                     found.append(ThemeOverride(path: prefix + path + ["style"] + property,
-                        title: "\(friendly(id)): \(styleTitle(property))" + suffix))
+                        title: "\(friendly(id)): \(detailTitle(property))" + suffix))
                 }
             }
         }
@@ -91,31 +95,50 @@ private func overlapping(_ main: ConfigurationValue, _ theme: ConfigurationValue
 private func overrideTitle(_ path: [String]) -> String {
     let tail = Array(path.dropFirst())
     switch path.first {
-    case "tokens": return "\(styleTitle(tail)) color"
-    case "defaults": return "All widgets: \(styleTitle(tail))"
-    case "popupDefaults": return "Popups: \(styleTitle(tail))"
-    case "roles": return "\(friendly(tail.first ?? "")) widgets: \(styleTitle(Array(tail.dropFirst())))"
-    case "workspaceDefaults": return "Workspaces: \(styleTitle(tail))"
-    case "groups": return "\(friendly(tail.first ?? "")) group: \(styleTitle(Array(tail.dropFirst().filter { $0 != "style" })))"
+    case "tokens":
+        let name = themeTokens.first { $0.name == tail.first }?.title ?? friendly(tail.first ?? "")
+        return appearanceTitle(name.lowercased().hasSuffix("color") ? name : "\(name) color", appearance: tail.last)
+    case "defaults": return "All widgets: \(detailTitle(tail))"
+    case "popupDefaults": return "Popups: \(detailTitle(tail))"
+    case "roles": return "\(friendly(tail.first ?? "")) widgets: \(detailTitle(Array(tail.dropFirst())))"
+    case "workspaceDefaults": return "Workspaces: \(detailTitle(tail))"
+    case "groups": return "\(friendly(tail.first ?? "")) group: \(detailTitle(Array(tail.dropFirst().filter { $0 != "style" })))"
     case "bar":
         if tail == ["height"] { return "Bar height" }
-        return "Bar: \(styleTitle(tail.filter { $0 != "style" }))"
+        return "Bar: \(detailTitle(tail.filter { $0 != "style" }))"
     default: return styleTitle(path)
     }
 }
 
+private func detailTitle(_ path: [String]) -> String {
+    let title = styleTitle(path)
+    return title.prefix(1).lowercased() + title.dropFirst()
+}
+
 private func styleTitle(_ path: [String]) -> String {
-    path.filter { $0 != "states" }.map { key in
+    let appearance = ["light", "dark"].contains(path.last ?? "") ? path.last : nil
+    let title = path.filter { $0 != "states" && $0 != appearance }.map { key in
         ["foreground": "Text color", "background": "Background", "borderColor": "Border color",
          "shadowColor": "Shadow color", "hoverBackground": "Hover background", "hoverForeground": "Hover text color",
          "fontName": "Font", "fontSize": "Font size", "fontWeight": "Font weight", "inset": "Side inset",
+         "paddingHorizontal": "Horizontal padding", "paddingVertical": "Vertical padding",
+         "paddingLeading": "Leading padding", "paddingTrailing": "Trailing padding", "paddingTop": "Top padding",
+         "paddingBottom": "Bottom padding", "offsetX": "Horizontal offset", "offsetY": "Vertical offset",
+         "minWidth": "Minimum width", "maxWidth": "Maximum width", "cornerRadius": "Corner radius",
          "offset": "Offset from top", "surface": "Surface", "surfaceRaised": "Raised surface", "text": "Text",
          "textMuted": "Muted text", "hairline": "Hairline", "accentText": "Accent text color"][key] ?? friendly(key)
     }.joined(separator: ": ")
+    return appearanceTitle(title, appearance: appearance)
+}
+
+private func appearanceTitle(_ title: String, appearance: String?) -> String {
+    guard let appearance, ["light", "dark"].contains(appearance) else { return title }
+    return "\(title) in \(appearance) mode"
 }
 
 private func friendly(_ value: String) -> String {
     let spaced = value.replacingOccurrences(of: "([a-z])([A-Z])", with: "$1 $2", options: .regularExpression)
         .replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
+        .lowercased()
     return spaced.prefix(1).uppercased() + spaced.dropFirst()
 }

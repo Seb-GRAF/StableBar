@@ -193,6 +193,8 @@ struct ConfigurationLoader {
     private(set) var activeProfiles: [String] = []
     private(set) var profiles: [ConfigurationProfile] = []
     private(set) var pinnedProfile: String?
+    /// The fixed appearance used to match conditions, before profiles apply their settings.
+    private(set) var profileAppearance: String?
     private(set) var matchesApps = false
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private var packageSources: [String: URL] = [:]
@@ -255,10 +257,12 @@ struct ConfigurationLoader {
     mutating func finish(_ input: ConfigurationLayer, context: ConfigurationContext) throws -> [String: ConfigurationValue] {
         var layer = input
         var context = context
+        profileAppearance = nil
         if case let .object(bar) = layer.values["bar"], let appearance = bar["appearance"],
            case let .string(name) = try substituteConfigurationReferences(appearance, prefix: "@token.",
                                                                           values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]) {
             context.appearance = name
+            profileAppearance = name
         }
         activeProfiles = []
         profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []

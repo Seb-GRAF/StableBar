@@ -75,7 +75,7 @@ struct ConfigurationEdit: Codable, Sendable {
                     root["widgetOverrides"] = overrides.isEmpty ? nil : .object(overrides)
                 }
             } else {
-                root = removing(properties, from: root)
+                root = removing(properties, from: root, scope: .document)
             }
         case .profile:
             root["profile"] = name.map(ConfigurationValue.string) ?? .null
@@ -128,20 +128,24 @@ private func changeDefinition(_ id: String, in document: inout [String: Configur
     return false
 }
 
-private func removing(_ keys: [String: ConfigurationValue], from object: [String: ConfigurationValue]) -> [String: ConfigurationValue] {
+private enum RemovalScope { case document, profile, object }
+
+private func removing(_ keys: [String: ConfigurationValue], from object: [String: ConfigurationValue],
+                      scope: RemovalScope = .object) -> [String: ConfigurationValue] {
     var result = object
     for (key, value) in keys {
         if case let .object(nested) = value, !nested.isEmpty {
             if case let .object(current) = result[key] {
-                let remaining = removing(nested, from: current)
-                result[key] = remaining.isEmpty && key != "configuration" ? nil : .object(remaining)
-            } else if case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
+                let profileConfiguration = scope == .profile && key == "configuration"
+                let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : .object)
+                result[key] = remaining.isEmpty && !profileConfiguration ? nil : .object(remaining)
+            } else if scope == .document, case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
                 // A root unset can address several named definitions in one undoable change.
                 let identity = key == "widgets" ? "id" : "name"
                 result[key] = .array(current.map { value in
                     guard case let .object(definition) = value, case let .string(id) = definition[identity],
                           case let .object(mask) = nested[id] else { return value }
-                    return .object(removing(mask, from: definition))
+                    return .object(removing(mask, from: definition, scope: key == "profiles" ? .profile : .object))
                 })
             }
         } else {

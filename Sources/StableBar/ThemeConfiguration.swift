@@ -8,7 +8,7 @@ struct ConfigurationContext: Sendable, Equatable {
     var app = ""
 }
 
-struct ConfigurationProfile: Codable, Equatable {
+struct ConfigurationProfile: Codable, Equatable, Sendable {
     let name: String
     var when: ProfileConditions?
     var configuration: [String: ConfigurationValue]
@@ -30,7 +30,7 @@ struct ConfigurationProfile: Codable, Equatable {
     }
 }
 
-struct ProfileConditions: Codable, Equatable {
+struct ProfileConditions: Codable, Equatable, Sendable {
     var appearance: String?
     var onBattery: Bool?
     var displayCount: Int?

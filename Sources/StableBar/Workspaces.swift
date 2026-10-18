@@ -80,6 +80,9 @@ final class WorkspaceStore {
     private var stopping = false
     private var task: Task<Void, Never>?
     private var process: Process?
+    private let isPreview: Bool
+
+    init(isPreview: Bool = false) { self.isPreview = isPreview }
 
     func workspaces(on monitor: Int, showEmpty: Bool) -> [Workspace] {
         workspaces.filter {
@@ -100,6 +103,7 @@ final class WorkspaceStore {
     }
 
     func start() {
+        guard !isPreview else { return }
         cancelConnection()
         if source == .yabai {
             task = Task { }
@@ -184,7 +188,7 @@ final class WorkspaceStore {
     }
 
     private func requestRefresh() {
-        guard tracksWorkspaces else { return }
+        guard !isPreview && tracksWorkspaces else { return }
         refreshPending = true
         guard refreshTask == nil else { return }
         refreshTask = Task {
@@ -229,6 +233,7 @@ final class WorkspaceStore {
     }
 
     func select(_ workspace: Workspace) {
+        guard !isPreview else { return }
         Task {
             do {
                 let arguments = source == .aerospace ? ["workspace", workspace.name] : ["-m", "space", "--focus", workspace.name]

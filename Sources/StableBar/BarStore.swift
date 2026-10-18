@@ -9,7 +9,8 @@ final class BarStore: NSObject {
     var activeApp = NSWorkspace.shared.frontmostApplication
     var activeDisplayID = 1
     var scripts: [String: ScriptWidget] = [:]
-    let workspaceStore = WorkspaceStore()
+    let workspaceStore: WorkspaceStore
+    let isPreview: Bool
     let windowClearance = WindowClearance()
     let popup: WidgetPopup
     let configurationURL: URL
@@ -47,10 +48,12 @@ final class BarStore: NSObject {
     private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
     init(configurationURL: URL = LaunchCommand.configurationURL, registry: DataSourceRegistry = .builtIn,
-         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory) {
+         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory, isPreview: Bool = false) {
         self.configurationURL = configurationURL
         self.registry = registry
         self.popup = popup
+        self.isPreview = isPreview
+        workspaceStore = WorkspaceStore(isPreview: isPreview)
         super.init()
         configurationLoader.themesDirectory = themesDirectory
         configurationWatcher.onChange = { [weak self] in self?.scheduleReload() }
@@ -61,6 +64,7 @@ final class BarStore: NSObject {
     }
 
     func start() {
+        guard !isPreview else { return }
         context = SystemContext.current()
         reloadObserver = DistributedNotificationCenter.default().addObserver(
             forName: LaunchCommand.reloadNotification, object: nil, queue: .main) { [weak self] _ in
@@ -123,6 +127,7 @@ final class BarStore: NSObject {
     }
 
     func reloadConfiguration() {
+        guard !isPreview else { return }
         defer { configurationWatcher.watch(configurationLoader.dependencies) }
         customizationHistory.checkForExternalChanges()
         do {
@@ -147,12 +152,9 @@ final class BarStore: NSObject {
     }
 
     func editedDocument(_ edits: [ConfigurationEdit], data: Data? = nil, replaying: [ConfigurationEdit]? = nil) throws -> [String: ConfigurationValue] {
-        let data = try data ?? Data(contentsOf: configurationURL)
-        var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
+        var root = try editedMainDocument(data: data, replaying: replaying)
         var loader = configurationLoader
-        var ids: [String] = []
-        for edit in replaying ?? (customizationEdits + sessionEdits) { root = try edit.applying(to: root, widgetIDs: &ids) }
-        ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
+        var ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
         for edit in edits {
             try edit.validateTargets(in: ids)
             root = try edit.applying(to: root, widgetIDs: &ids)
@@ -160,6 +162,14 @@ final class BarStore: NSObject {
                 ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
             }
         }
+        return root
+    }
+
+    func editedMainDocument(data: Data? = nil, replaying: [ConfigurationEdit]? = nil) throws -> [String: ConfigurationValue] {
+        let data = try data ?? Data(contentsOf: configurationURL)
+        var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
+        var ids: [String] = []
+        for edit in replaying ?? (customizationEdits + sessionEdits) { root = try edit.applying(to: root, widgetIDs: &ids) }
         return root
     }
 
@@ -306,6 +316,7 @@ final class BarStore: NSObject {
     }
 
     private func apply(_ next: Configuration) {
+        guard !isPreview else { return }
         profiles = configurationLoader.profiles
         pinnedProfile = configurationLoader.pinnedProfile
         if effectiveDocument == configurationLoader.document {
@@ -475,6 +486,7 @@ final class BarStore: NSObject {
     }
 
     private func updateSuspension() {
+        guard !isPreview else { return }
         var visible = visibleWidgets.values.reduce(into: Set<String>()) { $0.formUnion($1) }
         if let popupWidgetID { visible.insert(popupWidgetID) }
         if inspectorOpen, let inspectedWidgetID { visible.insert(inspectedWidgetID) }
@@ -509,7 +521,7 @@ final class BarStore: NSObject {
             guard !script.diagnostics.suspended else {
                 throw CommandFailure(message: "Widget is suspended. Open it in Diagnostics or make a consumer visible before refreshing.")
             }
-            script.refresh(ScriptEvent(sender: "manual"))
+            if !isPreview { script.refresh(ScriptEvent(sender: "manual")) }
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
@@ -620,6 +632,7 @@ final class BarStore: NSObject {
     }
 
     func refreshScripts(for event: String, environment: [String: String] = [:], skipping sender: ScriptWidget? = nil) {
+        guard !isPreview else { return }
         if event == BuiltInEvent.yabai.rawValue { workspaceStore.trigger() }
         var refreshed = Set<ObjectIdentifier>()
         if let sender { refreshed.insert(ObjectIdentifier(sender)) }
@@ -637,6 +650,7 @@ final class BarStore: NSObject {
     @discardableResult
     func runAction(_ command: String, widget: WidgetConfiguration,
                    event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
+        guard !isPreview else { return Task {} }
         let id = UUID()
         let script = scripts[widget.id]
         let environment = commandEnvironment(widget, configuration: configuration!)

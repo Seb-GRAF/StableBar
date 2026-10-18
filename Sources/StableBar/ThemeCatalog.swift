@@ -5,7 +5,7 @@ let themeTokens: [(name: String, title: String)] = [
     ("accent", "Accent"), ("track", "Track"), ("hairline", "Hairline"), ("warning", "Warning"), ("critical", "Critical")
 ]
 
-struct ThemeChoice {
+struct ThemeChoice: Sendable {
     let manifest: WidgetPackageManifest
     let directory: URL
     let isBundled: Bool

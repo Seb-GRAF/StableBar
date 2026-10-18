@@ -10,8 +10,7 @@ extension EnvironmentValues {
 
 struct ThemeCard: View {
     let title: String
-    let look: Configuration?
-    let store: BarStore
+    let snapshot: ThemePreview.Snapshot?
     var isSelected = false
     var progress: String?
     var error: String?
@@ -56,9 +55,9 @@ struct ThemeCard: View {
 
     private var preview: some View {
         Group {
-            if let look {
-                ThemeBarPreview(store: ThemePreview.snapshot(look, from: store))
-                    .environment(\.colorScheme, ThemePreview.usesDarkAppearance(look, context: store.context) ? .dark : .light)
+            if let snapshot, let configuration = snapshot.store.configuration {
+                ThemeBarPreview(store: snapshot.store, date: snapshot.date)
+                    .environment(\.colorScheme, ThemePreview.usesDarkAppearance(configuration, context: snapshot.store.context) ? .dark : .light)
             } else {
                 RoundedRectangle(cornerRadius: 8).fill(.quaternary)
                     .overlay { Text(isStore && error == nil ? "Loading preview…" : "Preview unavailable").font(.caption).foregroundStyle(.secondary) }
@@ -77,7 +76,7 @@ struct ThemeCard: View {
 
 private struct ThemeBarPreview: View {
     let store: BarStore
-    private let date = Date.now
+    let date: Date
 
     var body: some View {
         if let configuration = store.configuration {

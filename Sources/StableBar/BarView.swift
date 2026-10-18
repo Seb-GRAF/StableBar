@@ -314,7 +314,9 @@ struct WidgetView: View {
             .frame(minWidth: style.minWidth.map { CGFloat($0) }, maxWidth: style.maxWidth.map { CGFloat($0) })
             .contentShape(Rectangle())
         Group {
-            if let popup = widgetPopup(widget, store: store) {
+            if store.isPreview || staticPreviewDate != nil {
+                tile
+            } else if let popup = widgetPopup(widget, store: store) {
                 Button {
                     store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: popupAnchor)
                 } label: { tile }
@@ -352,7 +354,7 @@ struct WidgetView: View {
             }
         }
         .overlay {
-            if let actions = widget.actions {
+            if !store.isPreview && staticPreviewDate == nil, let actions = widget.actions {
                 WidgetActionCapture(actions: actions, display: monitor) { command, context in
                     store.runAction(command, widget: widget,
                                     event: ScriptEvent(sender: context.sender, environment: context.environment))
@@ -360,7 +362,7 @@ struct WidgetView: View {
             }
         }
         .background {
-            if !measuring && staticPreviewDate == nil { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
+            if !measuring && !store.isPreview && staticPreviewDate == nil { PopupAnchor(view: popupAnchor, popup: store.popup, id: widget.id) }
         }
         .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
             if !measuring { anchors.widgets[widget.id] = BarWidgetAnchor(bounds: bounds, unit: unitID) }
@@ -368,6 +370,7 @@ struct WidgetView: View {
         .offset(x: style.offsetX ?? 0, y: style.offsetY ?? 0)
         .opacity(style.opacity ?? 1)
         .onHover { inside in
+            guard !store.isPreview && staticPreviewDate == nil else { return }
             hovered = inside
             if let command = inside ? widget.actions?.mouseEntered : widget.actions?.mouseExited {
                 runAction(command, sender: inside ? "mouse.entered" : "mouse.exited")
@@ -451,7 +454,7 @@ struct WidgetBlocks: View {
                                                  menu: script?.output.menu ?? widget.menu ?? [], values: script?.output.values ?? [:],
                                                  targets: script?.output.targets ?? [:], styles: script?.output.styles ?? [:],
                                                  series: script?.output.series ?? [:], roles: store.configuration?.roles ?? [:],
-                                                 fillsWidth: fillsWidth, open: { $0.open() },
+                                                 fillsWidth: fillsWidth, open: { if !store.isPreview { $0.open() } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }
