@@ -25,18 +25,6 @@ extension WidgetConfiguration {
 }
 
 extension WidgetContent {
-    var title: String {
-        switch self {
-        case .spacer: "Spacer"
-        case let .provider(name): name.capitalized
-        case .workspaces: "Workspaces"
-        case .activeApp: "Active app"
-        case .clock: "Clock"
-        case .text: "Text"
-        case .script: "Script"
-        }
-    }
-
     var symbol: String {
         switch self {
         case .spacer: "arrow.left.and.right"
@@ -55,8 +43,7 @@ struct WidgetsView: View {
     @State private var advanced = "{}"
     @State private var setup: WidgetSetup
     @State private var adding = false
-    @State private var dragging: String?
-    @State private var insertion: String?
+    @State private var dragSession = WidgetDragSession()
     @State private var expanded = false
     @State private var customClockFormat = false
     @State private var editingWebPage = false
@@ -115,49 +102,55 @@ struct WidgetsView: View {
                     let section = widgets.filter { $0.position == position }
                     Section(position.title) {
                         ForEach(section) { widget in
-                            Label {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(widget.id).lineLimit(1)
-                                    Text(widget.content.title).font(.caption).foregroundStyle(.secondary)
+                            WidgetDragRow(session: dragSession, widgetID: widget.id, name: displayName(widget),
+                                          insertionKey: dropKey(position, before: widget.id),
+                                          select: { editor.selectedID = widget.id },
+                                          move: { move($0, to: position, before: widget.id) }) {
+                                Label {
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(displayName(widget)).lineLimit(1)
+                                        Text(typeName(widget)).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                } icon: {
+                                    Image(systemName: widget.content.symbol)
                                 }
-                            } icon: {
-                                Image(systemName: widget.content.symbol)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .opacity(widget.enabled ? 1 : 0.45)
+                                .padding(.vertical, 2)
                             }
-                            .opacity(widget.enabled ? 1 : 0.45)
-                            .padding(.vertical, 2)
                             .tag(widget.id)
-                            .onDrag {
-                                dragging = widget.id
-                                return NSItemProvider(object: widget.id as NSString)
-                            }
                             .overlay(alignment: .top) {
-                                if insertion == dropKey(position, widget.id) { Rectangle().fill(Color.accentColor).frame(height: 2) }
+                                if dragSession.insertion == position.rawValue + "/" + widget.id {
+                                    Rectangle().fill(Color.accentColor).frame(height: 2).allowsHitTesting(false)
+                                }
                             }
-                            .onDrop(of: [.text], delegate: drop(position, before: widget.id))
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel(displayName(widget))
+                            .accessibilityAction(named: Text("Move up")) { moveBy(-1, id: widget.id) }
+                            .accessibilityAction(named: Text("Move down")) { moveBy(1, id: widget.id) }
                             .contextMenu {
-                                Button("Move up") { moveBy(-1, widget: widget) }
-                                Button("Move down") { moveBy(1, widget: widget) }
+                                Button("Move up") { moveBy(-1, id: widget.id) }
+                                Button("Move down") { moveBy(1, id: widget.id) }
                                 Menu("Move to") {
-                                    ForEach(positions, id: \.self) { target in
+                                    ForEach(WidgetPlacement.destinations, id: \.self) { target in
                                         Button(target.title) { move(widget.id, to: target) }
                                     }
                                 }
                             }
                         }
-                        .onMove { offsets, destination in
-                            if let source = offsets.first {
-                                move(section[source].id, to: position,
-                                     before: destination < section.count ? section[destination].id : nil)
+                        WidgetDragRow(session: dragSession, widgetID: nil, name: "", insertionKey: dropKey(position),
+                                      select: {}, move: { move($0, to: position) }) {
+                            Text(section.isEmpty ? "Drop a widget here" : " ")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
+                        }
+                        .selectionDisabled()
+                        .accessibilityHidden(!section.isEmpty)
+                        .overlay(alignment: .top) {
+                            if dragSession.insertion == dropKey(position) {
+                                Rectangle().fill(Color.accentColor).frame(height: 2).allowsHitTesting(false)
                             }
                         }
-                        Text(section.isEmpty ? "Drop a widget here" : " ")
-                            .font(.caption).foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
-                            .selectionDisabled()
-                            .overlay(alignment: .top) {
-                                if insertion == dropKey(position, nil) { Rectangle().fill(Color.accentColor).frame(height: 2) }
-                            }
-                            .onDrop(of: [.text], delegate: drop(position))
                     }
                 }
             }
@@ -179,6 +172,20 @@ struct WidgetsView: View {
                 .accessibilityLabel("Remove the selected widget")
                 .disabled(editor.selectedID == nil)
                 Spacer()
+                Button {
+                    if let id = editor.selectedID { moveBy(-1, id: id) }
+                } label: { Image(systemName: "arrow.up").frame(width: 24, height: 24) }
+                .keyboardShortcut(.upArrow, modifiers: [.option, .command])
+                .help("Move the selected widget up")
+                .accessibilityLabel("Move up")
+                .disabled(editor.selectedID == nil)
+                Button {
+                    if let id = editor.selectedID { moveBy(1, id: id) }
+                } label: { Image(systemName: "arrow.down").frame(width: 24, height: 24) }
+                .keyboardShortcut(.downArrow, modifiers: [.option, .command])
+                .help("Move the selected widget down")
+                .accessibilityLabel("Move down")
+                .disabled(editor.selectedID == nil)
             }
             .buttonStyle(.borderless)
             .padding(4)
@@ -198,8 +205,8 @@ struct WidgetsView: View {
                         .frame(width: 40, height: 40)
                         .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(widget.id).font(.title3.weight(.semibold))
-                        Text(widget.content.title + " widget").foregroundStyle(.secondary)
+                        Text(displayName(widget)).font(.title3.weight(.semibold))
+                        Text(typeName(widget) + " widget").foregroundStyle(.secondary)
                     }
                     Spacer()
                     Toggle("Enabled", isOn: Binding(get: {
@@ -243,11 +250,12 @@ struct WidgetsView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 Picker("Position", selection: Binding(get: { widget.position }, set: { if $0 != widget.position { move(widget.id, to: $0) } })) {
-                    ForEach(positions, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(WidgetPlacement.destinations, id: \.self) { Text($0.title).tag($0) }
                 }
             }
             Section {
                 DisclosureGroup("Advanced", isExpanded: $expanded) {
+                    LabeledContent("ID", value: widget.id).textSelection(.enabled)
                     let origin = store.origins["widgets.\(widget.id).role"]
                     OverrideRow(title: "Presentation role", source: origin.map { "From \(store.sourceText($0))" },
                                 reset: origin.map(store.setsInMainFile) == true ? {
@@ -349,9 +357,11 @@ struct WidgetsView: View {
     }
 
     @ViewBuilder private func clickFields(_ widget: WidgetConfiguration) -> some View {
-        if let explanation = WidgetClickChoice.explanation(for: widget, output: store.scripts[widget.id]?.output) {
+        switch WidgetClickChoice.control(for: widget, output: store.scripts[widget.id]?.output) {
+        case .hidden: EmptyView()
+        case .explanation(let explanation):
             LabeledContent("When clicked") { Text(explanation).foregroundStyle(.secondary) }
-        } else {
+        case .choices:
             Picker("When clicked", selection: Binding(get: { WidgetClickChoice.current(for: widget, output: store.scripts[widget.id]?.output) }, set: { choice in
                 guard choice != WidgetClickChoice.current(for: widget, output: store.scripts[widget.id]?.output) else { return }
                 switch choice {
@@ -399,45 +409,29 @@ struct WidgetsView: View {
         catch { editor.error = errorMessage(error) }
     }
 
-    private func moveBy(_ offset: Int, widget: WidgetConfiguration) {
-        do { try setup.move(widget.id, by: offset) }
+    private func moveBy(_ offset: Int, id: String) {
+        do { try setup.move(id, by: offset) }
         catch { editor.error = errorMessage(error) }
     }
 
-    private func dropKey(_ position: WidgetPosition, _ anchor: String?) -> String { position.rawValue + "/" + (anchor ?? "") }
-
-    private func drop(_ position: WidgetPosition, before anchor: String? = nil) -> WidgetDropDelegate {
+    private func dropKey(_ position: WidgetPosition, before anchor: String? = nil) -> String {
         let target = widgets.first { $0.id == anchor }
         let first = target.flatMap { target in
             widgets.first { $0.id == target.id || (target.group != nil && $0.group == target.group) }?.id
         }
-        return WidgetDropDelegate(key: dropKey(position, first), dragging: $dragging, insertion: $insertion) { id in
-            move(id, to: position, before: anchor)
-        }
+        return position.rawValue + "/" + (first ?? "")
+    }
+
+    private func displayName(_ widget: WidgetConfiguration) -> String {
+        WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id], providers: store.configuration?.providers ?? [:])
+    }
+
+    private func typeName(_ widget: WidgetConfiguration) -> String {
+        WidgetDisplayName.title(for: widget.content, providers: store.configuration?.providers ?? [:])
     }
 
     private func string(_ key: String, fallback: String = "") -> Binding<String> {
         let value = if case let .string(value) = editor.selected[key] { value } else { fallback }
         return Binding(get: { value }, set: { if $0 != value { editor.set([key: .string($0)]) } })
-    }
-}
-
-
-private struct WidgetDropDelegate: DropDelegate {
-    let key: String
-    @Binding var dragging: String?
-    @Binding var insertion: String?
-    let move: (String) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool { dragging != nil }
-    func dropEntered(info: DropInfo) { insertion = key }
-    func dropExited(info: DropInfo) { if insertion == key { insertion = nil } }
-    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
-    func performDrop(info: DropInfo) -> Bool {
-        guard let dragging else { return false }
-        move(dragging)
-        self.dragging = nil
-        insertion = nil
-        return true
     }
 }

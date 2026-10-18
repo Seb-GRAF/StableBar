@@ -3,6 +3,8 @@ import Foundation
 /// Shared by Customize and editing directly on the bar. The insertion anchor is in the
 /// original list; dropping on a group inserts before the whole group.
 enum WidgetPlacement {
+    static let destinations = WidgetPosition.allCases
+
     static func positions(widgets: [WidgetConfiguration], hasNotchedDisplay: Bool) -> [WidgetPosition] {
         let usesNotch = hasNotchedDisplay || widgets.contains { [.notchLeft, .notchRight].contains($0.position) }
         return WidgetPosition.allCases.filter { position in

@@ -38,7 +38,9 @@ struct WidgetAddView: View {
                         ForEach(choices.filter(\.isScript)) { choice in row(choice) }
                     }
                 }
-                .onSubmit { if let choice = choices.first(where: { $0.id == selected }) { add(choice) } }
+                .contextMenu(forSelectionType: String.self) { _ in } primaryAction: { ids in
+                    if let choice = choices.first(where: { ids.contains($0.id) }) { add(choice) }
+                }
                 if let error = setup.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                         .textSelection(.enabled).padding(12)
@@ -72,7 +74,6 @@ struct WidgetAddView: View {
         } icon: { Image(systemName: choice.symbol).frame(width: 24) }
         .padding(.vertical, 4)
         .tag(choice.id)
-        .onTapGesture(count: 2) { add(choice) }
         .accessibilityElement(children: .combine)
     }
 

@@ -2,6 +2,22 @@ import XCTest
 @testable import StableBar
 
 final class WidgetSettingsTests: XCTestCase {
+    func testWorkspacesKeepTheirOwnClicksAndSpacerHasNoClickControl() throws {
+        for properties: [String: ConfigurationValue] in [[:], ["open": .string("com.apple.iCal")], ["onClick": .string("echo keep")]] {
+            let workspaces = try widget(properties.merging(["type": .string("workspaces")]) { $1 })
+            let spacer = try widget(properties.merging(["type": .string("spacer")]) { $1 })
+            XCTAssertEqual(WidgetClickChoice.control(for: workspaces), .explanation("Clicking a workspace switches to it."))
+            XCTAssertEqual(WidgetClickChoice.control(for: spacer), .hidden)
+            for widget in [workspaces, spacer] {
+                XCTAssertEqual(WidgetClickChoice.current(for: widget), .advanced)
+                for choice in WidgetClickChoice.allCases {
+                    XCTAssertThrowsError(try choice.properties(for: widget, value: "com.apple.iCal"))
+                }
+            }
+        }
+        XCTAssertEqual(WidgetClickChoice.control(for: try widget()), .choices)
+    }
+
     func testClickChoicesMapOnlyTheOpenPropertyAndRoundTrip() throws {
         let widget = try widget()
         XCTAssertEqual(WidgetClickChoice.current(for: widget), .nothing)

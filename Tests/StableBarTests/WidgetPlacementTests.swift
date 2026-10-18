@@ -2,6 +2,15 @@ import XCTest
 @testable import StableBar
 
 final class WidgetPlacementTests: XCTestCase {
+    func testPositionControlsKeepEveryDestinationWithoutANotchedDisplay() throws {
+        let widgets = try decode(#"[{"id":"clock","type":"clock","position":"right"}]"#)
+        XCTAssertEqual(WidgetPlacement.positions(widgets: widgets, hasNotchedDisplay: false), [.left, .center, .right])
+        XCTAssertEqual(WidgetPlacement.destinations, WidgetPosition.allCases)
+        for position in WidgetPlacement.destinations {
+            XCTAssertEqual(try moved("clock", to: position, before: nil, widgets: widgets).first?.position, position)
+        }
+    }
+
     func testEmptyGroupsAndNotchGroupsRemainAvailableAsNeeded() throws {
         XCTAssertEqual(WidgetPlacement.positions(widgets: [], hasNotchedDisplay: false), [.left, .center, .right])
         XCTAssertEqual(WidgetPlacement.positions(widgets: [], hasNotchedDisplay: true), WidgetPosition.allCases)
@@ -43,6 +52,25 @@ final class WidgetPlacementTests: XCTestCase {
             XCTAssertEqual(edits.count, 1)
             XCTAssertEqual(edits.first?.ids, ["c", "d", "a", "b"])
         }
+    }
+
+    @MainActor func testSelectedGroupMemberMovesUpAndDownWithOneUndoStepPerAction() throws {
+        let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"first","type":"clock","position":"left"},{"id":"a","type":"clock","position":"left","group":"pair"},{"id":"b","type":"clock","position":"left","group":"pair"},{"id":"last","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editor = ConfigurationEditor(store: store)
+        editor.selectedID = "b"
+        let setup = WidgetSetup(store: store)
+        try setup.move(try XCTUnwrap(editor.selectedID), by: -1)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "first", "last"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try setup.move(try XCTUnwrap(editor.selectedID), by: 1)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["first", "a", "b", "last"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
+        XCTAssertEqual(editor.selectedID, "b")
+        try store.customizationHistory.undo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "first", "last"])
     }
 
     @MainActor func testInvalidBatchIsRejectedWithoutSavingPartOfAGroupedMove() throws {

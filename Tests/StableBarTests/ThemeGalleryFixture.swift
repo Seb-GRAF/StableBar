@@ -45,6 +45,7 @@ struct ThemeGalleryFixture {
         store.configuration = try loader.load(url)
         store.effectiveDocument = loader.document
         store.origins = loader.origins
+        store.widgetPackageNames = loader.widgetPackageNames
         store.activeProfiles = loader.activeProfiles
         store.preparePresentations()
         return store

@@ -1,5 +1,9 @@
 import Foundation
 
+enum WidgetClickControl: Equatable {
+    case hidden, choices, explanation(String)
+}
+
 enum WidgetClickChoice: String, CaseIterable {
     case nothing, application, webPage, advanced
 
@@ -13,6 +17,7 @@ enum WidgetClickChoice: String, CaseIterable {
     }
 
     static func explanation(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> String? {
+        if widget.content == .workspaces { return "Clicking a workspace switches to it." }
         var actions: [String] = []
         if widget.onClick != nil || output?.onClick != nil { actions.append("runs a command") }
         if widget.popup != nil || widget.popupName != nil { actions.append("opens a popup") }
@@ -24,8 +29,14 @@ enum WidgetClickChoice: String, CaseIterable {
         return nil
     }
 
+    static func control(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> WidgetClickControl {
+        if widget.content == .spacer { return .hidden }
+        if let explanation = explanation(for: widget, output: output) { return .explanation(explanation) }
+        return .choices
+    }
+
     static func current(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> Self {
-        if explanation(for: widget, output: output) != nil { return .advanced }
+        if control(for: widget, output: output) != .choices { return .advanced }
         guard let open = widget.open, let target = OpenTarget(open) else { return .nothing }
         switch target {
         case .application: return .application
@@ -34,7 +45,7 @@ enum WidgetClickChoice: String, CaseIterable {
     }
 
     func properties(for widget: WidgetConfiguration, value: String? = nil, output: ScriptOutput? = nil) throws -> [String: ConfigurationValue] {
-        guard Self.explanation(for: widget, output: output) == nil else {
+        guard Self.control(for: widget, output: output) == .choices else {
             throw CommandFailure(message: "Change this widget’s click action under Advanced.")
         }
         switch self {

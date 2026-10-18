@@ -19,6 +19,7 @@ final class BarStore: NSObject {
     var onCustomize: (() -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
+    var widgetPackageNames: [String: String] = [:]
     var activeProfiles: [String] = []
     var profiles: [ConfigurationProfile] = []
     var pinnedProfile: String?
@@ -319,6 +320,7 @@ final class BarStore: NSObject {
         guard !isPreview else { return }
         profiles = configurationLoader.profiles
         pinnedProfile = configurationLoader.pinnedProfile
+        widgetPackageNames = configurationLoader.widgetPackageNames
         if effectiveDocument == configurationLoader.document {
             origins = configurationLoader.origins
             activeProfiles = configurationLoader.activeProfiles

@@ -190,6 +190,7 @@ struct ConfigurationLoader {
     private(set) var dependencies: Set<URL> = []
     private(set) var document: [String: ConfigurationValue] = [:]
     private(set) var origins: [String: ConfigurationOrigin] = [:]
+    private(set) var widgetPackageNames: [String: String] = [:]
     private(set) var activeProfiles: [String] = []
     private(set) var profiles: [ConfigurationProfile] = []
     private(set) var pinnedProfile: String?
@@ -198,6 +199,7 @@ struct ConfigurationLoader {
     private(set) var matchesApps = false
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private var packageSources: [String: URL] = [:]
+    private var packageNames: [String: String] = [:]
 
     mutating func load(_ url: URL, data: Data? = nil,
                        context: ConfigurationContext = ConfigurationContext(),
@@ -211,6 +213,8 @@ struct ConfigurationLoader {
         dependencies = []
         activeProfiles = []
         packageSources = [:]
+        packageNames = [:]
+        widgetPackageNames = [:]
         let base = try read(url.standardizedFileURL, data: data, path: [])
         let packageStore = WidgetPackageStore(directory: url.deletingLastPathComponent().appending(path: "packages"))
         var layer = ConfigurationLayer(values: ["widgets": .array([])], origins: [:])
@@ -335,6 +339,10 @@ struct ConfigurationLoader {
             .decoded([String: ConfigurationValue].self)
         let finalPaths = configurationOrigins(.object(document), source: ConfigurationOrigin(file: ""))
         origins = layer.origins.filter { finalPaths[$0.key] != nil }
+        widgetPackageNames = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
+            guard let source = origins["widgets.\(id).id"], let name = packageNames[source.file] else { return nil }
+            return (id, name)
+        })
         return document
     }
 
@@ -422,6 +430,7 @@ struct ConfigurationLoader {
             .decoded([String: ConfigurationValue].self)
         try validateSecretReferences(.object(layer.values), package: manifest.id)
         layer.values = try preparePackageDocument(layer.values, directory: directory)
+        for source in layer.origins.values { packageNames[source.file] = manifest.name }
         return layer
     }
 }
