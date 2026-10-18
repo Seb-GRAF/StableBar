@@ -15,7 +15,7 @@ final class ConfigurationHistory {
     private(set) var notice: String?
     private var lastFile: Data?
     private var pendingControl: Control?
-    @ObservationIgnored private var pendingEdit: (() throws -> ConfigurationEdit)?
+    @ObservationIgnored private var pendingEdit: (() throws -> [ConfigurationEdit])?
     @ObservationIgnored private var writeTask: Task<Void, Never>?
 
     private struct Control: Equatable {
@@ -32,7 +32,13 @@ final class ConfigurationHistory {
     var canRedo: Bool { !hasPendingChanges && !redoSteps.isEmpty }
 
     func change(_ edit: ConfigurationEdit) throws {
-        try change(control: control(for: edit)) { edit }
+        try change(control: control(for: edit)) { [edit] }
+    }
+
+    /// Related edits are validated and saved together, with one Undo step.
+    func change(_ edits: [ConfigurationEdit]) throws {
+        guard !edits.isEmpty else { return }
+        try change(control: nil) { edits }
     }
 
     func setProfileCondition<Value: Equatable>(_ name: String, _ key: WritableKeyPath<ProfileConditions, Value?>,
@@ -50,18 +56,18 @@ final class ConfigurationHistory {
             var conditions = profiles[index].when ?? ProfileConditions()
             conditions[keyPath: key] = value
             profiles[index].when = conditions
-            return ConfigurationEdit(action: .profiles, profiles: profiles)
+            return [ConfigurationEdit(action: .profiles, profiles: profiles)]
         }
     }
 
     func pendingEdits() throws -> [ConfigurationEdit] {
-        try pendingEdit.map { [try $0()] } ?? store.customizationEdits
+        try pendingEdit.map { try $0() } ?? store.customizationEdits
     }
 
-    private func change(control: Control?, edit: @escaping () throws -> ConfigurationEdit) throws {
+    private func change(control: Control?, edit: @escaping () throws -> [ConfigurationEdit]) throws {
         if hasPendingChanges && (control == nil || control != pendingControl) { store.flushCustomization() }
         checkForExternalChanges()
-        try store.setCustomizationEdits([edit()])
+        try store.setCustomizationEdits(edit())
         pendingEdit = edit
         pendingControl = control
         redoSteps.removeAll()

@@ -52,6 +52,18 @@ actor PackageStoreClient {
         catch { downloads[key] = nil; throw error }
     }
 
+    /// Review the files that will actually be enabled, including an already installed version.
+    func packageForAdding(_ entry: PackageIndex.Entry) async throws -> WidgetPackageInspection {
+        let destination = try packages.directory(id: entry.id, version: entry.version)
+        guard FileManager.default.fileExists(atPath: destination.path) else { return try await package(entry) }
+        let inspection = try packages.inspect(destination)
+        guard inspection.manifest.id == entry.id, inspection.manifest.version == entry.version else {
+            throw WidgetPackageError.archiveMismatch(entry.id, entry.version)
+        }
+        guard inspection.manifest.kind == entry.kind else { throw PackageStoreClientError.kindMismatch }
+        return inspection
+    }
+
     /// A caller must use the existing review screen for any command-capable package.
     func installWithoutReview(_ entry: PackageIndex.Entry) async throws -> WidgetPackageInspection {
         let downloaded = try await package(entry)

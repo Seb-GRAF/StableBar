@@ -3,6 +3,8 @@ import SwiftUI
 
 struct PackagesView: View {
     let store: BarStore
+    var reviewing: WidgetPackageInspection?
+    var onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)?
     @State private var installed: [WidgetPackageManifest] = []
     @State private var selections: [WidgetPackageSelection] = []
     @State private var inspection: WidgetPackageInspection?
@@ -22,6 +24,33 @@ struct PackagesView: View {
     }
 
     var body: some View {
+        Group {
+            if reviewing != nil {
+                if let inspection { packageDetails(inspection) }
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red).textSelection(.enabled).padding(12)
+                }
+            } else {
+                browser
+            }
+        }
+        .onAppear {
+            perform {
+                try loadInstalled()
+                if let reviewing { try select(reviewing.directory) }
+            }
+        }
+        .task { if reviewing == nil { await loadStore() } }
+        .onChange(of: store.effectiveDocument) { _, _ in perform(loadInstalled) }
+        .onChange(of: settings) { _, values in
+            if let inspection {
+                perform { self.inspection = try packages.inspect(inspection.directory, settings: values) }
+            }
+        }
+    }
+
+    private var browser: some View {
         HSplitView {
             VStack(spacing: 0) {
                 List(selection: Binding(get: { downloading ?? inspection.map { isInstalled($0) ? $0.manifest.versionKey : "store/\($0.manifest.versionKey)" } }, set: { key in
@@ -169,14 +198,6 @@ struct PackagesView: View {
             }
             .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
         }
-        .onAppear { perform(loadInstalled) }
-        .task { await loadStore() }
-        .onChange(of: store.effectiveDocument) { _, _ in perform(loadInstalled) }
-        .onChange(of: settings) { _, values in
-            if let inspection {
-                perform { self.inspection = try packages.inspect(inspection.directory, settings: values) }
-            }
-        }
     }
 
     private func packageDetails(_ inspection: WidgetPackageInspection) -> some View {
@@ -310,26 +331,27 @@ struct PackagesView: View {
             .formStyle(.grouped)
             Divider()
             HStack(spacing: 10) {
-                Text(isInstalled ? "Enabling pins this version. Select an older installed version to roll back." : "Installation copies the package. Enable it separately after review.")
+                Text(reviewing != nil ? "Adding enables these widgets after your review." : isInstalled ? "Enabling pins this version. Select an older installed version to roll back." : "Installation copies the package. Enable it separately after review.")
                     .font(.callout).foregroundStyle(.secondary)
                 Spacer()
                 if isInstalled {
-                    Button("Uninstall…", role: .destructive) { confirmingUninstall = true }
-                    if isEnabled {
+                    if reviewing == nil { Button("Uninstall…", role: .destructive) { confirmingUninstall = true } }
+                    if isEnabled && reviewing == nil {
                         Button("Disable") { perform { try activate(manifest, enabled: false) } }
                     }
-                    Button(isEnabled ? "Save Settings" : "Enable Version \(manifest.version)") {
+                    Button(reviewing != nil ? "Add widget" : isEnabled ? "Save Settings" : "Enable Version \(manifest.version)") {
                         perform { try enable(inspection) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(error != nil)
                 } else {
-                    Button("Install Version \(manifest.version)") {
+                    Button(reviewing != nil ? "Add widget" : "Install Version \(manifest.version)") {
                         perform {
                             let installed = try packages.install(inspection.directory)
                             self.inspection = try packages.inspect(installed.directory, settings: settings)
                             storeEntry = nil
                             try loadInstalled()
+                            if reviewing != nil, let inspection = self.inspection { try enable(inspection) }
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -415,11 +437,15 @@ struct PackagesView: View {
     }
 
     private func activate(_ manifest: WidgetPackageManifest, enabled: Bool) throws {
-        let edit = ConfigurationEdit(action: manifest.kind == .theme ? .theme : .package, properties: [
-            "id": .string(manifest.id), "version": .string(manifest.version),
-            "enabled": .bool(enabled), "settings": .object(settings)
-        ])
-        try store.customizationHistory.change(edit)
+        if let onEnable, enabled, let inspection {
+            try onEnable(inspection, settings)
+        } else {
+            let edit = ConfigurationEdit(action: manifest.kind == .theme ? .theme : .package, properties: [
+                "id": .string(manifest.id), "version": .string(manifest.version),
+                "enabled": .bool(enabled), "settings": .object(settings)
+            ])
+            try store.customizationHistory.change(edit)
+        }
         if enabled {
             for (name, value) in secrets {
                 try savePackageSecret(value, account: "\(manifest.id)/\(name)")
@@ -436,6 +462,7 @@ struct PackagesView: View {
             error = nil
         } catch {
             self.error = errorMessage(error)
+            if reviewing != nil { store.customizationHistory.error = nil }
         }
     }
 }
