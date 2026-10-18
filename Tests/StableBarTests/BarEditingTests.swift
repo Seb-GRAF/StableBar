@@ -668,6 +668,35 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
+    @MainActor func testUndoAndRedoPreserveCommandLayoutsAndNonLatinKeyFallback() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        store.barEditing.remove("a")
+        let panel = UnorderedEditingPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                                           backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        let layouts: [(UInt16, String, String, Bool)] = [
+            (6, "z", ";", true), (6, "z", "я", true), (6, "я", "я", true),
+            (6, ";", ";", true), (16, "z", "z", true), (6, "y", "y", false),
+            (6, "y", ";", false), (6, ";", "y", false), (16, "я", "я", false)
+        ]
+        for (code, characters, unmodified, handles) in layouts {
+            for redo in [false, true] {
+                let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                    modifierFlags: redo ? [.command, .shift] : .command, timestamp: 0, windowNumber: panel.windowNumber,
+                    context: nil, characters: redo ? characters.uppercased() : characters,
+                    charactersIgnoringModifiers: redo ? unmodified.uppercased() : unmodified, isARepeat: false, keyCode: code))
+                XCTAssertEqual(BarEditingKeyboard.handle(event, store: store, keyWindow: panel), handles,
+                               "key \(code), characters \(characters), unmodified \(unmodified), redo \(redo)")
+                XCTAssertEqual(store.configuration?.widgets.count, handles && !redo ? 1 : 0)
+            }
+        }
+    }
+
     @MainActor func testUndoShortcutsLeaveOtherWindowsSheetsAndTextInputAlone() throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
         defer { fixture.close() }

@@ -71,10 +71,13 @@ final class BarEditing {
     }
 
     @discardableResult
-    func handleKey(_ keyCode: UInt16, charactersIgnoringModifiers: String? = nil, modifiers: NSEvent.ModifierFlags = []) -> Bool {
+    func handleKey(_ keyCode: UInt16, characters: String? = nil, charactersIgnoringModifiers: String? = nil,
+                   modifiers: NSEvent.ModifierFlags = []) -> Bool {
         guard isActive else { return false }
         if keyCode == 53, modifiers.isEmpty { end(); return true }
-        guard charactersIgnoringModifiers?.lowercased() == "z",
+        let letters = [characters, charactersIgnoringModifiers].compactMap { $0?.lowercased() }
+        let isZ = letters.contains("z") || (keyCode == 6 && !letters.contains { $0.contains { $0.isASCII && $0.isLetter } })
+        guard isZ,
               modifiers == .command || modifiers == [.command, .shift] else { return false }
         if modifiers.contains(.shift) { redo() } else { undo() }
         return true
