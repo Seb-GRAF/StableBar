@@ -34,7 +34,7 @@ struct AppearanceView: View {
                                    unset: { unset(["bar": .object(["style": .object($0)])]) })
         Form {
             Section {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+                LazyVStack(spacing: 12) {
                     ForEach(gallery.choices, id: \.key) { choice in
                         ThemeCard(title: choice.title, snapshot: gallery.previews[choice.key],
                                   isSelected: gallery.selectedKey == choice.key, error: gallery.error(for: choice.key)) {
@@ -48,7 +48,7 @@ struct AppearanceView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 } else if !gallery.storeThemes.isEmpty {
                     Text("From the Store").font(.headline)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+                    LazyVStack(spacing: 12) {
                         ForEach(gallery.storeThemes, id: \.versionKey) { entry in
                             ThemeCard(title: entry.name, snapshot: gallery.previews[entry.versionKey],
                                       progress: gallery.progress[entry.versionKey], error: gallery.error(for: entry.versionKey), isStore: true) {

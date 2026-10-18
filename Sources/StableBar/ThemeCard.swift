@@ -22,11 +22,11 @@ struct ThemeCard: View {
             if isStore {
                 preview
                 HStack {
-                    Text(title).font(.callout)
+                    Text(title).font(.callout).lineLimit(1)
                     Spacer()
                     if let progress {
                         ProgressView().controlSize(.small)
-                        Text(progress).font(.caption)
+                        Text(progress).font(.caption).lineLimit(1)
                     } else {
                         Button("Get", action: select).accessibilityLabel("Get \(title)")
                     }
@@ -36,7 +36,7 @@ struct ThemeCard: View {
                     VStack(alignment: .leading, spacing: 8) {
                         preview
                         HStack {
-                            Text(title)
+                            Text(title).lineLimit(1)
                             if isSelected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                         }.font(.callout)
                     }.contentShape(Rectangle())
@@ -51,6 +51,8 @@ struct ThemeCard: View {
                     .textSelection(.enabled)
             }
         }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .clipped()
     }
 
     @Environment(\.colorScheme) private var colorScheme
@@ -63,7 +65,7 @@ struct ThemeCard: View {
     private var preview: some View {
         Group {
             if let snapshot, snapshot.store.configuration != nil {
-                ThemeBarPreview(store: snapshot.store, date: snapshot.date)
+                ThemeBarThumbnail(store: snapshot.store, date: snapshot.date)
             } else {
                 RoundedRectangle(cornerRadius: 8).fill(.quaternary)
                     .overlay { Text(isStore && error == nil ? "Loading preview…" : "Preview unavailable").font(.caption).foregroundStyle(.secondary) }
@@ -78,6 +80,73 @@ struct ThemeCard: View {
         }
         .environment(\.colorScheme, previewColorScheme)
         .accessibilityHidden(true)
+    }
+}
+
+struct ThemePreviewSizing {
+    static let minimumScale: CGFloat = 0.5
+    let scale: CGFloat
+    let clipsMiddle: Bool
+
+    init(naturalWidth: CGFloat, availableWidth: CGFloat) {
+        let width = max(0, availableWidth)
+        scale = naturalWidth > 0 ? min(1, max(Self.minimumScale, width / naturalWidth)) : 1
+        clipsMiddle = naturalWidth * Self.minimumScale > width
+    }
+}
+
+private struct ThemePreviewSize: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
+}
+
+private struct ThemeBarThumbnail: View {
+    let store: BarStore
+    let date: Date
+    @State private var naturalSize: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { viewport in
+            let sizing = ThemePreviewSizing(naturalWidth: naturalSize.width, availableWidth: viewport.size.width)
+            if sizing.clipsMiddle {
+                HStack(spacing: 0) {
+                    end(scale: sizing.scale, size: viewport.size, leading: true)
+                    end(scale: sizing.scale, size: viewport.size, leading: false)
+                }
+            } else {
+                scaledBar(sizing.scale)
+                    .frame(width: viewport.size.width, height: viewport.size.height)
+            }
+        }
+        .onPreferenceChange(ThemePreviewSize.self) { naturalSize = $0 }
+        .transaction { $0.animation = nil; $0.disablesAnimations = true }
+        .clipped()
+        .allowsHitTesting(false)
+    }
+
+    private func scaledBar(_ scale: CGFloat) -> some View {
+        ThemeBarPreview(store: store, date: date)
+            .fixedSize()
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: ThemePreviewSize.self, value: geometry.size)
+                }
+            }
+            .scaleEffect(scale)
+            .frame(width: naturalSize.width * scale, height: naturalSize.height * scale)
+    }
+
+    private func end(scale: CGFloat, size: CGSize, leading: Bool) -> some View {
+        let width = size.width / 2
+        let fade = min(16, width) / max(1, width)
+        return scaledBar(scale)
+            .frame(width: width, height: size.height, alignment: leading ? .leading : .trailing)
+            .clipped()
+            .mask {
+                LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 1 - fade),
+                                       .init(color: .clear, location: 1)],
+                               startPoint: leading ? .leading : .trailing, endPoint: leading ? .trailing : .leading)
+            }
     }
 }
 
@@ -99,7 +168,6 @@ private struct ThemeBarPreview: View {
                 }
             }
             .padding(.horizontal, configuration.bar.inset)
-            .frame(maxWidth: .infinity)
             .frame(height: max(0, configuration.bar.height - 2 * configuration.bar.margin))
             .modifier(BarSurface(store: store, settings: configuration.bar))
             .padding(configuration.bar.margin)
