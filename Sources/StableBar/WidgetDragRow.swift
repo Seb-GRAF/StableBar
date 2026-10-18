@@ -76,8 +76,8 @@ final class WidgetDragRowView: NSView, NSDraggingSource {
 
     override func mouseDown(with event: NSEvent) {
         mouseDownPoint = event.locationInWindow
-        select()
         window?.makeFirstResponder(enclosingScrollView?.documentView)
+        select()
     }
 
     override func mouseUp(with event: NSEvent) { mouseDownPoint = nil }

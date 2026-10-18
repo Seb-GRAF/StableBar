@@ -19,14 +19,22 @@ final class ConfigurationEditor {
     }
 
     var selected: [String: ConfigurationValue] {
-        guard let selectedID, case let .array(widgets) = store.effectiveDocument["widgets"] else { return [:] }
-        for case let .object(widget) in widgets where widget["id"] == .string(selectedID) { return widget }
-        return [:]
+        selectedID.map { properties(for: $0) } ?? [:]
     }
 
     var selectedStyle: [String: ConfigurationValue] {
+        selectedID.map { style(for: $0) } ?? [:]
+    }
+
+    func properties(for id: String) -> [String: ConfigurationValue] {
+        guard case let .array(widgets) = store.effectiveDocument["widgets"] else { return [:] }
+        for case let .object(widget) in widgets where widget["id"] == .string(id) { return widget }
+        return [:]
+    }
+
+    func style(for id: String) -> [String: ConfigurationValue] {
         guard let configuration = store.configuration,
-              let widget = configuration.widgets.first(where: { $0.id == selectedID }) else { return [:] }
+              let widget = configuration.widgets.first(where: { $0.id == id }) else { return [:] }
         let style = resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.style])
         if case let .object(properties) = style.configurationValue { return properties }
         return [:]
@@ -40,14 +48,18 @@ final class ConfigurationEditor {
 
     func set(_ properties: [String: ConfigurationValue]) {
         guard let selectedID else { return }
-        var current = selected
-        current["style"] = .object(selectedStyle)
+        set(properties, for: selectedID)
+    }
+
+    func set(_ properties: [String: ConfigurationValue], for id: String) {
+        var current = self.properties(for: id)
+        current["style"] = .object(style(for: id))
         let previous = ConfigurationValue.object(current)
         if ConfigurationValue.object(properties).overriding(previous) == previous {
             error = nil
             return
         }
-        change(ConfigurationEdit(action: .set, id: selectedID, properties: properties))
+        change(ConfigurationEdit(action: .set, id: id, properties: properties))
     }
 
     func replaceProperties(_ properties: [String: ConfigurationValue]) {

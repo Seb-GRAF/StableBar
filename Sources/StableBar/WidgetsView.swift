@@ -62,6 +62,9 @@ struct WidgetsView: View {
 
     private var store: BarStore { editor.store }
     private var widgets: [WidgetConfiguration] { store.configuration?.widgets ?? [] }
+    private var displayNames: [String: String] {
+        WidgetDisplayName.names(for: widgets, packageNames: store.widgetPackageNames, providers: store.configuration?.providers ?? [:])
+    }
 
     var body: some View {
         HSplitView {
@@ -96,19 +99,21 @@ struct WidgetsView: View {
     }
 
     private var sidebar: some View {
-        VStack(spacing: 0) {
+        let names = displayNames
+        return VStack(spacing: 0) {
             List(selection: $editor.selectedID) {
                 ForEach(positions, id: \.self) { position in
                     let section = widgets.filter { $0.position == position }
                     Section(position.title) {
                         ForEach(section) { widget in
-                            WidgetDragRow(session: dragSession, widgetID: widget.id, name: displayName(widget),
+                            let name = names[widget.id] ?? typeName(widget)
+                            WidgetDragRow(session: dragSession, widgetID: widget.id, name: name,
                                           insertionKey: dropKey(position, before: widget.id),
                                           select: { editor.selectedID = widget.id },
                                           move: { move($0, to: position, before: widget.id) }) {
                                 Label {
                                     VStack(alignment: .leading, spacing: 1) {
-                                        Text(displayName(widget)).lineLimit(1)
+                                        Text(name).lineLimit(1)
                                         Text(typeName(widget)).font(.caption).foregroundStyle(.secondary)
                                     }
                                 } icon: {
@@ -125,7 +130,7 @@ struct WidgetsView: View {
                                 }
                             }
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel(displayName(widget))
+                            .accessibilityLabel(name)
                             .accessibilityAction(named: Text("Move up")) { moveBy(-1, id: widget.id) }
                             .accessibilityAction(named: Text("Move down")) { moveBy(1, id: widget.id) }
                             .contextMenu {
@@ -194,7 +199,7 @@ struct WidgetsView: View {
 
     private func inspector(_ widget: WidgetConfiguration) -> some View {
         let style = StyleFields(store: store, path: "widgets.\(widget.id).style", defaultsPath: "defaults", widgetID: widget.id,
-                                values: editor.selectedStyle, set: { editor.set(["style": .object($0)]) },
+                                values: editor.style(for: widget.id), set: { editor.set(["style": .object($0)], for: widget.id) },
                                 unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) })
         return Form {
             Section {
@@ -205,13 +210,14 @@ struct WidgetsView: View {
                         .frame(width: 40, height: 40)
                         .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(displayName(widget)).font(.title3.weight(.semibold))
-                        Text(typeName(widget) + " widget").foregroundStyle(.secondary)
+                        Text(displayNames[widget.id] ?? typeName(widget)).font(.title3.weight(.semibold))
+                        Text(WidgetDisplayName.subtitle(for: widget.content, providers: store.configuration?.providers ?? [:]))
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Toggle("Enabled", isOn: Binding(get: {
-                        if case let .bool(value) = editor.selected["enabled"] { value } else { true }
-                    }, set: { editor.set(["enabled": .bool($0)]) }))
+                        widget.enabled
+                    }, set: { editor.set(["enabled": .bool($0)], for: widget.id) }))
                     .toggleStyle(.switch)
                     .labelsHidden()
                     .help("Show this widget in the bar")
@@ -219,27 +225,27 @@ struct WidgetsView: View {
                 }
             }
             Section("Content") {
-                if widget.content != .spacer && widget.content != .workspaces { iconField }
-                if case .text = widget.content { TextField("Text", text: string("text")) }
+                if widget.content != .spacer && widget.content != .workspaces { iconField(widget) }
+                if case .text = widget.content { TextField("Text", text: string("text", for: widget)) }
                 if case let .clock(format) = widget.content {
                     Picker("Date format", selection: Binding(get: {
                         !customClockFormat && WidgetClockFormat.common.contains { $0.value == format } ? format : "custom"
                     }, set: { value in
                         customClockFormat = value == "custom"
-                        if !customClockFormat { editor.set(["format": .string(value)]) }
+                        if !customClockFormat { editor.set(["format": .string(value)], for: widget.id) }
                     })) {
                         ForEach(WidgetClockFormat.common, id: \.value) { Text($0.title).tag($0.value) }
                         Text("Custom format").tag("custom")
                     }
                     if customClockFormat || !WidgetClockFormat.common.contains(where: { $0.value == format }) {
-                        TextField("Custom format", text: string("format", fallback: format))
+                        TextField("Custom format", text: string("format", for: widget, fallback: format))
                     }
                 }
             }
             Section {
                 clickFields(widget)
                 Picker("Screens", selection: Binding(get: { WidgetScreenChoice(widget.display) }, set: {
-                    if $0 != WidgetScreenChoice(widget.display), let properties = $0.properties { editor.set(properties) }
+                    if $0 != WidgetScreenChoice(widget.display), let properties = $0.properties { editor.set(properties, for: widget.id) }
                 })) {
                     ForEach(WidgetScreenChoice.allCases.filter { $0 != .specific || WidgetScreenChoice(widget.display) == .specific }, id: \.self) {
                         Text($0.title).tag($0)
@@ -263,7 +269,7 @@ struct WidgetsView: View {
                     } : nil) {
                         Picker("Presentation role", selection: Binding(get: { widget.role?.rawValue ?? "" }, set: {
                             if $0 != (widget.role?.rawValue ?? "") {
-                                editor.set(["role": $0.isEmpty ? .null : .string($0)])
+                                editor.set(["role": $0.isEmpty ? .null : .string($0)], for: widget.id)
                             }
                         })) {
                             Text("None").tag("")
@@ -271,9 +277,9 @@ struct WidgetsView: View {
                         }
                         .labelsHidden()
                     }
-                    if widget.content == .spacer || widget.content == .workspaces { iconField }
+                    if widget.content == .spacer || widget.content == .workspaces { iconField(widget) }
                     if widget.drawsTransitions {
-                        Picker("Transition", selection: string("transition", fallback: WidgetTransition.none.rawValue)) {
+                        Picker("Transition", selection: string("transition", for: widget, fallback: WidgetTransition.none.rawValue)) {
                             ForEach(WidgetTransition.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
                         }
                         .help("How the widget's text and symbols change")
@@ -300,8 +306,8 @@ struct WidgetsView: View {
                         Divider()
                         Text("Workspace presentation").font(.headline)
                         WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults",
-                            values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.selected["workspace"])) ?? [:],
-                            set: { editor.set(["workspace": .object($0)]) },
+                            values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.properties(for: widget.id)["workspace"])) ?? [:],
+                            set: { editor.set(["workspace": .object($0)], for: widget.id) },
                             unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
                     }
                     DisclosureGroup("JSON editor") {
@@ -347,11 +353,11 @@ struct WidgetsView: View {
         }
     }
 
-    private var iconField: some View {
+    private func iconField(_ widget: WidgetConfiguration) -> some View {
         LabeledContent("Icon") {
             HStack {
-                TextField("Icon", text: string("icon"), prompt: Text("SF Symbol name")).labelsHidden()
-                Image(systemName: string("icon").wrappedValue).foregroundStyle(.secondary).frame(width: 20)
+                TextField("Icon", text: string("icon", for: widget), prompt: Text("SF Symbol name")).labelsHidden()
+                Image(systemName: string("icon", for: widget).wrappedValue).foregroundStyle(.secondary).frame(width: 20)
             }
         }
     }
@@ -388,7 +394,7 @@ struct WidgetsView: View {
 
     private func setClick(_ choice: WidgetClickChoice, widget: WidgetConfiguration, value: String? = nil) {
         do {
-            editor.set(try choice.properties(for: widget, value: value, output: store.scripts[widget.id]?.output))
+            editor.set(try choice.properties(for: widget, value: value, output: store.scripts[widget.id]?.output), for: widget.id)
             clickError = nil
         } catch { clickError = errorMessage(error) }
     }
@@ -422,16 +428,12 @@ struct WidgetsView: View {
         return position.rawValue + "/" + (first ?? "")
     }
 
-    private func displayName(_ widget: WidgetConfiguration) -> String {
-        WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id], providers: store.configuration?.providers ?? [:])
-    }
-
     private func typeName(_ widget: WidgetConfiguration) -> String {
         WidgetDisplayName.title(for: widget.content, providers: store.configuration?.providers ?? [:])
     }
 
-    private func string(_ key: String, fallback: String = "") -> Binding<String> {
-        let value = if case let .string(value) = editor.selected[key] { value } else { fallback }
-        return Binding(get: { value }, set: { if $0 != value { editor.set([key: .string($0)]) } })
+    private func string(_ key: String, for widget: WidgetConfiguration, fallback: String = "") -> Binding<String> {
+        let value = if case let .string(value) = editor.properties(for: widget.id)[key] { value } else { fallback }
+        return Binding(get: { value }, set: { if $0 != value { editor.set([key: .string($0)], for: widget.id) } })
     }
 }

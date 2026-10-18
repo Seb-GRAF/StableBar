@@ -237,8 +237,7 @@ struct StyleFields {
 
     func number(_ title: String, _ key: String, default fallback: Double, in range: ClosedRange<Double> = 0...200) -> some View {
         row(title, key) { _ in
-            let value = if case let .number(number) = values[key] { number } else { fallback }
-            let binding = Binding(get: { value }, set: { if $0 != value { set([key: .number($0)]) } })
+            let binding = numberBinding(key, default: fallback)
             HStack(spacing: 6) {
                 TextField(title, value: binding, format: .number)
                     .labelsHidden()
@@ -287,6 +286,11 @@ struct StyleFields {
     func stringBinding(_ key: String, default fallback: String) -> Binding<String> {
         let value = if case let .string(value) = values[key] { value } else { fallback }
         return Binding(get: { value }, set: { if $0 != value { set([key: .string($0)]) } })
+    }
+
+    func numberBinding(_ key: String, default fallback: Double) -> Binding<Double> {
+        let value = if case let .number(number) = values[key] { number } else { fallback }
+        return Binding(get: { value }, set: { if $0 != value { set([key: .number($0)]) } })
     }
 
     private func row<Control: View>(_ title: String, _ key: String, @ViewBuilder control: (ConfigurationOrigin?) -> Control) -> some View {
