@@ -29,7 +29,7 @@ For development checks:
 swift test
 ```
 
-The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. Right-click the bar or use its macOS menu-bar icon to open **Customize StableBar**, **Try Themes…**, **Edit Bar** or quit. While editing, the menus offer **Finish Editing Bar**. **Customize → General** opens or reloads the configuration file, runs setup again and reconnects the workspace source.
+The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](Resources/config.json), with an offset for your menu bar. Subsequent launches keep your file. If it is a symbolic link, Setup, Customize and command-line saves update the linked file and keep the link. Right-click the bar or use its macOS menu-bar icon to open **Customize StableBar**, **Try Themes…**, **Edit Bar** or quit. While editing, the menus offer **Finish Editing Bar**. **Customize → General** opens or reloads the configuration file, runs setup again and reconnects the workspace source.
 
 ### Download a release
 

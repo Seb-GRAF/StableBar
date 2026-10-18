@@ -227,7 +227,7 @@ func migrateConfigurationFile(_ url: URL) throws {
     }
     var ids: [String] = []
     for edit in edits { root = try edit.applying(to: root, widgetIDs: &ids) }
-    try configurationData(root, editing: original).write(to: url, options: .atomic)
+    try writeConfiguration(configurationData(root, editing: original), to: url)
 }
 
 private let earlierSetupColors: [(appearance: String, colors: [String: ConfigurationValue])] = [
@@ -250,7 +250,7 @@ func migrateEarlierColors(_ url: URL) throws {
     for (key, value) in defaults where value == .null && earlierSetupColors.contains(where: { $0.colors[key] != nil }) { defaults[key] = nil }
     guard root["defaults"] != .object(defaults) else { return }
     root["defaults"] = defaults.isEmpty ? nil : .object(defaults)
-    try configurationData(root, editing: original).write(to: url, options: .atomic)
+    try writeConfiguration(configurationData(root, editing: original), to: url)
 }
 
 func configurationData(_ document: [String: ConfigurationValue]) throws -> Data {
@@ -413,4 +413,17 @@ private struct ConfigurationText {
             return String(decoding: try encoder.encode(value), as: UTF8.self)
         }
     }
+}
+
+/// Atomic saves follow the main file's symlinks, including links managed by dotfile tools.
+func writeConfiguration(_ data: Data, to url: URL) throws {
+    let target = url.resolvingSymlinksInPath()
+    if FileManager.default.fileExists(atPath: target.path) {
+        if try Data(contentsOf: target) == data { return }
+        guard FileManager.default.isWritableFile(atPath: target.path) else {
+            throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
+        }
+    }
+    do { try data.write(to: target, options: .atomic) }
+    catch { throw CommandFailure(message: "The configuration file could not be saved. \(error.localizedDescription)") }
 }

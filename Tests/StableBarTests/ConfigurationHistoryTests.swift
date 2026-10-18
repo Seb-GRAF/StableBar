@@ -15,12 +15,12 @@ final class ConfigurationHistoryTests: XCTestCase {
             XCTAssertTrue(history.undoSteps.isEmpty)
             XCTAssertTrue(fixture.store.sessionEdits.isEmpty)
         }
-        try await Task.sleep(for: .milliseconds(650))
+        await history.writeTask?.value
         XCTAssertFalse(history.hasPendingChanges)
         XCTAssertEqual(history.undoSteps.count, 1)
         XCTAssertEqual(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self)[0]["text"], .string("Burst"))
         let saved = try Data(contentsOf: fixture.url)
-        try await Task.sleep(for: .milliseconds(100))
+        await Task.yield()
         XCTAssertEqual(try Data(contentsOf: fixture.url), saved)
         XCTAssertEqual(history.undoSteps.count, 1)
         try history.change(ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Next burst")]))
@@ -111,8 +111,9 @@ final class ConfigurationHistoryTests: XCTestCase {
         try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
         let external = Data(#"{"bar":{"height":55},"widgets":[]}"#.utf8)
         try external.write(to: fixture.url)
+        let pending = history.writeTask
         try history.undo()
-        try await Task.sleep(for: .milliseconds(650))
+        await pending?.value
         XCTAssertEqual(try Data(contentsOf: fixture.url), external)
         XCTAssertFalse(history.hasPendingChanges)
         XCTAssertFalse(history.canUndo)
@@ -339,7 +340,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             try beginPendingChange(failure, in: fixture)
             let repair = try breakFile(failure, in: fixture)
             fixture.store.reloadConfiguration()
-            try await Task.sleep(for: .milliseconds(650))
+            await history.writeTask?.value
             XCTAssertFalse(history.hasPendingChanges, "\(failure)")
             XCTAssertTrue(history.error?.contains("could not be saved and was discarded") == true)
             XCTAssertTrue(history.undoSteps.isEmpty)
@@ -456,6 +457,27 @@ final class ConfigurationHistoryTests: XCTestCase {
             try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: fixture.url.path)
             XCTAssertThrowsError(try Data(contentsOf: fixture.url))
             return { try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fixture.url.path) }
+        }
+    }
+
+    @MainActor func testAChangeKeepsThePreviousPendingDiscardExplanationUntilAnotherAction() async throws {
+        for immediate in [false, true] {
+            let fixture = try Fixture()
+            defer { fixture.close() }
+            let history = fixture.store.customizationHistory
+            try history.change(.init(action: .set, id: "a", properties: ["text": .string("Lost")]))
+            try Data(#"{"bar":{"height":40},"widgets":[]}"#.utf8).write(to: fixture.url)
+            let edit = ConfigurationEdit(action: .bar, properties: ["height": .number(52)])
+            if immediate { try history.change([edit]) }
+            else { try history.change(edit); await history.writeTask?.value }
+            XCTAssertEqual(fixture.store.configuration?.bar.height, 52)
+            XCTAssertFalse(history.hasPendingChanges)
+            XCTAssertTrue(history.error?.contains("could not be saved and was discarded") == true)
+            try history.change(.init(action: .bar, properties: ["height": .number(54)]))
+            XCTAssertNil(history.error)
+            try history.flush()
+            try history.undo()
+            XCTAssertNil(history.error)
         }
     }
 
@@ -678,7 +700,7 @@ private final class Fixture {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         url = directory.appending(path: "config.json")
         try Data(configuration.utf8).write(to: url)
-        store = BarStore(configurationURL: url, themesDirectory: nil)
+        store = BarStore(configurationURL: url, themesDirectory: nil, customizationSaveDelay: .zero)
         store.reloadConfiguration()
         XCTAssertNil(store.configurationError)
     }

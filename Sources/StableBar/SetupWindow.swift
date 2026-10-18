@@ -297,10 +297,7 @@ struct SetupView: View {
 
     private func finish() {
         do {
-            let original = try Data(contentsOf: store.configurationURL)
-            let data = try preferences.applying(to: original, menuBarHeight: menuBarHeight,
-                                               configurationURL: store.configurationURL, context: store.context)
-            if data != original { try data.write(to: store.configurationURL, options: .atomic) }
+            try preferences.save(to: store.configurationURL, menuBarHeight: menuBarHeight, context: store.context)
             store.reloadConfiguration()
             UserDefaults.standard.set(true, forKey: "setupCompleted")
             close()

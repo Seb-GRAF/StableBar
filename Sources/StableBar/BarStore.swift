@@ -30,7 +30,8 @@ final class BarStore: NSObject {
     var sessionEdits: [ConfigurationEdit] = []
     private(set) var customizationEdits: [ConfigurationEdit] = []
     private var customizationBase: (Configuration, ConfigurationLoader)?
-    @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self)
+    private let customizationSaveDelay: Duration
+    @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self, saveDelay: customizationSaveDelay)
     @ObservationIgnored lazy var barEditing = BarEditing(store: self)
     @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
         packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")))
@@ -57,8 +58,10 @@ final class BarStore: NSObject {
     private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
     init(configurationURL: URL = LaunchCommand.configurationURL, registry: DataSourceRegistry = .builtIn,
-         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory, isPreview: Bool = false) {
+         popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory, isPreview: Bool = false,
+         customizationSaveDelay: Duration = .milliseconds(500)) {
         self.configurationURL = configurationURL
+        self.customizationSaveDelay = customizationSaveDelay
         self.registry = registry
         self.popup = popup
         self.isPreview = isPreview
@@ -93,7 +96,7 @@ final class BarStore: NSObject {
                 let data = try SetupPreferences(placement: .belowMenuBar).applying(
                     to: Data(contentsOf: template),
                     menuBarHeight: max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0))
-                try data.write(to: configurationURL, options: .atomic)
+                try writeConfiguration(data, to: configurationURL)
             }
             try migrateConfigurationFile(configurationURL)
             if !UserDefaults.standard.bool(forKey: "migratedEarlierColors") {
@@ -195,7 +198,7 @@ final class BarStore: NSObject {
         let data = try configurationData(root)
         var loader = configurationLoader
         let next = try loader.load(configurationURL, data: data, context: context)
-        if persist { try configurationData(root, editing: Data(contentsOf: configurationURL)).write(to: configurationURL, options: .atomic) }
+        if persist { try writeConfiguration(configurationData(root, editing: Data(contentsOf: configurationURL)), to: configurationURL) }
         sessionEdits = persist ? [] : allEdits
         configurationLoader = loader
         apply(next)
@@ -266,7 +269,7 @@ final class BarStore: NSObject {
         guard try Data(contentsOf: configurationURL) == original else {
             throw CommandFailure(message: "The configuration file changed. Try your change again.")
         }
-        try data.write(to: configurationURL, options: .atomic)
+        try writeConfiguration(data, to: configurationURL)
         customizationEdits = []
         customizationBase = nil
         configurationLoader = loader

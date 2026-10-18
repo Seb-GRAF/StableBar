@@ -9,6 +9,7 @@ final class ConfigurationHistory {
     }
 
     private unowned let store: BarStore
+    private let saveDelay: Duration
     private(set) var undoSteps: [Step] = []
     private(set) var redoSteps: [Step] = []
     var error: String?
@@ -16,7 +17,7 @@ final class ConfigurationHistory {
     private var lastFile: Data?
     private var pendingControl: Control?
     @ObservationIgnored private var pendingEdit: (() throws -> [ConfigurationEdit])?
-    @ObservationIgnored private var writeTask: Task<Void, Never>?
+    @ObservationIgnored private(set) var writeTask: Task<Void, Never>?
 
     private struct Control: Equatable {
         let action: ConfigurationEdit.Action
@@ -25,7 +26,10 @@ final class ConfigurationHistory {
         let name: String?
     }
 
-    init(store: BarStore) { self.store = store }
+    init(store: BarStore, saveDelay: Duration = .milliseconds(500)) {
+        self.store = store
+        self.saveDelay = saveDelay
+    }
 
     var hasPendingChanges: Bool { !store.customizationEdits.isEmpty }
     var canUndo: Bool { hasPendingChanges || !undoSteps.isEmpty }
@@ -65,19 +69,19 @@ final class ConfigurationHistory {
     }
 
     private func change(control: Control?, edit: @escaping () throws -> [ConfigurationEdit]) throws {
+        error = nil
         if hasPendingChanges && (control == nil || control != pendingControl) { store.flushCustomization() }
         checkForExternalChanges()
         try store.setCustomizationEdits(edit())
         pendingEdit = edit
         pendingControl = control
         redoSteps.removeAll()
-        error = nil
         notice = nil
         if control == nil { try flush() }
         else {
             writeTask?.cancel()
-            writeTask = Task { [weak self] in
-                do { try await Task.sleep(for: .milliseconds(500)) }
+            writeTask = Task { [weak self, saveDelay] in
+                do { try await Task.sleep(for: saveDelay) }
                 catch { return }
                 guard let self else { return }
                 do { try flush() }
@@ -99,7 +103,6 @@ final class ConfigurationHistory {
             lastFile = after
             pendingControl = nil
             pendingEdit = nil
-            error = nil
             notice = nil
         } catch {
             let message = "The pending Customize change could not be saved and was discarded. \(errorMessage(error))"
@@ -111,6 +114,7 @@ final class ConfigurationHistory {
     }
 
     func undo() throws {
+        error = nil
         let changedOutside = checkForExternalChanges()
         if hasPendingChanges {
             let step: Step?
@@ -132,6 +136,7 @@ final class ConfigurationHistory {
     }
 
     func redo() throws {
+        error = nil
         if checkForExternalChanges() { return }
         try flush()
         guard let step = redoSteps.last else { return }

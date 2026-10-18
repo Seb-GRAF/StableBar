@@ -22,6 +22,12 @@ struct SetupPreferences: Equatable {
     var clock = Clock.current
     var theme = Theme.current
 
+    func save(to url: URL, menuBarHeight: Double, context: ConfigurationContext) throws {
+        let original = try Data(contentsOf: url)
+        let data = try applying(to: original, menuBarHeight: menuBarHeight, configurationURL: url, context: context)
+        try writeConfiguration(data, to: url)
+    }
+
     func applying(to data: Data, menuBarHeight: Double, configurationURL: URL? = nil,
                   context: ConfigurationContext = ConfigurationContext()) throws -> Data {
         let configuration: Configuration
