@@ -7,6 +7,14 @@ struct WindowClearanceDisplay: Equatable {
     let visibleFrame: CGRect
     let barFrame: CGRect
 
+    init(frame: CGRect, visibleFrame: CGRect, configuration: Configuration, display: BarDisplay, desktopTop: CGFloat) {
+        let geometry = configuration.barGeometry(for: display)
+        let top = frame.maxY - configuration.bar.offset
+        self.init(frame: frame, visibleFrame: visibleFrame,
+                  barFrame: CGRect(x: frame.minX, y: top - geometry.panelHeight, width: frame.width, height: geometry.panelHeight),
+                  desktopTop: desktopTop)
+    }
+
     init(frame: CGRect, visibleFrame: CGRect, barFrame: CGRect, desktopTop: CGFloat) {
         self.frame = CGRect(x: frame.minX, y: desktopTop - frame.maxY, width: frame.width, height: frame.height)
         self.visibleFrame = CGRect(x: visibleFrame.minX, y: desktopTop - visibleFrame.maxY,

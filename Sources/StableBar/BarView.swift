@@ -116,7 +116,7 @@ struct BarView: View {
             Text("StableBar")
             Button("Customize StableBar…") { store.onCustomize?() }
             Button("Try Themes…") { store.onTryThemes?(display.id) }
-            if !store.isPreview { Button(store.barEditing.menuTitle, action: store.barEditing.toggle) }
+            if store.barEditing.isAvailable { Button(store.barEditing.menuTitle, action: store.barEditing.toggle) }
             if let error = store.configurationError ?? store.workspaceStore.error {
                 Divider()
                 Text(error)

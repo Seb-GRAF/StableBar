@@ -76,10 +76,17 @@ struct StableBarApp {
 }
 
 @MainActor
-final class BarPanel: NSPanel {
+class BarPanel: NSPanel {
     var barGeometry: BarGeometry?
     var isEditingBar = false {
-        didSet { if !isEditingBar && isKeyWindow { resignKey() } }
+        didSet {
+            guard oldValue, !isEditingBar, isKeyWindow else { return }
+            // Ordering out releases a nonactivating panel's keyboard grab and restores
+            // the previous app's focus. Ordering front again does not make it key.
+            let wasVisible = isVisible
+            orderOut(nil)
+            if wasVisible { orderFrontRegardless() }
+        }
     }
     private(set) var decorationPanel: PassiveBarPanel?
 
@@ -275,7 +282,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                   width: screen.frame.width, height: height), display: true)
             panel.orderFrontRegardless()
             clearanceDisplays.append(WindowClearanceDisplay(frame: screen.frame, visibleFrame: screen.visibleFrame,
-                                                            barFrame: panel.drawingFrame, desktopTop: screens[0].frame.maxY))
+                                                            configuration: config, display: BarDisplay(screen: screen),
+                                                            desktopTop: screens[0].frame.maxY))
         }
         store.windowClearance.update(enabled: config.bar.keepWindowsClear, displays: clearanceDisplays)
         if store.barEditing.isActive {
@@ -297,7 +305,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
         if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
-        if !panels.isEmpty { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
+        if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
         if let error = store.configurationError ?? store.workspaceStore.error {
             menu.addItem(.separator())
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")

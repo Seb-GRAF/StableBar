@@ -105,6 +105,7 @@ struct WidgetsView: View {
             HStack {
                 Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
                     .accessibilityLabel(store.barEditing.menuTitle)
+                    .disabled(!store.barEditing.isAvailable)
                 Spacer()
             }
             .padding(8)

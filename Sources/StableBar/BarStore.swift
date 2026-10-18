@@ -116,13 +116,12 @@ final class BarStore: NSObject {
         send(.frontApp, ["INFO": activeApp?.localizedName ?? "Desktop"])
     }
 
-    func refreshContext() {
-        let next = SystemContext.current()
+    func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
         var nextWithSameApp = next
         nextWithSameApp.app = context.app
         let reload = nextWithSameApp != context || (next.app != context.app && configurationLoader.matchesApps)
         context = next
-        if reload { reloadConfiguration() }
+        if reload { readConfiguration(leavingEditMode: false) }
     }
 
     private func scheduleReload() {

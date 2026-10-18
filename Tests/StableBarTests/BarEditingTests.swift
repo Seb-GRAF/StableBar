@@ -292,6 +292,70 @@ final class BarEditingTests: XCTestCase {
         }
     }
 
+    @MainActor func testAutomaticProfileRefreshKeepsEditingAndRevealsTheNewComposition() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"clock","type":"clock","position":"right"}],"profiles":[
+        {"name":"App","when":{"app":"com.stablebar"},"configuration":{"widgets":[{"id":"app","type":"clock","position":"left","enabled":false}]}},
+        {"name":"Dark","when":{"appearance":"dark"},"configuration":{"widgets":[{"id":"dark","type":"clock","position":"left"}]}},
+        {"name":"Battery","when":{"onBattery":true},"configuration":{"widgets":[{"id":"battery","type":"clock","position":"left"}]}},
+        {"name":"Displays","when":{"displayCount":2},"configuration":{"widgets":[{"id":"displays","type":"clock","position":"left"}]}},
+        {"name":"External","when":{"externalDisplay":true},"configuration":{"widgets":[{"id":"external","type":"clock","position":"left"}]}}]}
+        """#)
+        defer { fixture.close() }
+        let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+        store.reloadConfiguration()
+        defer { store.stop() }
+        let before = try Data(contentsOf: fixture.url)
+        store.barEditing.begin()
+        // Opening Customize activates StableBar and refreshes the frontmost-app context.
+        store.onCustomizeWidget = { [weak store] _ in store?.refreshContext(ConfigurationContext(app: "com.stablebar")) }
+        store.barEditing.select("clock")
+        XCTAssertTrue(store.barEditing.isActive)
+        XCTAssertEqual(store.activeProfiles, ["App"])
+        XCTAssertEqual(store.barEditing.entries(on: laptop).map(\.id), ["clock", "app"])
+        XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: laptop).last).visibility.isHidden)
+        for (context, name) in [(ConfigurationContext(appearance: "dark"), "dark"),
+                                (ConfigurationContext(onBattery: true), "battery"),
+                                (ConfigurationContext(displayCount: 2), "displays"),
+                                (ConfigurationContext(externalDisplay: true), "external")] {
+            store.refreshContext(context)
+            XCTAssertNil(store.configurationError)
+            XCTAssertTrue(store.barEditing.isActive)
+            XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock", name])
+            XCTAssertEqual(store.barEditing.entries(on: external).map(\.id), ["clock", name])
+        }
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        store.reloadConfiguration()
+        XCTAssertFalse(store.barEditing.isActive)
+    }
+
+    @MainActor func testWindowClearanceKeepsTheNormalFrameWhenEditingStartsAndEnds() throws {
+        let fixture = try ThemeGalleryFixture(#"{"bar":{"height":32,"margin":4,"offset":20,"keepWindowsClear":true},"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        for (display, frame) in [(laptop, CGRect(x: 0, y: 0, width: 1512, height: 982)),
+                                 (external, CGRect(x: -1920, y: 982, width: 1920, height: 1080))] {
+            let config = try XCTUnwrap(store.configuration)
+            let normal = config.barGeometry(for: display)
+            let clearance = { WindowClearanceDisplay(frame: frame, visibleFrame: frame, configuration: config,
+                                                     display: display, desktopTop: 2062) }
+            let before = clearance()
+            store.barEditing.begin()
+            XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: display)).panelHeight, normal.panelHeight)
+            let during = clearance()
+            XCTAssertEqual(during, before)
+            XCTAssertEqual(during.barFrame.height, normal.panelHeight)
+            XCTAssertEqual(during.barFrame.minY, 2062 - frame.maxY + config.bar.offset)
+            // A window below the normal bar must not be moved by the taller editing controls.
+            let window = CGRect(x: frame.minX + 10, y: during.barFrame.maxY + 1, width: 300, height: 200)
+            XCTAssertNil(frameBelowBar(window, displays: [during]))
+            store.barEditing.end()
+            XCTAssertEqual(clearance(), before)
+        }
+    }
+
     @MainActor func testThemeTrialsAndEditingEndEachOtherWithoutSavingAndPreviewsNeverEnterEditMode() throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }
@@ -369,24 +433,98 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
+    @MainActor func testEditBarIsUnavailableWithoutConfigurationOrInAPreview() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = BarStore(configurationURL: fixture.url)
+        defer { store.stop() }
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        let menu = NSMenu()
+        let delegate = AppDelegate(store: store, panels: [1: panel])
+        delegate.menuWillOpen(menu)
+        XCTAssertFalse(store.barEditing.isAvailable)
+        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar" })
+        store.barEditing.begin()
+        XCTAssertFalse(store.barEditing.isActive)
+        store.reloadConfiguration()
+        XCTAssertTrue(store.barEditing.isAvailable)
+        delegate.menuWillOpen(menu)
+        XCTAssertTrue(menu.items.contains { $0.title == "Edit Bar" })
+        let preview = ThemePreview.snapshot(try XCTUnwrap(store.configuration), from: store)
+        XCTAssertFalse(preview.barEditing.isAvailable)
+    }
+
+    @MainActor func testLeavingEditModeReleasesOnlyTheKeyBarAndKeepsItsVisibility() {
+        _ = NSApplication.shared
+        for (key, visible) in [(true, true), (true, false), (false, true), (false, false)] {
+            let panel = UnorderedEditingPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                                               backing: .buffered, defer: false)
+            defer { panel.close() }
+            panel.isEditingBar = true
+            panel.simulatedKey = key
+            panel.simulatedVisible = visible
+            panel.isEditingBar = false
+            XCTAssertEqual(panel.ordering, key ? (visible ? ["out", "front"] : ["out"]) : [])
+            XCTAssertFalse(panel.isKeyWindow)
+            XCTAssertEqual(panel.isVisible, visible)
+            panel.isEditingBar = false
+            XCTAssertEqual(panel.ordering.count, key ? (visible ? 2 : 1) : 0)
+        }
+    }
+
     @MainActor func testEscapeHandlingAcceptsAnUnmodifiedKeyAndLeavesOtherShortcutsAlone() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
         store.barEditing.begin()
-        for (code, modifiers) in [(UInt16(53), NSEvent.ModifierFlags.command), (53, .control), (53, .option), (36, [])] {
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        for (code, modifiers) in [(UInt16(53), NSEvent.ModifierFlags.command), (53, .control), (53, .option), (53, .shift), (36, [])] {
             let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers, timestamp: 0,
-                                                     windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                     windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
                                                      isARepeat: false, keyCode: code))
-            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store))
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: panel))
             XCTAssertTrue(store.barEditing.isActive)
         }
         let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                                                  windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                  windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
                                                   isARepeat: false, keyCode: 53))
-        XCTAssertTrue(BarEditingKeyboard.handle(escape, store: store))
-        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store))
+        XCTAssertTrue(BarEditingKeyboard.handle(escape, store: store, keyWindow: panel))
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store, keyWindow: panel))
+    }
+
+    @MainActor func testEscapeLeavesOtherWindowsSheetsAndFieldEditorsAlone() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        let panel = UnorderedEditingPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                                           backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        let other = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        defer { other.close() }
+        let escape = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                  windowNumber: panel.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "",
+                                                  isARepeat: false, keyCode: 53))
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store, keyWindow: other))
+        XCTAssertTrue(store.barEditing.isActive)
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store, keyWindow: nil))
+        panel.simulatedSheet = other
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store, keyWindow: panel))
+        XCTAssertTrue(store.barEditing.isActive)
+        panel.simulatedSheet = nil
+        let fieldEditor = NSTextView()
+        fieldEditor.isFieldEditor = true
+        panel.contentView = fieldEditor
+        XCTAssertTrue(panel.makeFirstResponder(fieldEditor))
+        XCTAssertFalse(BarEditingKeyboard.handle(escape, store: store, keyWindow: panel))
+        XCTAssertTrue(store.barEditing.isActive)
     }
 
     @MainActor func testEmptyCustomLayoutsAndTransparentWidgetsUsePlaceholdersUntilTheirContentReturns() throws {
@@ -490,5 +628,25 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertNil(store.barEditing.error)
         XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
+    }
+}
+
+/// Simulates native focus/sheet state without ordering a test window onto the screen.
+@MainActor private final class UnorderedEditingPanel: BarPanel {
+    var simulatedKey = false
+    var simulatedVisible = false
+    var simulatedSheet: NSWindow?
+    var ordering: [String] = []
+    override var isKeyWindow: Bool { simulatedKey }
+    override var isVisible: Bool { simulatedVisible }
+    override var attachedSheet: NSWindow? { simulatedSheet }
+    override func orderOut(_ sender: Any?) {
+        ordering.append("out")
+        simulatedKey = false
+        simulatedVisible = false
+    }
+    override func orderFrontRegardless() {
+        ordering.append("front")
+        simulatedVisible = true
     }
 }

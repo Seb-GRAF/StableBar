@@ -180,15 +180,15 @@ private struct BarEditTile: View {
         .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(.secondary.opacity(entry.visibility.isHidden ? 0.6 : 0.2)) }
         .help("\(title). Click to change its settings, or drag to move it.")
         .contextMenu {
-            Button("Edit widget…") { editing.select(entry.id) }
-            Button("Move left") { editing.move(entry.id, by: -1, on: display) }
-            Button("Move right") { editing.move(entry.id, by: 1, on: display) }
-            Menu("Move to") {
+            Button("Edit Widget…") { editing.select(entry.id) }
+            Button("Move Left") { editing.move(entry.id, by: -1, on: display) }
+            Button("Move Right") { editing.move(entry.id, by: 1, on: display) }
+            Menu("Move To") {
                 ForEach(WidgetPlacement.destinations, id: \.self) { position in
-                    Button(position.title) { editing.move(entry.id, to: position, on: display) }
+                    Button(position.title.capitalized) { editing.move(entry.id, to: position, on: display) }
                 }
             }
-            Button("Remove widget") { editing.remove(entry.id, on: display) }
+            Button("Remove Widget") { editing.remove(entry.id, on: display) }
             Divider()
             Button(editing.menuTitle, action: editing.end)
         }

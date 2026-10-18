@@ -27,42 +27,13 @@ struct BarEditDragSource<Content: View>: NSViewRepresentable {
     }
 }
 
-class BarEditHostingView: NSView {
-    private let hostingView: NSHostingView<AnyView>
-    var rootView: AnyView {
-        get { hostingView.rootView }
-        set { hostingView.rootView = newValue; invalidateIntrinsicContentSize() }
-    }
-
-    init(rootView: AnyView) {
-        hostingView = NSHostingView(rootView: rootView)
-        super.init(frame: .zero)
-        hostingView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(hostingView)
-        NSLayoutConstraint.activate([
-            hostingView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            hostingView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            hostingView.topAnchor.constraint(equalTo: topAnchor),
-            hostingView.bottomAnchor.constraint(equalTo: bottomAnchor)
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    override var isFlipped: Bool { true }
-    override var intrinsicContentSize: NSSize { hostingView.intrinsicContentSize }
-    override var fittingSize: NSSize { hostingView.fittingSize }
-}
-
-final class BarEditDragSourceView: BarEditHostingView, NSDraggingSource {
+final class BarEditDragSourceView: WidgetDragSourceView {
     weak var editing: BarEditing?
     var widgetID = ""
-    var name = ""
     var select: () -> Void = {}
-    private var mouseDownPoint: NSPoint?
-    private var payload: WidgetDragSession.Payload?
-    static let pasteboardType = NSPasteboard.PasteboardType(WidgetDragSession.typeIdentifier)
+    override var isFlipped: Bool { true }
+    override var dragSession: WidgetDragSession? { editing?.isActive == true ? editing?.dragSession : nil }
+    override var dragWidgetID: String? { widgetID }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let hit = super.hitTest(point) else { return nil }
@@ -72,47 +43,23 @@ final class BarEditDragSourceView: BarEditHostingView, NSDraggingSource {
         return self
     }
 
-    override func mouseDown(with event: NSEvent) { mouseDownPoint = event.locationInWindow }
-
     override func mouseUp(with event: NSEvent) {
         if mouseDownPoint != nil, bounds.contains(convert(event.locationInWindow, from: nil)) { select() }
-        mouseDownPoint = nil
+        super.mouseUp(with: event)
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        guard let start = mouseDownPoint, let editing, editing.isActive,
-              hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) >= 4 else { return }
-        mouseDownPoint = nil
-        let payload = editing.dragSession.begin(widgetID)
-        self.payload = payload
-        guard let data = try? JSONEncoder().encode(payload) else { editing.dragSession.end(payload); return }
-        let item = NSPasteboardItem()
-        item.setData(data, forType: Self.pasteboardType)
-        let draggingItem = NSDraggingItem(pasteboardWriter: item)
+    override func dragImage() -> NSImage {
         let name = name
-        let image = NSImage(size: NSSize(width: 150, height: 28), flipped: false) { rect in
+        return NSImage(size: NSSize(width: 150, height: 28), flipped: false) { rect in
             NSColor.controlBackgroundColor.setFill()
             rect.fill()
             (name as NSString).draw(in: rect.insetBy(dx: 8, dy: 5), withAttributes: [.font: NSFont.systemFont(ofSize: 12),
                                                                                   .foregroundColor: NSColor.labelColor])
             return true
         }
-        draggingItem.setDraggingFrame(NSRect(origin: convert(event.locationInWindow, from: nil), size: image.size), contents: image)
-        beginDraggingSession(with: [draggingItem], event: event, source: self)
     }
 
-    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        context == .withinApplication ? .move : []
-    }
-
-    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        if let payload, editing?.dragSession.accepts(payload) == true {
-            editing?.dragSession.end(payload)
-            editing?.insertion = nil
-        }
-        payload = nil
-        mouseDownPoint = nil
-    }
+    override func didEndWidgetDrag() { editing?.insertion = nil }
 }
 
 struct BarEditDropTarget<Content: View>: NSViewRepresentable {
@@ -141,7 +88,8 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     }
 }
 
-final class BarEditDropTargetView: BarEditHostingView {
+final class BarEditDropTargetView: WidgetHostingView {
+    override var isFlipped: Bool { true }
     weak var editing: BarEditing?
     var displayID = 0
     var position = WidgetPosition.left

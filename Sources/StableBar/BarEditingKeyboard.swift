@@ -1,7 +1,6 @@
 import AppKit
 
-/// The edit bar can take keyboard focus without activating the app. Also handle Escape
-/// after a widget opens Customize, where the bar is no longer the key window.
+/// Escape leaves editing only when the bar itself owns keyboard input.
 @MainActor
 final class BarEditingKeyboard {
     private var monitor: Any?
@@ -19,8 +18,10 @@ final class BarEditingKeyboard {
         return true
     }
 
-    static func handle(_ event: NSEvent, store: BarStore) -> Bool {
-        guard event.type == .keyDown, event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
+    static func handle(_ event: NSEvent, store: BarStore, keyWindow: NSWindow? = NSApp?.keyWindow) -> Bool {
+        guard event.type == .keyDown, event.modifierFlags.intersection([.shift, .command, .control, .option]).isEmpty,
+              let panel = keyWindow as? BarPanel, panel.isEditingBar,
+              panel.attachedSheet == nil, (panel.firstResponder as? NSTextView)?.isFieldEditor != true else { return false }
         return store.barEditing.handleKey(event.keyCode)
     }
 
