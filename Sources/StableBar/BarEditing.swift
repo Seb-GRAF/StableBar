@@ -68,10 +68,24 @@ final class BarEditing {
     }
 
     @discardableResult
-    func handleKey(_ keyCode: UInt16) -> Bool {
-        guard isActive, keyCode == 53 else { return false }
-        end()
+    func handleKey(_ keyCode: UInt16, modifiers: NSEvent.ModifierFlags = []) -> Bool {
+        guard isActive else { return false }
+        if keyCode == 53, modifiers.isEmpty { end(); return true }
+        guard keyCode == 6, modifiers == .command || modifiers == [.command, .shift] else { return false }
+        if modifiers.contains(.shift) { redo() } else { undo() }
         return true
+    }
+
+    var canUndo: Bool { isActive && store.customizationHistory.canUndo }
+
+    func undo() {
+        guard isActive else { return }
+        perform(on: store.activeDisplayID) { try store.customizationHistory.undo() }
+    }
+
+    func redo() {
+        guard isActive else { return }
+        perform(on: store.activeDisplayID) { try store.customizationHistory.redo() }
     }
 
     func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
@@ -205,7 +219,7 @@ struct BarEditLayout {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
         let spacing: CGFloat = 6
-        let doneWidth: CGFloat = 54
+        let doneWidth: CGFloat = 114
         let doneSpace = doneWidth + spacing
         let notch = display.notch.map { range in
             let center: CGFloat = (range.lowerBound + range.upperBound) / 2 - CGFloat(bar.margin)

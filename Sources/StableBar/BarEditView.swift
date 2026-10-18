@@ -33,11 +33,17 @@ struct BarEditView: View {
                             .offset(x: section.x)
                         }
                     }
-                    Button("Done", action: store.barEditing.end)
-                        .accessibilityLabel("Finish editing the bar")
-                        .help("Finish editing the bar (Esc)")
-                        .frame(width: layout.done.width, height: proxy.size.height)
-                        .offset(x: layout.done.x)
+                    HStack(spacing: 6) {
+                        Button("Undo", action: store.barEditing.undo)
+                            .accessibilityLabel("Undo bar change")
+                            .help("Undo (⌘Z)")
+                            .disabled(!store.barEditing.canUndo)
+                        Button("Done", action: store.barEditing.end)
+                            .accessibilityLabel("Finish editing the bar")
+                            .help("Finish editing the bar (Esc)")
+                    }
+                    .frame(width: layout.done.width, height: proxy.size.height)
+                    .offset(x: layout.done.x)
                 }
             }
             .padding(config.bar.margin)
@@ -188,7 +194,7 @@ private struct BarEditTile: View {
             Button("Move Right") { editing.move(entry.id, by: 1, on: display) }
             Menu("Move To") {
                 ForEach(WidgetPlacement.destinations, id: \.self) { position in
-                    Button(position.title.capitalized) { editing.move(entry.id, to: position, on: display) }
+                    Button(position.menuTitle) { editing.move(entry.id, to: position, on: display) }
                 }
             }
             Button("Remove Widget") { editing.remove(entry.id, on: display) }

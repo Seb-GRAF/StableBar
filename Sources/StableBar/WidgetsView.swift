@@ -143,11 +143,11 @@ struct WidgetsView: View {
                             .accessibilityAction(named: Text("Move up")) { moveBy(-1, id: widget.id) }
                             .accessibilityAction(named: Text("Move down")) { moveBy(1, id: widget.id) }
                             .contextMenu {
-                                Button("Move up") { moveBy(-1, id: widget.id) }
-                                Button("Move down") { moveBy(1, id: widget.id) }
-                                Menu("Move to") {
+                                Button("Move Up") { moveBy(-1, id: widget.id) }
+                                Button("Move Down") { moveBy(1, id: widget.id) }
+                                Menu("Move To") {
                                     ForEach(WidgetPlacement.destinations, id: \.self) { target in
-                                        Button(target.title) { move(widget.id, to: target) }
+                                        Button(target.menuTitle) { move(widget.id, to: target) }
                                     }
                                 }
                             }

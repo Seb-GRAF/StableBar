@@ -193,6 +193,14 @@ private struct GeneralView: View {
 }
 
 extension WidgetPosition {
+    var menuTitle: String {
+        switch self {
+        case .notchLeft: "Left of Notch"
+        case .notchRight: "Right of Notch"
+        default: title
+        }
+    }
+
     var title: String {
         switch self {
         case .left: "Left"

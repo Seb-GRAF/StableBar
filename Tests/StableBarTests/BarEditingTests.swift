@@ -527,6 +527,89 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(store.barEditing.isActive)
     }
 
+
+    @MainActor func testBarUndoAndRedoFinishCustomizeEditingAndFollowSharedHistoryState() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editing = store.barEditing
+        editing.begin()
+        XCTAssertFalse(editing.canUndo)
+        editing.remove("a")
+        XCTAssertTrue(editing.canUndo)
+        let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        var finished = 0
+        store.onEndCustomizationEditing = { finished += 1 }
+        for redo in [false, true] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: redo ? [.command, .shift] : .command, timestamp: 0, windowNumber: panel.windowNumber,
+                context: nil, characters: "z", charactersIgnoringModifiers: "z", isARepeat: false, keyCode: 6))
+            XCTAssertTrue(BarEditingKeyboard.handle(event, store: store, keyWindow: panel))
+            XCTAssertEqual(store.configuration?.widgets.count, redo ? 0 : 1)
+            XCTAssertEqual(editing.canUndo, redo)
+        }
+        XCTAssertEqual(finished, 2)
+        editing.undo()
+        XCTAssertFalse(editing.canUndo)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a"])
+        try store.customizationHistory.change(.init(action: .bar, properties: ["height": .number(56)]))
+        XCTAssertTrue(editing.canUndo)
+        editing.undo()
+        XCTAssertFalse(editing.canUndo)
+        XCTAssertFalse(store.customizationHistory.hasPendingChanges)
+        editing.end()
+        XCTAssertFalse(editing.canUndo)
+    }
+
+    @MainActor func testUndoShortcutsLeaveOtherWindowsSheetsAndTextInputAlone() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        store.barEditing.remove("a")
+        let panel = UnorderedEditingPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        defer { panel.close() }
+        panel.isEditingBar = true
+        let other = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        defer { other.close() }
+        for modifiers: NSEvent.ModifierFlags in [.command, [.command, .shift]] {
+            let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+                timestamp: 0, windowNumber: panel.windowNumber, context: nil, characters: "z", charactersIgnoringModifiers: "z", isARepeat: false, keyCode: 6))
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: other))
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: nil))
+            panel.simulatedSheet = other
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: panel))
+            panel.simulatedSheet = nil
+            let text = NSTextView()
+            text.isFieldEditor = true
+            panel.contentView = text
+            XCTAssertTrue(panel.makeFirstResponder(text))
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: panel))
+            panel.makeFirstResponder(nil)
+            panel.contentView = NSView()
+            panel.isEditingBar = false
+            XCTAssertFalse(BarEditingKeyboard.handle(event, store: store, keyWindow: panel))
+            panel.isEditingBar = true
+        }
+        for modifiers: NSEvent.ModifierFlags in [[], .shift, [.command, .option], [.command, .control]] {
+            XCTAssertFalse(store.barEditing.handleKey(6, modifiers: modifiers))
+        }
+        XCTAssertEqual(store.configuration?.widgets.count, 0)
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        store.barEditing.end()
+        XCTAssertFalse(store.barEditing.handleKey(6, modifiers: .command))
+    }
+
+    func testPositionMenusUseMacOSTitleCase() {
+        XCTAssertEqual(WidgetPosition.allCases.map(\.menuTitle), ["Left", "Left of Notch", "Center", "Right of Notch", "Right"])
+        XCTAssertEqual(WidgetPosition.notchLeft.title, "Left of notch")
+    }
+
     @MainActor func testEmptyCustomLayoutsAndTransparentWidgetsUsePlaceholdersUntilTheirContentReturns() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"widgets":[{"id":"empty","type":"text","text":"","position":"left","layout":{"type":"row","children":[{"type":"field","field":"text","hideWhenEmpty":"text"}]}},
