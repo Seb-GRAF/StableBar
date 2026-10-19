@@ -33,14 +33,14 @@ final class BarEditViewTests: XCTestCase {
     }
 
     @MainActor func testHiddenAndEmptyPlaceholdersKeepTheirNamesInCompactTiles() throws {
-        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"widget-00000001","type":"text","text":"","position":"right"},{"id":"off","type":"text","text":"Off","enabled":false,"position":"right"}]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"widget-00000001","type":"text","text":"","position":"right"},{"id":"elsewhere","type":"text","text":"Off","display":"builtIn","position":"right"}]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
         store.barEditing.begin()
         let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
         let entries = store.barEditing.entries(on: display)
-        XCTAssertEqual(entries.map(\.name), ["Text", "off"])
+        XCTAssertEqual(entries.map(\.name), ["Text", "elsewhere"])
         XCTAssertEqual(entries.map { $0.visibility.isHidden }, [false, true])
         for entry in entries {
             XCTAssertTrue(entry.usesPlaceholder)
@@ -104,7 +104,7 @@ final class BarEditViewTests: XCTestCase {
         _ = NSApplication.shared
         let fixture = try ThemeGalleryFixture(#"""
         {"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair","style":{"width":1500}},
-        {"id":"b","type":"clock","position":"left","group":"pair","enabled":false},
+        {"id":"b","type":"clock","position":"left","group":"pair","display":"builtIn"},
         {"id":"c","type":"text","text":"Hello","position":"right","display":"builtIn"},
         {"id":"d","type":"clock","position":"left"},{"id":"e","type":"clock","position":"left"},
         {"id":"f","type":"clock","position":"left"}]}

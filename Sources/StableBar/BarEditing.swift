@@ -4,7 +4,7 @@ import Observation
 /// Presence in the normal bar, kept separate from the temporary edit-mode reveal.
 struct BarWidgetVisibility {
     enum Reason: String, Equatable {
-        case disabled, display, output, workspaces
+        case display, output, workspaces
     }
 
     let reasons: [Reason]
@@ -106,7 +106,6 @@ final class BarEditing {
         let presentation = store.presentations[widget.id]
         let activeID = store.workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? store.activeDisplayID
         var reasons: [BarWidgetVisibility.Reason] = []
-        if !widget.enabled { reasons.append(.disabled) }
         if !(presentation?.display ?? widget.display).includes(display, activeID: activeID) { reasons.append(.display) }
         if presentation?.hidden == true { reasons.append(.output) }
         if widget.content == .workspaces && widget.layout == nil && store.workspaceStore.error == nil
@@ -116,8 +115,10 @@ final class BarEditing {
         return BarWidgetVisibility(reasons: reasons)
     }
 
+    /// Turned-off widgets aren't on the bar, even while editing: removing a package or include
+    /// widget turns it off, so it leaves the bar. Customize → Widgets can turn it on again.
     func widgets(on display: BarDisplay) -> [WidgetConfiguration] {
-        (store.configuration?.widgets ?? []).filter { isActive || !visibility(of: $0, on: display).isHidden }
+        (store.configuration?.widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
     }
 
     func entries(on display: BarDisplay) -> [BarEditWidget] {
@@ -210,7 +211,8 @@ final class BarEditing {
 
     func move(_ id: String, by offset: Int, on displayID: Int? = nil) {
         guard isActive else { return }
-        perform(on: displayID) { try WidgetSetup(store: store).move(id, by: offset) }
+        // Step over the turned-off widgets the bar leaves out.
+        perform(on: displayID) { try WidgetSetup(store: store).move(id, by: offset, listed: \.enabled) }
     }
 
     func remove(_ id: String, on displayID: Int? = nil) {
