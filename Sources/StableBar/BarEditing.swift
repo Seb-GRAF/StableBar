@@ -75,6 +75,8 @@ final class BarEditing {
         store.onConfigurationChange?()
     }
 
+    func screensChanged() { addPopover.close(focusBar: false) }
+
     @discardableResult
     func handleKey(_ keyCode: UInt16, characters: String? = nil, charactersIgnoringModifiers: String? = nil,
                    modifiers: NSEvent.ModifierFlags = []) -> Bool {
@@ -224,7 +226,12 @@ final class BarEditing {
     private func perform(on displayID: Int?, _ action: () throws -> Void) {
         store.onEndCustomizationEditing?()
         do { try action(); error = nil; errorDisplayID = nil }
-        catch { self.error = errorMessage(error); errorDisplayID = displayID }
+        catch { report(error, on: displayID) }
+    }
+
+    func report(_ error: Error, on displayID: Int?) {
+        self.error = errorMessage(error)
+        errorDisplayID = displayID
     }
 }
 
@@ -261,6 +268,7 @@ struct BarEditTrayState: Equatable {
     let showsName: Bool
     let showsBadges: Bool
     let isTarget: Bool
+    var showsAddSlot: Bool { !isTarget }
 }
 
 /// The normal planner supplies screen order and centering. Only trays wider than

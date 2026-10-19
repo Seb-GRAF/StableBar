@@ -12,6 +12,7 @@ final class WidgetSetup {
 
     private let store: BarStore
     private let client: PackageStoreClient
+    @ObservationIgnored private let widgetsForInsertion: () throws -> [WidgetConfiguration]
     private(set) var choices = WidgetAddCatalog.compose()
     private(set) var storeUnavailable = false
     private(set) var isAdding = false
@@ -19,9 +20,20 @@ final class WidgetSetup {
     var review: Review?
     var error: String?
 
-    init(store: BarStore, client: PackageStoreClient? = nil) {
+    init(store: BarStore, client: PackageStoreClient? = nil, widgetsForInsertion: (() throws -> [WidgetConfiguration])? = nil) {
         self.store = store
         self.client = client ?? store.packageStoreClient
+        self.widgetsForInsertion = widgetsForInsertion ?? {
+            var loader = ConfigurationLoader()
+            loader.themesDirectory = store.themesDirectory
+            let root = try store.editedDocument([], replaying: store.customizationEdits)
+            return try loader.load(store.configurationURL, data: configurationData(root), context: store.context).widgets
+        }
+    }
+
+    func addAnchor(at position: WidgetPosition) throws -> String? {
+        guard position == .right || position == .notchLeft else { return nil }
+        return try WidgetPlacement.addAnchor(at: position, widgets: widgetsForInsertion())
     }
 
     func beginSheet() {
@@ -65,10 +77,7 @@ final class WidgetSetup {
                 return try enable(installed, settings: settings, position: position, before: anchor)
             }
             let id = "widget-" + UUID().uuidString.prefix(8).lowercased()
-            var loader = ConfigurationLoader()
-            loader.themesDirectory = store.themesDirectory
-            let root = try store.editedDocument([], replaying: store.customizationEdits)
-            let widgets = try loader.load(store.configurationURL, data: configurationData(root), context: store.context).widgets
+            let widgets = try anchor == nil ? [] : widgetsForInsertion()
             guard let edits = choice.add(position: position, id: id, before: anchor, widgets: widgets) else {
                 throw CommandFailure(message: "Choose a widget to add.")
             }

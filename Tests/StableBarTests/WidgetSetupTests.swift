@@ -2,6 +2,59 @@ import XCTest
 @testable import StableBar
 
 final class WidgetSetupTests: XCTestCase {
+    @MainActor func testUnanchoredAddDoesNotLoadWidgetsForInsertion() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        var loads = 0
+        let setup = WidgetSetup(store: store, widgetsForInsertion: { loads += 1; return [] })
+        let result = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(loads, 0)
+        setup.beginSheet()
+        _ = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right, before: result)
+        XCTAssertEqual(loads, 1)
+    }
+
+    @MainActor func testPlusAnchorUsesPendingSavedWidgetsInsteadOfTemporaryWidgets() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"first","type":"clock","position":"right"},{"id":"pending","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([
+            .init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"), "text": .string("Temporary"), "position": .string("right")]),
+            .init(action: .reorder, ids: ["temporary"])
+        ])
+        try store.setCustomizationEdits([
+            .init(action: .set, id: "pending", properties: ["position": .string("right")]),
+            .init(action: .reorder, ids: ["pending", "first"])
+        ])
+        let setup = WidgetSetup(store: store)
+        XCTAssertEqual(store.configuration?.widgets.first?.id, "temporary")
+        let anchor = try setup.addAnchor(at: .right)
+        XCTAssertEqual(anchor, "pending")
+        let result = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right, before: anchor)
+        let id = try XCTUnwrap(result)
+        XCTAssertEqual(store.configuration?.widgets.filter { $0.id != "temporary" }.map(\.id), [id, "pending", "first"])
+        XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
+        XCTAssertEqual(store.sessionEdits.count, 2)
+    }
+
+    @MainActor func testAddingBeforeAMemberOfTheFirstUnitDoesNotSplitItsGroup() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"right","group":"pair"},{"id":"b","type":"clock","position":"right","group":"pair"},{"id":"last","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store)
+        let before = try Data(contentsOf: fixture.url)
+        let result = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right, before: "b")
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), [try XCTUnwrap(result), "a", "b", "last"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+    }
+
     @MainActor func testOfflineBuiltInAddsToSelectedPositionOrRightAndOneUndoRestoresTheFile() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"left","type":"clock","position":"left"},{"id":"right","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }

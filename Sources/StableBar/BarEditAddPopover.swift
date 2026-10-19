@@ -51,28 +51,39 @@ final class BarEditAddPopover: NSObject {
     @ObservationIgnored private var localMonitor: Any?
     @ObservationIgnored private var globalMonitor: Any?
     @ObservationIgnored private let present: (BarPanel, BarEditAddPanel) -> Void
+    @ObservationIgnored private let dismiss: (BarEditAddPanel) -> Void
 
     init(present: @escaping (BarPanel, BarEditAddPanel) -> Void = {
         $0.addChildWindow($1, ordered: .above)
         $1.makeKeyAndOrderFront(nil)
-    }) {
+    }, dismiss: @escaping (BarEditAddPanel) -> Void = { $0.close() }) {
         self.present = present
+        self.dismiss = dismiss
     }
+
+    func isOpen(on bar: BarPanel) -> Bool { panel != nil && self.bar === bar }
 
     func show(store: BarStore, displayID: Int, position: WidgetPosition, anchor: NSView,
               visibleFrame: CGRect? = nil, setup: WidgetSetup? = nil) {
         guard store.barEditing.isActive, let bar = anchor.window as? BarPanel,
               let visibleFrame = visibleFrame ?? bar.screen?.visibleFrame else { return }
+        if self.anchor === anchor, panel != nil { close(); return }
         close(focusBar: false)
+        let setup = setup ?? WidgetSetup(store: store)
+        let before: String?
+        do { before = try setup.addAnchor(at: position) }
+        catch {
+            store.barEditing.report(error, on: displayID)
+            return
+        }
         let panel = BarEditAddPanel()
         panel.level = bar.level
         panel.collectionBehavior = bar.collectionBehavior
         panel.appearance = store.configuration?.bar.appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
-        let model = WidgetAddPopoverModel(setup: setup ?? WidgetSetup(store: store), position: position,
-            before: WidgetPlacement.addAnchor(at: position, widgets: store.configuration?.widgets ?? [])) { [weak self, weak store] id in
-                self?.close()
-                if store?.customizationHistory.notice != nil { store?.barEditing.select(id) }
-            }
+        let model = WidgetAddPopoverModel(setup: setup, position: position, before: before) { [weak self, weak store] id in
+            self?.close()
+            if store?.customizationHistory.notice != nil { store?.barEditing.select(id) }
+        }
         self.panel = panel
         self.model = model
         self.bar = bar
@@ -118,10 +129,19 @@ final class BarEditAddPopover: NSObject {
         }
     }
 
-    func handle(_ event: NSEvent, keyWindow: NSWindow? = NSApp?.keyWindow) -> Bool {
+    func handle(_ event: NSEvent, keyWindow: NSWindow? = NSApp?.keyWindow, eventWindow: NSWindow? = nil) -> Bool {
         guard let panel else { return false }
         if event.type != .keyDown {
-            if event.window !== panel { close(focusBar: false) }
+            let eventWindow = eventWindow ?? event.window
+            var window = eventWindow
+            while let inside = window {
+                if inside === panel { return false }
+                window = inside.sheetParent
+            }
+            // Let the open + finish its click, so its action can toggle closed.
+            if event.type == .leftMouseDown, eventWindow === bar, let anchor,
+               anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil)) { return false }
+            close(focusBar: false)
             return false
         }
         guard event.window === panel || (event.window == nil && keyWindow === panel),
@@ -131,6 +151,8 @@ final class BarEditAddPopover: NSObject {
         switch event.keyCode {
         case 125: model?.move(by: 1)
         case 126: model?.move(by: -1)
+        case 123: return model?.moveColumn(by: -1) ?? false
+        case 124: return model?.moveColumn(by: 1) ?? false
         case 36, 76: model?.addSelected()
         default: return false
         }
@@ -148,8 +170,9 @@ final class BarEditAddPopover: NSObject {
         let parent = bar
         if let parent { NotificationCenter.default.removeObserver(self, name: nil, object: parent) }
         if let panel {
+            if focusBar, let parent, parent.isEditingBar { parent.makeKey() }
             panel.parent?.removeChildWindow(panel)
-            panel.close()
+            dismiss(panel)
         }
         panel = nil
         model = nil
@@ -159,7 +182,6 @@ final class BarEditAddPopover: NSObject {
         position = nil
         if let parent {
             NotificationCenter.default.post(name: Self.changedNotification, object: parent, userInfo: ["open": false])
-            if focusBar, parent.isEditingBar { parent.makeKey() }
         }
     }
 }

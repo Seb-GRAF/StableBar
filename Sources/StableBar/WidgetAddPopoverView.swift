@@ -6,10 +6,11 @@ final class WidgetAddPopoverModel {
     let setup: WidgetSetup
     let position: WidgetPosition
     let before: String?
-    var search = "" { didSet { selected = choices.first?.id } }
+    var search = "" { didSet { selected = choices.first?.id; pointerLocation = NSEvent.mouseLocation } }
     var selected: String?
     @ObservationIgnored private var request: Task<Void, Never>?
     @ObservationIgnored private let added: (String) -> Void
+    @ObservationIgnored private var pointerLocation = NSEvent.mouseLocation
 
     init(setup: WidgetSetup, position: WidgetPosition, before: String?, added: @escaping (String) -> Void) {
         self.setup = setup
@@ -24,9 +25,28 @@ final class WidgetAddPopoverModel {
     var rowCount: Int { min(10, (choices.count + columns - 1) / columns) }
 
     func move(by offset: Int) {
+        pointerLocation = NSEvent.mouseLocation
         guard !choices.isEmpty else { selected = nil; return }
         let index = choices.firstIndex { $0.id == selected } ?? 0
-        selected = choices[min(max(0, index + offset), choices.count - 1)].id
+        let column = index % columns
+        let row = min(max(0, index / columns + offset), (choices.count - 1 - column) / columns)
+        selected = choices[row * columns + column].id
+    }
+
+    @discardableResult
+    func moveColumn(by offset: Int) -> Bool {
+        guard search.isEmpty else { return false }
+        pointerLocation = NSEvent.mouseLocation
+        guard let index = choices.firstIndex(where: { $0.id == selected }),
+              (0..<columns).contains(index % columns + offset), choices.indices.contains(index + offset) else { return true }
+        selected = choices[index + offset].id
+        return true
+    }
+
+    func hover(_ id: String, at location: CGPoint) {
+        guard location != pointerLocation else { return }
+        pointerLocation = location
+        selected = id
     }
 
     func addSelected() {
@@ -50,6 +70,7 @@ struct WidgetAddPopoverView: View {
     let store: BarStore
     var availableSize = CGSize(width: 540, height: 620)
     var changed: () -> Void = {}
+    var measuredChoices: (([String: CGRect]) -> Void)?
     let title = "ADD HERE"
     @FocusState private var searchFocused: Bool
 
@@ -72,8 +93,18 @@ struct WidgetAddPopoverView: View {
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: model.columns), spacing: 6) {
                             ForEach(model.choices) { choice in
                                 choiceButton(choice).id(choice.id)
+                                    .background {
+                                        if measuredChoices != nil {
+                                            GeometryReader { proxy in
+                                                Color.clear.preference(key: WidgetAddChoiceFrames.self,
+                                                    value: [choice.id: proxy.frame(in: .named("addChoices"))])
+                                            }
+                                        }
+                                    }
                             }
                         }
+                        .coordinateSpace(name: "addChoices")
+                        .onPreferenceChange(WidgetAddChoiceFrames.self) { measuredChoices?($0) }
                     }
                     .frame(height: min(CGFloat(max(1, model.rowCount)) * 36 + CGFloat(max(0, model.rowCount - 1)) * 6,
                                        max(36, availableSize.height - 140)))
@@ -131,7 +162,9 @@ struct WidgetAddPopoverView: View {
         }
         .buttonStyle(.plain)
         .disabled(model.setup.requestStarted)
-        .onHover { if $0 { model.selected = choice.id } }
+        .onContinuousHover { phase in
+            if case .active = phase { model.hover(choice.id, at: NSEvent.mouseLocation) }
+        }
         .help(choice.description)
         .accessibilityLabel(choice.name)
         .accessibilityAddTraits(model.selected == choice.id ? [.isSelected] : [])
@@ -142,4 +175,9 @@ struct WidgetAddPopoverView: View {
             if let basic = choice.basicChoice { Button(choice.basicActionTitle) { model.add(basic) } }
         }
     }
+}
+
+private struct WidgetAddChoiceFrames: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
 }

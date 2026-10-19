@@ -221,6 +221,7 @@ final class BarEditingTests: XCTestCase {
         editing.begin()
         XCTAssertFalse(editing.trayState(on: 1, position: .left).showsName)
         XCTAssertTrue(editing.trayState(on: 1, position: .left).showsBadges)
+        XCTAssertTrue(editing.trayState(on: 1, position: .left).showsAddSlot)
         let payload = editing.dragSession.begin("a")
         editing.insertion = editing.dropTarget("a", on: 2, position: .right, x: 100, frames: [:])
         for position in WidgetPosition.allCases {
@@ -228,11 +229,14 @@ final class BarEditingTests: XCTestCase {
             XCTAssertFalse(editing.trayState(on: 1, position: position).showsBadges)
             XCTAssertFalse(editing.trayState(on: 1, position: position).isTarget)
             XCTAssertEqual(editing.trayState(on: 2, position: position).isTarget, position == .right)
+            XCTAssertTrue(editing.trayState(on: 1, position: position).showsAddSlot)
+            XCTAssertEqual(editing.trayState(on: 2, position: position).showsAddSlot, position != .right)
         }
         XCTAssertEqual(editing.opacity(for: "a"), 0.25)
         XCTAssertEqual(editing.opacity(for: "b"), 0.25)
         editing.dragSession.end(payload)
         XCTAssertFalse(editing.trayState(on: 2, position: .right).isTarget)
+        XCTAssertTrue(editing.trayState(on: 2, position: .right).showsAddSlot)
         XCTAssertTrue(editing.trayState(on: 1, position: .left).showsBadges)
         XCTAssertEqual(editing.opacity(for: "b"), 1)
     }

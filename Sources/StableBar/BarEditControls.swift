@@ -49,7 +49,7 @@ final class BarEditControls: NSObject {
                 let host = NSHostingView(rootView: BarEditControlsView(actions: actions))
                 panel.contentView = host
                 controls[id] = Controls(bar: bar, panel: panel, hasSheet: bar.attachedSheet != nil,
-                                        hasPopover: store.barEditing.addPopover.displayID == Int(id))
+                                        hasPopover: store.barEditing.addPopover.isOpen(on: bar))
                 NotificationCenter.default.addObserver(self, selector: #selector(willBeginSheet),
                                                        name: NSWindow.willBeginSheetNotification, object: bar)
                 NotificationCenter.default.addObserver(self, selector: #selector(didEndSheet),

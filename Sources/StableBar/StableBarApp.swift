@@ -221,6 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func screensChanged() {
+        store.barEditing.screensChanged()
         themeTrial.cancel()
         store.popup.close()
         store.retainDisplays(Set(NSScreen.screens.map { BarDisplay(screen: $0).id }))

@@ -4,6 +4,38 @@ import XCTest
 @testable import StableBar
 
 final class BarEditControlsTests: XCTestCase {
+    @MainActor func testControlsCreatedWhilePopoverIsOpenUseTheBarInsteadOfTheScreenIndex() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let originalBars = makeBars()
+        let first = try XCTUnwrap(originalBars[1])
+        let second = try XCTUnwrap(originalBars[2])
+        let bars: [CGDirectDisplayID: BarPanel] = [100: first, 1: second]
+        defer { bars.values.forEach { $0.close() } }
+        let popover = BarEditAddPopover(present: { _, _ in })
+        store.barEditing = BarEditing(store: store, addPopover: popover)
+        defer { popover.close(focusBar: false) }
+        let anchor = NSView(frame: CGRect(x: 100, y: 10, width: 22, height: 22))
+        first.contentView = anchor
+        store.barEditing.begin()
+        popover.show(store: store, displayID: 1, position: .right, anchor: anchor,
+                     visibleFrame: try XCTUnwrap(visibleFrames[1]))
+        var presented: [UnorderedEditControlsPanel] = []
+        let controls = BarEditControls(makePanel: {
+            let panel = UnorderedEditControlsPanel()
+            presented.append(panel)
+            return panel
+        })
+        defer { controls.close() }
+        controls.update(store: store, bars: bars, visibleFrames: [100: try XCTUnwrap(visibleFrames[1]), 1: try XCTUnwrap(visibleFrames[2])])
+        XCTAssertFalse(try XCTUnwrap(presented.first { abs($0.frame.midX - first.frame.midX) < 1 }).simulatedVisible)
+        XCTAssertTrue(try XCTUnwrap(presented.first { abs($0.frame.midX - second.frame.midX) < 1 }).simulatedVisible)
+        popover.close(focusBar: false)
+        XCTAssertTrue(presented.allSatisfy(\.simulatedVisible))
+    }
+
     @MainActor func testEachEditingDisplayGetsPassiveControlsThatFollowItsBar() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

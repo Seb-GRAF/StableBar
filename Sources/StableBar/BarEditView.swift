@@ -49,7 +49,6 @@ struct BarEditView: View {
                 .frame(width: proxy.size.width / scale, height: proxy.size.height / scale, alignment: .topLeading)
                 .scaleEffect(scale, anchor: .topLeading)
             }
-            .foregroundStyle((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
             .modifier(BarSurface(store: store, settings: config.bar))
             .padding(config.bar.margin)
             .frame(height: geometry.layoutHeight)
@@ -191,7 +190,6 @@ struct BarEditSectionRow: View {
                     ForEach(unit.widgets) { widget in
                         if let entry = entries.first(where: { $0.id == widget.id }) {
                             BarEditTile(store: store, display: display.id, entry: entry, config: config)
-                                .environment(\.barUnitID, unit.id)
                                 .background {
                                     GeometryReader { proxy in
                                         Color.clear.preference(key: BarEditFrames.self,
@@ -226,6 +224,9 @@ struct BarEditSectionRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .opacity(store.barEditing.trayState(on: display.id, position: position).showsAddSlot ? 1 : 0)
+        .allowsHitTesting(store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
+        .accessibilityHidden(!store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
         .background { if !measuring { BarEditAddAnchor(view: anchor) } }
         .help("Add a widget to \(position.title)")
         .accessibilityLabel("Add a widget to \(position.title)")
