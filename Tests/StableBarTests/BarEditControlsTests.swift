@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import StableBar
 
@@ -45,7 +46,95 @@ final class BarEditControlsTests: XCTestCase {
         controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
         XCTAssertEqual(presented.count, 2, "Moving a bar must reuse its controls")
         XCTAssertEqual(panel.frame.midX, bar.frame.midX)
-        XCTAssertEqual(panel.frame.maxY, 776)
+        XCTAssertEqual(panel.frame.maxY, bar.frame.minY - 8)
+    }
+
+    @MainActor func testUndoRestoresHistoryThenFocusesItsOwnBarAndDoneEndsEditing() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let bars = makeBars()
+        defer { bars.values.forEach { $0.close() } }
+        var presented: [UnorderedEditControlsPanel] = []
+        let controls = BarEditControls(makePanel: {
+            let panel = UnorderedEditControlsPanel()
+            presented.append(panel)
+            return panel
+        })
+        defer { controls.close() }
+        store.onConfigurationChange = { controls.update(store: store, bars: bars, visibleFrames: self.visibleFrames) }
+        defer { store.onConfigurationChange = nil }
+        store.barEditing.begin()
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        let firstBar = try XCTUnwrap(bars[1])
+        let secondBar = try XCTUnwrap(bars[2])
+        let firstPanel = try XCTUnwrap(presented.first { abs($0.frame.midX - firstBar.frame.midX) < 1 })
+        let secondPanel = try XCTUnwrap(presented.first { $0 !== firstPanel })
+        let firstActions = try XCTUnwrap(firstPanel.contentView as? NSHostingView<BarEditControlsView>).rootView.actions
+        let secondActions = try XCTUnwrap(secondPanel.contentView as? NSHostingView<BarEditControlsView>).rootView.actions
+        XCTAssertFalse(firstActions.canUndo)
+        XCTAssertFalse(secondActions.canUndo)
+        for bar in bars.values {
+            bar.onMakeKey = { XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock"], "Undo must precede focus") }
+        }
+        store.barEditing.remove("clock")
+        XCTAssertTrue(firstActions.canUndo)
+        XCTAssertTrue(secondActions.canUndo)
+        firstActions.undo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock"])
+        XCTAssertEqual(firstBar.makeKeyCalls, 1)
+        XCTAssertEqual(secondBar.makeKeyCalls, 0)
+        XCTAssertFalse(firstActions.canUndo)
+        store.barEditing.redo()
+        secondActions.undo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock"])
+        XCTAssertEqual(firstBar.makeKeyCalls, 1)
+        XCTAssertEqual(secondBar.makeKeyCalls, 1)
+        XCTAssertFalse(firstPanel.canBecomeKey)
+        XCTAssertFalse(secondPanel.canBecomeKey)
+        secondActions.done()
+        XCTAssertFalse(store.barEditing.isActive)
+        XCTAssertFalse(secondActions.canUndo)
+        XCTAssertTrue(presented.allSatisfy(\.closed))
+        XCTAssertEqual(firstBar.makeKeyCalls, 1)
+        XCTAssertEqual(secondBar.makeKeyCalls, 1)
+    }
+
+    @MainActor func testControlsFollowConfiguredAppearanceAndReturnToSystemAppearance() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let bars = makeBars()
+        defer { bars.values.forEach { $0.close() } }
+        var presented: [UnorderedEditControlsPanel] = []
+        let controls = BarEditControls(makePanel: {
+            let panel = UnorderedEditControlsPanel()
+            presented.append(panel)
+            return panel
+        })
+        defer { controls.close() }
+        store.barEditing.begin()
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        XCTAssertEqual(presented.count, 2)
+        XCTAssertTrue(presented.allSatisfy { $0.appearance == nil })
+        for (appearance, name) in [(BarAppearance.dark, NSAppearance.Name.darkAqua), (.light, .aqua)] {
+            try store.applyEdits([.init(action: .bar, properties: ["appearance": .string(appearance.rawValue)])], persist: false)
+            controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+            XCTAssertEqual(presented.count, 2, "Appearance changes must reuse the controls")
+            for panel in presented {
+                XCTAssertEqual(panel.appearance?.name, name)
+                XCTAssertEqual(panel.contentView?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]), name)
+            }
+        }
+        try store.applyEdits([.init(action: .bar, properties: ["appearance": .null])], persist: false)
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        for panel in presented {
+            XCTAssertNil(panel.appearance)
+            XCTAssertEqual(panel.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]),
+                           NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]))
+        }
     }
 
     @MainActor func testControlsStayInsideANarrowVisibleFrame() throws {
@@ -167,7 +256,15 @@ final class BarEditControlsTests: XCTestCase {
         store.barEditing.begin()
         controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
         let hidden = try XCTUnwrap(presented.first { !$0.simulatedVisible })
+        NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
+        XCTAssertTrue(hidden.simulatedVisible, "The end notification precedes detaching the sheet")
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        XCTAssertTrue(hidden.simulatedVisible, "An update must trust the end notification while the sheet detaches")
         bar.simulatedSheet = nil
+        NotificationCenter.default.post(name: NSWindow.willBeginSheetNotification, object: bar)
+        XCTAssertFalse(hidden.simulatedVisible, "The next sheet's begin notification hides the controls again")
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        XCTAssertFalse(hidden.simulatedVisible)
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
         XCTAssertTrue(hidden.simulatedVisible)
         controls.update(store: store, bars: [2: try XCTUnwrap(bars[2])], visibleFrames: visibleFrames)
@@ -199,7 +296,10 @@ final class BarEditControlsTests: XCTestCase {
 
 @MainActor private final class SheetEditingBarPanel: BarPanel {
     var simulatedSheet: NSWindow?
+    var makeKeyCalls = 0
+    var onMakeKey: (() -> Void)?
     override var attachedSheet: NSWindow? { simulatedSheet }
+    override func makeKey() { makeKeyCalls += 1; onMakeKey?() }
 }
 
 /// Records presentation without ordering any test window onto the screen.

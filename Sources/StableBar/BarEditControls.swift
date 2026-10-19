@@ -44,7 +44,8 @@ final class BarEditControls: NSObject {
             guard let visibleFrame = visibleFrames[id] else { continue }
             if controls[id] == nil {
                 let panel = makePanel()
-                let host = NSHostingView(rootView: BarEditControlsView(editing: store.barEditing))
+                let actions = BarEditControlsActions(editing: store.barEditing, focusBar: { [weak bar] in bar?.makeKey() })
+                let host = NSHostingView(rootView: BarEditControlsView(actions: actions))
                 panel.contentView = host
                 controls[id] = Controls(bar: bar, panel: panel, hasSheet: bar.attachedSheet != nil)
                 NotificationCenter.default.addObserver(self, selector: #selector(willBeginSheet),
@@ -55,11 +56,13 @@ final class BarEditControls: NSObject {
             guard let entry = controls[id], let host = entry.panel.contentView else { continue }
             entry.panel.level = bar.level
             entry.panel.collectionBehavior = bar.collectionBehavior
+            entry.panel.appearance = store.configuration?.bar.appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
             let fittingSize = host.fittingSize
             let size = CGSize(width: min(fittingSize.width, max(0, visibleFrame.width - 16)), height: fittingSize.height)
-            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: bar.frame, geometry: bar.barGeometry,
+            // Edit mode's material covers the entire bar window, including its margin.
+            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: bar.frame, geometry: nil,
                                                           visibleFrame: visibleFrame), display: true)
-            if entry.hasSheet || bar.attachedSheet != nil { entry.panel.orderOut(nil) }
+            if entry.hasSheet { entry.panel.orderOut(nil) }
             else { entry.panel.orderFrontRegardless() }
         }
     }
@@ -75,7 +78,7 @@ final class BarEditControls: NSObject {
         guard let bar = notification.object as? BarPanel,
               let id = controls.first(where: { $0.value.bar === bar })?.key else { return }
         controls[id]?.hasSheet = false
-        if bar.isEditingBar && bar.attachedSheet == nil { controls[id]?.panel.orderFrontRegardless() }
+        if bar.isEditingBar { controls[id]?.panel.orderFrontRegardless() }
     }
 
     private func close(_ id: CGDirectDisplayID) {
@@ -90,8 +93,23 @@ final class BarEditControls: NSObject {
     }
 }
 
-private struct BarEditControlsView: View {
+@MainActor
+struct BarEditControlsActions {
     let editing: BarEditing
+    let focusBar: () -> Void
+
+    var canUndo: Bool { editing.canUndo }
+
+    func undo() {
+        editing.undo()
+        focusBar()
+    }
+
+    func done() { editing.end() }
+}
+
+struct BarEditControlsView: View {
+    let actions: BarEditControlsActions
 
     var body: some View {
         HStack(spacing: 12) {
@@ -99,12 +117,12 @@ private struct BarEditControlsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            Button("Undo", action: editing.undo)
+            Button("Undo", action: actions.undo)
                 .accessibilityLabel("Undo bar change")
                 .help("Undo (⌘Z)")
-                .disabled(!editing.canUndo)
+                .disabled(!actions.canUndo)
                 .fixedSize()
-            Button("Done", action: editing.end)
+            Button("Done", action: actions.done)
                 .accessibilityLabel("Finish editing the bar")
                 .help("Finish editing the bar (Esc)")
                 .buttonStyle(.borderedProminent)
