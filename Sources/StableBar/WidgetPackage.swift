@@ -123,6 +123,11 @@ struct WidgetPackageInspection: Sendable {
     let commands: [String]
     let screenshot: URL?
 
+    var requiresReview: Bool {
+        !commands.isEmpty || !manifest.permissions.isEmpty || !manifest.hosts.isEmpty || !manifest.requires.isEmpty
+            || manifest.settings.values.contains { $0.type == "secret" }
+    }
+
     func additions(since previous: WidgetPackageInspection) -> [String] {
         commands.filter { !previous.commands.contains($0) }.map { "Command: \($0)" }
             + manifest.hosts.filter { !previous.manifest.hosts.contains($0) }.map { "Host: \($0)" }

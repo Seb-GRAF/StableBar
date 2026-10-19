@@ -207,6 +207,48 @@ final class WidgetSetupTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
     }
 
+    @MainActor func testCommandFreePackageWithHostsRequiresReview() async throws {
+        try await assertCommandFreePackageRequiresReview(hosts: #"["example.com"]"#)
+    }
+
+    @MainActor func testCommandFreePackageWithPermissionsRequiresReview() async throws {
+        try await assertCommandFreePackageRequiresReview(permissions: #"["calendars"]"#)
+    }
+
+    @MainActor func testCommandFreePackageWithRequiredToolsRequiresReview() async throws {
+        try await assertCommandFreePackageRequiresReview(requires: #"["curl"]"#)
+    }
+
+    @MainActor func testCommandFreePackageWithSecretSettingsRequiresReview() async throws {
+        try await assertCommandFreePackageRequiresReview(settings: #"{"token":{"type":"secret"}}"#)
+    }
+
+    @MainActor private func assertCommandFreePackageRequiresReview(hosts: String = "[]", permissions: String = "[]",
+                                                                  requires: String = "[]", settings: String = "{}") async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"first","type":"clock","position":"notchLeft"}]}"#)
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "review", kind: "widgets",
+            configuration: #"{"widgets":[{"id":"note","type":"text","text":"Note","position":"right"}]}"#,
+            settings: settings, hosts: hosts, permissions: permissions, requires: requires)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        await setup.load()
+        let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "review" })
+        let before = try Data(contentsOf: fixture.url)
+        let result = await setup.add(choice, to: .notchLeft, before: "first")
+        XCTAssertNil(result)
+        XCTAssertNil(setup.error)
+        let review = try XCTUnwrap(setup.review)
+        XCTAssertTrue(review.inspection.commands.isEmpty)
+        XCTAssertEqual(review.position, .notchLeft)
+        XCTAssertEqual(review.before, "first")
+        XCTAssertTrue(try fixture.packages.list().isEmpty)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+    }
+
     @MainActor func testCommandPackageStaysSeparateAndCannotInstallOrEnableUntilReview() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

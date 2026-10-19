@@ -7,10 +7,11 @@ struct LocalPackageIndex {
     var url: URL { fixture.directory.appending(path: "store/index.json") }
 
     func add(id: String = "store-theme", kind: String? = "theme", configuration: String = #"{"bar":{"height":31}}"#,
-             checksum: String? = nil, listedKind: String? = nil, settings: String = "{}", version: String = "1") async throws -> PackageIndex.Entry {
+             checksum: String? = nil, listedKind: String? = nil, settings: String = "{}", version: String = "1",
+             hosts: String = "[]", permissions: String = "[]", requires: String = "[]") async throws -> PackageIndex.Entry {
         let source = fixture.directory.appending(path: "sources/\(id)")
         let kindField = kind.map { #", "kind":"\#($0)""# } ?? ""
-        try fixture.write(#"{"id":"\#(id)","name":"Store theme","version":"\#(version)","entry":"config.json","settings":\#(settings)\#(kindField)}"#,
+        try fixture.write(#"{"id":"\#(id)","name":"Store theme","version":"\#(version)","entry":"config.json","settings":\#(settings),"hosts":\#(hosts),"permissions":\#(permissions),"requires":\#(requires)\#(kindField)}"#,
                           to: source.appending(path: "package.json"))
         try fixture.write(configuration, to: source.appending(path: "config.json"))
         let archive = url.deletingLastPathComponent().appending(path: "\(id).tar.gz")
@@ -91,6 +92,32 @@ final class PackageStoreClientTests: XCTestCase {
             catch { XCTAssertTrue(error is PackageStoreClientError) }
             XCTAssertTrue(try fixture.packages.list().isEmpty)
         }
+    }
+
+    func testHostsOnlyDownloadRequiresReviewBeforeInstalling() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        let entry = try await index.add(id: "hosts", kind: "widgets", configuration: #"{"widgets":[]}"#,
+                                        hosts: #"["example.com"]"#)
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        do { _ = try await client.installWithoutReview(entry); XCTFail("Declared hosts must require review") }
+        catch PackageStoreClientError.reviewRequired {}
+        XCTAssertTrue(try fixture.packages.list().isEmpty)
+    }
+
+    func testHostsOnlyInstalledVersionRequiresReviewEvenWithAPlainDownload() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        let entry = try await index.add(id: "hosts", kind: "widgets", configuration: #"{"widgets":[]}"#)
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let installed = try await client.installWithoutReview(entry)
+        try fixture.write(#"{"id":"hosts","name":"Hosts","version":"1","kind":"widgets","entry":"config.json","hosts":["example.com"]}"#,
+                          to: installed.directory.appending(path: "package.json"))
+        do { _ = try await client.installWithoutReview(entry); XCTFail("Installed hosts must require review") }
+        catch PackageStoreClientError.reviewRequired {}
+        XCTAssertEqual(try fixture.packages.list().count, 1)
     }
 
     func testBadChecksumInvalidThemeAndMisleadingKindCannotBeInstalled() async throws {

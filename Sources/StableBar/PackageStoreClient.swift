@@ -6,7 +6,7 @@ enum PackageStoreClientError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .reviewRequired: "Review this package’s commands, permissions and hosts in Packages before enabling it."
+        case .reviewRequired: "Review this package’s commands, permissions, hosts, tools and secret settings in Packages before enabling it."
         case .kindMismatch: "The package’s kind does not match its Store listing."
         }
     }
@@ -64,7 +64,7 @@ actor PackageStoreClient {
         return inspection
     }
 
-    /// A caller must use the existing review screen for any command-capable package.
+    /// Packages declaring commands, access, tools or secret settings must use the existing review screen.
     func installWithoutReview(_ entry: PackageIndex.Entry) async throws -> WidgetPackageInspection {
         let downloaded = try await package(entry)
         let inspection = try packages.inspect(downloaded.directory)
@@ -72,12 +72,12 @@ actor PackageStoreClient {
             throw WidgetPackageError.archiveMismatch(entry.id, entry.version)
         }
         guard inspection.manifest.kind == entry.kind else { throw PackageStoreClientError.kindMismatch }
-        guard inspection.commands.isEmpty else { throw PackageStoreClientError.reviewRequired }
+        guard !inspection.requiresReview else { throw PackageStoreClientError.reviewRequired }
         let destination = try packages.directory(id: entry.id, version: entry.version)
         if FileManager.default.fileExists(atPath: destination.path) {
             let installed = try packages.inspect(destination)
             guard installed.manifest.kind == entry.kind else { throw PackageStoreClientError.kindMismatch }
-            guard installed.commands.isEmpty else { throw PackageStoreClientError.reviewRequired }
+            guard !installed.requiresReview else { throw PackageStoreClientError.reviewRequired }
             return installed
         }
         return try packages.install(inspection.directory)

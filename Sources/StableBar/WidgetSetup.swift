@@ -67,7 +67,7 @@ final class WidgetSetup {
             if let entry = choice.package {
                 let inspection = try await client.packageForAdding(entry)
                 try Task.checkCancellation()
-                if !inspection.commands.isEmpty {
+                if inspection.requiresReview {
                     review = Review(inspection: inspection, position: position, before: anchor)
                     return nil
                 }
