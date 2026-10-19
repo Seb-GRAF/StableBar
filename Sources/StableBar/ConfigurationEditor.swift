@@ -120,6 +120,7 @@ final class ConfigurationEditor {
 
     func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
         do {
+            error = nil
             store.flushCustomization()
             guard try store.customizationProfiles().contains(where: { $0.name == name }),
                   var profile = store.profiles.first(where: { $0.name == name }) else {
@@ -128,7 +129,7 @@ final class ConfigurationEditor {
             let current = profile
             profile.configuration = configuration
             let changes = try profileChanges(from: current, to: profile)
-            if changes.isEmpty { error = nil; return }
+            if changes.isEmpty { return }
             change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
     }

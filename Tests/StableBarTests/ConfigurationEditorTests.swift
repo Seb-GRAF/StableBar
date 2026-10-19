@@ -2,6 +2,29 @@ import XCTest
 @testable import StableBar
 
 final class ConfigurationEditorTests: XCTestCase {
+    @MainActor func testUnchangedProfileApplyKeepsAFailedPendingSaveVisible() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"text","position":"left","text":"A"}],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let editor = ConfigurationEditor(store: store)
+        let profile = try XCTUnwrap(store.profiles.first)
+        editor.set(["text": .string("Pending")], for: "a")
+        XCTAssertTrue(editor.history.hasPendingChanges)
+        XCTAssertNil(editor.error)
+        let external = Data(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#.utf8)
+        try external.write(to: fixture.url)
+
+        editor.setProfileConfiguration(name: profile.name, configuration: profile.configuration)
+
+        XCTAssertTrue(editor.error?.contains("could not be saved and was discarded") == true)
+        XCTAssertFalse(editor.history.hasPendingChanges)
+        XCTAssertTrue(editor.undoSteps.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), external)
+        XCTAssertTrue(try XCTUnwrap(store.configuration).widgets.isEmpty)
+    }
+
     @MainActor func testUnchangedProfileApplyClearsAnEarlierConfigurationError() throws {
         for wholeProfile in [false, true] {
             let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)

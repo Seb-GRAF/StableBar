@@ -157,7 +157,7 @@ private struct BarEditSection: View {
         .overlay(alignment: .topLeading) {
             if state.showsName {
                 Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
-                    .foregroundStyle(state.isTarget ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
+                    .foregroundStyle(state.isTarget ? Color.white : Color.primary)
                     .padding(.horizontal, 4).padding(.vertical, 1)
                     .background(state.isTarget ? Color.accentColor : neutral.opacity(colorScheme == .dark ? 0.07 : 0.05), in: Capsule())
                     .background(.regularMaterial, in: Capsule())
