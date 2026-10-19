@@ -27,12 +27,15 @@ enum WidgetPlacement {
         return widgets.lastIndex { $0.position == position }.map { $0 + 1 } ?? widgets.endIndex
     }
 
-    static func move(_ id: String, by offset: Int, widgets: [WidgetConfiguration]) throws -> [ConfigurationEdit] {
+    /// `listed` picks the widgets the surface shows. A move steps over the others and leaves them in place.
+    static func move(_ id: String, by offset: Int, widgets: [WidgetConfiguration],
+                     listed: (WidgetConfiguration) -> Bool = { _ in true }) throws -> [ConfigurationEdit] {
         guard let widget = widgets.first(where: { $0.id == id }) else {
             throw CommandFailure(message: "This widget is no longer available.")
         }
-        let section = widgets.filter { $0.position == widget.position }
-        let indices = section.indices.filter { section[$0].id == id || (widget.group != nil && section[$0].group == widget.group) }
+        let moves = { (other: WidgetConfiguration) in other.id == id || (widget.group != nil && other.group == widget.group) }
+        let section = widgets.filter { $0.position == widget.position && (moves($0) || listed($0)) }
+        let indices = section.indices.filter { moves(section[$0]) }
         guard let start = indices.first, let end = indices.last else { return [] }
         if offset < 0, start > 0 { return try move(id, to: widget.position, before: section[start - 1].id, widgets: widgets) }
         if offset > 0, end + 1 < section.count {

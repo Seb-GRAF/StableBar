@@ -7,7 +7,7 @@ final class BarEditingTests: XCTestCase {
     private let laptop = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)
     private let external = BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)
 
-    @MainActor func testEveryDisplayRevealsDisabledOutputHiddenAndExcludedWidgetsWithoutChangingTheirSettings() throws {
+    @MainActor func testEveryDisplayRevealsOutputHiddenAndExcludedWidgetsButLeavesTurnedOffOnesOff() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"widgets":[{"id":"off","type":"text","text":"Off","position":"left","enabled":false},
                     {"id":"output","type":"script","command":"true","position":"center"},
@@ -32,11 +32,10 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(editing.menuTitle, "Finish Editing Bar")
         for display in [laptop, external] {
             let entries = editing.entries(on: display)
-            XCTAssertEqual(entries.map(\.id), ["off", "output", "screen", "spaces", "visible"])
-            XCTAssertTrue(entries[0].visibility.reasons.contains(.disabled))
-            XCTAssertTrue(entries[1].visibility.reasons.contains(.output))
-            XCTAssertEqual(entries[2].visibility.isHidden, display.isBuiltIn)
-            XCTAssertTrue(entries[3].visibility.reasons.contains(.workspaces))
+            XCTAssertEqual(entries.map(\.id), ["output", "screen", "spaces", "visible"], "Turned-off widgets aren't on the bar")
+            XCTAssertTrue(entries[0].visibility.reasons.contains(.output))
+            XCTAssertEqual(entries[1].visibility.isHidden, display.isBuiltIn)
+            XCTAssertTrue(entries[2].visibility.reasons.contains(.workspaces))
             XCTAssertTrue(entries.filter { $0.visibility.isHidden }.allSatisfy(\.usesPlaceholder))
             XCTAssertTrue(entries.allSatisfy { !$0.name.isEmpty })
         }
@@ -359,7 +358,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
 
-    @MainActor func testRemovingPackageWidgetDisablesItAndLeavesItsSourceAndHiddenPlaceholderIntact() throws {
+    @MainActor func testRemovingAPackageWidgetTurnsItOffTakesItOffTheEditBarAndAddingItBackRestoresIt() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let source = fixture.directory.appending(path: "source")
@@ -370,22 +369,51 @@ final class BarEditingTests: XCTestCase {
         let installed = try fixture.packages.install(source)
         let store = try fixture.store()
         defer { store.stop() }
-        _ = try WidgetSetup(store: store).enable(installed, settings: [:], position: .left)
+        let setup = WidgetSetup(store: store)
+        _ = try setup.enable(installed, settings: [:], position: .left)
         let packageFile = installed.directory.appending(path: "config.json")
         let before = try Data(contentsOf: packageFile)
         store.barEditing.begin()
         store.barEditing.remove("note")
         XCTAssertNil(store.barEditing.error)
-        let entry = try XCTUnwrap(store.barEditing.entries(on: laptop).first)
-        XCTAssertEqual(entry.id, "note")
-        XCTAssertFalse(entry.widget.enabled)
-        XCTAssertTrue(entry.usesPlaceholder)
-        XCTAssertTrue(entry.visibility.reasons.contains(.disabled))
+        XCTAssertEqual(store.configuration?.widgets.map(\.enabled), [false])
+        for display in [laptop, external] {
+            XCTAssertTrue(store.barEditing.entries(on: display).isEmpty, "A removed widget must leave the edit bar")
+        }
         XCTAssertEqual(try Data(contentsOf: packageFile), before)
         try store.customizationHistory.undo()
-        XCTAssertEqual(store.configuration?.widgets.first?.enabled, true)
+        XCTAssertEqual(store.barEditing.entries(on: laptop).map(\.id), ["note"])
+        store.barEditing.remove("note")
+        _ = try setup.enable(installed, settings: [:], position: .right)
+        let entry = try XCTUnwrap(store.barEditing.entries(on: laptop).first)
+        XCTAssertEqual(entry.id, "note")
+        XCTAssertEqual(entry.widget.position, .right)
         store.barEditing.end()
         XCTAssertEqual(store.barEditing.widgets(on: laptop).map(\.id), ["note"])
+    }
+
+    @MainActor func testMoveLeftAndRightStepOverTurnedOffWidgetsThatTheEditBarLeavesOut() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"a","type":"clock","position":"right"},{"id":"off","type":"clock","position":"right","enabled":false},
+                    {"id":"b","type":"clock","position":"right"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editing = store.barEditing
+        editing.begin()
+        XCTAssertEqual(editing.entries(on: laptop).map(\.id), ["a", "b"])
+        editing.move("b", by: -1)
+        XCTAssertNil(editing.error)
+        XCTAssertEqual(editing.entries(on: laptop).map(\.id), ["b", "a"])
+        try store.customizationHistory.undo()
+        editing.move("a", by: 1)
+        XCTAssertNil(editing.error)
+        XCTAssertEqual(editing.entries(on: laptop).map(\.id), ["b", "a"])
+        try store.customizationHistory.undo()
+        // Customize lists turned-off widgets, so its moves still step over them.
+        try WidgetSetup(store: store).move("b", by: -1)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "off"])
     }
 
     @MainActor func testClicksSelectCustomizeInsteadOfActionsAndAllMouseActionsResumeAfterDone() async throws {
@@ -426,7 +454,7 @@ final class BarEditingTests: XCTestCase {
 
     @MainActor func testEscapeDoneReloadInvalidReloadAndStopAlwaysRestoreNormalVisibilityAndGeometry() throws {
         for exit in ["escape", "done", "reload", "runtime reload", "invalid reload", "stop"] {
-            let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"off","type":"clock","position":"right","enabled":false}]}"#)
+            let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"hidden","type":"clock","position":"right","display":"builtIn"}]}"#)
             defer { fixture.close() }
             let store = try fixture.store()
             defer { store.stop() }
@@ -434,8 +462,8 @@ final class BarEditingTests: XCTestCase {
             store.barEditing.begin()
             XCTAssertEqual(store.barEditing.widgets(on: external).count, 1)
             XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: laptop)).layoutHeight, normal.layoutHeight)
-            let payload = store.barEditing.dragSession.begin("off")
-            store.barEditing.insertion = store.barEditing.dropTarget("off", on: 1, position: .left, x: 0, frames: [:])
+            let payload = store.barEditing.dragSession.begin("hidden")
+            store.barEditing.insertion = store.barEditing.dropTarget("hidden", on: 1, position: .left, x: 0, frames: [:])
             XCTAssertFalse(store.barEditing.handleKey(36))
             switch exit {
             case "escape": XCTAssertTrue(store.barEditing.handleKey(53))
@@ -458,7 +486,7 @@ final class BarEditingTests: XCTestCase {
     @MainActor func testAutomaticProfileRefreshKeepsEditingAndRevealsTheNewComposition() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"widgets":[{"id":"clock","type":"clock","position":"right"}],"profiles":[
-        {"name":"App","when":{"app":"com.stablebar"},"configuration":{"widgets":[{"id":"app","type":"clock","position":"left","enabled":false}]}},
+        {"name":"App","when":{"app":"com.stablebar"},"configuration":{"widgets":[{"id":"app","type":"clock","position":"left","display":"external"}]}},
         {"name":"Dark","when":{"appearance":"dark"},"configuration":{"widgets":[{"id":"dark","type":"clock","position":"left"}]}},
         {"name":"Battery","when":{"onBattery":true},"configuration":{"widgets":[{"id":"battery","type":"clock","position":"left"}]}},
         {"name":"Displays","when":{"displayCount":2},"configuration":{"widgets":[{"id":"displays","type":"clock","position":"left"}]}},
@@ -857,7 +885,7 @@ final class BarEditingTests: XCTestCase {
     }
 
     @MainActor func testExternalFileWatcherEndsEditingAndSessionOnlyWidgetsCannotBeSavedByMovingThem() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right","enabled":false}]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right","display":"external"}]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
@@ -871,7 +899,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertEqual(store.sessionEdits.count, 1)
-        try fixture.write(#"{"widgets":[{"id":"clock","type":"clock","position":"left","enabled":false}]}"#, to: fixture.url)
+        try fixture.write(#"{"widgets":[{"id":"clock","type":"clock","position":"left","display":"external"}]}"#, to: fixture.url)
         for _ in 0..<100 {
             if !store.barEditing.isActive { break }
             try await Task.sleep(for: .milliseconds(10))
@@ -883,7 +911,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
 
-    @MainActor func testRevealingAndMovingDisabledCommandsNeverStartsThemOrEnablesThem() async throws {
+    @MainActor func testTurnedOffCommandsStayOffTheEditBarAndMovingThemNeverStartsOrEnablesThem() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let marker = fixture.directory.appending(path: "must-not-run")
@@ -894,7 +922,7 @@ final class BarEditingTests: XCTestCase {
         defer { store.stop() }
         store.reloadConfiguration()
         store.barEditing.begin()
-        XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: laptop).first).usesPlaceholder)
+        XCTAssertTrue(store.barEditing.entries(on: laptop).isEmpty)
         store.setVisibleWidgets(ids: ["off"], displayID: 1)
         store.barEditing.move("off", to: .left)
         try await Task.sleep(for: .milliseconds(200))

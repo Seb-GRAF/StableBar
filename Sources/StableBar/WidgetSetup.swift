@@ -158,10 +158,10 @@ final class WidgetSetup {
         try store.customizationHistory.change(WidgetPlacement.move(id, to: position, before: anchor, widgets: widgets))
     }
 
-    func move(_ id: String, by offset: Int) throws {
+    func move(_ id: String, by offset: Int, listed: (WidgetConfiguration) -> Bool = { _ in true }) throws {
         let widgets = store.configuration?.widgets ?? []
         try requireSavedWidget(id, widgets: widgets)
-        try store.customizationHistory.change(WidgetPlacement.move(id, by: offset, widgets: widgets))
+        try store.customizationHistory.change(WidgetPlacement.move(id, by: offset, widgets: widgets, listed: listed))
     }
 
     func remove(_ id: String) throws {
