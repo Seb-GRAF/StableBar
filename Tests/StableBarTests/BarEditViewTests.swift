@@ -164,6 +164,154 @@ final class BarEditViewTests: XCTestCase {
         XCTAssertEqual(store.barEditing.widgets(on: BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)).map(\.id), ["a", "d", "e", "f"])
     }
 
+    @MainActor func testTraysOnASeeThroughBarBringABackingThatTheirTextReadsOn() async throws {
+        _ = NSApplication.shared
+        let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+        // Without tiles, widget text sits on the tray itself.
+        let tileless = #","background":null,"borderColor":null,"shadowColor":null"#
+        let cases: [(name: String, appearance: BarAppearance, bar: String, defaults: String, darkTray: Bool)] = [
+            ("Built-in", .light, "", "", false),
+            ("Built-in", .dark, "", "", true),
+            // A translucent strip with text that keeps its color in both appearances, as SketchyBar setups often have.
+            ("fixed light text", .light, ##""style":{"background":"#1e1e2e80"},"##, ##""foreground":"#ffffff""## + tileless, true),
+            ("fixed dark text", .dark, "", ##""foreground":"#1d1d1f""## + tileless, false),
+            // Widgets don't draw the bar style's text color.
+            ("bar style text", .light, ##""style":{"foreground":"#ffffff"},"##, String(tileless.dropFirst()), false)
+        ]
+        for item in cases {
+            let fixture = try ThemeGalleryFixture(#"""
+            {"bar":{\#(item.bar)"appearance":"\#(item.appearance.rawValue)"},"defaults":{\#(item.defaults)},
+             "widgets":[{"id":"label","type":"text","text":"WWWW","position":"right"},
+                        {"id":"elsewhere","type":"text","text":"Hidden","display":"builtIn","position":"right"}]}
+            """#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            store.barEditing.begin()
+            let render = try await editBarImage(store, on: display)
+            let tray = try XCTUnwrap(render.trays[.right])
+            let label = "\(item.name), \(item.appearance)"
+            // Inside the tray's padding, before its + slot.
+            let fill = try XCTUnwrap(render.image.colorAt(x: Int(tray.minX + 3 * render.scale), y: Int(tray.midY))?
+                .usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(fill.alphaComponent, 0.9, "\(label): the tray needs a backing of its own over the wallpaper")
+            XCTAssertEqual(brightness(fill) < 0.5, item.darkTray, label)
+            let slot = CGRect(x: tray.minX + 12 * render.scale, y: tray.midY - 6 * render.scale,
+                              width: 12 * render.scale, height: 12 * render.scale)
+            XCTAssertGreaterThan(try contrast(in: slot, of: render.image, with: fill), 0.4, "\(label): +")
+            for id in ["label", "elsewhere"] {
+                // The right half of the widget, clear of its − badge.
+                let frame = try XCTUnwrap(render.frames[id], id)
+                let text = CGRect(x: frame.midX, y: tray.midY - 3 * render.scale,
+                                  width: frame.width / 2 - render.scale, height: 6 * render.scale)
+                XCTAssertGreaterThan(try contrast(in: text, of: render.image, with: fill), 0.3, "\(label): \(id)")
+            }
+        }
+    }
+
+    @MainActor func testTraysOnAPaintedStripKeepItsCalmTintAndReadOnIt() async throws {
+        _ = NSApplication.shared
+        let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+        let tileless = #","background":null,"borderColor":null,"shadowColor":null"#
+        let cases: [(name: String, appearance: BarAppearance, strip: [Int], defaults: String)] = [
+            ("light strip", .light, [0xc8, 0xd8, 0xf0], ""),
+            ("dark strip", .dark, [0x00, 0x40, 0x6a], ""),
+            // Colors that ignore the appearance: SketchyBar-style text on its strip, and Built-in tiles on a black strip.
+            ("fixed light text", .light, [0x1e, 0x1e, 0x2e], ##""foreground":"#cdd6f4""## + tileless),
+            ("tiles on a black strip", .light, [0x00, 0x00, 0x00], "")
+        ]
+        for item in cases {
+            let fixture = try ThemeGalleryFixture(#"""
+            {"bar":{"style":{"background":"#\#(item.strip.map { String(format: "%02x", $0) }.joined())"},
+                    "appearance":"\#(item.appearance.rawValue)"},"defaults":{\#(item.defaults)},
+             "widgets":[{"id":"label","type":"text","text":"WWWW","position":"right"},
+                        {"id":"elsewhere","type":"text","text":"Hidden","display":"builtIn","position":"right"}]}
+            """#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            store.barEditing.begin()
+            let render = try await editBarImage(store, on: display)
+            let tray = try XCTUnwrap(render.trays[.right])
+            let label = "\(item.name), \(item.appearance)"
+            let fill = try XCTUnwrap(render.image.colorAt(x: Int(tray.minX + 3 * render.scale), y: Int(tray.midY))?
+                .usingColorSpace(.sRGB))
+            // The strip as drawn beside the tray, in the same color space as the tray.
+            let strip = try XCTUnwrap(render.image.colorAt(x: Int(tray.minX - 3 * render.scale), y: Int(tray.midY))?
+                .usingColorSpace(.sRGB))
+            XCTAssertEqual(fill.redComponent, strip.redComponent, accuracy: 0.12, label)
+            XCTAssertEqual(fill.greenComponent, strip.greenComponent, accuracy: 0.12, label)
+            XCTAssertEqual(fill.blueComponent, strip.blueComponent, accuracy: 0.12, label)
+            let slot = CGRect(x: tray.minX + 12 * render.scale, y: tray.midY - 6 * render.scale,
+                              width: 12 * render.scale, height: 12 * render.scale)
+            XCTAssertGreaterThan(try contrast(in: slot, of: render.image, with: fill), 0.4, "\(label): +")
+            let frame = try XCTUnwrap(render.frames["elsewhere"])
+            let name = CGRect(x: frame.midX, y: tray.midY - 3 * render.scale,
+                              width: frame.width / 2 - render.scale, height: 6 * render.scale)
+            XCTAssertGreaterThan(try contrast(in: name, of: render.image, with: fill), 0.3, "\(label): placeholder")
+        }
+    }
+
+    private func brightness(_ color: NSColor) -> CGFloat {
+        (color.redComponent + color.greenComponent + color.blueComponent) / 3
+    }
+
+    /// The largest brightness difference from `color` among the opaque pixels in `rect`.
+    private func contrast(in rect: CGRect, of image: NSBitmapImageRep, with color: NSColor) throws -> CGFloat {
+        let reference = brightness(color)
+        var largest: CGFloat = 0
+        for x in Int(rect.minX)..<Int(rect.maxX) {
+            for y in Int(rect.minY)..<Int(rect.maxY) {
+                let pixel = try XCTUnwrap(image.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                if pixel.alphaComponent > 0.5 { largest = max(largest, abs(brightness(pixel) - reference)) }
+            }
+        }
+        return largest
+    }
+
+    /// Draws the edit bar into memory, in a window that is never ordered onto the screen.
+    /// Trays and widget frames are in pixels; a frame's x is exact, its y depends on the host's flip.
+    @MainActor private func editBarImage(_ store: BarStore, on display: BarDisplay) async throws
+        -> (image: NSBitmapImageRep, scale: CGFloat, trays: [WidgetPosition: CGRect], frames: [String: CGRect]) {
+        let width: CGFloat = 900
+        var height = try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: height),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: BarView(store: store, display: display))
+        host.sizingOptions = []
+        window.contentView = host
+        let expected = Set(store.barEditing.entries(on: display).map(\.id))
+        for _ in 0..<100 {
+            host.layoutSubtreeIfNeeded()
+            let measured = try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight
+            if measured != height {
+                height = measured
+                window.setContentSize(CGSize(width: width, height: height))
+            } else if expected.isSubset(of: descendants(host, of: BarEditDropTargetView.self).flatMap(\.frames.keys)) {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        host.layoutSubtreeIfNeeded()
+        let image = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: image)
+        let scale = CGFloat(image.pixelsWide) / host.bounds.width
+        var trays: [WidgetPosition: CGRect] = [:]
+        var frames: [String: CGRect] = [:]
+        for tray in descendants(host, of: BarEditDropTargetView.self) where trays[tray.position] == nil {
+            let bounds = host.convert(tray.bounds, from: tray)
+            let pixels = CGRect(x: bounds.minX * scale, y: bounds.minY * scale, width: bounds.width * scale, height: bounds.height * scale)
+            trays[tray.position] = pixels
+            for (id, frame) in tray.frames {
+                frames[id] = CGRect(x: pixels.minX + frame.minX * scale, y: pixels.minY + frame.minY * scale,
+                                    width: frame.width * scale, height: frame.height * scale)
+            }
+        }
+        return (image, scale, trays, frames)
+    }
+
     @MainActor private func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
         view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
     }

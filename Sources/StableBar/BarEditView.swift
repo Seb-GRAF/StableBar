@@ -102,7 +102,7 @@ private struct BarEditSection: View {
     var body: some View {
         let state = editing.trayState(on: display.id, position: position)
         let overflow = BarEditOverflow(bounds: rowBounds, viewportWidth: viewportWidth)
-        let neutral = colorScheme == .dark ? Color.white : .black
+        let surface = BarEditTraySurface(store: store, config: config, colorScheme: colorScheme)
         let shape = RoundedRectangle(cornerRadius: 9)
         BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames) {
             ScrollView(.horizontal) {
@@ -134,14 +134,15 @@ private struct BarEditSection: View {
                     Spacer(minLength: 0)
                     if overflow.trailing { overflowEdge(.trailing) }
                 }
+                .environment(\.colorScheme, surface.scheme)
                 .allowsHitTesting(false)
             }
             .help(scrolling ? "Scroll to see more widgets. Use the mouse wheel or swipe sideways." : "")
-            .background(neutral.opacity(colorScheme == .dark ? 0.07 : 0.05), in: shape)
+            .background(surface.tint, in: shape)
             .background(state.isTarget ? Color.accentColor.opacity(0.16) : .clear, in: shape)
+            .background(surface.backing, in: shape)
             .overlay {
-                shape.strokeBorder(state.isTarget ? Color.accentColor : neutral.opacity(colorScheme == .dark ? 0.10 : 0.08),
-                                   lineWidth: state.isTarget ? 2 : 0.5)
+                shape.strokeBorder(state.isTarget ? Color.accentColor : surface.hairline, lineWidth: state.isTarget ? 2 : 0.5)
             }
             .overlay(alignment: .topLeading) {
                 if state.isTarget, let target = editing.insertion {
@@ -159,9 +160,10 @@ private struct BarEditSection: View {
                 Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
                     .foregroundStyle(state.isTarget ? Color.white : Color.primary)
                     .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(state.isTarget ? Color.accentColor : neutral.opacity(colorScheme == .dark ? 0.07 : 0.05), in: Capsule())
+                    .background(state.isTarget ? Color.accentColor : surface.tint, in: Capsule())
                     .background(.regularMaterial, in: Capsule())
-                    .overlay { Capsule().strokeBorder(neutral.opacity(0.15), lineWidth: 0.5) }
+                    .overlay { Capsule().strokeBorder(surface.neutral.opacity(0.15), lineWidth: 0.5) }
+                    .environment(\.colorScheme, surface.scheme)
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
             }
@@ -178,6 +180,52 @@ private struct BarEditSection: View {
     }
 }
 
+/// Trays and their chrome follow the surface they sit on. A tray tints the theme's strip when the
+/// strip's color is nearly opaque. A see-through strip, as tile themes such as Built-in leave it, would
+/// put trays on the wallpaper, so each tray brings a backing that the widgets' text reads on.
+private struct BarEditTraySurface {
+    let isOwn: Bool
+    /// The shade of the tray's surface: the strip's, or its own backing's.
+    let scheme: ColorScheme
+    /// Outlines and + use the widgets' text color when it reads on that surface.
+    let ink: Color
+
+    @MainActor init(store: BarStore, config: Configuration, colorScheme: ColorScheme) {
+        let resolve = { (color: HexColor) in colorScheme == .dark ? color.dark : color.light }
+        // The strip's color as `BarSurface` paints it. Themes design their text for it, Liquid Glass or not.
+        let strip = resolve(store.barStyle.background ?? config.bar.background)
+        // Widgets draw the text color in `defaults`, not the bar style's.
+        let text = config.defaults.foreground.map(resolve)
+        isOwn = Double(strip & 0xff) / 255 < 0.85
+        let scheme: ColorScheme = if isOwn {
+            text.map { isLightText($0) ? .dark : .light } ?? colorScheme
+        } else {
+            // On a strip above a relative luminance of about 0.18, black ink contrasts more than white.
+            luminance(strip) > 0.18 ? .light : .dark
+        }
+        self.scheme = scheme
+        ink = text.flatMap { isLightText($0) == (scheme == .dark) ? HexColor($0).color : nil }
+            ?? (scheme == .dark ? Color.white : .black).opacity(0.85)
+    }
+
+    var neutral: Color { scheme == .dark ? .white : .black }
+    var tint: Color { neutral.opacity(scheme == .dark ? 0.07 : 0.05) }
+    var hairline: Color { neutral.opacity(scheme == .dark ? 0.10 : 0.08) }
+    var backing: Color { isOwn ? Color(white: scheme == .dark ? 0.17 : 0.97) : .clear }
+}
+
+/// Above a relative luminance of about 0.24, text contrasts more with the dark tray backing than the light one.
+private func isLightText(_ rgba: UInt32) -> Bool { luminance(rgba) > 0.24 }
+
+/// WCAG relative luminance of an RGBA color.
+private func luminance(_ rgba: UInt32) -> Double {
+    let channels = [24, 16, 8].map { shift in
+        let value = Double((rgba >> UInt32(shift)) & 0xff) / 255
+        return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
+
 struct BarEditSectionRow: View {
     let store: BarStore
     let display: BarDisplay
@@ -187,6 +235,7 @@ struct BarEditSectionRow: View {
     let adding: Bool
     @State private var anchor = NSView()
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: config.bar.spacing) {
@@ -217,16 +266,16 @@ struct BarEditSectionRow: View {
     }
 
     private var addSlot: some View {
-        Button {
+        let ink = BarEditTraySurface(store: store, config: config, colorScheme: colorScheme).ink
+        return Button {
             store.barEditing.addPopover.show(store: store, displayID: display.id, position: position, anchor: anchor)
         } label: {
             Image(systemName: "plus").font(.system(size: 12, weight: .medium))
                 .frame(width: BarEditTrayMetrics.slot, height: BarEditTrayMetrics.slot)
-                .foregroundStyle(adding ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
+                .foregroundStyle(adding ? Color.white : ink)
                 .background(adding ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 5).strokeBorder(((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary).opacity(0.55),
-                        style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                    RoundedRectangle(cornerRadius: 5).strokeBorder(ink.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                 }
                 .contentShape(Rectangle())
         }
@@ -246,6 +295,7 @@ struct BarEditTile: View {
     let entry: BarEditWidget
     let config: Configuration
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.colorScheme) private var colorScheme
     private var editing: BarEditing { store.barEditing }
     private var title: String { entry.name + (entry.visibility.isHidden ? ", Hidden" : "") }
 
@@ -292,12 +342,14 @@ struct BarEditTile: View {
     }
 
     private var tile: some View {
-        Button { editing.select(entry.id) } label: {
+        let surface = BarEditTraySurface(store: store, config: config, colorScheme: colorScheme)
+        return Button { editing.select(entry.id) } label: {
             Group {
                 if entry.usesPlaceholder {
                     Label(entry.name, systemImage: entry.visibility.isHidden ? "eye.slash" : entry.widget.content.symbol)
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         .padding(.horizontal, 5).frame(minHeight: 22).frame(maxWidth: 120)
+                        .environment(\.colorScheme, surface.scheme)
                 } else {
                     WidgetView(widget: entry.widget, defaults: config.defaults, popupDefaults: config.popupDefaults,
                                store: store, monitor: display, animationDuration: config.bar.animationDuration)
@@ -306,8 +358,7 @@ struct BarEditTile: View {
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary).opacity(0.58),
-                                  style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                    .strokeBorder(surface.ink.opacity(0.58), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                     .padding(-2)
                     .allowsHitTesting(false)
             }
