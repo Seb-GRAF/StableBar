@@ -37,17 +37,6 @@ struct BarEditView: View {
                             .offset(x: section.x / scale)
                         }
                     }
-                    HStack(spacing: 6) {
-                        Button("Undo", action: store.barEditing.undo)
-                            .accessibilityLabel("Undo bar change")
-                            .help("Undo (⌘Z)")
-                            .disabled(!store.barEditing.canUndo)
-                        Button("Done", action: store.barEditing.end)
-                            .accessibilityLabel("Finish editing the bar")
-                            .help("Finish editing the bar (Esc)")
-                    }
-                    .frame(width: layout.done.width / scale, height: proxy.size.height / scale)
-                    .offset(x: layout.done.x / scale)
                 }
                 .overlay {
                     HStack(spacing: 0) {

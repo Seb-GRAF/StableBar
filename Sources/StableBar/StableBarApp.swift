@@ -161,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let setup = SetupWindow()
     private let customization = CustomizationWindow()
     private let themeTrial = ThemeTrialPanel()
+    private let editingControls = BarEditControls()
     private let editingKeyboard = BarEditingKeyboard()
     private var control: RuntimeControl?
     private var systemContext: SystemContext?
@@ -246,9 +247,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updatePanels() {
+        if !store.barEditing.isActive { editingControls.close() }
         guard let config = store.configuration else { return }
         let screens = NSScreen.screens
         var clearanceDisplays: [WindowClearanceDisplay] = []
+        var visibleFrames: [CGDirectDisplayID: CGRect] = [:]
         let ids = screens.map { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value }
         for (id, panel) in panels where !ids.contains(id) {
             panel.close()
@@ -287,11 +290,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.setFrame(NSRect(x: screen.frame.minX, y: top - config.bar.offset - height,
                                   width: screen.frame.width, height: height), display: true)
             panel.orderFrontRegardless()
+            visibleFrames[id] = screen.visibleFrame
             if let clearance = clearanceDisplay(frame: screen.frame, visibleFrame: screen.visibleFrame,
                                                       display: BarDisplay(screen: screen), desktopTop: screens[0].frame.maxY) {
                 clearanceDisplays.append(clearance)
             }
         }
+        editingControls.update(store: store, bars: panels, visibleFrames: visibleFrames)
         store.windowClearance.update(enabled: store.clearanceConfiguration?.bar.keepWindowsClear == true, displays: clearanceDisplays)
         if store.barEditing.isActive {
             if editingKeyboard.start(store: store) {
@@ -363,6 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         editingKeyboard.stop()
+        editingControls.close()
         themeTrial.cancel()
         control?.stop()
         systemContext?.stop()

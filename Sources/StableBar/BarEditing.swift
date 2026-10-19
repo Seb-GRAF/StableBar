@@ -225,11 +225,10 @@ private enum BarEditContent {
     }
 }
 
-/// The normal planner supplies screen order and centering. Reserve the controls before fitting
-/// sections, and shorten only sections wider than their share of the available space.
+/// The normal planner supplies screen order and centering. Shorten only sections wider
+/// than their share of the available space.
 struct BarEditLayout {
     let sections: [WidgetPosition: BarPlacement]
-    let done: BarPlacement
     let scrolling: Set<WidgetPosition>
 
     init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:],
@@ -237,8 +236,6 @@ struct BarEditLayout {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
         let spacing: CGFloat = 6 * scale
-        let doneWidth: CGFloat = 114 * scale
-        let doneSpace = doneWidth + spacing
         let notch = display.notch.map { range in
             let center: CGFloat = (range.lowerBound + range.upperBound) / 2 - CGFloat(bar.margin)
             let half: CGFloat = bar.notchWidth.map { CGFloat($0) * scale / 2 } ?? (range.upperBound - range.lowerBound) / 2
@@ -254,24 +251,21 @@ struct BarEditLayout {
             Self.fit([.left, .notchLeft], capacity: max(inset, notch.lowerBound - notchSpacing) - inset - spacing,
                      content: content, widths: &widths)
             Self.fit([.notchRight, .center, .right],
-                     capacity: width - inset - min(width - inset, notch.upperBound + notchSpacing) - doneSpace - 2 * spacing,
+                     capacity: width - inset - min(width - inset, notch.upperBound + notchSpacing) - 2 * spacing,
                      content: content, widths: &widths)
         } else {
-            Self.fit(WidgetPosition.allCases, capacity: width - 2 * inset - doneSpace - 4 * spacing, content: content, widths: &widths)
+            Self.fit(WidgetPosition.allCases, capacity: width - 2 * inset - 4 * spacing, content: content, widths: &widths)
         }
         let items = WidgetPosition.allCases.map { position in
             BarLayoutItem(id: position.rawValue, position: position,
-                          width: widths[position]! + (position == .right ? doneSpace : 0), canOverflow: false)
+                          width: widths[position]!, canOverflow: false)
         }
         let plan = AdaptiveBarPlanner(inset: inset, spacing: spacing, notchSpacing: notchSpacing, notch: notch)
             .plan(width: width, items: items)
         let sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
-            plan.placements[position.rawValue].map {
-                (position, BarPlacement(x: $0.x, width: max(0, $0.width - (position == .right ? doneSpace : 0))))
-            }
+            plan.placements[position.rawValue].map { (position, $0) }
         })
         self.sections = sections
-        done = BarPlacement(x: max(0, width - inset - doneWidth), width: doneWidth)
         scrolling = Set(WidgetPosition.allCases.filter { sections[$0]!.width < content[$0]! - 0.5 })
     }
 

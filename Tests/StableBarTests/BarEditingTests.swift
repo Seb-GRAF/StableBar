@@ -87,7 +87,7 @@ final class BarEditingTests: XCTestCase {
             for (index, item) in ordered.enumerated() {
                 XCTAssertGreaterThan(item.value.width, 0)
                 XCTAssertGreaterThanOrEqual(item.value.x, 0)
-                XCTAssertLessThanOrEqual(item.value.x + item.value.width, layout.done.x)
+                XCTAssertLessThanOrEqual(item.value.x + item.value.width, 1512 - 8)
                 if index > 0 { XCTAssertGreaterThan(item.value.x, ordered[index - 1].value.x + ordered[index - 1].value.width) }
                 if let notch = display.notch {
                     XCTAssertTrue(item.value.x + item.value.width <= notch.lowerBound || item.value.x >= notch.upperBound)
@@ -120,22 +120,36 @@ final class BarEditingTests: XCTestCase {
             let frame = try XCTUnwrap(layout.sections[position])
             XCTAssertEqual(frame.width, try XCTUnwrap(widths[position]), accuracy: 0.01,
                            "Measured sections that fit must retain their content width")
-            XCTAssertLessThanOrEqual(frame.x + frame.width, layout.done.x - 6)
+            XCTAssertLessThanOrEqual(frame.x + frame.width, 1512 - 12)
         }
         XCTAssertTrue(layout.scrolling.isEmpty)
     }
 
-    func testOnlyTheSectionThatCannotFitScrollsAndControlsKeepTheirFullWidth() throws {
+    func testRightSectionUsesTheSpacePreviouslyReservedForControlsWithoutScrolling() throws {
+        let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: 450]
+        let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
+        XCTAssertTrue(layout.scrolling.isEmpty)
+        for position in WidgetPosition.allCases {
+            let frame = try XCTUnwrap(layout.sections[position])
+            XCTAssertEqual(frame.width, try XCTUnwrap(widths[position]), accuracy: 0.01)
+            XCTAssertLessThanOrEqual(frame.x + frame.width, 1512 - 12)
+            XCTAssertTrue(frame.x + frame.width <= 661 || frame.x >= 851)
+        }
+        let right = try XCTUnwrap(layout.sections[.right])
+        XCTAssertEqual(right.x + right.width, 1512 - 12, accuracy: 0.01)
+    }
+
+    func testOnlyTheSectionThatCannotFitScrollsAndSectionsReachTheRightInset() throws {
         let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: 2000]
         for (width, display) in [(CGFloat(800), external), (1512, laptop)] {
             let layout = BarEditLayout(width: width, display: display, bar: BarSettings(), preferredWidths: widths)
             XCTAssertEqual(layout.scrolling, [.right])
-            XCTAssertEqual(layout.done.width, 114)
-            XCTAssertEqual(layout.done.x + layout.done.width, width - 12)
+            let right = try XCTUnwrap(layout.sections[.right])
+            XCTAssertEqual(right.x + right.width, width - 12, accuracy: 0.01)
             let ordered = layout.sections.values.sorted { $0.x < $1.x }
             for (index, frame) in ordered.enumerated() {
                 XCTAssertGreaterThan(frame.width, 0)
-                XCTAssertLessThanOrEqual(frame.x + frame.width, layout.done.x - 6)
+                XCTAssertLessThanOrEqual(frame.x + frame.width, width - 12 + 0.01)
                 if index > 0 { XCTAssertGreaterThanOrEqual(frame.x, ordered[index - 1].x + ordered[index - 1].width + 5.99) }
             }
             for position in WidgetPosition.allCases where position != .right {
@@ -145,16 +159,16 @@ final class BarEditingTests: XCTestCase {
     }
 
     func testEmptyHeadingsShortenBeforeWidgetsThatFitNeedToScroll() throws {
-        let preferred: [WidgetPosition: CGFloat] = [.left: 60, .notchLeft: 99, .center: 69, .notchRight: 105, .right: 354]
-        let content: [WidgetPosition: CGFloat] = [.left: 60, .notchLeft: 60, .center: 60, .notchRight: 60, .right: 354]
+        let preferred: [WidgetPosition: CGFloat] = [.left: 60, .notchLeft: 99, .center: 69, .notchRight: 105, .right: 480]
+        let content: [WidgetPosition: CGFloat] = [.left: 60, .notchLeft: 60, .center: 60, .notchRight: 60, .right: 480]
         let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: preferred, contentWidths: content)
         XCTAssertTrue(layout.scrolling.isEmpty)
-        XCTAssertEqual(try XCTUnwrap(layout.sections[.right]).width, 354, accuracy: 0.01)
+        XCTAssertEqual(try XCTUnwrap(layout.sections[.right]).width, 480, accuracy: 0.01)
         XCTAssertLessThan(try XCTUnwrap(layout.sections[.notchRight]).width, 105)
         for position in WidgetPosition.allCases {
             let frame = try XCTUnwrap(layout.sections[position])
             XCTAssertGreaterThanOrEqual(frame.width, try XCTUnwrap(content[position]))
-            XCTAssertLessThanOrEqual(frame.x + frame.width, layout.done.x - 6)
+            XCTAssertLessThanOrEqual(frame.x + frame.width, 1512 - 12)
         }
     }
 
