@@ -135,9 +135,25 @@ final class BarEditing {
     func geometry(for display: BarDisplay) -> BarGeometry? {
         guard let config = store.configuration else { return nil }
         if !isActive { return config.barGeometry(for: display) }
-        return BarGeometry(layoutHeight: max(config.bar.height * config.bar.scale(for: display),
-                                            (measuredHeights[display.id] ?? 64 * config.bar.scale(for: display)) + 2 * config.bar.margin),
+        let scale = CGFloat(config.bar.scale(for: display))
+        let initial = max(BarEditTrayMetrics.slot, config.bar.height - 2 * config.bar.margin / scale)
+            + 2 * BarEditTrayMetrics.verticalPadding
+        return BarGeometry(layoutHeight: max(config.bar.height * scale,
+                                            (measuredHeights[display.id] ?? initial * scale) + 2 * config.bar.margin),
                            margin: config.bar.margin, outsideExtent: 0)
+    }
+
+    func trayState(on displayID: Int, position: WidgetPosition) -> BarEditTrayState {
+        let dragging = dragSession.active != nil
+        return BarEditTrayState(showsName: dragging, showsBadges: !dragging,
+                                isTarget: dragging && insertion?.displayID == displayID && insertion?.position == position)
+    }
+
+    func opacity(for id: String) -> Double {
+        guard let active = dragSession.active, let widgets = store.configuration?.widgets,
+              let moving = widgets.first(where: { $0.id == active.widgetID }),
+              let widget = widgets.first(where: { $0.id == id }) else { return 1 }
+        return widget.id == moving.id || (moving.group != nil && moving.group == widget.group) ? 0.25 : 1
     }
 
     func measure(height: CGFloat, on displayID: Int) {
@@ -225,14 +241,30 @@ private enum BarEditContent {
     }
 }
 
-/// The normal planner supplies screen order and centering. Shorten only sections wider
-/// than their share of the available space.
+enum BarEditTrayMetrics {
+    static let slot: CGFloat = 22
+    static let horizontalPadding: CGFloat = 7
+    static let verticalPadding: CGFloat = 6
+    static let emptyWidth = slot + 2 * horizontalPadding
+
+    static func chipWidth(for position: WidgetPosition) -> CGFloat {
+        ceil((position.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 9, weight: .bold)]).width) + 18
+    }
+}
+
+struct BarEditTrayState: Equatable {
+    let showsName: Bool
+    let showsBadges: Bool
+    let isTarget: Bool
+}
+
+/// The normal planner supplies screen order and centering. Only trays wider than
+/// their share of the available space scroll.
 struct BarEditLayout {
     let sections: [WidgetPosition: BarPlacement]
     let scrolling: Set<WidgetPosition>
 
-    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:],
-         contentWidths: [WidgetPosition: CGFloat] = [:]) {
+    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:], isDragging: Bool = false) {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
         let spacing: CGFloat = 6 * scale
@@ -241,10 +273,12 @@ struct BarEditLayout {
             let half: CGFloat = bar.notchWidth.map { CGFloat($0) * scale / 2 } ?? (range.upperBound - range.lowerBound) / 2
             return (center - half)...(center + half)
         }
-        let preferred = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
-            ($0, max(1, preferredWidths[$0] ?? 64 * scale))
+        let content = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
+            ($0, max(1, preferredWidths[$0] ?? BarEditTrayMetrics.emptyWidth * scale))
         })
-        let content = preferred.merging(contentWidths) { preferred, content in min(preferred, max(1, content)) }
+        let preferred = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
+            ($0, max(content[$0]!, isDragging ? BarEditTrayMetrics.chipWidth(for: $0) * scale : 0))
+        })
         var widths = preferred
         let notchSpacing = CGFloat(bar.notchSpacing) * scale
         if let notch {
@@ -271,7 +305,7 @@ struct BarEditLayout {
 
     private static func fit(_ positions: [WidgetPosition], capacity: CGFloat, content: [WidgetPosition: CGFloat],
                             widths: inout [WidgetPosition: CGFloat]) {
-        // Shorten a heading before scrolling widgets that would otherwise fit.
+        // Shorten a drag chip before scrolling content that would otherwise fit.
         let excess = max(0, positions.reduce(CGFloat.zero) { $0 + widths[$1]! } - max(0, capacity))
         let slack = positions.reduce(CGFloat.zero) { $0 + max(0, widths[$1]! - content[$1]!) }
         if slack > 0 {

@@ -28,8 +28,8 @@ final class BarEditViewTests: XCTestCase {
         let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
         let tile = NSHostingView(rootView: BarEditTile(store: store, display: display.id,
             entry: try XCTUnwrap(store.barEditing.entries(on: display).first), config: try XCTUnwrap(store.configuration)))
-        XCTAssertEqual(tile.fittingSize.width, 222, accuracy: 0.01)
-        XCTAssertEqual(tile.fittingSize.height, 22, accuracy: 0.01)
+        XCTAssertEqual(tile.fittingSize.width, 220, accuracy: 0.01)
+        XCTAssertEqual(tile.fittingSize.height, 20, accuracy: 0.01)
     }
 
     @MainActor func testHiddenAndEmptyPlaceholdersKeepTheirNamesInCompactTiles() throws {
@@ -76,7 +76,7 @@ final class BarEditViewTests: XCTestCase {
         XCTAssertEqual(descendants(host, of: BarEditDragSourceView.self).count, 15, "The measuring copy must not add drag or accessibility targets")
         let right = try XCTUnwrap(sections.first { $0.position == .right })
         XCTAssertEqual(right.frames.count, 15)
-        XCTAssertTrue(right.frames.values.allSatisfy { abs($0.width - 20) < 0.01 })
+        XCTAssertTrue(right.frames.values.allSatisfy { abs($0.width - 18) < 0.01 })
         XCTAssertTrue(right.frames.values.allSatisfy { $0.minX >= 0 && $0.maxX <= right.bounds.width },
                       "Section: \(right.frame), bounds: \(right.bounds), tiles: \(right.frames)")
         for section in sections {

@@ -225,8 +225,7 @@ struct BarUnitView: View {
             Color.clear.frame(minWidth: unit.widgets[0].style.minWidth ?? 0,
                               idealWidth: unit.widgets[0].style.minWidth ?? 0, maxWidth: .infinity, minHeight: 1)
         } else {
-            let style = unit.style ?? WidgetStyle()
-            HStack(spacing: style.spacing ?? config.bar.spacing) {
+            BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
                 ForEach(unit.widgets) { widget in
                     WidgetView(widget: widget, defaults: config.defaults, popupDefaults: config.popupDefaults, store: store,
                                monitor: display, animationDuration: config.bar.animationDuration)
@@ -234,6 +233,18 @@ struct BarUnitView: View {
                         .transition(visibilityTransition(widget.transition, still: reduceMotion || measuring))
                 }
             }
+        }
+    }
+}
+
+/// The same group spacing and surface wrap normal widgets and their edit decorations.
+struct BarUnitSurface<Content: View>: View {
+    let style: WidgetStyle
+    let spacing: Double
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        HStack(spacing: style.spacing ?? spacing, content: content)
             .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 0)
             .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 0)
             .padding(.top, style.paddingTop ?? style.paddingVertical ?? 0)
@@ -243,7 +254,6 @@ struct BarUnitView: View {
                 RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
                     .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
             }
-        }
     }
 }
 

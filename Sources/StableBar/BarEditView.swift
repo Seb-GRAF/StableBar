@@ -7,7 +7,6 @@ struct BarEditView: View {
     @State private var adding = false
     @State private var addPosition = WidgetPosition.right
     @State private var measuredSizes: [WidgetPosition: CGSize] = [:]
-    @State private var measuredContentWidths: [WidgetPosition: CGFloat] = [:]
 
     init(store: BarStore, display: BarDisplay) {
         self.store = store
@@ -22,36 +21,30 @@ struct BarEditView: View {
             GeometryReader { proxy in
                 let widths = measuredSizes.mapValues { $0.width * scale }
                 let layout = BarEditLayout(width: proxy.size.width, display: display, bar: config.bar, preferredWidths: widths,
-                                           contentWidths: measuredContentWidths.mapValues { $0 * scale })
+                                           isDragging: store.barEditing.dragSession.active != nil)
                 ZStack(alignment: .topLeading) {
                     ForEach(WidgetPosition.allCases, id: \.self) { position in
                         if let section = layout.sections[position] {
+                            let height = min(proxy.size.height / scale, measuredSizes[position]?.height ?? proxy.size.height / scale)
                             BarEditSection(store: store, display: display, position: position,
                                            entries: entries.filter { $0.widget.position == position }, config: config,
                                            scrolling: layout.scrolling.contains(position),
-                                           contentWidth: measuredContentWidths[position] ?? 0, viewportWidth: section.width / scale) {
+                                           contentWidth: measuredSizes[position]?.width ?? 0, viewportWidth: section.width / scale,
+                                           adding: adding && addPosition == position) {
                                 addPosition = position
                                 adding = true
                             }
-                            .frame(width: section.width / scale, height: proxy.size.height / scale)
-                            .offset(x: section.x / scale)
+                            .frame(width: section.width / scale, height: height)
+                            .offset(x: section.x / scale, y: (proxy.size.height / scale - height) / 2)
                         }
                     }
                 }
                 .overlay {
                     HStack(spacing: 0) {
                         ForEach(WidgetPosition.allCases, id: \.self) { position in
-                            VStack(spacing: 3) {
-                                BarEditSectionHeader(position: position, add: {})
-                                BarEditSectionRow(store: store, display: display.id,
-                                                  entries: entries.filter { $0.widget.position == position }, config: config)
-                                    .background {
-                                        GeometryReader { measurement in
-                                            Color.clear.preference(key: BarEditContentWidths.self, value: [position: measurement.size.width])
-                                        }
-                                    }
-                            }
-                            .padding(.vertical, 6)
+                            BarEditSectionRow(store: store, display: display, position: position,
+                                              entries: entries.filter { $0.widget.position == position }, config: config,
+                                              adding: false, add: {})
                             .fixedSize()
                             .background {
                                 GeometryReader { measurement in
@@ -64,13 +57,13 @@ struct BarEditView: View {
                     .modifier(MeasuringCopy())
                 }
                 .onPreferenceChange(BarEditSizes.self) { measuredSizes = $0 }
-                .onPreferenceChange(BarEditContentWidths.self) { measuredContentWidths = $0 }
                 .frame(width: proxy.size.width / scale, height: proxy.size.height / scale, alignment: .topLeading)
                 .scaleEffect(scale, anchor: .topLeading)
             }
+            .foregroundStyle((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
+            .modifier(BarSurface(store: store, settings: config.bar))
             .padding(config.bar.margin)
             .frame(height: geometry.layoutHeight)
-            .background(.regularMaterial)
             .sheet(isPresented: $adding) {
                 WidgetAddView(setup: setup, store: store, position: addPosition) { id in
                     adding = false
@@ -99,14 +92,14 @@ private struct BarEditSizes: PreferenceKey {
     static func reduce(value: inout [WidgetPosition: CGSize], nextValue: () -> [WidgetPosition: CGSize]) { value.merge(nextValue()) { $1 } }
 }
 
-private struct BarEditContentWidths: PreferenceKey {
-    static let defaultValue: [WidgetPosition: CGFloat] = [:]
-    static func reduce(value: inout [WidgetPosition: CGFloat], nextValue: () -> [WidgetPosition: CGFloat]) { value.merge(nextValue()) { $1 } }
-}
-
 private struct BarEditFrames: PreferenceKey {
     static let defaultValue: [String: CGRect] = [:]
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
+}
+
+private struct BarEditRowBounds: PreferenceKey {
+    static let defaultValue = CGRect.null
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 private struct BarEditSection: View {
@@ -118,52 +111,75 @@ private struct BarEditSection: View {
     let scrolling: Bool
     let contentWidth: CGFloat
     let viewportWidth: CGFloat
+    let adding: Bool
     let add: () -> Void
     @State private var frames: [String: CGRect] = [:]
+    @State private var rowBounds = CGRect.null
+    @Environment(\.colorScheme) private var colorScheme
     private var editing: BarEditing { store.barEditing }
 
     var body: some View {
+        let state = editing.trayState(on: display.id, position: position)
+        let neutral = colorScheme == .dark ? Color.white : .black
+        let shape = RoundedRectangle(cornerRadius: 9)
         BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames) {
-            VStack(spacing: 3) {
-                BarEditSectionHeader(position: position, add: add)
-                ScrollView(.horizontal) {
-                    BarEditSectionRow(store: store, display: display.id, entries: entries, config: config)
-                        .overlay { BarEditScrollWheel(contentWidth: contentWidth, viewportWidth: viewportWidth).allowsHitTesting(scrolling) }
-                }
-                .scrollIndicators(.hidden)
-                .scrollDisabled(!scrolling)
-                .overlay(alignment: .leading) {
-                    let overflow = BarEditOverflow(bounds: frames.values.reduce(CGRect.null) { $0.union($1) },
-                                                   viewportWidth: viewportWidth)
-                    HStack {
-                        if overflow.leading { overflowEdge(.leading) }
-                        Spacer(minLength: 0)
-                        if overflow.trailing { overflowEdge(.trailing) }
+            ScrollView(.horizontal) {
+                BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
+                                  adding: adding, add: add)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(key: BarEditRowBounds.self, value: proxy.frame(in: .named("editSection")))
+                        }
                     }
-                    .frame(width: viewportWidth).allowsHitTesting(false)
-                }
-                .help(scrolling ? "Scroll to see more widgets. Use the mouse wheel or swipe sideways." : "")
+                    .overlay { BarEditScrollWheel(contentWidth: contentWidth, viewportWidth: viewportWidth).allowsHitTesting(scrolling) }
             }
-            .padding(.vertical, 6)
-            .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+            .scrollIndicators(.hidden)
+            .scrollDisabled(!scrolling)
+            .overlay {
+                let overflow = BarEditOverflow(bounds: rowBounds, viewportWidth: viewportWidth)
+                HStack {
+                    if overflow.leading { overflowEdge(.leading) }
+                    Spacer(minLength: 0)
+                    if overflow.trailing { overflowEdge(.trailing) }
+                }
+                .allowsHitTesting(false)
+            }
+            .help(scrolling ? "Scroll to see more widgets. Use the mouse wheel or swipe sideways." : "")
+            .background(neutral.opacity(colorScheme == .dark ? 0.07 : 0.05), in: shape)
+            .background(state.isTarget ? Color.accentColor.opacity(0.16) : .clear, in: shape)
+            .overlay {
+                shape.strokeBorder(state.isTarget ? Color.accentColor : neutral.opacity(colorScheme == .dark ? 0.10 : 0.08),
+                                   lineWidth: state.isTarget ? 2 : 0.5)
+            }
             .overlay(alignment: .topLeading) {
-                if editing.dragSession.active != nil, let target = editing.insertion,
-                   target.displayID == display.id, target.position == position {
+                if state.isTarget, let target = editing.insertion {
                     let bounds = frames.values.reduce(CGRect.null) { $0.union($1) }
                     Rectangle().fill(Color.accentColor).frame(width: 3, height: bounds.isNull ? 22 : bounds.height)
-                        .offset(x: target.x, y: bounds.isNull ? 26 : bounds.minY).allowsHitTesting(false)
+                        .offset(x: target.x, y: bounds.isNull ? 6 : bounds.minY).allowsHitTesting(false)
                 }
             }
-            .clipped()
             .coordinateSpace(name: "editSection")
             .onPreferenceChange(BarEditFrames.self) { frames = $0 }
+            .onPreferenceChange(BarEditRowBounds.self) { rowBounds = $0 }
+        }
+        .overlay(alignment: .topLeading) {
+            if state.showsName {
+                Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
+                    .foregroundStyle(state.isTarget ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(state.isTarget ? Color.accentColor : (store.barStyle.background ?? config.bar.background).color,
+                                in: RoundedRectangle(cornerRadius: 3))
+                    .overlay { RoundedRectangle(cornerRadius: 3).strokeBorder(neutral.opacity(0.15), lineWidth: 0.5) }
+                    .padding(.leading, 5)
+                    .allowsHitTesting(false)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(position.title)
     }
 
     private func overflowEdge(_ edge: HorizontalEdge) -> some View {
-        LinearGradient(colors: [.clear, Color(nsColor: .windowBackgroundColor)],
+        LinearGradient(colors: [.clear, (store.barStyle.background ?? config.bar.background).color],
                        startPoint: edge == .leading ? .trailing : .leading, endPoint: edge == .leading ? .leading : .trailing)
             .overlay {
                 Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
@@ -174,37 +190,25 @@ private struct BarEditSection: View {
     }
 }
 
-private struct BarEditSectionHeader: View {
+struct BarEditSectionRow: View {
+    let store: BarStore
+    let display: BarDisplay
     let position: WidgetPosition
+    let entries: [BarEditWidget]
+    let config: Configuration
+    let adding: Bool
     let add: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
-            Text(position.title).font(.caption.weight(.medium)).lineLimit(1).help(position.title)
-            Spacer(minLength: 0)
-            Button(action: add) { Image(systemName: "plus") }
-                .buttonStyle(.borderless)
-                .help("Add a widget to \(position.title)")
-                .accessibilityLabel("Add a widget to \(position.title)")
-        }
-        .padding(.horizontal, 6)
-    }
-}
-
-private struct BarEditSectionRow: View {
-    let store: BarStore
-    let display: Int
-    let entries: [BarEditWidget]
-    let config: Configuration
-
-    var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: config.bar.spacing) {
+            if position == .right || position == .notchLeft { addSlot }
             let units = BarUnit.make(widgets: entries.map(\.widget), groups: config.groups)
             ForEach(units) { unit in
-                HStack(spacing: 3) {
+                BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
                     ForEach(unit.widgets) { widget in
                         if let entry = entries.first(where: { $0.id == widget.id }) {
-                            BarEditTile(store: store, display: display, entry: entry, config: config)
+                            BarEditTile(store: store, display: display.id, entry: entry, config: config)
+                                .environment(\.barUnitID, unit.id)
                                 .background {
                                     GeometryReader { proxy in
                                         Color.clear.preference(key: BarEditFrames.self,
@@ -214,19 +218,31 @@ private struct BarEditSectionRow: View {
                         }
                     }
                 }
-                .padding(unit.widgets.count > 1 ? 2 : 0)
-                .background(unit.style != nil ? Color.primary.opacity(0.06) : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .overlay {
-                    if unit.style != nil { RoundedRectangle(cornerRadius: 6).strokeBorder(.secondary.opacity(0.3)) }
-                }
+                .opacity(store.barEditing.opacity(for: unit.widgets[0].id))
             }
-            if entries.isEmpty {
-                Text("Drop here").font(.caption).foregroundStyle(.secondary).frame(minHeight: 22)
-            }
+            if position != .right && position != .notchLeft { addSlot }
         }
+        .frame(minHeight: BarEditTrayMetrics.slot)
         .fixedSize()
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
+        .padding(.horizontal, BarEditTrayMetrics.horizontalPadding)
+        .padding(.vertical, BarEditTrayMetrics.verticalPadding)
+    }
+
+    private var addSlot: some View {
+        Button(action: add) {
+            Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                .frame(width: BarEditTrayMetrics.slot, height: BarEditTrayMetrics.slot)
+                .foregroundStyle(adding ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
+                .background(adding ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5).strokeBorder(((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary).opacity(0.55),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Add a widget to \(position.title)")
+        .accessibilityLabel("Add a widget to \(position.title)")
     }
 }
 
@@ -252,15 +268,18 @@ struct BarEditTile: View {
         .fixedSize()
         .accessibilityAction(named: Text("Move left")) { editing.move(entry.id, by: -1, on: display) }
         .accessibilityAction(named: Text("Move right")) { editing.move(entry.id, by: 1, on: display) }
-        .overlay(alignment: .topTrailing) {
-            Button { editing.remove(entry.id, on: display) } label: {
-                Image(systemName: "minus.circle.fill").font(.system(size: 13))
-                    .symbolRenderingMode(.palette).foregroundStyle(.primary, .background)
-            }
-                .buttonStyle(.borderless)
+        .overlay(alignment: .topLeading) {
+            if editing.trayState(on: display, position: entry.widget.position).showsBadges {
+                Button { editing.remove(entry.id, on: display) } label: {
+                    Image(systemName: "minus").font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white).frame(width: 14, height: 14)
+                        .background(HexColor(0x6e6e73ff).color, in: Circle())
+                }
+                .buttonStyle(.plain)
                 .help("Remove \(entry.name)")
                 .accessibilityLabel("Remove \(entry.name)")
-                .offset(x: 4, y: -5)
+                .offset(x: -5, y: -5)
+            }
         }
         .help("\(title). Click to change its settings, or drag to move it.")
         .contextMenu {
@@ -291,10 +310,12 @@ struct BarEditTile: View {
                         .allowsHitTesting(false).accessibilityHidden(true).fixedSize()
                 }
             }
-            .padding(1)
             .overlay {
                 RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(.secondary.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+                    .strokeBorder(((store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary).opacity(0.58),
+                                  style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
+                    .padding(-2)
+                    .allowsHitTesting(false)
             }
             .contentShape(Rectangle())
         }
