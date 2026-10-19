@@ -545,6 +545,59 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), external)
     }
 
+    @MainActor func testSettingAndClearingAnAbsentProfileConditionInOneBurstDoesNotSave() throws {
+        for inherited in [false, true] {
+            let profile = #"{"widgets":[],"profiles":[{"name":"work","configuration":{}}]}"#
+            let fixture = try Fixture(configuration: inherited ? #"{"widgets":[]}"# : profile)
+            defer { fixture.close() }
+            let included = fixture.url.deletingLastPathComponent().appending(path: "profiles.json")
+            if inherited {
+                try Data(profile.utf8).write(to: included)
+                try Data(#"{"widgets":[],"includes":["profiles.json"]}"#.utf8).write(to: fixture.url)
+                fixture.store.reloadConfiguration()
+            }
+            let original = try Data(contentsOf: fixture.url)
+            let editor = ConfigurationEditor(store: fixture.store)
+            editor.setProfileCondition("work", \.app, value: "com.example", control: "app")
+            editor.setProfileCondition("work", \.app, value: nil, control: "app")
+            try editor.history.flush()
+            XCTAssertNil(editor.error)
+            XCTAssertNil(fixture.store.profiles.first?.when)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            XCTAssertTrue(editor.undoSteps.isEmpty)
+            XCTAssertFalse(editor.history.hasPendingChanges)
+            XCTAssertFalse(editor.history.canUndo)
+            if inherited { XCTAssertEqual(try Data(contentsOf: included), Data(profile.utf8)) }
+        }
+    }
+
+    @MainActor func testEnabledRefusesCommandLineOnlyProfilesAndStillAllowsAddingProfiles() throws {
+        let fixture = try Fixture(configuration: #"{"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = fixture.store
+        let original = try Data(contentsOf: fixture.url)
+        try store.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
+            ["name": .string("temporary"), "configuration": .object([:])]
+        ])], persist: false)
+        let editor = ConfigurationEditor(store: store)
+        var profile = try XCTUnwrap(store.profiles.first)
+        profile.enabled = false
+        editor.setProfile(profile)
+        XCTAssertEqual(editor.error, "Save command-line changes before editing this profile.")
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        XCTAssertTrue(editor.undoSteps.isEmpty)
+        XCTAssertFalse(editor.history.hasPendingChanges)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        editor.discardCommandLineChanges()
+        XCTAssertTrue(store.profiles.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        editor.addProfile(name: "new")
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.profiles.map(\.name), ["new"])
+        XCTAssertEqual(editor.undoSteps.count, 1)
+        XCTAssertEqual(try fixture.document()["profiles"]?.decoded([ConfigurationProfile].self).map(\.name), ["new"])
+    }
+
     @MainActor func testProfileConditionKeepsTheWidgetSelectionValid() throws {
         let fixture = try Fixture(configuration: #"{"widgets":[],"profiles":[{"name":"work","configuration":{"widgets":[{"id":"a","type":"text","position":"left","text":"A"}]}}]}"#)
         defer { fixture.close() }

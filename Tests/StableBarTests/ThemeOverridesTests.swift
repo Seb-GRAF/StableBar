@@ -2,6 +2,52 @@ import XCTest
 @testable import StableBar
 
 final class ThemeOverridesTests: XCTestCase {
+    @MainActor func testThemeProfileOverridesFollowMergedEnabledConditionsAndPinning() async throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"theme":{"id":"test-theme","version":"1"},"bar":{"height":48,"spacing":17},"widgets":[],
+         "profiles":[{"name":"conditional","enabled":false}]}
+        """#)
+        defer { fixture.close() }
+        _ = try fixture.theme(#"""
+        {"profiles":[{"name":"conditional","configuration":{"bar":{"height":32}}},
+                     {"name":"disabled","enabled":false,"configuration":{"bar":{"spacing":4}}}]}
+        """#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        XCTAssertTrue(store.activeProfiles.isEmpty)
+        XCTAssertTrue(gallery.overrides.values.isEmpty)
+
+        let included = fixture.directory.appending(path: "profiles.json")
+        try fixture.write(#"{"profiles":[{"name":"conditional","when":{"app":"com.example"}}]}"#, to: included)
+        try fixture.write(#"""
+        {"theme":{"id":"test-theme","version":"1"},"bar":{"height":48,"spacing":17},"widgets":[],
+         "includes":["profiles.json"],"profiles":[{"name":"disabled","enabled":true}]}
+        """#, to: fixture.url)
+        store.reloadConfiguration()
+        gallery.contextChanged()
+        XCTAssertEqual(store.activeProfiles, ["disabled"])
+        XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "spacing"]])
+
+        store.context.app = "com.example"
+        store.reloadConfiguration()
+        gallery.contextChanged()
+        XCTAssertEqual(store.activeProfiles, ["conditional", "disabled"])
+        XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "height"], ["bar", "spacing"]])
+
+        store.context.app = "com.other"
+        try store.applyEdits([ConfigurationEdit(action: .profile, name: "conditional")], persist: false)
+        gallery.contextChanged()
+        XCTAssertEqual(store.activeProfiles, ["conditional"])
+        XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "height"]])
+        let main = try fixture.document()
+        var ids: [String] = []
+        let reset = try gallery.overrides.resetEdit.applying(to: main, widgetIDs: &ids)
+        XCTAssertEqual(reset["bar"], .object(["spacing": .number(17)]))
+    }
+
     func testNoticeUsesSingularAndPluralAndLabelsUseNaturalSentenceCase() {
         let main: [String: ConfigurationValue] = [
             "defaults": .object(["paddingHorizontal": .number(4), "offsetY": .number(2), "iconSize": .number(12), "borderEdges": .string("all")]),
@@ -138,10 +184,10 @@ final class ThemeOverridesTests: XCTestCase {
          "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}},
                      {"name":"disabled","enabled":false,"configuration":{"bar":{"spacing":99}}}]}
         """##, install: false)
-        let light = try theme.overrideLayer(context: ConfigurationContext())
+        let light = try theme.overrideLayer(activeProfiles: [])
         XCTAssertNil(light.values["tokens"])
         XCTAssertNil(light.values["bar"])
-        let dark = try theme.overrideLayer(context: ConfigurationContext(appearance: "dark"))
+        let dark = try theme.overrideLayer(activeProfiles: ["night"])
         XCTAssertEqual(dark.values["bar"], .object(["height": .number(30)]))
         XCTAssertNil(dark.values["profiles"])
     }

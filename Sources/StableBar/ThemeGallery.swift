@@ -116,9 +116,8 @@ final class ThemeGallery {
         overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
         guard let selected = choices.first(where: { $0.key == selectedKey }) else { return }
         do {
-            var context = store.context
-            if let appearance = store.configuration?.bar.appearance { context.appearance = appearance.rawValue }
-            let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument), context: context)
+            let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument),
+                                                   activeProfiles: store.activeProfiles)
             let main = try store.editedMainDocument(replaying: store.customizationEdits)
             overrides = ThemeOverrides(main: main, theme: theme.values, widgets: store.configuration?.widgets ?? [],
                                        activeProfiles: store.activeProfiles)

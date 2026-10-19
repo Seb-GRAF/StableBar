@@ -101,6 +101,7 @@ private struct BarEditSection: View {
 
     var body: some View {
         let state = editing.trayState(on: display.id, position: position)
+        let overflow = BarEditOverflow(bounds: rowBounds, viewportWidth: viewportWidth)
         let neutral = colorScheme == .dark ? Color.white : .black
         let shape = RoundedRectangle(cornerRadius: 9)
         BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames) {
@@ -116,8 +117,18 @@ private struct BarEditSection: View {
             }
             .scrollIndicators(.hidden)
             .scrollDisabled(!scrolling)
+            .mask {
+                HStack(spacing: 0) {
+                    if overflow.leading {
+                        LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 18)
+                    }
+                    Rectangle().fill(.black)
+                    if overflow.trailing {
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 18)
+                    }
+                }
+            }
             .overlay {
-                let overflow = BarEditOverflow(bounds: rowBounds, viewportWidth: viewportWidth)
                 HStack {
                     if overflow.leading { overflowEdge(.leading) }
                     Spacer(minLength: 0)
@@ -148,9 +159,9 @@ private struct BarEditSection: View {
                 Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
                     .foregroundStyle(state.isTarget ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
                     .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(state.isTarget ? Color.accentColor : (store.barStyle.background ?? config.bar.background).color,
-                                in: RoundedRectangle(cornerRadius: 3))
-                    .overlay { RoundedRectangle(cornerRadius: 3).strokeBorder(neutral.opacity(0.15), lineWidth: 0.5) }
+                    .background(state.isTarget ? Color.accentColor : neutral.opacity(colorScheme == .dark ? 0.07 : 0.05), in: Capsule())
+                    .background(.regularMaterial, in: Capsule())
+                    .overlay { Capsule().strokeBorder(neutral.opacity(0.15), lineWidth: 0.5) }
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
             }
@@ -160,12 +171,8 @@ private struct BarEditSection: View {
     }
 
     private func overflowEdge(_ edge: HorizontalEdge) -> some View {
-        LinearGradient(colors: [.clear, (store.barStyle.background ?? config.bar.background).color],
-                       startPoint: edge == .leading ? .trailing : .leading, endPoint: edge == .leading ? .leading : .trailing)
-            .overlay {
-                Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
-                    .font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
-            }
+        Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
+            .font(.system(size: 9, weight: .bold)).foregroundStyle(.secondary)
             .frame(width: 18)
             .accessibilityHidden(true)
     }

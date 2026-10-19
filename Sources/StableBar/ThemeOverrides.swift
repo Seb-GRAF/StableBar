@@ -145,13 +145,11 @@ private func friendly(_ value: String) -> String {
 
 extension ThemeChoice {
     /// Raw theme values keep token references intact for the override notice.
-    func overrideLayer(settings: [String: ConfigurationValue] = [:], context: ConfigurationContext) throws -> ConfigurationLayer {
+    func overrideLayer(settings: [String: ConfigurationValue] = [:], activeProfiles: [String]) throws -> ConfigurationLayer {
         var loader = ConfigurationLoader()
         var layer = try loader.readPackage(at: directory, manifest: manifest, settings: settings)
-        for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] where profile.enabled {
-            if profile.when?.matches(context) ?? true {
-                try layer.merge(ConfigurationLayer(values: profile.configuration, origins: [:]))
-            }
+        for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] where activeProfiles.contains(profile.name) {
+            try layer.merge(ConfigurationLayer(values: profile.configuration, origins: [:]))
         }
         layer.values["profiles"] = nil
         return layer

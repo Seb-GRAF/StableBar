@@ -2,6 +2,35 @@ import XCTest
 @testable import StableBar
 
 final class ConfigurationEditorTests: XCTestCase {
+    @MainActor func testUnchangedProfileApplyClearsAnEarlierConfigurationError() throws {
+        for wholeProfile in [false, true] {
+            let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            store.reloadConfiguration()
+            let original = try Data(contentsOf: fixture.url)
+            let profile = try XCTUnwrap(store.profiles.first)
+            let editor = ConfigurationEditor(store: store)
+            let invalid = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(#"{"bar":{"height":"invalid"}}"#.utf8))
+            if wholeProfile {
+                var edited = profile
+                edited.configuration = invalid
+                editor.setProfile(edited)
+            } else {
+                editor.setProfileConfiguration(name: profile.name, configuration: invalid)
+            }
+            XCTAssertNotNil(editor.error)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            if wholeProfile { editor.setProfile(profile) }
+            else { editor.setProfileConfiguration(name: profile.name, configuration: profile.configuration) }
+            XCTAssertNil(editor.error)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            XCTAssertTrue(editor.undoSteps.isEmpty)
+            XCTAssertFalse(editor.history.hasPendingChanges)
+        }
+    }
+
     @MainActor func testProgrammaticSelectionCommitsPendingTextBeforeChangingItsWidget() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"right"},{"id":"b","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }

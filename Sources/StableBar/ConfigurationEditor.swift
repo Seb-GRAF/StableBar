@@ -108,8 +108,12 @@ final class ConfigurationEditor {
 
     func setProfile(_ profile: ConfigurationProfile) {
         do {
-            let changes = try profileChanges(from: store.profiles.first { $0.name == profile.name }, to: profile)
-            if changes.isEmpty { return }
+            let current = store.profiles.first { $0.name == profile.name }
+            if current != nil, try !store.customizationProfiles().contains(where: { $0.name == profile.name }) {
+                throw CommandFailure(message: "Save command-line changes before editing this profile.")
+            }
+            let changes = try profileChanges(from: current, to: profile)
+            if changes.isEmpty { error = nil; return }
             change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
     }
@@ -124,7 +128,7 @@ final class ConfigurationEditor {
             let current = profile
             profile.configuration = configuration
             let changes = try profileChanges(from: current, to: profile)
-            if changes.isEmpty { return }
+            if changes.isEmpty { error = nil; return }
             change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
     }

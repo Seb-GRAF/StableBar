@@ -59,7 +59,7 @@ final class ConfigurationHistory {
             let current = profile
             var conditions = profile.when ?? ProfileConditions()
             conditions[keyPath: key] = value
-            profile.when = conditions
+            profile.when = current.when == nil && conditions == ProfileConditions() ? nil : conditions
             let changes = try profileChanges(from: current, to: profile)
             return changes.isEmpty ? [] : [ConfigurationEdit(action: .profiles, profiles: [changes])]
         }
