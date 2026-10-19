@@ -8,7 +8,7 @@ class BarEditControlsPanel: NSPanel {
         title = "Edit Bar"
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = false
+        hasShadow = true
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .none
@@ -62,6 +62,7 @@ final class BarEditControls: NSObject {
             // Edit mode's material covers the entire bar window, including its margin.
             entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: bar.frame, geometry: nil,
                                                           visibleFrame: visibleFrame), display: true)
+            entry.panel.invalidateShadow()
             if entry.hasSheet { entry.panel.orderOut(nil) }
             else { entry.panel.orderFrontRegardless() }
         }
@@ -110,8 +111,11 @@ struct BarEditControlsActions {
 
 struct BarEditControlsView: View {
     let actions: BarEditControlsActions
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 12)
         HStack(spacing: 12) {
             Text("Drag to move · − removes · click a widget to change it")
                 .font(.caption)
@@ -121,14 +125,47 @@ struct BarEditControlsView: View {
                 .accessibilityLabel("Undo bar change")
                 .help("Undo (⌘Z)")
                 .disabled(!actions.canUndo)
+                .buttonStyle(BarEditControlsButtonStyle(isProminent: false))
                 .fixedSize()
             Button("Done", action: actions.done)
                 .accessibilityLabel("Finish editing the bar")
                 .help("Finish editing the bar (Esc)")
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(BarEditControlsButtonStyle(isProminent: true))
                 .fixedSize()
         }
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background {
+            shape.fill(.thickMaterial)
+                .overlay { shape.fill(Color.white.opacity(colorScheme == .dark ? 0.06 : 0.2)) }
+        }
+        .overlay {
+            shape.strokeBorder((colorScheme == .dark ? Color.white : .black)
+                .opacity(colorScheme == .dark ? 0.18 : 0.12), lineWidth: 1 / displayScale)
+        }
+        .clipShape(shape)
+    }
+}
+
+private struct BarEditControlsButtonStyle: ButtonStyle {
+    let isProminent: Bool
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 5)
+        let secondary = colorScheme == .dark ? Color.white : .black
+        configuration.label
+            .font(.body)
+            .foregroundStyle(isProminent ? Color.white : .primary)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background {
+                shape.fill(isProminent ? Color.accentColor : secondary.opacity(colorScheme == .dark ? 0.12 : 0.06))
+                    .overlay {
+                        shape.fill(isProminent ? Color.black : secondary)
+                            .opacity(configuration.isPressed ? (isProminent ? 0.16 : 0.08) : 0)
+                    }
+            }
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }

@@ -30,7 +30,7 @@ final class BarEditControlsTests: XCTestCase {
             XCTAssertFalse(panel.canBecomeMain)
             XCTAssertTrue(panel.styleMask.contains(.nonactivatingPanel))
             XCTAssertFalse(panel.styleMask.contains(.titled))
-            XCTAssertFalse(panel.hasShadow)
+            XCTAssertTrue(panel.hasShadow)
             XCTAssertFalse(panel.hidesOnDeactivate)
             XCTAssertEqual(panel.animationBehavior, .none)
             XCTAssertEqual(panel.level, bar.level)
@@ -47,6 +47,34 @@ final class BarEditControlsTests: XCTestCase {
         XCTAssertEqual(presented.count, 2, "Moving a bar must reuse its controls")
         XCTAssertEqual(panel.frame.midX, bar.frame.midX)
         XCTAssertEqual(panel.frame.maxY, bar.frame.minY - 8)
+    }
+
+    @MainActor func testDoneKeepsItsAccentFillWhenTheControlsAreInactive() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let view = BarEditControlsView(actions: BarEditControlsActions(editing: store.barEditing, focusBar: {}))
+        for scheme in [ColorScheme.dark, .light] {
+            for state in [ControlActiveState.active, .inactive] {
+                let renderer = ImageRenderer(content: HStack(spacing: 0) {
+                    view
+                    Color.accentColor.frame(width: 8, height: 8)
+                }
+                    .environment(\.colorScheme, scheme)
+                    .environment(\.controlActiveState, state))
+                renderer.scale = 1
+                let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+                let fill = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide - 24, y: bitmap.pixelsHigh / 2)?
+                    .usingColorSpace(.sRGB))
+                let accent = try XCTUnwrap(bitmap.colorAt(x: bitmap.pixelsWide - 4, y: bitmap.pixelsHigh / 2)?
+                    .usingColorSpace(.sRGB))
+                XCTAssertEqual(fill.redComponent, accent.redComponent, accuracy: 0.02, "\(scheme), \(state)")
+                XCTAssertEqual(fill.greenComponent, accent.greenComponent, accuracy: 0.02, "\(scheme), \(state)")
+                XCTAssertEqual(fill.blueComponent, accent.blueComponent, accuracy: 0.02, "\(scheme), \(state)")
+                XCTAssertEqual(fill.alphaComponent, 1, accuracy: 0.02, "\(scheme), \(state)")
+            }
+        }
     }
 
     @MainActor func testUndoRestoresHistoryThenFocusesItsOwnBarAndDoneEndsEditing() throws {
