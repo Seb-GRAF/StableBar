@@ -27,6 +27,14 @@ struct WidgetAddChoice: Identifiable, Sendable {
             "id": .string(id), "position": .string(position.rawValue)
         ]) { $1 }) }
     }
+
+    func add(position: WidgetPosition, id: String, before anchor: String?, widgets: [WidgetConfiguration]) -> [ConfigurationEdit]? {
+        guard let edit = add(position: position, id: id) else { return nil }
+        guard anchor != nil else { return [edit] }
+        var order = widgets.map(\.id)
+        order.insert(id, at: WidgetPlacement.insertionIndex(at: position, before: anchor, widgets: widgets))
+        return [edit, ConfigurationEdit(action: .reorder, ids: order)]
+    }
 }
 
 struct WidgetStoreChoice: Sendable {

@@ -16,6 +16,17 @@ enum WidgetPlacement {
         widgets.first { $0.id == selectedID }?.position ?? .right
     }
 
+    static func addAnchor(at position: WidgetPosition, widgets: [WidgetConfiguration]) -> String? {
+        [.right, .notchLeft].contains(position) ? widgets.first { $0.position == position }?.id : nil
+    }
+
+    static func insertionIndex(at position: WidgetPosition, before anchor: String?, widgets: [WidgetConfiguration]) -> Int {
+        if let target = widgets.first(where: { $0.id == anchor && $0.position == position }) {
+            return widgets.firstIndex { $0.id == target.id || (target.group != nil && $0.group == target.group) }!
+        }
+        return widgets.lastIndex { $0.position == position }.map { $0 + 1 } ?? widgets.endIndex
+    }
+
     static func move(_ id: String, by offset: Int, widgets: [WidgetConfiguration]) throws -> [ConfigurationEdit] {
         guard let widget = widgets.first(where: { $0.id == id }) else {
             throw CommandFailure(message: "This widget is no longer available.")
@@ -41,13 +52,7 @@ enum WidgetPlacement {
         let movingIDs = Set(moving.map(\.id))
         if let anchor, movingIDs.contains(anchor), moving.allSatisfy({ $0.position == position }) { return [] }
         var remaining = widgets.filter { !movingIDs.contains($0.id) }
-        let target = remaining.first { $0.id == anchor && $0.position == position }
-        let insertion: Int
-        if let target {
-            insertion = remaining.firstIndex { $0.id == target.id || (target.group != nil && $0.group == target.group) }!
-        } else {
-            insertion = remaining.lastIndex { $0.position == position }.map { $0 + 1 } ?? remaining.endIndex
-        }
+        let insertion = insertionIndex(at: position, before: anchor, widgets: remaining)
         remaining.insert(contentsOf: moving, at: insertion)
         var edits = moving.filter { $0.position != position }.map {
             ConfigurationEdit(action: .set, id: $0.id, properties: ["position": .string(position.rawValue)])

@@ -3,16 +3,7 @@ import SwiftUI
 struct BarEditView: View {
     let store: BarStore
     let display: BarDisplay
-    @State private var setup: WidgetSetup
-    @State private var adding = false
-    @State private var addPosition = WidgetPosition.right
     @State private var measuredSizes: [WidgetPosition: CGSize] = [:]
-
-    init(store: BarStore, display: BarDisplay) {
-        self.store = store
-        self.display = display
-        _setup = State(initialValue: WidgetSetup(store: store))
-    }
 
     var body: some View {
         if let config = store.configuration, let geometry = store.barEditing.geometry(for: display) {
@@ -30,10 +21,8 @@ struct BarEditView: View {
                                            entries: entries.filter { $0.widget.position == position }, config: config,
                                            scrolling: layout.scrolling.contains(position),
                                            contentWidth: measuredSizes[position]?.width ?? 0, viewportWidth: section.width / scale,
-                                           adding: adding && addPosition == position) {
-                                addPosition = position
-                                adding = true
-                            }
+                                           adding: store.barEditing.addPopover.displayID == display.id
+                                               && store.barEditing.addPopover.position == position)
                             .frame(width: section.width / scale, height: height)
                             .offset(x: section.x / scale, y: (proxy.size.height / scale - height) / 2)
                         }
@@ -44,7 +33,7 @@ struct BarEditView: View {
                         ForEach(WidgetPosition.allCases, id: \.self) { position in
                             BarEditSectionRow(store: store, display: display, position: position,
                                               entries: entries.filter { $0.widget.position == position }, config: config,
-                                              adding: false, add: {})
+                                              adding: false)
                             .fixedSize()
                             .background {
                                 GeometryReader { measurement in
@@ -64,12 +53,6 @@ struct BarEditView: View {
             .modifier(BarSurface(store: store, settings: config.bar))
             .padding(config.bar.margin)
             .frame(height: geometry.layoutHeight)
-            .sheet(isPresented: $adding) {
-                WidgetAddView(setup: setup, store: store, position: addPosition) { id in
-                    adding = false
-                    if store.customizationHistory.notice != nil { store.barEditing.select(id) }
-                }
-            }
             .alert("Couldn’t change widget", isPresented: Binding(get: {
                 store.barEditing.error != nil && store.barEditing.errorDisplayID == display.id
             }, set: {
@@ -112,7 +95,6 @@ private struct BarEditSection: View {
     let contentWidth: CGFloat
     let viewportWidth: CGFloat
     let adding: Bool
-    let add: () -> Void
     @State private var frames: [String: CGRect] = [:]
     @State private var rowBounds = CGRect.null
     @Environment(\.colorScheme) private var colorScheme
@@ -125,7 +107,7 @@ private struct BarEditSection: View {
         BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames) {
             ScrollView(.horizontal) {
                 BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
-                                  adding: adding, add: add)
+                                  adding: adding)
                     .background {
                         GeometryReader { proxy in
                             Color.clear.preference(key: BarEditRowBounds.self, value: proxy.frame(in: .named("editSection")))
@@ -197,7 +179,8 @@ struct BarEditSectionRow: View {
     let entries: [BarEditWidget]
     let config: Configuration
     let adding: Bool
-    let add: () -> Void
+    @State private var anchor = NSView()
+    @Environment(\.measuringBarWidths) private var measuring
 
     var body: some View {
         HStack(spacing: config.bar.spacing) {
@@ -229,7 +212,9 @@ struct BarEditSectionRow: View {
     }
 
     private var addSlot: some View {
-        Button(action: add) {
+        Button {
+            store.barEditing.addPopover.show(store: store, displayID: display.id, position: position, anchor: anchor)
+        } label: {
             Image(systemName: "plus").font(.system(size: 12, weight: .medium))
                 .frame(width: BarEditTrayMetrics.slot, height: BarEditTrayMetrics.slot)
                 .foregroundStyle(adding ? Color.white : (store.barStyle.foreground ?? config.defaults.foreground)?.color ?? .primary)
@@ -241,6 +226,7 @@ struct BarEditSectionRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background { if !measuring { BarEditAddAnchor(view: anchor) } }
         .help("Add a widget to \(position.title)")
         .accessibilityLabel("Add a widget to \(position.title)")
     }

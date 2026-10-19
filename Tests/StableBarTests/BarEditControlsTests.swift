@@ -262,6 +262,40 @@ final class BarEditControlsTests: XCTestCase {
         XCTAssertFalse(panel.simulatedVisible, "A late sheet notification must not reopen closed controls")
     }
 
+    @MainActor func testOnlyPopoverDisplayHidesControlsUntilItClosesIncludingSheetTransitions() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let bars = makeBars()
+        defer { bars.values.forEach { $0.close() } }
+        var presented: [UnorderedEditControlsPanel] = []
+        let controls = BarEditControls(makePanel: {
+            let panel = UnorderedEditControlsPanel()
+            presented.append(panel)
+            return panel
+        })
+        defer { controls.close() }
+        store.barEditing.begin()
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        let bar = try XCTUnwrap(bars[1])
+        let panel = try XCTUnwrap(presented.first { abs($0.frame.midX - bar.frame.midX) < 1 })
+        let other = try XCTUnwrap(presented.first { $0 !== panel })
+        NotificationCenter.default.post(name: BarEditAddPopover.changedNotification, object: bar, userInfo: ["open": true])
+        XCTAssertFalse(panel.simulatedVisible)
+        XCTAssertTrue(other.simulatedVisible)
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        XCTAssertFalse(panel.simulatedVisible)
+        NotificationCenter.default.post(name: NSWindow.willBeginSheetNotification, object: bar)
+        NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
+        XCTAssertFalse(panel.simulatedVisible, "Ending a sheet must not cover an open popover")
+        NotificationCenter.default.post(name: BarEditAddPopover.changedNotification, object: bar, userInfo: ["open": false])
+        XCTAssertTrue(panel.simulatedVisible)
+        controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
+        XCTAssertTrue(panel.simulatedVisible)
+        XCTAssertTrue(other.simulatedVisible)
+    }
+
     @MainActor func testAnAlreadyAttachedSheetHidesControlsAndRemovedDisplaysCloseTheirs() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

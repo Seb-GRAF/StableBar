@@ -33,12 +33,16 @@ final class BarEditing {
     private unowned let store: BarStore
     private(set) var isActive = false
     let dragSession = WidgetDragSession()
+    let addPopover: BarEditAddPopover
     var insertion: BarEditInsertion?
     var error: String?
     private(set) var errorDisplayID: Int?
     private var measuredHeights: [Int: CGFloat] = [:]
 
-    init(store: BarStore) { self.store = store }
+    init(store: BarStore, addPopover: BarEditAddPopover = BarEditAddPopover()) {
+        self.store = store
+        self.addPopover = addPopover
+    }
 
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar" }
     var isAvailable: Bool { store.configuration != nil }
@@ -61,6 +65,7 @@ final class BarEditing {
 
     func end() {
         guard isActive else { return }
+        addPopover.close(focusBar: false)
         if let payload = dragSession.active { dragSession.end(payload) }
         insertion = nil
         isActive = false

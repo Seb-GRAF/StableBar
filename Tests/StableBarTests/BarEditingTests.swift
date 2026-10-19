@@ -201,13 +201,13 @@ final class BarEditingTests: XCTestCase {
         let unit = NSHostingView(rootView: BarUnitView(unit: units[0], config: config, store: store, display: laptop.id)
             .fixedSize().modifier(MeasuringCopy()))
         let row = NSHostingView(rootView: BarEditSectionRow(store: store, display: laptop, position: .left,
-            entries: store.barEditing.entries(on: laptop), config: config, adding: false, add: {}).modifier(MeasuringCopy()))
+            entries: store.barEditing.entries(on: laptop), config: config, adding: false).modifier(MeasuringCopy()))
         XCTAssertEqual(row.fittingSize.width, unit.fittingSize.width + 22 + 8 + 14, accuracy: 0.5)
         XCTAssertEqual(row.fittingSize.height, 50, accuracy: 0.5)
         store.barEditing.measure(height: row.fittingSize.height, on: laptop.id)
         XCTAssertEqual(store.barEditing.geometry(for: laptop)?.layoutHeight, 50)
         let empty = NSHostingView(rootView: BarEditSectionRow(store: store, display: laptop, position: .right,
-            entries: [], config: config, adding: false, add: {}).modifier(MeasuringCopy()))
+            entries: [], config: config, adding: false).modifier(MeasuringCopy()))
         XCTAssertEqual(empty.fittingSize.width, 36, accuracy: 0.01)
         XCTAssertEqual(empty.fittingSize.height, 34, accuracy: 0.01)
     }

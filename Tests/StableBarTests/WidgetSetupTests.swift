@@ -69,6 +69,91 @@ final class WidgetSetupTests: XCTestCase {
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
 
+    @MainActor func testEachPlusAddsAtItsOpenSideInOneUndoStepIncludingEmptyGroups() async throws {
+        for position in WidgetPosition.allCases {
+            for empty in [false, true] {
+                let fixture = try ThemeGalleryFixture(empty ? #"{"widgets":[]}"# : "{\"widgets\":[{\"id\":\"first\",\"type\":\"text\",\"text\":\"First\",\"position\":\"\(position.rawValue)\"},{\"id\":\"last\",\"type\":\"clock\",\"position\":\"\(position.rawValue)\"}]}")
+                defer { fixture.close() }
+                let store = try fixture.store()
+                defer { store.stop() }
+                let before = try Data(contentsOf: fixture.url)
+                let setup = WidgetSetup(store: store)
+                let anchor = WidgetPlacement.addAnchor(at: position, widgets: store.configuration?.widgets ?? [])
+                XCTAssertEqual(anchor, !empty && [.right, .notchLeft].contains(position) ? "first" : nil)
+                let result = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: position, before: anchor)
+                let id = try XCTUnwrap(result)
+                XCTAssertEqual(store.configuration?.widgets.map(\.id), empty ? [id] : anchor == nil ? ["first", "last", id] : [id, "first", "last"])
+                XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+                try store.customizationHistory.undo()
+                XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+            }
+        }
+    }
+
+    @MainActor func testAnchoredAddKeepsTemporaryCommandLineWidgetsSeparateFromSavedOrder() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"first","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        try store.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+                                                                  "text": .string("Temporary"), "position": .string("left")])])
+        let setup = WidgetSetup(store: store)
+        let before = try Data(contentsOf: fixture.url)
+        let result = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right, before: "first")
+        let id = try XCTUnwrap(result)
+        XCTAssertEqual(store.configuration?.widgets.filter { $0.position == .right }.map(\.id), [id, "first"])
+        XCTAssertTrue(store.configuration?.widgets.contains { $0.id == "temporary" } == true)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertEqual(store.sessionEdits.count, 1)
+    }
+
+    @MainActor func testCommandFreePackageAddsBeforeThePlusAnchorWithoutReview() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"first","type":"clock","position":"notchLeft"}]}"#)
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "notes", kind: "widgets",
+            configuration: #"{"widgets":[{"id":"note","type":"text","text":"Note","position":"right"}]}"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        await setup.load()
+        let before = try Data(contentsOf: fixture.url)
+        let id = await setup.add(try XCTUnwrap(setup.choices.first { $0.package?.id == "notes" }), to: .notchLeft, before: "first")
+        XCTAssertEqual(id, "note")
+        XCTAssertNil(setup.review)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["note", "first"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+    }
+
+    @MainActor func testCommandPackageKeepsItsPlusAnchorThroughReviewAndAddsAllMembersOnce() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"first","type":"clock","position":"right"}]}"#)
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "commands", kind: nil,
+            configuration: #"{"widgets":[{"id":"a","type":"text","text":"A","position":"left","onClick":"echo reviewed"},{"id":"b","type":"text","text":"B","position":"left"}]}"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        await setup.load()
+        let before = try Data(contentsOf: fixture.url)
+        _ = await setup.add(try XCTUnwrap(setup.choices.first { $0.package?.id == "commands" }), to: .right, before: "first")
+        let review = try XCTUnwrap(setup.review)
+        XCTAssertEqual(review.before, "first")
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+        let installed = try fixture.packages.install(review.inspection.directory)
+        _ = try setup.enable(installed, settings: [:], position: review.position, before: review.before)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "first"])
+        XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        try store.customizationHistory.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+    }
+
     @MainActor func testCommandPackageStaysSeparateAndCannotInstallOrEnableUntilReview() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

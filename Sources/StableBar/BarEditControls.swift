@@ -25,6 +25,7 @@ final class BarEditControls: NSObject {
         let bar: BarPanel
         let panel: BarEditControlsPanel
         var hasSheet: Bool
+        var hasPopover: Bool
     }
 
     private let makePanel: () -> BarEditControlsPanel
@@ -47,11 +48,14 @@ final class BarEditControls: NSObject {
                 let actions = BarEditControlsActions(editing: store.barEditing, focusBar: { [weak bar] in bar?.makeKey() })
                 let host = NSHostingView(rootView: BarEditControlsView(actions: actions))
                 panel.contentView = host
-                controls[id] = Controls(bar: bar, panel: panel, hasSheet: bar.attachedSheet != nil)
+                controls[id] = Controls(bar: bar, panel: panel, hasSheet: bar.attachedSheet != nil,
+                                        hasPopover: store.barEditing.addPopover.displayID == Int(id))
                 NotificationCenter.default.addObserver(self, selector: #selector(willBeginSheet),
                                                        name: NSWindow.willBeginSheetNotification, object: bar)
                 NotificationCenter.default.addObserver(self, selector: #selector(didEndSheet),
                                                        name: NSWindow.didEndSheetNotification, object: bar)
+                NotificationCenter.default.addObserver(self, selector: #selector(popoverChanged),
+                                                       name: BarEditAddPopover.changedNotification, object: bar)
             }
             guard let entry = controls[id], let host = entry.panel.contentView else { continue }
             entry.panel.level = bar.level
@@ -59,11 +63,11 @@ final class BarEditControls: NSObject {
             entry.panel.appearance = store.configuration?.bar.appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
             let fittingSize = host.fittingSize
             let size = CGSize(width: min(fittingSize.width, max(0, visibleFrame.width - 16)), height: fittingSize.height)
-            // Edit mode's material covers the entire bar window, including its margin.
+            // Keep the established gap below the edit bar window.
             entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: bar.frame, geometry: nil,
                                                           visibleFrame: visibleFrame), display: true)
             entry.panel.invalidateShadow()
-            if entry.hasSheet { entry.panel.orderOut(nil) }
+            if entry.hasSheet || entry.hasPopover { entry.panel.orderOut(nil) }
             else { entry.panel.orderFrontRegardless() }
         }
     }
@@ -79,11 +83,21 @@ final class BarEditControls: NSObject {
         guard let bar = notification.object as? BarPanel,
               let id = controls.first(where: { $0.value.bar === bar })?.key else { return }
         controls[id]?.hasSheet = false
-        if bar.isEditingBar { controls[id]?.panel.orderFrontRegardless() }
+        if bar.isEditingBar, controls[id]?.hasPopover == false { controls[id]?.panel.orderFrontRegardless() }
+    }
+
+    @objc private func popoverChanged(_ notification: Notification) {
+        guard let bar = notification.object as? BarPanel,
+              let id = controls.first(where: { $0.value.bar === bar })?.key,
+              let open = notification.userInfo?["open"] as? Bool else { return }
+        controls[id]?.hasPopover = open
+        if open { controls[id]?.panel.orderOut(nil) }
+        else if controls[id]?.hasSheet == false && bar.isEditingBar { controls[id]?.panel.orderFrontRegardless() }
     }
 
     private func close(_ id: CGDirectDisplayID) {
         guard let entry = controls.removeValue(forKey: id) else { return }
+        NotificationCenter.default.removeObserver(self, name: BarEditAddPopover.changedNotification, object: entry.bar)
         NotificationCenter.default.removeObserver(self, name: NSWindow.willBeginSheetNotification, object: entry.bar)
         NotificationCenter.default.removeObserver(self, name: NSWindow.didEndSheetNotification, object: entry.bar)
         entry.panel.close()

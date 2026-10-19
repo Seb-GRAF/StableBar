@@ -6,6 +6,7 @@ final class WidgetSetup {
     struct Review: Identifiable {
         let inspection: WidgetPackageInspection
         let position: WidgetPosition
+        let before: String?
         var id: String { inspection.manifest.versionKey }
     }
 
@@ -44,8 +45,8 @@ final class WidgetSetup {
         }
     }
 
-    func add(_ choice: WidgetAddChoice, to position: WidgetPosition) async -> String? {
-        guard !requestStarted else { return nil }
+    func add(_ choice: WidgetAddChoice, to position: WidgetPosition, before anchor: String? = nil) async -> String? {
+        guard !requestStarted, !Task.isCancelled else { return nil }
         requestStarted = true
         isAdding = true
         defer { isAdding = false }
@@ -53,23 +54,29 @@ final class WidgetSetup {
             error = nil
             if let entry = choice.package {
                 let inspection = try await client.packageForAdding(entry)
+                try Task.checkCancellation()
                 if !inspection.commands.isEmpty {
-                    review = Review(inspection: inspection, position: position)
+                    review = Review(inspection: inspection, position: position, before: anchor)
                     return nil
                 }
                 let installed = try await client.installWithoutReview(entry)
+                try Task.checkCancellation()
                 let settings = try savedSettings(for: installed.manifest)
-                return try enable(installed, settings: settings, position: position)
+                return try enable(installed, settings: settings, position: position, before: anchor)
             }
             let id = "widget-" + UUID().uuidString.prefix(8).lowercased()
-            guard let edit = choice.add(position: position, id: id) else {
+            var loader = ConfigurationLoader()
+            loader.themesDirectory = store.themesDirectory
+            let root = try store.editedDocument([], replaying: store.customizationEdits)
+            let widgets = try loader.load(store.configurationURL, data: configurationData(root), context: store.context).widgets
+            guard let edits = choice.add(position: position, id: id, before: anchor, widgets: widgets) else {
                 throw CommandFailure(message: "Choose a widget to add.")
             }
-            try store.customizationHistory.change(edit)
+            try store.customizationHistory.change(edits)
             return id
         } catch {
             requestStarted = false
-            self.error = errorMessage(error)
+            self.error = error is CancellationError ? nil : errorMessage(error)
             // History reports a write failure too; keep Add errors at their point of use.
             store.customizationHistory.error = nil
             return nil
@@ -87,7 +94,7 @@ final class WidgetSetup {
         }
     }
 
-    func enable(_ inspection: WidgetPackageInspection, settings: [String: ConfigurationValue], position: WidgetPosition) throws -> String? {
+    func enable(_ inspection: WidgetPackageInspection, settings: [String: ConfigurationValue], position: WidgetPosition, before anchor: String? = nil) throws -> String? {
         try store.customizationHistory.flush()
         let selection = ConfigurationEdit(action: .package, properties: [
             "id": .string(inspection.manifest.id), "version": .string(inspection.manifest.version),
@@ -128,7 +135,7 @@ final class WidgetSetup {
             edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: ["position": .string(position.rawValue), "enabled": .bool(true)]))
         }
         let remaining = configured.widgets.filter { !ids.contains($0.id) }
-        let insertion = remaining.lastIndex { $0.position == position }.map { $0 + 1 } ?? remaining.endIndex
+        let insertion = WidgetPlacement.insertionIndex(at: position, before: anchor, widgets: remaining)
         var order = remaining.map(\.id)
         order.insert(contentsOf: added.map(\.id), at: insertion)
         edits.append(ConfigurationEdit(action: .reorder, ids: order))

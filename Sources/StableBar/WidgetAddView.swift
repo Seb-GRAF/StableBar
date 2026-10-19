@@ -21,7 +21,7 @@ struct WidgetAddView: View {
             Divider()
             if let review = setup.review {
                 PackagesView(store: store, reviewing: review.inspection) { inspection, settings in
-                    if let id = try setup.enable(inspection, settings: settings, position: review.position) { added(id) }
+                    if let id = try setup.enable(inspection, settings: settings, position: review.position, before: review.before) { added(id) }
                 }
                 Divider()
                 HStack {
