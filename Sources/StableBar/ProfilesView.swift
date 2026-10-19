@@ -56,7 +56,7 @@ struct ProfilesView: View {
                             if editor.error == nil { selectedName = newName; newName = "" }
                         }
                         .labelStyle(.iconOnly)
-                        .disabled(newName.isEmpty)
+                        .disabled(newName.isEmpty || store.profiles.contains { $0.name == newName })
                     }
                     .padding(10)
                 }
@@ -80,6 +80,11 @@ struct ProfilesView: View {
     private func settings(_ profile: ConfigurationProfile) -> some View {
         Form {
             Section(profile.name) {
+                Toggle("Enabled", isOn: Binding(get: { profile.enabled }, set: {
+                    var edited = profile
+                    edited.enabled = $0
+                    editor.setProfile(edited)
+                }))
                 Text("All conditions must match in Automatic mode. A pinned profile ignores its conditions.")
                     .foregroundStyle(.secondary)
             }

@@ -98,6 +98,7 @@ class BarPanel: NSPanel {
 
     override var canBecomeKey: Bool { isEditingBar }
     override var canBecomeMain: Bool { false }
+    @objc var hasKeyAppearance: Bool { true }
 
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         frameRect
@@ -204,6 +205,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
             NSApp.terminate(nil)
             return
+        }
+        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
+            let update = AppUpdate()
+            do {
+                try update.updater.start()
+                store.update = update
+            } catch {
+                FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
+            }
         }
         Task {
             try? await loadLoginShellEnvironment()
@@ -319,6 +329,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
         if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
         if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
+        if let update = store.update {
+            menu.addItem(withTitle: "Check for Updates…", action: #selector(AppUpdate.checkForUpdates), keyEquivalent: "").target = update
+        }
         if let error = store.configurationError ?? store.workspaceStore.error {
             menu.addItem(.separator())
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")

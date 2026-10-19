@@ -9,10 +9,33 @@ struct BarSurface: ViewModifier {
     func body(content: Content) -> some View {
         let style = store.barStyle
         content
-            .background((style.background ?? settings.background).color)
             .clipShape(RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0)))
+            .modifier(GlassBackground(color: style.background ?? settings.background, glass: settings.glass, surface: \.bar,
+                                      shape: RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0))))
             .overlay { BarBorder(style: style) }
             .animation(reduceMotion ? nil : .easeOut(duration: settings.animationDuration), value: style)
+    }
+}
+
+struct GlassBackground<S: Shape>: ViewModifier {
+    let color: HexColor?
+    let glass: GlassSettings
+    let surface: KeyPath<GlassSettings, Bool>
+    let shape: S
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), glass.enabled, glass[keyPath: surface], let color,
+           (colorScheme == .dark ? color.dark : color.light) & 0xff > 0 {
+            content.background {
+                ZStack {
+                    Color.clear.glassEffect(.clear, in: shape)
+                    shape.fill(color.color.opacity(1 - glass.transparency))
+                }
+            }
+        } else {
+            content.background(color?.color ?? .clear, in: shape)
+        }
     }
 }
 

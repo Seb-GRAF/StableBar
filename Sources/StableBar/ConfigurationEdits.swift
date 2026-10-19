@@ -7,7 +7,7 @@ struct ConfigurationEdit: Codable, Sendable {
     var properties: [String: ConfigurationValue]?
     var ids: [String]?
     var name: String?
-    var profiles: [ConfigurationProfile]?
+    var profiles: [[String: ConfigurationValue]]?
 
     func validateTargets(in widgetIDs: [String]) throws {
         switch action {
@@ -81,7 +81,8 @@ struct ConfigurationEdit: Codable, Sendable {
             root["profile"] = name.map(ConfigurationValue.string) ?? .null
         case .profiles:
             guard let profiles else { throw CommandFailure(message: "Profiles requires profile definitions.") }
-            root["profiles"] = try JSONDecoder().decode(ConfigurationValue.self, from: JSONEncoder().encode(profiles))
+            root["profiles"] = .array(try mergeProfiles(root["profiles"], with: .array(profiles.map(ConfigurationValue.object)))
+                .map(ConfigurationValue.object))
         case .package:
             let package = try requiredProperties()
             guard let id = try package["id"]?.decoded(String.self) else {

@@ -562,23 +562,106 @@ final class ConfigurationHistoryTests: XCTestCase {
         let fixture = try Fixture(configuration: #"{"widgets":[],"profiles":[{"name":"work","configuration":{}}]}"#)
         defer { fixture.close() }
         let store = fixture.store
-        var temporary = store.profiles
-        temporary[0].when = ProfileConditions()
-        temporary[0].when?.app = "com.temporary"
-        try store.applyEdits([ConfigurationEdit(action: .profiles, profiles: temporary)], persist: false)
+        try store.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
+            ["name": .string("work"), "when": .object(["app": .string("com.temporary")]),
+             "configuration": .object(["bar": .object(["margin": .number(10)])])]
+        ])], persist: false)
         let editor = ConfigurationEditor(store: store)
         editor.setProfileCondition("work", \.onBattery, value: true, control: "onBattery")
         try editor.history.flush()
         var saved = try XCTUnwrap(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
         XCTAssertNil(saved[0].when?.app)
         XCTAssertEqual(saved[0].when?.onBattery, true)
-        editor.setProfileConfiguration(name: "work", configuration: ["bar": .object(["height": .number(48)])])
+        editor.setProfileConfiguration(name: "work", configuration: ["bar": .object(["height": .number(48), "margin": .number(10)])])
         editor.addProfile(name: "extra")
         saved = try XCTUnwrap(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
         XCTAssertNil(saved[0].when?.app)
         XCTAssertEqual(saved.map(\.name), ["work", "extra"])
+        XCTAssertEqual(saved[0].configuration["bar"], .object(["height": .number(48)]))
         XCTAssertEqual(store.sessionEdits.count, 1)
         XCTAssertEqual(store.profiles[0].when?.app, "com.temporary")
+        XCTAssertEqual(store.profiles[0].configuration["bar"], .object(["height": .number(48), "margin": .number(10)]))
+    }
+
+    @MainActor func testProfileControlsSaveOnlyChangedPropertiesAcrossPackageAndIncludeLayers() throws {
+        let fixture = try Fixture(configuration: #"{"widgets":[]}"#)
+        defer { fixture.close() }
+        try fixture.installPackage(kind: "widgets", version: "1")
+        let package = fixture.packageURL("1").appending(path: "config.json")
+        let packageData = Data(#"{"profiles":[{"name":"work","when":{"appearance":"light"},"configuration":{"bar":{"height":36,"spacing":7}}},{"name":"package-only"}]}"#.utf8)
+        try packageData.write(to: package)
+        let included = fixture.url.deletingLastPathComponent().appending(path: "included.json")
+        let imported = Data(#"{"profiles":[{"name":"work","when":{"app":"com.inherited"},"configuration":{"bar":{"height":38}}},{"name":"include-only"}]}"#.utf8)
+        try imported.write(to: included)
+        let original = Data(#"{"widgets":[],"packages":[{"id":"sample","version":"1"}],"includes":["included.json"],"profiles":[{"name":"work","configuration":{"bar":{"offset":2}}}]}"#.utf8)
+        try original.write(to: fixture.url)
+        let store = fixture.store
+        store.reloadConfiguration()
+        XCTAssertNil(store.configurationError)
+        _ = try XCTUnwrap(store.profiles.first)
+        let editor = ConfigurationEditor(store: store)
+        for app in ["c", "co", "com.edited"] {
+            editor.setProfileCondition("work", \.app, value: app, control: "app")
+        }
+        try editor.history.flush()
+        XCTAssertEqual(editor.undoSteps.count, 1)
+        let initialOverride: [String: ConfigurationValue] = [
+            "name": .string("work"), "when": .object(["app": .string("com.edited")]),
+            "configuration": .object(["bar": .object(["offset": .number(2)])])
+        ]
+        XCTAssertEqual(try fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self), [initialOverride])
+        editor.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        editor.redo()
+        XCTAssertEqual(store.profiles.map(\.name), ["work", "package-only", "include-only"])
+
+        editor.setProfileCondition("work", \.appearance, value: nil, control: "appearance")
+        try editor.history.flush()
+        XCTAssertNil(try XCTUnwrap(store.profiles.first).when?.appearance)
+        var configuration = try XCTUnwrap(store.profiles.first).configuration
+        configuration["bar"] = .object(["height": .number(44), "spacing": .number(7)])
+        editor.setProfileConfiguration(name: "work", configuration: configuration)
+        var edited = try XCTUnwrap(store.profiles.first)
+        edited.enabled = false
+        editor.setProfile(edited)
+        editor.addProfile(name: "extra")
+        XCTAssertNil(editor.error)
+        let saved = try XCTUnwrap(fixture.document()["profiles"]).decoded([[String: ConfigurationValue]].self)
+        XCTAssertEqual(saved.map { $0["name"] }, [.string("work"), .string("extra")])
+        XCTAssertEqual(saved[0], [
+            "name": .string("work"), "enabled": .bool(false),
+            "when": .object(["app": .string("com.edited"), "appearance": .null]),
+            "configuration": .object(["bar": .object(["height": .number(44), "offset": .null])])
+        ])
+        XCTAssertEqual(try Data(contentsOf: included), imported)
+        XCTAssertEqual(try Data(contentsOf: package), packageData)
+
+        try Data(String(decoding: packageData, as: UTF8.self).replacingOccurrences(of: "7", with: "9").utf8).write(to: package)
+        store.reloadConfiguration()
+        XCTAssertEqual(store.profiles[0].configuration["bar"], .object(["height": .number(44), "spacing": .number(9), "offset": .null]))
+    }
+
+    @MainActor func testLiquidGlassControlsSaveAndUndoWithoutCopyingInheritedSettings() throws {
+        let fixture = try Fixture(configuration: #"{"widgets":[]}"#)
+        defer { fixture.close() }
+        let included = fixture.url.deletingLastPathComponent().appending(path: "included.json")
+        let imported = Data(#"{"bar":{"glass":{"transparency":0.6,"popups":false}}}"#.utf8)
+        try imported.write(to: included)
+        try Data(#"{"widgets":[],"includes":["included.json"]}"#.utf8).write(to: fixture.url)
+        fixture.store.reloadConfiguration()
+        let original = try Data(contentsOf: fixture.url)
+        let editor = ConfigurationEditor(store: fixture.store)
+        editor.change(ConfigurationEdit(action: .bar, properties: ["glass": .object(["enabled": .bool(true)])]))
+        try editor.history.flush()
+        XCTAssertEqual(fixture.store.configuration?.bar.glass.enabled, true)
+        XCTAssertEqual(fixture.store.configuration?.bar.glass.transparency, 0.6)
+        XCTAssertEqual(fixture.store.configuration?.bar.glass.popups, false)
+        XCTAssertEqual(try fixture.document()["bar"], .object(["glass": .object(["enabled": .bool(true)])]))
+        editor.undo()
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        editor.redo()
+        XCTAssertEqual(fixture.store.configuration?.bar.glass.enabled, true)
+        XCTAssertEqual(try Data(contentsOf: included), imported)
     }
 
     @MainActor func testInheritedWidgetAndStylesSaveOnlyInTheMainFile() throws {

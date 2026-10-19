@@ -28,6 +28,10 @@ struct AppearanceView: View {
         let bar = StyleFields(store: store, path: "bar", values: document("bar"),
                               set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
                               unset: { unset(["bar": .object($0)]) })
+        let glass = StyleFields(store: store, path: "bar.glass",
+                                values: (try? document("bar")["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:],
+                                set: { editor.change(ConfigurationEdit(action: .bar, properties: ["glass": .object($0)])) },
+                                unset: { unset(["bar": .object(["glass": .object($0)])]) })
         let barStyle = StyleFields(store: store, path: "bar.style",
                                    values: (try? document("bar")["style"]?.decoded([String: ConfigurationValue].self)) ?? [:],
                                    set: { editor.change(ConfigurationEdit(action: .bar, properties: ["style": .object($0)])) },
@@ -83,6 +87,20 @@ struct AppearanceView: View {
                 Text("Theme")
             } footer: {
                 Text("Automatic follows the system’s light or dark mode. Choose a theme to apply and save it.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Section {
+                glass.toggle("Use Liquid Glass", "enabled", default: false)
+                if glass.values["enabled"] == .bool(true) {
+                    glass.percentage("See-through", "transparency", default: 0.3)
+                    glass.toggle("Widgets", "widgets", default: true)
+                    glass.toggle("Popups", "popups", default: true)
+                    glass.toggle("Bar", "bar", default: true)
+                }
+            } header: {
+                Text("Liquid Glass")
+            } footer: {
+                Text("Experimental. Draws the widgets, popups and bar your theme gives a background as native macOS glass, tinted with the theme’s colors. See-through sets how much glass shows through them; the higher it is, the more your wallpaper can make text hard to read. Needs macOS 26 or later.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {

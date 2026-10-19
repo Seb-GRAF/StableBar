@@ -53,14 +53,15 @@ final class ConfigurationHistory {
         }
         guard profile.when?[keyPath: key] != value else { return }
         try change(control: Control(action: .profiles, id: name, paths: [], name: control)) { [unowned store] in
-            var profiles = try store.customizationProfiles(includingPending: false)
-            guard let index = profiles.firstIndex(where: { $0.name == name }) else {
+            guard var profile = try store.customizationProfiles(includingPending: false).first(where: { $0.name == name }) else {
                 throw CommandFailure(message: "This profile is no longer in the configuration file.")
             }
-            var conditions = profiles[index].when ?? ProfileConditions()
+            let current = profile
+            var conditions = profile.when ?? ProfileConditions()
             conditions[keyPath: key] = value
-            profiles[index].when = conditions
-            return [ConfigurationEdit(action: .profiles, profiles: profiles)]
+            profile.when = conditions
+            let changes = try profileChanges(from: current, to: profile)
+            return changes.isEmpty ? [] : [ConfigurationEdit(action: .profiles, profiles: [changes])]
         }
     }
 

@@ -103,22 +103,29 @@ final class ConfigurationEditor {
     }
 
     func addProfile(name: String) {
+        setProfile(ConfigurationProfile(name: name, when: nil, configuration: [:]))
+    }
+
+    func setProfile(_ profile: ConfigurationProfile) {
         do {
-            store.flushCustomization()
-            let profiles = try store.customizationProfiles() + [ConfigurationProfile(name: name, when: nil, configuration: [:])]
-            change(ConfigurationEdit(action: .profiles, profiles: profiles))
+            let changes = try profileChanges(from: store.profiles.first { $0.name == profile.name }, to: profile)
+            if changes.isEmpty { return }
+            change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
     }
 
     func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
         do {
             store.flushCustomization()
-            var profiles = try store.customizationProfiles()
-            guard let index = profiles.firstIndex(where: { $0.name == name }) else {
+            guard try store.customizationProfiles().contains(where: { $0.name == name }),
+                  var profile = store.profiles.first(where: { $0.name == name }) else {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")
             }
-            profiles[index].configuration = configuration
-            change(ConfigurationEdit(action: .profiles, profiles: profiles))
+            let current = profile
+            profile.configuration = configuration
+            let changes = try profileChanges(from: current, to: profile)
+            if changes.isEmpty { return }
+            change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
     }
 
@@ -153,6 +160,16 @@ final class ConfigurationEditor {
             selectedID = store.configuration?.widgets.first?.id
         }
     }
+}
+
+func profileChanges(from current: ConfigurationProfile?, to edited: ConfigurationProfile) throws -> [String: ConfigurationValue] {
+    let values = try JSONDecoder().decode([String: ConfigurationValue].self, from: JSONEncoder().encode(edited))
+    let previous = try current.map {
+        try JSONDecoder().decode([String: ConfigurationValue].self, from: JSONEncoder().encode($0))
+    } ?? [:]
+    var changes = changedProperties(from: previous, to: values)
+    if !changes.isEmpty { changes["name"] = .string(edited.name) }
+    return changes
 }
 
 private func changedProperties(from current: [String: ConfigurationValue], to edited: [String: ConfigurationValue]) -> [String: ConfigurationValue] {

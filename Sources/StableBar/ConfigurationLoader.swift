@@ -144,7 +144,11 @@ struct ConfigurationLayer {
         let widgets = try (values["widgets"]?.decoded([ConfigurationValue].self) ?? [])
             + (next.values["widgets"]?.decoded([ConfigurationValue].self) ?? [])
         let previousPackages = values["packages"]
+        let previousProfiles = values["profiles"]
         values.merge(next.values) { $1.overriding($0) }
+        if let profiles = next.values["profiles"] {
+            values["profiles"] = .array(try mergeProfiles(previousProfiles, with: profiles).map(ConfigurationValue.object))
+        }
         if let selections = next.values["packages"] {
             var packages = try previousPackages?.decoded([[String: ConfigurationValue]].self) ?? []
             for selection in try selections.decoded([[String: ConfigurationValue]].self) {
@@ -162,6 +166,21 @@ struct ConfigurationLayer {
     }
 }
 
+func mergeProfiles(_ earlier: ConfigurationValue?, with next: ConfigurationValue) throws -> [[String: ConfigurationValue]] {
+    var profiles = try earlier?.decoded([[String: ConfigurationValue]].self) ?? []
+    var names = Set<String>()
+    for profile in try next.decoded([[String: ConfigurationValue]].self) {
+        let name = try (profile["name"] ?? .null).decoded(String.self)
+        guard names.insert(name).inserted else { throw ThemeConfigurationError.duplicateProfile(name) }
+        if let index = profiles.firstIndex(where: { $0["name"] == .string(name) }) {
+            profiles[index].merge(profile) { $1.overriding($0) }
+        } else {
+            profiles.append(profile)
+        }
+    }
+    return profiles
+}
+
 func configurationOrigins(_ value: ConfigurationValue, source: ConfigurationOrigin, path: String = "") -> [String: ConfigurationOrigin] {
     var origins = path.isEmpty ? [:] : [path: source]
     switch value {
@@ -173,8 +192,11 @@ func configurationOrigins(_ value: ConfigurationValue, source: ConfigurationOrig
     case let .array(array):
         for (index, value) in array.enumerated() {
             var key = String(index)
-            if path == "widgets", case let .object(widget) = value, case let .string(id) = widget["id"] {
+            if (path == "widgets" || path.hasSuffix(".configuration.widgets")),
+               case let .object(widget) = value, case let .string(id) = widget["id"] {
                 key = id
+            } else if path == "profiles", case let .object(profile) = value, case let .string(name) = profile["name"] {
+                key = name
             }
             origins.merge(configurationOrigins(value, source: source, path: "\(path).\(key)")) { $1 }
         }
@@ -270,7 +292,7 @@ struct ConfigurationLoader {
         }
         activeProfiles = []
         profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []
-        matchesApps = profiles.contains { $0.when?.app != nil }
+        matchesApps = profiles.contains { $0.enabled && $0.when?.app != nil }
         let selected = try layer.values["profile"].flatMap { try $0.decoded(String?.self) }
         pinnedProfile = selected
         var names = Set<String>()
@@ -278,12 +300,17 @@ struct ConfigurationLoader {
             guard names.insert(profile.name).inserted else { throw ThemeConfigurationError.duplicateProfile(profile.name) }
         }
         if let selected, !names.contains(selected) { throw ThemeConfigurationError.unknownProfile(selected) }
-        for (index, profile) in profiles.enumerated() {
+        for profile in profiles where profile.enabled {
             let matches = selected.map { $0 == profile.name } ?? (profile.when?.matches(context) ?? true)
             if matches {
-                let source = layer.origins["profiles.\(index).name"]!.appending("(profile \(profile.name))")
+                let source = layer.origins["profiles.\(profile.name).name"]!.appending("(profile \(profile.name))")
+                var origins = configurationOrigins(.object(profile.configuration), source: source)
+                let prefix = "profiles.\(profile.name).configuration."
+                for (path, origin) in layer.origins where path.hasPrefix(prefix) {
+                    origins[String(path.dropFirst(prefix.count))] = origin.appending("(profile \(profile.name))")
+                }
                 try layer.merge(ConfigurationLayer(values: profile.configuration,
-                    origins: configurationOrigins(.object(profile.configuration), source: source)))
+                    origins: origins))
                 activeProfiles.append(profile.name)
             }
         }

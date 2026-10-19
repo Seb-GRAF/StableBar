@@ -91,13 +91,22 @@ jobs:
           else
             echo "No beta: nothing to release since the last stable version, or main moved on."
           fi
+      - name: Set up Developer ID signing
+        if: steps.next.outputs.version
+        env:
+          DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ vars.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER: ${{ vars.NOTARY_API_ISSUER }}
+        run: ./scripts/import-developer-id.sh
       - name: Build the beta
         if: steps.next.outputs.version
         env:
           VERSION: ${{ steps.next.outputs.version }}
         run: |
           ./scripts/set-version.sh "$VERSION" "$GITHUB_RUN_NUMBER"
-          ./scripts/package.sh
+          STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
       - name: Publish the beta
         if: steps.next.outputs.version
         env:
@@ -106,6 +115,13 @@ jobs:
         run: |
           gh release create "v$VERSION" dist/StableBar.dmg --repo "$GITHUB_REPOSITORY" --prerelease \
             --target "$GITHUB_SHA" --title "v$VERSION" --generate-notes
+      # Only a Developer ID-signed app can install an update, so ad-hoc builds stay out of the feed.
+      - name: Publish the update feed
+        if: steps.next.outputs.version && env.SIGNING_IDENTITY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: ./scripts/publish-appcast.sh "$VERSION" beta
 
   # Run by hand from Actions > CI > Run workflow on main.
   release:
@@ -150,6 +166,14 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts
       - run: npm audit signatures
+      - name: Set up Developer ID signing
+        env:
+          DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ vars.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER: ${{ vars.NOTARY_API_ISSUER }}
+        run: ./scripts/import-developer-id.sh
       - name: Release
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -163,3 +187,8 @@ jobs:
               "to release. Run it again once the newest commit's beta is out."
             exit 1
           fi
+      - name: Publish the update feed
+        if: env.SIGNING_IDENTITY
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./scripts/publish-appcast.sh "$(cat .next-version)"

@@ -22,6 +22,13 @@
       "muted": { "opacity": 0.5 }
     }
   },
+  "profiles": [
+    {
+      "name": "portable",
+      "when": { "onBattery": true },
+      "configuration": { "bar": { "spacing": 4 } }
+    }
+  ],
   "templates": {
     "metric": {
       "type": "script",

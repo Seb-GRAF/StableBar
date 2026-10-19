@@ -22,9 +22,9 @@ import Testing
     #expect(store.pinnedProfile == nil)
     #expect(store.activeProfiles == ["light"])
     #expect(store.configuration?.bar.height == 32)
-    var profiles = store.profiles
-    profiles[1].when?.onBattery = true
-    editor.change(ConfigurationEdit(action: .profiles, profiles: profiles))
+    var profile = store.profiles[1]
+    profile.when?.onBattery = true
+    editor.setProfile(profile)
     #expect(store.activeProfiles.isEmpty)
     #expect(store.configuration?.bar.height == 40)
     editor.undo()
@@ -33,9 +33,7 @@ import Testing
     #expect(store.activeProfiles.isEmpty)
     editor.change(ConfigurationEdit(action: .profile, name: "light"))
     #expect(store.configuration?.bar.height == 32)
-    editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [
-        ConfigurationProfile(name: "work", when: nil, configuration: ["bar": .object(["height": .number(36)])])
-    ]))
+    editor.setProfile(ConfigurationProfile(name: "work", when: nil, configuration: ["bar": .object(["height": .number(36)])]))
     #expect(store.profiles.map(\.name) == ["dark", "light", "work"])
     editor.change(ConfigurationEdit(action: .profile, name: "work"))
     #expect(store.configuration?.bar.height == 36)
@@ -44,6 +42,10 @@ import Testing
     #expect(editor.error == nil)
     #expect(store.sessionEdits.isEmpty)
     #expect(try Data(contentsOf: module) == imported)
+    let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
+    let savedProfiles = try saved["profiles"]!.decoded([[String: ConfigurationValue]].self)
+    #expect(savedProfiles.map { $0["name"] } == [.string("light"), .string("work")])
+    #expect(savedProfiles[0] == ["name": .string("light"), "when": .object(["onBattery": .bool(true)])])
     store.reloadConfiguration()
     #expect(store.pinnedProfile == "work")
     #expect(store.profiles[1].when?.onBattery == true)
@@ -51,10 +53,34 @@ import Testing
     editor.undo()
     #expect(store.pinnedProfile == "work")
     #expect(store.configuration?.bar.height == 36)
-    editor.change(ConfigurationEdit(action: .profiles, profiles: store.profiles + [store.profiles[0]]))
+    editor.change(ConfigurationEdit(action: .profiles, profiles: [["name": .string("dark")], ["name": .string("dark")]]))
     #expect(editor.error != nil)
     #expect(store.profiles.count == 3)
     #expect(store.sessionEdits.isEmpty)
+
+    try Data(String(decoding: imported, as: UTF8.self).replacingOccurrences(of: "32", with: "34").utf8).write(to: module)
+    store.reloadConfiguration()
+    editor.change(ConfigurationEdit(action: .profile, name: "light"))
+    #expect(store.configuration?.bar.height == 34)
+    var light = store.profiles[1]
+    light.when?.appearance = nil
+    light.enabled = false
+    editor.setProfile(light)
+    #expect(editor.error == nil)
+    #expect(store.activeProfiles.isEmpty)
+    editor.undo()
+    #expect(store.activeProfiles == ["light"])
+    editor.redo()
+    #expect(store.activeProfiles.isEmpty)
+    try editor.history.flush()
+    let edited = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
+    let lightOverride = try edited["profiles"]!.decoded([[String: ConfigurationValue]].self)[0]
+    #expect(lightOverride == ["name": .string("light"), "enabled": .bool(false),
+                              "when": .object(["appearance": .null, "onBattery": .bool(true)])])
+    try Data(#"{"profiles":[]}"#.utf8).write(to: module)
+    store.reloadConfiguration()
+    #expect(store.profiles.map(\.name) == ["light", "work"])
+    #expect(store.configurationError == nil)
 }
 
 @Test @MainActor func profilesUpdateEvenWhenEffectiveSettingsStayTheSame() throws {
@@ -66,7 +92,7 @@ import Testing
     store.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     let original = store.effectiveDocument
-    editor.change(ConfigurationEdit(action: .profiles, profiles: [ConfigurationProfile(name: "work", when: nil, configuration: [:])]))
+    editor.setProfile(ConfigurationProfile(name: "work", when: nil, configuration: [:]))
     #expect(store.effectiveDocument == original)
     #expect(store.profiles.map(\.name) == ["work"])
     editor.change(ConfigurationEdit(action: .profile, name: "work"))

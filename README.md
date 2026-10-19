@@ -23,6 +23,8 @@ Quit the running app before rebuilding its bundle.
 open dist/StableBar.app
 ```
 
+Local app builds show **Development** in **Customize → About**, with the source revision and a `-dirty` suffix when the checkout has changes. A local rebuild of beta source is still a development build; install the beta DMG for its published version and build number.
+
 For development checks:
 
 ```sh
@@ -33,7 +35,15 @@ The first launch creates `~/.config/stablebar/config.json` from [Resources/confi
 
 ### Download a release
 
-Stable releases after v0.4.0 on the [releases page](https://github.com/Seb-GRAF/StableBar/releases) include `StableBar.dmg`. Betas of the next version are marked **Pre-release**. Both are built for Apple silicon and are not notarized yet, so macOS blocks the app the first time you open it: allow it in **System Settings → Privacy & Security → Open Anyway**.
+Stable releases after v0.4.0 on the [releases page](https://github.com/Seb-GRAF/StableBar/releases) include `StableBar.dmg`. Betas of the next version are marked **Pre-release**. Both are built for Apple silicon. Releases signed with a Developer ID are notarized and open like any app. Earlier ones are ad-hoc signed, so macOS blocks them the first time you open them: allow it in **System Settings → Privacy & Security → Open Anyway**.
+
+### Updates
+
+A release signed with a Developer ID checks GitHub for a newer version once a day. When one is out, an **Update** tile appears at the right end of the bar, in your theme's style. Click it to see what's changed and **Download** the update, then **Install and Relaunch** once it's downloaded. **Check for Updates…** in the menu-bar icon's menu or in **Customize → About** checks right away, and About shows the same button while an update waits. **Customize → About** also turns off the daily check, or lets StableBar download updates and install them when it quits.
+
+**Update track** chooses the releases you get. **Stable** gets stable releases. **Beta** gets betas of the next version and stable releases, whichever is newer. An installed beta starts on Beta. Switching back to Stable keeps your beta until a newer stable release is out, because StableBar never installs an older version.
+
+Only an app signed with a Developer ID updates itself, because the update must be signed by the same developer as the app it replaces. Ad-hoc signed releases and the builds you make yourself don't check for updates; **Customize → About** links to the releases page instead.
 
 ### Build an installer
 
@@ -99,7 +109,7 @@ Split a setup into JSON files and load them from the main configuration:
 }
 ```
 
-Include paths are relative to the file that names them; absolute paths and `~` also work. Includes can have their own includes. Files apply in listed order, followed by the containing file. Objects merge recursively, with later values winning. Arrays replace earlier arrays, except top-level `widgets`, which concatenate in order, and `packages`, whose selections merge by package ID. Root package selections can disable or change versions inherited from includes. Modules can contain only a theme, templates, popups, environment variables, or overrides; they do not need widgets.
+Include paths are relative to the file that names them; absolute paths and `~` also work. Includes can have their own includes. Files apply in listed order, followed by the containing file. Objects merge recursively, with later values winning. Arrays replace earlier arrays, except top-level `widgets`, which concatenate in order, `packages`, whose selections merge by package ID, and `profiles`, which merge by name. Root package selections can disable or change versions inherited from includes. Modules can contain only a theme, templates, popups, environment variables, or overrides; they do not need widgets.
 
 Define reusable widget properties in `templates`, then select one with `template`:
 
@@ -290,11 +300,15 @@ Define reusable JSON values in `tokens` and reference them with a whole string s
 
 A color token can hold a light and dark pair, as `accent` does here, so it follows the appearance without a profile.
 
-Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, and the focused app's bundle identifier in `app`. Conditions in one profile must all match. Matching profiles apply in array order after modules and the root configuration; later profiles win. A profile without `when` always matches. A profile that sets `bar.appearance` changes how the bar looks, not which profiles match. Widgets in profiles append to the bar; use `widgetOverrides` to change existing widgets. Appearance, power, screen and focused-app changes update the active profiles automatically.
+Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, and the focused app's bundle identifier in `app`. Conditions in one profile must all match.
+
+Profiles merge by name across packages, themes, includes and the main file. Later values merge recursively into an existing profile without moving it; new names append in order. Matching profiles apply in that order after modules and the root configuration; later profiles win. Set `"enabled": false` on a profile to skip it, even when pinned, or `true` to enable it again. An override can contain only its `name` and the properties to change, for example `{"name":"dark","enabled":false}`.
+
+A profile without `when` always matches. A profile that sets `bar.appearance` changes how the bar looks, not which profiles match. Widgets in profiles append to the bar; use `widgetOverrides` to change existing widgets. Appearance, power, screen and focused-app changes update the active profiles automatically.
 
 Set `"profile": "laptop"` to apply only that profile, regardless of its conditions. Remove `profile` to resume automatic matching, or set it to `null` to override a manual profile inherited from a module. **Customize → Diagnostics** reports active profiles and the file, template, override and token sources behind effective widget properties.
 
-In **Customize StableBar → Profiles**, add profiles, edit their conditions and configuration, or choose Automatic matching or a pinned profile. Changes save automatically and can be undone or redone. Editing profiles imported from another file writes the full profile list into the main file, preserving their order and configuration; the imported file stays unchanged.
+In **Customize StableBar → Profiles**, add profiles, edit their conditions and configuration, or choose Automatic matching or a pinned profile. Changes save automatically and can be undone or redone. The Enabled toggle turns a profile on or off. Adding or editing a profile saves only the new profile or changed properties into the main file; unchanged profiles and properties continue to follow their source files. Included files stay unchanged. Set a condition to Any to clear an inherited condition.
 
 Setup, the editor and the command line save changes into the main file's ordinary keys and never edit imported files. A widget defined in the main file, including inside one of its profiles, is changed, removed or reordered where it is defined. A widget from an include or package gets an entry in the main file's `widgetOverrides`; removing it sets `enabled` to `false`. Bar and default-style changes merge into `bar` and `defaults`. Untouched parts of the file keep their formatting and key order. An active profile still applies on top of these changes.
 
@@ -419,7 +433,7 @@ Install your own theme like any other package, then select it with its version:
 { "theme": { "id": "my-theme", "version": "1.0.0" } }
 ```
 
-Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Packages**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. A `profiles` array in a later layer replaces the theme's profiles, like any array. **Built-in** in setup removes `theme`. In Appearance it removes the main file’s selection, or selects Built-in explicitly when an included file chooses another theme. Choosing a theme in Appearance or Try Themes replaces the version and settings inherited from an included file.
+Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Packages**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. Profiles merge by name across these layers, keeping their order; later properties override earlier ones. A theme’s profiles remain unless you disable them with `"enabled": false`. **Built-in** in setup removes `theme`. In Appearance it removes the main file’s selection, or selects Built-in explicitly when an included file chooses another theme. Choosing a theme in Appearance or Try Themes replaces the version and settings inherited from an included file.
 
 When your main file sets values that the selected theme also sets, Appearance names them below the gallery. **Reset them** removes those values in one saved, undoable change. This includes bar dimensions, shared styles and a widget’s own style where it overrides the theme’s defaults or that widget’s role. Theme color changes count too, including colors inherited from Built-in. Active profiles in your main file are included; included files, templates and packages are left alone. The Light/Dark/Automatic choice is kept. Other settings still follow the usual layer order.
 
@@ -449,6 +463,18 @@ Popups inherit `popupDefaults` and then `defaults`, and the workspace highlight 
 | `critical` | Critical text or fills |
 
 A reference to a token that no layer defines is an error. Built-in defines all of these, so your own widgets can use them under any theme. Their names are reserved for colors: Built-in's `defaults` use `text`, `surface`, `surfaceRaised` and `accent`, so a token of yours with one of these names replaces the theme's color and must be a color. A widget package should still define fallback values for the shared tokens it uses, so it passes review on its own; Built-in and any other theme replace them.
+
+### Liquid Glass
+
+`bar.glass` is experimental. It draws backgrounds as native Liquid Glass, the material of the macOS 26 Dock, on top of any theme:
+
+```json
+"bar": { "glass": { "enabled": true, "transparency": 0.4 } }
+```
+
+Every widget, popup and bar that has a background becomes glass in the same shape, tinted with that background's color, so hover, open and data-state colors still show. Borders, corners, shadows and text keep the theme's style. Transparent backgrounds stay transparent. `transparency` (0.3 by default) sets how much glass shows through the color, from `0`, the theme's color, to `1`, pure glass; the higher it is, the more a busy or bright wallpaper can make text hard to read. StableBar uses Apple's clear glass with the theme's color as its dimming layer: the frosted regular glass switches small elements between light and dark to match what is behind them, which would leave theme text unreadable. Set `widgets`, `popups` or `bar` to `false` to keep that surface's plain color. Before macOS 26, StableBar draws the colors as usual.
+
+Glass in a background window renders flat, without refraction. StableBar's bar and popups report themselves as active to AppKit so the glass refracts; they still don't take keyboard focus.
 
 ### Displays and notch placement
 
@@ -647,9 +673,9 @@ StableBar --batch '[
 ]' --persist
 ```
 
-A batch validates the whole resulting configuration before replacing the running bar or writing the file. A failed batch leaves both intact. Supported edit actions are `set` (`id`, `properties`), `add` (`properties`, including `id`), `remove` (`id`), `reorder` (`ids`), `bar`/`defaults`/`popupDefaults`/`roles`/`workspaceDefaults`/`modeAliases`/`tokens` (`properties`, merged into those keys), `unset` (`properties` naming the keys to remove from the main file, with `id` for a widget, for example `{"action":"unset","id":"clock","properties":{"style":{"foreground":null}}}`), `profile` (`name`, omitted for automatic), `package` (`properties`: `id`, `version`, optional `enabled` and `settings`), and `theme` (the same `properties`, with only `id` for a theme that ships with StableBar, omitted for Built-in).
+A batch validates the whole resulting configuration before replacing the running bar or writing the file. A failed batch leaves both intact. Supported edit actions are `set` (`id`, `properties`), `add` (`properties`, including `id`), `remove` (`id`), `reorder` (`ids`), `bar`/`defaults`/`popupDefaults`/`roles`/`workspaceDefaults`/`modeAliases`/`tokens` (`properties`, merged into those keys), `unset` (`properties` naming the keys to remove from the main file, with `id` for a widget, for example `{"action":"unset","id":"clock","properties":{"style":{"foreground":null}}}`), `profile` (`name`, omitted for automatic), `profiles` (`profiles`, definitions merged by name; set `enabled` to `false` to disable one), `package` (`properties`: `id`, `version`, optional `enabled` and `settings`), and `theme` (the same `properties`, with only `id` for a theme that ships with StableBar, omitted for Built-in).
 
-Without `id`, `unset` can also address widget definitions by their ID and profiles by their name in the main file. For example, `{"action":"unset","properties":{"widgets":{"clock":{"style":{"foreground":null}}},"profiles":{"night":{"configuration":{"bar":{"height":null}}}}}}` removes the clock’s text color and the night profile’s bar height in one edit. Empty objects are removed, except a profile’s required `configuration` stays as `{}`.
+Without `id`, `unset` can also address widget definitions by their ID and profiles by their name in the main file. For example, `{"action":"unset","properties":{"widgets":{"clock":{"style":{"foreground":null}}},"profiles":{"night":{"configuration":{"bar":{"height":null}}}}}}` removes the clock’s text color and the night profile’s bar height in one edit. Empty objects are removed, except an emptied profile `configuration` stays as `{}`.
 
 - `--validate [PATH]`: compose and validate files without starting scripts.
 - `--refresh ID`: refresh a running widget. Hidden, suspended providers must first be made visible or opened in **Customize → Diagnostics**.
@@ -659,11 +685,11 @@ Without `id`, `unset` can also address widget definitions by their ID and profil
 
 ### Customize
 
-Open **Customize StableBar…** from the menu-bar icon or by right-clicking the bar, reopen the running app, or run `StableBar --customize`. Its sidebar has six sections.
+Open **Customize StableBar…** from the menu-bar icon or by right-clicking the bar, reopen the running app, or run `StableBar --customize`. Its sidebar has seven sections.
 
 **General** opens the configuration file in your editor, shows it in Finder or reloads it, runs setup again, and reconnects the workspace source.
 
-**Appearance** shows a sample bar in each [theme](#themes)'s style; click a card to select it or **Get** a theme from the Store. A notice names your settings that override the chosen theme, with **Reset them** to let its values apply. Appearance also keeps the bar light or dark or lets it follow the system, and edits the theme's colors. Each theme color has a light and a dark value; changing one saves it in your configuration's `tokens`, so every widget, popup and package that uses the color follows. **All widgets** sets the default colors, shadow, font, weight, size, padding and corners. **Popups** sets their background, border, shadow and weight, which apply over All widgets. **Bar** sets the bar's background, border color, width and edges, corners, size and position. Together they reach every property the themes that ship with StableBar set, so you can build any of their looks here.
+**Appearance** shows a sample bar in each [theme](#themes)'s style; click a card to select it or **Get** a theme from the Store. A notice names your settings that override the chosen theme, with **Reset them** to let its values apply. Appearance also keeps the bar light or dark or lets it follow the system, and edits the theme's colors. Each theme color has a light and a dark value; changing one saves it in your configuration's `tokens`, so every widget, popup and package that uses the color follows. **Liquid Glass**, below the theme, turns on [Liquid Glass](#liquid-glass) and sets how see-through it is and which surfaces use it. **All widgets** sets the default colors, shadow, font, weight, size, padding and corners. **Popups** sets their background, border, shadow and weight, which apply over All widgets. **Bar** sets the bar's background, border color, width and edges, corners, size and position. Together they reach every property the themes that ship with StableBar set, so you can build any of their looks here.
 
 **Widgets** groups your widgets by position. Drag within or between groups to move them; widgets that share a group move together, with one Undo step. Use the arrow buttons or ⌥⌘↑ and ⌥⌘↓ to move the selected widget up or down. Empty positions remain available, including both sides of the notch when a display or widget uses them; **Position** and **Move to** always offer every position. **Add widget** searches built-in widgets and the Store in one list, with Script in its own section. Double-click an entry or select it and press Return to add it. A Store widget that improves a native widget shares its entry; its context menu and accessibility action offer **Add Basic** to add the built-in version. Offline, the built-in version stays available. Adding a package already on the bar selects its widget and keeps its position and compatible settings. Packages with commands show their commands, permissions and hosts for review before you add them. New widgets go to the end of the selected widget’s position, or Right if none is selected, and become selected.
 
@@ -680,6 +706,8 @@ Changes in Appearance, Widgets, Profiles and Packages apply to the bar immediate
 **Packages** reviews local folders and [store](#store) packages and their declared commands, edits typed settings, installs versions and enables a chosen version. Enabling a theme makes it the active theme; themes have no commands to review. Select an older installed version to roll back, or **Uninstall…** to remove one.
 
 **Diagnostics** shows the composed widget configuration, role and resolved style, ordered presentation layers and their source paths (including role/workspace defaults and tokens), AeroSpace mode/alias states and connection errors, what the widget shows (its `text`, `icon`, `fields` and `temporaryFields`), provider output and data state, the provider's data source and the events it sends, graph samples, command stdout/stderr, timing, CPU time and failure/restart counts. Run a refresh, invoke the widget’s click command, or send an event. Inspecting a hidden provider resumes it while Diagnostics is visible. Closing the window restores its visibility policy.
+
+**About** shows a released app's channel (Stable or Beta), full version and build number. Local app builds show Development and their source revision; builds without version metadata show Development with the version unavailable. It also checks for [updates](#updates), chooses the update track and turns automatic checks and installs on or off.
 
 ## Built-in widgets
 

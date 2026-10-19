@@ -57,6 +57,8 @@ indirect enum PopupContent: Sendable {
     case progress(source: String, height: Double)
     /// The frontmost app's icon, drawn by an active-app widget's default layout. Configurations can't use it.
     case appIcon
+    /// The update on offer and its download button, drawn by the update tile's popup. Configurations can't use it.
+    case appUpdate
 }
 
 struct PopupBlock: Decodable, Sendable {

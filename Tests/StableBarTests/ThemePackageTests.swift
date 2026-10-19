@@ -43,6 +43,51 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(loader.document["widgetOverrides"] == nil)
 }
 
+@Test func profilesMergeByNameAndCanBeDisabledAcrossLayers() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    try writePackageFile(#"""
+    {"profiles":[
+      {"name":"dark","when":{"appearance":"dark"},"configuration":{"bar":{"height":30,"spacing":8}}},
+      {"name":"portable","when":{"onBattery":true},"configuration":{"bar":{"height":32}}}]}
+    """#, to: directory.appending(path: "base.json"))
+    try writePackageFile(#"""
+    {"includes":["base.json"],"profiles":[
+      {"name":"portable","enabled":false},
+      {"name":"dark","configuration":{"bar":{"height":34}}},
+      {"name":"work","when":{"app":"com.test.Editor"},"configuration":{"bar":{"height":36}}}]}
+    """#, to: directory.appending(path: "module.json"))
+    let json = #"""
+    {"includes":["module.json"],"profiles":[
+      {"name":"dark","when":{"appearance":null,"onBattery":true}},
+      {"name":"work","enabled":false},
+      {"name":"external","when":{"externalDisplay":true},"configuration":{"bar":{"spacing":12}}}]}
+    """#
+    var loader = ConfigurationLoader()
+    #expect(try loader.load(root, data: Data(json.utf8)).bar.height == 40)
+    #expect(loader.profiles.map(\.name) == ["dark", "portable", "work", "external"])
+    #expect(!loader.matchesApps)
+    let battery = try loader.load(root, data: Data(json.utf8), context: ConfigurationContext(onBattery: true))
+    #expect(loader.activeProfiles == ["dark"])
+    #expect(battery.bar.height == 34)
+    #expect(battery.bar.spacing == 8)
+    #expect(loader.origins["bar.height"]?.file == directory.appending(path: "module.json").path)
+    #expect(loader.origins["bar.spacing"]?.file == directory.appending(path: "base.json").path)
+    let external = try loader.load(root, data: Data(json.utf8), context: ConfigurationContext(onBattery: true, externalDisplay: true))
+    #expect(loader.activeProfiles == ["dark", "external"])
+    #expect(external.bar.spacing == 12)
+    let disabled = #"{"includes":["module.json"],"profile":"portable"}"#
+    #expect(try loader.load(root, data: Data(disabled.utf8)).bar.height == 40)
+    #expect(loader.activeProfiles.isEmpty)
+    let enabled = #"{"includes":["module.json"],"profile":"portable","profiles":[{"name":"portable","enabled":true}]}"#
+    #expect(try loader.load(root, data: Data(enabled.utf8)).bar.height == 32)
+    #expect(loader.activeProfiles == ["portable"])
+    #expect(throws: ThemeConfigurationError.self) {
+        try loader.load(root, data: Data(#"{"profiles":[{"name":"same"},{"name":"same"}]}"#.utf8))
+    }
+}
+
 @Test func manualProfilesOverrideConditionsAndUnknownProfilesFail() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "profiles.json")
     let json = #"""
@@ -166,7 +211,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
      "widgets":[{"id":"weather","type":"text","position":"right","text":"@setting.label",
       "style":{"fontSize":"@setting.size"},"onClick":"sh \"$PACKAGE_DIR/scripts/weather.sh\"",
       "popup":{"height":120,"style":{},"layout":{"type":"image","path":"@token.image","onClickField":"joinCommand"}}}],
-     "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{
+     "profiles":[{"name":"night","enabled":false,"when":{"appearance":"dark"},"configuration":{
        "widgetOverrides":{"weather":{"onClick":"echo night"}}}}]}
     """#, to: source.appending(path: "config.json"))
     let inspection = try store.inspect(source)
@@ -618,14 +663,15 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     try writePackageFile(##"""
     {"tokens":{"textMuted":"#555555","badge":"#888888","surface":"#777777"},
      "widgets":[{"id":"status","type":"text","position":"left","text":"Ready",
-                 "style":{"foreground":"@token.textMuted","background":"@token.badge"}}]}
+                 "style":{"foreground":"@token.textMuted","background":"@token.badge"}}],
+     "profiles":[{"name":"package","when":{"onBattery":true},"configuration":{"bar":{"height":31}}}]}
     """##, to: widget.appending(path: "config.json"))
     _ = try store.install(widget)
-    try writePackageFile(##"{"tokens":{"surface":"#666666"}}"##, to: directory.appending(path: "module.json"))
+    try writePackageFile(##"{"tokens":{"surface":"#666666"},"profiles":[{"name":"dark","configuration":{"bar":{"spacing":9}}}]}"##, to: directory.appending(path: "module.json"))
     let root = directory.appending(path: "config.json")
     let json = ##"""
     {"includes":["module.json"],"theme":{"id":"slate","version":"1"},"packages":[{"id":"status","version":"1"}],
-     "defaults":{"fontSize":13},
+     "defaults":{"fontSize":13},"profiles":[{"name":"root","when":{"onBattery":true},"configuration":{"bar":{"height":33}}}],
      "widgets":[{"id":"note","type":"text","position":"right","text":"Note","style":{"foreground":"@token.textMuted"}}]}
     """##
     var loader = ConfigurationLoader()
@@ -641,6 +687,11 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let dark = try loader.load(root, data: Data(json.utf8), context: ConfigurationContext(appearance: "dark"))
     #expect(dark.defaults.foreground == HexColor(0xeeeeeeff))
     #expect(loader.activeProfiles == ["dark"])
+    #expect(loader.profiles.map(\.name) == ["package", "dark", "root"])
+    #expect(dark.bar.spacing == 9)
+    let battery = try loader.load(root, data: Data(json.utf8), context: ConfigurationContext(onBattery: true))
+    #expect(loader.activeProfiles == ["package", "root"])
+    #expect(battery.bar.height == 33)
     let builtIn = try loader.load(root, data: Data(#"{"widgets":[]}"#.utf8))
     #expect(builtIn.defaults.foreground == nil)
     #expect(builtIn.bar.height == 40)

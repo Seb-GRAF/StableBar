@@ -10,10 +10,11 @@ struct ConfigurationContext: Sendable, Equatable {
 
 struct ConfigurationProfile: Codable, Equatable, Sendable {
     let name: String
+    var enabled = true
     var when: ProfileConditions?
     var configuration: [String: ConfigurationValue]
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case name, when, configuration }
+    enum CodingKeys: String, CodingKey, CaseIterable { case name, enabled, when, configuration }
 
     init(name: String, when: ProfileConditions?, configuration: [String: ConfigurationValue]) {
         self.name = name
@@ -25,8 +26,9 @@ struct ConfigurationProfile: Codable, Equatable, Sendable {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         name = try values.decode(String.self, forKey: .name)
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         when = try values.decodeIfPresent(ProfileConditions.self, forKey: .when)
-        configuration = try values.decode([String: ConfigurationValue].self, forKey: .configuration)
+        configuration = try values.decodeIfPresent([String: ConfigurationValue].self, forKey: .configuration) ?? [:]
     }
 }
 

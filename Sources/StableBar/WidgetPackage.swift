@@ -250,6 +250,7 @@ struct WidgetPackageStore: Sendable {
         for profile in profiles {
             var selected = layer
             selected.values["profile"] = .string(profile.name)
+            try selected.merge(ConfigurationLayer(values: ["profiles": .array([.object(["name": .string(profile.name), "enabled": .bool(true)])])], origins: [:]))
             documents.append(try loader.finish(selected, context: ConfigurationContext()))
             commands.formUnion(packageCommands(.object(loader.templates.mapValues(ConfigurationValue.object))))
         }
@@ -369,7 +370,7 @@ func preparePackageDocument(_ document: [String: ConfigurationValue], directory:
     if let profiles = result["profiles"] {
         result["profiles"] = .array(try profiles.decoded([[String: ConfigurationValue]].self).map { profile in
             var profile = profile
-            let configuration = try (profile["configuration"] ?? .null).decoded([String: ConfigurationValue].self)
+            let configuration = try (profile["configuration"] ?? .object([:])).decoded([String: ConfigurationValue].self)
             profile["configuration"] = .object(try preparePackageDocument(configuration, directory: directory))
             return .object(profile)
         })

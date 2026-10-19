@@ -135,7 +135,8 @@ final class ThemeOverridesTests: XCTestCase {
         defer { fixture.close() }
         let theme = try fixture.theme(##"""
         {"defaults":{"foreground":"@token.text"},
-         "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}}]}
+         "profiles":[{"name":"night","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}},
+                     {"name":"disabled","enabled":false,"configuration":{"bar":{"spacing":99}}}]}
         """##, install: false)
         let light = try theme.overrideLayer(context: ConfigurationContext())
         XCTAssertNil(light.values["tokens"])

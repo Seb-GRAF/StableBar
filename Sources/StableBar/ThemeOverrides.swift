@@ -148,7 +148,7 @@ extension ThemeChoice {
     func overrideLayer(settings: [String: ConfigurationValue] = [:], context: ConfigurationContext) throws -> ConfigurationLayer {
         var loader = ConfigurationLoader()
         var layer = try loader.readPackage(at: directory, manifest: manifest, settings: settings)
-        for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
+        for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] where profile.enabled {
             if profile.when?.matches(context) ?? true {
                 try layer.merge(ConfigurationLayer(values: profile.configuration, origins: [:]))
             }

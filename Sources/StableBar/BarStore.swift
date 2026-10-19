@@ -12,6 +12,7 @@ final class BarStore: NSObject {
     let workspaceStore: WorkspaceStore
     let windowClearance = WindowClearance()
     let popup: WidgetPopup
+    var update: AppUpdate?
     let configurationURL: URL
     let registry: DataSourceRegistry
     var onConfigurationChange: (() -> Void)?

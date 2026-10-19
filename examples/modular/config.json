@@ -1,5 +1,11 @@
 {
   "includes": ["theme.json", "widgets.json"],
+  "profiles": [
+    {
+      "name": "portable",
+      "configuration": { "bar": { "spacing": 5 } }
+    }
+  ],
   "environment": {
     "STATUS_TEXT": "Ready for events"
   },

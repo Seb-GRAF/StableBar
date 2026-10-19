@@ -34,7 +34,7 @@ struct PopupView: View {
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     target.open()
-                }, states: states) { command, environment in
+                }, states: states, update: store.update) { command, environment in
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                     store.runAction(command, widget: widget,
                                     event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
@@ -46,8 +46,9 @@ struct PopupView: View {
             .padding(.horizontal, appearance.paddingHorizontal)
             .padding(.vertical, appearance.paddingVertical)
         }
-        .background(appearance.background, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
         .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))
+        .modifier(GlassBackground(color: presentationStyle.background, glass: store.configuration?.bar.glass ?? GlassSettings(), surface: \.popups,
+                                  shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
             RoundedRectangle(cornerRadius: appearance.cornerRadius)
                 .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
@@ -78,6 +79,8 @@ struct BlockContext {
     var tracksHover = true
     /// The frontmost app's icon, for an active-app widget's default layout.
     var appIcon: NSImage?
+    /// The update on offer, for the update tile's popup.
+    var update: AppUpdate?
     /// How text, field and symbol blocks without a transition of their own show changes.
     var motion = BlockMotion()
     let runAction: (String, [String: String]) -> Void
@@ -327,6 +330,10 @@ struct PopupBlockView: View {
         case .appIcon:
             if let icon = context.appIcon {
                 Image(nsImage: icon).resizable().frame(width: appearance.iconSize, height: appearance.iconSize)
+            }
+        case .appUpdate:
+            if let update = context.update, let version = update.version {
+                UpdateDetails(update: update, version: version, appearance: appearance)
             }
         }
     }

@@ -66,6 +66,31 @@ enum IndicatorPlacement: String, Decodable, CaseIterable, Sendable {
     case cell, belowBar
 }
 
+struct GlassSettings: Decodable, Sendable {
+    var enabled = false
+    var transparency = 0.3
+    var widgets = true
+    var popups = true
+    var bar = true
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case enabled, transparency, widgets, popups, bar }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? enabled
+        transparency = try values.decodeIfPresent(Double.self, forKey: .transparency) ?? transparency
+        guard (0...1).contains(transparency) else {
+            throw DecodingError.dataCorruptedError(forKey: .transparency, in: values, debugDescription: "Use a number from 0 to 1.")
+        }
+        widgets = try values.decodeIfPresent(Bool.self, forKey: .widgets) ?? widgets
+        popups = try values.decodeIfPresent(Bool.self, forKey: .popups) ?? popups
+        bar = try values.decodeIfPresent(Bool.self, forKey: .bar) ?? bar
+    }
+}
+
 struct WidgetStyle: Decodable, Equatable, Sendable {
     var foreground: HexColor?
     var background: HexColor?
@@ -385,9 +410,10 @@ struct BarSettings: Decodable, Sendable {
     var notchSpacing = 16.0
     var style = WidgetStyle()
     var appearance: BarAppearance?
+    var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, margin, keepWindowsClear, inset, spacing, background, animationDuration, notchWidth, notchSpacing, style, appearance
+        case height, displayScale, offset, margin, keepWindowsClear, inset, spacing, background, animationDuration, notchWidth, notchSpacing, style, appearance, glass
     }
 
     init() {}
@@ -411,6 +437,7 @@ struct BarSettings: Decodable, Sendable {
         notchSpacing = try values.decodeIfPresent(Double.self, forKey: .notchSpacing) ?? notchSpacing
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? style
         appearance = try values.decodeIfPresent(BarAppearance.self, forKey: .appearance)
+        glass = try values.decodeIfPresent(GlassSettings.self, forKey: .glass) ?? glass
     }
 
     func scale(for display: BarDisplay) -> Double {

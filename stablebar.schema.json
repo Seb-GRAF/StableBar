@@ -516,6 +516,37 @@
         }
       ]
     },
+    "glass": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Experimental. Draws the widget, popup and bar backgrounds as native Liquid Glass on macOS 26 and later, tinted with their colors.",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/boolean",
+          "description": "Turns Liquid Glass on. Off by default."
+        },
+        "transparency": {
+          "anyOf": [
+            { "type": "number", "minimum": 0, "maximum": 1 },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "How much glass shows through the background colors: 0 keeps the colors, 1 is pure glass. 0.3 by default."
+        },
+        "widgets": {
+          "$ref": "#/definitions/boolean",
+          "description": "Glass for widgets that have a background. On by default."
+        },
+        "popups": {
+          "$ref": "#/definitions/boolean",
+          "description": "Glass for popups that have a background. On by default."
+        },
+        "bar": {
+          "$ref": "#/definitions/boolean",
+          "description": "Glass for the bar when it has a background. On by default."
+        }
+      }
+    },
     "style": {
       "type": "object",
       "additionalProperties": false,
@@ -1455,6 +1486,9 @@
           "$ref": "#/definitions/boolean",
           "description": "Move ordinary windows below the bar using Accessibility access. Disabled by default."
         },
+        "glass": {
+          "$ref": "#/definitions/glass"
+        },
         "inset": {
           "$ref": "#/definitions/number"
         },
@@ -1546,6 +1580,9 @@
       "properties": {
         "name": {
           "$ref": "#/definitions/string"
+        },
+        "enabled": {
+          "$ref": "#/definitions/boolean"
         },
         "when": {
           "$ref": "#/definitions/conditions"

@@ -26,7 +26,7 @@ struct BarView: View {
                     } ?? range
                 }
                 let widgets = store.barEditing.widgets(on: display)
-                let units = BarUnit.make(widgets: widgets, groups: config.groups)
+                let units = BarUnit.make(widgets: widgets + [store.update?.widget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
                     let items = units.map { unit in
                         BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0,
@@ -259,6 +259,7 @@ struct BarUnitSurface<Content: View>: View {
 
 @MainActor
 private func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfiguration? {
+    if widget.id == AppUpdate.widgetID { return AppUpdate.popup }
     if let popup = widget.popup { return popup }
     if let name = widget.popupName { return store.configuration?.popups[name] }
     if let menu = store.scripts[widget.id]?.output.menu ?? widget.menu, !menu.isEmpty {
@@ -338,7 +339,8 @@ struct WidgetView: View {
         }
         .font(appearance.font)
         .foregroundStyle(appearance.foreground)
-        .background(appearance.background, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
+        .modifier(GlassBackground(color: style.background, glass: store.configuration?.bar.glass ?? GlassSettings(), surface: \.widgets,
+                                  shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
             RoundedRectangle(cornerRadius: appearance.cornerRadius)
                 .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
