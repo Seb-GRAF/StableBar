@@ -9,7 +9,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         ScrollViewReader { scroll in
             Form {
-                Section("General") {
+                Section("Startup") {
                     LoginItemSettings()
                 }
                 .id(SettingsSearchResult.login.id)
@@ -71,11 +71,11 @@ struct GeneralSettingsView: View {
                 } header: {
                     Text("Configuration")
                 } footer: {
-                    Text("Saved file changes apply automatically. Customize writes to your main configuration; imported files stay intact. Temporary command-line changes have their own Save and Discard actions.")
+                    Text("Saved file changes apply automatically. Settings writes to your main configuration; imported files stay intact. Temporary command-line changes have their own Save and Discard actions.")
                 }
                 .id(SettingsSearchResult.configuration.id)
                 Section("Getting started") {
-                    Text("Select a widget in Your bar to change its content, appearance and behavior. Arrange on desktop moves widgets directly on the bar. Undo reverses saved edits.")
+                    Text("Select a widget in Your bar to change its content, appearance and behavior. Edit Bar in Place moves widgets directly on the bar. Undo reverses saved edits.")
                         .font(.callout).foregroundStyle(.secondary)
                     HStack {
                         Button("Set Up StableBar…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }

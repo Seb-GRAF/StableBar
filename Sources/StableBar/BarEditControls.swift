@@ -5,7 +5,7 @@ import SwiftUI
 class BarEditControlsPanel: NSPanel {
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        title = "Edit Bar"
+        title = "Edit Bar in Place"
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true

@@ -101,7 +101,7 @@ struct ProfilesView: View {
     private func settings(_ profile: ConfigurationProfile) -> some View {
         Form {
             Section(profile.name) {
-                Text("Your bar, Appearance and Settings change this profile while it is on the bar. Values it doesn't change come from Default.")
+                Text("Your bar, Appearance and General change this profile while it is on the bar. Values it doesn't change come from Default.")
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Edit \(profile.name)") { edit(profile.name) }

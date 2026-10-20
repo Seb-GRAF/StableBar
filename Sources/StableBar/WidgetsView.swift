@@ -109,8 +109,8 @@ struct WidgetsView: View {
         let names = displayNames
         return VStack(spacing: 0) {
             HStack {
-                Button(store.barEditing.isActive ? "Finish arranging" : "Arrange on desktop", action: store.barEditing.toggle)
-                    .accessibilityLabel(store.barEditing.isActive ? "Finish arranging" : "Arrange on desktop")
+                Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
+                    .accessibilityLabel(store.barEditing.menuTitle)
                     .disabled(!store.barEditing.isAvailable)
                 Spacer()
             }

@@ -1,6 +1,6 @@
 # StableBar
 
-StableBar is a native macOS bar built with Swift, AppKit and SwiftUI as a Swift package (macOS 14+, Swift 6). It reads a JSON configuration, by default `~/.config/stablebar/config.json`, and is controlled from its menu-bar icon, the Customize window and the `StableBar` command line. The [README](README.md) is the user manual; [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull request flow and releases.
+StableBar is a native macOS bar built with Swift, AppKit and SwiftUI as a Swift package (macOS 14+, Swift 6). It reads a JSON configuration, by default `~/.config/stablebar/config.json`, and is controlled from its menu-bar icon, the Settings window and the `StableBar` command line. In code, the Settings window is still called Customize (`CustomizationWindow`, `--customize`). The [README](README.md) is the user manual; [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull request flow and releases.
 
 ## Protect the developer's setup
 
@@ -23,7 +23,7 @@ The developer's own StableBar is usually running while you work.
 - `swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`.
 - Run the tests for what you changed with `swift test --filter <name>`. CI runs the whole suite on macOS for every pull request.
 - `StableBar --validate PATH` checks a configuration without starting its scripts.
-- Visible changes (the bar, popups, setup, Customize) need before/after screenshots in the pull request. Ask before launching the app or taking screenshots: a second bar appears on the developer's screen.
+- Visible changes (the bar, popups, setup, Settings) need before/after screenshots in the pull request. Ask before launching the app or taking screenshots: a second bar appears on the developer's screen.
 
 ## Hit every surface
 
@@ -31,7 +31,7 @@ A configuration change rarely lives in one place. Before calling one done, say w
 
 - **Decoding.** Unknown properties are errors, so a new property needs a coding key and an entry in [stablebar.schema.json](stablebar.schema.json). `schemaListsTheSamePropertiesAsTheDecoders` fails when they differ.
 - **Layers.** Values can come from includes, templates, profiles and package overrides, not only the main file.
-- **Editing.** Customize's Appearance, Widgets and Profiles sections, and the command-line edits, which share `ConfigurationEdits.swift`.
+- **Editing.** The Appearance, Your bar and Profiles sections in Settings, and the command-line edits, which share `ConfigurationEdits.swift`.
 - **Docs.** The README section that documents the feature, and the setups in [examples](examples).
 
 ## Pull requests
