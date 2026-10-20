@@ -11,26 +11,58 @@ struct AppMenuItem: Hashable {
 final class AppMenu: NSObject, NSMenuDelegate {
     private(set) var appleMenu: AppMenuItem?
     private(set) var items: [AppMenuItem] = []
-    private(set) var isTrusted = AXIsProcessTrusted()
+    private(set) var isTrusted: Bool
+    @ObservationIgnored private let checkAccess: () -> Bool
+    @ObservationIgnored private let readAttribute: (String, AXUIElement) -> CFTypeRef?
     @ObservationIgnored private var app: NSRunningApplication?
     @ObservationIgnored private var menus: [NSMenu: AXUIElement] = [:]
+    @ObservationIgnored private(set) var retryTask: Task<Void, Never>?
+
+    init(checkAccess: @escaping () -> Bool = { AXIsProcessTrusted() },
+         readAttribute: @escaping (String, AXUIElement) -> CFTypeRef? = { name, element in
+             var value: CFTypeRef?
+             guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+             return value
+         }) {
+        self.checkAccess = checkAccess
+        self.readAttribute = readAttribute
+        isTrusted = checkAccess()
+        super.init()
+    }
 
     func read(_ app: NSRunningApplication?) {
         if let app, app.processIdentifier == ProcessInfo.processInfo.processIdentifier || app.bundleIdentifier == "org.stablebar.app" { return }
+        retryTask?.cancel()
+        retryTask = nil
         self.app = app
-        isTrusted = AXIsProcessTrusted()
+        if readItems() { return }
+        retryTask = Task { [weak self] in
+            do {
+                for delay in [250, 500, 1000, 2000] {
+                    try await Task.sleep(for: .milliseconds(delay))
+                    guard let self else { return }
+                    if readItems() { return }
+                }
+            } catch {}
+        }
+    }
+
+    private func readItems() -> Bool {
+        isTrusted = checkAccess()
         var next: [AppMenuItem] = []
         if isTrusted, let app {
             let element = AXUIElementCreateApplication(app.processIdentifier)
             AXUIElementSetMessagingTimeout(element, 0.1)
-            if let menuBar = attribute(kAXMenuBarAttribute, of: element) {
-                next = children(of: menuBar as! AXUIElement).compactMap { item in
-                    (attribute(kAXTitleAttribute, of: item) as? String).map { AppMenuItem(title: $0, element: item) }
-                }
+            guard let menuBar = attribute(kAXMenuBarAttribute, of: element),
+                  let children = attribute(kAXChildrenAttribute, of: menuBar as! AXUIElement) as? [AXUIElement] else { return false }
+            for item in children {
+                guard let title = attribute(kAXTitleAttribute, of: item) as? String else { return false }
+                next.append(AppMenuItem(title: title, element: item))
             }
         }
         if next.first != appleMenu { appleMenu = next.first }
         if Array(next.dropFirst()) != items { items = Array(next.dropFirst()) }
+        return true
     }
 
     func refresh() {
@@ -38,6 +70,9 @@ final class AppMenu: NSObject, NSMenuDelegate {
     }
 
     func open(_ item: AppMenuItem, at location: NSPoint, in view: NSView?) {
+        var pid: pid_t = 0
+        AXUIElementGetPid(item.element, &pid)
+        guard pid == app?.processIdentifier else { return }
         let menu = NSMenu()
         menu.delegate = self
         menus = [menu: item.element]
@@ -75,9 +110,7 @@ final class AppMenu: NSObject, NSMenuDelegate {
     }
 
     private func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
-        return value
+        readAttribute(name, element)
     }
 
     private func children(of element: AXUIElement) -> [AXUIElement] {

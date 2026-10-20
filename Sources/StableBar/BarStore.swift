@@ -112,6 +112,11 @@ final class BarStore: NSObject {
         }
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(updateActiveApp), name: NSWorkspace.didActivateApplicationNotification, object: nil)
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
+            NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(refreshAppMenu), name: name, object: nil)
+        }
+        DistributedNotificationCenter.default().addObserver(
+            self, selector: #selector(refreshAppMenu), name: Notification.Name("com.apple.screenIsUnlocked"), object: nil)
     }
 
     @objc private func updateActiveApp() {
@@ -131,6 +136,11 @@ final class BarStore: NSObject {
             }
         } == true
         appMenu.read(shown ? activeApp : nil)
+    }
+
+    @objc private func refreshAppMenu() {
+        activeApp = NSWorkspace.shared.frontmostApplication
+        readAppMenu()
     }
 
     func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
@@ -827,6 +837,7 @@ final class BarStore: NSObject {
         managesConnections = false
         popup.close()
         windowClearance.stop()
+        appMenu.read(nil)
         reloadTask?.cancel()
         configurationWatcher.stop()
         workspaceStore.stop()
@@ -842,6 +853,7 @@ final class BarStore: NSObject {
         reloadObserver = nil
         eventObservers.removeAll()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        DistributedNotificationCenter.default().removeObserver(self)
     }
 }
 
