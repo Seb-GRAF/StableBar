@@ -44,7 +44,6 @@ struct SetupView: View {
     @State private var step = 0
     @State private var preferences = SetupPreferences()
     @State private var preview = BarStore()
-    @State private var catalog = BarStore()
     @State private var sources: [String: ScriptWidget] = [:]
     @State private var error: String?
     @State private var loginStatus = SMAppService.mainApp.status
@@ -52,7 +51,6 @@ struct SetupView: View {
     @State private var calendarAccess = EKEventStore.authorizationStatus(for: .event)
     @State private var wallpaper = NSScreen.main.flatMap { NSWorkspace.shared.desktopImageURL(for: $0) }.flatMap(NSImage.init(contentsOf:))
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
 
     private var themes: [ThemeChoice] {
         themeChoices(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"), selectedKey: store.selectedThemeKey)
@@ -118,17 +116,17 @@ struct SetupView: View {
                     .foregroundStyle(Color.accentColor)
                 Text("StableBar").font(.headline)
                 Spacer()
-                Text(step == 4 ? "Ready" : "\(step + 1) of 4")
+                Text(step == 3 ? "Ready" : "\(step + 1) of 3")
                     .font(.callout).foregroundStyle(.secondary).monospacedDigit()
             }
             .padding(.horizontal, 36)
             .padding(.top, 24)
             HStack(spacing: 6) {
-                ForEach(0..<4) { index in
+                ForEach(0..<3) { index in
                     Capsule().fill(index <= step ? Color.accentColor : Color.primary.opacity(0.08)).frame(height: 3)
                 }
             }
-            .accessibilityLabel(step == 4 ? "Setup complete" : "Setup step \(step + 1) of 4")
+            .accessibilityLabel(step == 3 ? "Setup complete" : "Setup step \(step + 1) of 3")
             .padding(.horizontal, 36)
             .padding(.top, 20)
 
@@ -137,8 +135,7 @@ struct SetupView: View {
                     switch step {
                     case 0: welcome
                     case 1: customization
-                    case 2: widgets
-                    case 3: access
+                    case 2: access
                     default: completion
                     }
                     if let error {
@@ -153,18 +150,18 @@ struct SetupView: View {
             }
             Divider()
             HStack {
-                if step > 0 && step < 4 {
+                if step > 0 && step < 3 {
                     Button("Back") { step -= 1 }
                 } else if step == 0 {
                     Button("Set up later", action: close)
                 }
                 Spacer()
-                Text(step == 4 ? "You can reopen setup from Settings." : "Bar settings and Open at login apply when you finish.")
+                Text(step == 3 ? "You can reopen setup from Settings." : "Bar settings and Open at login apply when you finish.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button(step == 4 ? "Done" : step == 3 ? "Apply setup" : "Continue") {
-                    if step == 4 { close() }
-                    else if step == 3 { finish() }
+                Button(step == 3 ? "Done" : step == 2 ? "Apply setup" : "Continue") {
+                    if step == 3 { close() }
+                    else if step == 2 { finish() }
                     else { step += 1 }
                 }
                 .buttonStyle(.borderedProminent)
@@ -182,10 +179,10 @@ struct SetupView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             loginStatus = SMAppService.mainApp.status
             calendarAccess = EKEventStore.authorizationStatus(for: .event)
-            if step < 4 { refreshPreview() }
+            if step < 3 { refreshPreview() }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
-            if step < 4 { refreshPreview() }
+            if step < 3 { refreshPreview() }
         }
     }
 
@@ -193,6 +190,17 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 24) {
             heading("Make the bar yours.", detail: "Widgets are the items on your bar. Click one to use it; use Edit Bar to move it or open its settings.")
             barPreview
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Start from a preset").font(.headline)
+                HStack(spacing: 10) {
+                    ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
+                        presetCard(preset)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Text("A preset picks a style, which you can change on the next step, and adds its widgets. Click it again to keep your current bar.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.title2).frame(width: 28)
                 VStack(alignment: .leading, spacing: 5) {
@@ -274,77 +282,32 @@ struct SetupView: View {
         }
     }
 
-    private var widgets: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            heading("Choose useful widgets.", detail: "These built-in widgets run no scripts. Packages provide more widgets or themes; browse them later in the Library.")
-            barPreview
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(sets, id: \.self) { set in
-                    setCard(set)
-                }
-            }
-            Text("Already added widgets stay as they are. Selecting a turned-off widget enables it while preserving its settings. You can arrange, add and remove widgets in Your bar.")
-                .font(.callout).foregroundStyle(.secondary)
-            if sets.count == 2 {
-                Text("Workspaces are available when AeroSpace or yabai is installed. You can add them later from the Library.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            if preferences.widgetSets.contains(.meetings) {
-                Label("The Meetings preview uses sample events. Choose Calendar access on the next step, or set it up later.",
-                      systemImage: "calendar")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func setCard(_ set: SetupPreferences.WidgetSet) -> some View {
-        let selected = preferences.widgetSets.contains(set)
-        let state = store.configuration.map { set.state(in: $0) } ?? .available
-        let marked = selected || state == .added
+    private func presetCard(_ preset: SetupPreferences.Preset) -> some View {
+        let selected = preferences == preset.preferences(sets: sets)
         return Button {
-            if selected { preferences.widgetSets.removeAll { $0 == set } } else { preferences.widgetSets.append(set) }
+            preferences = selected ? SetupPreferences() : preset.preferences(sets: sets)
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack {
-                    if let configuration = catalog.configuration {
-                        let ids = set.widgets.map { $0["id"] }
-                        HStack(spacing: configuration.bar.spacing) {
-                            ForEach(configuration.widgets.filter { ids.contains(.string($0.id)) }) { widget in
-                                WidgetView(widget: widget, defaults: configuration.defaults, popupDefaults: configuration.popupDefaults,
-                                           store: catalog, monitor: 1, animationDuration: configuration.bar.animationDuration)
-                            }
-                        }
-                        .padding(.horizontal, configuration.bar.inset)
-                        .frame(height: configuration.bar.height)
-                        .modifier(BarSurface(store: catalog, settings: configuration.bar))
-                        .environment(\.colorScheme, configuration.bar.appearance?.colorScheme ?? colorScheme)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 72)
-                .background { backdrop }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(marked ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: marked ? 2 : 1)
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                Image(systemName: preset.symbol)
+                    .font(.title2)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    .frame(height: 28)
                 HStack(spacing: 4) {
-                    Text(set.title).font(.headline)
-                    if marked { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
+                    Text(preset.title).font(.headline)
+                    if selected { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor) }
                 }
-                Text(set.detail).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Text(widgetSetStatus(set, state: state, selected: selected))
-                    .font(.caption).foregroundStyle(state == .conflict ? .orange : .secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(preset.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .contentShape(Rectangle())
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: selected ? 2 : 1)
+            }
         }
         .buttonStyle(.plain)
-        .disabled(state == .added || state == .conflict)
-        .accessibilityAddTraits(marked ? .isSelected : [])
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var access: some View {
@@ -395,14 +358,14 @@ struct SetupView: View {
         }
     }
 
-    private func widgetSetStatus(_ set: SetupPreferences.WidgetSet, state: SetupPreferences.WidgetSet.State, selected: Bool) -> String {
-        if selected, let configuration = preview.configuration, set.state(in: configuration) == .disabled {
+    private func widgetSetStatus(_ set: SetupPreferences.WidgetSet, state: SetupPreferences.WidgetSet.State) -> String {
+        if let configuration = preview.configuration, set.state(in: configuration) == .disabled {
             return "Will stay turned off in this configuration"
         }
         return switch state {
-        case .available: selected ? "Will be added" : "Select to add"
+        case .available: "Will be added"
         case .added: "Already added"
-        case .disabled: selected ? "Will be turned on" : "Turned off · select to enable"
+        case .disabled: "Will be turned on"
         case .conflict: "An existing widget uses this ID. Its settings will be kept."
         }
     }
@@ -470,7 +433,7 @@ struct SetupView: View {
             ForEach(preferences.widgetSets, id: \.self) { set in
                 LabeledContent(set.title, value: set == .meetings && (needsCalendarSetup || preferences.deferMeetings)
                                ? "Save turned off · set up access later"
-                               : widgetSetStatus(set, state: store.configuration.map { set.state(in: $0) } ?? .available, selected: true))
+                               : widgetSetStatus(set, state: store.configuration.map { set.state(in: $0) } ?? .available))
             }
             if let openAtLogin {
                 LabeledContent("Open at login", value: openAtLogin ? "On" : "Off")
@@ -560,10 +523,6 @@ struct SetupView: View {
     private func refreshPreview() {
         do {
             try load(preview, preferences)
-            var everySet = preferences
-            everySet.widgetSets = sets
-            everySet.deferMeetings = false
-            try load(catalog, everySet)
             error = nil
         } catch {
             self.error = errorMessage(error)
@@ -615,7 +574,7 @@ struct SetupView: View {
             UserDefaults.standard.set(true, forKey: "setupCompleted")
             error = nil
             refreshPreview()
-            step = 4
+            step = 3
         } catch {
             self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
             loginStatus = SMAppService.mainApp.status

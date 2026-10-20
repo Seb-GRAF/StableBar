@@ -46,14 +46,6 @@ struct SetupPreferences: Equatable {
             }
         }
 
-        var detail: String {
-            switch self {
-            case .system: "CPU and memory use, with details when you click it."
-            case .meetings: "Your next meeting and today's agenda. Needs Calendars access."
-            case let .workspaces(source): "Your \(source.title) workspaces and their apps. Click one to switch."
-            }
-        }
-
         var widgets: [[String: ConfigurationValue]] {
             let json = switch self {
             case .system: #"""
@@ -144,6 +136,51 @@ struct SetupPreferences: Equatable {
             case .workspaces: #"[{ "id": "workspaces", "type": "workspaces", "position": "left" }]"#
             }
             return try! JSONDecoder().decode([[String: ConfigurationValue]].self, from: Data(json.utf8))
+        }
+    }
+
+    enum Preset: CaseIterable {
+        case minimal, developer, workday, notch, everything
+
+        var title: String {
+            switch self {
+            case .minimal: "Minimal"
+            case .developer: "Developer"
+            case .workday: "Workday"
+            case .notch: "Notch"
+            case .everything: "Everything"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .minimal: "The active app and the time on the Built-in theme."
+            case .developer: "Workspaces, CPU and memory on dark Blueprint."
+            case .workday: "Your next meeting and today's agenda on Léman."
+            case .notch: "A black bar on the top edge that hides the notch."
+            case .everything: "Every widget set on Rosé Pine."
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .minimal: "minus"
+            case .developer: "chevron.left.forwardslash.chevron.right"
+            case .workday: "calendar"
+            case .notch: "macbook"
+            case .everything: "square.grid.2x2"
+            }
+        }
+
+        func preferences(sets: [WidgetSet]) -> SetupPreferences {
+            switch self {
+            case .minimal: SetupPreferences(theme: .builtIn)
+            case .developer: SetupPreferences(appearance: .dark, theme: .package(id: "blueprint", version: nil),
+                                              widgetSets: sets.filter { $0 != .meetings })
+            case .workday: SetupPreferences(theme: .package(id: "leman", version: nil), widgetSets: [.meetings])
+            case .notch: SetupPreferences(placement: .top, theme: .package(id: "notch", version: nil))
+            case .everything: SetupPreferences(theme: .package(id: "rose-pine", version: nil), widgetSets: sets)
+            }
         }
     }
 

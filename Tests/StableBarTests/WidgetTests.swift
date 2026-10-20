@@ -477,6 +477,17 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
     #expect(bundledResult["bar"] == .object(["height": .number(48), "offset": .number(38), "notchSpacing": .number(20), "appearance": .null]))
 }
 
+@Test(arguments: SetupPreferences.Preset.allCases)
+func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throws {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let url = repository.appending(path: "Resources/config.json")
+    let data = try preset.preferences(sets: [.system, .meetings, .workspaces(.aerospace)])
+        .applying(to: Data(contentsOf: url), menuBarHeight: 24)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = repository.appending(path: "Resources/themes")
+    _ = try loader.load(url, data: data)
+}
+
 @Test func setupPlacesChosenWidgetSetsBesideTheAppAndClockAndKeepsWidgetsWithTheSameID() throws {
     let data = Data(#"""
     { "widgets": [
