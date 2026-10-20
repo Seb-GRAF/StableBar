@@ -87,7 +87,7 @@ jobs:
         run: |
           npx semantic-release --dry-run
           if [[ -f .next-version ]]; then
-            echo "version=$(cat .next-version)-beta.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "version=$(cat .next-version)-beta.$(date -u +%Y%m%d%H%M%S).$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
           else
             echo "No beta: nothing to release since the last stable version, or main moved on."
           fi
