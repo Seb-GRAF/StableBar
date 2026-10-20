@@ -158,6 +158,34 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
+/// Only the open state sets a background, so opening the popup makes glass start drawing behind the widget,
+/// as leaving a widget whose hover background disappears does.
+@Test(arguments: [false, true]) @MainActor func clickedPopupStaysOpenWhenItsWidgetBackgroundChanges(glass: Bool) async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"bar":{"glass":{"enabled":\#(glass)}},
+     "popups":{"details":{"style":{},"layout":{"type":"text","text":"Details"}}},
+     "widgets":[{"id":"first","type":"text","text":"First","position":"right","popupName":"details",
+                 "style":{"states":{"open":{"background":"#ff0000"}}}}]}
+    """#.utf8))
+    let popup = WidgetPopup(present: { _, _ in })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let anchor = try #require(bar.anchors("first").first)
+    let details = try #require(configuration.popups["details"])
+
+    popup.toggle(details, widget: configuration.widgets[0], defaults: configuration.defaults, store: store, anchor: anchor)
+    await bar.settle()
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(popup.isOpen)
+    #expect(store.presentations["first"]?.popupAnchor == ObjectIdentifier(anchor))
+}
+
 @Test(arguments: [false, true]) @MainActor func pendingHoverIsCancelledWhenDismissedOrRemoved(remove: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"agenda","type":"text","text":"Agenda","position":"right",

@@ -25,12 +25,14 @@ struct GlassBackground<S: Shape>: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *), glass.enabled, glass[keyPath: surface], let color,
-           (colorScheme == .dark ? color.dark : color.light) & 0xff > 0 {
+        if #available(macOS 26, *), glass.enabled, glass[keyPath: surface] {
+            // Keep one view structure while the color comes and goes (hover, open, data states): switching
+            // branches rebuilds the content, which dismantles a widget's popup anchor and closes its popup.
+            let visible = color.map { (colorScheme == .dark ? $0.dark : $0.light) & 0xff > 0 } ?? false
             content.background {
                 ZStack {
-                    Color.clear.glassEffect(.clear, in: shape)
-                    shape.fill(color.color.opacity(1 - glass.transparency))
+                    Color.clear.glassEffect(visible ? .clear : .identity, in: shape)
+                    shape.fill((color?.color ?? .clear).opacity(1 - glass.transparency))
                 }
             }
         } else {
