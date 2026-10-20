@@ -27,7 +27,7 @@ final class BarEditingTests: XCTestCase {
         let editing = store.barEditing
         XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
         XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
-        XCTAssertEqual(editing.menuTitle, "Edit Bar")
+        XCTAssertEqual(editing.menuTitle, "Edit Bar in Place")
         editing.begin()
         XCTAssertEqual(editing.menuTitle, "Finish Editing Bar")
         for display in [laptop, external] {
@@ -411,7 +411,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertNil(editing.error)
         XCTAssertEqual(editing.entries(on: laptop).map(\.id), ["b", "a"])
         try store.customizationHistory.undo()
-        // Customize lists turned-off widgets, so its moves still step over them.
+        // Settings lists turned-off widgets, so its moves still step over them.
         try WidgetSetup(store: store).move("b", by: -1)
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "off"])
     }
@@ -498,7 +498,7 @@ final class BarEditingTests: XCTestCase {
         defer { store.stop() }
         let before = try Data(contentsOf: fixture.url)
         store.barEditing.begin()
-        // Opening Customize activates StableBar and refreshes the frontmost-app context.
+        // Opening Settings activates StableBar and refreshes the frontmost-app context.
         store.onCustomizeWidget = { [weak store] _ in store?.refreshContext(ConfigurationContext(app: "com.stablebar")) }
         store.barEditing.select("clock")
         XCTAssertTrue(store.barEditing.isActive)
@@ -605,11 +605,11 @@ final class BarEditingTests: XCTestCase {
         defer { panel.close() }
         let menu = NSMenu()
         AppDelegate(store: store).menuWillOpen(menu)
-        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar" })
+        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar in Place" })
         let delegate = AppDelegate(store: store, panels: [1: panel])
         delegate.menuWillOpen(menu)
-        let item = try XCTUnwrap(menu.items.first { $0.title == "Edit Bar" })
-        XCTAssertEqual(menu.items[try XCTUnwrap(menu.items.firstIndex { $0 === item }) - 1].title, "Try Themes…")
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Edit Bar in Place" })
+        XCTAssertEqual(menu.items.firstIndex { $0 === item }, 2)
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item))
         XCTAssertTrue(store.barEditing.isActive)
         delegate.menuWillOpen(menu)
@@ -617,6 +617,48 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(done.action), to: done.target, from: done))
         XCTAssertFalse(store.barEditing.isActive)
         XCTAssertFalse(panel.isVisible)
+    }
+
+    @MainActor func testMenuBarMenuOrdersEditingFirstAndSettingsLastWithoutEmptyGroups() throws {
+        for hasBar in [true, false] {
+            for hasProfiles in [true, false] {
+                let fixture = try ThemeGalleryFixture(hasProfiles
+                    ? #"{"widgets":[],"profiles":[{"name":"work","configuration":{}}]}"#
+                    : #"{"widgets":[]}"#)
+                defer { fixture.close() }
+                let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+                store.reloadConfiguration()
+                defer { store.stop() }
+                XCTAssertNil(store.configurationError)
+                let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+                defer { panel.close() }
+                let delegate = AppDelegate(store: store, panels: hasBar ? [1: panel] : [:])
+                let menu = NSMenu()
+                for error in [nil, "Configuration needs attention"] as [String?] {
+                    store.configurationError = error
+                    delegate.menuWillOpen(menu)
+                    var expected = ["StableBar", "separator"]
+                    if hasBar { expected += ["Edit Bar in Place", "Try Themes…"] }
+                    if hasProfiles { expected += ["Profile"] }
+                    if hasBar || hasProfiles { expected += ["separator"] }
+                    expected += ["Getting Started…", "User Guide"]
+                    if let error { expected += ["separator", error] }
+                    expected += ["separator", "Settings…", "Quit StableBar"]
+                    XCTAssertEqual(menu.items.map { $0.isSeparatorItem ? "separator" : $0.title }, expected)
+                    XCTAssertFalse(zip(menu.items, menu.items.dropFirst()).contains {
+                        $0.0.isSeparatorItem && $0.1.isSeparatorItem
+                    })
+                    let settings = try XCTUnwrap(menu.items.firstIndex { $0.title == "Settings…" })
+                    XCTAssertTrue(menu.items[settings - 1].isSeparatorItem)
+                    XCTAssertEqual(menu.items[settings + 1].title, "Quit StableBar")
+                    if hasBar { XCTAssertEqual(menu.items[2].title, "Edit Bar in Place") }
+                    if hasProfiles {
+                        let profiles = try XCTUnwrap(menu.items.first { $0.title == "Profile" }?.submenu)
+                        XCTAssertEqual(profiles.items.filter { !$0.isSeparatorItem }.map(\.title), ["Default", "work", "Switch automatically"])
+                    }
+                }
+            }
+        }
     }
 
     @MainActor func testEditBarIsUnavailableWithoutConfiguration() throws {
@@ -630,13 +672,13 @@ final class BarEditingTests: XCTestCase {
         let delegate = AppDelegate(store: store, panels: [1: panel])
         delegate.menuWillOpen(menu)
         XCTAssertFalse(store.barEditing.isAvailable)
-        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar" })
+        XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar in Place" })
         store.barEditing.begin()
         XCTAssertFalse(store.barEditing.isActive)
         store.reloadConfiguration()
         XCTAssertTrue(store.barEditing.isAvailable)
         delegate.menuWillOpen(menu)
-        XCTAssertTrue(menu.items.contains { $0.title == "Edit Bar" })
+        XCTAssertTrue(menu.items.contains { $0.title == "Edit Bar in Place" })
     }
 
     @MainActor func testLeavingEditModeReleasesOnlyTheKeyBarAndKeepsItsVisibility() {

@@ -15,7 +15,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "Customize StableBar"
+            window.title = "StableBar Settings"
             window.delegate = self
             window.minSize = NSSize(width: 900, height: 600)
             window.isReleasedWhenClosed = false
@@ -43,7 +43,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 }
 
 enum CustomizationSection: String, CaseIterable, Identifiable {
-    case widgets = "Your bar", appearance = "Appearance", packages = "Library", profiles = "Profiles", general = "Settings", diagnostics = "Status"
+    case widgets = "Your bar", appearance = "Appearance", packages = "Library", profiles = "Profiles", general = "General", diagnostics = "Status"
 
     var id: Self { self }
 
@@ -166,7 +166,7 @@ private struct CustomizationView: View {
                     ForEach(["Default"] + store.profiles.map(\.name), id: \.self) { Text($0).tag($0) }
                 }
                 .fixedSize()
-                .help("Your bar, Appearance and Settings change this profile. The bar shows it while Customize is open.")
+                .help("Your bar, Appearance and General change this profile. The bar shows it while Settings is open.")
             }
         }
         .controlSize(.large)
@@ -473,7 +473,7 @@ extension BarStore {
         return origin.detail.isEmpty ? text : "\(text) \(origin.detail)"
     }
 
-    /// Whether the main file saves this value at the level Customize edits: its root, or the edited profile.
+    /// Whether the main file saves this value at the level Settings edits: its root, or the edited profile.
     func setsInMainFile(_ origin: ConfigurationOrigin) -> Bool {
         let level = editingProfile.map { "(profile \($0))" }
         return origin.file == configurationURL.standardizedFileURL.path && origin.profile == editingProfile

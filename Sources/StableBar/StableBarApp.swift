@@ -328,7 +328,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.removeAllItems()
         menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
-        addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
+        if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
+        if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
         if !store.profiles.isEmpty {
             let profiles = NSMenu()
             for name in store.profileChoices {
@@ -341,8 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             menu.addItem(withTitle: "Profile", action: nil, keyEquivalent: "").submenu = profiles
         }
-        if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
-        if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
+        if !panels.isEmpty || !store.profiles.isEmpty { menu.addItem(.separator()) }
         addItem("Getting Started…", action: #selector(showSetup), to: menu)
         addItem("User Guide", action: #selector(showUserGuide), to: menu)
         if let update = store.update {
@@ -353,6 +353,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(withTitle: error, action: nil, keyEquivalent: "")
         }
         menu.addItem(.separator())
+        addItem("Settings…", action: #selector(showCustomization), to: menu)
         addItem("Quit StableBar", action: #selector(quit), to: menu)
     }
 
