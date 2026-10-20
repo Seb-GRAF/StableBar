@@ -569,6 +569,21 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
 }
 
+@Test func packageSettingChoicesValidateDefaultsAndSavedValues() throws {
+    let manifest = #"{"id":"weather","name":"Weather","version":"1","entry":"config.json","settings":{"units":{"type":"string","title":"Units","description":"Choose how temperature is shown.","choices":["metric","imperial"],"default":"metric"}}}"#
+    let decoder = JSONDecoder()
+    let package = try decoder.decode(WidgetPackageManifest.self, from: Data(manifest.utf8))
+    #expect(try package.values(["units": .string("imperial")])["units"] == .string("imperial"))
+    #expect(throws: WidgetPackageError.self) { try package.values(["units": .string("unknown")]) }
+    for invalid in [
+        manifest.replacingOccurrences(of: #""default":"metric""#, with: #""default":"unknown""#),
+        manifest.replacingOccurrences(of: #"["metric","imperial"]"#, with: "[]"),
+        manifest.replacingOccurrences(of: #""type":"string""#, with: #""type":"number""#)
+    ] {
+        #expect(throws: (any Error).self) { try decoder.decode(WidgetPackageManifest.self, from: Data(invalid.utf8)) }
+    }
+}
+
 @Test func packagesThatNeedANewerStableBarFailReviewAndInstall() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

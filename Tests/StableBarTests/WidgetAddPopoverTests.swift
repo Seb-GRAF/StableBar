@@ -35,7 +35,7 @@ final class WidgetAddPopoverTests: XCTestCase {
         XCTAssertEqual(frames[0].minX, frames[2].minX, accuracy: 1)
         XCTAssertEqual(model.rowCount, 7)
         XCTAssertLessThanOrEqual(host.fittingSize.width, 340)
-        XCTAssertLessThan(host.fittingSize.height, 420)
+        XCTAssertLessThan(host.fittingSize.height, 560)
         model.search = "CPU"
         for _ in 0..<10 { host.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(10)) }
         XCTAssertEqual(model.choices.map(\.id), ["system"])

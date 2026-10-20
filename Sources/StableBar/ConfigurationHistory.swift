@@ -39,6 +39,13 @@ final class ConfigurationHistory {
         try change(control: control(for: edit)) { [edit] }
     }
 
+    func changePackageSettings(_ edit: ConfigurationEdit) throws {
+        let properties = edit.properties!
+        let id = try properties["id"]!.decoded(String.self)
+        let settings = try properties["settings"]!.decoded([String: ConfigurationValue].self)
+        try change(control: Control(action: edit.action, id: id, paths: propertyPaths(settings), name: "settings")) { [edit] }
+    }
+
     /// Related edits are validated and saved together, with one Undo step.
     func change(_ edits: [ConfigurationEdit]) throws {
         guard !edits.isEmpty else { return }

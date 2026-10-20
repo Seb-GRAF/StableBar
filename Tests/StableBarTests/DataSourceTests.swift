@@ -415,6 +415,48 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
                                           "events": .array([])]))
 }
 
+@Test @MainActor func widgetStatusDistinguishesMissingAccessFromSuccessfulCalendarOutput() throws {
+    let store = BarStore()
+    store.configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"meeting","type":"calendar","position":"right"}]}
+    """#.utf8))
+    let widget = store.configuration!.widgets[0]
+    let script = ScriptWidget()
+    store.scripts[widget.id] = script
+    #expect(store.widgetStatus(for: widget) == .starting)
+    try script.accept(ScriptOutput(text: "No calendar access", fields: ["access": "denied"]))
+    #expect(script.error == nil)
+    #expect(store.widgetStatus(for: widget) == .accessNeeded(.calendars))
+    #expect(store.widgetStatus(for: widget).needsAttention)
+    try script.accept(ScriptOutput(text: "No meetings", fields: ["access": "granted"]))
+    #expect(store.widgetStatus(for: widget) == .working)
+    script.error = "Calendar unavailable"
+    #expect(store.widgetStatus(for: widget) == .failed("Calendar unavailable"))
+    store.actionErrors[widget.id] = "Meeting link failed"
+    #expect(store.widgetStatus(for: widget) == .failed("Click action: Meeting link failed"))
+}
+
+@Test @MainActor func widgetStatusKeepsPausedAndDisabledSourcesDistinctFromConnections() throws {
+    let store = BarStore()
+    store.configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"power","type":"battery","position":"right"},
+                {"id":"off","type":"battery","position":"right","enabled":false}]}
+    """#.utf8))
+    let widget = store.configuration!.widgets[0]
+    let disabled = store.configuration!.widgets[1]
+    let script = ScriptWidget()
+    store.scripts[widget.id] = script
+    try script.accept(ScriptOutput(text: "80%"))
+    script.diagnostics.running = true
+    #expect(store.widgetStatus(for: widget) == .connected)
+    script.diagnostics.running = false
+    script.diagnostics.suspended = true
+    #expect(store.widgetStatus(for: widget) == .paused)
+    store.actionErrors[disabled.id] = "An earlier error"
+    #expect(store.widgetStatus(for: disabled) == .disabled)
+    #expect(!store.widgetStatus(for: disabled).needsAttention)
+}
+
 @Test @MainActor func aProviderWhoseTypeIsNotRegisteredReportsAnError() {
     let script = ScriptWidget()
     defer { script.stop() }

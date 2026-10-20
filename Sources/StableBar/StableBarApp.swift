@@ -331,6 +331,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
         if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
         if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
+        addItem("Getting Started…", action: #selector(showSetup), to: menu)
+        addItem("User Guide", action: #selector(showUserGuide), to: menu)
         if let update = store.update {
             menu.addItem(withTitle: "Check for Updates…", action: #selector(AppUpdate.checkForUpdates), keyEquivalent: "").target = update
         }
@@ -367,7 +369,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeTrial.show(store: store, bar: bar, screen: screen)
     }
 
-    @objc func showSetup() { setup.show(store: store) }
+    @objc func showSetup() {
+        setup.show(store: store,
+            arrangeBar: { [weak self] in self?.store.barEditing.begin() },
+            customizeWidgets: { [weak self] in
+                guard let self else { return }
+                customization.show(store: store, section: .widgets)
+            },
+            showProfile: { [weak self] name in
+                guard let self else { return }
+                customization.show(store: store, section: .profiles)
+                store.onCustomizeProfile?(name)
+            })
+    }
+    @objc private func showUserGuide() {
+        NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar#readme")!)
+    }
     @objc private func quit() { NSApp.terminate(nil) }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -27,10 +27,11 @@ final class WidgetDisplayNameTests: XCTestCase {
         }
     }
 
-    func testUserChosenIDsStayAsWrittenEvenWithTextOrPackageNames() throws {
+    func testUserChosenIDsStayAsWrittenAndPackageWidgetsUseTheirPackageName() throws {
         for id in ["music", "My clock", "widget-1234567", "widget-123456789", "widget-1234567g", "prefix-widget-12345678", "widget-12345678\n"] {
             let widget = try ConfigurationValue.object(["id": .string(id), "type": .string("text"), "text": .string("Other name"), "position": .string("right")]).decoded(WidgetConfiguration.self)
-            XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: "Weather"), id)
+            XCTAssertEqual(WidgetDisplayName.name(for: widget), id)
+            XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: "Weather"), "Weather")
         }
         let generated = try widgets(#"[{"id":"widget-ABCDEF12","type":"clock","position":"right"}]"#)
         XCTAssertEqual(WidgetDisplayName.names(for: generated), ["widget-ABCDEF12": "Clock"])
@@ -101,7 +102,7 @@ final class WidgetDisplayNameTests: XCTestCase {
         defer { store.stop() }
         XCTAssertEqual(store.widgetPackageNames, ["current": "Weather", "forecast": "Weather", "widget-00000001": "Weather"])
         for widget in try XCTUnwrap(store.configuration?.widgets) {
-            let expected = widget.id == "widget-1a2b3c4d" ? "Clock" : widget.id == "widget-00000001" ? "Weather" : widget.id
+            let expected = widget.id == "widget-1a2b3c4d" ? "Clock" : "Weather"
             XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id]), expected)
         }
         store.reloadConfiguration()
@@ -109,7 +110,7 @@ final class WidgetDisplayNameTests: XCTestCase {
         try fixture.write(#"{"id":"weather","name":"Forecast","version":"1","entry":"config.json"}"#, to: package.appending(path: "package.json"))
         store.reloadConfiguration()
         XCTAssertEqual(store.widgetPackageNames, ["current": "Forecast", "forecast": "Forecast", "widget-00000001": "Forecast"])
-        XCTAssertEqual(WidgetDisplayName.names(for: try XCTUnwrap(store.configuration?.widgets), packageNames: store.widgetPackageNames)["widget-00000001"], "Forecast")
+        XCTAssertEqual(WidgetDisplayName.names(for: try XCTUnwrap(store.configuration?.widgets), packageNames: store.widgetPackageNames)["widget-00000001"], "Forecast 2")
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
     }

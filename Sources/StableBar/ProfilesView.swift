@@ -1,13 +1,13 @@
 import SwiftUI
 
 struct ProfilesView: View {
-    let editor: ConfigurationEditor
-    @State private var selectedName: String?
+    @Bindable var editor: ConfigurationEditor
     @State private var newName = ""
     @State private var configuration = "{}"
+    @State private var technical = false
 
     private var store: BarStore { editor.store }
-    private var selected: ConfigurationProfile? { store.profiles.first { $0.name == selectedName } }
+    private var selected: ConfigurationProfile? { store.profiles.first { $0.name == editor.selectedProfileName } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,10 +20,19 @@ struct ProfilesView: View {
                 }
             }
             .padding(12)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Active profiles: \(store.activeProfiles.isEmpty ? "None" : store.activeProfiles.joined(separator: " → "))")
+                    .font(.callout)
+                Text("Applied from left to right. Later profiles override earlier ones; disabled profiles never apply.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
             Divider()
             HSplitView {
                 VStack(spacing: 0) {
-                    List(selection: $selectedName) {
+                    List(selection: $editor.selectedProfileName) {
                         ForEach(store.profiles, id: \.name) { profile in
                             let conditions = profile.when
                             let parts = [conditions?.appearance?.capitalized,
@@ -34,10 +43,14 @@ struct ProfilesView: View {
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack {
                                     Text(profile.name)
-                                    if store.activeProfiles.contains(profile.name) {
-                                        Image(systemName: "checkmark.circle.fill")
+                                    Spacer()
+                                    if let index = store.activeProfiles.firstIndex(of: profile.name) {
+                                        Text("\(index + 1) · Active")
+                                            .font(.caption)
                                             .foregroundStyle(Color.accentColor)
-                                            .help("Active")
+                                    } else {
+                                        Text(profile.enabled ? "Not active" : "Disabled")
+                                            .font(.caption).foregroundStyle(.secondary)
                                     }
                                 }
                                 Text(parts.isEmpty ? "Always matches" : parts.joined(separator: " · "))
@@ -53,7 +66,7 @@ struct ProfilesView: View {
                         TextField("New profile name", text: $newName)
                         Button("Add", systemImage: "plus") {
                             editor.addProfile(name: newName)
-                            if editor.error == nil { selectedName = newName; newName = "" }
+                            if editor.error == nil { editor.selectedProfileName = newName; newName = "" }
                         }
                         .labelStyle(.iconOnly)
                         .disabled(newName.isEmpty || store.profiles.contains { $0.name == newName })
@@ -75,6 +88,7 @@ struct ProfilesView: View {
         .onChange(of: selected, initial: true) {
             configuration = (try? String(decoding: configurationData(selected?.configuration ?? [:]), as: UTF8.self)) ?? "{}"
         }
+        .onChange(of: editor.selectedProfileName) { technical = false }
     }
 
     private func settings(_ profile: ConfigurationProfile) -> some View {
@@ -109,27 +123,93 @@ struct ProfilesView: View {
                     condition(profile, \.app, control: "app").wrappedValue = $0.isEmpty ? nil : $0
                 }), prompt: Text("Any, or a bundle identifier"))
             }
-            Section("Configuration") {
-                Text("Settings applied by this profile, as JSON. For example: {\"bar\": {\"height\": 36}}.")
-                    .font(.caption).foregroundStyle(.secondary)
-                TextEditor(text: $configuration)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .frame(height: 160)
-                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                Button("Apply configuration") {
-                    do {
-                        editor.setProfileConfiguration(name: profile.name, configuration:
-                            try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(configuration.utf8)))
-                    } catch { editor.error = errorMessage(error) }
+            Section {
+                number("Bar height", section: "bar", key: "height", profile: profile, fallback: store.configuration?.bar.height ?? 40)
+                number("Offset from top", section: "bar", key: "offset", profile: profile, fallback: store.configuration?.bar.offset ?? 0)
+                let bar = (try? profile.configuration["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:]
+                let appearance: String = if case let .string(value) = bar["appearance"] { value }
+                    else if bar["appearance"] == .null { "automatic" }
+                    else { "unchanged" }
+                Picker("Bar appearance", selection: Binding(get: { appearance }, set: {
+                    setProfileValue($0 == "automatic" ? .null : .string($0), section: "bar", key: "appearance", profile: profile)
+                })) {
+                    if appearance == "unchanged" { Text("Not set by this profile").tag("unchanged") }
+                    Text("Automatic").tag("automatic")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
                 }
-                Text("Edits are saved in the main configuration file; included files stay unchanged.")
+                number("Default widget font size", section: "defaults", key: "fontSize", profile: profile,
+                       fallback: store.configuration?.defaults.fontSize ?? 12)
+            } header: {
+                Text("Common settings")
+            } footer: {
+                Text("Only fields you change are saved in this profile. Unset number fields show the current bar's value. Automatic follows macOS even when your base appearance is Light or Dark.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            let other = otherSettings(profile)
+            if !other.isEmpty {
+                Section("Other settings") {
+                    Text("This profile also configures: \(other.joined(separator: ", ")).")
+                    Text("Edit these settings in Technical details. Changing a common setting keeps them intact.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Section {
+                DisclosureGroup("Technical details", isExpanded: $technical) {
+                    Text("All settings applied by this profile, as JSON. Apply after editing. Omitted inherited properties become null overrides; use the main configuration file to remove an override completely.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    TextEditor(text: $configuration)
+                        .font(.system(.body, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .frame(height: 160)
+                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
+                    Button("Apply configuration") {
+                        do {
+                            editor.setProfileConfiguration(name: profile.name, configuration:
+                                try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(configuration.utf8)))
+                        } catch { editor.error = errorMessage(error) }
+                    }
+                    Text("Edits are saved in the main configuration file; included files stay unchanged.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func number(_ title: String, section: String, key: String, profile: ConfigurationProfile, fallback: Double) -> some View {
+        let values = (try? profile.configuration[section]?.decoded([String: ConfigurationValue].self)) ?? [:]
+        let property = values[key]
+        let value = if case let .number(number) = property { number } else { fallback }
+        return LabeledContent {
+            TextField(title, value: Binding(get: { value }, set: {
+                if property != .number($0) { setProfileValue(.number($0), section: section, key: key, profile: profile) }
+            }), format: .number)
+                .labelsHidden().multilineTextAlignment(.trailing).frame(width: 70)
+            Text("pt").foregroundStyle(.secondary)
+        } label: {
+            Text(title)
+            Text(property.map { "Profile value: \($0.sourceDescription)" } ?? "Not set by this profile")
+        }
+    }
+
+    private func setProfileValue(_ value: ConfigurationValue, section: String, key: String, profile: ConfigurationProfile) {
+        var configuration = profile.configuration
+        configuration[section] = .object([key: value]).overriding(configuration[section] ?? .object([:]))
+        editor.setProfileConfiguration(name: profile.name, configuration: configuration)
+    }
+
+    private func otherSettings(_ profile: ConfigurationProfile) -> [String] {
+        var settings = profile.configuration
+        for (section, keys) in [("bar", ["height", "offset", "appearance"]), ("defaults", ["fontSize"])] {
+            if case var .object(values) = settings[section] {
+                for key in keys { values[key] = nil }
+                if values.isEmpty { settings[section] = nil }
+            }
+        }
+        return settings.keys.sorted()
     }
 
     private func condition<Value: Equatable>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>, control: String) -> Binding<Value?> {

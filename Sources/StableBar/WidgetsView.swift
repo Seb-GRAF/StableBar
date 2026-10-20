@@ -109,8 +109,8 @@ struct WidgetsView: View {
         let names = displayNames
         return VStack(spacing: 0) {
             HStack {
-                Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
-                    .accessibilityLabel(store.barEditing.menuTitle)
+                Button(store.barEditing.isActive ? "Finish arranging" : "Arrange on desktop", action: store.barEditing.toggle)
+                    .accessibilityLabel(store.barEditing.isActive ? "Finish arranging" : "Arrange on desktop")
                     .disabled(!store.barEditing.isAvailable)
                 Spacer()
             }
@@ -216,125 +216,110 @@ struct WidgetsView: View {
         let style = StyleFields(store: store, path: "widgets.\(widget.id).style", defaultsPath: "defaults", widgetID: widget.id,
                                 values: editor.style(for: widget.id), set: { editor.set(["style": .object($0)], for: widget.id) },
                                 unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) })
-        return Form {
-            Section {
-                HStack(spacing: 12) {
-                    Image(systemName: widget.content.symbol)
-                        .font(.title2)
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 40, height: 40)
-                        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(displayNames[widget.id] ?? typeName(widget)).font(.title3.weight(.semibold))
-                        Text(WidgetDisplayName.subtitle(for: widget.content, providers: store.configuration?.providers ?? [:]))
-                            .foregroundStyle(.secondary)
+        return ScrollViewReader { scroll in
+            Form {
+                Section {
+                    HStack(spacing: 12) {
+                        Image(systemName: widget.content.symbol)
+                            .font(.title2)
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 40, height: 40)
+                            .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 9))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(displayNames[widget.id] ?? typeName(widget)).font(.title3.weight(.semibold))
+                            Text(WidgetDisplayName.subtitle(for: widget.content, providers: store.configuration?.providers ?? [:]))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Toggle("Show on bar", isOn: Binding(get: {
+                            widget.enabled
+                        }, set: { editor.set(["enabled": .bool($0)], for: widget.id) }))
+                        .toggleStyle(.switch)
+                        .help("Show this widget in the bar")
+                        .accessibilityLabel("Show this widget in the bar")
                     }
-                    Spacer()
-                    Toggle("Enabled", isOn: Binding(get: {
-                        widget.enabled
-                    }, set: { editor.set(["enabled": .bool($0)], for: widget.id) }))
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-                    .help("Show this widget in the bar")
-                    .accessibilityLabel("Show this widget in the bar")
-                }
-            }
-            Section("Content") {
-                if !widget.content.drawsOwnView { iconField(widget) }
-                if case let .appMenu(expandOnHover) = widget.content {
-                    Toggle("Expand on hover", isOn: Binding(get: { expandOnHover }, set: {
-                        editor.set(["expandOnHover": .bool($0)], for: widget.id)
-                    }))
-                    .help("Show only the app's name until the pointer is over the widget")
-                }
-                if widget.content == .workspaces {
-                    Toggle("Show each window", isOn: Binding(get: { widget.workspace?.windows == true }, set: {
-                        editor.set(["workspace": .object(["windows": .bool($0)])], for: widget.id)
-                    }))
-                    if widget.workspace?.windows == true {
-                        TextField("Window title length", value: Binding(get: { widget.workspace?.titleLength ?? 0 }, set: {
-                            editor.set(["workspace": .object(["titleLength": .number(Double($0))])], for: widget.id)
-                        }), format: .number)
-                        .help("Maximum characters per window title; zero shows only the app icon or glyph")
+                    HStack(alignment: .top) {
+                        let status = store.widgetStatus(for: widget)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label(status.title, systemImage: status.symbol).foregroundStyle(status.color)
+                            Text(status.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Troubleshoot") { editor.troubleshoot(widget.id) }
                     }
                 }
-                if case .text = widget.content { TextField("Text", text: string("text", for: widget)) }
-                if case let .clock(format) = widget.content {
-                    Picker("Date format", selection: Binding(get: {
-                        !customClockFormat && WidgetClockFormat.common.contains { $0.value == format } ? format : "custom"
-                    }, set: { value in
-                        customClockFormat = value == "custom"
-                        if !customClockFormat { editor.set(["format": .string(value)], for: widget.id) }
-                    })) {
-                        ForEach(WidgetClockFormat.common, id: \.value) { Text($0.title).tag($0.value) }
-                        Text("Custom format").tag("custom")
-                    }
-                    if customClockFormat || !WidgetClockFormat.common.contains(where: { $0.value == format }) {
-                        TextField("Custom format", text: string("format", for: widget, fallback: format))
-                    }
-                }
-            }
-            Section {
-                clickFields(widget)
-                TextField("Tooltip", text: Binding(get: { widget.tooltip ?? "" }, set: {
-                    editor.set(["tooltip": $0.isEmpty ? .null : .string($0)], for: widget.id)
-                }), prompt: Text("Use the script's tooltip"))
-                if let popup = widget.popup {
-                    Toggle("Open popup on hover", isOn: Binding(get: { popup.openOnHover }, set: {
-                        editor.set(["popup": .object(["openOnHover": .bool($0)])], for: widget.id)
-                    }))
-                }
-                Picker("Screens", selection: Binding(get: { WidgetScreenChoice(widget.display) }, set: {
-                    if $0 != WidgetScreenChoice(widget.display), let properties = $0.properties { editor.set(properties, for: widget.id) }
-                })) {
-                    ForEach(WidgetScreenChoice.allCases.filter { $0 != .specific || WidgetScreenChoice(widget.display) == .specific }, id: \.self) {
-                        Text($0.title).tag($0)
-                    }
-                }
-                if case let .ids(ids) = widget.display {
-                    Text("Specific screens: \(ids.map(String.init).joined(separator: ", ")). Edit the list under Advanced.")
-                        .font(.callout).foregroundStyle(.secondary)
-                }
-                Picker("Position", selection: Binding(get: { widget.position }, set: { if $0 != widget.position { move(widget.id, to: $0) } })) {
-                    ForEach(WidgetPlacement.destinations, id: \.self) { Text($0.title).tag($0) }
-                }
-            }
-            Section {
-                DisclosureGroup("Advanced", isExpanded: $expanded) {
-                    LabeledContent("ID", value: widget.id).textSelection(.enabled)
-                    let origin = store.origins["widgets.\(widget.id).role"]
-                    OverrideRow(title: "Presentation role", source: origin.map { "From \(store.sourceText($0))" },
-                                reset: origin.map(store.setsInMainFile) == true ? {
-                        editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["role": .null]))
-                    } : nil) {
-                        Picker("Presentation role", selection: Binding(get: { widget.role?.rawValue ?? "" }, set: {
-                            if $0 != (widget.role?.rawValue ?? "") {
-                                editor.set(["role": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                Section("Content") {
+                    if let packageID = store.widgetPackageIDs[widget.id] {
+                        WidgetPackageSettings(store: store, packageID: packageID) { editor.showPackage(packageID) }
+                    } else {
+                        if !widget.content.drawsOwnView { iconField(widget) }
+                        if case let .appMenu(expandOnHover) = widget.content {
+                            Toggle("Expand on hover", isOn: Binding(get: { expandOnHover }, set: {
+                                editor.set(["expandOnHover": .bool($0)], for: widget.id)
+                            }))
+                            .help("Show only the app's name until the pointer is over the widget")
+                        }
+                        if widget.content == .workspaces {
+                            Toggle("Show each window", isOn: Binding(get: { widget.workspace?.windows == true }, set: {
+                                editor.set(["workspace": .object(["windows": .bool($0)])], for: widget.id)
+                            }))
+                            if widget.workspace?.windows == true {
+                                TextField("Window title length", value: Binding(get: { widget.workspace?.titleLength ?? 0 }, set: {
+                                    editor.set(["workspace": .object(["titleLength": .number(Double($0))])], for: widget.id)
+                                }), format: .number)
+                                .help("Maximum characters per window title; zero shows only the app icon or glyph")
                             }
-                        })) {
-                            Text("None").tag("")
-                            ForEach(PresentationRole.allCases, id: \.rawValue) { Text($0.rawValue.capitalized).tag($0.rawValue) }
                         }
-                        .labelsHidden()
-                    }
-                    if widget.content.drawsOwnView { iconField(widget) }
-                    if widget.drawsTransitions {
-                        Picker("Transition", selection: string("transition", for: widget, fallback: WidgetTransition.none.rawValue)) {
-                            ForEach(WidgetTransition.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                        if case .text = widget.content { TextField("Text", text: string("text", for: widget)) }
+                        if case let .clock(format) = widget.content {
+                            Picker("Date format", selection: Binding(get: {
+                                !customClockFormat && WidgetClockFormat.common.contains { $0.value == format } ? format : "custom"
+                            }, set: { value in
+                                customClockFormat = value == "custom"
+                                if !customClockFormat { editor.set(["format": .string(value)], for: widget.id) }
+                            })) {
+                                ForEach(WidgetClockFormat.common, id: \.value) { Text($0.title).tag($0.value) }
+                                Text("Custom format").tag("custom")
+                            }
+                            if customClockFormat || !WidgetClockFormat.common.contains(where: { $0.value == format }) {
+                                TextField("Custom format", text: string("format", for: widget, fallback: format))
+                            }
                         }
-                        .help("How the widget's text and symbols change")
                     }
-                    Divider()
-                    Text("Colors").font(.headline)
-
+                }
+                .id(SettingsSearchResult.widgetContent.id)
+                Section("Behavior and placement") {
+                    clickFields(widget)
+                    TextField("Tooltip", text: Binding(get: { widget.tooltip ?? "" }, set: {
+                        editor.set(["tooltip": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                    }), prompt: Text("Use the script's tooltip"))
+                    if let popup = widget.popup {
+                        Toggle("Open popup on hover", isOn: Binding(get: { popup.openOnHover }, set: {
+                            editor.set(["popup": .object(["openOnHover": .bool($0)])], for: widget.id)
+                        }))
+                    }
+                    Picker("Screens", selection: Binding(get: { WidgetScreenChoice(widget.display) }, set: {
+                        if $0 != WidgetScreenChoice(widget.display), let properties = $0.properties { editor.set(properties, for: widget.id) }
+                    })) {
+                        ForEach(WidgetScreenChoice.allCases.filter { $0 != .specific || WidgetScreenChoice(widget.display) == .specific }, id: \.self) {
+                            Text($0.title).tag($0)
+                        }
+                    }
+                    if case let .ids(ids) = widget.display {
+                        Text("Specific screens: \(ids.map(String.init).joined(separator: ", ")). Edit the list under Technical details.")
+                            .font(.callout).foregroundStyle(.secondary)
+                    }
+                    Picker("Position", selection: Binding(get: { widget.position }, set: { if $0 != widget.position { move(widget.id, to: $0) } })) {
+                        ForEach(WidgetPlacement.destinations, id: \.self) { Text($0.title).tag($0) }
+                    }
+                }
+                .id(SettingsSearchResult.widgetBehavior.id)
+                Section("Appearance") {
                     style.color("Text", "foreground")
                     style.color("Background", "background")
                     style.hoverBackground("Hover background")
                     style.color("Border", "borderColor")
                     style.color("Accent", "accent")
-                    Divider()
-                    Text("Text and shape").font(.headline)
-
                     style.font(fontFamilies)
                     style.weight()
                     style.number("Font size", "fontSize", default: 12)
@@ -342,54 +327,92 @@ struct WidgetsView: View {
                     style.number("Vertical padding", "paddingVertical", default: 6)
                     style.number("Corner radius", "cornerRadius", default: 14)
                     style.number("Border width", "borderWidth", default: 1)
-                    if widget.content == .workspaces {
-                        Divider()
-                        Text("Workspace presentation").font(.headline)
-                        WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults",
-                            values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.properties(for: widget.id)["workspace"])) ?? [:],
-                            set: { editor.set(["workspace": .object($0)], for: widget.id) },
-                            unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
-                    }
-                    DisclosureGroup("JSON editor") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Edit this widget's properties as JSON. Removing a property clears it. Templates and included files stay intact.")
-                                .font(.caption).foregroundStyle(.secondary)
-                            TextEditor(text: $advanced)
-                                .font(.system(.body, design: .monospaced))
-                                .scrollContentBackground(.hidden)
-                                .padding(6)
-                                .frame(height: 160)
-                                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                            HStack {
-                                Spacer()
-                                Button("Apply properties") {
-                                    do {
-                                        editor.replaceProperties(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(advanced.utf8)))
-                                    } catch { editor.error = errorMessage(error) }
+                }
+                .id(SettingsSearchResult.widgetAppearance.id)
+                Section {
+                    DisclosureGroup("Technical details", isExpanded: $expanded) {
+                        LabeledContent("ID", value: widget.id).textSelection(.enabled)
+                        let origin = store.origins["widgets.\(widget.id).role"]
+                        OverrideRow(title: "Presentation role", source: origin.map { "From \(store.sourceText($0))" },
+                                    reset: origin.map(store.setsInMainFile) == true ? {
+                            editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["role": .null]))
+                        } : nil) {
+                            Picker("Presentation role", selection: Binding(get: { widget.role?.rawValue ?? "" }, set: {
+                                if $0 != (widget.role?.rawValue ?? "") {
+                                    editor.set(["role": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                                }
+                            })) {
+                                Text("None").tag("")
+                                ForEach(PresentationRole.allCases, id: \.rawValue) { Text($0.rawValue.capitalized).tag($0.rawValue) }
+                            }
+                            .labelsHidden()
+                        }
+                        if widget.content.drawsOwnView || store.widgetPackageIDs[widget.id] != nil { iconField(widget) }
+                        if widget.drawsTransitions {
+                            Picker("Transition", selection: string("transition", for: widget, fallback: WidgetTransition.none.rawValue)) {
+                                ForEach(WidgetTransition.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                            }
+                            .help("How the widget's text and symbols change")
+                        }
+                        if widget.content == .workspaces {
+                            Divider()
+                            Text("Workspace presentation").font(.headline)
+                            WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults", widgetID: widget.id,
+                                values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.properties(for: widget.id)["workspace"])) ?? [:],
+                                set: { editor.set(["workspace": .object($0)], for: widget.id) },
+                                unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
+                        }
+                        DisclosureGroup("JSON editor") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Edit this widget's properties as JSON. Removing a property clears it. Templates and included files stay intact.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                TextEditor(text: $advanced)
+                                    .font(.system(.body, design: .monospaced))
+                                    .scrollContentBackground(.hidden)
+                                    .padding(6)
+                                    .frame(height: 160)
+                                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
+                                HStack {
+                                    Spacer()
+                                    Button("Apply properties") {
+                                        do {
+                                            editor.replaceProperties(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(advanced.utf8)))
+                                        } catch { editor.error = errorMessage(error) }
+                                    }
                                 }
                             }
+                            .padding(.top, 6)
                         }
-                        .padding(.top, 6)
                     }
                 }
+                .id(SettingsSearchResult.widgetTechnical.id)
             }
-        }
-        .formStyle(.grouped)
-        .sheet(isPresented: $editingWebPage) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Open a web page").font(.headline)
-                TextField("Web address", text: $webPage).frame(width: 360)
-                if let clickError { Text(clickError).foregroundStyle(.red) }
-                HStack {
-                    Spacer()
-                    Button("Cancel") { editingWebPage = false }.keyboardShortcut(.cancelAction)
-                    Button("Done") {
-                        setClick(.webPage, widget: widget, value: webPage)
-                        if clickError == nil { editingWebPage = false }
-                    }.keyboardShortcut(.defaultAction)
+            .formStyle(.grouped)
+            .task(id: editor.searchTarget) {
+                if let target = editor.searchTarget {
+                    if target == SettingsSearchResult.widgetTechnical.id { expanded = true }
+                    await Task.yield()
+                    if Task.isCancelled { return }
+                    scroll.scrollTo(target, anchor: .top)
+                    editor.searchTarget = nil
                 }
-            }.padding(24)
+            }
+            .sheet(isPresented: $editingWebPage) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Open a web page").font(.headline)
+                    TextField("Web address", text: $webPage).frame(width: 360)
+                    if let clickError { Text(clickError).foregroundStyle(.red) }
+                    HStack {
+                        Spacer()
+                        Button("Cancel") { editingWebPage = false }.keyboardShortcut(.cancelAction)
+                        Button("Done") {
+                            setClick(.webPage, widget: widget, value: webPage)
+                            if clickError == nil { editingWebPage = false }
+                        }.keyboardShortcut(.defaultAction)
+                    }
+                }.padding(24)
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 struct ConfigurationEdit: Codable, Sendable {
-    enum Action: String, Codable { case set, add, remove, reorder, bar, defaults, popupDefaults, roles, workspaceDefaults, tokens, modeAliases, unset, profile, profiles, package, theme }
+    enum Action: String, Codable { case set, add, remove, reorder, bar, defaults, popupDefaults, roles, workspaceDefaults, tokens, modeAliases, workspaceSource, unset, profile, profiles, package, theme }
     let action: Action
     var id: String?
     var properties: [String: ConfigurationValue]?
@@ -79,6 +79,8 @@ struct ConfigurationEdit: Codable, Sendable {
             }
         case .profile:
             root["profile"] = name.map(ConfigurationValue.string) ?? .null
+        case .workspaceSource:
+            root["workspaceSource"] = name.map(ConfigurationValue.string) ?? .null
         case .profiles:
             guard let profiles else { throw CommandFailure(message: "Profiles requires profile definitions.") }
             root["profiles"] = .array(try mergeProfiles(root["profiles"], with: .array(profiles.map(ConfigurationValue.object)))

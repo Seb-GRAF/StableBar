@@ -20,6 +20,24 @@ struct SetupPreferences: Equatable {
     enum WidgetSet: Hashable {
         case system, meetings, workspaces(WorkspaceSource)
 
+        enum State {
+            case available, added, disabled, conflict
+        }
+
+        func state(in configuration: Configuration) -> State {
+            let template = try! ConfigurationValue.object(widgets[0]).decoded(WidgetConfiguration.self)
+            guard let widget = configuration.widgets.first(where: { $0.id == template.id }) else { return .available }
+            let matches: Bool
+            switch (template.content, widget.content) {
+            case let (.provider(expected), .provider(actual)):
+                matches = configuration.providers[actual]!.type == expected
+            default:
+                matches = widget.content == template.content
+            }
+            if !matches { return .conflict }
+            return widget.enabled ? .added : .disabled
+        }
+
         var title: String {
             switch self {
             case .system: "System"
@@ -134,6 +152,9 @@ struct SetupPreferences: Equatable {
     var clock = Clock.current
     var theme = Theme.current
     var widgetSets: [WidgetSet] = []
+    var keepWindowsClear: Bool?
+    var keepNotificationsClear: Bool?
+    var deferMeetings = false
 
     func save(to url: URL, menuBarHeight: Double, context: ConfigurationContext) throws {
         let original = try Data(contentsOf: url)
@@ -171,6 +192,12 @@ struct SetupPreferences: Equatable {
         if placement != .current {
             edits.append(ConfigurationEdit(action: .bar, properties: ["offset": .number(placement == .top ? 0 : menuBarHeight)]))
         }
+        if let keepWindowsClear {
+            edits.append(ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(keepWindowsClear)]))
+        }
+        if let keepNotificationsClear {
+            edits.append(ConfigurationEdit(action: .bar, properties: ["keepNotificationsClear": .bool(keepNotificationsClear)]))
+        }
         if clock != .current {
             for widget in configuration.widgets {
                 if case .clock = widget.content {
@@ -183,8 +210,21 @@ struct SetupPreferences: Equatable {
         var order = configuration.widgets.map(\.id)
         var appended = order
         for set in widgetSets {
-            for widget in set.widgets {
-                guard case let .string(id)? = widget["id"], !order.contains(id) else { continue }
+            let state = set.state(in: configuration)
+            if state == .added || state == .conflict { continue }
+            for var widget in set.widgets {
+                let id = try widget["id"]!.decoded(String.self)
+                let enabled = set != .meetings || !deferMeetings
+                if state == .disabled {
+                    if enabled {
+                        edits.append(ConfigurationEdit(action: .unset, properties: [
+                            "widgetOverrides": .object([id: .object(["enabled": .null])])
+                        ]))
+                        edits.append(ConfigurationEdit(action: .set, id: id, properties: ["enabled": .bool(true)]))
+                    }
+                    continue
+                }
+                if !enabled { widget["enabled"] = .bool(false) }
                 edits.append(ConfigurationEdit(action: .add, properties: widget))
                 appended.append(id)
                 let anchor = configuration.widgets.first { existing in
@@ -201,7 +241,8 @@ struct SetupPreferences: Equatable {
         var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
         var ids = configuration.widgets.map(\.id)
         for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
-        for case let .workspaces(source) in widgetSets where source != configuration.workspaceSource {
+        for case let .workspaces(source) in widgetSets
+        where source != configuration.workspaceSource && WidgetSet.workspaces(source).state(in: configuration) != .conflict {
             document["workspaceSource"] = .string(source.rawValue)
         }
         return try configurationData(document, editing: data)

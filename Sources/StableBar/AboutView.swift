@@ -6,7 +6,12 @@ struct AboutView: View {
     private let version = AppVersion()
 
     var body: some View {
-        Form {
+        Form { sections }
+            .formStyle(.grouped)
+    }
+
+    var sections: some View {
+        Group {
             Section {
                 HStack(spacing: 16) {
                     Image(nsImage: NSApplication.shared.applicationIconImage)
@@ -37,7 +42,6 @@ struct AboutView: View {
                 }
             }
         }
-        .formStyle(.grouped)
     }
 }
 

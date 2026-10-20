@@ -19,12 +19,15 @@ final class BarStore: NSObject {
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
     var onCustomizeWidget: ((String) -> Void)?
+    var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
     var onEndThemeTrial: (() -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
+    var contributions: [String: [ConfigurationContribution]] = [:]
     var widgetPackageNames: [String: String] = [:]
+    var widgetPackageIDs: [String: String] = [:]
     var activeProfiles: [String] = []
     var profiles: [ConfigurationProfile] = []
     var pinnedProfile: String?
@@ -36,6 +39,7 @@ final class BarStore: NSObject {
     @ObservationIgnored lazy var barEditing = BarEditing(store: self)
     @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
         packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")))
+    @ObservationIgnored lazy var packageLibrary = PackageLibrary(store: self)
     var themesDirectory: URL? { configurationLoader.themesDirectory }
     var context = ConfigurationContext()
     private(set) var presentations: [String: WidgetPresentation] = [:]
@@ -44,7 +48,7 @@ final class BarStore: NSObject {
     private var visibleWidgets: [Int: Set<String>] = [:]
     private var sleeping = false
     private var popupWidgetID: String?
-    private var inspectedWidgetID: String?
+    private(set) var inspectedWidgetID: String?
     private var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
@@ -420,6 +424,8 @@ final class BarStore: NSObject {
         profiles = loader.profiles
         pinnedProfile = loader.pinnedProfile
         widgetPackageNames = loader.widgetPackageNames
+        widgetPackageIDs = loader.widgetPackageIDs
+        contributions = loader.contributions
         if effectiveDocument == loader.document {
             origins = loader.origins
             activeProfiles = loader.activeProfiles
@@ -579,7 +585,34 @@ final class BarStore: NSObject {
 
     func setInspectorOpen(_ open: Bool) {
         inspectorOpen = open
+        if !open { inspectedWidgetID = nil }
         updateSuspension()
+    }
+
+    func widgetStatus(for widget: WidgetConfiguration) -> WidgetStatus {
+        if !widget.enabled { return .disabled }
+        if let error = actionErrors[widget.id] { return .failed("Click action: \(error)") }
+        let script = scripts[widget.id]
+        if let error = script?.error { return .failed(error) }
+        if widget.content == .workspaces, let error = workspaceStore.error { return .failed(error) }
+        if !widget.content.permissions.isEmpty, !appMenu.isTrusted {
+            return .accessNeeded(.accessibility)
+        }
+        if let name = widget.providerName, let provider = configuration?.providers[name],
+           let permission = registry[provider.type]?.permission,
+           let access = script?.output.fields?["access"], access != "granted" {
+            return .accessNeeded(permission)
+        }
+        if script?.diagnostics.suspended == true { return .paused }
+        if let script {
+            if script.diagnostics.lastUpdated == nil { return .starting }
+            if let name = widget.providerName, let provider = configuration?.providers[name],
+               registry[provider.type]?.continuous == true, script.diagnostics.running {
+                return .connected
+            }
+            if script.diagnostics.running { return .updating }
+        }
+        return .working
     }
 
     func setSleeping(_ sleeping: Bool) {
@@ -624,7 +657,7 @@ final class BarStore: NSObject {
         case .refresh:
             guard let id = request.id, let script = scripts[id] else { throw CommandFailure(message: "Refresh requires a running widget id.") }
             guard !script.diagnostics.suspended else {
-                throw CommandFailure(message: "Widget is suspended. Open it in Diagnostics or make a consumer visible before refreshing.")
+                throw CommandFailure(message: "Widget is suspended. Choose Resume for testing in Status or make a consumer visible before refreshing.")
             }
             script.refresh(ScriptEvent(sender: "manual"))
         case .trigger:

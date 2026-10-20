@@ -79,7 +79,7 @@ final class WidgetSetupTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.filter { $0.position == .right }.map(\.id), ["right", right])
     }
 
-    @MainActor func testCommandFreeFoldedPackageInstallsEnablesAndPlacesAllItsWidgetsInOneStep() async throws {
+    @MainActor func testMultiWidgetPackageReviewsItsContentsThenPlacesAllWidgetsInOneStep() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"existing","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }
         let index = LocalPackageIndex(fixture: fixture)
@@ -89,13 +89,18 @@ final class WidgetSetupTests: XCTestCase {
         try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
         let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
         await setup.load()
-        let choice = try XCTUnwrap(setup.choices.first { $0.id == "battery" })
+        let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "power" })
         XCTAssertEqual(choice.package?.id, "power")
         let before = try Data(contentsOf: fixture.url)
-        let id = await setup.add(choice, to: .right)
+        let pending = await setup.add(choice, to: .right)
+        XCTAssertNil(pending)
+        let review = try XCTUnwrap(setup.review)
+        XCTAssertEqual(review.inspection.widgets.map(\.id), ["battery", "charge"])
+        let package = try fixture.packages.install(review.inspection.directory)
+        let id = try setup.enable(package, settings: [:], position: .right)
         XCTAssertEqual(id, "battery")
         XCTAssertNil(setup.error)
-        XCTAssertNil(setup.review)
+        XCTAssertNotNil(setup.review)
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["existing", "battery", "charge"])
         XCTAssertEqual(store.configuration?.widgets.map(\.position), [.right, .right, .right])
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -315,7 +320,7 @@ final class WidgetSetupTests: XCTestCase {
         let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
         let setup = WidgetSetup(store: store, client: client)
         await setup.load()
-        let choice = try XCTUnwrap(setup.choices.first { $0.id == "battery" })
+        let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "power" })
         let installed = try await client.installWithoutReview(entry)
         try fixture.write(#"{"widgets":[{"id":"battery","type":"battery","position":"left","onClick":"echo newly reviewed"}]}"#,
                           to: installed.directory.appending(path: "config.json"))
@@ -341,7 +346,7 @@ final class WidgetSetupTests: XCTestCase {
         _ = try setup.enable(installed, settings: ["message": .string("Keep my text")], position: .left)
         await setup.load()
         let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "note" })
-        let result = await setup.add(choice, to: .right)
+        let result = try await addAndReview(choice, with: setup, fixture: fixture, position: .right)
         XCTAssertEqual(result, "note")
         XCTAssertNil(setup.error)
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Keep my text"))
@@ -404,7 +409,7 @@ final class WidgetSetupTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.count, 2)
     }
 
-    @MainActor func testFoldedChoiceOffersBothPackageAndBasicWidget() async throws {
+    @MainActor func testBuiltInAndStoreChoicesRemainSeparateAndBothCanBeAdded() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let index = LocalPackageIndex(fixture: fixture)
@@ -413,9 +418,8 @@ final class WidgetSetupTests: XCTestCase {
         defer { store.stop() }
         let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
         await setup.load()
-        let choice = try XCTUnwrap(setup.choices.first { $0.id == "battery" })
-        XCTAssertEqual(choice.basicActionTitle, "Add Basic Battery")
-        let basic = try XCTUnwrap(choice.basicChoice)
+        let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "power" })
+        let basic = try XCTUnwrap(setup.choices.first { $0.id == "battery" })
         XCTAssertNil(basic.package)
         let basicID = await setup.add(basic, to: .right)
         XCTAssertNotNil(basicID)
@@ -454,7 +458,7 @@ final class WidgetSetupTests: XCTestCase {
             let adding = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
             await adding.load()
             let choice = try XCTUnwrap(adding.choices.first { $0.package?.id == "note" })
-            let selected = await adding.add(choice, to: .right)
+            let selected = try await addAndReview(choice, with: adding, fixture: fixture, position: .right)
             XCTAssertNil(adding.error)
             let settings: [String: ConfigurationValue] = ["message": .string("Mine")]
             XCTAssertEqual(selected, "note")
@@ -484,13 +488,26 @@ final class WidgetSetupTests: XCTestCase {
             "settings": .object(["message": .string("Temporary")])])])
         await setup.load()
         let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "note" })
-        let id = await setup.add(choice, to: .right)
+        let id = try await addAndReview(choice, with: setup, fixture: fixture, position: .right)
         XCTAssertEqual(id, "note")
         XCTAssertNil(setup.error)
         XCTAssertEqual(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self).first?.settings,
                        ["message": .string("Saved")])
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(store.sessionEdits.count, 1)
+    }
+
+    @MainActor private func addAndReview(_ choice: WidgetAddChoice, with setup: WidgetSetup,
+                                         fixture: ThemeGalleryFixture, position: WidgetPosition) async throws -> String? {
+        if let id = await setup.add(choice, to: position) { return id }
+        let review = try XCTUnwrap(setup.review)
+        let inspection: WidgetPackageInspection
+        if try fixture.packages.list().contains(where: { $0.versionKey == review.inspection.manifest.versionKey }) {
+            inspection = review.inspection
+        } else {
+            inspection = try fixture.packages.install(review.inspection.directory)
+        }
+        return try setup.enable(inspection, settings: setup.savedSettings(for: inspection.manifest), position: position)
     }
 
 }

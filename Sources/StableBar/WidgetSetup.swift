@@ -15,9 +15,12 @@ final class WidgetSetup {
     @ObservationIgnored private let widgetsForInsertion: () throws -> [WidgetConfiguration]
     private(set) var choices = WidgetAddCatalog.compose()
     private(set) var storeUnavailable = false
+    private(set) var storeError: String?
+    private(set) var isLoading = false
     private(set) var isAdding = false
     private(set) var requestStarted = false
     var review: Review?
+    var reviewIsWorking = false
     var error: String?
 
     init(store: BarStore, client: PackageStoreClient? = nil, widgetsForInsertion: (() throws -> [WidgetConfiguration])? = nil) {
@@ -43,17 +46,22 @@ final class WidgetSetup {
     }
 
     func cancelReview() {
+        guard !reviewIsWorking else { return }
         review = nil
         requestStarted = false
     }
 
     func load() async {
+        isLoading = true
+        defer { isLoading = false }
         do {
             choices = WidgetAddCatalog.compose(try await client.widgetChoices())
             storeUnavailable = false
+            storeError = nil
         } catch {
             choices = WidgetAddCatalog.compose()
             storeUnavailable = true
+            storeError = errorMessage(error)
         }
     }
 
@@ -67,7 +75,7 @@ final class WidgetSetup {
             if let entry = choice.package {
                 let inspection = try await client.packageForAdding(entry)
                 try Task.checkCancellation()
-                if inspection.requiresReview {
+                if inspection.requiresReview || !inspection.manifest.settings.isEmpty || inspection.widgets.count > 1 {
                     review = Review(inspection: inspection, position: position, before: anchor)
                     return nil
                 }
@@ -97,7 +105,8 @@ final class WidgetSetup {
         loader.themesDirectory = store.themesDirectory
         let root = try store.editedDocument([], replaying: store.customizationEdits)
         let document = try loader.compose(store.configurationURL, data: configurationData(root), context: store.context)
-        let selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        var selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        if let theme = document["theme"] { selections.append(try theme.decoded(WidgetPackageSelection.self)) }
         return (selections.first { $0.id == manifest.id }?.settings ?? [:]).filter { name, value in
             manifest.settings[name]?.accepts(value) == true
         }
