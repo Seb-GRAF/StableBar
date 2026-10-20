@@ -30,6 +30,7 @@
     "borderWidth": 1,
     "accentText": { "light": "#ffffff", "dark": "#0d2a5e" },
     "cornerRadius": 2,
+    "paddingVertical": 6,
     "fontName": "Menlo",
     "fontSize": 11,
     "fontWeight": "regular"
@@ -43,6 +44,7 @@
     "indicator": "underline",
     "indicatorStyle": {
       "height": 2,
+      "offsetY": 6,
       "background": "@token.accent",
       "cornerRadius": 0
     },
