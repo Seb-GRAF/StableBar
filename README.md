@@ -786,7 +786,7 @@ The Apple logo is a separate `appleMenu` widget. Add **Apple menu** to show it, 
 }
 ```
 
-StableBar reads the titles through Accessibility when you switch apps and again when the pointer enters either widget, which catches apps that set their menus late. Clicking a title opens that menu below it, read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then the widgets show a warning that opens that pane. While a StableBar window such as Customize is in front, the widgets keep the previous app's menus.
+StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters either widget. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Clicking a title opens that menu below it, read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then the widgets show a warning that opens that pane. While a StableBar window such as Customize is in front, the widgets keep the previous app's menus.
 
 ### yabai workspaces
 

@@ -4,6 +4,147 @@ import SwiftUI
 import Testing
 @testable import StableBar
 
+private final class MenuApplication: NSRunningApplication, @unchecked Sendable {
+    let pid: pid_t
+    override var processIdentifier: pid_t { pid }
+    override var bundleIdentifier: String? { "test.menu.\(pid)" }
+
+    init(pid: pid_t) {
+        self.pid = pid
+        super.init()
+    }
+}
+
+@MainActor private final class MenuReadFixture {
+    var trusted = true
+    var failedAttribute: String?
+    var empty = false
+    var title = "First"
+    var reads: [pid_t] = []
+    let menuBar = AXUIElementCreateApplication(10)
+    let apple = AXUIElementCreateApplication(11)
+    let app = AXUIElementCreateApplication(12)
+    let file = AXUIElementCreateApplication(13)
+
+    func read(_ name: String, _ element: AXUIElement) -> CFTypeRef? {
+        if name == kAXMenuBarAttribute {
+            var pid: pid_t = 0
+            AXUIElementGetPid(element, &pid)
+            reads.append(pid)
+        }
+        if name == failedAttribute, name != kAXTitleAttribute || element == apple { return nil }
+        switch name {
+        case kAXMenuBarAttribute: return menuBar
+        case kAXChildrenAttribute: return (empty ? [] : [apple, app, file]) as CFArray
+        case kAXTitleAttribute:
+            return (element == apple ? "Apple" : element == app ? title : "File") as CFString
+        default: return nil
+        }
+    }
+}
+
+@Test(arguments: [kAXMenuBarAttribute, kAXChildrenAttribute, kAXTitleAttribute])
+@MainActor func menuReadFailureKeepsCompleteMenusAndRetries(
+    attribute: String
+) async throws {
+    let source = MenuReadFixture()
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    let apple = try #require(menu.appleMenu)
+    let items = menu.items
+    source.failedAttribute = attribute
+    menu.refresh()
+    #expect(menu.appleMenu == apple)
+    #expect(menu.items == items)
+
+    source.failedAttribute = nil
+    source.title = "Recovered"
+    await menu.retryTask?.value
+    #expect(menu.appleMenu == apple)
+    #expect(menu.items.map(\.title) == ["Recovered", "File"])
+    #expect(source.reads == [100, 100, 100])
+}
+
+@Test @MainActor func menuRecoversWhenItsFirstReadFails() async {
+    let source = MenuReadFixture()
+    source.failedAttribute = kAXMenuBarAttribute
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    #expect(menu.items.isEmpty)
+    source.failedAttribute = nil
+    await menu.retryTask?.value
+    #expect(menu.appleMenu?.title == "Apple")
+    #expect(menu.items.map(\.title) == ["First", "File"])
+}
+
+@Test(arguments: [false, true])
+@MainActor func switchingAppsCancelsThePreviousMenuRetry(secondReadFails: Bool) async {
+    let source = MenuReadFixture()
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    source.failedAttribute = kAXMenuBarAttribute
+    menu.refresh()
+    let previousRetry = menu.retryTask
+    source.failedAttribute = secondReadFails ? kAXMenuBarAttribute : nil
+    source.title = "Second"
+    menu.read(MenuApplication(pid: 200))
+    source.failedAttribute = nil
+    await previousRetry?.value
+    await menu.retryTask?.value
+    #expect(menu.items.map(\.title) == ["Second", "File"])
+    #expect(source.reads == (secondReadFails ? [100, 100, 200, 200] : [100, 100, 200]))
+}
+
+@Test @MainActor func disablingMenusCancelsRecoveryAndClearsThem() async {
+    let source = MenuReadFixture()
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    source.failedAttribute = kAXMenuBarAttribute
+    menu.refresh()
+    let retry = menu.retryTask
+    menu.read(nil)
+    source.failedAttribute = nil
+    await retry?.value
+    #expect(menu.appleMenu == nil)
+    #expect(menu.items.isEmpty)
+    #expect(source.reads == [100, 100])
+    #expect(menu.retryTask == nil)
+}
+
+@Test @MainActor func revokingAccessDuringMenuRecoveryClearsTheMenus() async {
+    let source = MenuReadFixture()
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    source.failedAttribute = kAXMenuBarAttribute
+    menu.refresh()
+    source.trusted = false
+    await menu.retryTask?.value
+    #expect(!menu.isTrusted)
+    #expect(menu.appleMenu == nil)
+    #expect(menu.items.isEmpty)
+    #expect(source.reads == [100, 100])
+}
+
+@Test @MainActor func aSuccessfulEmptyMenuReadClearsPreviousMenusWithoutRetrying() {
+    let source = MenuReadFixture()
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    source.empty = true
+    menu.refresh()
+    #expect(menu.appleMenu == nil)
+    #expect(menu.items.isEmpty)
+    #expect(menu.retryTask == nil)
+}
+
+@Test @MainActor func menuRecoveryStopsAfterFourRetries() async {
+    let source = MenuReadFixture()
+    source.failedAttribute = kAXMenuBarAttribute
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    menu.read(MenuApplication(pid: 100))
+    await menu.retryTask?.value
+    #expect(source.reads == [100, 100, 100, 100, 100])
+}
+
 @Test @MainActor func appleMenuKeepsItsIconWhenTheSourceAppChanges() throws {
     let appMenu = AppMenu()
     func image(title: String, pid: pid_t) throws -> CGImage {
