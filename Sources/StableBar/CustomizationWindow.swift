@@ -37,6 +37,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         editor?.finishEditing()
         store?.flushCustomization()
         store?.customizationHistory.clearNotice()
+        store?.previewProfile(nil)
         store?.setInspectorOpen(false)
     }
 }
@@ -160,6 +161,13 @@ private struct CustomizationView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if !store.profiles.isEmpty, [.widgets, .appearance, .general].contains(section ?? .widgets) {
+                Picker("Profile", selection: Binding(get: { store.editingProfile ?? "Default" }, set: { store.previewProfile($0) })) {
+                    ForEach(["Default"] + store.profiles.map(\.name), id: \.self) { Text($0).tag($0) }
+                }
+                .fixedSize()
+                .help("Your bar, Appearance and Settings change this profile. The bar shows it while Customize is open.")
+            }
         }
         .controlSize(.large)
         .padding(.horizontal, 16)
@@ -465,7 +473,10 @@ extension BarStore {
         return origin.detail.isEmpty ? text : "\(text) \(origin.detail)"
     }
 
+    /// Whether the main file saves this value at the level Customize edits: its root, or the edited profile.
     func setsInMainFile(_ origin: ConfigurationOrigin) -> Bool {
-        origin.file == configurationURL.standardizedFileURL.path && (origin.detail.isEmpty || origin.detail == "(widget override)")
+        let level = editingProfile.map { "(profile \($0))" }
+        return origin.file == configurationURL.standardizedFileURL.path && origin.profile == editingProfile
+            && [level ?? "", [level, "(widget override)"].compactMap { $0 }.joined(separator: " ")].contains(origin.detail)
     }
 }

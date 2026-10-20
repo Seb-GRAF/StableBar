@@ -22,7 +22,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --set ID JSON [--persist]
            StableBar [--config PATH] --add JSON | --remove ID | --reorder ID... [--persist]
            StableBar [--config PATH] --batch JSON_ARRAY [--persist]
-           StableBar [--config PATH] --profile NAME|auto [--persist]
+           StableBar [--config PATH] --profile NAME|Default|auto [--persist]
            StableBar [--config PATH] --reset | --refresh ID
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID
            StableBar [--config PATH] --enable-package ID VERSION [--persist]

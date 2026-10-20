@@ -239,6 +239,8 @@ let bundledThemesDirectory = Bundle.main.url(forResource: "themes", withExtensio
 
 struct ConfigurationLoader {
     var themesDirectory = bundledThemesDirectory
+    /// Applies this profile, or none for "Default", in place of the saved choice, without saving it.
+    var previewProfile: String?
     private(set) var dependencies: Set<URL> = []
     private(set) var document: [String: ConfigurationValue] = [:]
     private(set) var origins: [String: ConfigurationOrigin] = [:]
@@ -281,13 +283,36 @@ struct ConfigurationLoader {
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
-        if let previewTheme {
-            try layer.merge(previewTheme)
-        } else if let theme = try base.values["theme"]?.decoded(WidgetPackageSelection.self, at: "theme"), theme.enabled {
-            try layer.merge(theme.version == nil ? readBundledTheme(theme) : readSelectedPackage(theme, from: packageStore, theme: true))
+        let unthemed = self
+        var document = try finish(themed(layer, base: base, theme: previewTheme.map { .theme($0) } ?? .selection(base.values["theme"]),
+                                         packageStore: packageStore), context: context)
+        // A profile that chooses a theme replaces the theme layer, so it composes again with that theme.
+        if previewTheme == nil, let profile = profiles.last(where: { activeProfiles.contains($0.name) && $0.configuration["theme"] != nil }),
+           profile.configuration["theme"] != base.values["theme"] {
+            self = unthemed
+            document = try finish(themed(layer, base: base, theme: .selection(profile.configuration["theme"]),
+                                         packageStore: packageStore), context: context)
+        }
+        return document
+    }
+
+    private enum ThemeLayer {
+        case theme(ConfigurationLayer)
+        case selection(ConfigurationValue?)
+    }
+
+    private mutating func themed(_ layer: ConfigurationLayer, base: ConfigurationLayer, theme: ThemeLayer,
+                                 packageStore: WidgetPackageStore) throws -> ConfigurationLayer {
+        var layer = layer
+        switch theme {
+        case let .theme(preview): try layer.merge(preview)
+        case let .selection(value):
+            if let theme = try value?.decoded(WidgetPackageSelection?.self, at: "theme"), theme.enabled {
+                try layer.merge(theme.version == nil ? readBundledTheme(theme) : readSelectedPackage(theme, from: packageStore, theme: true))
+            }
         }
         try layer.merge(base)
-        return try finish(layer, context: context)
+        return layer
     }
 
     private mutating func readSelectedPackage(_ selection: WidgetPackageSelection, from packageStore: WidgetPackageStore,
@@ -334,27 +359,38 @@ struct ConfigurationLoader {
         for profile in profiles {
             guard names.insert(profile.name).inserted else { throw ThemeConfigurationError.duplicateProfile(profile.name) }
         }
-        if let selected, !names.contains(selected) { throw ThemeConfigurationError.unknownProfile(selected) }
-        for profile in profiles where profile.enabled {
-            let matches = selected.map { $0 == profile.name } ?? (profile.when?.matches(context) ?? true)
-            if matches {
-                let source = layer.origins["profiles.\(profile.name).name"]!.inProfile(profile.name)
-                var origins = configurationOrigins(.object(profile.configuration), source: source)
-                let prefix = "profiles.\(profile.name).configuration."
-                for (path, origin) in layer.origins where path.hasPrefix(prefix) {
-                    origins[String(path.dropFirst(prefix.count))] = origin.inProfile(profile.name)
-                }
-                var profileLayer = ConfigurationLayer(values: profile.configuration, origins: origins)
-                for (path, entries) in layer.contributions where path.hasPrefix(prefix) {
-                    profileLayer.contributions[String(path.dropFirst(prefix.count))] = entries.map {
-                        var entry = $0
-                        entry.origin = entry.origin.inProfile(profile.name)
-                        return entry
-                    }
-                }
-                try layer.merge(profileLayer)
-                activeProfiles.append(profile.name)
+        if let selected, !names.contains(selected), selected != "Default", selected != "automatic" {
+            throw ThemeConfigurationError.unknownProfile(selected)
+        }
+        let choice = previewProfile ?? selected
+        let applied: [ConfigurationProfile]
+        if let choice, names.contains(choice) {
+            applied = profiles.filter { $0.name == choice && ($0.enabled || choice == previewProfile) }
+        } else if choice == "automatic" {
+            applied = profiles.first { $0.enabled && $0.when?.matches(context) == true }.map { [$0] } ?? []
+        } else if choice == nil {
+            // Configurations without a choice keep the earlier rule: every matching profile applies.
+            applied = profiles.filter { $0.enabled && ($0.when?.matches(context) ?? true) }
+        } else {
+            applied = []
+        }
+        for profile in applied {
+            let source = layer.origins["profiles.\(profile.name).name"]!.inProfile(profile.name)
+            var origins = configurationOrigins(.object(profile.configuration), source: source)
+            let prefix = "profiles.\(profile.name).configuration."
+            for (path, origin) in layer.origins where path.hasPrefix(prefix) {
+                origins[String(path.dropFirst(prefix.count))] = origin.inProfile(profile.name)
             }
+            var profileLayer = ConfigurationLayer(values: profile.configuration, origins: origins)
+            for (path, entries) in layer.contributions where path.hasPrefix(prefix) {
+                profileLayer.contributions[String(path.dropFirst(prefix.count))] = entries.map {
+                    var entry = $0
+                    entry.origin = entry.origin.inProfile(profile.name)
+                    return entry
+                }
+            }
+            try layer.merge(profileLayer)
+            activeProfiles.append(profile.name)
         }
         for key in ["profiles", "profile"] { layer.values.removeValue(forKey: key) }
         let tokens = try layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]

@@ -118,6 +118,38 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(loader.activeProfiles == ["laptop"])
 }
 
+@Test func aSavedChoiceAppliesOneProfileAndItsTheme() throws {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let root = FileManager.default.temporaryDirectory.appending(path: "config.json")
+    let profiles = #"""
+    "widgets":[],"theme":{"id":"leman"},"profiles":[
+      {"name":"dark","when":{"appearance":"dark"},"configuration":{"bar":{"height":30}}},
+      {"name":"battery","when":{"onBattery":true},"configuration":{"bar":{"spacing":4},"theme":{"id":"notch"}}},
+      {"name":"present","enabled":false,"configuration":{"bar":{"height":50}}}]
+    """#
+    func load(_ choice: String, _ context: ConfigurationContext, preview: String? = nil) throws -> ConfigurationLoader {
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = repository.appending(path: "Resources/themes")
+        loader.previewProfile = preview
+        _ = try loader.load(root, data: Data("{\(choice)\(profiles)}".utf8), context: context)
+        return loader
+    }
+    let both = ConfigurationContext(appearance: "dark", onBattery: true)
+    #expect(try load("", both).activeProfiles == ["dark", "battery"])
+    #expect(try load(#""profile":"automatic","#, both).activeProfiles == ["dark"])
+    let battery = try load(#""profile":"automatic","#, ConfigurationContext(onBattery: true))
+    #expect(battery.activeProfiles == ["battery"])
+    #expect(battery.document["theme"] == .object(["id": .string("notch")]))
+    #expect(battery.origins["tokens.surface"]?.file.contains("/themes/notch/") == true)
+    let manual = try load(#""profile":"Default","#, both)
+    #expect(manual.activeProfiles.isEmpty)
+    #expect(manual.origins["tokens.surface"]?.file.contains("/themes/leman/") == true)
+    #expect(try load(#""profile":"battery","#, both).activeProfiles == ["battery"])
+    let previewed = try load(#""profile":"battery","#, both, preview: "present")
+    #expect(previewed.activeProfiles == ["present"])
+    #expect(previewed.pinnedProfile == "battery")
+}
+
 @Test func customizationAndRemovedWidgetsMigrateIntoNormalKeys() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

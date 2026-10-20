@@ -293,7 +293,7 @@ Native providers can't return `state`, so a widget can set it with `rules`. The 
 
 `when` compares one entry of the output: `value` names a number in `values`, which matches `below` when it is at or below that number and `above` when it is at or above it (give both for a range); `field` names a string in `fields`, which matches `equals` exactly. A missing value or field doesn't match. Rules are checked when output arrives and belong to the widget, so widgets that share a provider can use different thresholds. Only script and provider widgets accept rules.
 
-### Theme tokens and automatic profiles
+### Theme tokens
 
 Define reusable JSON values in `tokens` and reference them with a whole string such as `"@token.accent"`. Values retain their type: a token can supply a number, boolean, array, object, or string. Tokens can reference other tokens; unknown names and cycles reject the change while the current configuration keeps running. References are not interpolated inside shell commands or other strings.
 
@@ -301,34 +301,50 @@ Define reusable JSON values in `tokens` and reference them with a whole string s
 {
   "tokens": { "accent": { "light": "#db733f", "dark": "#ffa66b" }, "fontSize": 12 },
   "defaults": { "accent": "@token.accent", "fontSize": "@token.fontSize" },
-  "profiles": [
-    {
-      "name": "laptop",
-      "when": { "onBattery": true, "displayCount": 1 },
-      "configuration": { "bar": { "height": 34 }, "tokens": { "fontSize": 11 } }
-    }
-  ],
   "widgets": [{ "id": "clock", "type": "clock", "position": "right" }]
 }
 ```
 
 A color token can hold a light and dark pair, as `accent` does here, so it follows the appearance without a profile.
 
-Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, and the focused app's bundle identifier in `app`. Conditions in one profile must all match.
+### Profiles
 
-Profiles merge by name across packages, themes, includes and the main file. Later values merge recursively into an existing profile without moving it; new names append in order. Matching profiles apply in that order after modules and the root configuration; later profiles win. Set `"enabled": false` on a profile to skip it, even when pinned, or `true` to enable it again. An override can contain only its `name` and the properties to change, for example `{"name":"dark","enabled":false}`.
+A profile is a variation of your bar. **Default** is your main configuration; every other profile starts from it and saves only what it changes in `configuration`. One profile is on the bar at a time.
 
-A profile without `when` always matches. A profile that sets `bar.appearance` changes how the bar looks, not which profiles match. Widgets in profiles append to the bar; use `widgetOverrides` to change existing widgets. Appearance, power, screen and focused-app changes update the active profiles automatically.
+```json
+{
+  "profile": "automatic",
+  "profiles": [
+    {
+      "name": "Presenting",
+      "configuration": { "bar": { "height": 30 }, "widgetOverrides": { "meeting": { "enabled": false } } }
+    },
+    {
+      "name": "Laptop",
+      "when": { "onBattery": true, "displayCount": 1 },
+      "configuration": { "theme": { "id": "notch" }, "tokens": { "fontSize": 11 } }
+    }
+  ]
+}
+```
 
-Set `"profile": "laptop"` to apply only that profile, regardless of its conditions. Remove `profile` to resume automatic matching, or set it to `null` to override a manual profile inherited from a module. **Customize → Status** reports active profiles and the file, template, override and token sources behind effective widget properties.
+`profile` chooses what is on the bar: a profile's name, `"Default"` for no profile, or `"automatic"` to switch automatically. Switching automatically uses the first enabled profile whose `when` conditions all match, or Default when none does. Conditions are `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, and the focused app's bundle identifier in `app`. A profile without `when` is used only when you choose it. Appearance, power, screen and focused-app changes switch the profile right away.
 
-In **Customize StableBar → Profiles**, add profiles, edit their conditions, or choose Automatic matching or a pinned profile. The active profiles appear in order; later ones take priority. Each row shows whether it is active, inactive or disabled, and **Enabled** turns it on or off. **Common settings** edits bar height, offset, appearance and default widget font size. Fields name values this profile already sets; an unset number shows the current bar's value. Changing it saves an override in the selected profile. Automatic appearance follows macOS, including when the base configuration sets Light or Dark.
+A profile can change anything the main file can, including `theme`. Widgets in a profile append to the bar; `widgetOverrides` changes or hides existing ones. A profile that sets `bar.appearance` changes how the bar looks, not which profile matches.
 
-**Widget screens** chooses where each widget appears in the selected profile, even when that profile is inactive or disabled. For a full bar on your main display and only a few widgets on your MacBook beside it, choose **All screens** for those few and **The main screen** for the rest. When only one screen remains, it is the main screen. **Specific screens** offers checkboxes for individual screen numbers, which can change when displays are rearranged. **Widgets by screen** lists the enabled widgets assigned to each connected screen by this profile alone; other active profiles, script output, empty workspace lists and overflow can affect the live bar. Each choice names its source; **Reset to inherited** removes only your saved screen override in that profile. Imported files and other widget settings stay intact. The controls save automatically and support Undo and Redo. See the [profile screens example](examples/profile-screens/config.json).
+Choose a profile under **Profile** in the menu-bar icon's menu or the bar's right-click menu, in **Customize → Profiles**, or with `StableBar --profile NAME|Default|auto`. A choice made in a menu or in Customize is saved, so it survives a restart, and Undo reverses it. In the menu-bar icon's menu, a dash marks the profile that automatic switching put on the bar.
 
-Other settings remain available in **Technical details**, where the configuration JSON has an explicit **Apply configuration** action. Removing an inherited property from that JSON writes a null override; it does not restore inheritance. Common controls save automatically and can be undone or redone. Adding or editing a profile saves only the new profile or changed properties into the main file; unchanged profiles and properties continue to follow their source files. Included files stay unchanged. Set a condition to Any to clear an inherited condition.
+Profiles merge by name across packages, themes, includes and the main file. Later values merge recursively into an existing profile without moving it; new names append in order. Set `"enabled": false` on a profile to skip it, even when chosen, or `true` to enable it again. An override can contain only its `name` and the properties to change, for example `{"name":"dark","enabled":false}`. Set `profile` to `null` to override a choice inherited from a module.
 
-Setup, the editor and the command line save changes into the main file's ordinary keys and never edit imported files. A widget defined in the main file, including inside one of its profiles, is changed, removed or reordered where it is defined. A widget from an include or package gets an entry in the main file's `widgetOverrides`; removing it sets `enabled` to `false`. Bar and default-style changes merge into `bar` and `defaults`. Untouched parts of the file keep their formatting and key order. An active profile still applies on top of these changes.
+A configuration without `profile` keeps the rule of earlier versions, so updating StableBar doesn't change its bar: every enabled profile whose conditions match applies, in list order, later ones winning, and a profile without `when` always applies. Choosing a profile in a menu or in Customize saves a choice and switches to one profile at a time; **Customize → Profiles** names the profiles that currently apply together. Adding a profile in Customize also saves a choice: `automatic` when a profile has conditions, otherwise `Default`.
+
+In **Customize StableBar → Profiles**, choose the profile on the bar, add and delete profiles, turn them on or off, and set the conditions for switching automatically. **Default** comes first, and the profile on the bar is marked. Adding or editing a profile saves only the new profile or changed properties into the main file; profiles from included files keep following those files. Set a condition to Any to clear an inherited condition.
+
+**Edit** shows a profile on the bar while Customize stays open, without changing your choice; the **Profile** picker at the bottom of Your bar, Appearance and Settings does the same. Changes in those sections and in bar editing then save into that profile, and the values it doesn't change keep coming from Default. For a full bar on your main display and only a few widgets on a MacBook beside it, edit the profile and choose **The main screen** under Screens for every widget except those few, which keep **All screens**; see the [profile screens example](examples/profile-screens/config.json). A value the profile saves offers **Reset to default**, which returns it to Default's value. Closing Customize shows your chosen profile again. Without a saved choice, these sections edit Default, and the profiles that apply together still apply on top.
+
+**Customize → Status** reports the profile on the bar and the file, template, override and token sources behind effective widget properties.
+
+Setup, the editor and the command line save changes into the main file's ordinary keys and never edit imported files. A widget defined in the main file, including inside one of its profiles, is changed, removed or reordered where it is defined. A widget from an include or package gets an entry in the main file's `widgetOverrides`; removing it sets `enabled` to `false`. Bar and default-style changes merge into `bar` and `defaults`. Untouched parts of the file keep their formatting and key order. Customize writes these keys inside the profile it edits, as described in [Profiles](#profiles); setup and the command line write them to Default. A profile on the bar still applies on top of Default's changes.
 
 When every widget comes from the main file's `widgets` array, reordering changes that array. Otherwise the order is saved in `widgetOrder`: listed IDs come first, unlisted widgets keep their relative order, and IDs that are not currently present, such as widgets of an inactive profile, are skipped.
 
@@ -461,7 +477,7 @@ Install your own theme like any other package, then select it with its version:
 { "theme": { "id": "my-theme", "version": "1.0.0" } }
 ```
 
-Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Library**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. Profiles merge by name across these layers, keeping their order; later properties override earlier ones. A theme’s profiles remain unless you disable them with `"enabled": false`. **Built-in** in setup removes `theme`. In Appearance it removes the main file’s selection, or selects Built-in explicitly when an included file chooses another theme. Choosing a theme in Appearance or Try Themes replaces the version and settings inherited from an included file.
+Only one theme is active: `theme` must name a theme, and `packages` cannot list one. An installed theme accepts the same `enabled` and `settings` as a package selection, and you can also enable it in **Customize → Library**. Widget packages load first, then Built-in, then the selected theme, then includes and the main file. A theme's tokens, `defaults` and `bar` settings override a widget package's, and yours override the theme's. Profiles merge by name across these layers, keeping their order; later properties override earlier ones. A theme’s profiles remain unless you disable them with `"enabled": false`. A profile can choose its own theme with `theme` in its `configuration`; Appearance does this while it edits a profile. **Built-in** in setup removes `theme`. In Appearance it removes the main file’s selection, or selects Built-in explicitly when an included file chooses another theme. Choosing a theme in Appearance or Try Themes replaces the version and settings inherited from an included file.
 
 When your main file sets values that the selected theme also sets, Appearance names them below the gallery. **Reset them** removes those values in one saved, undoable change. This includes bar dimensions, shared styles and a widget’s own style where it overrides the theme’s defaults or that widget’s role. Theme color changes count too, including colors inherited from Built-in. Active profiles in your main file are included; included files, templates and packages are left alone. The Light/Dark/Automatic choice is kept. Other settings still follow the usual layer order.
 
@@ -717,9 +733,13 @@ StableBar --batch '[
 ]' --persist
 ```
 
-A batch validates the whole resulting configuration before replacing the running bar or writing the file. A failed batch leaves both intact. Supported edit actions are `set` (`id`, `properties`), `add` (`properties`, including `id`), `remove` (`id`), `reorder` (`ids`), `bar`/`defaults`/`popupDefaults`/`roles`/`workspaceDefaults`/`modeAliases`/`tokens` (`properties`, merged into those keys), `workspaceSource` (`name`: `aerospace` or `yabai`, omitted for the default AeroSpace source), `unset` (`properties` naming the keys to remove from the main file, with `id` for a widget, for example `{"action":"unset","id":"clock","properties":{"style":{"foreground":null}}}`), `profile` (`name`, omitted for automatic), `profiles` (`profiles`, definitions merged by name; set `enabled` to `false` to disable one), `package` (`properties`: `id`, `version`, optional `enabled` and `settings`), and `theme` (the same `properties`, with only `id` for a theme that ships with StableBar, omitted for Built-in).
+A batch validates the whole resulting configuration before replacing the running bar or writing the file. A failed batch leaves both intact. Supported edit actions are `set` (`id`, `properties`), `add` (`properties`, including `id`), `remove` (`id`), `reorder` (`ids`), `bar`/`defaults`/`popupDefaults`/`roles`/`workspaceDefaults`/`modeAliases`/`tokens` (`properties`, merged into those keys), `workspaceSource` (`name`: `aerospace` or `yabai`, omitted for the default AeroSpace source), `unset` (`properties` naming the keys to remove from the main file, with `id` for a widget, for example `{"action":"unset","id":"clock","properties":{"style":{"foreground":null}}}`), `profile` (`name`: a profile, `Default` or `automatic`; omitted to remove the choice), `profiles` (`profiles`, definitions merged by name; set `enabled` to `false` to disable one), `package` (`properties`: `id`, `version`, optional `enabled` and `settings`), and `theme` (the same `properties`, with only `id` for a theme that ships with StableBar, omitted for Built-in).
 
-Without `id`, `unset` can also address widget definitions by their ID and profiles by their name in the main file. For example, `{"action":"unset","properties":{"widgets":{"clock":{"style":{"foreground":null}}},"profiles":{"night":{"configuration":{"bar":{"height":null}}}}}}` removes the clock’s text color and the night profile’s bar height in one edit. Empty objects are removed, except an emptied profile `configuration` stays as `{}`.
+Without `id`, `unset` can also address widget definitions by their ID and profiles by their name in the main file. For example, `{"action":"unset","properties":{"widgets":{"clock":{"style":{"foreground":null}}},"profiles":{"night":{"configuration":{"bar":{"height":null}}}}}}` removes the clock’s text color and the night profile’s bar height in one edit. Empty objects are removed, except an emptied profile `configuration` stays as `{}`. `{"action":"unset","properties":{"profiles":{"night":null}}}` deletes the night profile from the main file.
+
+Any other widget, style, `unset` or `theme` edit can name a `profile` to change that profile's `configuration` instead of Default, for example `{"action":"set","profile":"Laptop","id":"clock","properties":{"display":"main"}}`.
+
+`--profile auto` switches automatically. In a configuration without a saved choice, it removes a temporary choice instead, so every matching profile applies together again.
 
 - `--validate [PATH]`: compose and validate files without starting scripts.
 - `--refresh ID`: refresh a running widget. Hidden, suspended providers must first be made visible or explicitly resumed with **Customize → Status → Resume for testing**.
@@ -747,7 +767,7 @@ Style controls name their value's source. **Why?** shows the saved value, effect
 
 Configuration changes in Your bar, Appearance, Profiles and Settings apply immediately and save to your main file. Ordinary settings for active packages use the same automatic save and Undo history; Library drafts and credential edits have their own explicit actions. Typing or dragging saves when you pause; closing Customize or quitting StableBar saves pending configuration changes. **Undo** (⌘Z) discards a pending change or reverses the last saved change, and **Redo** (⇧⌘Z) restores changes, with one step per burst. If the file changes outside Customize, affected history is cleared so Undo cannot overwrite those changes. An invalid change is rejected and its error is shown. If a pending change cannot be saved, it is discarded with an explanation so you can keep using Customize or quit.
 
-**Profiles** shows the active [profiles](#theme-tokens-and-automatic-profiles) in priority order, chooses automatic matching or a pinned profile, and edits conditions, bar height, offset, appearance and default widget font size. **Technical details** keeps the configuration JSON for other settings such as role styles, workspace defaults and mode aliases.
+**Profiles** chooses the [profile](#profiles) on the bar, adds and deletes profiles, sets their conditions for switching automatically, and opens one for editing in the other sections.
 
 **Library** reviews local folders and [store](#store) packages, lists their included widgets and requirements, and provides **Add to bar**, ordinary settings, credential saves, version selection and removal. Installing files, adding widgets, turning off a package and uninstalling a version are separate states. Themes are primarily browsed in Appearance; selecting an installed theme in Library still offers **Use theme**.
 

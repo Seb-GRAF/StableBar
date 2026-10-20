@@ -329,6 +329,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
         addItem("Customize StableBar…", action: #selector(showCustomization), to: menu)
+        if !store.profiles.isEmpty {
+            let profiles = NSMenu()
+            for name in store.profileChoices {
+                if name == "automatic" { profiles.addItem(.separator()) }
+                let item = profiles.addItem(withTitle: profileTitle(name), action: #selector(chooseProfile), keyEquivalent: "")
+                item.target = self
+                item.representedObject = name
+                let onBar = name == "Default" ? store.activeProfiles.isEmpty : store.activeProfiles.contains(name)
+                item.state = name == (store.pinnedProfile ?? "automatic") ? .on : onBar ? .mixed : .off
+            }
+            menu.addItem(withTitle: "Profile", action: nil, keyEquivalent: "").submenu = profiles
+        }
         if !panels.isEmpty { addItem("Try Themes…", action: #selector(tryThemes), to: menu) }
         if !panels.isEmpty, store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
         addItem("Getting Started…", action: #selector(showSetup), to: menu)
@@ -350,6 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showCustomization() { customization.show(store: store) }
+    @objc private func chooseProfile(_ item: NSMenuItem) { store.chooseProfile(item.representedObject as! String) }
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func tryThemes() {
         let screens = NSScreen.screens

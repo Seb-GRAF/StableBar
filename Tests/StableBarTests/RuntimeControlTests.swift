@@ -83,6 +83,28 @@ import Testing
     #expect(store.configurationError == nil)
 }
 
+@Test @MainActor func automaticFromTheCommandLineKeepsTheEarlierRuleUntilAChoiceIsSaved() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try Data(#"""
+    {"widgets":[],"profiles":[{"name":"wide","configuration":{"bar":{"height":48}}},
+                              {"name":"light","when":{"appearance":"light"},"configuration":{"bar":{"spacing":3}}}]}
+    """#.utf8).write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.activeProfiles == ["wide", "light"])
+    try store.applyEdits([ConfigurationEdit(action: .profile, name: "wide")], persist: false)
+    #expect(store.activeProfiles == ["wide"])
+    try store.applyEdits([ConfigurationEdit(action: .profile)], persist: false)
+    #expect(store.activeProfiles == ["wide", "light"])
+    try store.applyEdits([ConfigurationEdit(action: .profile, name: "Default")], persist: true)
+    #expect(store.activeProfiles.isEmpty)
+    try store.applyEdits([ConfigurationEdit(action: .profile)], persist: true)
+    #expect(store.pinnedProfile == "automatic")
+    #expect(store.activeProfiles == ["light"])
+}
+
 @Test @MainActor func profilesUpdateEvenWhenEffectiveSettingsStayTheSame() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + ".json")
     defer { try? FileManager.default.removeItem(at: url) }

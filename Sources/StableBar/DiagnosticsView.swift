@@ -137,7 +137,7 @@ struct DiagnosticsView: View {
             Section("Status") {
                 LabeledContent("Widgets", value: String(widgets.count))
                 LabeledContent("Need attention", value: String(attention.count))
-                LabeledContent("Active profiles", value: store.activeProfiles.isEmpty ? "Base configuration" : store.activeProfiles.joined(separator: ", "))
+                LabeledContent("Profile on the bar", value: store.activeProfiles.isEmpty ? "Default" : store.activeProfiles.joined(separator: ", "))
                 Text("Select a widget to see its last update, fix a problem or inspect its configuration. Viewing a paused widget does not start it.")
                     .foregroundStyle(.secondary)
             }

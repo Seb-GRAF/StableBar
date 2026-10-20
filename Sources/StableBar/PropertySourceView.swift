@@ -122,7 +122,7 @@ extension BarStore {
         let mainDefinition = definition?.file == configurationURL.standardizedFileURL.path
         let saved = own.last { source in
             guard let origin = source.origin, origin.file == configurationURL.standardizedFileURL.path else { return false }
-            if widgetID != nil, mainDefinition {
+            if widgetID != nil, mainDefinition, definition?.profile == editingProfile {
                 return origin.profile == definition?.profile && !origin.detail.contains("(template ") && !origin.detail.contains("(widget override)")
             }
             return setsInMainFile(origin)
@@ -264,7 +264,7 @@ struct PropertySourceView: View {
                                         Button("Open profile \(profile)") { open(profile) }
                                     }
                                     Button("Open source file") { NSWorkspace.shared.open(URL(filePath: origin.file)) }
-                                    if store.setsInMainFile(origin), origin.detail == "(widget override)",
+                                    if store.setsInMainFile(origin), origin.detail.hasSuffix("(widget override)"),
                                        source.path.first == "widgets" {
                                         Button("Remove this override") { removeOverride(source) }
                                     }

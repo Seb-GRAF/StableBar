@@ -31,6 +31,17 @@ final class BarStore: NSObject {
     var activeProfiles: [String] = []
     var profiles: [ConfigurationProfile] = []
     var pinnedProfile: String?
+    /// The profile Customize and bar editing change, or nil for Default: the one profile on the bar. Without a
+    /// saved choice, profiles combine as adjustments, so edits stay at the root unless Customize previews one.
+    var editingProfile: String? {
+        guard pinnedProfile != nil || previewedProfile != nil, activeProfiles.count == 1 else { return nil }
+        return activeProfiles[0]
+    }
+    var previewedProfile: String? { configurationLoader.previewProfile }
+    /// The choices of the Profile menus: Default, each enabled profile, then automatic switching.
+    var profileChoices: [String] {
+        ["Default"] + profiles.filter { $0.enabled && !["Default", "automatic"].contains($0.name) }.map(\.name) + ["automatic"]
+    }
     var sessionEdits: [ConfigurationEdit] = []
     private(set) var customizationEdits: [ConfigurationEdit] = []
     private var customizationBase: (Configuration, ConfigurationLoader)?
@@ -216,6 +227,16 @@ final class BarStore: NSObject {
 
     func applyEdits(_ edits: [ConfigurationEdit], persist: Bool) throws {
         flushCustomization()
+        var edits = edits
+        if edits.contains(where: { $0.action == .profile && $0.name == nil }) {
+            // `--profile auto` removes the choice of a file that never saved one, which keeps the
+            // earlier rule; once a file saves a choice, it switches to automatic switching instead.
+            var saved = configurationLoader
+            _ = try saved.load(configurationURL, context: context)
+            if saved.pinnedProfile != nil {
+                edits = edits.map { $0.action == .profile && $0.name == nil ? ConfigurationEdit(action: .profile, name: "automatic") : $0 }
+            }
+        }
         let allEdits = sessionEdits + edits
         let root = try editedDocument(edits)
         let data = try configurationData(root)
@@ -235,22 +256,28 @@ final class BarStore: NSObject {
         catch { sessionEdits = previous; throw error }
     }
 
+    /// Shows a profile, or "Default", on the bar while Customize edits it, without saving the choice.
+    func previewProfile(_ name: String?) {
+        guard name != configurationLoader.previewProfile else { return }
+        flushCustomization()
+        configurationLoader.previewProfile = name
+        readConfiguration(leavingEditMode: false)
+    }
+
+    /// Saves the profile choice from a menu: a profile name, "Default" or "automatic".
+    func chooseProfile(_ name: String) {
+        previewProfile(nil)
+        // A file without a choice already switches automatically; saving one would change its rule.
+        guard name != (pinnedProfile ?? "automatic") else { return }
+        do { try customizationHistory.change(ConfigurationEdit(action: .profile, name: name)) }
+        catch { customizationHistory.error = errorMessage(error) }
+    }
+
     func customizationProfiles(includingPending: Bool = true) throws -> [ConfigurationProfile] {
         let root = try editedDocument([], replaying: includingPending ? customizationEdits : [])
         var loader = configurationLoader
         _ = try loader.load(configurationURL, data: configurationData(root), context: context)
         return loader.profiles
-    }
-
-    func configurationForProfile(_ name: String) throws -> (Configuration, ConfigurationLoader) {
-        var root = try editedMainDocument(replaying: customizationEdits)
-        root["profile"] = .string(name)
-        var ids: [String] = []
-        root = try ConfigurationEdit(action: .profiles, profiles: [["name": .string(name), "enabled": .bool(true)]])
-            .applying(to: root, widgetIDs: &ids)
-        var loader = configurationLoader
-        let configuration = try loader.load(configurationURL, data: configurationData(root), context: context)
-        return (configuration, loader)
     }
 
     func customizationData(_ edits: [ConfigurationEdit], editing original: Data) throws -> Data {
@@ -385,17 +412,25 @@ final class BarStore: NSObject {
     }
 
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
-        // Saving uses only the main file's own settings; previews can supply the temporary composition.
-        let document = try previewDocument ?? editedMainDocument(replaying: customizationEdits)
+        // Saving uses only the edited level's own settings; previews can supply the temporary composition.
+        let document = try previewDocument ?? editedLevel(editedMainDocument(replaying: customizationEdits))
         let selection = try document["theme"]?.decoded(WidgetPackageSelection.self)
         return selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:]
     }
 
+    /// The part of the main file Customize writes to: its root, or the edited profile's configuration.
+    func editedLevel(_ root: [String: ConfigurationValue]) throws -> [String: ConfigurationValue] {
+        guard let editingProfile else { return root }
+        let profiles = try root["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
+        return try profiles.first { $0["name"] == .string(editingProfile) }?["configuration"]?.decoded([String: ConfigurationValue].self) ?? [:]
+    }
+
     func themeEdit(for choice: ThemeChoice) throws -> ConfigurationEdit {
         var inheritedRoot = try editedMainDocument(replaying: [])
-        inheritedRoot["theme"] = nil
         var loader = ConfigurationLoader()
         loader.themesDirectory = themesDirectory
+        // A profile inherits Default's theme; Default inherits from included files.
+        if editingProfile == nil { inheritedRoot["theme"] = nil } else { loader.previewProfile = "Default" }
         let document = try loader.compose(configurationURL, data: configurationData(inheritedRoot), context: context)
         let inherited = try document["theme"]?.decoded(WidgetPackageSelection.self)
         var edit = choice.edit
@@ -434,6 +469,7 @@ final class BarStore: NSObject {
     private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
         var loader = ConfigurationLoader()
         loader.themesDirectory = themesDirectory
+        loader.previewProfile = configurationLoader.previewProfile
         let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
         let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),

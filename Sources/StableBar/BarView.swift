@@ -115,6 +115,11 @@ struct BarView: View {
         .contextMenu {
             Text("StableBar")
             Button("Customize StableBar…") { store.onCustomize?() }
+            if !store.profiles.isEmpty {
+                Picker("Profile", selection: Binding(get: { store.pinnedProfile ?? "automatic" }, set: { store.chooseProfile($0) })) {
+                    ForEach(store.profileChoices, id: \.self) { Text(profileTitle($0)).tag($0) }
+                }
+            }
             Button("Try Themes…") { store.onTryThemes?(display.id) }
             if store.barEditing.isAvailable { Button(store.barEditing.menuTitle, action: store.barEditing.toggle) }
             if let error = store.configurationError ?? store.workspaceStore.error {

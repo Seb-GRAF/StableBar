@@ -77,6 +77,8 @@ final class ConfigurationHistory {
     }
 
     private func change(control: Control?, edit: @escaping () throws -> [ConfigurationEdit]) throws {
+        let profile = store.editingProfile
+        let edit = { try edit().map { $0.inProfile(profile) } }
         error = nil
         if hasPendingChanges && (control == nil || control != pendingControl) { store.flushCustomization() }
         checkForExternalChanges()

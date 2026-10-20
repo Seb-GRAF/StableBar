@@ -32,7 +32,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .configuration: ("Configuration files", .general, "json path reload finder temporary command line")
         case .help: ("Getting started", .general, "onboarding setup guide help")
         case .updates: ("About and updates", .general, "version release beta stable automatic download")
-        case .profiles: ("Profiles", .profiles, "automatic conditions app battery power external display overrides")
+        case .profiles: ("Profiles", .profiles, "default switch automatic conditions app battery power external display overrides")
         case .library: ("Widget library", .packages, "store package install version update uninstall shared settings")
         case .status: ("Status and troubleshooting", .diagnostics, "diagnostics error failed refresh snapshot event")
         }

@@ -625,7 +625,9 @@ final class ConfigurationHistoryTests: XCTestCase {
         var saved = try XCTUnwrap(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
         XCTAssertNil(saved[0].when?.app)
         XCTAssertEqual(saved[0].when?.onBattery, true)
-        editor.setProfileConfiguration(name: "work", configuration: ["bar": .object(["height": .number(48), "margin": .number(10)])])
+        var work = try XCTUnwrap(store.profiles.first)
+        work.configuration = ["bar": .object(["height": .number(48), "margin": .number(10)])]
+        editor.setProfile(work)
         editor.addProfile(name: "extra")
         saved = try XCTUnwrap(fixture.document()["profiles"]).decoded([ConfigurationProfile].self)
         XCTAssertNil(saved[0].when?.app)
@@ -671,10 +673,10 @@ final class ConfigurationHistoryTests: XCTestCase {
         editor.setProfileCondition("work", \.appearance, value: nil, control: "appearance")
         try editor.history.flush()
         XCTAssertNil(try XCTUnwrap(store.profiles.first).when?.appearance)
-        var configuration = try XCTUnwrap(store.profiles.first).configuration
-        configuration["bar"] = .object(["height": .number(44), "spacing": .number(7)])
-        editor.setProfileConfiguration(name: "work", configuration: configuration)
         var edited = try XCTUnwrap(store.profiles.first)
+        edited.configuration["bar"] = .object(["height": .number(44), "spacing": .number(7)])
+        editor.setProfile(edited)
+        edited = try XCTUnwrap(store.profiles.first)
         edited.enabled = false
         editor.setProfile(edited)
         editor.addProfile(name: "extra")

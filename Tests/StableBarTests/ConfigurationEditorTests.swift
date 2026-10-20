@@ -2,7 +2,7 @@ import XCTest
 @testable import StableBar
 
 final class ConfigurationEditorTests: XCTestCase {
-    @MainActor func testProfileScreenPreviewIncludesDisabledProfileWidgetsWithoutActivatingIt() throws {
+    @MainActor func testPreviewShowsADisabledProfileWithoutChangingTheSavedChoice() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"profile":"Other","widgets":[{"id":"clock","type":"clock","position":"right"}],
          "profiles":[
@@ -16,20 +16,22 @@ final class ConfigurationEditorTests: XCTestCase {
         defer { store.stop() }
         store.reloadConfiguration()
         let original = try Data(contentsOf: fixture.url)
-        let (configuration, loader) = try store.configurationForProfile("Main")
-        XCTAssertEqual(configuration.widgets.map(\.id), ["clock", "extra"])
-        XCTAssertEqual(configuration.widgets.map(\.display), [.main, .builtIn])
-        XCTAssertEqual(loader.origins["widgets.clock.display"]?.profile, "Main")
-        XCTAssertEqual(store.configuration?.widgets.map(\.display), [.external])
-        XCTAssertEqual(store.activeProfiles, ["Other"])
+        store.previewProfile("Main")
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock", "extra"])
+        XCTAssertEqual(store.configuration?.widgets.map(\.display), [.main, .builtIn])
+        XCTAssertEqual(store.origins["widgets.clock.display"]?.profile, "Main")
+        XCTAssertEqual(store.editingProfile, "Main")
         XCTAssertEqual(store.pinnedProfile, "Other")
         XCTAssertFalse(store.profiles[0].enabled)
+        store.previewProfile(nil)
+        XCTAssertEqual(store.configuration?.widgets.map(\.display), [.external])
+        XCTAssertEqual(store.activeProfiles, ["Other"])
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationEdits.isEmpty)
         XCTAssertTrue(store.sessionEdits.isEmpty)
     }
 
-    @MainActor func testProfileScreenEditsSaveOnlyTheirOverrideAndResetToImportedSettings() throws {
+    @MainActor func testEditsToAShownProfileSaveOnlyItsOverrideAndResetToImportedSettings() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"includes":["included.json"],"profile":"Other",
          "profiles":[{"name":"Main","configuration":{"widgetOverrides":{"clock":{"style":{"fontSize":18}}}}}]}
@@ -50,35 +52,33 @@ final class ConfigurationEditorTests: XCTestCase {
         store.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         let original = try fixture.document()
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .builtIn)
+        store.previewProfile("Main")
+        XCTAssertEqual(store.configuration?.widgets[0].display, .builtIn)
 
-        editor.setProfileWidgetDisplay(.string("main"), for: "clock", profile: store.profiles[0])
+        editor.set(["display": .string("main")], for: "clock")
+        try editor.history.flush()
         XCTAssertNil(editor.error)
-        XCTAssertEqual(store.configuration?.widgets[0].display, .external)
+        XCTAssertEqual(store.configuration?.widgets[0].display, .main)
         let profiles = try XCTUnwrap(fixture.document()["profiles"]).decoded([[String: ConfigurationValue]].self)
         XCTAssertEqual(profiles, [["name": .string("Main"), "configuration": .object([
             "widgetOverrides": .object(["clock": .object(["display": .string("main"), "style": .object(["fontSize": .number(18)])])])
         ])]])
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .main)
-        editor.setProfileWidgetDisplay(.string("main"), for: "clock", profile: store.profiles[0])
-        XCTAssertEqual(editor.undoSteps.count, 1)
+        XCTAssertTrue(store.setsInMainFile(try XCTUnwrap(store.origins["widgets.clock.display"])))
 
-        editor.setProfileWidgetDisplay(nil, for: "clock", profile: store.profiles[0])
-        try editor.history.flush()
+        editor.change(ConfigurationEdit(action: .unset, id: "clock", properties: ["display": .null]))
         XCTAssertNil(editor.error)
         XCTAssertEqual(try fixture.document(), original)
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .builtIn)
+        XCTAssertEqual(store.configuration?.widgets[0].display, .builtIn)
         editor.undo()
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .main)
+        XCTAssertEqual(store.configuration?.widgets[0].display, .main)
         editor.redo()
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .builtIn)
+        XCTAssertEqual(store.configuration?.widgets[0].display, .builtIn)
         XCTAssertEqual(try String(contentsOf: included, encoding: .utf8), imported)
-        try fixture.write(imported.replacingOccurrences(of: "\"screen\":\"builtIn\"", with: "\"screen\":\"all\""), to: included)
-        store.reloadConfiguration()
-        XCTAssertEqual(try store.configurationForProfile("Main").0.widgets[0].display, .all)
+        store.previewProfile(nil)
+        XCTAssertEqual(store.configuration?.widgets[0].display, .external)
     }
 
-    @MainActor func testProfileScreensKeepMainWidgetsVisibleWhenTheMacBookBecomesSecondary() throws {
+    @MainActor func testAProfileKeepsEveryWidgetOnTheMainScreenAndAFewOnASecondaryMacBook() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"profile":"Main",
          "widgets":[{"id":"clock","type":"clock","position":"right"},{"id":"system","type":"system","position":"right"}],
@@ -89,7 +89,7 @@ final class ConfigurationEditorTests: XCTestCase {
         defer { store.stop() }
         store.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
-        editor.setProfileWidgetDisplay(.string("main"), for: "system", profile: store.profiles[0])
+        editor.set(["display": .string("main")], for: "system")
         XCTAssertNil(editor.error)
         let widgets = try XCTUnwrap(store.configuration).widgets
         let external = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
@@ -99,66 +99,66 @@ final class ConfigurationEditorTests: XCTestCase {
             XCTAssertEqual(widgets.filter { $0.display.includes(display, activeID: 1) }.map(\.id), ["clock", "system"])
         }
         XCTAssertEqual(widgets.filter { $0.display.includes(secondary, activeID: 1) }.map(\.id), ["clock"])
-        XCTAssertEqual(try store.configurationForProfile("Other").0.widgets.map(\.display), [.all, .all])
+        try editor.history.flush()
+        store.previewProfile("Other")
+        XCTAssertEqual(store.configuration?.widgets.map(\.display), [.all, .all])
+        store.previewProfile(nil)
 
-        editor.setProfileWidgetDisplay(.array([.number(2)]), for: "system", profile: store.profiles[0])
+        editor.set(["display": .array([.number(2)])], for: "system")
         XCTAssertEqual(store.configuration?.widgets[1].display, .ids([2]))
         editor.undo()
         XCTAssertEqual(store.configuration?.widgets[1].display, .main)
         editor.redo()
         XCTAssertEqual(store.configuration?.widgets[1].display, .ids([2]))
+        XCTAssertEqual(try fixture.document()["widgets"], .array([
+            .object(["id": .string("clock"), "type": .string("clock"), "position": .string("right")]),
+            .object(["id": .string("system"), "type": .string("system"), "position": .string("right")])
+        ]))
     }
 
-    @MainActor func testUnchangedProfileApplyKeepsAFailedPendingSaveVisible() throws {
-        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"text","position":"left","text":"A"}],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)
+    @MainActor func testAddingAProfileSavesAChoiceAndDeletingTheChosenOneReturnsToDefault() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"dark","when":{"appearance":"dark"},"configuration":{}}]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
         store.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
-        let profile = try XCTUnwrap(store.profiles.first)
-        editor.set(["text": .string("Pending")], for: "a")
-        XCTAssertTrue(editor.history.hasPendingChanges)
+        store.chooseProfile("automatic")
+        XCTAssertNil(try fixture.document()["profile"])
+        editor.addProfile(name: "present")
         XCTAssertNil(editor.error)
-        let external = Data(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#.utf8)
-        try external.write(to: fixture.url)
-
-        editor.setProfileConfiguration(name: profile.name, configuration: profile.configuration)
-
-        XCTAssertTrue(editor.error?.contains("could not be saved and was discarded") == true)
-        XCTAssertFalse(editor.history.hasPendingChanges)
-        XCTAssertTrue(editor.undoSteps.isEmpty)
-        XCTAssertEqual(try Data(contentsOf: fixture.url), external)
-        XCTAssertTrue(try XCTUnwrap(store.configuration).widgets.isEmpty)
+        XCTAssertEqual(try fixture.document()["profile"], .string("automatic"))
+        XCTAssertEqual(store.profiles.map(\.name), ["dark", "present"])
+        XCTAssertTrue(store.activeProfiles.isEmpty)
+        store.chooseProfile("present")
+        XCTAssertEqual(store.activeProfiles, ["present"])
+        editor.deleteProfile("present")
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(try fixture.document()["profile"], .string("Default"))
+        XCTAssertEqual(store.profiles.map(\.name), ["dark"])
+        editor.undo()
+        XCTAssertEqual(store.activeProfiles, ["present"])
     }
 
     @MainActor func testUnchangedProfileApplyClearsAnEarlierConfigurationError() throws {
-        for wholeProfile in [false, true] {
-            let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)
-            defer { fixture.close() }
-            let store = try fixture.store()
-            defer { store.stop() }
-            store.reloadConfiguration()
-            let original = try Data(contentsOf: fixture.url)
-            let profile = try XCTUnwrap(store.profiles.first)
-            let editor = ConfigurationEditor(store: store)
-            let invalid = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(#"{"bar":{"height":"invalid"}}"#.utf8))
-            if wholeProfile {
-                var edited = profile
-                edited.configuration = invalid
-                editor.setProfile(edited)
-            } else {
-                editor.setProfileConfiguration(name: profile.name, configuration: invalid)
-            }
-            XCTAssertNotNil(editor.error)
-            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
-            if wholeProfile { editor.setProfile(profile) }
-            else { editor.setProfileConfiguration(name: profile.name, configuration: profile.configuration) }
-            XCTAssertNil(editor.error)
-            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
-            XCTAssertTrue(editor.undoSteps.isEmpty)
-            XCTAssertFalse(editor.history.hasPendingChanges)
-        }
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"work","configuration":{"bar":{"height":40}}}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let original = try Data(contentsOf: fixture.url)
+        let profile = try XCTUnwrap(store.profiles.first)
+        let editor = ConfigurationEditor(store: store)
+        var edited = profile
+        edited.configuration = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(#"{"bar":{"height":"invalid"}}"#.utf8))
+        editor.setProfile(edited)
+        XCTAssertNotNil(editor.error)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        editor.setProfile(profile)
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+        XCTAssertTrue(editor.undoSteps.isEmpty)
+        XCTAssertFalse(editor.history.hasPendingChanges)
     }
 
     @MainActor func testProgrammaticSelectionCommitsPendingTextBeforeChangingItsWidget() async throws {

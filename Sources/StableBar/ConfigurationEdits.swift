@@ -8,6 +8,18 @@ struct ConfigurationEdit: Codable, Sendable {
     var ids: [String]?
     var name: String?
     var profiles: [[String: ConfigurationValue]]?
+    /// Applies the edit inside this profile's configuration in the main file instead of its root.
+    var profile: String?
+
+    /// Customize edits the profile shown on the bar; selections, profile definitions, packages and
+    /// paths that already name a profile stay at the root.
+    func inProfile(_ name: String?) -> ConfigurationEdit {
+        guard [.set, .add, .remove, .reorder, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens,
+               .modeAliases, .unset, .theme].contains(action), properties?["profiles"] == nil else { return self }
+        var edit = self
+        edit.profile = name
+        return edit
+    }
 
     func validateTargets(in widgetIDs: [String]) throws {
         switch action {
@@ -28,6 +40,17 @@ struct ConfigurationEdit: Codable, Sendable {
 
     func applying(to document: [String: ConfigurationValue], widgetIDs: inout [String]) throws -> [String: ConfigurationValue] {
         var root = document
+        if let profile {
+            var edit = self
+            edit.profile = nil
+            var profiles = try root["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
+            if !profiles.contains(where: { $0["name"] == .string(profile) }) { profiles.append(["name": .string(profile)]) }
+            let index = profiles.firstIndex { $0["name"] == .string(profile) }!
+            let configuration = try (profiles[index]["configuration"] ?? .object([:])).decoded([String: ConfigurationValue].self)
+            profiles[index]["configuration"] = .object(try edit.applying(to: configuration, widgetIDs: &widgetIDs))
+            root["profiles"] = .array(profiles.map(ConfigurationValue.object))
+            return root
+        }
         var overrides = try root["widgetOverrides"]?.decoded([String: ConfigurationValue].self) ?? [:]
         switch action {
         case .set:
@@ -145,9 +168,10 @@ private func removing(_ keys: [String: ConfigurationValue], from object: [String
             } else if scope == .document, case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
                 // A root unset can address several named definitions in one undoable change.
                 let identity = key == "widgets" ? "id" : "name"
-                result[key] = .array(current.map { value in
-                    guard case let .object(definition) = value, case let .string(id) = definition[identity],
-                          case let .object(mask) = nested[id] else { return value }
+                result[key] = .array(current.compactMap { value in
+                    guard case let .object(definition) = value, case let .string(id) = definition[identity] else { return value }
+                    if key == "profiles", nested[id] == .null { return nil }
+                    guard case let .object(mask) = nested[id] else { return value }
                     return .object(removing(mask, from: definition, scope: key == "profiles" ? .profile : .object))
                 })
             }

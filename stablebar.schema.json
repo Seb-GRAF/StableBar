@@ -278,7 +278,7 @@
     },
     "profile": {
       "$ref": "#/definitions/string",
-      "description": "Name of the only profile to apply, or null for automatic matching."
+      "description": "The profile on the bar: a profile name, \"Default\" for none, or \"automatic\" for the first profile whose conditions match. Without it, every matching profile applies."
     },
     "packages": {
       "type": "array",

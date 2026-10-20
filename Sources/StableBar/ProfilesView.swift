@@ -3,27 +3,29 @@ import SwiftUI
 struct ProfilesView: View {
     @Bindable var editor: ConfigurationEditor
     @State private var newName = ""
-    @State private var configuration = "{}"
-    @State private var technical = false
 
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? { store.profiles.first { $0.name == editor.selectedProfileName } }
 
+    /// Profiles that apply together because the file predates choosing one profile at a time.
+    private var combined: [String] {
+        guard store.pinnedProfile == nil else { return [] }
+        let active = store.profiles.filter { store.activeProfiles.contains($0.name) }
+        return active.count > 1 || active.contains { $0.when == nil } ? active.map(\.name) : []
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Matching", selection: Binding(get: { store.pinnedProfile }, set: {
-                if $0 != store.pinnedProfile { editor.change(ConfigurationEdit(action: .profile, name: $0)) }
-            })) {
-                Text("Automatic").tag(Optional<String>.none)
-                ForEach(store.profiles, id: \.name) { profile in
-                    Text("Pinned: \(profile.name)").tag(Optional(profile.name))
-                }
+            Picker("Profile", selection: Binding(get: { store.pinnedProfile ?? "automatic" }, set: { store.chooseProfile($0) })) {
+                ForEach(store.profileChoices, id: \.self) { Text(profileTitle($0)).tag($0) }
             }
             .padding(12)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Active profiles: \(store.activeProfiles.isEmpty ? "None" : store.activeProfiles.joined(separator: " → "))")
+                Text("On the bar: \(store.activeProfiles.isEmpty ? "Default" : store.activeProfiles.joined(separator: " + "))")
                     .font(.callout)
-                Text("Applied from left to right. Later profiles override earlier ones; disabled profiles never apply.")
+                Text(combined.isEmpty
+                     ? "One profile applies at a time. Switch automatically uses the first profile in the list whose conditions all match, or Default when none do."
+                     : "\(combined.count == 1 ? "\(combined[0]) always applies" : "\(combined.joined(separator: ", ")) apply together") because this configuration has no saved profile choice. Choose a profile to use one at a time.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -33,6 +35,8 @@ struct ProfilesView: View {
             HSplitView {
                 VStack(spacing: 0) {
                     List(selection: $editor.selectedProfileName) {
+                        row("Default", detail: "Your main configuration", active: store.activeProfiles.isEmpty)
+                            .tag("Default")
                         ForEach(store.profiles, id: \.name) { profile in
                             let conditions = profile.when
                             let parts = [conditions?.appearance?.capitalized,
@@ -40,24 +44,9 @@ struct ProfilesView: View {
                                          conditions?.displayCount.map { "\($0) display(s)" },
                                          conditions?.externalDisplay.map { $0 ? "External display" : "No external display" },
                                          conditions?.app].compactMap { $0 }
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack {
-                                    Text(profile.name)
-                                    Spacer()
-                                    if let index = store.activeProfiles.firstIndex(of: profile.name) {
-                                        Text("\(index + 1) · Active")
-                                            .font(.caption)
-                                            .foregroundStyle(Color.accentColor)
-                                    } else {
-                                        Text(profile.enabled ? "Not active" : "Disabled")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                }
-                                Text(parts.isEmpty ? "Always matches" : parts.joined(separator: " · "))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 2)
-                            .tag(profile.name)
+                            row(profile.name, detail: profile.enabled ? (parts.isEmpty ? "Manual" : parts.joined(separator: " · ")) : "Disabled",
+                                active: store.activeProfiles.contains(profile.name))
+                                .tag(profile.name)
                         }
                     }
                     .listStyle(.sidebar)
@@ -69,7 +58,7 @@ struct ProfilesView: View {
                             if editor.error == nil { editor.selectedProfileName = newName; newName = "" }
                         }
                         .labelStyle(.iconOnly)
-                        .disabled(newName.isEmpty || store.profiles.contains { $0.name == newName })
+                        .disabled(newName.isEmpty || store.profileChoices.contains(newName) || store.profiles.contains { $0.name == newName })
                     }
                     .padding(10)
                 }
@@ -78,31 +67,54 @@ struct ProfilesView: View {
                     if let selected {
                         settings(selected)
                     } else {
-                        ContentUnavailableView("Select a profile", systemImage: "slider.horizontal.3",
-                                               description: Text("Choose a profile to edit its conditions, or add one."))
+                        defaultSettings
                     }
                 }
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onChange(of: selected, initial: true) {
-            configuration = (try? String(decoding: configurationData(selected?.configuration ?? [:]), as: UTF8.self)) ?? "{}"
+    }
+
+    private func row(_ name: String, detail: String, active: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(name)
+                Spacer()
+                if active { Text("On the bar").font(.caption).foregroundStyle(Color.accentColor) }
+            }
+            Text(detail).font(.caption).foregroundStyle(.secondary)
         }
-        .onChange(of: editor.selectedProfileName) { technical = false }
+        .padding(.vertical, 2)
+    }
+
+    private var defaultSettings: some View {
+        Form {
+            Section("Default") {
+                Text("Default is your main configuration. Other profiles start from it and save only what they change, so a widget you add to Default appears in every profile that doesn't hide it.")
+                    .foregroundStyle(.secondary)
+                Button("Edit Default") { edit("Default") }
+            }
+        }
+        .formStyle(.grouped)
     }
 
     private func settings(_ profile: ConfigurationProfile) -> some View {
         Form {
             Section(profile.name) {
+                Text("Your bar, Appearance and Settings change this profile while it is on the bar. Values it doesn't change come from Default.")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Edit \(profile.name)") { edit(profile.name) }
+                    Spacer()
+                    Button("Delete Profile", role: .destructive) { editor.deleteProfile(profile.name) }
+                }
                 Toggle("Enabled", isOn: Binding(get: { profile.enabled }, set: {
                     var edited = profile
                     edited.enabled = $0
                     editor.setProfile(edited)
                 }))
-                Text("All conditions must match in Automatic mode. A pinned profile ignores its conditions.")
-                    .foregroundStyle(.secondary)
             }
-            Section("Conditions") {
+            Section {
                 Picker("Appearance", selection: condition(profile, \.appearance, control: "appearance")) {
                     Text("Any").tag(Optional<String>.none)
                     Text("Light").tag(Optional("light"))
@@ -122,104 +134,19 @@ struct ProfilesView: View {
                 TextField("Focused app", text: Binding(get: { profile.when?.app ?? "" }, set: {
                     condition(profile, \.app, control: "app").wrappedValue = $0.isEmpty ? nil : $0
                 }), prompt: Text("Any, or a bundle identifier"))
-            }
-            Section {
-                number("Bar height", section: "bar", key: "height", profile: profile, fallback: store.configuration?.bar.height ?? 40)
-                number("Offset from top", section: "bar", key: "offset", profile: profile, fallback: store.configuration?.bar.offset ?? 0)
-                let bar = (try? profile.configuration["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:]
-                let appearance: String = if case let .string(value) = bar["appearance"] { value }
-                    else if bar["appearance"] == .null { "automatic" }
-                    else { "unchanged" }
-                Picker("Bar appearance", selection: Binding(get: { appearance }, set: {
-                    setProfileValue($0 == "automatic" ? .null : .string($0), section: "bar", key: "appearance", profile: profile)
-                })) {
-                    if appearance == "unchanged" { Text("Not set by this profile").tag("unchanged") }
-                    Text("Automatic").tag("automatic")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                }
-                number("Default widget font size", section: "defaults", key: "fontSize", profile: profile,
-                       fallback: store.configuration?.defaults.fontSize ?? 12)
             } header: {
-                Text("Common settings")
+                Text("Switch automatically when")
             } footer: {
-                Text("Only fields you change are saved in this profile. Unset number fields show the current bar's value. Automatic follows macOS even when your base appearance is Light or Dark.")
+                Text("All conditions must match. A profile without conditions is only used when you choose it.")
                     .font(.caption).foregroundStyle(.secondary)
-            }
-            ProfileWidgetsView(editor: editor, profile: profile)
-            let other = otherSettings(profile)
-            if !other.isEmpty {
-                Section("Other settings") {
-                    Text("This profile also configures: \(other.joined(separator: ", ")).")
-                    Text("Edit these settings in Technical details. Changing a common setting keeps them intact.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section {
-                DisclosureGroup("Technical details", isExpanded: $technical) {
-                    Text("All settings applied by this profile, as JSON. Apply after editing. Omitted inherited properties become null overrides; use the main configuration file to remove an override completely.")
-                        .font(.caption).foregroundStyle(.secondary)
-                    TextEditor(text: $configuration)
-                        .font(.system(.body, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .frame(height: 160)
-                        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                    Button("Apply configuration") {
-                        do {
-                            editor.setProfileConfiguration(name: profile.name, configuration:
-                                try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(configuration.utf8)))
-                        } catch { editor.error = errorMessage(error) }
-                    }
-                    Text("Edits are saved in the main configuration file; included files stay unchanged.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
             }
         }
         .formStyle(.grouped)
     }
 
-    private func number(_ title: String, section: String, key: String, profile: ConfigurationProfile, fallback: Double) -> some View {
-        let values = (try? profile.configuration[section]?.decoded([String: ConfigurationValue].self)) ?? [:]
-        let property = values[key]
-        let value = if case let .number(number) = property { number } else { fallback }
-        return LabeledContent {
-            TextField(title, value: Binding(get: { value }, set: {
-                if property != .number($0) { setProfileValue(.number($0), section: section, key: key, profile: profile) }
-            }), format: .number)
-                .labelsHidden().multilineTextAlignment(.trailing).frame(width: 70)
-            Text("pt").foregroundStyle(.secondary)
-        } label: {
-            Text(title)
-            Text(property.map { "Profile value: \($0.sourceDescription)" } ?? "Not set by this profile")
-        }
-    }
-
-    private func setProfileValue(_ value: ConfigurationValue, section: String, key: String, profile: ConfigurationProfile) {
-        var configuration = profile.configuration
-        configuration[section] = .object([key: value]).overriding(configuration[section] ?? .object([:]))
-        editor.setProfileConfiguration(name: profile.name, configuration: configuration)
-    }
-
-    private func otherSettings(_ profile: ConfigurationProfile) -> [String] {
-        var settings = profile.configuration
-        for (section, keys) in [("bar", ["height", "offset", "appearance"]), ("defaults", ["fontSize"])] {
-            if case var .object(values) = settings[section] {
-                for key in keys { values[key] = nil }
-                if values.isEmpty { settings[section] = nil }
-            }
-        }
-        if case var .object(overrides) = settings["widgetOverrides"] {
-            for (id, value) in overrides {
-                if case var .object(properties) = value {
-                    properties["display"] = nil
-                    overrides[id] = properties.isEmpty ? nil : .object(properties)
-                }
-            }
-            settings["widgetOverrides"] = overrides.isEmpty ? nil : .object(overrides)
-        }
-        return settings.keys.sorted()
+    private func edit(_ name: String) {
+        store.previewProfile(name)
+        editor.section = .widgets
     }
 
     private func condition<Value: Equatable>(_ profile: ConfigurationProfile, _ key: WritableKeyPath<ProfileConditions, Value?>, control: String) -> Binding<Value?> {
@@ -228,4 +155,8 @@ struct ProfilesView: View {
             editor.setProfileCondition(profile.name, key, value: value, control: control)
         })
     }
+}
+
+func profileTitle(_ choice: String) -> String {
+    choice == "automatic" ? "Switch automatically" : choice
 }

@@ -165,7 +165,25 @@ final class ConfigurationEditor {
     }
 
     func addProfile(name: String) {
-        setProfile(ConfigurationProfile(name: name, when: nil, configuration: [:]))
+        do {
+            var edits = [ConfigurationEdit(action: .profiles, profiles: [
+                try profileChanges(from: nil, to: ConfigurationProfile(name: name, when: nil, configuration: [:]))
+            ])]
+            // Without a saved choice, every matching profile applies, including one without conditions.
+            if store.pinnedProfile == nil {
+                edits.append(ConfigurationEdit(action: .profile, name: store.profiles.contains { $0.when != nil } ? "automatic" : "Default"))
+            }
+            try history.change(edits)
+        } catch { self.error = errorMessage(error) }
+    }
+
+    func deleteProfile(_ name: String) {
+        if store.previewedProfile == name { store.previewProfile(nil) }
+        var edits = [ConfigurationEdit(action: .unset, properties: ["profiles": .object([name: .null])])]
+        if store.pinnedProfile == name { edits.append(ConfigurationEdit(action: .profile, name: "Default")) }
+        do { try history.change(edits) }
+        catch { self.error = errorMessage(error) }
+        selectedProfileName = nil
     }
 
     func setProfile(_ profile: ConfigurationProfile) {
@@ -178,37 +196,6 @@ final class ConfigurationEditor {
             if changes.isEmpty { error = nil; return }
             change(ConfigurationEdit(action: .profiles, profiles: [changes]))
         } catch { self.error = errorMessage(error) }
-    }
-
-    func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
-        do {
-            error = nil
-            store.flushCustomization()
-            guard try store.customizationProfiles().contains(where: { $0.name == name }),
-                  var profile = store.profiles.first(where: { $0.name == name }) else {
-                throw CommandFailure(message: "Save command-line changes before editing this profile.")
-            }
-            let current = profile
-            profile.configuration = configuration
-            let changes = try profileChanges(from: current, to: profile)
-            if changes.isEmpty { return }
-            change(ConfigurationEdit(action: .profiles, profiles: [changes]))
-        } catch { self.error = errorMessage(error) }
-    }
-
-    func setProfileWidgetDisplay(_ value: ConfigurationValue?, for id: String, profile: ConfigurationProfile) {
-        if let value {
-            var configuration = profile.configuration
-            configuration["widgetOverrides"] = .object([id: .object(["display": value])])
-                .overriding(configuration["widgetOverrides"] ?? .object([:]))
-            setProfileConfiguration(name: profile.name, configuration: configuration)
-        } else {
-            change(ConfigurationEdit(action: .unset, properties: [
-                "profiles": .object([profile.name: .object(["configuration": .object([
-                    "widgetOverrides": .object([id: .object(["display": .null])])
-                ])])])
-            ]))
-        }
     }
 
     func undo() {
