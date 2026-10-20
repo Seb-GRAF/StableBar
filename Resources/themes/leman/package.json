@@ -1,0 +1,10 @@
+{
+  "id": "leman",
+  "name": "Léman",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Lake blue-green colors: morning mist in light, night water in dark, with teal for the accent.",
+  "author": "alexandrebucci",
+  "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+}

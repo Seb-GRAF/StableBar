@@ -7,7 +7,7 @@ final class ThemeTrialTests: XCTestCase {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let installed = try fixture.theme(#"{"defaults":{"fontSize":19}}"#)
-        for selection in [#"{"id":"terminal"}"#, #"{"id":"test-theme","version":"1"}"#, #"{"id":"terminal","enabled":false}"#, ""] {
+        for selection in [#"{"id":"rose-pine"}"#, #"{"id":"test-theme","version":"1"}"#, #"{"id":"rose-pine","enabled":false}"#, ""] {
             let configuration = selection.isEmpty ? #"{"widgets":[]}"# : #"{"theme":\#(selection),"widgets":[]}"#
             try fixture.write(configuration, to: fixture.url)
             let store = try loadedStore(fixture)
@@ -32,7 +32,7 @@ final class ThemeTrialTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertEqual(trial.selectedIndex, trial.choices.count - 1)
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
         trial.next()
         XCTAssertEqual(trial.selectedIndex, 0)
         for index in 1...trial.choices.count {
@@ -49,11 +49,11 @@ final class ThemeTrialTests: XCTestCase {
     @MainActor func testGalleryAndTrialSaveIdenticalThemeEditsIncludingMainFileSettingsAndInheritedThemes() async throws {
         let cases: [(main: String, included: String, key: String, properties: [String: ConfigurationValue]?)] = [
             (#"{"widgets":[]}"#, "{}", "built-in", nil),
-            (#"{"theme":{"id":"terminal"},"widgets":[]}"#, "{}", "built-in", nil),
-            (#"{"widgets":[]}"#, "{}", "terminal", ["id": .string("terminal")]),
+            (#"{"theme":{"id":"rose-pine"},"widgets":[]}"#, "{}", "built-in", nil),
+            (#"{"widgets":[]}"#, "{}", "rose-pine", ["id": .string("rose-pine")]),
             (#"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}},"widgets":[]}"#,
              "{}", "test-theme/1", ["id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(48)])]),
-            (#"{"includes":["included.json"],"widgets":[]}"#, #"{"theme":{"id":"terminal"}}"#,
+            (#"{"includes":["included.json"],"widgets":[]}"#, #"{"theme":{"id":"rose-pine"}}"#,
              "built-in", ["id": .string("built-in")]),
             (#"{"includes":["included.json"],"widgets":[]}"#,
              #"{"theme":{"id":"test-theme","version":"1","settings":{"size":48}}}"#,
@@ -113,7 +113,7 @@ final class ThemeTrialTests: XCTestCase {
         defer { store.stop() }
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
-        for key in ["built-in", "terminal", other.key] {
+        for key in ["built-in", "rose-pine", other.key] {
             let choice = try XCTUnwrap(gallery.choices.first { $0.key == key })
             for trialSelection in [false, true] {
                 if trialSelection {
@@ -217,7 +217,7 @@ final class ThemeTrialTests: XCTestCase {
     }
 
     @MainActor func testCancelRestoresEveryComposedLayerAndLeavesAllFilesAndHistoryUntouched() throws {
-        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"theme":{"id":"terminal"},"templates":{"label":{"type":"text","position":"left","style":{"paddingHorizontal":7}}},"widgets":[{"id":"label","template":"label","text":"Label"}],"widgetOverrides":{"label":{"style":{"fontSize":17}}},"profiles":[{"name":"work","configuration":{"bar":{"inset":19}}}]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"theme":{"id":"rose-pine"},"templates":{"label":{"type":"text","position":"left","style":{"paddingHorizontal":7}}},"widgets":[{"id":"label","template":"label","text":"Label"}],"widgetOverrides":{"label":{"style":{"fontSize":17}}},"profiles":[{"name":"work","configuration":{"bar":{"inset":19}}}]}"#)
         defer { fixture.close() }
         try fixture.write(#"{"defaults":{"cornerRadius":4}}"#, to: fixture.directory.appending(path: "included.json"))
         let installed = try fixture.theme(#"{"bar":{"height":57},"defaults":{"fontSize":22}}"#)
@@ -267,11 +267,11 @@ final class ThemeTrialTests: XCTestCase {
         trial.cancel()
         XCTAssertNil(trial.error)
         XCTAssertFalse(trial.isActive)
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("terminal")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("rose-pine")]))
         XCTAssertNil(try fixture.document()["bar"])
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(store.configuration?.bar.margin, 9)
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
         XCTAssertEqual(try encodedEdits(store), edits)
         XCTAssertFalse(store.customizationHistory.hasPendingChanges)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -280,7 +280,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(try encodedEdits(store), edits)
         try store.customizationHistory.redo()
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
         XCTAssertEqual(try encodedEdits(store), edits)
     }
 
@@ -288,22 +288,22 @@ final class ThemeTrialTests: XCTestCase {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
         defer { fixture.close() }
         let includedURL = fixture.directory.appending(path: "included.json")
-        try fixture.write(#"{"theme":{"id":"terminal"}}"#, to: includedURL)
+        try fixture.write(#"{"theme":{"id":"rose-pine"}}"#, to: includedURL)
         let included = try Data(contentsOf: includedURL)
         let store = try loadedStore(fixture)
         defer { store.stop() }
         let trial = ThemeTrial(store: store)
-        XCTAssertEqual(trial.choice?.key, "terminal")
+        XCTAssertEqual(trial.choice?.key, "rose-pine")
         trial.next()
         XCTAssertTrue(trial.choice?.isBuiltIn == true)
-        XCTAssertNil(store.configuration?.defaults.fontName)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
         trial.keep()
         XCTAssertNil(trial.error)
         XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("built-in")]))
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
     }
 
     @MainActor func testInstalledThemeSettingsSurvivePreviewAndKeepAndOtherPackageFilesStayUntouched() throws {
@@ -384,7 +384,7 @@ final class ThemeTrialTests: XCTestCase {
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        try store.customizationHistory.change(ConfigurationEdit(action: .theme, properties: ["id": .string("terminal")]))
+        try store.customizationHistory.change(ConfigurationEdit(action: .theme, properties: ["id": .string("rose-pine")]))
         try store.customizationHistory.undo()
         let document = store.effectiveDocument
         let origins = store.origins
@@ -414,20 +414,20 @@ final class ThemeTrialTests: XCTestCase {
             defer { fixture.close() }
             let store = try loadedStore(fixture)
             defer { store.stop() }
-            let themeEdit = ConfigurationEdit(action: .theme, properties: ["id": .string("terminal")])
+            let themeEdit = ConfigurationEdit(action: .theme, properties: ["id": .string("rose-pine")])
             try store.setSessionEdits([themeEdit] + pendingEdits)
             let trial = ThemeTrial(store: store)
-            XCTAssertEqual(trial.choice?.key, "terminal")
+            XCTAssertEqual(trial.choice?.key, "rose-pine")
             trial.next()
-            XCTAssertNil(store.configuration?.defaults.fontName)
+            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
             try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["inset": .number(23)])], persist: false)
             store.reloadConfiguration()
-            XCTAssertNil(store.configuration?.defaults.fontName)
+            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
             XCTAssertEqual(store.configuration?.bar.inset, 23)
             let edits = try encodedEdits(store)
             if keep { trial.keep() } else { trial.cancel() }
             XCTAssertNil(trial.error)
-            XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+            XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
             XCTAssertEqual(store.configuration?.bar.margin, 9)
             XCTAssertEqual(store.configuration?.bar.inset, 23)
             XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
@@ -446,7 +446,7 @@ final class ThemeTrialTests: XCTestCase {
         let cancelled = ThemeTrial(store: store)
         XCTAssertFalse(cancelled.handleKey(48)) // Tab remains available to focus controls.
         XCTAssertTrue(cancelled.handleKey(123))
-        XCTAssertEqual(cancelled.choice?.key, "terminal")
+        XCTAssertEqual(cancelled.choice?.key, "rose-pine")
         XCTAssertTrue(cancelled.handleKey(124))
         XCTAssertTrue(cancelled.choice?.isBuiltIn == true)
         XCTAssertTrue(cancelled.handleKey(123))
@@ -464,19 +464,19 @@ final class ThemeTrialTests: XCTestCase {
     }
 
     @MainActor func testQuittingDuringTrialLeavesTheSavedThemeForTheNextLaunch() throws {
-        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"terminal"},"widgets":[]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"rose-pine"},"widgets":[]}"#)
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         let original = try Data(contentsOf: fixture.url)
         let trial = ThemeTrial(store: store)
         trial.next()
-        XCTAssertNil(store.configuration?.defaults.fontName)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
         XCTAssertEqual(AppDelegate(store: store).applicationShouldTerminate(NSApplication.shared), .terminateNow)
         store.stop()
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         let restarted = try loadedStore(fixture)
         defer { restarted.stop() }
-        XCTAssertEqual(restarted.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(restarted.configuration?.defaults.cornerRadius, 13)
         XCTAssertTrue(restarted.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -532,7 +532,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.effectiveDocument, baseline)
         trial.previous()
         XCTAssertEqual(trial.choice?.key, broken[0].key)
-        XCTAssertEqual(trial.position, "9 of 10")
+        XCTAssertEqual(trial.position, "7 of 8")
         XCTAssertFalse(trial.canKeep)
         XCTAssertNotNil(trial.error)
         XCTAssertTrue(trial.handleKey(36))
@@ -540,10 +540,10 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
         trial.previous()
-        XCTAssertEqual(trial.choice?.key, "terminal")
+        XCTAssertEqual(trial.choice?.key, "rose-pine")
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
         let lastGood = store.effectiveDocument
         for choice in broken {
             trial.next()
@@ -556,7 +556,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertTrue(trial.choice?.isBuiltIn == true)
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertNil(store.configuration?.defaults.fontName)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
         trial.cancel()
         XCTAssertEqual(store.effectiveDocument, baseline)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)

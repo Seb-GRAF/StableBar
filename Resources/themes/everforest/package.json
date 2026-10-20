@@ -1,0 +1,10 @@
+{
+  "id": "everforest",
+  "name": "Everforest",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Everforest palette, Light and Dark at medium contrast, with green for the accent.",
+  "author": "alexandrebucci",
+  "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+}

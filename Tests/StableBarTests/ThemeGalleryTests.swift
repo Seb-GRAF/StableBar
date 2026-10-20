@@ -12,11 +12,11 @@ final class ThemeGalleryTests: XCTestCase {
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
         XCTAssertEqual(gallery.selectedKey, "built-in")
-        let terminal = try XCTUnwrap(gallery.choices.first { $0.key == "terminal" })
-        gallery.select(terminal)
-        XCTAssertEqual(gallery.selectedKey, "terminal")
+        let blueprint = try XCTUnwrap(gallery.choices.first { $0.key == "blueprint" })
+        gallery.select(blueprint)
+        XCTAssertEqual(gallery.selectedKey, "blueprint")
         XCTAssertEqual(store.configuration?.defaults.fontName, "Menlo")
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("terminal")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("blueprint")]))
         XCTAssertNil(try fixture.document()["bar"])
         XCTAssertEqual(store.configuration?.bar.margin, 12)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -26,7 +26,7 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertNil(try fixture.document()["theme"])
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
         try store.customizationHistory.undo()
-        XCTAssertEqual(gallery.selectedKey, "terminal")
+        XCTAssertEqual(gallery.selectedKey, "blueprint")
         try store.customizationHistory.undo()
         XCTAssertEqual(gallery.selectedKey, "built-in")
         XCTAssertEqual(store.sessionEdits.count, 1)
@@ -78,10 +78,10 @@ final class ThemeGalleryTests: XCTestCase {
         await gallery.loadStore()
         XCTAssertTrue(gallery.storeUnavailable)
         XCTAssertTrue(gallery.storeThemes.isEmpty)
-        XCTAssertEqual(gallery.choices.count, 8)
-        XCTAssertEqual(gallery.previews.count, 8)
-        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "slate" }))
-        XCTAssertEqual(gallery.selectedKey, "slate")
+        XCTAssertEqual(gallery.choices.count, 6)
+        XCTAssertEqual(gallery.previews.count, 6)
+        gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "rose-pine" }))
+        XCTAssertEqual(gallery.selectedKey, "rose-pine")
         XCTAssertNil(store.customizationHistory.error)
     }
 
@@ -130,7 +130,7 @@ final class ThemeGalleryTests: XCTestCase {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
         defer { fixture.close() }
         let includedURL = fixture.directory.appending(path: "included.json")
-        try fixture.write(#"{"theme":{"id":"terminal"}}"#, to: includedURL)
+        try fixture.write(#"{"theme":{"id":"blueprint"}}"#, to: includedURL)
         let included = try Data(contentsOf: includedURL)
         let store = try fixture.store()
         defer { store.stop() }
@@ -142,12 +142,13 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
-        XCTAssertEqual(gallery.selectedKey, "terminal")
+        XCTAssertEqual(gallery.selectedKey, "blueprint")
     }
 
     @MainActor func testInheritedThemeColorsStillCountWhenTheSelectedThemeDoesNotRedefineThem() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"menu-bar"},"widgets":[]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"theme":{"id":"test-theme","version":"1"},"widgets":[]}"#)
         defer { fixture.close() }
+        _ = try fixture.theme(#"{}"#)
         let store = try fixture.store()
         defer { store.stop() }
         let gallery = ThemeGallery(store: store)
