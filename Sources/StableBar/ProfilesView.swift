@@ -146,6 +146,7 @@ struct ProfilesView: View {
                 Text("Only fields you change are saved in this profile. Unset number fields show the current bar's value. Automatic follows macOS even when your base appearance is Light or Dark.")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            ProfileWidgetsView(editor: editor, profile: profile)
             let other = otherSettings(profile)
             if !other.isEmpty {
                 Section("Other settings") {
@@ -208,6 +209,15 @@ struct ProfilesView: View {
                 for key in keys { values[key] = nil }
                 if values.isEmpty { settings[section] = nil }
             }
+        }
+        if case var .object(overrides) = settings["widgetOverrides"] {
+            for (id, value) in overrides {
+                if case var .object(properties) = value {
+                    properties["display"] = nil
+                    overrides[id] = properties.isEmpty ? nil : .object(properties)
+                }
+            }
+            settings["widgetOverrides"] = overrides.isEmpty ? nil : .object(overrides)
         }
         return settings.keys.sorted()
     }

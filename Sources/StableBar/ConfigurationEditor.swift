@@ -196,6 +196,21 @@ final class ConfigurationEditor {
         } catch { self.error = errorMessage(error) }
     }
 
+    func setProfileWidgetDisplay(_ value: ConfigurationValue?, for id: String, profile: ConfigurationProfile) {
+        if let value {
+            var configuration = profile.configuration
+            configuration["widgetOverrides"] = .object([id: .object(["display": value])])
+                .overriding(configuration["widgetOverrides"] ?? .object([:]))
+            setProfileConfiguration(name: profile.name, configuration: configuration)
+        } else {
+            change(ConfigurationEdit(action: .unset, properties: [
+                "profiles": .object([profile.name: .object(["configuration": .object([
+                    "widgetOverrides": .object([id: .object(["display": .null])])
+                ])])])
+            ]))
+        }
+    }
+
     func undo() {
         finishEditing()
         do { try history.undo() }

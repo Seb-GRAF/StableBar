@@ -1,0 +1,30 @@
+{
+  "profile": "Main",
+  "widgets": [
+    { "id": "clock", "type": "clock", "position": "right" },
+    { "id": "system", "type": "system", "position": "right" },
+    { "id": "audio", "type": "audio", "position": "right" }
+  ],
+  "profiles": [
+    {
+      "name": "Main",
+      "configuration": {
+        "widgetOverrides": {
+          "clock": { "display": "all" },
+          "system": { "display": "main" },
+          "audio": { "display": "main" }
+        }
+      }
+    },
+    {
+      "name": "All screens",
+      "configuration": {
+        "widgetOverrides": {
+          "clock": { "display": "all" },
+          "system": { "display": "all" },
+          "audio": { "display": "all" }
+        }
+      }
+    }
+  ]
+}
