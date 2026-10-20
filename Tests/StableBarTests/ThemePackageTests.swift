@@ -760,12 +760,12 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     #expect(builtIn.widgets[0].style.foreground == textMuted)
     #expect(builtIn.widgets[0].style.background == HexColor(0x888888ff))
     #expect(builtIn.widgets[1].style.foreground == textMuted)
-    let slate = try loader.load(root, data: Data(#"{"theme":{"id":"slate"},\#(widgets)}"#.utf8))
-    #expect(slate.defaults.foreground == HexColor(light: 0x1f2329ff, dark: 0xe6e9efff))
-    #expect(slate.defaults.cornerRadius == 8)
-    #expect(slate.defaults.shadowColor == HexColor(light: 0x00000014, dark: 0x00000040))
-    #expect(slate.widgets[1].style.foreground == HexColor(light: 0x5f6773ff, dark: 0x9aa3b0ff))
-    let ownText = Data(##"{"theme":{"id":"slate"},"tokens":{"text":"#c2410c"},"widgets":[]}"##.utf8)
+    let rosePine = try loader.load(root, data: Data(#"{"theme":{"id":"rose-pine"},\#(widgets)}"#.utf8))
+    #expect(rosePine.defaults.foreground == HexColor(light: 0x575279ff, dark: 0xe0def4ff))
+    #expect(rosePine.defaults.cornerRadius == 13)
+    #expect(rosePine.defaults.shadowColor == HexColor(light: 0x5752791f, dark: 0x00000066))
+    #expect(rosePine.widgets[1].style.foreground == HexColor(light: 0x716d8cff, dark: 0x908caaff))
+    let ownText = Data(##"{"theme":{"id":"rose-pine"},"tokens":{"text":"#c2410c"},"widgets":[]}"##.utf8)
     for appearance in ["light", "dark"] {
         #expect(try loader.load(root, data: ownText, context: ConfigurationContext(appearance: appearance)).defaults.foreground == HexColor(0xc2410cff))
     }
@@ -773,7 +773,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
         #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(json.utf8)) }
     }
     loader.themesDirectory = nil
-    #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(#"{"theme":{"id":"slate"},"widgets":[]}"#.utf8)) }
+    #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(#"{"theme":{"id":"rose-pine"},"widgets":[]}"#.utf8)) }
 }
 
 @Test func bundledThemesDefineEverySharedTokenForLightAndDark() throws {
@@ -790,7 +790,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
         let tokens = try loader.document["tokens"]!.decoded([String: ConfigurationValue].self)
         for name in ["surface", "surfaceRaised", "text", "textMuted", "accent", "track", "hairline", "warning", "critical"] {
             let color = try #require(try tokens[name]?.decoded(HexColor.self), "\(manifest.id).\(name)")
-            #expect(color.light != color.dark, "\(manifest.id).\(name)")
+            #expect((color.light == color.dark) == (manifest.id == "notch"), "\(manifest.id).\(name)")
         }
     }
 }
@@ -831,7 +831,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
         ("{\(automatic),\"accent\":\"#007aff\"}", .object(["height": .number(40)]), nil),
         ("{\(changedAfterAutomatic)}", .object(["height": .number(40)]), .object(["foreground": .string("#ff8800ff")]))
     ] {
-        try writePackageFile(#"{"theme":{"id":"slate"},"bar":{"height":40},"defaults":\#(defaults),"widgets":[]}"#, to: root)
+        try writePackageFile(#"{"theme":{"id":"rose-pine"},"bar":{"height":40},"defaults":\#(defaults),"widgets":[]}"#, to: root)
         try migrateEarlierColors(root)
         let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))
         #expect(saved["bar"] == bar)
@@ -839,8 +839,8 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
         var loader = ConfigurationLoader()
         loader.themesDirectory = bundledThemes
         let configuration = try loader.load(root)
-        #expect(configuration.defaults.background == HexColor(light: 0xf4f5f7ed, dark: 0x23272eee))
-        #expect(configuration.defaults.accent == HexColor(light: 0x3a6ea5ff, dark: 0x5b8ac4ff))
+        #expect(configuration.defaults.background == HexColor(light: 0xfaf4edee, dark: 0x191724ee))
+        #expect(configuration.defaults.accent == HexColor(light: 0x8a72a4ff, dark: 0xc4a7e7ff))
     }
     let handSet = ##"{"bar":{"height":40},"defaults":{"foreground":"#abcdefff","background":"#242629ee","hoverBackground":"#36383cff","borderColor":"#ffffff1f","shadowColor":"#00000040","accent":"#ff8800"},"widgets":[]}"##
     try writePackageFile(handSet, to: root)

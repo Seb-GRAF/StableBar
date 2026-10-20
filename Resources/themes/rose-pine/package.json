@@ -1,0 +1,10 @@
+{
+  "id": "rose-pine",
+  "name": "Rosé Pine",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Rosé Pine palette, Dawn in light and Main in dark, with Iris for the accent.",
+  "author": "alexandrebucci",
+  "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+}

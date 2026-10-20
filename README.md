@@ -424,30 +424,30 @@ StableBar shows `requires`, `permissions` and `hosts` but does not enforce them.
 
 ### Themes
 
-StableBar ships with eight themes. Each has light and dark colors and follows the system's appearance, or the one `bar.appearance` sets.
+StableBar ships with five themes and the Built-in fallback. Themes follow the system's appearance, or the one `bar.appearance` sets. Notch stays black in both appearances.
 
 | Theme | ID | Look |
 | --- | --- | --- |
 | **Built-in** | none | Each widget is its own floating tile. |
-| **Slate**, **Paper**, **Graphite** | `slate`, `paper`, `graphite` | Tiles in other colors and corners. |
-| **Menu Bar** | `menu-bar` | One full-width strip with plain widgets and a hairline, like the macOS menu bar. |
-| **Island** | `island` | One rounded bar that floats below the top edge and in from the sides, in Catppuccin colors. |
-| **Minimal** | `minimal` | No backgrounds: text with a soft shadow sits on the wallpaper. |
-| **Terminal** | `terminal` | Menlo, square corners and outlined widgets on a solid strip, in Gruvbox colors. |
+| **Rosé Pine** | `rose-pine` | Rounded tiles in Dawn and Main colors, with an Iris accent. |
+| **Everforest** | `everforest` | A full-width strip in warm forest colors, with underlined workspaces. |
+| **Léman** | `leman` | A rounded floating bar in lake blue-green colors, with a teal accent. |
+| **Blueprint** | `blueprint` | A thin outlined bar in tracing-paper and cyanotype colors, set in Menlo. |
+| **Notch** | `notch` | A pure black strip that blends into the MacBook notch, with a cyan accent. |
 
 Choose one in setup or in **Customize → Appearance**. Appearance's full-width cards show the same sample bar in each theme's style: three workspaces, Finder, a battery percentage and a clock. The sample shows the theme's bar, widget tiles, fonts, colors and workspace indicator, in the light or dark appearance your bar uses now. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
 
 ```json
-{ "theme": { "id": "slate" } }
+{ "theme": { "id": "rose-pine" } }
 ```
 
 To try themes on your real bar, choose **Try Themes…** from the bar's right-click menu or its menu-bar icon. A small panel opens below the bar on that screen. Use **←** and **→** or the arrow buttons to cycle through the themes that ship with StableBar, starting with Built-in, then your installed themes, in the gallery's order; every display changes together. **Return** or **Keep** saves the shown theme, and **Undo** in Customize reverses it. **Esc**, **Cancel** or a click outside restores the previous look without saving. Quitting while trying also leaves the saved theme alone. Opening **Edit Bar** cancels a theme trial; starting **Try Themes…** finishes editing the bar. Temporary command-line changes stay applied and unsaved throughout. **Keep windows clear** uses the saved bar’s size until you choose **Keep**.
 
 Without `theme`, StableBar uses Built-in. Built-in also loads under every other theme, so a theme only needs what it changes: one that defines only tokens restyles widgets through Built-in's `defaults`, and anything it leaves out keeps Built-in's value.
 
-A theme is a package whose `package.json` sets `"kind": "theme"`. Its configuration can contain only `tokens`, `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`, plus includes inside the package. Widgets, templates, widget overrides, popups, providers, environment variables and any other key are rejected when the theme is reviewed, installed or loaded, so a theme runs no commands and needs no command review. The themes that ship with StableBar are in [Resources/themes](Resources/themes); [Slate](Resources/themes/slate/config.json) defines every token below. Give each color a light and a dark value, such as `{ "light": "#1f2329", "dark": "#e6e9ef" }`, instead of a dark profile.
+A theme is a package whose `package.json` sets `"kind": "theme"`. Its configuration can contain only `tokens`, `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`, plus includes inside the package. Widgets, templates, widget overrides, popups, providers, environment variables and any other key are rejected when the theme is reviewed, installed or loaded, so a theme runs no commands and needs no command review. The themes that ship with StableBar are in [Resources/themes](Resources/themes); [Rosé Pine](Resources/themes/rose-pine/config.json) defines every token below. Give each color a light and a dark value, such as `{ "light": "#1f2329", "dark": "#e6e9ef" }`, instead of a dark profile.
 
-A theme can change the whole look, not only its colors. [Menu Bar](Resources/themes/menu-bar/config.json) draws the strip with `bar.style` and removes the widget tiles by setting `background`, `borderColor` and `shadowColor` to `null` in `defaults`. Popups would lose their background with them, so it gives popups their own in `popupDefaults`. [Island](Resources/themes/island/config.json) adds `bar.margin` and a corner radius so the strip floats.
+A theme can change the whole look, not only its colors. [Everforest](Resources/themes/everforest/config.json) draws the strip with `bar.style` and removes the widget tiles by setting `background`, `borderColor` and `shadowColor` to `null` in `defaults`. Popups would lose their background with them, so it gives popups their own in `popupDefaults`. [Léman](Resources/themes/leman/config.json) adds `bar.margin` and a corner radius so the strip floats.
 
 Install your own theme like any other package, then select it with its version:
 

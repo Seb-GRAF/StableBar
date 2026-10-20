@@ -1,7 +1,0 @@
-{
-  "id": "menu-bar",
-  "name": "Menu Bar",
-  "version": "1.0.0",
-  "kind": "theme",
-  "entry": "config.json"
-}

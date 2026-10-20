@@ -1,0 +1,10 @@
+{
+  "id": "blueprint",
+  "name": "Blueprint",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "An architect's plan: tracing paper in light, cyanotype blue with a yellow pencil accent in dark, set in Menlo inside a thin outline.",
+  "author": "alexandrebucci",
+  "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+}
