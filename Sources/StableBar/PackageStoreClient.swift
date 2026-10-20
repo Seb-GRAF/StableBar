@@ -37,6 +37,41 @@ actor PackageStoreClient {
         catch { indexTask = nil; throw error }
     }
 
+    func reloadIndex() async throws -> PackageIndex {
+        indexTask = nil
+        return try await index()
+    }
+
+    func installed() throws -> [WidgetPackageManifest] {
+        try packages.list()
+    }
+
+    func inspect(_ directory: URL, settings: [String: ConfigurationValue] = [:]) throws -> WidgetPackageInspection {
+        try packages.inspect(directory, settings: settings)
+    }
+
+    func install(_ directory: URL) throws -> WidgetPackageInspection {
+        try packages.install(directory)
+    }
+
+    func savedSecrets(for manifest: WidgetPackageManifest) throws -> Set<String> {
+        var saved: Set<String> = []
+        for (name, setting) in manifest.settings where setting.type == "secret" {
+            if try packageSecretIsSaved("\(manifest.id)/\(name)") { saved.insert(name) }
+        }
+        return saved
+    }
+
+    func screenshotData(for inspection: WidgetPackageInspection) throws -> Data? {
+        try inspection.screenshot.map { try Data(contentsOf: $0) }
+    }
+
+    func saveSecrets(_ values: [String: String], for manifest: WidgetPackageManifest) throws {
+        for (name, value) in values {
+            try savePackageSecret(value, account: "\(manifest.id)/\(name)")
+        }
+    }
+
     func package(_ entry: PackageIndex.Entry) async throws -> WidgetPackageInspection {
         let key = "\(entry.id)/\(entry.version)/\(entry.sha256)"
         if let task = downloads[key] { return try await task.value }

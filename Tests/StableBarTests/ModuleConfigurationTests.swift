@@ -50,6 +50,53 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(loader.dependencies == [root, module, theme, shared])
 }
 
+@Test func contributionHistoryKeepsTemplateWidgetAndProfileOverridesInOrder() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    let module = directory.appending(path: "module.json")
+    try writeConfiguration(#"""
+    {"templates":{"base":{"type":"clock","position":"right","style":{"fontSize":11}}},
+     "widgetOverrides":{"time":{"style":{"fontSize":15}}},
+     "defaults":{"foreground":"@token.missing"}}
+    """#, to: module)
+    try writeConfiguration(##"""
+    {"includes":["module.json"],"widgets":[{"id":"time","template":"base","style":{"fontSize":13}}],
+     "profiles":[{"name":"work","configuration":{"defaults":{"foreground":"#123456"},
+                  "widgetOverrides":{"time":{"style":{"fontSize":18}}}}}]}
+    """##, to: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root)
+    #expect(configuration.widgets[0].style.fontSize == 18)
+    let history = try #require(loader.contributions["widgets.time.style.fontSize"])
+    #expect(history.map(\.value) == [.number(11), .number(13), .number(15), .number(18)])
+    #expect(history.first?.origin.detail == "(template base)")
+    #expect(history.last?.origin.profile == "work")
+    #expect(history.last?.origin.detail == "(profile work) (widget override)")
+    #expect(loader.contributions["defaults.foreground"]?.first?.value == .string("@token.missing"))
+}
+
+@Test func packageContributionHistoryRetainsRawSettingsAndTheirSelectedValues() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    let package = directory.appending(path: "packages/type-theme/1.0.0")
+    try writeConfiguration(#"""
+    {"id":"type-theme","name":"Type Theme","version":"1.0.0","kind":"theme","entry":"config.json",
+     "settings":{"size":{"type":"number","default":12}}}
+    """#, to: package.appending(path: "package.json"))
+    try writeConfiguration(#"{"defaults":{"fontSize":"@setting.size"}}"#, to: package.appending(path: "config.json"))
+    try writeConfiguration(#"""
+    {"theme":{"id":"type-theme","version":"1.0.0","settings":{"size":17}},"widgets":[]}
+    """#, to: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root)
+    #expect(configuration.defaults.fontSize == 17)
+    let contribution = try #require(loader.contributions["defaults.fontSize"]?.last)
+    #expect(contribution.value == .string("@setting.size"))
+    #expect(contribution.settingValue == .number(17))
+}
+
 @Test func widgetTemplatesInheritRecursivelyAndReplaceArrays() throws {
     let data = Data(##"""
     {"templates":{

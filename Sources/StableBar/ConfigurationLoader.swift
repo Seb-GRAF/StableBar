@@ -124,6 +124,7 @@ struct ConfigurationOrigin: Equatable, Sendable, CustomStringConvertible {
     var detail = ""
     var token: String?
     var tokenSource = ""
+    var profile: String?
 
     var description: String {
         [file, detail, token.map { "→ token \($0) (\(tokenSource))" } ?? ""].filter { !$0.isEmpty }.joined(separator: " ")
@@ -134,11 +135,29 @@ struct ConfigurationOrigin: Equatable, Sendable, CustomStringConvertible {
         origin.detail = detail.isEmpty ? text : "\(detail) \(text)"
         return origin
     }
+
+    func inProfile(_ name: String) -> ConfigurationOrigin {
+        var origin = appending("(profile \(name))")
+        origin.profile = name
+        return origin
+    }
 }
 
 struct ConfigurationLayer {
     var values: [String: ConfigurationValue]
     var origins: [String: ConfigurationOrigin]
+    var contributions: [String: [ConfigurationContribution]]
+
+    init(values: [String: ConfigurationValue], origins: [String: ConfigurationOrigin]) {
+        self.values = values
+        self.origins = origins
+        contributions = [:]
+        for (path, value) in configurationValues(.object(values)) {
+            if let origin = origins[path] {
+                contributions[path] = [ConfigurationContribution(value: value, origin: origin)]
+            }
+        }
+    }
 
     mutating func merge(_ next: ConfigurationLayer) throws {
         let widgets = try (values["widgets"]?.decoded([ConfigurationValue].self) ?? [])
@@ -163,7 +182,14 @@ struct ConfigurationLayer {
         }
         values["widgets"] = .array(widgets)
         origins.merge(next.origins) { $1 }
+        contributions.merge(next.contributions) { $0 + $1 }
     }
+}
+
+struct ConfigurationContribution: Equatable, Sendable {
+    let value: ConfigurationValue
+    var origin: ConfigurationOrigin
+    var settingValue: ConfigurationValue?
 }
 
 func mergeProfiles(_ earlier: ConfigurationValue?, with next: ConfigurationValue) throws -> [[String: ConfigurationValue]] {
@@ -182,12 +208,16 @@ func mergeProfiles(_ earlier: ConfigurationValue?, with next: ConfigurationValue
 }
 
 func configurationOrigins(_ value: ConfigurationValue, source: ConfigurationOrigin, path: String = "") -> [String: ConfigurationOrigin] {
-    var origins = path.isEmpty ? [:] : [path: source]
+    configurationValues(value, path: path).mapValues { _ in source }
+}
+
+func configurationValues(_ value: ConfigurationValue, path: String = "") -> [String: ConfigurationValue] {
+    var values = path.isEmpty ? [:] : [path: value]
     switch value {
     case let .object(object):
         for (key, value) in object {
             let child = path.isEmpty ? key : "\(path).\(key)"
-            origins.merge(configurationOrigins(value, source: source, path: child)) { $1 }
+            values.merge(configurationValues(value, path: child)) { $1 }
         }
     case let .array(array):
         for (index, value) in array.enumerated() {
@@ -198,11 +228,11 @@ func configurationOrigins(_ value: ConfigurationValue, source: ConfigurationOrig
             } else if path == "profiles", case let .object(profile) = value, case let .string(name) = profile["name"] {
                 key = name
             }
-            origins.merge(configurationOrigins(value, source: source, path: "\(path).\(key)")) { $1 }
+            values.merge(configurationValues(value, path: "\(path).\(key)")) { $1 }
         }
     default: break
     }
-    return origins
+    return values
 }
 
 let bundledThemesDirectory = Bundle.main.url(forResource: "themes", withExtension: nil)
@@ -212,7 +242,9 @@ struct ConfigurationLoader {
     private(set) var dependencies: Set<URL> = []
     private(set) var document: [String: ConfigurationValue] = [:]
     private(set) var origins: [String: ConfigurationOrigin] = [:]
+    private(set) var contributions: [String: [ConfigurationContribution]] = [:]
     private(set) var widgetPackageNames: [String: String] = [:]
+    private(set) var widgetPackageIDs: [String: String] = [:]
     private(set) var activeProfiles: [String] = []
     private(set) var profiles: [ConfigurationProfile] = []
     private(set) var pinnedProfile: String?
@@ -222,6 +254,7 @@ struct ConfigurationLoader {
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private var packageSources: [String: URL] = [:]
     private var packageNames: [String: String] = [:]
+    private var packageIDs: [String: String] = [:]
 
     mutating func load(_ url: URL, data: Data? = nil,
                        context: ConfigurationContext = ConfigurationContext(),
@@ -236,7 +269,9 @@ struct ConfigurationLoader {
         activeProfiles = []
         packageSources = [:]
         packageNames = [:]
+        packageIDs = [:]
         widgetPackageNames = [:]
+        widgetPackageIDs = [:]
         let base = try read(url.standardizedFileURL, data: data, path: [])
         let packageStore = WidgetPackageStore(directory: url.deletingLastPathComponent().appending(path: "packages"))
         var layer = ConfigurationLayer(values: ["widgets": .array([])], origins: [:])
@@ -303,14 +338,21 @@ struct ConfigurationLoader {
         for profile in profiles where profile.enabled {
             let matches = selected.map { $0 == profile.name } ?? (profile.when?.matches(context) ?? true)
             if matches {
-                let source = layer.origins["profiles.\(profile.name).name"]!.appending("(profile \(profile.name))")
+                let source = layer.origins["profiles.\(profile.name).name"]!.inProfile(profile.name)
                 var origins = configurationOrigins(.object(profile.configuration), source: source)
                 let prefix = "profiles.\(profile.name).configuration."
                 for (path, origin) in layer.origins where path.hasPrefix(prefix) {
-                    origins[String(path.dropFirst(prefix.count))] = origin.appending("(profile \(profile.name))")
+                    origins[String(path.dropFirst(prefix.count))] = origin.inProfile(profile.name)
                 }
-                try layer.merge(ConfigurationLayer(values: profile.configuration,
-                    origins: origins))
+                var profileLayer = ConfigurationLayer(values: profile.configuration, origins: origins)
+                for (path, entries) in layer.contributions where path.hasPrefix(prefix) {
+                    profileLayer.contributions[String(path.dropFirst(prefix.count))] = entries.map {
+                        var entry = $0
+                        entry.origin = entry.origin.inProfile(profile.name)
+                        return entry
+                    }
+                }
+                try layer.merge(profileLayer)
                 activeProfiles.append(profile.name)
             }
         }
@@ -332,15 +374,27 @@ struct ConfigurationLoader {
                 expanded.merge(properties) { $1.overriding($0) }
             }
             var propertyOrigins = try templateOrigins(definition, templates: templates, origins: layer.origins)
+            var propertyContributions = try templateContributions(definition, templates: templates, contributions: layer.contributions)
             let widgetPrefix = "widgets.\(id)"
             for (path, source) in layer.origins where path.hasPrefix(widgetPrefix + ".") {
                 propertyOrigins[String(path.dropFirst(widgetPrefix.count + 1))] = source
             }
             let overridePrefix = "widgetOverrides.\(id)."
+            for (path, entries) in layer.contributions where path.hasPrefix(widgetPrefix + ".") {
+                propertyContributions[String(path.dropFirst(widgetPrefix.count + 1)), default: []] += entries
+            }
             for (path, source) in layer.origins where path.hasPrefix(overridePrefix) {
                 propertyOrigins[String(path.dropFirst(overridePrefix.count))] = source.appending("(widget override)")
             }
+            for (path, entries) in layer.contributions where path.hasPrefix(overridePrefix) {
+                propertyContributions[String(path.dropFirst(overridePrefix.count)), default: []] += entries.map {
+                    var entry = $0
+                    entry.origin = entry.origin.appending("(widget override)")
+                    return entry
+                }
+            }
             for (path, source) in propertyOrigins { layer.origins["\(widgetPrefix).\(path)"] = source }
+            for (path, entries) in propertyContributions { layer.contributions["\(widgetPrefix).\(path)"] = entries }
             widgets.append(expanded)
         }
         let ids = try widgets.map { try $0["id"]!.decoded(String.self) }
@@ -366,9 +420,14 @@ struct ConfigurationLoader {
             .decoded([String: ConfigurationValue].self)
         let finalPaths = configurationOrigins(.object(document), source: ConfigurationOrigin(file: ""))
         origins = layer.origins.filter { finalPaths[$0.key] != nil }
+        contributions = layer.contributions.filter { finalPaths[$0.key] != nil }
         widgetPackageNames = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
             guard let source = origins["widgets.\(id).id"], let name = packageNames[source.file] else { return nil }
             return (id, name)
+        })
+        widgetPackageIDs = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
+            guard let source = origins["widgets.\(id).id"], let package = packageIDs[source.file] else { return nil }
+            return (id, package)
         })
         return document
     }
@@ -416,6 +475,23 @@ struct ConfigurationLoader {
         return inherited
     }
 
+    private func templateContributions(_ definition: [String: ConfigurationValue],
+                                       templates: [String: [String: ConfigurationValue]],
+                                       contributions: [String: [ConfigurationContribution]]) throws -> [String: [ConfigurationContribution]] {
+        guard let reference = definition["template"] else { return [:] }
+        let name = try reference.decoded(String.self)
+        var inherited = try templateContributions(templates[name]!, templates: templates, contributions: contributions)
+        let prefix = "templates.\(name)."
+        for (path, entries) in contributions where path.hasPrefix(prefix) {
+            inherited[String(path.dropFirst(prefix.count)), default: []] += entries.map {
+                var entry = $0
+                entry.origin = entry.origin.appending("(template \(name))")
+                return entry
+            }
+        }
+        return inherited
+    }
+
     private mutating func read(_ url: URL, data: Data? = nil, path: [URL], boundary: URL? = nil) throws -> ConfigurationLayer {
         dependencies.insert(url)
         let canonical = url.resolvingSymlinksInPath()
@@ -455,9 +531,19 @@ struct ConfigurationLoader {
         }
         layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@setting.", values: values)
             .decoded([String: ConfigurationValue].self)
+        layer.contributions = layer.contributions.mapValues { entries in
+            entries.map {
+                var entry = $0
+                entry.settingValue = try? substituteConfigurationReferences(entry.value, prefix: "@setting.", values: values)
+                return entry
+            }
+        }
         try validateSecretReferences(.object(layer.values), package: manifest.id)
         layer.values = try preparePackageDocument(layer.values, directory: directory)
-        for source in layer.origins.values { packageNames[source.file] = manifest.name }
+        for source in layer.origins.values {
+            packageNames[source.file] = manifest.name
+            packageIDs[source.file] = manifest.id
+        }
         return layer
     }
 }

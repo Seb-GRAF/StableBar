@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "entry": "config.json",
   "settings": {
-    "format": { "type": "string", "title": "Time format", "default": "%H:%M" },
+    "format": { "type": "string", "title": "Time format", "description": "Choose 24-hour or 12-hour time.", "choices": ["%H:%M", "%I:%M %p"], "default": "%H:%M" },
     "fontSize": { "type": "number", "title": "Font size", "default": 12 },
     "foreground": { "type": "string", "title": "Text color", "default": "#d9e5ff" }
   }

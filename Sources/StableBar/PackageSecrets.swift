@@ -9,9 +9,12 @@ func packageSecret(_ account: String) -> String {
     return String(decoding: data as! Data, as: UTF8.self)
 }
 
-func packageSecretIsSaved(_ account: String) -> Bool {
+func packageSecretIsSaved(_ account: String) throws -> Bool {
     let query = [kSecClass: kSecClassGenericPassword, kSecAttrService: "StableBar", kSecAttrAccount: account] as CFDictionary
-    return SecItemCopyMatching(query, nil) == errSecSuccess
+    let status = SecItemCopyMatching(query, nil)
+    if status == errSecItemNotFound { return false }
+    guard status == errSecSuccess else { throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) }
+    return true
 }
 
 func savePackageSecret(_ value: String, account: String) throws {

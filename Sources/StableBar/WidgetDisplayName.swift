@@ -19,8 +19,8 @@ enum WidgetDisplayName {
 
     static func name(for widget: WidgetConfiguration, packageName: String? = nil,
                      providers: [String: ProviderConfiguration] = [:]) -> String {
-        if !hasGeneratedID(widget) { return widget.id }
         if let packageName, !packageName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return packageName }
+        if !hasGeneratedID(widget) { return widget.id }
         if case let .text(text) = widget.content {
             let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
             if !text.isEmpty, text.count <= 60, !text.contains(where: \.isNewline) { return text }
@@ -35,9 +35,9 @@ enum WidgetDisplayName {
         })
         let counts = Dictionary(grouping: bases.values, by: { $0 }).mapValues(\.count)
         let reserved = Set(bases.values)
-        var used = Set(widgets.filter { !hasGeneratedID($0) }.map(\.id))
+        var used = Set(widgets.filter { !hasGeneratedID($0) && packageNames[$0.id] == nil }.map(\.id))
         var names = bases
-        for widget in widgets where hasGeneratedID(widget) {
+        for widget in widgets where hasGeneratedID(widget) || packageNames[widget.id] != nil {
             let base = bases[widget.id]!
             var name = base
             if counts[base, default: 0] > 1 || used.contains(name) {

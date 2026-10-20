@@ -73,17 +73,19 @@ struct WidgetAddPopoverView: View {
     var measuredChoices: (([String: CGRect]) -> Void)?
     let title = "ADD HERE"
     @FocusState private var searchFocused: Bool
+    @State private var addedID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.system(size: 10, weight: .bold)).foregroundStyle(.secondary)
             if let review = model.setup.review {
-                PackagesView(store: store, reviewing: review.inspection) { inspection, settings in
-                    if let id = try model.setup.enable(inspection, settings: settings, position: review.position, before: review.before) {
-                        model.didAdd(id)
-                    }
-                }
+                PackagesView(store: store, reviewing: review.inspection, onEnable: { inspection, settings in
+                    addedID = try model.setup.enable(inspection, settings: settings, position: review.position, before: review.before)
+                }, onAdded: {
+                    if let addedID { model.didAdd(addedID) }
+                }, onWorkingChanged: { model.setup.reviewIsWorking = $0 })
                 Button("Back", action: model.setup.cancelReview)
+                    .disabled(model.setup.reviewIsWorking)
             } else {
                 TextField("Search widgets", text: $model.search)
                     .textFieldStyle(.roundedBorder).focused($searchFocused)
@@ -106,8 +108,8 @@ struct WidgetAddPopoverView: View {
                         .coordinateSpace(name: "addChoices")
                         .onPreferenceChange(WidgetAddChoiceFrames.self) { measuredChoices?($0) }
                     }
-                    .frame(height: min(CGFloat(max(1, model.rowCount)) * 36 + CGFloat(max(0, model.rowCount - 1)) * 6,
-                                       max(36, availableSize.height - 140)))
+                    .frame(height: min(CGFloat(max(1, model.rowCount)) * 44 + CGFloat(max(0, model.rowCount - 1)) * 6,
+                                       max(44, availableSize.height - 140)))
                     .onChange(of: model.selected) { _, id in
                         if let id { proxy.scrollTo(id) }
                     }
@@ -116,7 +118,10 @@ struct WidgetAddPopoverView: View {
                 if model.choices.isEmpty { Text("No widgets found.").font(.callout).foregroundStyle(.secondary) }
                 if model.setup.storeUnavailable {
                     Text("Store unavailable. Built-in widgets are ready to add.").font(.caption).foregroundStyle(.secondary)
+                    if let error = model.setup.storeError { Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
+                    Button("Retry") { Task { await model.setup.load() } }
                 }
+                if model.setup.isLoading { ProgressView("Loading Store…").controlSize(.small) }
                 if model.setup.isAdding { ProgressView().controlSize(.small) }
                 if let error = model.setup.error {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
@@ -148,14 +153,17 @@ struct WidgetAddPopoverView: View {
         Button { model.add(choice) } label: {
             HStack(spacing: 7) {
                 Image(systemName: choice.symbol).frame(width: 18)
-                Text(choice.name).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(choice.name).lineLimit(1)
+                    Text(choice.package == nil ? "Built-in" : "Store").font(.caption2).foregroundStyle(.secondary)
+                }
                 Spacer(minLength: 0)
                 if choice.package != nil {
                     Image(systemName: "arrow.down").font(.caption).accessibilityLabel("Downloads from Store")
                 }
             }
             .font(.system(size: 12))
-            .padding(.horizontal, 8).frame(height: 36)
+            .padding(.horizontal, 8).frame(height: 44)
             .contentShape(Rectangle())
             .background(model.selected == choice.id ? Color.accentColor.opacity(0.18) : .clear,
                         in: RoundedRectangle(cornerRadius: 6))
@@ -168,12 +176,6 @@ struct WidgetAddPopoverView: View {
         .help(choice.description)
         .accessibilityLabel(choice.name)
         .accessibilityAddTraits(model.selected == choice.id ? [.isSelected] : [])
-        .contextMenu {
-            if let basic = choice.basicChoice { Button(choice.basicActionTitle) { model.add(basic) } }
-        }
-        .accessibilityActions {
-            if let basic = choice.basicChoice { Button(choice.basicActionTitle) { model.add(basic) } }
-        }
     }
 }
 

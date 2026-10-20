@@ -14,9 +14,15 @@ final class ConfigurationEditor {
             guard newValue != selection else { return }
             finishEditing()
             selection = newValue
+            searchTarget = nil
         }
     }
-    var section: CustomizationSection? = .appearance
+    var section: CustomizationSection? = .widgets
+    var selectedPackageID: String?
+    var diagnosticWidgetID: String?
+    var selectedProfileName: String?
+    var search = ""
+    var searchTarget: String?
     @ObservationIgnored private let endEditing: () -> Void
     @ObservationIgnored private var endingEditing = false
     var error: String? {
@@ -40,8 +46,37 @@ final class ConfigurationEditor {
 
     func showWidget(_ id: String) {
         guard store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
+        searchTarget = nil
         selectedID = id
         section = .widgets
+    }
+
+    func showPackage(_ id: String) {
+        finishEditing()
+        searchTarget = nil
+        selectedPackageID = id
+        section = .packages
+    }
+
+    func troubleshoot(_ id: String) {
+        finishEditing()
+        searchTarget = nil
+        diagnosticWidgetID = id
+        section = .diagnostics
+    }
+
+    func showProfile(_ name: String) {
+        finishEditing()
+        searchTarget = nil
+        selectedProfileName = name
+        section = .profiles
+    }
+
+    func showSetting(_ result: SettingsSearchResult) {
+        finishEditing()
+        search = ""
+        searchTarget = result.id
+        section = result.section
     }
 
     var selected: [String: ConfigurationValue] {
@@ -80,7 +115,34 @@ final class ConfigurationEditor {
 
     func set(_ properties: [String: ConfigurationValue], for id: String) {
         var current = self.properties(for: id)
-        current["style"] = .object(style(for: id))
+        var style = style(for: id)
+        if case let .object(changes) = properties["style"] {
+            for key in changes.keys {
+                let property = store.propertySources(path: "widgets.\(id).style", key: key, defaultsPath: "defaults",
+                                                     widgetID: id, values: style)
+                if let saved = property.saved { style[key] = saved.resolvedValue ?? saved.value }
+            }
+        }
+        current["style"] = .object(style)
+        if case let .object(changes) = properties["workspace"] {
+            var workspace = (try? store.configuration?.workspaceDefaults.mergedProperties(current["workspace"])) ?? [:]
+            for (key, change) in changes {
+                if case let .object(nested) = change {
+                    var values = (try? workspace[key]?.decoded([String: ConfigurationValue].self)) ?? [:]
+                    for name in nested.keys {
+                        let property = store.propertySources(path: "widgets.\(id).workspace.\(key)", key: name,
+                            defaultsPath: "workspaceDefaults.\(key)", widgetID: id, values: values)
+                        if let saved = property.saved { values[name] = saved.resolvedValue ?? saved.value }
+                    }
+                    workspace[key] = .object(values)
+                } else {
+                    let property = store.propertySources(path: "widgets.\(id).workspace", key: key,
+                        defaultsPath: "workspaceDefaults", widgetID: id, values: workspace)
+                    if let saved = property.saved { workspace[key] = saved.resolvedValue ?? saved.value }
+                }
+            }
+            current["workspace"] = .object(workspace)
+        }
         let previous = ConfigurationValue.object(current)
         if ConfigurationValue.object(properties).overriding(previous) == previous {
             error = nil

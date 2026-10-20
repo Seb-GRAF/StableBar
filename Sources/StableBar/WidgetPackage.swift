@@ -4,22 +4,30 @@ import Foundation
 struct WidgetPackageSetting: Codable, Sendable {
     let type: String
     let title: String?
+    let description: String?
+    let choices: [String]?
     let `default`: ConfigurationValue?
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case type, title, `default` }
+    enum CodingKeys: String, CodingKey, CaseIterable { case type, title, description, choices, `default` }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         type = try values.decode(String.self, forKey: .type)
         title = try values.decodeIfPresent(String.self, forKey: .title)
+        description = try values.decodeIfPresent(String.self, forKey: .description)
+        choices = try values.decodeIfPresent([String].self, forKey: .choices)
         `default` = try values.decodeIfPresent(ConfigurationValue.self, forKey: .default)
+        if let choices, type != "string" || choices.isEmpty {
+            throw DecodingError.dataCorruptedError(forKey: .choices, in: values, debugDescription: "Choices need a string setting and at least one value.")
+        }
     }
 
     func accepts(_ value: ConfigurationValue?) -> Bool {
         switch (type, value) {
-        case ("string", .string?), ("number", .number?), ("bool", .bool?), ("secret", nil): true
-        default: false
+        case let ("string", .string(text)?): return choices?.contains(text) ?? true
+        case ("number", .number?), ("bool", .bool?), ("secret", nil): return true
+        default: return false
         }
     }
 }
@@ -122,6 +130,7 @@ struct WidgetPackageInspection: Sendable {
     let directory: URL
     let commands: [String]
     let screenshot: URL?
+    let widgets: [WidgetConfiguration]
 
     var requiresReview: Bool {
         !commands.isEmpty || !manifest.permissions.isEmpty || !manifest.hosts.isEmpty || !manifest.requires.isEmpty
@@ -166,7 +175,7 @@ enum WidgetPackageError: LocalizedError {
         case let .missingFile(path): "Package file does not exist: \(path)."
         case let .alreadyInstalled(id, version): "Package \(id) \(version) is already installed. Choose a new version to replace it."
         case let .unknownSetting(name): "Unknown package setting: \(name)."
-        case let .invalidSetting(name): "Invalid type or default for package setting: \(name)."
+        case let .invalidSetting(name): "Invalid type, choice or default for package setting: \(name)."
         case .nestedPackages: "A widget package cannot activate other packages."
         case .manifestMismatch: "The package manifest does not match its pinned id and version."
         case let .notATheme(id): "Package \(id) is not a theme. Enable it in packages instead."
@@ -259,11 +268,13 @@ struct WidgetPackageStore: Sendable {
             documents.append(try loader.finish(selected, context: ConfigurationContext()))
             commands.formUnion(packageCommands(.object(loader.templates.mapValues(ConfigurationValue.object))))
         }
+        var widgets: [WidgetConfiguration] = []
         for document in documents {
-            _ = try ConfigurationValue.object(document).decoded(Configuration.self)
+            let configuration = try ConfigurationValue.object(document).decoded(Configuration.self)
+            widgets.append(contentsOf: configuration.widgets.filter { widget in !widgets.contains { $0.id == widget.id } })
             commands.formUnion(packageCommands(.object(document)))
         }
-        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot)
+        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot, widgets: widgets)
     }
 
     func install(_ source: URL) throws -> WidgetPackageInspection {

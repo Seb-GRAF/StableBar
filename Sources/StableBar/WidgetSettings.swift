@@ -24,9 +24,9 @@ enum WidgetClickChoice: String, CaseIterable {
         if widget.onClick != nil || output?.onClick != nil { actions.append("runs a command") }
         if widget.popup != nil || widget.popupName != nil { actions.append("opens a popup") }
         if widget.menu != nil || output?.menu != nil { actions.append("opens a menu") }
-        if !actions.isEmpty { return "This widget \(actions.joined(separator: " and ")). Change it under Advanced." }
+        if !actions.isEmpty { return "This widget \(actions.joined(separator: " and ")). Change it under Technical details." }
         if let open = widget.open, case .url(let url) = OpenTarget(open), !["http", "https"].contains(url.scheme?.lowercased() ?? "") {
-            return "This widget opens a link. Change it under Advanced."
+            return "This widget opens a link. Change it under Technical details."
         }
         return nil
     }
@@ -48,7 +48,7 @@ enum WidgetClickChoice: String, CaseIterable {
 
     func properties(for widget: WidgetConfiguration, value: String? = nil, output: ScriptOutput? = nil) throws -> [String: ConfigurationValue] {
         guard Self.control(for: widget, output: output) == .choices else {
-            throw CommandFailure(message: "Change this widget’s click action under Advanced.")
+            throw CommandFailure(message: "Change this widget’s click action under Technical details.")
         }
         switch self {
         case .nothing: return ["open": .null]
@@ -63,7 +63,7 @@ enum WidgetClickChoice: String, CaseIterable {
                 throw CommandFailure(message: "Enter a web address beginning with https:// or http://.")
             }
             return ["open": .string(value)]
-        case .advanced: throw CommandFailure(message: "Change this widget’s click action under Advanced.")
+        case .advanced: throw CommandFailure(message: "Change this widget’s click action under Technical details.")
         }
     }
 }

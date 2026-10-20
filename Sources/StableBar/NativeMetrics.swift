@@ -62,20 +62,14 @@ func meetingLink(_ texts: [String]) -> String? {
         .map { String($0.output) }
 }
 
-/// CPU, memory, network and calendar readings. CPU usage and network rates are deltas since the previous
-/// reading, and calendar readings share the instance's event store, so each source keeps its own instance.
-@MainActor
-final class NativeMetrics {
-    private var cpu: CPUTicks?
-    private var network: [String: NetworkCounters] = [:]
-    private var networkTime: ContinuousClock.Instant?
+actor CalendarMetrics {
     private lazy var eventStore: EKEventStore = {
         let store = EKEventStore()
         store.requestFullAccessToEvents { _, _ in }
         return store
     }()
 
-    func calendar(_ provider: ProviderConfiguration) -> ScriptOutput {
+    func read(_ provider: ProviderConfiguration) -> ScriptOutput {
         let store = eventStore
         let access = EKEventStore.authorizationStatus(for: .event)
         guard access == .fullAccess else {
@@ -111,6 +105,13 @@ final class NativeMetrics {
         }
         return fields
     }
+}
+
+@MainActor
+final class NativeMetrics {
+    private var cpu: CPUTicks?
+    private var network: [String: NetworkCounters] = [:]
+    private var networkTime: ContinuousClock.Instant?
 
     func system() throws -> ScriptOutput {
         let host = mach_host_self()

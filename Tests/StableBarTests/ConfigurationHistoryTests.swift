@@ -227,12 +227,12 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertNil(history.notice)
     }
 
-    func testConfigurationErrorBannerKeepsItsOriginalSectionsAndAvoidsDiagnosticDuplicates() {
+    func testConfigurationErrorBannerCoversEditableSectionsAndAvoidsDiagnosticDuplicates() {
         for section in CustomizationSection.allCases {
-            let originalSection = [.appearance, .widgets, .profiles].contains(section)
-            XCTAssertEqual(section.bannerError(customization: nil, configuration: "File error"), originalSection ? "File error" : nil)
+            let editingSection = [.appearance, .widgets, .profiles, .general].contains(section)
+            XCTAssertEqual(section.bannerError(customization: nil, configuration: "File error"), editingSection ? "File error" : nil)
             XCTAssertEqual(section.bannerError(customization: "Save error", configuration: "File error"), "Save error")
-            XCTAssertEqual(section.bannerError(customization: "File error", configuration: "File error"), originalSection ? "File error" : nil)
+            XCTAssertEqual(section.bannerError(customization: "File error", configuration: "File error"), editingSection ? "File error" : nil)
         }
     }
 

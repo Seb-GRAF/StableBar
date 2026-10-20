@@ -497,6 +497,82 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
     #expect(document["workspaceSource"] == nil)
 }
 
+@Test func setupReenablesMatchingWidgetsAndKeepsConflictingIDs() throws {
+    let data = Data(#"""
+    {
+      "providers":{"agenda":{"type":"calendar"}},
+      "widgetOverrides":{"system-monitor":{"enabled":false,"style":{"fontSize":22}}},
+      "widgets":[
+        {"id":"system-monitor","type":"system","position":"left","enabled":false,"style":{"fontSize":18}},
+        {"id":"meeting","type":"provider","provider":"agenda","position":"center","enabled":false},
+        {"id":"workspaces","type":"text","text":"Mine","position":"right","enabled":false}
+      ]
+    }
+    """#.utf8)
+    let original = try JSONDecoder().decode(Configuration.self, from: data)
+    #expect(SetupPreferences.WidgetSet.system.state(in: original) == .disabled)
+    #expect(SetupPreferences.WidgetSet.meetings.state(in: original) == .disabled)
+    #expect(SetupPreferences.WidgetSet.workspaces(.yabai).state(in: original) == .conflict)
+    let updated = try SetupPreferences(widgetSets: [.system, .meetings, .workspaces(.yabai)])
+        .applying(to: data, menuBarHeight: 24)
+    let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
+    #expect(configuration.widgets.map(\.enabled) == [true, true, false])
+    #expect(configuration.widgets.map(\.position) == [.left, .center, .right])
+    #expect(configuration.widgets[0].style.fontSize == 22)
+    #expect(configuration.widgets[1].content == .provider("agenda"))
+    #expect(configuration.widgets[2].content == .text("Mine"))
+    #expect(configuration.workspaceSource == .aerospace)
+}
+
+@Test func setupDefersMeetingsWithoutTurningOffExistingCalendars() throws {
+    let preferences = SetupPreferences(widgetSets: [.meetings], deferMeetings: true)
+    let new = try preferences.applying(to: Data(#"{"widgets":[]}"#.utf8), menuBarHeight: 24)
+    let newConfiguration = try JSONDecoder().decode(Configuration.self, from: new)
+    #expect(newConfiguration.widgets[0].id == "meeting")
+    #expect(!newConfiguration.widgets[0].enabled)
+    #expect(newConfiguration.activeProviders.isEmpty)
+    for enabled in [true, false] {
+        let data = Data(#"{"widgets":[{"id":"meeting","type":"calendar","position":"left","enabled":\#(enabled)}]}"#.utf8)
+        let updated = try preferences.applying(to: data, menuBarHeight: 24)
+        let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
+        #expect(configuration.widgets[0].enabled == enabled)
+        #expect(configuration.widgets[0].position == .left)
+    }
+}
+
+@Test func setupEnablesImportedWidgetsWithoutChangingTheirSource() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let module = directory.appending(path: "widgets.json")
+    let moduleData = Data(#"{"widgets":[{"id":"meeting","type":"calendar","position":"left","enabled":false}]}"#.utf8)
+    try moduleData.write(to: module)
+    let root = directory.appending(path: "config.json")
+    let data = Data(#"{"includes":["widgets.json"],"widgets":[]}"#.utf8)
+    let updated = try SetupPreferences(widgetSets: [.meetings]).applying(to: data, menuBarHeight: 24, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: updated)
+    #expect(configuration.widgets[0].enabled)
+    #expect(configuration.widgets[0].position == .left)
+    #expect(try Data(contentsOf: module) == moduleData)
+}
+
+@Test func setupKeepsAnActiveProfilesDisabledWidgetOverride() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "setup-disabled-profile.json")
+    let data = Data(#"""
+    {
+      "widgets":[{"id":"system-monitor","type":"system","position":"right"}],
+      "profiles":[{"name":"quiet","configuration":{"widgetOverrides":{"system-monitor":{"enabled":false}}}}]
+    }
+    """#.utf8)
+    let updated = try SetupPreferences(widgetSets: [.system]).applying(to: data, menuBarHeight: 24, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: updated)
+    #expect(!configuration.widgets[0].enabled)
+    #expect(SetupPreferences.WidgetSet.system.state(in: configuration) == .disabled)
+    #expect(loader.origins["widgets.system-monitor.enabled"]?.profile == "quiet")
+}
+
 @Test func setupRejectsInvalidConfigurationBeforeEditing() {
     #expect(throws: CommandFailure.self) {
         try SetupPreferences(appearance: .dark).applying(

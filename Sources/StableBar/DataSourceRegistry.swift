@@ -121,7 +121,7 @@ extension DataSourceType {
     static let calendar = DataSourceType(name: "calendar", isNative: true, symbol: "calendar", settings: [],
                                          optionalSettings: [.calendars, .lookahead, .soon, .now], continuous: false,
                                          changeNotification: .EKEventStoreChanged, permission: .calendars) { provider, _ in
-        let metrics = NativeMetrics()
-        return PollingSource { _ in .output(.success(metrics.calendar(provider))) }
+        let metrics = CalendarMetrics()
+        return PollingSource { _ in .output(.success(await metrics.read(provider))) }
     }
 }

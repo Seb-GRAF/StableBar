@@ -8,6 +8,7 @@ struct WidgetAddView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
     @State private var selected: String?
+    @State private var addedID: String?
 
     private var choices: [WidgetAddChoice] { setup.choices.filter { $0.matches(search) } }
 
@@ -17,31 +18,38 @@ struct WidgetAddView: View {
                 Text("Add widget").font(.title2.weight(.semibold))
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                    .disabled(setup.reviewIsWorking)
             }.padding(16)
             Divider()
             if let review = setup.review {
-                PackagesView(store: store, reviewing: review.inspection) { inspection, settings in
-                    if let id = try setup.enable(inspection, settings: settings, position: review.position, before: review.before) { added(id) }
-                }
+                PackagesView(store: store, reviewing: review.inspection, onEnable: { inspection, settings in
+                    addedID = try setup.enable(inspection, settings: settings, position: review.position, before: review.before)
+                }, onAdded: {
+                    if let addedID { added(addedID) }
+                }, onWorkingChanged: { setup.reviewIsWorking = $0 })
                 Divider()
                 HStack {
                     Button("Back", action: setup.cancelReview)
+                        .disabled(setup.reviewIsWorking)
                     Spacer()
                 }.padding(12)
             } else {
                 TextField("Search widgets", text: $search).textFieldStyle(.roundedBorder).padding(12)
                 List(selection: $selected) {
-                    Section("Widgets") {
-                        ForEach(choices.filter { !$0.isScript }) { choice in row(choice) }
+                    Section("Built-in widgets") {
+                        ForEach(choices.filter { !$0.isScript && $0.package == nil }) { choice in row(choice) }
+                    }
+                    if choices.contains(where: { $0.package != nil }) {
+                        Section("Store packages") {
+                            ForEach(choices.filter { $0.package != nil }) { choice in row(choice) }
+                        }
                     }
                     Section("Script") {
                         ForEach(choices.filter(\.isScript)) { choice in row(choice) }
                     }
                 }
                 .contextMenu(forSelectionType: String.self) { ids in
-                    if let choice = choices.first(where: { ids.contains($0.id) }), let basic = choice.basicChoice {
-                        Button(choice.basicActionTitle) { add(basic) }
-                    }
+                    EmptyView()
                 } primaryAction: { ids in
                     if let choice = choices.first(where: { ids.contains($0.id) }) { add(choice) }
                 }
@@ -51,10 +59,17 @@ struct WidgetAddView: View {
                 }
                 Divider()
                 HStack {
-                    if setup.storeUnavailable { Text("Store unavailable. Built-in widgets are ready to add.").font(.callout).foregroundStyle(.secondary) }
+                    if setup.isLoading { ProgressView("Loading Store…").controlSize(.small) }
+                    if setup.storeUnavailable {
+                        VStack(alignment: .leading) {
+                            Text("Store unavailable. Built-in widgets are ready to add.").font(.callout)
+                            if let error = setup.storeError { Text(error).font(.caption).textSelection(.enabled) }
+                        }.foregroundStyle(.secondary)
+                        Button("Retry") { Task { await setup.load() } }
+                    }
                     if setup.isAdding { ProgressView().controlSize(.small) }
                     Spacer()
-                    Button("Add widget") {
+                    Button("Add to bar") {
                         if let choice = choices.first(where: { $0.id == selected }) { add(choice) }
                     }
                     .keyboardShortcut(.defaultAction)
@@ -79,11 +94,6 @@ struct WidgetAddView: View {
         .padding(.vertical, 4)
         .tag(choice.id)
         .accessibilityElement(children: .combine)
-        .accessibilityActions {
-            if let basic = choice.basicChoice {
-                Button(choice.basicActionTitle) { add(basic) }
-            }
-        }
     }
 
     private func add(_ choice: WidgetAddChoice) {
