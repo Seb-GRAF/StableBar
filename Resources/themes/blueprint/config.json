@@ -11,7 +11,7 @@
     "critical": { "light": "#c0272d", "dark": "#ff7b7b" }
   },
   "bar": {
-    "margin": 4,
+    "inset": 8,
     "style": {
       "background": "@token.surface",
       "cornerRadius": 2,
