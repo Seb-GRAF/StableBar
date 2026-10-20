@@ -44,7 +44,7 @@ final class BarEditing {
         self.addPopover = addPopover
     }
 
-    var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar" }
+    var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
     var isAvailable: Bool { store.configuration != nil }
     var allowsWidgetActions: Bool { !isActive }
 
@@ -116,7 +116,7 @@ final class BarEditing {
     }
 
     /// Turned-off widgets aren't on the bar, even while editing: removing a package or include
-    /// widget turns it off, so it leaves the bar. Customize → Widgets can turn it on again.
+    /// widget turns it off, so it leaves the bar. Settings → Your bar can turn it on again.
     func widgets(on display: BarDisplay) -> [WidgetConfiguration] {
         (store.configuration?.widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
     }

@@ -100,7 +100,7 @@ struct BarView: View {
                             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(.orange)
                         }
                         .buttonStyle(.plain)
-                        .help("\(error)\nClick to open Customize StableBar.")
+                        .help("\(error)\nClick to open Settings.")
                     }
                 }
                 .padding(config.bar.margin)
@@ -114,14 +114,14 @@ struct BarView: View {
         .onDisappear { store.setVisibleWidgets(ids: [], displayID: display.id) }
         .contextMenu {
             Text("StableBar")
-            Button("Customize StableBar…") { store.onCustomize?() }
-            Button("Try Themes…") { store.onTryThemes?(display.id) }
             if store.barEditing.isAvailable { Button(store.barEditing.menuTitle, action: store.barEditing.toggle) }
+            Button("Try Themes…") { store.onTryThemes?(display.id) }
             if let error = store.configurationError ?? store.workspaceStore.error {
                 Divider()
                 Text(error)
             }
             Divider()
+            Button("Settings…") { store.onCustomize?() }
             Button("Quit StableBar") { NSApp.terminate(nil) }
         }
     }

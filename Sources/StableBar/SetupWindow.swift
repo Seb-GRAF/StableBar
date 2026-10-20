@@ -159,7 +159,7 @@ struct SetupView: View {
                     Button("Set up later", action: close)
                 }
                 Spacer()
-                Text(step == 4 ? "You can reopen setup from Settings." : "Bar settings and Open at login apply when you finish.")
+                Text(step == 4 ? "You can reopen setup from Settings → General." : "Bar settings and Open at login apply when you finish.")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button(step == 4 ? "Done" : step == 3 ? "Apply setup" : "Continue") {
@@ -191,7 +191,7 @@ struct SetupView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 24) {
-            heading("Make the bar yours.", detail: "Widgets are the items on your bar. Click one to use it; use Edit Bar to move it or open its settings.")
+            heading("Make the bar yours.", detail: "Widgets are the items on your bar. Click one to use it; use Edit Bar in Place to move it or open its settings.")
             barPreview
             HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).font(.title2).frame(width: 28)
@@ -201,7 +201,7 @@ struct SetupView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Label("Reopen Customize StableBar from the macOS menu-bar icon or by right-clicking the bar. Changes there save automatically, with Undo available.",
+            Label("Reopen Settings from the macOS menu-bar icon or by right-clicking the bar. Changes there save automatically, with Undo available.",
                   systemImage: "cursorarrow.click")
                 .font(.callout).foregroundStyle(.secondary)
             if !appIsInApplications() {
@@ -481,7 +481,7 @@ struct SetupView: View {
 
     private var completion: some View {
         VStack(alignment: .leading, spacing: 20) {
-            heading("Your bar is ready.", detail: "Click a widget to use it. Edit Bar lets you move widgets, add more and open their settings. Changes save automatically, and Undo restores the previous step.")
+            heading("Your bar is ready.", detail: "Click a widget to use it. Edit Bar in Place lets you move widgets, add more and open their settings. Changes save automatically, and Undo restores the previous step.")
             barPreview
             if preferences.widgetSets.contains(.meetings) && preferences.deferMeetings {
                 Label("Meetings is turned off. Enable it in Your bar when you are ready to allow Calendar access.", systemImage: "calendar")
@@ -493,14 +493,14 @@ struct SetupView: View {
             }
             HStack {
                 if let arrangeBar {
-                    Button("Arrange my bar") { close(); arrangeBar() }
+                    Button("Edit Bar in Place") { close(); arrangeBar() }
                         .buttonStyle(.borderedProminent)
                 }
                 if let customizeWidgets {
-                    Button("Customize widgets") { close(); customizeWidgets() }
+                    Button("Open Settings") { close(); customizeWidgets() }
                 }
             }
-            Text("Use the macOS menu-bar icon or right-click the bar to reopen Customize StableBar. Your bar contains your widgets, Library adds more, and Settings contains login and access preferences.")
+            Text("Use the macOS menu-bar icon or right-click the bar to reopen Settings. Your bar contains your widgets, Library adds more, and General contains login and access preferences.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

@@ -83,7 +83,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             XCTAssertEqual(try Data(contentsOf: fixture.url), externalData)
             XCTAssertTrue(history.undoSteps.isEmpty)
             XCTAssertTrue(history.redoSteps.isEmpty)
-            XCTAssertTrue(history.notice?.contains("changed outside Customize") == true)
+            XCTAssertTrue(history.notice?.contains("changed outside Settings") == true)
         }
     }
 

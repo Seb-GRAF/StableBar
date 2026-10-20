@@ -15,7 +15,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         if window == nil {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-            window.title = "Customize StableBar"
+            window.title = "StableBar Settings"
             window.delegate = self
             window.minSize = NSSize(width: 900, height: 600)
             window.isReleasedWhenClosed = false
@@ -42,7 +42,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 }
 
 enum CustomizationSection: String, CaseIterable, Identifiable {
-    case widgets = "Your bar", appearance = "Appearance", packages = "Library", profiles = "Profiles", general = "Settings", diagnostics = "Status"
+    case widgets = "Your bar", appearance = "Appearance", packages = "Library", profiles = "Profiles", general = "General", diagnostics = "Status"
 
     var id: Self { self }
 

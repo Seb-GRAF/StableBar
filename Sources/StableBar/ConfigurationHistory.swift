@@ -113,7 +113,7 @@ final class ConfigurationHistory {
             pendingEdit = nil
             notice = nil
         } catch {
-            let message = "The pending Customize change could not be saved and was discarded. \(errorMessage(error))"
+            let message = "The pending change in Settings could not be saved and was discarded. \(errorMessage(error))"
             discardPendingChange()
             self.error = message
             FileHandle.standardError.write(Data("\(message)\n".utf8))
@@ -180,7 +180,7 @@ final class ConfigurationHistory {
         let hadHistory = canUndo || !redoSteps.isEmpty
         undoSteps.removeAll()
         redoSteps.removeAll()
-        if hadHistory { notice = "Undo history was cleared because the configuration file changed outside Customize." }
+        if hadHistory { notice = "Undo history was cleared because the configuration file changed outside Settings." }
         return hadHistory
     }
 
