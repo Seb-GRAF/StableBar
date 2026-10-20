@@ -242,6 +242,17 @@ final class BarStore: NSObject {
         return loader.profiles
     }
 
+    func configurationForProfile(_ name: String) throws -> (Configuration, ConfigurationLoader) {
+        var root = try editedMainDocument(replaying: customizationEdits)
+        root["profile"] = .string(name)
+        var ids: [String] = []
+        root = try ConfigurationEdit(action: .profiles, profiles: [["name": .string(name), "enabled": .bool(true)]])
+            .applying(to: root, widgetIDs: &ids)
+        var loader = configurationLoader
+        let configuration = try loader.load(configurationURL, data: configurationData(root), context: context)
+        return (configuration, loader)
+    }
+
     func customizationData(_ edits: [ConfigurationEdit], editing original: Data) throws -> Data {
         var edits = edits
         if !sessionEdits.isEmpty {
