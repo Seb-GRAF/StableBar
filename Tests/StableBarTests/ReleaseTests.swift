@@ -7,7 +7,8 @@ private let setVersion = URL(filePath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     .appending(path: "scripts/set-version.sh").path
 
-@Test func releaseVersionWritesTheVersionAndBuildNumberAndNothingElse() async throws {
+@Test(arguments: ["1.2.3-beta.4", "1.2.3-beta.20261020103000.114"])
+func releaseVersionWritesTheVersionAndBuildNumberAndNothingElse(version: String) async throws {
     let plist = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).plist")
     defer { try? FileManager.default.removeItem(at: plist) }
     try Data("""
@@ -20,11 +21,11 @@ private let setVersion = URL(filePath: #filePath)
         </dict></plist>
 
         """.utf8).write(to: plist)
-    _ = try await runCommand(setVersion, arguments: ["1.2.3-beta.4", "57", plist.path])
+    _ = try await runCommand(setVersion, arguments: [version, "57", plist.path])
     #expect(try String(contentsOf: plist, encoding: .utf8) == """
         <?xml version="1.0" encoding="UTF-8"?>
         <plist version="1.0"><dict>
-            <key>CFBundleShortVersionString</key><string>1.2.3-beta.4</string>
+            <key>CFBundleShortVersionString</key><string>\(version)</string>
             <key>CFBundleVersion</key>
             <string>57</string>
             <key>LSMinimumSystemVersion</key><string>14.0</string>

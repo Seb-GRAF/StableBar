@@ -45,6 +45,8 @@ A release signed with a Developer ID checks GitHub for a newer version shortly a
 
 **Update track** chooses the releases you get. **Stable** gets stable releases. **Beta** gets betas of the next version and stable releases, whichever is newer. An installed beta starts on Beta. Switching back to Stable keeps your beta until a newer stable release is out, because StableBar never installs an older version.
 
+Beta version names include a UTC timestamp and build number, such as `0.5.0-beta.20261020103000.114`, to keep new betas in order on GitHub. In-app updates compare the build number.
+
 Only an app signed with a Developer ID updates itself, because the update must be signed by the same developer as the app it replaces. Ad-hoc signed releases and the builds you make yourself don't check for updates; **Customize → About** links to the releases page instead.
 
 ### Build an installer
