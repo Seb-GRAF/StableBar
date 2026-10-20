@@ -1,0 +1,7 @@
+{
+  "id": "terminal",
+  "name": "Terminal",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json"
+}

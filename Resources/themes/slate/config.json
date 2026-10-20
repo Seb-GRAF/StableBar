@@ -1,0 +1,21 @@
+{
+  "tokens": {
+    "surface": { "light": "#f4f5f7ed", "dark": "#23272eee" },
+    "surfaceRaised": { "light": "#ffffff", "dark": "#323842" },
+    "text": { "light": "#1f2329", "dark": "#e6e9ef" },
+    "textMuted": { "light": "#5f6773", "dark": "#9aa3b0" },
+    "accent": { "light": "#3a6ea5", "dark": "#5b8ac4" },
+    "track": { "light": "#1f232926", "dark": "#e6e9ef26" },
+    "hairline": { "light": "#1f23291f", "dark": "#ffffff1f" },
+    "warning": { "light": "#b45309", "dark": "#f0b45a" },
+    "critical": { "light": "#c53030", "dark": "#f07070" }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": "@token.hairline",
+    "accent": "@token.accent",
+    "cornerRadius": 8
+  }
+}

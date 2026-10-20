@@ -1,0 +1,7 @@
+{
+  "id": "minimal",
+  "name": "Minimal",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json"
+}

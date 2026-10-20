@@ -1,0 +1,7 @@
+{
+  "id": "graphite",
+  "name": "Graphite",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json"
+}

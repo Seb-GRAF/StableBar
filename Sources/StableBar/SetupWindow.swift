@@ -55,7 +55,7 @@ struct SetupView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var themes: [ThemeChoice] {
-        themeChoices(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
+        themeChoices(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"), selectedKey: store.selectedThemeKey)
     }
 
     private var menuBarHeight: Double {

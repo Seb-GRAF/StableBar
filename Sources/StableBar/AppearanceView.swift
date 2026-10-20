@@ -51,7 +51,7 @@ struct AppearanceView: View {
                     }
                     DisclosureGroup("Browse themes", isExpanded: $browsingThemes) {
                         LazyVStack(spacing: 12) {
-                            ForEach(gallery.choices, id: \.key) { choice in
+                            ForEach(gallery.choices.filter { !$0.isLegacy }, id: \.key) { choice in
                                 ThemeCard(title: choice.title, look: gallery.previews[choice.key]?.configuration(for: gallery.previewAppearance),
                                           appearance: gallery.previewAppearance,
                                           isSelected: gallery.selectedKey == choice.key, error: gallery.error(for: choice.key)) {

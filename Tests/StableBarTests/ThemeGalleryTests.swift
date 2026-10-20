@@ -32,6 +32,50 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
 
+    @MainActor func testOlderThemesKeepTheirAppearanceAsCustomAndCanBeReplacedAndUndone() async throws {
+        for id in ["graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal", "terminal/1.0.0"] {
+            let fixture = try ThemeGalleryFixture(#"{"includes":["theme.json"],"defaults":{"fontSize":17},"widgets":[]}"#)
+            defer { fixture.close() }
+            let selection: String
+            if id == "terminal/1.0.0" {
+                _ = try fixture.packages.install(fixture.themes.appending(path: "terminal"))
+                selection = #"{"id":"terminal","version":"1.0.0"}"#
+            } else {
+                selection = #"{"id":"\#(id)"}"#
+            }
+            let included = fixture.directory.appending(path: "theme.json")
+            try fixture.write(#"{"theme":\#(selection)}"#, to: included)
+            let original = try Data(contentsOf: fixture.url)
+            let includedOriginal = try Data(contentsOf: included)
+            let store = try fixture.store()
+            defer { store.stop() }
+            XCTAssertNil(store.configurationError)
+            let configuration = store.effectiveDocument
+            XCTAssertEqual(store.configuration?.defaults.fontSize, 17)
+            let gallery = ThemeGallery(store: store)
+            await gallery.refresh()
+            let custom = try XCTUnwrap(gallery.choices.first { $0.key == id })
+            XCTAssertEqual(custom.title, "Custom")
+            XCTAssertEqual(gallery.choices.filter(\.isLegacy).map(\.key), [id])
+            XCTAssertNotNil(gallery.previews[id])
+            let trial = ThemeTrial(store: store)
+            XCTAssertEqual(trial.choice?.title, "Custom")
+            trial.next()
+            trial.cancel()
+            XCTAssertEqual(store.effectiveDocument, configuration)
+            XCTAssertEqual(try Data(contentsOf: fixture.url), original)
+            gallery.select(try XCTUnwrap(gallery.choices.first { $0.key == "blueprint" }))
+            await gallery.refresh()
+            XCTAssertFalse(gallery.choices.contains(where: \.isLegacy))
+            try store.customizationHistory.undo()
+            await gallery.refresh()
+            XCTAssertEqual(gallery.selectedKey, id)
+            XCTAssertEqual(gallery.choices.first { $0.key == id }?.title, "Custom")
+            XCTAssertEqual(store.effectiveDocument, configuration)
+            XCTAssertEqual(try Data(contentsOf: included), includedOriginal)
+        }
+    }
+
     @MainActor func testStorePreviewsUseDownloadedThemesAndGetInstallsSelectsAndSavesOneChange() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }

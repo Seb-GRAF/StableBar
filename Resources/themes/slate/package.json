@@ -1,0 +1,7 @@
+{
+  "id": "slate",
+  "name": "Slate",
+  "version": "2.0.0",
+  "kind": "theme",
+  "entry": "config.json"
+}

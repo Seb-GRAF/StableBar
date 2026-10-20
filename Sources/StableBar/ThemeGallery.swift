@@ -70,7 +70,7 @@ final class ThemeGallery {
 
     private func buildPreviews(generation: Int) async {
         let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                                   themesDirectory: store.themesDirectory)
+                                   themesDirectory: store.themesDirectory, selectedKey: store.selectedThemeKey)
         let choices = await Task.detached { catalog.choices }.value
         guard self.generation == generation, !Task.isCancelled else { return }
         self.choices = choices
