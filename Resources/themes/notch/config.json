@@ -33,12 +33,12 @@
     "shadowColor": { "light": "#0000001a", "dark": "#00000059" }
   },
   "workspaceDefaults": {
-    "indicator": "none",
+    "indicator": "background",
     "style": {
       "foreground": "@token.textMuted",
       "states": {
         "focused": {
-          "foreground": "@token.text"
+          "foreground": "@token.surface"
         }
       }
     }
