@@ -35,6 +35,7 @@ final class BarEditing {
     let dragSession = WidgetDragSession()
     let addPopover: BarEditAddPopover
     var insertion: BarEditInsertion?
+    private(set) var dropped: (id: String, target: BarEditInsertion)?
     var error: String?
     private(set) var errorDisplayID: Int?
     private var measuredHeights: [Int: CGFloat] = [:]
@@ -68,6 +69,7 @@ final class BarEditing {
         addPopover.close(focusBar: false)
         if let payload = dragSession.active { dragSession.end(payload) }
         insertion = nil
+        dropped = nil
         isActive = false
         error = nil
         errorDisplayID = nil
@@ -162,11 +164,27 @@ final class BarEditing {
                                 isTarget: dragging && insertion?.displayID == displayID && insertion?.position == position)
     }
 
-    func opacity(for id: String) -> Double {
-        guard let active = dragSession.active, let widgets = store.configuration?.widgets,
-              let moving = widgets.first(where: { $0.id == active.widgetID }),
-              let widget = widgets.first(where: { $0.id == id }) else { return 1 }
-        return widget.id == moving.id || (moving.group != nil && moving.group == widget.group) ? 0.25 : 1
+    func isMoving(_ id: String) -> Bool {
+        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store.configuration?.widgets,
+              let moving = widgets.first(where: { $0.id == movingID }),
+              let widget = widgets.first(where: { $0.id == id }) else { return false }
+        return widget.id == moving.id || (moving.group != nil && moving.group == widget.group)
+    }
+
+    func opacity(for id: String) -> Double { dragSession.active != nil && isMoving(id) ? 0 : 1 }
+
+    func arranged(_ entries: [BarEditWidget], on displayID: Int, position: WidgetPosition) -> [BarEditWidget] {
+        let tray = entries.filter { $0.widget.position == position }
+        guard let insertion, insertion.displayID == displayID, insertion.position == position else { return tray }
+        var arranged = tray.filter { !isMoving($0.id) }
+        arranged.insert(contentsOf: entries.filter { isMoving($0.id) },
+                        at: arranged.firstIndex { $0.id == insertion.before } ?? arranged.endIndex)
+        return arranged
+    }
+
+    func isCollapsed(_ id: String, on displayID: Int, position: WidgetPosition) -> Bool {
+        guard let insertion else { return false }
+        return isMoving(id) && (insertion.displayID != displayID || insertion.position != position)
     }
 
     func measure(height: CGFloat, on displayID: Int) {
@@ -190,8 +208,17 @@ final class BarEditing {
     @discardableResult
     func drop(_ payload: WidgetDragSession.Payload, at target: BarEditInsertion) -> Bool {
         guard isActive else { return false }
-        defer { insertion = nil }
-        return dragSession.drop(payload) { id in move(id, to: target.position, before: target.before, on: target.displayID) }
+        return dragSession.drop(payload) { id in
+            insertion = target
+            dropped = (id, target)
+        }
+    }
+
+    func finishDrop() {
+        guard let dropped else { return }
+        self.dropped = nil
+        move(dropped.id, to: dropped.target.position, before: dropped.target.before, on: dropped.target.displayID)
+        insertion = nil
     }
 
     func move(_ id: String, to position: WidgetPosition, before anchor: String? = nil, on displayID: Int? = nil) {
@@ -295,7 +322,7 @@ struct BarEditLayout {
     let sections: [WidgetPosition: BarPlacement]
     let scrolling: Set<WidgetPosition>
 
-    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:], isDragging: Bool = false) {
+    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:]) {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
         let spacing: CGFloat = 6 * scale
@@ -308,7 +335,7 @@ struct BarEditLayout {
             ($0, max(1, preferredWidths[$0] ?? BarEditTrayMetrics.emptyWidth * scale))
         })
         let preferred = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
-            ($0, max(content[$0]!, isDragging ? BarEditTrayMetrics.chipWidth(for: $0) * scale : 0))
+            ($0, max(content[$0]!, BarEditTrayMetrics.chipWidth(for: $0) * scale))
         })
         var widths = preferred
         let notchSpacing = CGFloat(bar.notchSpacing) * scale

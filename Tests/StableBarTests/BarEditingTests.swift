@@ -161,13 +161,13 @@ final class BarEditingTests: XCTestCase {
     func testEmptyTraysContainOnlyTheSlotAndPadding() throws {
         let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings())
         for position in WidgetPosition.allCases {
-            XCTAssertEqual(try XCTUnwrap(layout.sections[position]).width, 36)
+            XCTAssertEqual(try XCTUnwrap(layout.sections[position]).width, max(36, BarEditTrayMetrics.chipWidth(for: position)))
         }
     }
 
     func testDragChipsFitEmptyTraysWithoutOverlappingOtherTraysOrTheNotch() throws {
         for display in [laptop, external] {
-            let layout = BarEditLayout(width: 1512, display: display, bar: BarSettings(), isDragging: true)
+            let layout = BarEditLayout(width: 1512, display: display, bar: BarSettings())
             XCTAssertTrue(layout.scrolling.isEmpty)
             let ordered = layout.sections.sorted { $0.value.x < $1.value.x }
             for (index, entry) in ordered.enumerated() {
@@ -184,7 +184,7 @@ final class BarEditingTests: XCTestCase {
 
     func testDragLabelsYieldSpaceBeforeFittingWidgetsHaveToScroll() throws {
         let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 36, .notchRight: 36, .center: 36, .right: 530]
-        let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths, isDragging: true)
+        let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
         XCTAssertTrue(layout.scrolling.isEmpty)
         XCTAssertEqual(try XCTUnwrap(layout.sections[.right]).width, 530, accuracy: 0.01)
     }
@@ -231,8 +231,8 @@ final class BarEditingTests: XCTestCase {
             XCTAssertTrue(editing.trayState(on: 1, position: position).showsAddSlot)
             XCTAssertEqual(editing.trayState(on: 2, position: position).showsAddSlot, position != .right)
         }
-        XCTAssertEqual(editing.opacity(for: "a"), 0.25)
-        XCTAssertEqual(editing.opacity(for: "b"), 0.25)
+        XCTAssertEqual(editing.opacity(for: "a"), 0)
+        XCTAssertEqual(editing.opacity(for: "b"), 0)
         editing.dragSession.end(payload)
         XCTAssertFalse(editing.trayState(on: 2, position: .right).isTarget)
         XCTAssertTrue(editing.trayState(on: 2, position: .right).showsAddSlot)
@@ -317,12 +317,29 @@ final class BarEditingTests: XCTestCase {
         let editing = store.barEditing
         editing.begin()
         let payload = editing.dragSession.begin("b")
+        let entries = editing.entries(on: external)
+        XCTAssertEqual(editing.arranged(entries, on: 2, position: .left).map(\.id), ["a", "b"])
+        XCTAssertFalse(editing.isCollapsed("a", on: 2, position: .left))
         let target = try XCTUnwrap(editing.dropTarget("b", on: 2, position: .notchRight, x: 0, frames: [:]))
         editing.insertion = target
+        XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"])
+        XCTAssertTrue(editing.isCollapsed("a", on: 2, position: .left))
+        XCTAssertTrue(editing.isCollapsed("b", on: 1, position: .left))
+        XCTAssertFalse(editing.isCollapsed("c", on: 2, position: .right))
+        editing.insertion = try XCTUnwrap(editing.dropTarget("b", on: 2, position: .right, x: 0,
+                                                             frames: ["c": CGRect(x: 10, y: 0, width: 40, height: 30)]))
+        XCTAssertEqual(editing.arranged(entries, on: 2, position: .right).map(\.id), ["a", "b", "c"])
         XCTAssertTrue(editing.drop(payload, at: target))
         XCTAssertFalse(editing.drop(payload, at: target))
-        XCTAssertNil(editing.insertion)
+        XCTAssertEqual(editing.insertion, target)
         XCTAssertNil(editing.dragSession.active)
+        XCTAssertEqual(editing.opacity(for: "a"), 1)
+        XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"])
+        XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.left, .left])
+        editing.finishDrop()
+        editing.finishDrop()
+        XCTAssertNil(editing.insertion)
+        XCTAssertFalse(editing.isMoving("a"))
         XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.notchRight, .notchRight])
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try await Task.sleep(for: .milliseconds(350))

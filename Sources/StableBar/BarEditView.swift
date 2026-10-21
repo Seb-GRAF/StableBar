@@ -4,6 +4,7 @@ struct BarEditView: View {
     let store: BarStore
     let display: BarDisplay
     @State private var measuredSizes: [WidgetPosition: CGSize] = [:]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         if let config = store.configuration?.onScreen(ScreenKind(display)), let geometry = store.barEditing.geometry(for: display) {
@@ -11,14 +12,12 @@ struct BarEditView: View {
             let scale = CGFloat(config.bar.scale(for: display))
             GeometryReader { proxy in
                 let widths = measuredSizes.mapValues { $0.width * scale }
-                let layout = BarEditLayout(width: proxy.size.width, display: display, bar: config.bar, preferredWidths: widths,
-                                           isDragging: store.barEditing.dragSession.active != nil)
+                let layout = BarEditLayout(width: proxy.size.width, display: display, bar: config.bar, preferredWidths: widths)
                 ZStack(alignment: .topLeading) {
                     ForEach(WidgetPosition.allCases, id: \.self) { position in
                         if let section = layout.sections[position] {
                             let height = min(proxy.size.height / scale, measuredSizes[position]?.height ?? proxy.size.height / scale)
-                            BarEditSection(store: store, display: display, position: position,
-                                           entries: entries.filter { $0.widget.position == position }, config: config,
+                            BarEditSection(store: store, display: display, position: position, entries: entries, config: config,
                                            scrolling: layout.scrolling.contains(position),
                                            contentWidth: measuredSizes[position]?.width ?? 0, viewportWidth: section.width / scale,
                                            adding: store.barEditing.addPopover.displayID == display.id
@@ -28,11 +27,11 @@ struct BarEditView: View {
                         }
                     }
                 }
+                .animation(reduceMotion || store.barEditing.dragSession.active == nil ? nil : .reorder, value: measuredSizes)
                 .overlay {
                     HStack(spacing: 0) {
                         ForEach(WidgetPosition.allCases, id: \.self) { position in
-                            BarEditSectionRow(store: store, display: display, position: position,
-                                              entries: entries.filter { $0.widget.position == position }, config: config,
+                            BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
                                               adding: false)
                             .fixedSize()
                             .background {
@@ -97,6 +96,7 @@ private struct BarEditSection: View {
     @State private var frames: [String: CGRect] = [:]
     @State private var rowBounds = CGRect.null
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var editing: BarEditing { store.barEditing }
 
     var body: some View {
@@ -144,29 +144,23 @@ private struct BarEditSection: View {
             .overlay {
                 shape.strokeBorder(state.isTarget ? Color.accentColor : surface.hairline, lineWidth: state.isTarget ? 2 : 0.5)
             }
-            .overlay(alignment: .topLeading) {
-                if state.isTarget, let target = editing.insertion {
-                    let bounds = frames.values.reduce(CGRect.null) { $0.union($1) }
-                    Rectangle().fill(Color.accentColor).frame(width: 3, height: bounds.isNull ? 22 : bounds.height)
-                        .offset(x: target.x, y: bounds.isNull ? 6 : bounds.minY).allowsHitTesting(false)
-                }
-            }
             .coordinateSpace(name: "editSection")
             .onPreferenceChange(BarEditFrames.self) { frames = $0 }
             .onPreferenceChange(BarEditRowBounds.self) { rowBounds = $0 }
         }
         .overlay(alignment: .topLeading) {
-            if state.showsName {
-                Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
-                    .foregroundStyle(state.isTarget ? Color.white : Color.primary)
-                    .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(state.isTarget ? Color.accentColor : surface.tint, in: Capsule())
-                    .background(.regularMaterial, in: Capsule())
-                    .overlay { Capsule().strokeBorder(surface.neutral.opacity(0.15), lineWidth: 0.5) }
-                    .environment(\.colorScheme, surface.scheme)
-                    .padding(.leading, 5)
-                    .allowsHitTesting(false)
-            }
+            Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
+                .foregroundStyle(state.isTarget ? Color.white : Color.primary)
+                .padding(.horizontal, 4).padding(.vertical, 1)
+                .background(state.isTarget ? Color.accentColor : surface.tint, in: Capsule())
+                .background(.regularMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(surface.neutral.opacity(0.15), lineWidth: 0.5) }
+                .environment(\.colorScheme, surface.scheme)
+                .padding(.leading, 5)
+                .opacity(state.showsName ? 1 : 0)
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state.showsName)
+                .allowsHitTesting(false)
+                .accessibilityHidden(!state.showsName)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(position.title)
@@ -236,12 +230,17 @@ struct BarEditSectionRow: View {
     @State private var anchor = NSView()
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: config.bar.spacing) {
-            if position == .right || position == .notchLeft { addSlot }
-            let units = BarUnit.make(widgets: entries.map(\.widget), groups: config.groups)
+        let editing = store.barEditing
+        let leadingSlot = position == .right || position == .notchLeft
+        HStack(spacing: 0) {
+            if leadingSlot { addSlot }
+            let units = BarUnit.make(widgets: editing.arranged(entries, on: display.id, position: position).map(\.widget),
+                                     groups: config.groups)
             ForEach(units) { unit in
+                let collapsed = editing.isCollapsed(unit.widgets[0].id, on: display.id, position: position)
                 BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
                     ForEach(unit.widgets) { widget in
                         if let entry = entries.first(where: { $0.id == widget.id }) {
@@ -255,10 +254,13 @@ struct BarEditSectionRow: View {
                         }
                     }
                 }
-                .opacity(store.barEditing.opacity(for: unit.widgets[0].id))
+                .opacity(collapsed ? 0 : editing.opacity(for: unit.widgets[0].id))
+                .frame(width: collapsed ? 0 : nil)
+                .padding(leadingSlot ? .leading : .trailing, collapsed ? 0 : config.bar.spacing)
             }
-            if position != .right && position != .notchLeft { addSlot }
+            if !leadingSlot { addSlot }
         }
+        .animation(reduceMotion ? nil : .reorder, value: editing.insertion)
         .frame(minHeight: BarEditTrayMetrics.slot)
         .fixedSize()
         .padding(.horizontal, BarEditTrayMetrics.horizontalPadding)
@@ -297,6 +299,7 @@ struct BarEditTile: View {
     let config: Configuration
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var editing: BarEditing { store.barEditing }
     private var title: String { entry.name + (entry.visibility.isHidden ? ", Hidden" : "") }
 
@@ -314,17 +317,20 @@ struct BarEditTile: View {
         .accessibilityAction(named: Text("Move left")) { editing.move(entry.id, by: -1, on: display) }
         .accessibilityAction(named: Text("Move right")) { editing.move(entry.id, by: 1, on: display) }
         .overlay(alignment: .topLeading) {
-            if editing.trayState(on: display, position: entry.widget.position).showsBadges {
-                Button { editing.remove(entry.id, on: display) } label: {
-                    Image(systemName: "minus").font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white).frame(width: 14, height: 14)
-                        .background(HexColor(0x6e6e73ff).color, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .help("Remove \(entry.name)")
-                .accessibilityLabel("Remove \(entry.name)")
-                .offset(x: -5, y: -5)
+            let showsBadges = editing.trayState(on: display, position: entry.widget.position).showsBadges
+            Button { editing.remove(entry.id, on: display) } label: {
+                Image(systemName: "minus").font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white).frame(width: 14, height: 14)
+                    .background(HexColor(0x6e6e73ff).color, in: Circle())
             }
+            .buttonStyle(.plain)
+            .help("Remove \(entry.name)")
+            .accessibilityLabel("Remove \(entry.name)")
+            .offset(x: -5, y: -5)
+            .opacity(showsBadges ? 1 : 0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: showsBadges)
+            .allowsHitTesting(showsBadges)
+            .accessibilityHidden(!showsBadges)
         }
         .help("\(title). Click to change its settings, or drag to move it.")
         .contextMenu {
@@ -372,4 +378,8 @@ struct BarEditTile: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Edit \(title)")
     }
+}
+
+private extension Animation {
+    static let reorder = Animation.spring(duration: 0.3, bounce: 0.15)
 }

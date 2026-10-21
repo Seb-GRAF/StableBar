@@ -28,6 +28,7 @@ struct BarEditDragSource<Content: View>: NSViewRepresentable {
 }
 
 final class BarEditDragSourceView: WidgetDragSourceView {
+    static let lift: CGFloat = 1.05
     weak var editing: BarEditing?
     var widgetID = ""
     var select: () -> Void = {}
@@ -48,9 +49,33 @@ final class BarEditDragSourceView: WidgetDragSourceView {
         super.mouseUp(with: event)
     }
 
-    override func dragImage() -> NSImage { dragChip() }
+    override func dragImage() -> NSImage {
+        let snapshot = bitmapImageRepForCachingDisplay(in: bounds)!
+        cacheDisplay(in: bounds, to: snapshot)
+        let tile = NSImage(cgImage: snapshot.cgImage!, size: bounds.size)
+        return NSImage(size: NSSize(width: bounds.width * Self.lift + 16, height: bounds.height * Self.lift + 16), flipped: false) { rect in
+            let shadow = NSShadow()
+            shadow.shadowBlurRadius = 6
+            shadow.shadowOffset = NSSize(width: 0, height: -2)
+            shadow.shadowColor = .black.withAlphaComponent(0.3)
+            shadow.set()
+            tile.draw(in: rect.insetBy(dx: 8, dy: 8))
+            return true
+        }
+    }
+
+    override func beginWidgetDrag(with item: NSDraggingItem, event: NSEvent) {
+        let size = item.draggingFrame.size
+        item.draggingFrame = NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2, width: size.width, height: size.height)
+        super.beginWidgetDrag(with: item, event: event)
+    }
 
     override func didEndWidgetDrag() { editing?.insertion = nil }
+
+    override func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        super.draggingSession(session, endedAt: screenPoint, operation: operation)
+        editing?.finishDrop()
+    }
 }
 
 struct BarEditDropTarget<Content: View>: NSViewRepresentable {
@@ -98,10 +123,21 @@ final class BarEditDropTargetView: WidgetHostingView {
         if editing?.insertion?.displayID == displayID, editing?.insertion?.position == position { editing?.insertion = nil }
     }
 
-    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool { acceptedPayload(sender) != nil }
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        sender.animatesToDestination = true
+        return acceptedPayload(sender) != nil
+    }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard let payload = acceptedPayload(sender), let target = target(sender, payload: payload) else { return false }
+        let gap = frames.filter { editing?.isMoving($0.key) == true }.values.reduce(CGRect.null) { $0.union($1) }
+        if !gap.isNull {
+            sender.enumerateDraggingItems(for: self, classes: [NSPasteboardItem.self]) { item, _, _ in
+                let size = NSSize(width: item.draggingFrame.width / BarEditDragSourceView.lift,
+                                  height: item.draggingFrame.height / BarEditDragSourceView.lift)
+                item.draggingFrame = NSRect(x: gap.midX - size.width / 2, y: gap.midY - size.height / 2, width: size.width, height: size.height)
+            }
+        }
         return editing?.drop(payload, at: target) ?? false
     }
 
