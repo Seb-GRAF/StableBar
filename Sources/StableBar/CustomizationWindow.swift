@@ -410,7 +410,7 @@ struct StyleFields {
     func toggle(_ title: String, _ key: String, default fallback: Bool, hint: String? = nil) -> some View {
         row(title, key, hint: hint) { _ in
             let isOn = if case let .bool(value) = property(key).editingValue { value } else { fallback }
-            Toggle(title, isOn: Binding(get: { isOn }, set: { if $0 != isOn { set([key: .bool($0)]) } }))
+            Toggle(title, isOn: Binding(get: { isOn }, set: { if $0 != isOn { set([key: .bool($0)]) } }).animation(.snappy(duration: 0.2)))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)

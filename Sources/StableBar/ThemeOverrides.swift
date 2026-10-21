@@ -9,7 +9,8 @@ struct ThemeOverrides {
     let values: [ThemeOverride]
 
     func notice(theme: String) -> String {
-        "\(values.count) of your settings \(values.count == 1 ? "replaces" : "replace") what \(theme) sets"
+        if values.isEmpty { return "None of your settings replace what \(theme) sets" }
+        return "\(values.count) of your settings \(values.count == 1 ? "replaces" : "replace") what \(theme) sets"
     }
 
     var summary: String {

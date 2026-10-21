@@ -14,6 +14,7 @@ struct PackagesView: View {
     @State private var additions: [String] = []
     @State private var showingThemes: Bool?
     @State private var gallery: ThemeGallery
+    @State private var showsLoading = false
     @FocusState private var searching: Bool
 
     init(store: BarStore, indexURL: URL = PackageIndex.url, selectedPackageID: String? = nil,
@@ -279,7 +280,14 @@ struct PackagesView: View {
                 PackageDetailView(store: store, library: library, draft: draft, reviewing: reviewing != nil, tab: $tab,
                                   additions: $additions, onEnable: onEnable, onAdded: onAdded, onWorkingChanged: onWorkingChanged)
             } else if library.loading {
-                ProgressView("Loading package…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                ProgressView("Loading package…")
+                    .opacity(showsLoading ? 1 : 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .task {
+                        do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+                        showsLoading = true
+                    }
+                    .onDisappear { showsLoading = false }
             } else if reviewing == nil {
                 if library.showingStore {
                     ContentUnavailableView("Select a package", systemImage: "shippingbox",

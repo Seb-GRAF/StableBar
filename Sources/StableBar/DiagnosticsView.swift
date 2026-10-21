@@ -68,10 +68,12 @@ struct DiagnosticsView: View {
     @State private var snapshotDate: Date?
     @State private var snapshotTask: Task<Void, Never>?
     @State private var actionTask: Task<Void, Never>?
+    @State private var needingAttention: Set<String>
 
     init(editor: ConfigurationEditor) {
         self.editor = editor
         _selectedID = State(initialValue: editor.diagnosticWidgetID ?? "")
+        _needingAttention = State(initialValue: Set((editor.store.configuration?.widgets ?? []).filter { editor.store.widgetStatus(for: $0).needsAttention }.map(\.id)))
     }
 
     private var store: BarStore { editor.store }
@@ -119,7 +121,7 @@ struct DiagnosticsView: View {
         let names = names
         return List(selection: $selectedID) {
             Label("All widgets", systemImage: "list.bullet").foregroundStyle(.primary).tag("")
-            ForEach(widgets.sorted { store.widgetStatus(for: $0).needsAttention && !store.widgetStatus(for: $1).needsAttention }) { widget in
+            ForEach(widgets.sorted { needingAttention.contains($0.id) && !needingAttention.contains($1.id) }) { widget in
                 let status = store.widgetStatus(for: widget)
                 Label {
                     VStack(alignment: .leading, spacing: 1) {

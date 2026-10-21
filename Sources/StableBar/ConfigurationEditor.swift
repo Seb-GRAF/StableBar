@@ -4,6 +4,7 @@ import Observation
 @MainActor @Observable
 final class ConfigurationEditor {
     let store: BarStore
+    let gallery: ThemeGallery
     var history: ConfigurationHistory { store.customizationHistory }
     var undoSteps: [ConfigurationHistory.Step] { history.undoSteps }
     var redoSteps: [ConfigurationHistory.Step] { history.redoSteps }
@@ -44,6 +45,7 @@ final class ConfigurationEditor {
 
     init(store: BarStore, endEditing: @escaping () -> Void = { NSApp?.keyWindow?.endEditing(for: nil) }) {
         self.store = store
+        gallery = ThemeGallery(store: store)
         self.endEditing = endEditing
         selection = store.configuration?.widgets.first?.id
     }

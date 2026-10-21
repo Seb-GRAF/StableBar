@@ -3,12 +3,6 @@ import SwiftUI
 
 struct AppearanceView: View {
     @Bindable var editor: ConfigurationEditor
-    @State private var gallery: ThemeGallery
-
-    init(editor: ConfigurationEditor) {
-        self.editor = editor
-        _gallery = State(initialValue: ThemeGallery(store: editor.store))
-    }
     @State private var filter = ThemeFilter.all
     @State private var advanced: AdvancedSheet?
     @State private var screen: ScreenKind?
@@ -17,6 +11,7 @@ struct AppearanceView: View {
     @State private var themeName = ""
 
     private var store: BarStore { editor.store }
+    private var gallery: ThemeGallery { editor.gallery }
     private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.screenSetup?.kinds.contains($0) == true } }
     private var document: [String: ConfigurationValue] { screen.flatMap { store.screenDocuments[$0.rawValue] } ?? store.effectiveDocument }
     private var screenTheme: WidgetPackageSelection? {
@@ -211,22 +206,23 @@ struct AppearanceView: View {
     }
 
     @ViewBuilder private var overrides: some View {
-        if !gallery.overrides.values.isEmpty, let theme = gallery.choices.first(where: { $0.key == gallery.selectedKey }) {
+        if let theme = gallery.choices.first(where: { $0.key == gallery.selectedKey }) {
+            let tint = gallery.overrides.values.isEmpty ? Color.secondary : SettingsPalette.warning
             HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(gallery.overrides.notice(theme: theme.title)).fontWeight(.semibold)
-                    Text(gallery.overrides.summary).font(.system(size: 11.5)).foregroundStyle(.secondary)
-                }
+                Text(gallery.overrides.notice(theme: theme.title)).fontWeight(.semibold)
+                Text(gallery.overrides.summary).foregroundStyle(.secondary).help(gallery.overrides.summary)
                 Spacer(minLength: 0)
                 Button("Reset them") { editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar) }
                     .controlSize(.small)
+                    .disabled(gallery.overrides.values.isEmpty)
                     .accessibilityLabel("Reset your settings that override this theme")
             }
+            .lineLimit(1)
             .font(.system(size: 12))
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .background(SettingsPalette.warning.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.warning.opacity(0.3)))
+            .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(0.3)))
             .padding(.top, 12)
         }
     }

@@ -405,7 +405,7 @@ struct BarInspector: View {
                     SettingRow(title: "Show each window") {
                         Toggle("Show each window", isOn: Binding(get: { widget.workspace?.windows == true }, set: {
                             editor.set(["workspace": .object(["windows": .bool($0)])], for: widget.id)
-                        }))
+                        }).animation(.snappy(duration: 0.2)))
                         .toggleStyle(.switch).labelsHidden().controlSize(.small)
                     }
                     if widget.workspace?.windows == true {
@@ -474,7 +474,7 @@ struct BarInspector: View {
     }
 
     private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button { withAnimation(.snappy(duration: 0.2), action) } label: {
             Text(title)
                 .font(.system(size: 12))
                 .monospacedDigit()
