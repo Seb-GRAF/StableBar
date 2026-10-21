@@ -52,7 +52,7 @@ struct PackagesView: View {
                         }
                         .frame(width: 256)
                         .background(SettingsPalette.sidebar)
-                        .disabled(library.draft?.working == true || !additions.isEmpty)
+                        .disabled(library.draft?.working == true || !additions.isEmpty || library.pendingUpdate != nil)
                         Divider()
                         detail
                     }
@@ -80,6 +80,12 @@ struct PackagesView: View {
                 showStore(target == SettingsSearchResult.store.id)
                 searchTarget = nil
             }
+        }
+        .confirmationDialog("Review additional access", isPresented: Binding(get: { library.pendingUpdate != nil }, set: { if !$0 { library.pendingUpdate = nil } }),
+                            presenting: library.pendingUpdate) { draft in
+            Button("Update package") { Task { await library.confirmUpdate(draft) } }
+        } message: { _ in
+            Text("This version adds:\n\(library.updateAdditions.joined(separator: "\n"))")
         }
         .onChange(of: store.effectiveDocument) { library.configurationChanged() }
         .onChange(of: selectedPackageID) { _, id in
@@ -130,9 +136,10 @@ struct PackagesView: View {
                             .tag(LibraryRow.package(reviewed.inspection.manifest.id))
                     }
                 }
-                rows("On your bar", packages.filter { $0.kind != .theme && library.isActive($0) })
-                rows("Installed, not on your bar", packages.filter { $0.kind != .theme && !library.isActive($0) })
-                rows("Themes", packages.filter { $0.kind == .theme })
+                rows("Updates available (\(library.updates.count))", packages.filter { library.update(for: $0) != nil })
+                rows("On your bar", packages.filter { $0.kind != .theme && library.isActive($0) && library.update(for: $0) == nil })
+                rows("Installed, not on your bar", packages.filter { $0.kind != .theme && !library.isActive($0) && library.update(for: $0) == nil })
+                rows("Themes", packages.filter { $0.kind == .theme && library.update(for: $0) == nil })
                 if library.installed.isEmpty {
                     Text("Nothing installed yet. Get packages from the Store or open a folder.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -145,6 +152,13 @@ struct PackagesView: View {
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
+            HStack {
+                if library.loadingStore { ProgressView().controlSize(.small) }
+                Button("Check for updates") { Task { await library.loadStore(reload: true) } }
+                    .disabled(library.loadingStore)
+                Spacer()
+            }
+            .font(.caption).padding(12)
             if library.storeError != nil {
                 Text("Store unavailable. Installed packages are still available.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -158,8 +172,10 @@ struct PackagesView: View {
         if !packages.isEmpty {
             Section(title) {
                 ForEach(packages, id: \.id) { manifest in
-                    PackageRow(manifest: manifest, source: library.source(of: manifest), update: library.update(for: manifest) != nil,
-                               inUse: manifest.kind == .theme && library.isActive(manifest))
+                    PackageRow(manifest: manifest, source: library.source(of: manifest), update: library.update(for: manifest)?.version,
+                               updating: library.updating.contains(manifest.id), inUse: manifest.kind == .theme && library.isActive(manifest)) {
+                        Task { await library.update(manifest) }
+                    }
                         .tag(LibraryRow.package(manifest.id))
                 }
             }
@@ -208,9 +224,13 @@ struct PackagesView: View {
             List(selection: storeSelection) {
                 ForEach(entries, id: \.id) { entry in
                     StoreRow(entry: entry, installed: library.installed.contains { $0.id == entry.id },
-                             getting: library.getting.contains(entry.id)) {
+                             getting: library.getting.contains(entry.id) || library.updating.contains(entry.id),
+                             update: library.updates.contains { $0.id == entry.id }) {
                         tab = .overview
-                        Task { await library.get(entry) }
+                        Task {
+                            if let manifest = library.updates.first(where: { $0.id == entry.id }) { await library.update(manifest) }
+                            else { await library.get(entry) }
+                        }
                     }
                     .tag(entry.id)
                 }
@@ -296,8 +316,10 @@ private enum LibraryRow: Hashable {
 private struct PackageRow: View {
     let manifest: WidgetPackageManifest
     let source: PackageSource?
-    var update = false
+    var update: String?
+    var updating = false
     var inUse = false
+    var onUpdate: (() -> Void)?
     @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
@@ -309,20 +331,18 @@ private struct PackageRow: View {
                 HStack(spacing: 5) {
                     if let source { PackageSourceBadge(source: source, onSelection: prominence == .increased) }
                     Text(manifest.version).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                    if update {
-                        Text("Update")
-                            .font(.system(size: 10.5, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .frame(height: 17)
-                            .background(SettingsPalette.success, in: RoundedRectangle(cornerRadius: 5))
-                    }
                     if inUse { PackageTag(title: "In use", tint: SettingsPalette.success) }
                 }
                 .padding(.top, 3)
+                if let update {
+                    Button(updating ? "Updating…" : "Update to \(update)") { onUpdate?() }
+                        .buttonStyle(.borderedProminent).controlSize(.mini)
+                        .disabled(updating)
+                        .accessibilityLabel("Update \(manifest.name) to \(update)")
+                }
             }
         }
-        .frame(height: 54, alignment: .top)
+        .frame(height: update == nil ? 54 : 76, alignment: .top)
         .padding(.vertical, 3)
     }
 }
@@ -349,6 +369,7 @@ private struct StoreRow: View {
     let entry: PackageIndex.Entry
     let installed: Bool
     let getting: Bool
+    let update: Bool
     let get: () -> Void
 
     var body: some View {
@@ -360,10 +381,13 @@ private struct StoreRow: View {
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
-            if installed {
+            if getting {
+                Text(update ? "Updating…" : "Getting…").font(.system(size: 11.5)).foregroundStyle(.secondary)
+            } else if update {
+                Button("Update", action: get).buttonStyle(.borderedProminent).controlSize(.small)
+                    .accessibilityLabel("Update \(entry.name)")
+            } else if installed {
                 Label("Installed", systemImage: "checkmark").font(.system(size: 11.5)).foregroundStyle(.secondary)
-            } else if getting {
-                Text("Getting…").font(.system(size: 11.5)).foregroundStyle(.secondary)
             } else {
                 Button("Get", action: get)
                     .buttonStyle(.bordered)

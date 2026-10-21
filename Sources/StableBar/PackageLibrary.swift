@@ -38,6 +38,9 @@ final class PackageLibrary {
     private(set) var loading = false
     private(set) var loadingStore = false
     private(set) var getting: Set<String> = []
+    private(set) var updating: Set<String> = []
+    var pendingUpdate: PackageDraft?
+    private(set) var updateAdditions: [String] = []
     var storeError: String?
     var error: String?
     var search = ""
@@ -76,6 +79,77 @@ final class PackageLibrary {
 
     func update(for manifest: WidgetPackageManifest) -> PackageIndex.Entry? {
         entries.first { $0.id == manifest.id && $0.version.compare(manifest.version, options: .numeric) == .orderedDescending }
+    }
+
+    var updates: [WidgetPackageManifest] { installedPackages.filter { update(for: $0) != nil } }
+
+    func update(_ manifest: WidgetPackageManifest) async {
+        guard let entry = update(for: manifest) else { return }
+        updating.insert(manifest.id)
+        defer { updating.remove(manifest.id) }
+        do {
+            let downloaded = try await client.packageForAdding(entry)
+            let values = try downloaded.manifest.values(WidgetSetup(store: store).savedSettings(for: downloaded.manifest))
+            let inspection = try await client.inspect(downloaded.directory, settings: values)
+            let previous = try await client.inspect(packages.directory(id: manifest.id, version: manifest.version))
+            let draft = PackageDraft(inspection: inspection, settings: values)
+            updateAdditions = inspection.additions(since: previous)
+            if updateAdditions.isEmpty {
+                try await applyUpdate(draft)
+            } else {
+                pendingUpdate = draft
+            }
+            error = nil
+        } catch {
+            self.error = errorMessage(error)
+        }
+    }
+
+    func confirmUpdate(_ draft: PackageDraft) async {
+        pendingUpdate = nil
+        let id = draft.inspection.manifest.id
+        updating.insert(id)
+        defer { updating.remove(id) }
+        do { try await applyUpdate(draft); error = nil }
+        catch { self.error = errorMessage(error) }
+    }
+
+    private func applyUpdate(_ draft: PackageDraft) async throws {
+        let manifest = draft.inspection.manifest
+        if !isInstalled(draft) { draft.inspection = try await client.install(draft.inspection.directory) }
+        configurationChanged()
+        if let selection = selections.first(where: { $0.id == manifest.id }) {
+            try store.customizationHistory.flush()
+            let selectionEdit = edit(draft, enabled: selection.enabled)
+            var edits = [selectionEdit]
+            if manifest.kind != .theme && selection.enabled {
+                var loader = ConfigurationLoader()
+                loader.themesDirectory = store.themesDirectory
+                let root = try store.editedDocument([selectionEdit], replaying: [])
+                let configured = try loader.load(store.configurationURL, data: configurationData(root), context: store.context)
+                let previous = store.configuration!.widgets
+                let ids = draft.inspection.widgets.map(\.id)
+                for widget in previous where ids.contains(widget.id) {
+                    if let updated = configured.widgets.first(where: { $0.id == widget.id }) {
+                        var properties: [String: ConfigurationValue] = [:]
+                        if updated.position != widget.position { properties["position"] = .string(widget.position.rawValue) }
+                        if updated.enabled != widget.enabled { properties["enabled"] = .bool(widget.enabled) }
+                        if !properties.isEmpty { edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: properties)) }
+                    }
+                }
+                let configuredIDs = configured.widgets.map(\.id)
+                let previousIDs = previous.map(\.id)
+                let order = previousIDs.filter { configuredIDs.contains($0) } + configuredIDs.filter { !previousIDs.contains($0) }
+                if order != configuredIDs { edits.append(ConfigurationEdit(action: .reorder, ids: order)) }
+            }
+            try store.customizationHistory.change(edits)
+        }
+        await loadInstalled()
+        if selectedID == manifest.id {
+            drafts[manifest.versionKey] = nil
+            await selectInstalled(manifest)
+        }
+        store.customizationHistory.showNotice("\(manifest.name) updated to \(manifest.version).")
     }
 
     func source(_ draft: PackageDraft) -> PackageSource? {

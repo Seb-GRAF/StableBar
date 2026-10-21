@@ -52,7 +52,7 @@ struct PackageDetailView: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
-            .disabled(draft.working)
+            .disabled(draft.working || library.updating.contains(manifest.id))
             if let error = draft.error ?? draft.credentialsError {
                 Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                     .textSelection(.enabled).font(.callout).padding(12)
@@ -108,7 +108,8 @@ struct PackageDetailView: View {
         let update = reviewing ? nil : library.update(for: manifest)
         Group {
             if let update {
-                Button("Update to \(update.version)") { Task { await library.selectStore(update) } }
+                Button(library.updating.contains(manifest.id) ? "Updating…" : "Update to \(update.version)") { Task { await library.update(manifest) } }
+                    .disabled(library.updating.contains(manifest.id))
                     .buttonStyle(.borderedProminent)
             }
             if library.isActive(draft) && !reviewing {
@@ -287,7 +288,8 @@ struct PackageDetailView: View {
                 LabeledContent(update.version) {
                     HStack {
                         Text("New in the Store").font(.caption).foregroundStyle(.secondary)
-                        Button("Review update") { Task { await library.selectStore(update) } }.buttonStyle(.borderedProminent)
+                        Button(library.updating.contains(manifest.id) ? "Updating…" : "Update") { Task { await library.update(manifest) } }
+                            .buttonStyle(.borderedProminent).disabled(library.updating.contains(manifest.id))
                     }
                 }
             }
