@@ -99,25 +99,7 @@ struct SettingsView: View {
                     SettingsSearchResults(editor: editor).padding(.trailing, 12).padding(.top, 4)
                 }
             }
-            if let error = (editor.section ?? .general).bannerError(customization: editor.error, configuration: store.configurationError) {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.red.opacity(0.1))
-            }
-            if let notice = editor.history.notice {
-                Text(notice)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-            }
-            if !store.sessionEdits.isEmpty { commandLineNotice }
+            .overlay(alignment: .bottom) { messages }
             Divider()
             footer
         }
@@ -152,8 +134,9 @@ struct SettingsView: View {
             .labelStyle(.iconOnly)
             .controlSize(.small)
             .fixedSize()
-            Text(editor.error != nil ? "Change not saved" : editor.history.hasPendingChanges ? "Saving…" : "All changes saved")
-                .foregroundStyle(.secondary)
+            if editor.error != nil {
+                Text("Change not saved").foregroundStyle(.red)
+            }
             Spacer()
             Button(editor.showsValueSources ? "Hide where values come from" : "Show where values come from") {
                 editor.showsValueSources.toggle()
@@ -165,6 +148,36 @@ struct SettingsView: View {
         .padding(.horizontal, 12)
         .frame(height: 38)
         .background(SettingsPalette.sidebar)
+    }
+
+    private var messages: some View {
+        VStack(spacing: 0) {
+            if let error = (editor.section ?? .general).bannerError(customization: editor.error, configuration: store.configurationError) {
+                Divider()
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.red.opacity(0.1))
+            }
+            if let notice = editor.history.notice {
+                Divider()
+                Text(notice)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+            }
+            if !store.sessionEdits.isEmpty {
+                Divider()
+                commandLineNotice
+            }
+        }
+        .background(.bar)
     }
 
     private var commandLineNotice: some View {
