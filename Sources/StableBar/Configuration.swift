@@ -343,9 +343,9 @@ struct WidgetAppearance {
         width = (style.width ?? defaults.width).map { CGFloat($0) }
         shadowRadius = style.shadowRadius ?? defaults.shadowRadius ?? 2
         shadowColor = (style.shadowColor ?? defaults.shadowColor)?.color ?? .clear
-        let size = style.fontSize ?? defaults.fontSize ?? 12
+        let size = style.fontSize ?? defaults.fontSize ?? 13
         let name = style.fontName ?? defaults.fontName ?? "system"
-        let weight = fontWeights.first { $0.name == style.fontWeight ?? defaults.fontWeight }?.weight ?? .medium
+        let weight = fontWeights.first { $0.name == style.fontWeight ?? defaults.fontWeight }?.weight ?? .regular
         font = name == "system" ? .system(size: size, weight: weight) : .custom(name, size: size).weight(weight)
     }
 }

@@ -307,7 +307,7 @@ struct BarInspector: View {
         SettingsGroup("Text") {
             style.font(fontFamilies)
             style.weight()
-            style.number("Size", "fontSize", default: 12, in: 6...40, slider: true)
+            style.number("Size", "fontSize", default: 13, in: 6...40, slider: true)
         }
         SettingsGroup("Padding and corners") {
             BoxModel(style: style, name: name)

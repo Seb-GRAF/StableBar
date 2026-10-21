@@ -24,7 +24,7 @@ struct WorkspacePresentationFields: View {
         cell.color("Workspace text", "foreground")
         cell.number("Cell height", "height", default: 22)
         cell.number("Cell padding", "paddingHorizontal", default: 7)
-        cell.number("Workspace font size", "fontSize", default: 12)
+        cell.number("Workspace font size", "fontSize", default: 13)
         cell.weight()
         app.color("App glyphs", "foreground")
         app.font(NSFontManager.shared.availableFontFamilies)

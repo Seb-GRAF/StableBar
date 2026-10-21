@@ -446,7 +446,7 @@ struct StyleFields {
 
     func weight() -> some View {
         row("Weight", "fontWeight") { _ in
-            let selection = stringBinding("fontWeight", default: "medium")
+            let selection = stringBinding("fontWeight", default: "regular")
             choiceMenu("Weight", selection: selection, selectedTitle: selection.wrappedValue.capitalized) {
                 ForEach(fontWeights, id: \.name) { Text($0.name.capitalized).tag($0.name) }
             }

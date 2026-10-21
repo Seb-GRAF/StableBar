@@ -275,7 +275,7 @@ struct PopupBlockView: View {
             ResolvedBlockMotion(motion: context.motion, block: block) { transition, animation in
                 Group {
                     if let speed = block.scrollSpeed {
-                        ScrollingText(text: text, font: appearance.font, fontSize: style.text.fontSize ?? 12, speed: speed)
+                        ScrollingText(text: text, font: appearance.font, fontSize: style.text.fontSize ?? 13, speed: speed)
                     } else {
                         Text(text)
                     }
@@ -286,7 +286,7 @@ struct PopupBlockView: View {
             ResolvedBlockMotion(motion: context.motion, block: block) { transition, animation in
                 Group {
                     if let speed = block.scrollSpeed {
-                        ScrollingText(text: fields[name] ?? "", font: appearance.font, fontSize: style.text.fontSize ?? 12, speed: speed)
+                        ScrollingText(text: fields[name] ?? "", font: appearance.font, fontSize: style.text.fontSize ?? 13, speed: speed)
                     } else if block.monospacedDigits {
                         Text(fields[name] ?? "—").lineLimit(1).monospacedDigit()
                     } else {
