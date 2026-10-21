@@ -258,6 +258,23 @@ struct NumberField: View {
     }
 }
 
+struct NumberDraft<Content: View>: View {
+    @Binding var value: Double
+    @ViewBuilder let content: (Binding<Double>) -> Content
+    @State private var draft: Double?
+
+    var body: some View {
+        content(Binding(get: { draft ?? value }, set: { draft = $0 }))
+            .task(id: draft) {
+                guard let draft else { return }
+                do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+                value = draft
+                self.draft = nil
+            }
+            .onDisappear { if let draft { value = draft } }
+    }
+}
+
 struct SettingsSegments<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(Value, String)]

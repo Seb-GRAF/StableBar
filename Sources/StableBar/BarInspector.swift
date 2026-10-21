@@ -277,10 +277,12 @@ struct BarInspector: View {
                 editor.change(ConfigurationEdit(action: .bar, properties: ["displayScale": .object([key: .number(percent / 100)])]))
             }
         })
-        return SettingRow(title: title, property: property, source: store.propertySourceText(property),
-                          reset: property.saved.map { source in { reset(source) } },
-                          scrub: Scrub(value: binding, range: 25...300, step: 5)) {
-            NumberField(title: title, value: binding, range: 25...300, step: 5, unit: "%", slider: true)
+        return NumberDraft(value: binding) { binding in
+            SettingRow(title: title, property: property, source: store.propertySourceText(property),
+                       reset: property.saved.map { source in { reset(source) } },
+                       scrub: Scrub(value: binding, range: 25...300, step: 5)) {
+                NumberField(title: title, value: binding, range: 25...300, step: 5, unit: "%", slider: true)
+            }
         }
     }
 
@@ -309,10 +311,11 @@ struct BarInspector: View {
         }
         SettingsGroup("Padding and corners") {
             BoxModel(style: style, name: name)
-            let width = style.numberBinding("borderWidth", default: 0)
-            style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
-                NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
-                style.colorButton("Border color", "borderColor")
+            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
+                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
+                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
+                    style.colorButton("Border color", "borderColor")
+                }
             }
         }
         if let widget, widget.content == .workspaces {
@@ -409,8 +412,10 @@ struct BarInspector: View {
                         let length = Binding(get: { Double(widget.workspace?.titleLength ?? 0) }, set: {
                             editor.set(["workspace": .object(["titleLength": .number($0)])], for: widget.id)
                         })
-                        SettingRow(title: "Title length", scrub: Scrub(value: length, range: 0...200), hint: "0 shows only app icons") {
-                            NumberField(title: "Title length", value: length, range: 0...200, unit: "chars")
+                        NumberDraft(value: length) { length in
+                            SettingRow(title: "Title length", scrub: Scrub(value: length, range: 0...200), hint: "0 shows only app icons") {
+                                NumberField(title: "Title length", value: length, range: 0...200, unit: "chars")
+                            }
                         }
                     }
                 }
@@ -799,7 +804,7 @@ private struct BoxModel: View {
         let property = style.property(key)
         return HStack(spacing: 4) {
             RevertSettingButton(title: title, property: property, reset: property.saved.map { source in { style.reset(source) } })
-            NumberField(title: title, value: value, range: 0...30, unit: "", symbol: symbol)
+            NumberDraft(value: value) { NumberField(title: title, value: $0, range: 0...30, unit: "", symbol: symbol) }
         }
         .padding(4)
         .help(title)

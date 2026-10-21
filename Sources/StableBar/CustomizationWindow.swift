@@ -388,9 +388,10 @@ struct StyleFields {
 
     func number(_ title: String, _ key: String, default fallback: Double, in range: ClosedRange<Double> = 0...200,
                 step: Double = 1, unit: String = "pt", slider: Bool = false, hint: String? = nil) -> some View {
-        let binding = numberBinding(key, default: fallback)
-        return row(title, key, scrub: Scrub(value: binding, range: range, step: step), hint: hint) { _ in
-            NumberField(title: title, value: binding, range: range, step: step, unit: unit, slider: slider)
+        NumberDraft(value: numberBinding(key, default: fallback)) { binding in
+            row(title, key, scrub: Scrub(value: binding, range: range, step: step), hint: hint) { _ in
+                NumberField(title: title, value: binding, range: range, step: step, unit: unit, slider: slider)
+            }
         }
     }
 
@@ -418,19 +419,18 @@ struct StyleFields {
 
     func percentage(_ title: String, _ key: String, default fallback: Double) -> some View {
         row(title, key) { _ in
-            let value = if case let .number(number) = property(key).editingValue { number } else { fallback }
-            HStack(spacing: 8) {
-                Slider(value: Binding(get: { value }, set: {
-                    let rounded = ($0 * 100).rounded() / 100
-                    if rounded != value { set([key: .number(rounded)]) }
-                }), in: 0...1, step: 0.05)
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(width: 140)
-                Text(value, format: .percent.precision(.fractionLength(0)))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .frame(width: 40, alignment: .trailing)
+            NumberDraft(value: numberBinding(key, default: fallback)) { value in
+                HStack(spacing: 8) {
+                    Slider(value: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = ($0 * 100).rounded() / 100 }),
+                           in: 0...1, step: 0.05)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .frame(width: 140)
+                    Text(value.wrappedValue, format: .percent.precision(.fractionLength(0)))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .frame(width: 40, alignment: .trailing)
+                }
             }
         }
     }

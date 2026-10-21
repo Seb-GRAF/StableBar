@@ -218,7 +218,7 @@ private struct FillPopover: View {
     @State private var color: HSVA
     @State private var stopDragOrigin: Double?
     @State private var written: ConfigurationValue
-    @State private var writtenAt = Date.distantPast
+    @State private var dragWrite: Task<Void, Never>?
     @State private var isDragging = false
     @Environment(\.colorScheme) private var colorScheme
 
@@ -510,10 +510,21 @@ private struct FillPopover: View {
 
     private func write(dragging: Bool = false) {
         isDragging = dragging
+        dragWrite?.cancel()
+        if dragging {
+            dragWrite = Task {
+                do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+                commit()
+            }
+        } else {
+            commit()
+        }
+    }
+
+    private func commit() {
         let value = fill.configurationValue
-        guard value != written, !dragging || Date.now.timeIntervalSince(writtenAt) >= 0.05 else { return }
+        guard value != written else { return }
         written = value
-        writtenAt = .now
         set(value)
     }
 }

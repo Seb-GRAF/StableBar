@@ -40,6 +40,7 @@ final class BarStore: NSObject {
     var sessionEdits: [ConfigurationEdit] = []
     private(set) var customizationEdits: [ConfigurationEdit] = []
     private var customizationBase: (Configuration, ConfigurationLoader)?
+    private var customizationPreview: (data: Data, configuration: Configuration, loader: ConfigurationLoader)?
     private let customizationSaveDelay: Duration
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self, saveDelay: customizationSaveDelay)
     @ObservationIgnored lazy var barEditing = BarEditing(store: self)
@@ -188,6 +189,7 @@ final class BarStore: NSObject {
     private func readConfiguration(leavingEditMode: Bool) {
         if leavingEditMode { barEditing.end() }
         defer { configurationWatcher.watch(configurationLoader.dependencies) }
+        customizationPreview = nil
         customizationHistory.checkForExternalChanges()
         do {
             let base = try configurationLoader.load(configurationURL, context: context)
@@ -373,6 +375,7 @@ final class BarStore: NSObject {
         customizationEdits = edits
         configurationLoader = loader
         apply(next)
+        customizationPreview = (data, next, loader)
         configurationWatcher.watch(loader.dependencies)
     }
 
@@ -390,13 +393,18 @@ final class BarStore: NSObject {
     }
 
     func writeCustomization(_ data: Data, replacing original: Data) throws {
-        let (next, loader) = try configurationReplayingSession(over: data)
+        let (next, loader) = if let customizationPreview, customizationPreview.data == data {
+            (customizationPreview.configuration, customizationPreview.loader)
+        } else {
+            try configurationReplayingSession(over: data)
+        }
         guard try Data(contentsOf: configurationURL) == original else {
             throw CommandFailure(message: "The configuration file changed. Try your change again.")
         }
         try writeConfiguration(data, to: configurationURL)
         customizationEdits = []
         customizationBase = nil
+        customizationPreview = nil
         configurationLoader = loader
         apply(next)
         configurationWatcher.watch(loader.dependencies)
