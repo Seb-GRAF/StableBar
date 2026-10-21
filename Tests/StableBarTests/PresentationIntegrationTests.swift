@@ -237,6 +237,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
                  anchor: try #require(bar.anchors(widget.id).first))
     let panel = try #require(presented)
     defer { popup.close() }
+    let opened = panel.frame
     for _ in 0..<8 {
         panel.contentView!.layoutSubtreeIfNeeded()
         let host = panel.contentView!.subviews[0]
@@ -244,6 +245,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
         try await Task.sleep(for: .milliseconds(25))
     }
     let initial = panel.frame
+    #expect(initial == opened)
     for lines in [5, 100, 0] {
         store.actionErrors[widget.id] = lines == 0 ? nil : Array(repeating: "Download progress", count: lines).joined(separator: "\n")
         for _ in 0..<8 {

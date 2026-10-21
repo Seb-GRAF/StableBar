@@ -37,7 +37,8 @@ struct GlassBackground<S: Shape>: ViewModifier {
                 }
             }
         } else {
-            content.background(fill?.shapeStyle ?? AnyShapeStyle(Color.clear), in: shape)
+            let empty = surface == \GlassSettings.popups ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(Color.clear)
+            content.background(fill?.shapeStyle ?? empty, in: shape)
         }
     }
 }

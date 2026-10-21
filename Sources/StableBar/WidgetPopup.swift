@@ -13,6 +13,7 @@ final class PopupRevealView: NSView {
     init(content: NSView, size: NSSize) {
         super.init(frame: NSRect(origin: .zero, size: size))
         clipsToBounds = true
+        wantsLayer = true
         content.frame = bounds
         // Keep the scroll viewport full-sized and pinned to the top while the panel folds.
         content.autoresizingMask = [.minYMargin]
@@ -178,9 +179,12 @@ final class WidgetPopup {
                         context.duration = animation.duration
                         context.timingFunction = animation.timingFunction
                         panel.animator().setFrame(frame, display: true)
+                    } completionHandler: {
+                        Task { @MainActor in panel.invalidateShadow() }
                     }
                 } else {
                     panel.setFrame(frame, display: true)
+                    panel.invalidateShadow()
                 }
             }
             .shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, y: 1)
@@ -194,7 +198,7 @@ final class WidgetPopup {
         panel.title = "\(widget.id) popup"
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.autorecalculatesKeyViewLoop = true
@@ -208,7 +212,8 @@ final class WidgetPopup {
         self.store = store
         store.setPopupVisibleWidget(widget.id, anchor: anchor)
         self.anchor = anchor
-        animation = popup.animation
+        let animation = popup.animation ?? WidgetAnimation(duration: 0.15)
+        self.animation = animation
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             let handled = MainActor.assumeIsolated {
                 guard let self else { return false }
@@ -230,21 +235,23 @@ final class WidgetPopup {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
         }
-        let fullFrame = panel.frame
-        if popup.animation != nil {
-            panel.alphaValue = 0
-            if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                panel.setFrame(NSRect(x: fullFrame.minX, y: fullFrame.maxY - 1, width: fullFrame.width, height: 1), display: false)
-            }
-        }
+        panel.alphaValue = 0
         present(panel, onHover)
-        if let animation = popup.animation {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = animation.duration
-                context.timingFunction = animation.timingFunction
-                panel.animator().alphaValue = 1
-                panel.animator().setFrame(fullFrame, display: true)
-            }
+        if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let reveal = panel.contentView!
+            let top = CATransform3DMakeTranslation(reveal.bounds.midX, reveal.bounds.maxY, 0)
+            let scale = CABasicAnimation(keyPath: "transform")
+            scale.fromValue = CATransform3DTranslate(CATransform3DScale(top, 0.97, 0.97, 1), -reveal.bounds.midX, -reveal.bounds.maxY, 0)
+            scale.duration = animation.duration
+            scale.timingFunction = animation.timingFunction
+            reveal.layer!.add(scale, forKey: "reveal")
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animation.duration
+            context.timingFunction = animation.timingFunction
+            panel.animator().alphaValue = 1
+        } completionHandler: {
+            Task { @MainActor in panel.invalidateShadow() }
         }
     }
 
@@ -265,10 +272,6 @@ final class WidgetPopup {
                 context.duration = animation.duration
                 context.timingFunction = animation.timingFunction
                 panel.animator().alphaValue = 0
-                if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                    let frame = panel.frame
-                    panel.animator().setFrame(NSRect(x: frame.minX, y: frame.maxY - 1, width: frame.width, height: 1), display: true)
-                }
             } completionHandler: {
                 Task { @MainActor in panel.close() }
             }
