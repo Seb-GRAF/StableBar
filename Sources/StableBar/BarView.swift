@@ -448,7 +448,7 @@ struct WidgetView: View {
                 runAction(command, sender: inside ? "mouse.entered" : "mouse.exited")
             }
         }
-        .animation(reduceMotion ? nil : animation.value, value: hovered)
+        .animation(hoverAnimation(hovered, reduceMotion: reduceMotion), value: hovered)
         .animation(reduceMotion ? nil : animation.value, value: style)
         .animation(reduceMotion ? nil : animation.value, value: store.activeApp)
         .accessibilityHint(tooltip ?? "")
@@ -672,6 +672,7 @@ struct WorkspaceView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hoveredWorkspace = $0 ? workspace.name : nil }
+                .animation(hoverAnimation(hovered, reduceMotion: reduceMotion), value: hovered)
             }
             if let error = workspaceStore.error {
                 Image(systemName: "exclamationmark.triangle").padding(padding).help(error)
@@ -747,6 +748,7 @@ private struct AppMenuTitle: View {
     @Binding var anchors: [Int: NSView]
     let open: () -> Void
     @State private var anchor = NSView()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button(action: open) {
@@ -767,6 +769,7 @@ private struct AppMenuTitle: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onAppear { anchors[index] = anchor }
     }
 }

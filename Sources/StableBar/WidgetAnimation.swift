@@ -35,13 +35,13 @@ struct WidgetAnimation: Decodable, Equatable, Sendable {
     }
 
     var timingFunction: CAMediaTimingFunction {
-        let name: CAMediaTimingFunctionName = switch curve {
-        case .linear: .linear
-        case .easeIn: .easeIn
-        case .easeOut: .easeOut
-        case .easeInOut, .smooth, .spring: .easeInEaseOut
+        switch curve {
+        case .linear: CAMediaTimingFunction(name: .linear)
+        case .easeIn: CAMediaTimingFunction(name: .easeIn)
+        case .easeOut: CAMediaTimingFunction(name: .easeOut)
+        case .easeInOut: CAMediaTimingFunction(name: .easeInEaseOut)
+        case .smooth, .spring: CAMediaTimingFunction(controlPoints: 0.15, 0.05, 0.25, 1)
         }
-        return CAMediaTimingFunction(name: name)
     }
 }
 
@@ -74,6 +74,10 @@ extension WidgetTransition {
 func visibilityAnimation(_ transition: WidgetTransition?, animation: WidgetAnimation, reduceMotion: Bool) -> WidgetAnimation? {
     guard let transition, transition != .none, !reduceMotion else { return nil }
     return animation
+}
+
+func hoverAnimation(_ hovered: Bool, reduceMotion: Bool) -> Animation? {
+    hovered || reduceMotion ? nil : .easeOut(duration: 0.1)
 }
 
 /// How a widget or unit enters and leaves the bar: with its transition, but not under Reduce Motion
