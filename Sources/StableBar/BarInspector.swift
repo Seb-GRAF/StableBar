@@ -397,7 +397,9 @@ struct BarInspector: View {
                 iconGroup(widget)
             case .text:
                 SettingsGroup("Text") {
-                    SettingRow(title: "Text") { TextField("Text", text: string("text", for: widget)).labelsHidden().frame(width: 220) }
+                    TextDraft(text: string("text", for: widget)) { text in
+                        SettingRow(title: "Text") { TextField("Text", text: text).labelsHidden().frame(width: 220) }
+                    }
                 }
                 iconGroup(widget)
             case .workspaces:
@@ -442,11 +444,12 @@ struct BarInspector: View {
     }
 
     private func iconGroup(_ widget: WidgetConfiguration) -> some View {
-        let icon = string("icon", for: widget)
-        return SettingsGroup("Icon") {
-            SettingRow(title: "Symbol", hint: "Any SF Symbol name") {
-                Image(systemName: icon.wrappedValue).foregroundStyle(.secondary).frame(width: 20)
-                TextField("Symbol", text: icon, prompt: Text("SF Symbol name")).labelsHidden().frame(width: 160)
+        SettingsGroup("Icon") {
+            TextDraft(text: string("icon", for: widget)) { icon in
+                SettingRow(title: "Symbol", hint: "Any SF Symbol name") {
+                    Image(systemName: icon.wrappedValue).foregroundStyle(.secondary).frame(width: 20)
+                    TextField("Symbol", text: icon, prompt: Text("SF Symbol name")).labelsHidden().frame(width: 160)
+                }
             }
         }
     }
@@ -466,7 +469,9 @@ struct BarInspector: View {
             }
             if custom {
                 HStack(spacing: 8) {
-                    TextField("Date pattern", text: string("format", for: widget, fallback: format)).labelsHidden().frame(width: 200)
+                    TextDraft(text: string("format", for: widget, fallback: format)) {
+                        TextField("Date pattern", text: $0).labelsHidden().frame(width: 200)
+                    }
                     Text("Date pattern, such as EEE HH:mm").font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
             }
@@ -502,11 +507,13 @@ struct BarInspector: View {
                 }
             }
             SettingRow(title: "Tooltip") {
-                TextField("Tooltip", text: Binding(get: { widget.tooltip ?? "" }, set: {
+                TextDraft(text: Binding(get: { widget.tooltip ?? "" }, set: {
                     editor.set(["tooltip": $0.isEmpty ? .null : .string($0)], for: widget.id)
-                }), prompt: Text("The widget’s own"))
-                .labelsHidden()
-                .frame(width: 200)
+                })) {
+                    TextField("Tooltip", text: $0, prompt: Text("The widget’s own"))
+                        .labelsHidden()
+                        .frame(width: 200)
+                }
             }
         }
         SettingsGroup("Screens") {
