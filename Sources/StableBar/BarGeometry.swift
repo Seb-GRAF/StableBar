@@ -220,6 +220,6 @@ struct BarDecorationLayer: ViewModifier {
 
 /// The opening instance supplies both its anchor and window; never use NSScreen.main here.
 func popupAttachmentTop(anchor: CGRect, window: CGRect, geometry: BarGeometry?) -> CGFloat {
-    guard let geometry, geometry.outsideExtent > 0 else { return anchor.minY }
-    return min(anchor.minY, window.maxY - geometry.drawingBottom)
+    guard let geometry else { return anchor.minY }
+    return window.maxY - geometry.drawingBottom
 }

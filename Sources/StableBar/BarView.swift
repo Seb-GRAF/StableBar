@@ -705,7 +705,8 @@ struct AppMenuView: View {
     let requestAccess: () -> Void
     var expansionChanged: (Bool) -> Void = { _ in }
     @State private var hoveredItem: AppMenuItem?
-    @State private var menuOpen = false
+    @State private var openTitle: Int?
+    @State private var anchors: [Int: NSView] = [:]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -716,36 +717,35 @@ struct AppMenuView: View {
                 .buttonStyle(.plain)
                 .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings.")
             }
-            ForEach(Array(items.prefix(expandOnHover && !hovering && !menuOpen ? 1 : items.count).enumerated()), id: \.offset) { index, item in
-                AppMenuTitle(appMenu: appMenu, item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,
-                             hovered: hoveredItem == item, menuOpen: $menuOpen)
-                    .onHover { hoveredItem = $0 ? item : nil }
+            ForEach(Array(items.prefix(expandOnHover && !hovering && openTitle == nil ? 1 : items.count).enumerated()), id: \.offset) { index, item in
+                AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,
+                             highlighted: openTitle.map { $0 == index } ?? (hoveredItem == item), anchors: $anchors) {
+                    appMenu.open(index, of: items, at: items.indices.map { anchors[$0]! }) { openTitle = $0 }
+                    openTitle = nil
+                }
+                .onHover { hoveredItem = $0 ? item : nil }
             }
         }
         .fixedSize(horizontal: true, vertical: false)
         .onHover { if $0 { appMenu.refresh() } }
-        .onChange(of: hovering || menuOpen, initial: true) { _, expanded in expansionChanged(expanded) }
+        .onChange(of: hovering || openTitle != nil, initial: true) { _, expanded in expansionChanged(expanded) }
         .onDisappear { expansionChanged(false) }
     }
 }
 
 private struct AppMenuTitle: View {
-    let appMenu: AppMenu
     let item: AppMenuItem
     let index: Int
     let isAppleMenu: Bool
     let appearance: WidgetAppearance
     let padding: EdgeInsets
-    let hovered: Bool
-    @Binding var menuOpen: Bool
+    let highlighted: Bool
+    @Binding var anchors: [Int: NSView]
+    let open: () -> Void
     @State private var anchor = NSView()
 
     var body: some View {
-        Button {
-            menuOpen = true
-            appMenu.open(item, at: .zero, in: anchor)
-            menuOpen = false
-        } label: {
+        Button(action: open) {
             Group {
                 if isAppleMenu {
                     Image(systemName: "apple.logo").accessibilityLabel(item.title)
@@ -757,12 +757,13 @@ private struct AppMenuTitle: View {
             .padding(.horizontal, 7)
             .padding(padding)
             .background {
-                if hovered { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
+                if highlighted { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
             }
             .background(MenuAnchor(view: anchor))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onAppear { anchors[index] = anchor }
     }
 }
 

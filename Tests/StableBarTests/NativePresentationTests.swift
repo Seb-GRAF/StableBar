@@ -387,6 +387,9 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
         window: CGRect(x: -1500, y: 780, width: 1512, height: 44), geometry: geometry) == 780)
     #expect(popupAttachmentTop(anchor: CGRect(x: 100, y: 1700, width: 40, height: 22),
         window: CGRect(x: 0, y: 1680, width: 2560, height: 44), geometry: geometry) == 1680)
+    #expect(popupAttachmentTop(anchor: CGRect(x: 100, y: 1690, width: 40, height: 22),
+        window: CGRect(x: 0, y: 1682, width: 2560, height: 38),
+        geometry: BarGeometry(layoutHeight: 38, margin: 3, outsideExtent: 0)) == 1685)
 }
 
 @Test @MainActor func nativeConstrainedWorkspaceClipsItsDecorationAndScrollingRemovesOffscreenSelection() async throws {

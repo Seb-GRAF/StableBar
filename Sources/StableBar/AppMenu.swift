@@ -16,6 +16,7 @@ final class AppMenu: NSObject, NSMenuDelegate {
     @ObservationIgnored private let readAttribute: (String, AXUIElement) -> CFTypeRef?
     @ObservationIgnored private var app: NSRunningApplication?
     @ObservationIgnored private var menus: [NSMenu: AXUIElement] = [:]
+    @ObservationIgnored private var nextTitle: Int?
     @ObservationIgnored private(set) var retryTask: Task<Void, Never>?
 
     init(checkAccess: @escaping () -> Bool = { AXIsProcessTrusted() },
@@ -78,6 +79,28 @@ final class AppMenu: NSObject, NSMenuDelegate {
         menus = [menu: item.element]
         menu.popUp(positioning: nil, at: location, in: view)
         menus = [:]
+    }
+
+    func open(_ index: Int, of items: [AppMenuItem], at anchors: [NSView], opened: (Int) -> Void) {
+        let window = anchors[index].window!
+        let frames = anchors.map { window.convertToScreen($0.convert($0.bounds, to: nil)) }
+        let top = popupAttachmentTop(anchor: frames[index], window: window.frame, geometry: (window as? BarPanel)?.barGeometry)
+        nextTitle = index
+        while let index = nextTitle {
+            nextTitle = nil
+            opened(index)
+            let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let title = frames.firstIndex(where: { $0.contains(NSEvent.mouseLocation) }), title != index else { return }
+                    self.nextTitle = title
+                    for menu in self.menus.keys { menu.cancelTrackingWithoutAnimation() }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .eventTracking)
+            open(items[index], at: anchors[index].convert(window.convertPoint(fromScreen: NSPoint(x: frames[index].minX, y: top)), from: nil),
+                 in: anchors[index])
+            timer.invalidate()
+        }
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
