@@ -213,15 +213,20 @@ final class BarStore: NSObject {
     func editedDocument(_ edits: [ConfigurationEdit], data: Data? = nil, replaying: [ConfigurationEdit]? = nil) throws -> [String: ConfigurationValue] {
         var root = try editedMainDocument(data: data, replaying: replaying)
         var loader = configurationLoader
-        var ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
+        var ids = try widgetIDs(in: root, loader: &loader)
         for edit in edits {
             try edit.validateTargets(in: ids)
             root = try applying(edit, to: root, widgetIDs: &ids, widgetPackageIDs: loader.widgetPackageIDs)
             if edit.action == .profile || edit.action == .profiles || edit.action == .package {
-                ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
+                ids = try widgetIDs(in: root, loader: &loader)
             }
         }
         return root
+    }
+
+    private func widgetIDs(in root: [String: ConfigurationValue], loader: inout ConfigurationLoader) throws -> [String] {
+        try loader.compose(configurationURL, data: configurationData(root), context: context)["widgets"]!
+            .decoded([[String: ConfigurationValue]].self).map { try $0["id"]!.decoded(String.self) }
     }
 
     private func applying(_ edit: ConfigurationEdit, to root: [String: ConfigurationValue], widgetIDs: inout [String],
@@ -357,8 +362,6 @@ final class BarStore: NSObject {
             }
         }
         let root = try editedDocument(edits, data: original, replaying: [])
-        var loader = configurationLoader
-        _ = try loader.load(configurationURL, data: configurationData(root), context: context)
         return try configurationData(root, editing: original)
     }
 

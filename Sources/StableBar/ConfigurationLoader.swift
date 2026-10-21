@@ -31,7 +31,9 @@ indirect enum ConfigurationValue: Codable, Sendable, Equatable {
     }
 
     func decoded<T: Decodable>(_ type: T.Type) throws -> T {
-        try JSONDecoder().decode(type, from: JSONEncoder().encode(self))
+        if case let .object(object) = self, let object = object as? T { return object }
+        if case let .array(array) = self, let array = array as? T { return array }
+        return try JSONDecoder().decode(type, from: JSONEncoder().encode(self))
     }
 
     func decoded<T: Decodable>(_ type: T.Type, at key: String) throws -> T {
