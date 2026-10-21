@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+struct PackagePreviewData: Sendable {
+    var screenshot: Data?
+    var theme: ThemePreview?
+    var widgets: [WidgetConfiguration] = []
+}
+
 @MainActor @Observable
 final class PackageDraft {
     var inspection: WidgetPackageInspection
@@ -209,7 +215,18 @@ final class PackageLibrary {
         }
     }
 
-    private func preview(_ inspection: WidgetPackageInspection) async throws -> (screenshot: Data?, theme: ThemePreview?) {
+    func preview(_ manifest: WidgetPackageManifest) async throws -> PackagePreviewData {
+        try await preview(client.inspect(packages.directory(id: manifest.id, version: manifest.version)))
+    }
+
+    func preview(_ entry: PackageIndex.Entry) async throws -> PackagePreviewData {
+        if let screenshot = entry.screenshot {
+            return try await PackagePreviewData(screenshot: fetch(screenshot))
+        }
+        return try await preview(client.packageForAdding(entry))
+    }
+
+    private func preview(_ inspection: WidgetPackageInspection) async throws -> PackagePreviewData {
         let screenshot = try await client.screenshotData(for: inspection)
         let themesDirectory = store.themesDirectory
         let theme = try await Task.detached { () throws -> ThemePreview? in
@@ -219,7 +236,7 @@ final class PackageLibrary {
             }
             return nil
         }.value
-        return (screenshot, theme)
+        return PackagePreviewData(screenshot: screenshot, theme: theme, widgets: inspection.widgets)
     }
 
     func selectPackage(_ id: String) async {

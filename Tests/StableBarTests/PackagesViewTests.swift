@@ -121,14 +121,40 @@ final class PackagesViewTests: XCTestCase {
         defer { store.stop() }
         let before = try Data(contentsOf: fixture.url)
         let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        let widgetPreview = try await library.preview(widget)
+        XCTAssertEqual(widgetPreview.widgets.map(\.id), ["script"])
+        XCTAssertNil(widgetPreview.theme)
         await library.selectStore(widget)
         XCTAssertNil(library.draft?.themePreview)
+        let themePreview = try await library.preview(theme)
+        XCTAssertEqual(themePreview.theme?.light.bar.height, 31)
         await library.selectStore(theme)
         XCTAssertEqual(library.draft?.themePreview?.light.bar.height, 31)
         XCTAssertEqual(library.draft?.themePreview?.dark.bar.height, 31)
         XCTAssertTrue(try fixture.packages.list().isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @MainActor func testListScreenshotLoadsWithoutDownloadingOrInstallingThePackage() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let imageURL = fixture.directory.appending(path: "preview.png")
+        let image = ImageRenderer(content: Color.blue.frame(width: 20, height: 20))
+        let data = try XCTUnwrap(NSBitmapImageRep(cgImage: XCTUnwrap(image.cgImage)).representation(using: .png, properties: [:]))
+        try data.write(to: imageURL)
+        let entry = try ConfigurationValue.object([
+            "id": .string("image"), "name": .string("Image"), "version": .string("1"),
+            "archive": .string("missing.tar.gz"), "sha256": .string("unused"),
+            "source": .string("https://example.com/source"), "screenshot": .string(imageURL.absoluteString)
+        ]).decoded(PackageIndex.Entry.self)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let library = store.packageLibrary
+        let preview = try await library.preview(entry)
+        XCTAssertEqual(preview.screenshot, data)
+        XCTAssertTrue(try fixture.packages.list().isEmpty)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
     }
 

@@ -132,7 +132,11 @@ struct PackagesView: View {
             List(selection: selection) {
                 if let reviewed {
                     Section("Not installed") {
-                        PackageRow(manifest: reviewed.inspection.manifest, source: library.source(reviewed))
+                        VStack(alignment: .leading, spacing: 8) {
+                            PackagePreview(screenshotData: reviewed.screenshotData, look: reviewed.themePreview?.light,
+                                           widgets: reviewed.inspection.widgets).frame(height: 64)
+                            PackageRow(manifest: reviewed.inspection.manifest, source: library.source(reviewed))
+                        }
                             .tag(LibraryRow.package(reviewed.inspection.manifest.id))
                     }
                 }
@@ -172,11 +176,14 @@ struct PackagesView: View {
         if !packages.isEmpty {
             Section(title) {
                 ForEach(packages, id: \.id) { manifest in
-                    PackageRow(manifest: manifest, source: library.source(of: manifest), update: library.update(for: manifest)?.version,
-                               updating: library.updating.contains(manifest.id), inUse: manifest.kind == .theme && library.isActive(manifest)) {
-                        Task { await library.update(manifest) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        PackageListPreview(key: manifest.versionKey) { try await library.preview(manifest) }
+                        PackageRow(manifest: manifest, source: library.source(of: manifest), update: library.update(for: manifest)?.version,
+                                   updating: library.updating.contains(manifest.id), inUse: manifest.kind == .theme && library.isActive(manifest)) {
+                            Task { await library.update(manifest) }
+                        }
                     }
-                        .tag(LibraryRow.package(manifest.id))
+                    .tag(LibraryRow.package(manifest.id))
                 }
             }
         }
@@ -223,13 +230,16 @@ struct PackagesView: View {
             }
             List(selection: storeSelection) {
                 ForEach(entries, id: \.id) { entry in
-                    StoreRow(entry: entry, installed: library.installed.contains { $0.id == entry.id },
-                             getting: library.getting.contains(entry.id) || library.updating.contains(entry.id),
-                             update: library.updates.contains { $0.id == entry.id }) {
-                        tab = .overview
-                        Task {
-                            if let manifest = library.updates.first(where: { $0.id == entry.id }) { await library.update(manifest) }
-                            else { await library.get(entry) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        PackageListPreview(key: "\(entry.id)/\(entry.version)") { try await library.preview(entry) }
+                        StoreRow(entry: entry, installed: library.installed.contains { $0.id == entry.id },
+                                 getting: library.getting.contains(entry.id) || library.updating.contains(entry.id),
+                                 update: library.updates.contains { $0.id == entry.id }) {
+                            tab = .overview
+                            Task {
+                                if let manifest = library.updates.first(where: { $0.id == entry.id }) { await library.update(manifest) }
+                                else { await library.get(entry) }
+                            }
                         }
                     }
                     .tag(entry.id)
