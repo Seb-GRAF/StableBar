@@ -4,15 +4,23 @@ on:
   pull_request:
   push:
     branches: [main]
-  # Starts a stable release; see the release job.
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Release channel
+        type: choice
+        required: true
+        default: stable
+        options:
+          - stable
+          - beta
 
 permissions:
   contents: read
 
 # A stable release gets its own group, so a newer push can't cancel it while it waits.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && 'stable' || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && 'stable' || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -65,7 +73,7 @@ jobs:
   beta:
     name: Beta
     needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'beta'))
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
@@ -127,7 +135,7 @@ jobs:
   release:
     name: Release
     needs: test
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
