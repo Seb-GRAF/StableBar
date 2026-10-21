@@ -57,6 +57,9 @@ final class BarStore: NSObject {
     private(set) var inspectedWidgetID: String?
     private var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
+    @ObservationIgnored var onCompose: ((Configuration) -> Void)?
+    @ObservationIgnored private var sharedCompositions: [(document: [String: ConfigurationValue], configuration: Configuration,
+                                                          loader: ConfigurationLoader)]?
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
     private var triedTheme: ThemeChoice?
@@ -210,13 +213,14 @@ final class BarStore: NSObject {
 
     func editedDocument(_ edits: [ConfigurationEdit], data: Data? = nil, replaying: [ConfigurationEdit]? = nil) throws -> [String: ConfigurationValue] {
         var root = try editedMainDocument(data: data, replaying: replaying)
-        var loader = configurationLoader
-        var ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
+        var current = try composition(of: root)
+        var ids = current.configuration.widgets.map(\.id)
         for edit in edits {
             try edit.validateTargets(in: ids)
-            root = try applying(edit, to: root, widgetIDs: &ids, widgetPackageIDs: loader.widgetPackageIDs)
+            root = try applying(edit, to: root, widgetIDs: &ids, widgetPackageIDs: current.loader.widgetPackageIDs)
             if edit.action == .profile || edit.action == .profiles || edit.action == .package {
-                ids = try loader.load(configurationURL, data: configurationData(root), context: context).widgets.map(\.id)
+                current = try composition(of: root)
+                ids = current.configuration.widgets.map(\.id)
             }
         }
         return root
@@ -318,16 +322,13 @@ final class BarStore: NSObject {
 
     func customizationProfiles(includingPending: Bool = true) throws -> [ConfigurationProfile] {
         let root = try editedDocument([], replaying: includingPending ? customizationEdits : [])
-        var loader = configurationLoader
-        _ = try loader.load(configurationURL, data: configurationData(root), context: context)
-        return loader.profiles
+        return try composition(of: root).loader.profiles
     }
 
     func customizationData(_ edits: [ConfigurationEdit], editing original: Data) throws -> Data {
         var edits = edits
         if !sessionEdits.isEmpty {
-            var loader = configurationLoader
-            let savedIDs = try loader.load(configurationURL, data: original, context: context).widgets.map(\.id)
+            let savedIDs = try composition(of: original).configuration.widgets.map(\.id)
             let temporaryIDs = Set(try configurationReplayingSession(over: original).0.widgets.map(\.id)).subtracting(savedIDs)
             for index in edits.indices {
                 if edits[index].action == .reorder {
@@ -339,16 +340,17 @@ final class BarStore: NSObject {
             }
         }
         let root = try editedDocument(edits, data: original, replaying: [])
-        var loader = configurationLoader
-        _ = try loader.load(configurationURL, data: configurationData(root), context: context)
+        _ = try composition(of: root)
         return try configurationData(root, editing: original)
     }
 
     func setCustomizationEdits(_ edits: [ConfigurationEdit]) throws {
         let original = try Data(contentsOf: configurationURL)
-        let data = try customizationData(edits, editing: original)
-        let (next, loader) = try configurationReplayingSession(over: data)
-        if customizationEdits.isEmpty { customizationBase = try configurationReplayingSession(over: original) }
+        let (next, loader) = try sharingCompositions {
+            let preview = try configurationReplayingSession(over: customizationData(edits, editing: original))
+            if customizationEdits.isEmpty { customizationBase = try configurationReplayingSession(over: original) }
+            return preview
+        }
         customizationEdits = edits
         configurationLoader = loader
         apply(next)
@@ -382,17 +384,36 @@ final class BarStore: NSObject {
     }
 
     func validateCustomization(_ data: Data) throws {
-        var loader = configurationLoader
-        _ = try loader.load(configurationURL, data: data, context: context)
+        _ = try composition(of: data)
     }
 
     private func configurationReplayingSession(over data: Data) throws -> (Configuration, ConfigurationLoader) {
+        let saved = try composition(of: data)
+        if sessionEdits.isEmpty { return saved }
+        return try composition(of: editedMainDocument(data: data, replaying: sessionEdits))
+    }
+
+    /// An edit composes the documents before and after it several times over, to check, save and show
+    /// it. While one runs, each document is composed once; the next edit reads the files again.
+    func sharingCompositions<T>(_ edit: () throws -> T) rethrows -> T {
+        guard sharedCompositions == nil else { return try edit() }
+        sharedCompositions = []
+        defer { sharedCompositions = nil }
+        return try edit()
+    }
+
+    /// The bar for `document` as the main file. Tests watch these compositions through `onCompose`.
+    func composition(of document: [String: ConfigurationValue]) throws -> (configuration: Configuration, loader: ConfigurationLoader) {
+        if let shared = sharedCompositions?.first(where: { $0.document == document }) { return (shared.configuration, shared.loader) }
         var loader = configurationLoader
-        let saved = try loader.load(configurationURL, data: data, context: context)
-        if sessionEdits.isEmpty { return (saved, loader) }
-        let root = try editedMainDocument(data: data, replaying: sessionEdits)
-        let next = try loader.load(configurationURL, data: configurationData(root), context: context)
-        return (next, loader)
+        let configuration = try loader.load(configurationURL, data: configurationData(document), context: context)
+        onCompose?(configuration)
+        sharedCompositions?.append((document, configuration, loader))
+        return (configuration, loader)
+    }
+
+    func composition(of data: Data) throws -> (configuration: Configuration, loader: ConfigurationLoader) {
+        try composition(of: JSONDecoder().decode([String: ConfigurationValue].self, from: data))
     }
 
     @discardableResult

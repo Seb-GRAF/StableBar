@@ -148,8 +148,11 @@ final class ConfigurationHistory {
 
     private func save(_ edits: [ConfigurationEdit]) throws {
         let before = try Data(contentsOf: store.configurationURL)
-        let after = try store.customizationData(edits, editing: before)
-        try store.writeCustomization(after, replacing: before)
+        let after = try store.sharingCompositions {
+            let after = try store.customizationData(edits, editing: before)
+            try store.writeCustomization(after, replacing: before)
+            return after
+        }
         if before != after { undoSteps.append(Step(before: before, after: after, profile: editingProfile)) }
         lastFile = after
         pendingControl = nil

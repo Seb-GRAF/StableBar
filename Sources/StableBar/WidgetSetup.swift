@@ -163,24 +163,28 @@ final class WidgetSetup {
 
     func move(_ id: String, to position: WidgetPosition, before anchor: String? = nil, on kind: ScreenKind? = nil) throws {
         let widgets = store.configuration?.widgets ?? []
-        try requireSavedWidget(id, widgets: widgets)
-        if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
-            return try arrange(WidgetPlacement.arrangement(moving: id, to: position, before: anchor, widgets: configuration.onScreen(kind).widgets), on: kind)
+        try store.sharingCompositions {
+            try requireSavedWidget(id, widgets: widgets)
+            if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
+                return try arrange(WidgetPlacement.arrangement(moving: id, to: position, before: anchor, widgets: configuration.onScreen(kind).widgets), on: kind)
+            }
+            var edits = try WidgetPlacement.move(id, to: position, before: anchor, widgets: widgets)
+            if store.customizationHistory.editingProfile != nil, anchor == nil, edits.contains(where: { $0.action == .set }) {
+                edits.removeAll { $0.action == .reorder }
+            }
+            try store.customizationHistory.change(edits)
         }
-        var edits = try WidgetPlacement.move(id, to: position, before: anchor, widgets: widgets)
-        if store.customizationHistory.editingProfile != nil, anchor == nil, edits.contains(where: { $0.action == .set }) {
-            edits.removeAll { $0.action == .reorder }
-        }
-        try store.customizationHistory.change(edits)
     }
 
     func move(_ id: String, by offset: Int, on kind: ScreenKind? = nil, listed: (WidgetConfiguration) -> Bool = { _ in true }) throws {
         let widgets = store.configuration?.widgets ?? []
-        try requireSavedWidget(id, widgets: widgets)
-        if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
-            return try arrange(WidgetPlacement.arrangement(moving: id, by: offset, widgets: configuration.onScreen(kind).widgets, listed: listed), on: kind)
+        try store.sharingCompositions {
+            try requireSavedWidget(id, widgets: widgets)
+            if let kind, let configuration = store.configuration, hasOwnLayout(kind, in: configuration) {
+                return try arrange(WidgetPlacement.arrangement(moving: id, by: offset, widgets: configuration.onScreen(kind).widgets, listed: listed), on: kind)
+            }
+            try store.customizationHistory.change(WidgetPlacement.move(id, by: offset, widgets: widgets, listed: listed))
         }
-        try store.customizationHistory.change(WidgetPlacement.move(id, by: offset, widgets: widgets, listed: listed))
     }
 
     private func hasOwnLayout(_ kind: ScreenKind, in configuration: Configuration) -> Bool {
@@ -232,9 +236,7 @@ final class WidgetSetup {
 
     private func requireSavedWidget(_ id: String, widgets: [WidgetConfiguration]) throws {
         guard let widget = widgets.first(where: { $0.id == id }) else { return }
-        var loader = ConfigurationLoader()
-        loader.themesDirectory = store.themesDirectory
-        let saved = try loader.load(store.configurationURL, context: store.context)
+        let saved = try store.composition(of: Data(contentsOf: store.configurationURL)).configuration
         let savedIDs = Set(saved.widgets.map(\.id))
         let moving = widgets.filter { $0.id == id || (widget.group != nil && $0.group == widget.group) }
         guard moving.allSatisfy({ savedIDs.contains($0.id) }) else {

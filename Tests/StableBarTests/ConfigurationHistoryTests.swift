@@ -30,6 +30,21 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertEqual(history.redoSteps.count, 1)
     }
 
+    @MainActor func testAPausedChangeComposesItsDocumentsOnceToShowThemAndOnceToSaveThem() throws {
+        let fixture = try Fixture()
+        defer { fixture.close() }
+        let history = fixture.store.customizationHistory
+        var composed: [WidgetContent?] = []
+        fixture.store.onCompose = { composed.append($0.widgets.first?.content) }
+        try history.change(ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Typed")]))
+        XCTAssertTrue(history.hasPendingChanges)
+        XCTAssertEqual(composed, [.text("A"), .text("Typed")])
+        composed = []
+        try history.flush()
+        XCTAssertEqual(history.undoSteps.count, 1)
+        XCTAssertEqual(composed, [.text("A"), .text("Typed")])
+    }
+
     @MainActor func testBurstUpdatesLiveAndWritesOnceAfterPausing() async throws {
         let fixture = try Fixture()
         defer { fixture.close() }

@@ -889,6 +889,41 @@ final class BarEditingTests: XCTestCase {
         XCTAssertTrue(store.barEditing.entries(on: external).allSatisfy { !$0.usesPlaceholder })
     }
 
+    @MainActor func testAMoveComposesTheConfigurationOnceBeforeAndOnceAfterIt() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"a","type":"clock","position":"left"},{"id":"b","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        var composed: [[String]] = []
+        store.onCompose = { composed.append($0.widgets.map(\.id)) }
+        store.barEditing.begin()
+        store.barEditing.move("b", by: -1)
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a"])
+        XCTAssertEqual(composed, [["a", "b"], ["b", "a"]])
+        composed = []
+        store.barEditing.undo()
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b"])
+        XCTAssertEqual(composed, [["a", "b"]])
+    }
+
+    @MainActor func testEachEditComposesIncludedFilesAsTheyAreWhenItRuns() throws {
+        let fixture = try ThemeGalleryFixture(#"{"includes":["part.json"],"widgets":[{"id":"a","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let part = fixture.directory.appending(path: "part.json")
+        try fixture.write(#"{"widgets":[{"id":"b","type":"text","text":"One","position":"left"}]}"#, to: part)
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        store.barEditing.move("a", by: -1)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b"])
+        try fixture.write(#"{"widgets":[{"id":"b","type":"text","text":"Two","position":"left"}]}"#, to: part)
+        store.barEditing.undo()
+        XCTAssertNil(store.barEditing.error)
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a"])
+        XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Two"))
+    }
+
     @MainActor func testMovesWithinASectionAndKeyboardMovesShareTheSameUndoableGroupLogic() throws {
         let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair"},{"id":"b","type":"clock","position":"left","group":"pair"},{"id":"c","type":"clock","position":"left"}]}"#)
         defer { fixture.close() }
