@@ -142,9 +142,9 @@ func popupFoldKeepsTheScrollViewportAndPosition(documentHeight: Double) {
 }
 
 @Test func cancellingAWidgetStopsItsRunningCommand() async throws {
-    let start = ContinuousClock.now
     let task = Task { try await runCommand("/bin/sleep", arguments: ["5"]) }
     try await Task.sleep(for: .milliseconds(100))
+    let start = ContinuousClock.now
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
     #expect(start.duration(to: .now) < .seconds(2))
