@@ -21,14 +21,12 @@ struct ScrollingText: View {
             .frame(height: fontSize * 1.3)
             .overlay {
                 GeometryReader { geometry in
-                    TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || measuring || textWidth <= geometry.size.width)) { context in
+                    TimelineView(.animation(paused: reduceMotion || measuring || textWidth <= geometry.size.width)) { context in
                         let distance = max(textWidth - geometry.size.width, 0)
                         let travel = distance / speed
                         let elapsed = context.date.timeIntervalSince(start).truncatingRemainder(dividingBy: travel * 2 + 2)
-                        let offset = if elapsed <= 1 { 0.0 }
-                            else if elapsed < travel + 1 { (elapsed - 1) * speed }
-                            else if elapsed <= travel + 2 { distance }
-                            else { (travel * 2 + 2 - elapsed) * speed }
+                        let progress = distance == 0 ? 0 : min(max(elapsed - 1, 0) / travel, 1) - min(max(elapsed - travel - 2, 0) / travel, 1)
+                        let offset = distance * progress * progress * (3 - 2 * progress)
                         Text(text)
                             .font(font)
                             .fixedSize()

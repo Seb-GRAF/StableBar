@@ -450,7 +450,7 @@ struct WidgetView: View {
         }
         .animation(hoverAnimation(hovered, reduceMotion: reduceMotion), value: hovered)
         .animation(reduceMotion ? nil : animation.value, value: style)
-        .animation(reduceMotion ? nil : animation.value, value: store.activeApp)
+        .animation(reduceMotion ? nil : animation.value, value: widget.content == .activeApp ? store.activeApp : nil)
         .accessibilityHint(tooltip ?? "")
         .accessibilityIdentifier(widget.id)
     }
