@@ -17,7 +17,7 @@ cp dist/StableBar.dmg "$feed/"
 gh release view "v$version" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$feed/StableBar.md"
 # generate_appcast reads the versions and requirements of the app in the DMG, adds it on the given
 # channel with the release's notes, and keeps the newest items of the other channel.
-.build/artifacts/sparkle/Sparkle/bin/generate_appcast ${2:+--channel=$2} --embed-release-notes \
+"${STABLEBAR_PREBUILT_DIR:-.build/artifacts/sparkle/Sparkle}/bin/generate_appcast" ${2:+--channel=$2} --embed-release-notes \
     --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/v$version/" \
     --full-release-notes-url "https://github.com/$GITHUB_REPOSITORY/releases/tag/v$version" "$feed"
 gh release upload appcast "$feed/appcast.xml" --repo "$GITHUB_REPOSITORY" --clobber

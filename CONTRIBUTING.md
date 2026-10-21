@@ -36,6 +36,8 @@ Pull requests run `swift test` on macOS and check that every commit message, and
 | `feat!:`, or a `BREAKING CHANGE:` footer | Major: 0.1.0 → 1.0.0 |
 | `build:`, `chore:`, `ci:`, `docs:`, `refactor:`, `style:`, `test:` | None |
 
+Queued pushes skip builds when `main` has already moved on. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
+
 Both release channels come from `main`:
 
 - **Beta:** after the tests pass on `main`, CI builds `dist/StableBar.dmg` as the next version plus `-beta.<UTC timestamp>.<run number>`, such as `0.5.0-beta.20261020103000.114`, and publishes it as a GitHub prerelease. The timestamp uses `YYYYMMDDHHMMSS` so GitHub's alphabetical prerelease sorting keeps same-day betas in order when the run number gains a digit. A beta commits nothing. A push with no releasable commits since the last stable release makes no beta.

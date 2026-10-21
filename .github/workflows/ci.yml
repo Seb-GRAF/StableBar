@@ -24,20 +24,79 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  current:
+    name: Check revision
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.revision.outputs.build }}
+    steps:
+      - name: Skip superseded pushes
+        id: revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == push && "$(gh api "repos/$GH_REPO/commits/main" --jq .sha)" != "$GITHUB_SHA" ]]; then
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping this push because main has moved on."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
     name: Test
+    needs: current
+    if: needs.current.outputs.build == 'true'
     runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Identify Swift toolchain
+        id: swift
+        run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: ${{ runner.os }}-${{ runner.arch }}-debug-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-debug-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       - name: Build
         run: |
           swift --version
           swift build --build-tests
       - name: Test
         run: swift test --skip-build
+
+  build:
+    name: Build release
+    needs: current
+    if: needs.current.outputs.build == 'true' && github.ref == 'refs/heads/main'
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Identify Swift toolchain
+        id: swift
+        run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: .build
+          key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      - name: Compile release
+        run: swift build -c release --disable-keychain
+      - name: Archive release binary
+        run: tar -cf release-build.tar -C .build/release StableBar Sparkle.framework -C "$GITHUB_WORKSPACE/.build/artifacts/sparkle/Sparkle" bin
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-build
+          path: release-build.tar
+          retention-days: 1
 
   commits:
     name: Commit messages
@@ -72,7 +131,9 @@ jobs:
   # to release, or when main moved on during this run; the newer push builds its own beta.
   beta:
     name: Beta
-    needs: test
+    env:
+      STABLEBAR_PREBUILT_DIR: release-build
+    needs: [test, build]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'beta'))
     runs-on: macos-26
     timeout-minutes: 20
@@ -99,6 +160,15 @@ jobs:
           else
             echo "No beta: nothing to release since the last stable version, or main moved on."
           fi
+      - uses: actions/download-artifact@v8
+        if: steps.next.outputs.version
+        with:
+          name: release-build
+      - name: Extract release binary
+        if: steps.next.outputs.version
+        run: |
+          mkdir release-build
+          tar -xf release-build.tar -C release-build
       - name: Set up Developer ID signing
         if: steps.next.outputs.version
         env:
@@ -134,7 +204,9 @@ jobs:
   # Run by hand from Actions > CI > Run workflow on main.
   release:
     name: Release
-    needs: test
+    env:
+      STABLEBAR_PREBUILT_DIR: release-build
+    needs: [test, build]
     if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 20
@@ -174,6 +246,13 @@ jobs:
           node-version: 24
       - run: npm ci --ignore-scripts
       - run: npm audit signatures
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-build
+      - name: Extract release binary
+        run: |
+          mkdir release-build
+          tar -xf release-build.tar -C release-build
       - name: Set up Developer ID signing
         env:
           DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}
