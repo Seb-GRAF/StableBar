@@ -29,10 +29,21 @@ final class PackageDraft {
 
 @MainActor @Observable
 final class PackageLibrary {
+    nonisolated static let updateWidgetID = "stablebar.package-updates"
     private unowned let store: BarStore
     private let client: PackageStoreClient
     private let packages: WidgetPackageStore
     private let reviewing: Bool
+    private let preferences: UserDefaults
+    private var dismissedUpdates: Set<String>
+    @ObservationIgnored private var updateTimer: Timer?
+    @ObservationIgnored private var updateTask: Task<Void, Never>?
+    var notifiesAboutUpdates: Bool {
+        didSet {
+            preferences.set(notifiesAboutUpdates, forKey: "notifyPackageUpdates")
+            if notifiesAboutUpdates { startUpdateChecks() } else { stopUpdateChecks() }
+        }
+    }
     private var drafts: [String: PackageDraft] = [:]
     private var downloads: Set<URL> = []
     private var selectionRequest = 0
@@ -52,11 +63,63 @@ final class PackageLibrary {
     var search = ""
     var showingStore = false
 
-    init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false) {
+    init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false, preferences: UserDefaults = .standard) {
         self.store = store
         self.client = client ?? store.packageStoreClient
         self.packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
         self.reviewing = reviewing
+        self.preferences = preferences
+        notifiesAboutUpdates = preferences.object(forKey: "notifyPackageUpdates") as? Bool ?? true
+        dismissedUpdates = Set(preferences.stringArray(forKey: "dismissedPackageUpdates") ?? [])
+    }
+
+    func startUpdateChecks() {
+        guard notifiesAboutUpdates, updateTimer == nil else { return }
+        let timer = Timer(fire: Date(timeIntervalSinceNow: 15), interval: 60 * 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateTask = Task { [weak self] in
+                    guard let self else { return }
+                    await self.loadInstalled()
+                    await self.loadStore(reload: true)
+                }
+            }
+        }
+        timer.tolerance = 60
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
+    }
+
+    func stopUpdateChecks() {
+        updateTimer?.invalidate()
+        updateTimer = nil
+        updateTask?.cancel()
+        updateTask = nil
+    }
+
+    private var updateKeys: [String] {
+        updates.map { "\($0.id)/\(update(for: $0)!.version)" }
+    }
+
+    var updateWidget: WidgetConfiguration? {
+        guard notifiesAboutUpdates, updateKeys.contains(where: { !dismissedUpdates.contains($0) }) else { return nil }
+        return try! ConfigurationValue.object([
+            "id": .string(Self.updateWidgetID), "position": .string("right"), "type": .string("text"),
+            "text": .string(String(updates.count)), "icon": .string("shippingbox"),
+            "tooltip": .string("\(updates.count) package updates available"), "overflow": .string("never")
+        ]).decoded(WidgetConfiguration.self)
+    }
+
+    func dismissUpdates() {
+        dismissedUpdates.formUnion(updateKeys)
+        preferences.set(dismissedUpdates.sorted(), forKey: "dismissedPackageUpdates")
+    }
+
+    func openUpdates() {
+        showingStore = false
+        search = ""
+        deselect()
+        store.onCustomizePackages?()
     }
 
     var selectedID: String? { requestedID ?? draft?.inspection.manifest.id }

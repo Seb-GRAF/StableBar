@@ -23,6 +23,7 @@ final class BarStore: NSObject {
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
     var onCustomizeWidget: ((String) -> Void)?
+    var onCustomizePackages: (() -> Void)?
     var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
@@ -118,6 +119,7 @@ final class BarStore: NSObject {
                 configurationURL = barURL(for: setup)
             }
             reloadConfiguration()
+            packageLibrary.startUpdateChecks()
         } catch {
             configurationError = errorMessage(error)
         }
@@ -983,6 +985,7 @@ final class BarStore: NSObject {
     }
 
     func stop() {
+        packageLibrary.stopUpdateChecks()
         barEditing.end()
         endThemeTrial()
         flushCustomization()

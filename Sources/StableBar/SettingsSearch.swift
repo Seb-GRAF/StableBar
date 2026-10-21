@@ -18,7 +18,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .workspaces: ("Workspace manager", .general, "General", "aerospace yabai source reconnect connection")
         case .access: ("Permissions", .general, "General", "access accessibility calendar location automation denied")
         case .configuration: ("Configuration file", .general, "General", "json path reload finder temporary command line")
-        case .updates: ("Updates", .general, "General", "version release beta stable automatic download about")
+        case .updates: ("Updates", .general, "General", "version release beta stable automatic download about package notification")
         case .help: ("Set up StableBar again", .general, "General", "onboarding setup guide help")
         case .barSize: ("Bar height and corners", .widgets, "Bar › Bar › Size", "tall size px pt radius rounded inset spacing")
         case .barLook: ("Bar background and border", .widgets, "Bar › Bar › Look", "color fill gradient edges line")

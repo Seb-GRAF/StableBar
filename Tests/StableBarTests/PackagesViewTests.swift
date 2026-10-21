@@ -4,6 +4,54 @@ import XCTest
 @testable import StableBar
 
 final class PackagesViewTests: XCTestCase {
+    @MainActor func testPackageUpdateNoticesPersistDismissalAndReturnOnlyForNewVersions() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let suite = "StableBarPackageNotices-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#)
+        let old = try fixture.packages.install(fixture.directory.appending(path: "sources/note"))
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "2")
+        let store = try fixture.store()
+        defer { store.stop() }
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let library = PackageLibrary(store: store, client: client, preferences: preferences)
+        defer { library.stopUpdateChecks() }
+        await library.loadInstalled()
+        await library.loadStore()
+        XCTAssertNotNil(library.updateWidget)
+        library.dismissUpdates()
+        XCTAssertNil(library.updateWidget)
+        XCTAssertEqual(library.updates.map(\.id), ["note"])
+        let reopened = PackageLibrary(store: store, client: client, preferences: preferences)
+        defer { reopened.stopUpdateChecks() }
+        await reopened.loadInstalled()
+        await reopened.loadStore()
+        XCTAssertNil(reopened.updateWidget)
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "3")
+        await reopened.loadStore(reload: true)
+        XCTAssertNotNil(reopened.updateWidget)
+        reopened.notifiesAboutUpdates = false
+        XCTAssertNil(reopened.updateWidget)
+        XCTAssertFalse(PackageLibrary(store: store, client: client, preferences: preferences).notifiesAboutUpdates)
+        reopened.notifiesAboutUpdates = true
+        XCTAssertNotNil(reopened.updateWidget)
+        var opened = false
+        store.onCustomizePackages = { opened = true }
+        reopened.showingStore = true
+        reopened.search = "unrelated"
+        reopened.openUpdates()
+        XCTAssertTrue(opened)
+        XCTAssertFalse(reopened.showingStore)
+        XCTAssertEqual(reopened.search, "")
+        await reopened.update(old.manifest)
+        XCTAssertNil(reopened.error)
+        XCTAssertNil(reopened.updateWidget)
+        XCTAssertTrue(reopened.updates.isEmpty)
+    }
+
     @MainActor func testOneClickUpdatesPreserveSettingsPlacementHiddenWidgetsAndUndo() async throws {
         for enabled in [true, false] {
             let fixture = try ThemeGalleryFixture()

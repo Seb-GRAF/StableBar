@@ -26,7 +26,7 @@ struct BarView: View {
                     } ?? range
                 }
                 let widgets = store.barEditing.widgets(on: display)
-                let units = BarUnit.make(widgets: widgets + [store.update?.widget].compactMap { $0 }, groups: config.groups)
+                let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
                     let items = units.map { unit in
                         BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0,
@@ -351,6 +351,18 @@ struct WidgetView: View {
         Group {
             if store.barEditing.isActive {
                 tile.allowsHitTesting(false)
+            } else if widget.id == PackageLibrary.updateWidgetID {
+                HStack(spacing: 0) {
+                    Button(action: store.packageLibrary.openUpdates) { tile }
+                        .accessibilityLabel("Open package updates")
+                    Button(action: store.packageLibrary.dismissUpdates) {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                            .padding(6)
+                    }
+                    .accessibilityLabel("Dismiss package update notification")
+                    .help("Dismiss package update notification")
+                }
+                .buttonStyle(.plain)
             } else if let popup = widgetPopup(widget, store: store) {
                 Button {
                     guard store.barEditing.allowsWidgetActions else { return }
