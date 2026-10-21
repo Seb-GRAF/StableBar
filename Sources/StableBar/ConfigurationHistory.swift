@@ -7,6 +7,7 @@ final class ConfigurationHistory {
         let before: Data
         let after: Data
         let profile: String?
+        var otherBars: [(url: URL, before: Data, after: Data)] = []
     }
 
     private unowned let store: BarStore
@@ -18,6 +19,7 @@ final class ConfigurationHistory {
     private(set) var notice: String?
     private var lastFile: Data?
     private var pendingControl: Control?
+    private var pendingEveryBar = false
     @ObservationIgnored private var pendingEdit: (() throws -> [ConfigurationEdit])?
     @ObservationIgnored private(set) var writeTask: Task<Void, Never>?
 
@@ -41,9 +43,9 @@ final class ConfigurationHistory {
         !hasPendingChanges && !redoSteps.isEmpty && (editingProfile == nil || redoSteps.last?.profile == editingProfile)
     }
 
-    func change(_ edit: ConfigurationEdit) throws {
+    func change(_ edit: ConfigurationEdit, everyBar: Bool = false) throws {
         let edit = try inEditingProfile(edit)
-        try change(control: control(for: edit)) { [edit] }
+        try change(control: control(for: edit), everyBar: everyBar) { [edit] }
     }
 
     func changePackageSettings(_ edit: ConfigurationEdit) throws {
@@ -57,10 +59,10 @@ final class ConfigurationHistory {
     }
 
     /// Related edits are validated and saved together, with one Undo step.
-    func change(_ edits: [ConfigurationEdit]) throws {
+    func change(_ edits: [ConfigurationEdit], everyBar: Bool = false) throws {
         guard !edits.isEmpty else { return }
         let edits = try edits.map(inEditingProfile)
-        try change(control: nil) { edits }
+        try change(control: nil, everyBar: everyBar) { edits }
     }
 
     private func inEditingProfile(_ edit: ConfigurationEdit) throws -> ConfigurationEdit {
@@ -107,16 +109,18 @@ final class ConfigurationHistory {
         try pendingEdit.map { try $0() } ?? store.customizationEdits
     }
 
-    private func change(control: Control?, edit: @escaping () throws -> [ConfigurationEdit]) throws {
+    private func change(control: Control?, everyBar: Bool = false, edit: @escaping () throws -> [ConfigurationEdit]) throws {
         error = nil
-        if hasPendingChanges && (control == nil || control != pendingControl) { store.flushCustomization() }
+        let everyBar = everyBar && editingProfile == nil
+        if hasPendingChanges && (control == nil || control != pendingControl || everyBar != pendingEveryBar) { store.flushCustomization() }
         checkForExternalChanges()
         if control == nil {
-            try save(edit())
+            try save(edit(), everyBar: everyBar)
         } else {
             try store.setCustomizationEdits(edit())
             pendingEdit = edit
             pendingControl = control
+            pendingEveryBar = everyBar
             writeTask?.cancel()
             writeTask = Task { [weak self, saveDelay] in
                 do { try await Task.sleep(for: saveDelay) }
@@ -136,7 +140,7 @@ final class ConfigurationHistory {
         guard hasPendingChanges else { return }
         do {
             checkForExternalChanges()
-            try save(pendingEdits())
+            try save(pendingEdits(), everyBar: pendingEveryBar)
         } catch {
             let message = "The pending change in Settings could not be saved and was discarded. \(errorMessage(error))"
             discardPendingChange()
@@ -146,14 +150,18 @@ final class ConfigurationHistory {
         }
     }
 
-    private func save(_ edits: [ConfigurationEdit]) throws {
+    private func save(_ edits: [ConfigurationEdit], everyBar: Bool) throws {
         let before = try Data(contentsOf: store.configurationURL)
-        let after = try store.sharingCompositions {
+        let (after, otherBars) = try store.sharingCompositions {
             let after = try store.customizationData(edits, editing: before)
+            let otherBars = everyBar ? try store.otherBars(applying: edits) : []
             try store.writeCustomization(after, replacing: before)
-            return after
+            return (after, otherBars)
         }
-        if before != after { undoSteps.append(Step(before: before, after: after, profile: editingProfile)) }
+        for bar in otherBars { try writeConfiguration(bar.after, to: bar.url) }
+        if before != after || !otherBars.isEmpty {
+            undoSteps.append(Step(before: before, after: after, profile: editingProfile, otherBars: otherBars))
+        }
         lastFile = after
         pendingControl = nil
         pendingEdit = nil
@@ -166,8 +174,10 @@ final class ConfigurationHistory {
         if hasPendingChanges {
             let step: Step?
             if !changedOutside, let before = try? Data(contentsOf: store.configurationURL),
-               let after = try? store.customizationData(pendingEdits(), editing: before), before != after {
-                step = Step(before: before, after: after, profile: editingProfile)
+               let after = try? store.customizationData(pendingEdits(), editing: before),
+               let otherBars = try? pendingEveryBar ? store.otherBars(applying: pendingEdits()) : [],
+               before != after || !otherBars.isEmpty {
+                step = Step(before: before, after: after, profile: editingProfile, otherBars: otherBars)
             } else { step = nil }
             discardPendingChange()
             if let step { redoSteps.append(step) }
@@ -177,7 +187,7 @@ final class ConfigurationHistory {
         }
         if changedOutside { return }
         guard canUndo, let step = undoSteps.last else { return }
-        guard try restore(step.before) else { return }
+        guard try restore(step.before, otherBars: step.otherBars.map { ($0.url, $0.after, $0.before) }) else { return }
         undoSteps.removeLast()
         redoSteps.append(step)
     }
@@ -187,7 +197,7 @@ final class ConfigurationHistory {
         if checkForExternalChanges() { return }
         try flush()
         guard canRedo, let step = redoSteps.last else { return }
-        guard try restore(step.after) else { return }
+        guard try restore(step.after, otherBars: step.otherBars.map { ($0.url, $0.before, $0.after) }) else { return }
         redoSteps.removeLast()
         undoSteps.append(step)
     }
@@ -252,10 +262,17 @@ final class ConfigurationHistory {
         }
     }
 
-    private func restore(_ data: Data) throws -> Bool {
+    private func restore(_ data: Data, otherBars: [(url: URL, current: Data, restored: Data)]) throws -> Bool {
         let current = try Data(contentsOf: store.configurationURL)
         guard current == lastFile else { checkForExternalChanges(); return false }
+        guard otherBars.allSatisfy({ (try? Data(contentsOf: $0.url)) == $0.current }) else {
+            undoSteps.removeAll()
+            redoSteps.removeAll()
+            notice = "Undo history was cleared because another bar’s configuration file changed outside Settings."
+            return false
+        }
         try store.writeCustomization(data, replacing: current)
+        for bar in otherBars { try writeConfiguration(bar.restored, to: bar.url) }
         lastFile = data
         error = nil
         notice = nil

@@ -57,6 +57,11 @@ struct GeneralSettingsView: View {
                     .id(SettingsSearchResult.configuration.id)
                     SettingsGroup("Updates") {
                         AboutView(update: store.update).rows
+                        SettingRow(title: "Notify about package updates", hint: "Show a dismissible button in the bar. Checks hourly.") {
+                            Toggle("Notify about package updates", isOn: Binding(get: { store.packageLibrary.notifiesAboutUpdates },
+                                                                                set: { store.packageLibrary.notifiesAboutUpdates = $0 }))
+                                .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                        }
                     }
                     .id(SettingsSearchResult.updates.id)
                     SettingsGroup("Help") {

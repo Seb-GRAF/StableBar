@@ -131,3 +131,44 @@ struct WidgetClockFormat {
         return formatter.string(from: .now)
     }
 }
+
+enum WidgetMetricDisplay: String, CaseIterable {
+    case standard, icon, value, meter, graph, custom
+
+    var title: String {
+        switch self {
+        case .standard: "Icon and value"
+        case .icon: "Icon only"
+        case .value: "Value only"
+        case .meter: "Meter and value"
+        case .graph: "Graph and value"
+        case .custom: "Custom layout"
+        }
+    }
+
+    func layout(for source: String) -> ConfigurationValue? {
+        let icon: ConfigurationValue = .object(["type": .string("symbol"), "source": .string("icon")])
+        let text: ConfigurationValue = .object(["type": .string("field"), "field": .string("text")])
+        switch self {
+        case .standard: return .null
+        case .icon: return .object(["type": .string("row"), "children": .array([icon])])
+        case .value: return .object(["type": .string("row"), "children": .array([text])])
+        case .meter, .graph:
+            let meter: ConfigurationValue = self == .meter
+                ? .object(["type": .string("progress"), "source": .string(source), "height": .number(4),
+                           "style": .object(["width": .number(40)])])
+                : .object(["type": .string("graph"), "height": .number(16), "style": .object(["width": .number(40)])])
+            return .object(["type": .string("row"), "children": .array([meter, icon, text])])
+        case .custom: return nil
+        }
+    }
+
+    static func current(_ layout: ConfigurationValue?, source: String) -> Self {
+        if layout == nil || layout == .null { return .standard }
+        guard case let .object(properties) = layout, properties["type"] == .string("row") else { return .custom }
+        return allCases.first {
+            guard case let .object(candidate)? = $0.layout(for: source) else { return false }
+            return candidate["children"] == properties["children"]
+        } ?? .custom
+    }
+}

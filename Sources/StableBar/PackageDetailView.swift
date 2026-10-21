@@ -52,7 +52,7 @@ struct PackageDetailView: View {
             .scrollContentBackground(.hidden)
             .frame(maxWidth: 720)
             .frame(maxWidth: .infinity)
-            .disabled(draft.working)
+            .disabled(draft.working || library.updating.contains(manifest.id))
             if let error = draft.error ?? draft.credentialsError {
                 Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.red)
                     .textSelection(.enabled).font(.callout).padding(12)
@@ -108,7 +108,8 @@ struct PackageDetailView: View {
         let update = reviewing ? nil : library.update(for: manifest)
         Group {
             if let update {
-                Button("Update to \(update.version)") { Task { await library.selectStore(update) } }
+                Button(library.updating.contains(manifest.id) ? "Updating…" : "Update to \(update.version)") { Task { await library.update(manifest) } }
+                    .disabled(library.updating.contains(manifest.id))
                     .buttonStyle(.borderedProminent)
             }
             if library.isActive(draft) && !reviewing {
@@ -154,9 +155,9 @@ struct PackageDetailView: View {
             }
         } header: {
             VStack(alignment: .leading, spacing: 12) {
-                if draft.screenshotData != nil || draft.themePreview != nil {
+                if draft.screenshotData != nil || draft.themePreview != nil || !draft.inspection.widgets.isEmpty {
                     let appearance = store.configuration?.bar.appearance ?? (store.context.appearance == "dark" ? BarAppearance.dark : .light)
-                    PackagePreview(screenshotData: draft.screenshotData, look: draft.themePreview?.configuration(for: appearance))
+                    PackagePreview(screenshotData: draft.screenshotData, look: draft.themePreview?.configuration(for: appearance), widgets: draft.inspection.widgets)
                         .frame(height: 150)
                         .environment(\.colorScheme, appearance.colorScheme)
                 }
@@ -287,7 +288,8 @@ struct PackageDetailView: View {
                 LabeledContent(update.version) {
                     HStack {
                         Text("New in the Store").font(.caption).foregroundStyle(.secondary)
-                        Button("Review update") { Task { await library.selectStore(update) } }.buttonStyle(.borderedProminent)
+                        Button(library.updating.contains(manifest.id) ? "Updating…" : "Update") { Task { await library.update(manifest) } }
+                            .buttonStyle(.borderedProminent).disabled(library.updating.contains(manifest.id))
                     }
                 }
             }
@@ -413,6 +415,8 @@ struct BuiltInPackagesView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
                             ForEach(widgets) { choice in
                                 VStack(alignment: .leading, spacing: 12) {
+                                    let widget = try! ConfigurationValue.object(choice.add(position: .right, id: choice.id)!.properties!).decoded(WidgetConfiguration.self)
+                                    PackagePreview(screenshotData: nil, look: nil, widgets: [widget]).frame(height: 64)
                                     HStack(spacing: 10) {
                                         Image(systemName: choice.symbol)
                                             .font(.system(size: 17))
@@ -474,6 +478,7 @@ struct BuiltInPackagesView: View {
 struct PackagePreview: View {
     let screenshotData: Data?
     let look: Configuration?
+    var widgets: [WidgetConfiguration] = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -485,8 +490,14 @@ struct PackagePreview: View {
                         .frame(width: geometry.size.width * 1.5)
                         .scaleEffect(2 / 3)
                         .frame(width: geometry.size.width, height: geometry.size.height)
+                } else if !widgets.isEmpty {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) { ForEach(widgets) { WidgetSample(widget: $0) } }
+                        WidgetSample(widget: widgets[0])
+                    }
+                    .padding(12)
                 } else {
-                    Label("No preview supplied", systemImage: "photo")
+                    Label("Preview unavailable", systemImage: "photo")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }

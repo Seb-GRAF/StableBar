@@ -187,6 +187,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.menu = menu
         store.onConfigurationChange = { [weak self] in self?.updatePanels() }
         store.onCustomize = { [weak self] in self?.showCustomization() }
+        store.onCustomizePackages = { [weak self] in
+            guard let self else { return }
+            customization.show(store: store, section: .packages)
+        }
         store.onCustomizeWidget = { [weak self] id in
             guard let self else { return }
             customization.show(store: store, widgetID: id)

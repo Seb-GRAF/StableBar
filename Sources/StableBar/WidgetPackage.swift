@@ -336,6 +336,7 @@ struct PackageIndex: Decodable, Sendable {
         let description: String?
         let author: String?
         let minimumVersion: String?
+        let screenshot: URL?
         let archive: String
         let sha256: String
         let source: URL
@@ -362,7 +363,7 @@ struct PackageIndex: Decodable, Sendable {
     }
 }
 
-private func fetch(_ url: URL) async throws -> Data {
+func fetch(_ url: URL) async throws -> Data {
     let (data, response) = try await URLSession.shared.data(from: url)
     if let response = response as? HTTPURLResponse, response.statusCode != 200 {
         throw WidgetPackageError.downloadFailed(url.absoluteString, response.statusCode)

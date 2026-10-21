@@ -132,17 +132,17 @@ final class ThemeGallery {
         } catch { overrideError = errorMessage(error) }
     }
 
-    func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil) {
-        perform(on: choice.key) { try apply(choice, on: kind) }
+    func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
+        perform(on: choice.key) { try apply(choice, on: kind, everyBar: everyBar) }
         configurationChanged()
     }
 
-    private func apply(_ choice: ThemeChoice, on kind: ScreenKind?) throws {
-        guard let kind else { return try store.customizationHistory.change(store.themeEdit(for: choice)) }
+    private func apply(_ choice: ThemeChoice, on kind: ScreenKind?, everyBar: Bool) throws {
+        guard let kind else { return try store.customizationHistory.change(store.themeEdit(for: choice), everyBar: everyBar) }
         try store.customizationHistory.change([
             ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
             ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
-        ])
+        ], everyBar: everyBar)
     }
 
     func loadStore() async {
@@ -165,7 +165,7 @@ final class ThemeGallery {
         }
     }
 
-    func get(_ entry: PackageIndex.Entry, on kind: ScreenKind? = nil) async {
+    func get(_ entry: PackageIndex.Entry, on kind: ScreenKind? = nil, everyBar: Bool = false) async {
         let key = entry.versionKey
         guard progress[key] == nil else { return }
         progress[key] = "Downloading…"
@@ -178,11 +178,11 @@ final class ThemeGallery {
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             if !choices.contains(where: { $0.key == choice.key }) { choices.append(choice) }
             progress[key] = "Applying…"
-            perform(on: key) { try apply(choice, on: kind) }
+            perform(on: key) { try apply(choice, on: kind, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
     }
 
-    func save(_ current: ThemeChoice, as name: String) async {
+    func save(_ current: ThemeChoice, as name: String, everyBar: Bool = false) async {
         let key = current.key
         errors[key] = nil
         defer { configurationChanged() }
@@ -226,7 +226,8 @@ final class ThemeGallery {
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
             perform(on: key) {
-                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: removal), store.themeEdit(for: choice)])
+                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: removal), store.themeEdit(for: choice)],
+                                                      everyBar: everyBar)
             }
         } catch { errors[key] = errorMessage(error) }
     }

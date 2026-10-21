@@ -217,7 +217,7 @@ extension BarStore {
                                sources: sources, tokenSources: tokenSources, scope: scope, inheritedValue: values[key])
     }
 
-    func removePropertySource(_ source: PropertyValueSource) throws {
+    func removePropertySource(_ source: PropertyValueSource, everyBar: Bool = false) throws {
         let origin = source.origin!
         var path = source.path
         if origin.detail.contains("(widget override)") { path[0] = "widgetOverrides" }
@@ -225,7 +225,7 @@ extension BarStore {
             path = ["profiles", profile, "configuration"] + path
         }
         let mask = path.dropFirst().reversed().reduce(ConfigurationValue.null) { .object([$1: $0]) }
-        try customizationHistory.change(ConfigurationEdit(action: .unset, properties: [path[0]: mask]))
+        try customizationHistory.change(ConfigurationEdit(action: .unset, properties: [path[0]: mask]), everyBar: everyBar)
     }
 }
 

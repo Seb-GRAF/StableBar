@@ -117,6 +117,36 @@ import Testing
     #expect(!editor.history.canUndo)
 }
 
+@Test @MainActor func aThemeChangeForAllSetupsSavesToEveryBarWithOneUndoStep() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let shared = directory.appending(path: "config.json")
+    let sharedData = Data(#"{"bar":{"height":36},"widgets":[]}"#.utf8)
+    try sharedData.write(to: shared)
+    let own = directory.appending(path: "setup-laptop+monitor.json")
+    let ownData = Data(#"{"bar":{"height":30},"widgets":[]}"#.utf8)
+    try ownData.write(to: own)
+    let displays = [BarDisplay(id: 1, isBuiltIn: true, isMain: false, notch: nil), BarDisplay(id: 2, isBuiltIn: false, isMain: true, notch: nil)]
+    let store = BarStore(configurationURL: shared)
+    defer { store.stop() }
+    store.start(on: ScreenSetup(displays))
+    let editor = ConfigurationEditor(store: store)
+    editor.change(ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(15)]), everyBar: true)
+    try editor.history.flush()
+    #expect(store.configuration?.defaults.fontSize == 15)
+    #expect(editor.undoSteps.count == 1)
+
+    try editor.history.undo()
+    #expect(try Data(contentsOf: shared) == sharedData)
+    #expect(try Data(contentsOf: own) == ownData)
+    try editor.history.redo()
+    store.showScreenSetup(ScreenSetup([displays[1]]))
+    #expect(store.configurationURL == shared)
+    #expect(store.configuration?.defaults.fontSize == 15)
+    #expect(store.configuration?.bar.height == 36)
+}
+
 @Test @MainActor func aPreviewedScreenSetupCopiesAnotherBarAndListsEachSetupOnce() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

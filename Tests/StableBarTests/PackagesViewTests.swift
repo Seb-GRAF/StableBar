@@ -4,6 +4,159 @@ import XCTest
 @testable import StableBar
 
 final class PackagesViewTests: XCTestCase {
+    @MainActor func testPackageUpdateNoticesPersistDismissalAndReturnOnlyForNewVersions() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let suite = "StableBarPackageNotices-\(UUID().uuidString)"
+        let preferences = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { preferences.removePersistentDomain(forName: suite) }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#)
+        let old = try fixture.packages.install(fixture.directory.appending(path: "sources/note"))
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "2")
+        let store = try fixture.store()
+        defer { store.stop() }
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let library = PackageLibrary(store: store, client: client, preferences: preferences)
+        defer { library.stopUpdateChecks() }
+        await library.loadInstalled()
+        await library.loadStore()
+        XCTAssertNotNil(library.updateWidget)
+        library.dismissUpdates()
+        XCTAssertNil(library.updateWidget)
+        XCTAssertEqual(library.updates.map(\.id), ["note"])
+        let reopened = PackageLibrary(store: store, client: client, preferences: preferences)
+        defer { reopened.stopUpdateChecks() }
+        await reopened.loadInstalled()
+        await reopened.loadStore()
+        XCTAssertNil(reopened.updateWidget)
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "3")
+        await reopened.loadStore(reload: true)
+        XCTAssertNotNil(reopened.updateWidget)
+        reopened.notifiesAboutUpdates = false
+        XCTAssertNil(reopened.updateWidget)
+        XCTAssertFalse(PackageLibrary(store: store, client: client, preferences: preferences).notifiesAboutUpdates)
+        reopened.notifiesAboutUpdates = true
+        XCTAssertNotNil(reopened.updateWidget)
+        var opened = false
+        store.onCustomizePackages = { opened = true }
+        reopened.showingStore = true
+        reopened.search = "unrelated"
+        reopened.openUpdates()
+        XCTAssertTrue(opened)
+        XCTAssertFalse(reopened.showingStore)
+        XCTAssertEqual(reopened.search, "")
+        await reopened.update(old.manifest)
+        XCTAssertNil(reopened.error)
+        XCTAssertNil(reopened.updateWidget)
+        XCTAssertTrue(reopened.updates.isEmpty)
+    }
+
+    @MainActor func testOneClickUpdatesPreserveSettingsPlacementHiddenWidgetsAndUndo() async throws {
+        for enabled in [true, false] {
+            let fixture = try ThemeGalleryFixture()
+            defer { fixture.close() }
+            let index = LocalPackageIndex(fixture: fixture)
+            let settings = #"{"label":{"type":"string","default":"Default"},"units":{"type":"string","choices":["metric","imperial"],"default":"metric"}}"#
+            _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[{"id":"note","type":"text","position":"left","text":"@setting.label"},{"id":"other","type":"text","position":"left","text":"Other"}]}"#, settings: settings)
+            let old = try fixture.packages.install(fixture.directory.appending(path: "sources/note"))
+            try fixture.write(#"{"packages":[{"id":"note","version":"1","enabled":\#(enabled),"settings":{"label":"Saved","units":"imperial"}}],"widgetOverrides":{"note":{"enabled":false,"display":"external"}},"profiles":[{"name":"Night","when":{"appearance":"dark"},"configuration":{"widgetOverrides":{"note":{"style":{"fontSize":18}}}}}],"widgets":[]}"#, to: fixture.url)
+            if !enabled {
+                var document = try fixture.document()
+                document["widgetOverrides"] = nil
+                document["profiles"] = nil
+                try configurationData(document).write(to: fixture.url)
+            }
+            _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[{"id":"other","type":"text","position":"right","text":"New"},{"id":"note","type":"text","position":"right","text":"@setting.label"}]}"#, settings: settings.replacingOccurrences(of: #"["metric","imperial"]"#, with: #"["metric"]"#), version: "2")
+            let store = try fixture.store()
+            defer { store.stop() }
+            let before = try fixture.document()
+            let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+            await library.loadInstalled()
+            await library.loadStore()
+            XCTAssertEqual(library.updates.map(\.id), ["note"])
+            await library.update(old.manifest)
+            XCTAssertNil(library.error)
+            XCTAssertNil(library.pendingUpdate)
+            XCTAssertTrue(library.updating.isEmpty)
+            XCTAssertTrue(library.updates.isEmpty)
+            let after = try fixture.document()
+            let selection = try XCTUnwrap(after["packages"]?.decoded([WidgetPackageSelection].self).first)
+            XCTAssertEqual(selection.version, "2")
+            XCTAssertEqual(selection.enabled, enabled)
+            XCTAssertEqual(selection.settings, ["label": .string("Saved"), "units": .string("metric")])
+            XCTAssertEqual(after["profiles"], before["profiles"])
+            if enabled {
+                XCTAssertEqual(store.configuration?.widgets.map(\.id), ["note", "other"])
+                let note = try XCTUnwrap(store.configuration?.widgets.first)
+                XCTAssertFalse(note.enabled)
+                XCTAssertEqual(note.position, .left)
+                XCTAssertEqual(note.display, .external)
+                XCTAssertEqual(note.content, .text("Saved"))
+            } else {
+                XCTAssertTrue(store.configuration!.widgets.isEmpty)
+                XCTAssertEqual(after["widgetOverrides"], before["widgetOverrides"])
+            }
+            XCTAssertEqual(try fixture.packages.list().count, 2)
+            try store.customizationHistory.undo()
+            XCTAssertEqual(try fixture.document(), before)
+        }
+    }
+
+    @MainActor func testUpdateReviewsAddedAccessAndKeepsInactivePackagesOffTheBar() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[{"id":"note","type":"text","position":"left","text":"Old"}]}"#)
+        let old = try fixture.packages.install(fixture.directory.appending(path: "sources/note"))
+        _ = try await index.add(id: "note", kind: "widgets", configuration: #"{"widgets":[{"id":"note","type":"text","position":"left","text":"New"}]}"#, version: "2", hosts: #"["example.com"]"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let before = try fixture.document()
+        let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        await library.loadInstalled()
+        await library.loadStore()
+        await library.update(old.manifest)
+        XCTAssertEqual(library.updateAdditions, ["Host: example.com"])
+        XCTAssertNotNil(library.pendingUpdate)
+        XCTAssertEqual(try fixture.packages.list().count, 1)
+        XCTAssertEqual(try fixture.document(), before)
+        library.pendingUpdate = nil
+        await library.update(old.manifest)
+        await library.confirmUpdate(try XCTUnwrap(library.pendingUpdate))
+        XCTAssertNil(library.error)
+        XCTAssertTrue(library.updates.isEmpty)
+        XCTAssertEqual(try fixture.packages.list().count, 2)
+        XCTAssertEqual(try fixture.document(), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @MainActor func testFailedUpdateLeavesTheSelectedThemeAndItsSettingsIntact() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let old = try fixture.theme(#"{"bar":{"height":30}}"#)
+        try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":[]}"#, to: fixture.url)
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "test-theme", checksum: String(repeating: "0", count: 64), version: "2")
+        let store = try fixture.store()
+        defer { store.stop() }
+        let before = try fixture.document()
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let library = PackageLibrary(store: store, client: client)
+        await library.loadInstalled()
+        await library.loadStore()
+        await library.update(old.manifest)
+        XCTAssertNotNil(library.error)
+        XCTAssertEqual(try fixture.document(), before)
+        XCTAssertEqual(try fixture.packages.list().count, 1)
+        _ = try await index.add(id: "test-theme", configuration: #"{"bar":{"height":35}}"#, version: "2")
+        await library.loadStore(reload: true)
+        await library.update(old.manifest)
+        XCTAssertNil(library.error)
+        XCTAssertEqual(store.configuration?.bar.height, 35)
+        XCTAssertEqual(try fixture.document()["theme"]?.decoded(WidgetPackageSelection.self).version, "2")
+    }
+
     @MainActor func testStorePreviewsDoNotInstallPackagesOrRunTheirCommands() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -16,14 +169,40 @@ final class PackagesViewTests: XCTestCase {
         defer { store.stop() }
         let before = try Data(contentsOf: fixture.url)
         let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        let widgetPreview = try await library.preview(widget)
+        XCTAssertEqual(widgetPreview.widgets.map(\.id), ["script"])
+        XCTAssertNil(widgetPreview.theme)
         await library.selectStore(widget)
         XCTAssertNil(library.draft?.themePreview)
+        let themePreview = try await library.preview(theme)
+        XCTAssertEqual(themePreview.theme?.light.bar.height, 31)
         await library.selectStore(theme)
         XCTAssertEqual(library.draft?.themePreview?.light.bar.height, 31)
         XCTAssertEqual(library.draft?.themePreview?.dark.bar.height, 31)
         XCTAssertTrue(try fixture.packages.list().isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
+        XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @MainActor func testListScreenshotLoadsWithoutDownloadingOrInstallingThePackage() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let imageURL = fixture.directory.appending(path: "preview.png")
+        let image = ImageRenderer(content: Color.blue.frame(width: 20, height: 20))
+        let data = try XCTUnwrap(NSBitmapImageRep(cgImage: XCTUnwrap(image.cgImage)).representation(using: .png, properties: [:]))
+        try data.write(to: imageURL)
+        let entry = try ConfigurationValue.object([
+            "id": .string("image"), "name": .string("Image"), "version": .string("1"),
+            "archive": .string("missing.tar.gz"), "sha256": .string("unused"),
+            "source": .string("https://example.com/source"), "screenshot": .string(imageURL.absoluteString)
+        ]).decoded(PackageIndex.Entry.self)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let library = store.packageLibrary
+        let preview = try await library.preview(entry)
+        XCTAssertEqual(preview.screenshot, data)
+        XCTAssertTrue(try fixture.packages.list().isEmpty)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
     }
 

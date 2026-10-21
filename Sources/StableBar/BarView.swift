@@ -26,7 +26,7 @@ struct BarView: View {
                     } ?? range
                 }
                 let widgets = store.barEditing.widgets(on: display)
-                let units = BarUnit.make(widgets: widgets + [store.update?.widget].compactMap { $0 }, groups: config.groups)
+                let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
                     let items = units.map { unit in
                         BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0,
@@ -351,6 +351,18 @@ struct WidgetView: View {
         Group {
             if store.barEditing.isActive {
                 tile.allowsHitTesting(false)
+            } else if widget.id == PackageLibrary.updateWidgetID {
+                HStack(spacing: 0) {
+                    Button(action: store.packageLibrary.openUpdates) { tile }
+                        .accessibilityLabel("Open package updates")
+                    Button(action: store.packageLibrary.dismissUpdates) {
+                        Image(systemName: "xmark").font(.system(size: 9, weight: .semibold))
+                            .padding(6)
+                    }
+                    .accessibilityLabel("Dismiss package update notification")
+                    .help("Dismiss package update notification")
+                }
+                .buttonStyle(.plain)
             } else if let popup = widgetPopup(widget, store: store) {
                 Button {
                     guard store.barEditing.allowsWidgetActions else { return }
@@ -520,7 +532,8 @@ struct WidgetBlocks: View {
         let script = store.scripts[widget.id]
         let label = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields)
         let appIcon = widget.content == .activeApp ? store.activeApp?.icon : nil
-        if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil) {
+        let providerType = widget.providerName.flatMap { store.configuration?.providers[$0]?.type }
+        if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil, providerType: providerType) {
             PopupBlockView(block: layout, inheritedStyle: style.inherited, fields: label.fields,
                            context: BlockContext(lists: script?.output.lists ?? [:], samples: script?.samples ?? [],
                                                  menu: script?.output.menu ?? widget.menu ?? [], values: script?.output.values ?? [:],

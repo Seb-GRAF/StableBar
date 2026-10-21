@@ -1,6 +1,12 @@
 import Foundation
 import Observation
 
+struct PackagePreviewData: Sendable {
+    var screenshot: Data?
+    var theme: ThemePreview?
+    var widgets: [WidgetConfiguration] = []
+}
+
 @MainActor @Observable
 final class PackageDraft {
     var inspection: WidgetPackageInspection
@@ -23,10 +29,21 @@ final class PackageDraft {
 
 @MainActor @Observable
 final class PackageLibrary {
+    nonisolated static let updateWidgetID = "stablebar.package-updates"
     private unowned let store: BarStore
     private let client: PackageStoreClient
     private let packages: WidgetPackageStore
     private let reviewing: Bool
+    private let preferences: UserDefaults
+    private var dismissedUpdates: Set<String>
+    @ObservationIgnored private var updateTimer: Timer?
+    @ObservationIgnored private var updateTask: Task<Void, Never>?
+    var notifiesAboutUpdates: Bool {
+        didSet {
+            preferences.set(notifiesAboutUpdates, forKey: "notifyPackageUpdates")
+            if notifiesAboutUpdates { startUpdateChecks() } else { stopUpdateChecks() }
+        }
+    }
     private var drafts: [String: PackageDraft] = [:]
     private var downloads: Set<URL> = []
     private var selectionRequest = 0
@@ -38,16 +55,71 @@ final class PackageLibrary {
     private(set) var loading = false
     private(set) var loadingStore = false
     private(set) var getting: Set<String> = []
+    private(set) var updating: Set<String> = []
+    var pendingUpdate: PackageDraft?
+    private(set) var updateAdditions: [String] = []
     var storeError: String?
     var error: String?
     var search = ""
     var showingStore = false
 
-    init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false) {
+    init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false, preferences: UserDefaults = .standard) {
         self.store = store
         self.client = client ?? store.packageStoreClient
         self.packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
         self.reviewing = reviewing
+        self.preferences = preferences
+        notifiesAboutUpdates = preferences.object(forKey: "notifyPackageUpdates") as? Bool ?? true
+        dismissedUpdates = Set(preferences.stringArray(forKey: "dismissedPackageUpdates") ?? [])
+    }
+
+    func startUpdateChecks() {
+        guard notifiesAboutUpdates, updateTimer == nil else { return }
+        let timer = Timer(fire: Date(timeIntervalSinceNow: 15), interval: 60 * 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateTask = Task { [weak self] in
+                    guard let self else { return }
+                    await self.loadInstalled()
+                    await self.loadStore(reload: true)
+                }
+            }
+        }
+        timer.tolerance = 60
+        RunLoop.main.add(timer, forMode: .common)
+        updateTimer = timer
+    }
+
+    func stopUpdateChecks() {
+        updateTimer?.invalidate()
+        updateTimer = nil
+        updateTask?.cancel()
+        updateTask = nil
+    }
+
+    private var updateKeys: [String] {
+        updates.map { "\($0.id)/\(update(for: $0)!.version)" }
+    }
+
+    var updateWidget: WidgetConfiguration? {
+        guard notifiesAboutUpdates, updateKeys.contains(where: { !dismissedUpdates.contains($0) }) else { return nil }
+        return try! ConfigurationValue.object([
+            "id": .string(Self.updateWidgetID), "position": .string("right"), "type": .string("text"),
+            "text": .string(String(updates.count)), "icon": .string("shippingbox"),
+            "tooltip": .string("\(updates.count) package updates available"), "overflow": .string("never")
+        ]).decoded(WidgetConfiguration.self)
+    }
+
+    func dismissUpdates() {
+        dismissedUpdates.formUnion(updateKeys)
+        preferences.set(dismissedUpdates.sorted(), forKey: "dismissedPackageUpdates")
+    }
+
+    func openUpdates() {
+        showingStore = false
+        search = ""
+        deselect()
+        store.onCustomizePackages?()
     }
 
     var selectedID: String? { requestedID ?? draft?.inspection.manifest.id }
@@ -76,6 +148,77 @@ final class PackageLibrary {
 
     func update(for manifest: WidgetPackageManifest) -> PackageIndex.Entry? {
         entries.first { $0.id == manifest.id && $0.version.compare(manifest.version, options: .numeric) == .orderedDescending }
+    }
+
+    var updates: [WidgetPackageManifest] { installedPackages.filter { update(for: $0) != nil } }
+
+    func update(_ manifest: WidgetPackageManifest) async {
+        guard let entry = update(for: manifest) else { return }
+        updating.insert(manifest.id)
+        defer { updating.remove(manifest.id) }
+        do {
+            let downloaded = try await client.packageForAdding(entry)
+            let values = try downloaded.manifest.values(WidgetSetup(store: store).savedSettings(for: downloaded.manifest))
+            let inspection = try await client.inspect(downloaded.directory, settings: values)
+            let previous = try await client.inspect(packages.directory(id: manifest.id, version: manifest.version))
+            let draft = PackageDraft(inspection: inspection, settings: values)
+            updateAdditions = inspection.additions(since: previous)
+            if updateAdditions.isEmpty {
+                try await applyUpdate(draft)
+            } else {
+                pendingUpdate = draft
+            }
+            error = nil
+        } catch {
+            self.error = errorMessage(error)
+        }
+    }
+
+    func confirmUpdate(_ draft: PackageDraft) async {
+        pendingUpdate = nil
+        let id = draft.inspection.manifest.id
+        updating.insert(id)
+        defer { updating.remove(id) }
+        do { try await applyUpdate(draft); error = nil }
+        catch { self.error = errorMessage(error) }
+    }
+
+    private func applyUpdate(_ draft: PackageDraft) async throws {
+        let manifest = draft.inspection.manifest
+        if !isInstalled(draft) { draft.inspection = try await client.install(draft.inspection.directory) }
+        configurationChanged()
+        if let selection = selections.first(where: { $0.id == manifest.id }) {
+            try store.customizationHistory.flush()
+            let selectionEdit = edit(draft, enabled: selection.enabled)
+            var edits = [selectionEdit]
+            if manifest.kind != .theme && selection.enabled {
+                var loader = ConfigurationLoader()
+                loader.themesDirectory = store.themesDirectory
+                let root = try store.editedDocument([selectionEdit], replaying: [])
+                let configured = try loader.load(store.configurationURL, data: configurationData(root), context: store.context)
+                let previous = store.configuration!.widgets
+                let ids = draft.inspection.widgets.map(\.id)
+                for widget in previous where ids.contains(widget.id) {
+                    if let updated = configured.widgets.first(where: { $0.id == widget.id }) {
+                        var properties: [String: ConfigurationValue] = [:]
+                        if updated.position != widget.position { properties["position"] = .string(widget.position.rawValue) }
+                        if updated.enabled != widget.enabled { properties["enabled"] = .bool(widget.enabled) }
+                        if !properties.isEmpty { edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: properties)) }
+                    }
+                }
+                let configuredIDs = configured.widgets.map(\.id)
+                let previousIDs = previous.map(\.id)
+                let order = previousIDs.filter { configuredIDs.contains($0) } + configuredIDs.filter { !previousIDs.contains($0) }
+                if order != configuredIDs { edits.append(ConfigurationEdit(action: .reorder, ids: order)) }
+            }
+            try store.customizationHistory.change(edits)
+        }
+        await loadInstalled()
+        if selectedID == manifest.id {
+            drafts[manifest.versionKey] = nil
+            await selectInstalled(manifest)
+        }
+        store.customizationHistory.showNotice("\(manifest.name) updated to \(manifest.version).")
     }
 
     func source(_ draft: PackageDraft) -> PackageSource? {
@@ -135,7 +278,18 @@ final class PackageLibrary {
         }
     }
 
-    private func preview(_ inspection: WidgetPackageInspection) async throws -> (screenshot: Data?, theme: ThemePreview?) {
+    func preview(_ manifest: WidgetPackageManifest) async throws -> PackagePreviewData {
+        try await preview(client.inspect(packages.directory(id: manifest.id, version: manifest.version)))
+    }
+
+    func preview(_ entry: PackageIndex.Entry) async throws -> PackagePreviewData {
+        if let screenshot = entry.screenshot {
+            return try await PackagePreviewData(screenshot: fetch(screenshot))
+        }
+        return try await preview(client.packageForAdding(entry))
+    }
+
+    private func preview(_ inspection: WidgetPackageInspection) async throws -> PackagePreviewData {
         let screenshot = try await client.screenshotData(for: inspection)
         let themesDirectory = store.themesDirectory
         let theme = try await Task.detached { () throws -> ThemePreview? in
@@ -145,7 +299,7 @@ final class PackageLibrary {
             }
             return nil
         }.value
-        return (screenshot, theme)
+        return PackagePreviewData(screenshot: screenshot, theme: theme, widgets: inspection.widgets)
     }
 
     func selectPackage(_ id: String) async {

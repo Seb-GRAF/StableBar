@@ -360,6 +360,23 @@ struct BarInspector: View {
     }
 
     @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
+        if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
+           type == "battery" || type == "audio" {
+            let source = type == "battery" ? "percent" : "volume"
+            let current = WidgetMetricDisplay.current(editor.properties(for: widget.id)["layout"], source: source)
+            SettingsGroup("Display") {
+                SettingRow(title: "Show") {
+                    Picker("Show", selection: Binding(get: { current }, set: { choice in
+                        if let layout = choice.layout(for: source) { editor.set(["layout": layout], for: widget.id) }
+                    })) {
+                        ForEach(WidgetMetricDisplay.allCases.filter { $0 != .custom || current == .custom }, id: \.self) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }
+                    .labelsHidden().frame(width: 180)
+                }
+            }
+        }
         if let packageID = store.widgetPackageIDs[widget.id] {
             SettingsCallout(systemImage: source(widget).symbol,
                             text: Text("Settings from the **\(store.widgetPackageNames[widget.id] ?? packageID)** package, shared by its widgets.")) {

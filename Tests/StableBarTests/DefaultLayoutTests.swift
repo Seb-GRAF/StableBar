@@ -88,7 +88,7 @@ private enum FrontmostApp {
         (#"{"id":"w","type":"script","command":"true","icon":"cpu","position":"right"}"#, #"{"text":"12%","value":0.12}"#, .noApp),
         (#"{"id":"w","type":"script","command":"true","position":"right"}"#, #"{"text":"","value":0.5}"#, .noApp),
         (#"{"id":"w","type":"script","command":"true","icon":"speaker.wave.2","position":"right"}"#, #"{"text":""}"#, .noApp),
-        (#"{"id":"w","type":"battery","position":"right"}"#, #"{"text":"85%","icon":"battery.100percent","value":0.85}"#, .noApp)
+        (#"{"id":"w","type":"system","position":"right"}"#, #"{"text":"85%","icon":"cpu","value":0.85}"#, .noApp)
     ]
     let styles = try [
         decode(WidgetStyle.self, "{}"),
@@ -133,6 +133,30 @@ private enum FrontmostApp {
                 #expect(drawn.width == expected.width && drawn.height == expected.height, "\(name)")
                 #expect(drawn.difference(from: expected) <= tolerance, "\(name)")
             }
+        }
+    }
+}
+
+@Test @MainActor func batteryAndSoundDefaultLayoutsFitTheirLabelAndKeepExplicitGraphs() throws {
+    for (type, icon, source) in [("battery", "battery.100percent", "percent"), ("audio", "speaker.wave.2", "volume")] {
+        for named in [false, true] {
+            let provider = named ? #""type":"provider","provider":"metric""# : #""type":"\#(type)""#
+            let widget = try decode(WidgetConfiguration.self, #"{"id":"w",\#(provider),"position":"right"}"#)
+            let output = try decode(ScriptOutput.self, #"{"text":"85%","icon":"\#(icon)","value":0.85,"values":{"\#(source)":0.85}}"#)
+            let label = widget.label(output: output, activeApp: nil, date: .now)
+            let layout = try #require(widget.defaultLayout(label, output: output, appIcon: false, providerType: named ? type : nil))
+            let expected = PopupBlock(content: .row([
+                PopupBlock(content: .symbol(name: "", source: "icon")),
+                PopupBlock(content: .field("text"), hideWhenEmpty: "text", monospacedDigits: false)
+            ]), keepsLineHeight: true)
+            let context = BlockContext(samples: [0.85], values: [source: 0.85], fillsWidth: false, open: { _ in }, runAction: { _, _ in })
+            let drawn = try draw(PopupBlockView(block: layout, inheritedStyle: WidgetStyle(), fields: label.fields, context: context))
+            let plain = try draw(PopupBlockView(block: expected, inheritedStyle: WidgetStyle(), fields: label.fields, context: context))
+            #expect(drawn.width == plain.width)
+            #expect(drawn.difference(from: plain) <= tolerance)
+            let graph = try #require(WidgetMetricDisplay.graph.layout(for: source)).decoded(PopupBlock.self)
+            let withGraph = try draw(PopupBlockView(block: graph, inheritedStyle: WidgetStyle(), fields: label.fields, context: context))
+            #expect(withGraph.width > drawn.width)
         }
     }
 }

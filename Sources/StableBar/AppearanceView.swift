@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 struct AppearanceView: View {
-    let editor: ConfigurationEditor
+    @Bindable var editor: ConfigurationEditor
     @State private var gallery: ThemeGallery
 
     init(editor: ConfigurationEditor) {
@@ -37,6 +37,13 @@ struct AppearanceView: View {
                                     .fixedSize()
                             }
                             Spacer()
+                            if editor.editingProfile == nil, !store.screenSetupsWithOwnBars.isEmpty {
+                                SettingsSegments(selection: $editor.themeChangesEveryBar,
+                                                 options: [(true, "All setups"),
+                                                           (false, store.configurationURL == store.sharedConfigurationURL ? "Shared bar only" : "This setup only")],
+                                                 stretches: false)
+                                    .fixedSize()
+                            }
                             ProfilePicker(editor: editor)
                         }
                         .padding(.top, 16)
@@ -128,7 +135,7 @@ struct AppearanceView: View {
                                 Spacer()
                                 Button("Cancel") { savingTheme = false }.keyboardShortcut(.cancelAction)
                                 Button("Save") {
-                                    Task { await gallery.save(choice, as: themeName) }
+                                    Task { await gallery.save(choice, as: themeName, everyBar: editor.themeChangesEveryBar) }
                                     savingTheme = false
                                 }
                                 .keyboardShortcut(.defaultAction)
@@ -194,10 +201,12 @@ struct AppearanceView: View {
             let selected = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? gallery.selectedKey
             return ThemeCard(title: choice.title, look: look, appearance: appearance, isSelected: selected == choice.key,
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id),
-                             source: gallery.source(of: choice)) { gallery.select(choice, on: screen) }
+                             source: gallery.source(of: choice)) { gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar) }
         case let .store(entry):
             return ThemeCard(title: entry.name, look: look, appearance: appearance, progress: gallery.progress[item.id],
-                             error: gallery.error(for: item.id), isStore: true) { Task { await gallery.get(entry, on: screen) } }
+                             error: gallery.error(for: item.id), isStore: true) {
+                Task { await gallery.get(entry, on: screen, everyBar: editor.themeChangesEveryBar) }
+            }
         }
     }
 
@@ -209,7 +218,7 @@ struct AppearanceView: View {
                     Text(gallery.overrides.summary).font(.system(size: 11.5)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                Button("Reset them") { editor.change(gallery.overrides.resetEdit) }
+                Button("Reset them") { editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar) }
                     .controlSize(.small)
                     .accessibilityLabel("Reset your settings that override this theme")
             }
@@ -315,7 +324,7 @@ struct AppearanceView: View {
     }
 
     private func reset(_ source: PropertyValueSource) {
-        do { try store.removePropertySource(source) }
+        do { try store.removePropertySource(source, everyBar: editor.themeChangesEveryBar) }
         catch { store.customizationHistory.error = errorMessage(error) }
     }
 }
@@ -505,11 +514,12 @@ private extension ConfigurationEditor {
         let nest = { (properties: [String: ConfigurationValue]) in path.dropFirst().reversed().reduce(properties) { [$1: .object($0)] } }
         return StyleFields(store: store, path: path.joined(separator: "."),
                            defaultsPath: screen == nil ? defaultsPath : keys.joined(separator: "."), values: values,
-                           set: { self.change(ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: path[0])!, properties: nest($0))) },
+                           set: { self.change(ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: path[0])!, properties: nest($0)),
+                                              everyBar: self.themeChangesEveryBar) },
                            unset: { self.unset([path[0]: .object(nest($0))]) })
     }
 
     func unset(_ properties: [String: ConfigurationValue]) {
-        change(ConfigurationEdit(action: .unset, properties: properties))
+        change(ConfigurationEdit(action: .unset, properties: properties), everyBar: themeChangesEveryBar)
     }
 }

@@ -23,6 +23,7 @@ final class BarStore: NSObject {
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
     var onCustomizeWidget: ((String) -> Void)?
+    var onCustomizePackages: (() -> Void)?
     var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
@@ -121,6 +122,7 @@ final class BarStore: NSObject {
                 configurationURL = barURL(for: setup)
             }
             reloadConfiguration()
+            packageLibrary.startUpdateChecks()
         } catch {
             configurationError = errorMessage(error)
         }
@@ -308,6 +310,22 @@ final class BarStore: NSObject {
     func useSharedBar(for setup: ScreenSetup) throws {
         if setup == screenSetup { showBar(at: sharedConfigurationURL) }
         try FileManager.default.trashItem(at: ownBarURL(for: setup), resultingItemURL: nil)
+    }
+
+    func otherBars(applying edits: [ConfigurationEdit]) throws -> [(url: URL, before: Data, after: Data)] {
+        var otherBars: [(url: URL, before: Data, after: Data)] = []
+        for url in [sharedConfigurationURL] + screenSetupsWithOwnBars.map(ownBarURL(for:)) where url != configurationURL {
+            let original = try Data(contentsOf: url)
+            var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+            var ids: [String] = []
+            for edit in edits { root = try edit.applying(to: root, widgetIDs: &ids) }
+            var other = ConfigurationLoader()
+            other.themesDirectory = themesDirectory
+            _ = try other.load(url, data: configurationData(root), context: context)
+            let data = try configurationData(root, editing: original)
+            if data != original { otherBars.append((url, original, data)) }
+        }
+        return otherBars
     }
 
     private func showBar(at url: URL) {
@@ -988,6 +1006,7 @@ final class BarStore: NSObject {
     }
 
     func stop() {
+        packageLibrary.stopUpdateChecks()
         barEditing.end()
         endThemeTrial()
         flushCustomization()

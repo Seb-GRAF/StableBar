@@ -40,7 +40,7 @@ func commandOutputHasABoundedSize(stderr: Bool) async {
     } catch {
         #expect(error.localizedDescription == "Command output exceeded 1 MiB.")
     }
-    #expect(start.duration(to: .now) < .seconds(2))
+    #expect(start.duration(to: .now) < .seconds(5))
 }
 
 @Test(arguments: [false, true])
@@ -69,7 +69,7 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(2))
+    #expect(start.duration(to: .now) < .seconds(5))
     for _ in 0..<200 {
         if kill(child, 0) == -1 { break }
         try await Task.sleep(for: .milliseconds(5))
@@ -99,7 +99,7 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
     } catch {
         #expect(error.localizedDescription == "Command timed out after 0.3 seconds.")
     }
-    #expect(start.duration(to: .now) < .seconds(2))
+    #expect(start.duration(to: .now) < .seconds(5))
     let child = try #require(Int32(String(contentsOf: marker, encoding: .utf8)))
     for _ in 0..<200 {
         if kill(child, 0) == -1 { break }

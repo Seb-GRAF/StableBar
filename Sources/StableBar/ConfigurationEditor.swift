@@ -29,6 +29,7 @@ final class ConfigurationEditor {
     var barTab = BarTab.size
     var widgetTab = WidgetTab.style
     var barScreen = ScreenKind.laptop
+    var themeChangesEveryBar = true
     var selectedPackageID: String?
     var diagnosticWidgetID: String?
     var selectedProfileName: String?
@@ -148,9 +149,9 @@ final class ConfigurationEditor {
         return [:]
     }
 
-    func change(_ edit: ConfigurationEdit) {
+    func change(_ edit: ConfigurationEdit, everyBar: Bool = false) {
         if edit.action == .remove { finishEditing() }
-        do { try history.change(edit) }
+        do { try history.change(edit, everyBar: everyBar) }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }

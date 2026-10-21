@@ -2,6 +2,26 @@ import XCTest
 @testable import StableBar
 
 final class WidgetSettingsTests: XCTestCase {
+    @MainActor func testMetricDisplayChoicesReplaceContentAndUndoWithoutChangingPlacementOrActions() throws {
+        let fixture = try ThemeGalleryFixture(#"{"providers":{"power":{"type":"battery"}},"widgets":[{"id":"power","type":"provider","provider":"power","position":"left","open":"com.apple.systempreferences","layout":{"type":"row","style":{"spacing":8},"children":[{"type":"text","text":"Custom"}]}}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editor = ConfigurationEditor(store: store)
+        let before = try fixture.document()
+        XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], source: "percent"), .custom)
+        for choice in [WidgetMetricDisplay.graph, .icon, .meter, .value, .standard] {
+            editor.set(["layout": try XCTUnwrap(choice.layout(for: "percent"))], for: "power")
+            try editor.history.flush()
+            XCTAssertNil(editor.error)
+            XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], source: "percent"), choice)
+            XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
+            XCTAssertEqual(store.configuration?.widgets.first?.open, "com.apple.systempreferences")
+        }
+        for _ in 0..<5 { editor.undo() }
+        XCTAssertEqual(try fixture.document(), before)
+    }
+
     func testWorkspacesKeepTheirOwnClicksAndSpacerHasNoClickControl() throws {
         for properties: [String: ConfigurationValue] in [[:], ["open": .string("com.apple.iCal")], ["onClick": .string("echo keep")]] {
             let workspaces = try widget(properties.merging(["type": .string("workspaces")]) { $1 })
