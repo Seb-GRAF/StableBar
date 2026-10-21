@@ -45,6 +45,7 @@ final class BarEditControls: NSObject {
             guard let visibleFrame = visibleFrames[id] else { continue }
             if controls[id] == nil {
                 let panel = makePanel()
+                panel.alphaValue = 0
                 let actions = BarEditControlsActions(editing: store.barEditing, focusBar: { [weak bar] in bar?.makeKey() })
                 let host = NSHostingView(rootView: BarEditControlsView(actions: actions))
                 panel.contentView = host
@@ -64,12 +65,15 @@ final class BarEditControls: NSObject {
                 .appearance.flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
             let fittingSize = host.fittingSize
             let size = CGSize(width: min(fittingSize.width, max(0, visibleFrame.width - 16)), height: fittingSize.height)
+            let height = bar.barGeometry!.inputHeight
             // Keep the established gap below the edit bar window.
-            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: bar.frame, geometry: nil,
-                                                          visibleFrame: visibleFrame), display: true)
+            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: CGRect(x: bar.frame.minX, y: bar.frame.maxY - height,
+                                                                                    width: bar.frame.width, height: height),
+                                                          geometry: nil, visibleFrame: visibleFrame), display: true)
             entry.panel.invalidateShadow()
             if entry.hasSheet || entry.hasPopover { entry.panel.orderOut(nil) }
             else { entry.panel.orderFrontRegardless() }
+            entry.panel.animator().alphaValue = 1
         }
     }
 
@@ -101,7 +105,11 @@ final class BarEditControls: NSObject {
         NotificationCenter.default.removeObserver(self, name: BarEditAddPopover.changedNotification, object: entry.bar)
         NotificationCenter.default.removeObserver(self, name: NSWindow.willBeginSheetNotification, object: entry.bar)
         NotificationCenter.default.removeObserver(self, name: NSWindow.didEndSheetNotification, object: entry.bar)
-        entry.panel.close()
+        NSAnimationContext.runAnimationGroup { _ in
+            entry.panel.animator().alphaValue = 0
+        } completionHandler: {
+            Task { @MainActor in entry.panel.close() }
+        }
     }
 
     func close() {

@@ -12,9 +12,10 @@ struct BarView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Group {
+        ZStack(alignment: .top) {
             if store.barEditing.isActive && !preview {
                 BarEditView(store: store, display: display)
+                    .transition(.opacity)
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
@@ -108,8 +109,11 @@ struct BarView: View {
                 .frame(height: barGeometry.layoutHeight)
                 .modifier(BarDecorationLayer(geometry: barGeometry, scale: scale, native: nativeDecorations))
                 .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight, alignment: .top)
+                .transition(.opacity)
             }
         }
+        .animation(reduceMotion ? nil : store.configuration.map { .easeOut(duration: $0.bar(on: ScreenKind(display)).animationDuration) },
+                   value: store.barEditing.isActive && !preview)
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
         .frame(maxHeight: .infinity, alignment: .top)

@@ -272,7 +272,7 @@ final class BarEditingTests: XCTestCase {
         store.barEditing.end()
         XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, CGFloat(try XCTUnwrap(store.configuration).bar.height))
         store.barEditing.begin()
-        XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, 52)
+        XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, CGFloat(try XCTUnwrap(store.configuration).bar.height))
     }
 
     @MainActor func testDropIndexUsesFrameMidpointsAndNeverSplitsOrTargetsTheMovingGroup() throws {
@@ -460,6 +460,7 @@ final class BarEditingTests: XCTestCase {
             defer { store.stop() }
             let normal = try XCTUnwrap(store.barEditing.geometry(for: laptop))
             store.barEditing.begin()
+            store.barEditing.measure(height: 80, on: laptop.id)
             XCTAssertEqual(store.barEditing.widgets(on: external).count, 1)
             XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: laptop)).layoutHeight, normal.layoutHeight)
             let payload = store.barEditing.dragSession.begin("hidden")
@@ -534,6 +535,7 @@ final class BarEditingTests: XCTestCase {
             let clearance = { app.clearanceDisplay(frame: frame, visibleFrame: frame, display: display, desktopTop: 2062) }
             let before = try XCTUnwrap(clearance())
             store.barEditing.begin()
+            store.barEditing.measure(height: 80, on: display.id)
             XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: display)).panelHeight, normal.panelHeight)
             let during = try XCTUnwrap(clearance())
             XCTAssertEqual(during, before)

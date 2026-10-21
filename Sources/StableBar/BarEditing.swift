@@ -147,12 +147,8 @@ final class BarEditing {
 
     func geometry(for display: BarDisplay) -> BarGeometry? {
         guard let config = store.configuration?.onScreen(ScreenKind(display)) else { return nil }
-        if !isActive { return config.barGeometry(for: display) }
-        let scale = CGFloat(config.bar.scale(for: display))
-        let initial = max(BarEditTrayMetrics.slot, config.bar.height - 2 * config.bar.margin / scale)
-            + 2 * BarEditTrayMetrics.verticalPadding
-        return BarGeometry(layoutHeight: max(config.bar.height * scale,
-                                            (measuredHeights[display.id] ?? initial * scale) + 2 * config.bar.margin),
+        guard isActive, let height = measuredHeights[display.id] else { return config.barGeometry(for: display) }
+        return BarGeometry(layoutHeight: max(config.bar.height * CGFloat(config.bar.scale(for: display)), height + 2 * config.bar.margin),
                            margin: config.bar.margin, outsideExtent: 0)
     }
 

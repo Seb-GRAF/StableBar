@@ -156,6 +156,7 @@ final class BarEditControlsTests: XCTestCase {
         secondActions.done()
         XCTAssertFalse(store.barEditing.isActive)
         XCTAssertFalse(secondActions.canUndo)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         XCTAssertTrue(presented.allSatisfy(\.closed))
         XCTAssertEqual(firstBar.makeKeyCalls, 1)
         XCTAssertEqual(secondBar.makeKeyCalls, 1)
@@ -253,10 +254,12 @@ final class BarEditControlsTests: XCTestCase {
             default: store.stop()
             }
             XCTAssertFalse(store.barEditing.isActive, exit)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
             XCTAssertTrue(presented.allSatisfy { $0.closed && !$0.simulatedVisible }, exit)
             store.barEditing.begin()
             XCTAssertEqual(presented.count, 4, exit)
             controls.close()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
             XCTAssertTrue(presented.allSatisfy(\.closed), exit)
         }
     }
@@ -290,6 +293,7 @@ final class BarEditControlsTests: XCTestCase {
         XCTAssertTrue(panel.simulatedVisible)
         XCTAssertEqual(presented.count, 2)
         controls.close()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
         XCTAssertFalse(panel.simulatedVisible, "A late sheet notification must not reopen closed controls")
     }
@@ -362,6 +366,7 @@ final class BarEditControlsTests: XCTestCase {
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
         XCTAssertTrue(hidden.simulatedVisible)
         controls.update(store: store, bars: [2: try XCTUnwrap(bars[2])], visibleFrames: visibleFrames)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         XCTAssertTrue(hidden.closed)
         XCTAssertTrue(presented.first { $0 !== hidden }?.simulatedVisible == true)
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
@@ -381,6 +386,7 @@ final class BarEditControlsTests: XCTestCase {
                                           backing: .buffered, defer: false)
             bar.isReleasedWhenClosed = false
             bar.isEditingBar = true
+            bar.barGeometry = BarGeometry(layoutHeight: 64, margin: 4, outsideExtent: 0)
             bar.level = .floating
             bar.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
             return bar
@@ -403,4 +409,5 @@ final class BarEditControlsTests: XCTestCase {
     override func orderFrontRegardless() { simulatedVisible = true }
     override func orderOut(_ sender: Any?) { simulatedVisible = false }
     override func close() { simulatedVisible = false; closed = true; super.close() }
+    override func animator() -> Self { self }
 }
