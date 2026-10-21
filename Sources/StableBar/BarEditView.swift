@@ -144,6 +144,7 @@ private struct BarEditSection: View {
             .overlay {
                 shape.strokeBorder(state.isTarget ? Color.accentColor : surface.hairline, lineWidth: state.isTarget ? 2 : 0.5)
             }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state.isTarget)
             .coordinateSpace(name: "editSection")
             .onPreferenceChange(BarEditFrames.self) { frames = $0 }
             .onPreferenceChange(BarEditRowBounds.self) { rowBounds = $0 }
@@ -300,6 +301,7 @@ struct BarEditTile: View {
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
     private var editing: BarEditing { store.barEditing }
     private var title: String { entry.name + (entry.visibility.isHidden ? ", Hidden" : "") }
 
@@ -367,15 +369,14 @@ struct BarEditTile: View {
                         .allowsHitTesting(false).accessibilityHidden(true).fixedSize()
                 }
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(surface.ink.opacity(0.58), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                    .padding(-2)
-                    .allowsHitTesting(false)
+            .background {
+                RoundedRectangle(cornerRadius: 5).fill(surface.ink.opacity(hovering ? 0.08 : 0)).padding(-2)
             }
+            .animation(reduceMotion || hovering ? nil : .easeOut(duration: 0.1), value: hovering)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .accessibilityLabel("Edit \(title)")
     }
 }

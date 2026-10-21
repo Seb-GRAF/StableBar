@@ -44,7 +44,15 @@ final class BarEditDragSourceView: WidgetDragSourceView {
         return self
     }
 
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+
+    override func mouseDown(with event: NSEvent) {
+        NSCursor.closedHand.set()
+        super.mouseDown(with: event)
+    }
+
     override func mouseUp(with event: NSEvent) {
+        NSCursor.openHand.set()
         if mouseDownPoint != nil, bounds.contains(convert(event.locationInWindow, from: nil)) { select() }
         super.mouseUp(with: event)
     }
@@ -115,7 +123,10 @@ final class BarEditDropTargetView: WidgetHostingView {
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
         guard let payload = acceptedPayload(sender), let target = target(sender, payload: payload) else { return [] }
-        if editing?.insertion != target { editing?.insertion = target }
+        if editing?.insertion != target {
+            editing?.insertion = target
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
         return .move
     }
 
