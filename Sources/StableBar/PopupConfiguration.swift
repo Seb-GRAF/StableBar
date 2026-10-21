@@ -57,6 +57,8 @@ indirect enum PopupContent: Sendable {
     case image(path: String, source: String?, fit: ImageFit)
     case symbol(name: String, source: String?)
     case progress(source: String, height: Double)
+    /// Bars that bounce while `fields[source]` is on, or always without a source.
+    case equalizer(source: String?, height: Double)
     /// The frontmost app's icon, drawn by an active-app widget's default layout. Configurations can't use it.
     case appIcon
     /// The update on offer and its download button, drawn by the update tile's popup. Configurations can't use it.
@@ -193,6 +195,12 @@ struct PopupBlock: Decodable, Sendable {
         case "progress":
             content = .progress(source: try values.decode(String.self, forKey: .source),
                                 height: try values.decode(Double.self, forKey: .height))
+        case "equalizer":
+            let height = try values.decodeIfPresent(Double.self, forKey: .height) ?? 12
+            guard height > 0, height.isFinite else {
+                throw DecodingError.dataCorruptedError(forKey: .height, in: values, debugDescription: "An equalizer's height must be greater than zero.")
+            }
+            content = .equalizer(source: try values.decodeIfPresent(String.self, forKey: .source), height: height)
         default:
             throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown popup block type.")
         }

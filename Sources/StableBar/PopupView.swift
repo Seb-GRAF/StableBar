@@ -339,6 +339,8 @@ struct PopupBlockView: View {
                          animation: block.animation ?? WidgetAnimation(), color: appearance.accent,
                          track: style.text.background?.color ?? .clear, cornerRadius: appearance.cornerRadius)
                 .frame(height: height)
+        case let .equalizer(source, height):
+            Equalizer(playing: source.map { fields[$0] == "true" || fields[$0] == "1" || context.values[$0] == 1 } ?? true, height: height)
         case .appIcon:
             if let icon = context.appIcon {
                 Image(nsImage: icon).resizable().frame(width: appearance.iconSize, height: appearance.iconSize)

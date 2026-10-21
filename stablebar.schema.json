@@ -841,7 +841,8 @@
                 "divider",
                 "image",
                 "symbol",
-                "progress"
+                "progress",
+                "equalizer"
               ]
             },
             {

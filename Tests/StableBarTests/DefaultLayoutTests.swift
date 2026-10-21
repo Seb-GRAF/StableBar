@@ -151,6 +151,33 @@ private enum FrontmostApp {
     }
 }
 
+/// A drawing is one frame, so this checks the still shapes: playing in the measuring copy and under
+/// Reduce Motion, and settled when the source is off.
+@Test @MainActor func equalizersDrawStillWhileMeasuredAndSettleWhenTheirSourceIsOff() throws {
+    let style = WidgetStyle(foreground: HexColor(0x2255ccff))
+    let block = try decode(PopupBlock.self, #"{"type":"equalizer","source":"playing"}"#)
+    let always = try decode(PopupBlock.self, #"{"type":"equalizer"}"#)
+    func drawing(_ block: PopupBlock, fields: [String: String] = [:], values: [String: Double] = [:],
+                 _ environment: @escaping (inout EnvironmentValues) -> Void) throws -> Drawing {
+        let context = BlockContext(values: values, fillsWidth: false, open: { _ in }, runAction: { _, _ in })
+        return try draw(PopupBlockView(block: block, inheritedStyle: style, fields: fields, context: context)
+            .transformEnvironment(\.self, transform: environment))
+    }
+    let measuring: (inout EnvironmentValues) -> Void = { $0.measuringBarWidths = true }
+    let reduceMotion: (inout EnvironmentValues) -> Void = { $0._accessibilityReduceMotion = true }
+    let playing = try drawing(always, measuring)
+    #expect(playing.width == 28 && playing.height == 24, "Four 2 pt bars, 2 pt apart, 12 pt tall, at 2×")
+    #expect(try drawing(always, reduceMotion).difference(from: playing) <= tolerance)
+    for on in [["playing": "1"], ["playing": "true"]] {
+        #expect(try drawing(block, fields: on, measuring).difference(from: playing) <= tolerance, "\(on)")
+    }
+    #expect(try drawing(block, values: ["playing": 1], measuring).difference(from: playing) <= tolerance)
+    let settled = try drawing(block, fields: ["playing": ""], measuring)
+    #expect(settled.width == playing.width && settled.height == playing.height, "Settling keeps the footprint")
+    #expect(settled.difference(from: playing) > tolerance)
+    #expect(try drawing(block, measuring).difference(from: settled) <= tolerance, "A missing field is off")
+}
+
 @Test func defaultLayoutsDrawTheWidgetsHoverAndOpenStylesWhileConfiguredLayoutsKeepTheirOwnHover() throws {
     let resolution = ResolvedWidgetStyle(base: try decode(WidgetStyle.self, ##"""
     {"foreground":"#111111","states":{"hover":{"fontWeight":"bold","foreground":"#222222"},"open":{"foreground":"#333333"}}}

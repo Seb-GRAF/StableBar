@@ -1104,6 +1104,7 @@ Layout blocks:
 | `image` | `path` or `source` | Local path, `file://`, or HTTP(S) image; `source` reads a path from `fields`. `fit` is `fit` or `fill`; size defaults to 52 × 52. |
 | `symbol` | `name` or `source` | SF Symbol; `source` reads its name from `fields`. `style.iconSize` sets its size. |
 | `progress` | `source`, `height` | A rule using `values[source]`, optionally moving toward `targets[source]`. `style.accent` is the fill and `style.background` the track. |
+| `equalizer` | — | Four bars that bounce in the text color while `source` is on, for `"true"`/`"1"` in fields or 1 in values, and settle low when it's off; without `source` they always bounce. `height` defaults to 12. Reduce Motion keeps them still. |
 
 Every block accepts `style` and `alignment` (`leading`, `center`, `trailing`). Fonts, text color, accent and spacing inherit from the containing block. Width, padding, background, hover background and border apply only when set on that block. Set a width on numeric fields and their headings to align columns. Blocks without a width use the available space.
 
