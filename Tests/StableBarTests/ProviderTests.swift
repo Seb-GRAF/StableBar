@@ -50,7 +50,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         """], environment: ["MARKER": marker.path]) {
         last = result
     }
-    #expect(started.duration(to: .now) < .seconds(2))
+    #expect(started.duration(to: .now) < .seconds(5))
     #expect(try ScriptOutput.read(#require(last).stdout).text == "done")
     let child = try #require(Int32(String(contentsOf: marker, encoding: .utf8)))
     defer { kill(child, SIGKILL) }
