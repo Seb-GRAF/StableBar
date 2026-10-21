@@ -22,8 +22,6 @@ struct BuiltInLabel: View {
                 }
                 Text(label.text).lineLimit(1)
             }
-        case .clock:
-            text.monospacedDigit()
         case .script, .provider:
             HStack(spacing: appearance.spacing) {
                 if let samples {
@@ -44,7 +42,7 @@ struct BuiltInLabel: View {
             Text(" ").hidden()
             HStack(spacing: appearance.spacing) {
                 if let icon = label.icon { Image(systemName: icon).font(.system(size: appearance.iconSize)) }
-                if !label.text.isEmpty { Text(label.text).lineLimit(1) }
+                if !label.text.isEmpty { Text(label.text).lineLimit(1).monospacedDigit() }
             }
         }
     }

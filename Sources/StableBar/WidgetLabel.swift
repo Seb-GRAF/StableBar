@@ -56,7 +56,7 @@ extension WidgetConfiguration {
     /// none.
     func defaultLayout(_ label: WidgetLabel, output: ScriptOutput?, appIcon: Bool, providerType: String? = nil) -> PopupBlock? {
         let icon = label.icon.map { _ in PopupBlock(content: .symbol(name: "", source: "icon")) }
-        let text = PopupBlock(content: .field("text"), hideWhenEmpty: "text", monospacedDigits: false)
+        let text = PopupBlock(content: .field("text"), hideWhenEmpty: "text")
         switch content {
         case .text:
             return PopupBlock(content: .row([icon, text].compactMap { $0 }), keepsLineHeight: true)

@@ -146,7 +146,7 @@ private enum FrontmostApp {
             let label = widget.label(output: output, activeApp: nil, date: .now)
             let layout = try #require(widget.defaultLayout(label, output: output, appIcon: false, providerType: named ? type : nil))
             // Sound shows its volume only after a change, so at rest it is the icon alone.
-            let value = type == "audio" ? nil : PopupBlock(content: .field("text"), hideWhenEmpty: "text", monospacedDigits: false)
+            let value = type == "audio" ? nil : PopupBlock(content: .field("text"), hideWhenEmpty: "text")
             let speaker = PopupBlock(content: .symbol(name: "", source: "icon"), widestSymbol: type == "audio" ? AudioMonitor.widestIcon : nil)
             let expected = PopupBlock(content: .row([speaker, value].compactMap { $0 }), keepsLineHeight: true)
             let context = BlockContext(samples: [0.85], values: [source: 0.85], fillsWidth: false, open: { _ in }, runAction: { _, _ in })
