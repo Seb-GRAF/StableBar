@@ -29,6 +29,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             store.onCustomizeProfile = { [weak editor] name in editor?.showProfile(name) }
             window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor))
             window.center()
+            window.setFrameAutosaveName("StableBarSettings")
             self.window = window
         }
         if let widgetID { editor?.showWidget(widgetID) }
