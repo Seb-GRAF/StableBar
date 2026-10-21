@@ -520,7 +520,8 @@ struct WidgetBlocks: View {
         let script = store.scripts[widget.id]
         let label = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields)
         let appIcon = widget.content == .activeApp ? store.activeApp?.icon : nil
-        if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil) {
+        let providerType = widget.providerName.flatMap { store.configuration?.providers[$0]?.type }
+        if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil, providerType: providerType) {
             PopupBlockView(block: layout, inheritedStyle: style.inherited, fields: label.fields,
                            context: BlockContext(lists: script?.output.lists ?? [:], samples: script?.samples ?? [],
                                                  menu: script?.output.menu ?? widget.menu ?? [], values: script?.output.values ?? [:],
