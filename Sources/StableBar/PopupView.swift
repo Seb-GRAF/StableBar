@@ -201,6 +201,9 @@ struct PopupBlockView: View {
         case .center: .center
         case .trailing: .trailing
         }
+        // A fixed width wins over the limits. Without either, a block in a popup fills the width.
+        let minWidth: CGFloat? = box.width == nil ? box.minWidth.map { CGFloat($0) } : nil
+        let maxWidth: CGFloat? = box.width == nil ? box.maxWidth.map { CGFloat($0) } ?? (context.fillsWidth ? .infinity : nil) : nil
         return Group {
             if handlesInteraction {
                 content(resting, appearance: appearance)
@@ -227,7 +230,7 @@ struct PopupBlockView: View {
             .padding(.top, box.paddingTop ?? box.paddingVertical ?? 0)
             .padding(.bottom, box.paddingBottom ?? box.paddingVertical ?? 0)
             .frame(width: box.width.map { CGFloat($0) }, height: box.height.map { CGFloat($0) }, alignment: alignment)
-            .frame(maxWidth: context.fillsWidth && box.width == nil ? .infinity : nil, alignment: alignment)
+            .frame(minWidth: minWidth, maxWidth: maxWidth, alignment: alignment)
             .background(box.background?.color ?? .clear, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)

@@ -151,6 +151,41 @@ private enum FrontmostApp {
     }
 }
 
+@Test @MainActor func scrollingTextTakesItsOwnWidthUpToMaxWidth() throws {
+    let context = BlockContext(fillsWidth: false, open: { _ in }, runAction: { _, _ in })
+    func drawing(_ text: String, style: String, scrolls: Bool = true) throws -> Drawing {
+        let speed = scrolls ? #","scrollSpeed":20"# : ""
+        let block = try decode(PopupBlock.self, #"{"type":"field","field":"title"\#(speed),"style":\#(style)}"#)
+        return try draw(PopupBlockView(block: block, inheritedStyle: WidgetStyle(fontSize: 13), fields: ["title": text], context: context))
+    }
+    let short = "Mikasa"
+    let long = "Mikasa — Moha MMZ, the extended mix that keeps going"
+    let plain = try drawing(short, style: "{}", scrolls: false)
+    #expect(plain.width < 320)
+    #expect(try drawing(short, style: #"{"maxWidth":160}"#).width == plain.width, "A short title leaves no gap after it")
+    #expect(try drawing(long, style: #"{"maxWidth":160}"#).width == 320, "A long title stops at maxWidth")
+    #expect(try drawing(short, style: #"{"minWidth":160}"#).width == 320)
+    #expect(try drawing(short, style: #"{"width":160}"#).width == 320, "A fixed width keeps its footprint")
+    #expect(try drawing(long, style: #"{"width":160,"maxWidth":40}"#).width == 320, "A fixed width wins over maxWidth")
+}
+
+@Test @MainActor func blocksStayWithinTheirMinimumAndMaximumWidths() throws {
+    func width(_ json: String, fillsWidth: Bool = false, offered: CGFloat? = nil) throws -> Int {
+        let block = try decode(PopupBlock.self, json)
+        let renderer = ImageRenderer(content: PopupBlockView(block: block, inheritedStyle: WidgetStyle(fontSize: 13), fields: [:],
+                                                             context: BlockContext(fillsWidth: fillsWidth, open: { _ in }, runAction: { _, _ in })))
+        renderer.proposedSize = ProposedViewSize(width: offered, height: nil)
+        return try #require(renderer.cgImage).width
+    }
+    let text = try width(#"{"type":"text","text":"Ready"}"#)
+    #expect(try width(#"{"type":"text","text":"Ready","style":{"maxWidth":200}}"#) == text)
+    #expect(try width(#"{"type":"text","text":"Ready","style":{"minWidth":200}}"#) == 200)
+    #expect(try width(#"{"type":"text","text":"A much longer status line","style":{"maxWidth":40}}"#) == 40)
+    #expect(try width(#"{"type":"text","text":"Ready"}"#, fillsWidth: true, offered: 300) == 300)
+    #expect(try width(#"{"type":"text","text":"Ready","style":{"maxWidth":120}}"#, fillsWidth: true, offered: 300) == 120,
+            "A popup block fills the width up to its maxWidth")
+}
+
 @Test func defaultLayoutsDrawTheWidgetsHoverAndOpenStylesWhileConfiguredLayoutsKeepTheirOwnHover() throws {
     let resolution = ResolvedWidgetStyle(base: try decode(WidgetStyle.self, ##"""
     {"foreground":"#111111","states":{"hover":{"fontWeight":"bold","foreground":"#222222"},"open":{"foreground":"#333333"}}}
