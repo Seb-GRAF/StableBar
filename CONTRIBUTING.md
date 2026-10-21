@@ -41,6 +41,8 @@ Both release channels come from `main`:
 - **Beta:** after the tests pass on `main`, CI builds `dist/StableBar.dmg` as the next version plus `-beta.<UTC timestamp>.<run number>`, such as `0.5.0-beta.20261020103000.114`, and publishes it as a GitHub prerelease. The timestamp uses `YYYYMMDDHHMMSS` so GitHub's alphabetical prerelease sorting keeps same-day betas in order when the run number gains a digit. A beta commits nothing. A push with no releasable commits since the last stable release makes no beta.
 - **Stable:** a maintainer starts it from **Actions → CI → Run workflow** on `main`. It releases the newest commit on `main`, and only once that commit has shipped as a beta, so stable ships what beta users have run. It sets `CFBundleShortVersionString` to the version and `CFBundleVersion` to the run number in [Resources/Info.plist](Resources/Info.plist) with `scripts/set-version.sh`, adds its notes to `CHANGELOG.md`, commits both as `chore(release): <version>`, tags `v<version>` and publishes a GitHub release with the DMG.
 
+To retry a missing beta, use **Actions → CI → Run workflow** on `main` and choose **beta** as the release channel. The default channel is **stable**.
+
 Both jobs use the CI run number, which only goes up, so a stable build always numbers higher than the betas before it. In-app updates compare that number to find the newest release.
 
 Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed: Sparkle installs an update only when it's signed by the same developer as the running app. Without one, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:

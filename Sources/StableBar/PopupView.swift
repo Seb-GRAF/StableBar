@@ -201,36 +201,31 @@ struct PopupBlockView: View {
         case .center: .center
         case .trailing: .trailing
         }
-        // A fixed width wins over the limits. Without either, a block in a popup fills the width.
-        let minWidth: CGFloat? = box.width == nil ? box.minWidth.map { CGFloat($0) } : nil
-        let maxWidth: CGFloat? = box.width == nil ? box.maxWidth.map { CGFloat($0) } ?? (context.fillsWidth ? .infinity : nil) : nil
         return Group {
             if handlesInteraction {
-                content(resting, appearance: appearance)
+                boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
             } else if let command = block.onClickField.flatMap({ fields[$0] }) ?? block.onClick {
-                Button { context.runAction(command, [:]) } label: { content(resting, appearance: appearance) }
+                Button { context.runAction(command, [:]) } label: {
+                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                }
                     .buttonStyle(.plain)
             } else if let value = block.openField.flatMap({ fields[$0] }) ?? block.open {
-                Button { if let target = OpenTarget(value) { context.open(target) } } label: { content(resting, appearance: appearance) }
+                Button { if let target = OpenTarget(value) { context.open(target) } } label: {
+                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                }
                     .buttonStyle(.plain)
             } else if block.keepsLineHeight {
-                ZStack {
+                boxed(ZStack {
                     Text(" ").hidden()
                     content(resting, appearance: appearance)
-                }
+                }, box: box, alignment: alignment)
             } else {
-                content(resting, appearance: appearance)
+                boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
             }
         }
             .font(appearance.font)
             .foregroundStyle(current.text.foreground?.color ?? appearance.foreground)
             .tint(appearance.accent)
-            .padding(.leading, box.paddingLeading ?? box.paddingHorizontal ?? 0)
-            .padding(.trailing, box.paddingTrailing ?? box.paddingHorizontal ?? 0)
-            .padding(.top, box.paddingTop ?? box.paddingVertical ?? 0)
-            .padding(.bottom, box.paddingBottom ?? box.paddingVertical ?? 0)
-            .frame(width: box.width.map { CGFloat($0) }, height: box.height.map { CGFloat($0) }, alignment: alignment)
-            .frame(minWidth: minWidth, maxWidth: maxWidth, alignment: alignment)
             .background(box.background?.color ?? .clear, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
@@ -241,6 +236,22 @@ struct PopupBlockView: View {
             .onHover { pointerInside = $0 }
             .animation(reduceMotion ? nil : block.animation?.value, value: box)
             .animation(reduceMotion ? nil : block.animation?.value, value: hovered)
+    }
+
+    /// The block's content in the box its style gives it. A click anywhere in the box, including its
+    /// padding and configured size, reaches the block's action, not only its glyph or text.
+    private func boxed(_ content: some View, box: WidgetStyle, alignment: Alignment) -> some View {
+        // A fixed width wins over the limits. Without either, a block in a popup fills the width.
+        let minWidth: CGFloat? = box.width == nil ? box.minWidth.map { CGFloat($0) } : nil
+        let maxWidth: CGFloat? = box.width == nil ? box.maxWidth.map { CGFloat($0) } ?? (context.fillsWidth ? .infinity : nil) : nil
+        return content
+            .padding(.leading, box.paddingLeading ?? box.paddingHorizontal ?? 0)
+            .padding(.trailing, box.paddingTrailing ?? box.paddingHorizontal ?? 0)
+            .padding(.top, box.paddingTop ?? box.paddingVertical ?? 0)
+            .padding(.bottom, box.paddingBottom ?? box.paddingVertical ?? 0)
+            .frame(width: box.width.map { CGFloat($0) }, height: box.height.map { CGFloat($0) }, alignment: alignment)
+            .frame(minWidth: minWidth, maxWidth: maxWidth, alignment: alignment)
+            .contentShape(Rectangle())
     }
 
     /// A child block, built as a concrete view so SwiftUI diffs it without type erasure.
