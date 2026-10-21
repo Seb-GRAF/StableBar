@@ -156,7 +156,7 @@ final class BarEditControlsTests: XCTestCase {
         secondActions.done()
         XCTAssertFalse(store.barEditing.isActive)
         XCTAssertFalse(secondActions.canUndo)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        waitForFade { presented.allSatisfy(\.closed) }
         XCTAssertTrue(presented.allSatisfy(\.closed))
         XCTAssertEqual(firstBar.makeKeyCalls, 1)
         XCTAssertEqual(secondBar.makeKeyCalls, 1)
@@ -254,12 +254,12 @@ final class BarEditControlsTests: XCTestCase {
             default: store.stop()
             }
             XCTAssertFalse(store.barEditing.isActive, exit)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+            waitForFade { presented.allSatisfy(\.closed) }
             XCTAssertTrue(presented.allSatisfy { $0.closed && !$0.simulatedVisible }, exit)
             store.barEditing.begin()
             XCTAssertEqual(presented.count, 4, exit)
             controls.close()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+            waitForFade { presented.allSatisfy(\.closed) }
             XCTAssertTrue(presented.allSatisfy(\.closed), exit)
         }
     }
@@ -293,7 +293,7 @@ final class BarEditControlsTests: XCTestCase {
         XCTAssertTrue(panel.simulatedVisible)
         XCTAssertEqual(presented.count, 2)
         controls.close()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        waitForFade { panel.closed }
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
         XCTAssertFalse(panel.simulatedVisible, "A late sheet notification must not reopen closed controls")
     }
@@ -366,7 +366,7 @@ final class BarEditControlsTests: XCTestCase {
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
         XCTAssertTrue(hidden.simulatedVisible)
         controls.update(store: store, bars: [2: try XCTUnwrap(bars[2])], visibleFrames: visibleFrames)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        waitForFade { hidden.closed }
         XCTAssertTrue(hidden.closed)
         XCTAssertTrue(presented.first { $0 !== hidden }?.simulatedVisible == true)
         NotificationCenter.default.post(name: NSWindow.didEndSheetNotification, object: bar)
@@ -391,6 +391,13 @@ final class BarEditControlsTests: XCTestCase {
             bar.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
             return bar
         }
+    }
+}
+
+@MainActor private func waitForFade(_ condition: () -> Bool) {
+    for _ in 0..<100 {
+        if condition() { return }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
     }
 }
 
