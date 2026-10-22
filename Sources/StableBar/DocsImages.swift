@@ -206,7 +206,7 @@ enum DocsImages {
          {"title":"Release planning","start":"16:30","end":"17:15"}]}}
         """#,
         "controls": #"""
-        {"text":"balanced · 35%","fields":{"enabled":"true","mode":"balanced"},"values":{"level":35},
+        {"text":"balanced · 35%","fields":{"enabled":"true","mode":"balanced"},"values":{"level":0.35},
          "lists":{"apps":[{"name":"Finder"},{"name":"Calendar"},{"name":"Activity Monitor"},{"name":"Terminal"}]}}
         """#
     ]
@@ -235,7 +235,7 @@ enum DocsImages {
           "type": "column",
           "children": [
             { "type": "text", "text": "Controls", "role": "heading" },
-            { "type": "slider", "title": "Level", "source": "level", "min": 0, "max": 100, "onChange": "true" },
+            { "type": "slider", "title": "Level", "source": "level", "onChange": "true" },
             { "type": "toggle", "title": "Enabled", "source": "enabled", "onChange": "true" },
             {
               "type": "segmented", "title": "Mode", "source": "mode", "onChange": "true",
