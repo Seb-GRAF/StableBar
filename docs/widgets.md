@@ -14,7 +14,7 @@
 
 **Add widget** includes Clock, Active app, Apple menu, App menus, Battery, Sound, CPU, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu and App menus need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
 
-The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
+The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
 ## App menus
 

@@ -103,13 +103,13 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     try Data(script.utf8).write(to: executable)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
     let store = WorkspaceStore()
-    store.reconnectDelay = .milliseconds(40)
+    store.reconnectDelay = 0.04
     store.executablePath = { executable.path }
     var changes: [String?] = []
     store.onModeChange = { changes.append($0) }
     store.configure(source: .aerospace, workspaces: false, mode: true)
     defer { store.stop() }
-    for _ in 0..<160 {
+    for _ in 0..<500 {
         if changes.filter({ $0 == "tailing" }).count >= 2 { break }
         try await Task.sleep(for: .milliseconds(20))
     }
@@ -229,7 +229,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
 @Test @MainActor func optionalModeConnectionFailureStaysInDiagnosticsAndStopDoesNotReenter() async throws {
     let workspace = WorkspaceStore()
     workspace.executablePath = { throw CommandFailure(message: "Fixture unavailable") }
-    workspace.reconnectDelay = .seconds(30)
+    workspace.reconnectDelay = 30
     workspace.configure(source: .aerospace, workspaces: false, mode: true)
     for _ in 0..<40 {
         if workspace.connectionError != nil { break }

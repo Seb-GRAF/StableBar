@@ -99,7 +99,7 @@ final class WorkspaceStore {
     var workspaces: [Workspace] = []
     var error: String?
     private(set) var connectionError: String?
-    var reconnectDelay: Duration = .seconds(2)
+    var reconnectDelay = 2.0
     var onWorkspaceChange: (() -> Void)?
     var onModeChange: ((String?) -> Void)?
     private(set) var mode: String?
@@ -112,7 +112,7 @@ final class WorkspaceStore {
     private var stopping = false
     private var task: Task<Void, Never>?
     private var process: Process?
-    private var spaceObservers: [NSObjectProtocol] = []
+    private var observers: [NSObjectProtocol] = []
 
     func workspaces(on monitor: Int, showEmpty: Bool) -> [Workspace] {
         workspaces.filter {
@@ -142,7 +142,7 @@ final class WorkspaceStore {
         if source == .spaces {
             task = Task { }
             let center = NSWorkspace.shared.notificationCenter
-            spaceObservers = [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification,
+            observers = [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification,
                               NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification].map {
                 center.addObserver(forName: $0, object: nil, queue: .main) { [weak self] _ in
                     MainActor.assumeIsolated { self?.requestRefresh() }
@@ -151,8 +151,16 @@ final class WorkspaceStore {
             requestRefresh()
             return
         }
+        observers = [NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
+            guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+                    == "bobko.aerospace" else { return }
+            MainActor.assumeIsolated { self?.start() }
+        }]
         task = Task {
+            var failures = 0
             while !Task.isCancelled {
+                let started = ContinuousClock.now
                 do {
                     let stream = Process()
                     let output = Pipe()
@@ -204,7 +212,9 @@ final class WorkspaceStore {
                     connectionError = error.localizedDescription
                     if tracksWorkspaces { self.error = error.localizedDescription }
                 }
-                do { try await Task.sleep(for: reconnectDelay) }
+                if started.duration(to: .now) >= .seconds(10) { failures = 0 }
+                failures += 1
+                do { try await Task.sleep(for: .seconds(providerRetryDelay(interval: reconnectDelay, failures: failures))) }
                 catch { return }
             }
         }
@@ -347,7 +357,7 @@ final class WorkspaceStore {
         task = nil
         if let process, process.isRunning { process.terminate() }
         process = nil
-        for observer in spaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
-        spaceObservers = []
+        for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        observers = []
     }
 }
