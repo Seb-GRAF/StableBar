@@ -23,7 +23,7 @@ The developer's own StableBar is usually running while you work.
 - `swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`.
 - Run the tests for what you changed with `swift test --filter <name>`. CI runs the whole suite on macOS for every pull request.
 - `StableBar --validate PATH` checks a configuration without starting its scripts.
-- Visible changes (the bar, popups, setup, Settings) need before/after screenshots in the pull request. Ask before launching the app or taking screenshots: a second bar appears on the developer's screen.
+- Visible changes (the bar, popups, setup, Settings) need before/after screenshots in the pull request. Ask before launching the app or taking screenshots: a second bar appears on the developer's screen. `StableBar --render-docs-images DIR` draws the bar, popups and Settings in offscreen windows instead, so nothing appears on screen.
 
 ## Hit every surface
 

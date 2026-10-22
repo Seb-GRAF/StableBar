@@ -1,0 +1,254 @@
+import AppKit
+import SwiftUI
+
+/// Draws the images in docs/images from the real bar, popup and Settings views, in the dark and
+/// light appearance. Sample data and a fixed time give the same pixels on every run until the views
+/// change. `scripts/render-docs-images.sh` runs it and converts the images to WebP.
+@MainActor
+enum DocsImages {
+    static func render(to directory: URL) async throws {
+        let samples = FileManager.default.temporaryDirectory.appending(path: "stablebar-docs-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: samples) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for appearance in ["dark", "light"] {
+            let dark = appearance == "dark"
+            func store(_ name: String, theme: String?, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
+                try sampleStore(in: samples.appending(path: "\(name)-\(appearance)"), theme: theme, dark: dark, widgets: widgets)
+            }
+            func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore]) async throws {
+                try await snapshot(content, size: size, dark: dark, stores: stores, to: directory.appending(path: "\(name)-\(appearance).png"))
+            }
+
+            let bar = try store("bar", theme: "rose-pine")
+            try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 270), stores: [bar])
+
+            let themes = try ThemeCatalog(packages: samples.appending(path: "packages")).choices.map { choice in
+                (choice.manifest.name, try store(choice.manifest.id, theme: choice.isBuiltIn ? nil : choice.manifest.id))
+            }
+            try await save(gallery(themes, dark: dark).background { backdrop(dark: dark) }, "themes",
+                           size: NSSize(width: 1100, height: 78 * CGFloat(themes.count) + 10), stores: themes.map(\.1))
+            themes.forEach { $0.1.stop() }
+
+            let controls = try store("controls", theme: "rose-pine", widgets: barWidgets + [controlsWidget])
+            let popups = HStack(alignment: .top, spacing: 24) {
+                popup(controls, "system-monitor")
+                popup(controls, "meeting")
+                popup(controls, "controls")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            try await save(popups.background { backdrop(dark: dark) }, "popups", size: NSSize(width: 1100, height: 330), stores: [controls])
+            controls.stop()
+
+            bar.showScreenSetup(ScreenSetup([display]))
+            let editor = ConfigurationEditor(store: bar)
+            editor.section = .appearance
+            try await save(SettingsView(store: bar, editor: editor).background(Color(nsColor: .windowBackgroundColor)), "settings",
+                           size: NSSize(width: 1080, height: 760), stores: [bar])
+            bar.stop()
+        }
+    }
+
+    private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+    private static let darkBackdrop = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
+
+    private static func backdrop(dark: Bool) -> some View {
+        Image(nsImage: dark ? darkBackdrop : Wallpaper.image!).resizable().scaledToFill()
+    }
+
+    private static func bar(_ store: BarStore) -> some View {
+        BarView(store: store, display: display)
+            .frame(height: store.configuration!.barGeometry(for: display).panelHeight)
+            .environment(\.screenKind, .monitor)
+    }
+
+    /// The bar with the meeting's agenda open below it, centered under the widget as `WidgetPopup` places it.
+    private static func hero(_ store: BarStore) -> some View {
+        bar(store)
+            .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
+                GeometryReader { proxy in
+                    if let meeting = anchors.widgets["meeting"] {
+                        let frame = proxy[meeting.bounds]
+                        popup(store, "meeting").frame(width: 0).offset(x: frame.midX, y: frame.maxY + 4)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private static func gallery(_ themes: [(String, BarStore)], dark: Bool) -> some View {
+        VStack(spacing: 0) {
+            ForEach(themes, id: \.0) { name, store in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55))
+                        .padding(.leading, 16)
+                    bar(store)
+                }
+                .frame(height: 78, alignment: .top)
+            }
+        }
+        .padding(.top, 12)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private static func popup(_ store: BarStore, _ id: String) -> some View {
+        let configuration = store.configuration!.look(on: .monitor)
+        let widget = configuration.widgets.first { $0.id == id }!
+        let popup = widget.popup!
+        let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults))
+        return PopupView(popup: popup, style: style, store: store, widget: widget)
+            .environment(\.screenKind, .monitor)
+            .frame(width: CGFloat(popup.style.width ?? 360))
+            .fixedSize(horizontal: false, vertical: true)
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+    }
+
+    /// A bar whose data comes from sample files, with Finder as the active app. Its workspaces come
+    /// from a stand-in for AeroSpace, so the bar never reaches the AeroSpace running on this Mac.
+    private static func sampleStore(in directory: URL, theme: String?, dark: Bool,
+                                    widgets: [[String: ConfigurationValue]]) throws -> BarStore {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for (name, json) in sampleOutput { try Data(json.utf8).write(to: directory.appending(path: "\(name).json")) }
+        let aerospace = directory.appending(path: "aerospace")
+        try Data("""
+        #!/bin/sh
+        case "$1" in
+        subscribe) exec /bin/sleep 600 ;;
+        list-workspaces) exec /bin/cat "${0%/*}/workspaces.json" ;;
+        list-windows) exec /bin/cat "${0%/*}/windows.json" ;;
+        esac
+        """.utf8).write(to: aerospace)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: aerospace.path)
+        var configuration: [String: ConfigurationValue] = [
+            "bar": .object(["offset": .number(0), "appearance": .string(dark ? "dark" : "light")]),
+            "providers": .object(Dictionary(uniqueKeysWithValues: ["system", "calendar", "battery"].map { name in
+                (name, .object(["type": .string("command"), "command": .string("/bin/cat \"$CONFIG_DIR/\(name).json\""),
+                                "interval": .number(3600)]))
+            })),
+            "widgets": .array(widgets.map(ConfigurationValue.object))
+        ]
+        if let theme { configuration["theme"] = .object(["id": .string(theme)]) }
+        let url = directory.appending(path: "config.json")
+        try JSONEncoder().encode(configuration).write(to: url)
+        let store = BarStore(configurationURL: url)
+        store.workspaceStore.executablePath = { aerospace.path }
+        store.reloadConfiguration()
+        store.activeApp = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
+        return store
+    }
+
+    /// Waits for the sample workspaces and every sample command's output, adds the CPU history they
+    /// can't supply and lets the views settle, then draws the content at twice its size in an
+    /// offscreen window below the desktop icons.
+    private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], to url: URL) async throws {
+        let view = NSHostingView(rootView: content
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14))))
+        view.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: NSRect(x: -9000, y: -6000, width: size.width, height: size.height),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.contentView = view
+        window.orderFrontRegardless()
+        while stores.contains(where: { $0.workspaceStore.workspaces.isEmpty || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        for store in stores { store.scripts["system-monitor"]?.samples = cpuHistory }
+        try await Task.sleep(for: .seconds(3))
+        let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        image.size = size
+        view.cacheDisplay(in: view.bounds, to: image)
+        try image.representation(using: .png, properties: [:])!.write(to: url)
+        window.orderOut(nil)
+    }
+
+    private static let cpuHistory: [Double] = (0..<60).map { index in
+        let t = Double(index)
+        return 0.2 + 0.1 * sin(t / 4) + 0.07 * sin(t / 1.3) + ((41...46).contains(index) ? 0.25 : 0)
+    }
+
+    private static let sampleOutput = [
+        "workspaces": #"""
+        [{"workspace":"1","workspace-is-focused":false,"workspace-is-visible":false,"monitor-appkit-nsscreen-screens-id":1},
+         {"workspace":"2","workspace-is-focused":true,"workspace-is-visible":true,"monitor-appkit-nsscreen-screens-id":1},
+         {"workspace":"3","workspace-is-focused":false,"workspace-is-visible":false,"monitor-appkit-nsscreen-screens-id":1},
+         {"workspace":"4","workspace-is-focused":false,"workspace-is-visible":false,"monitor-appkit-nsscreen-screens-id":1}]
+        """#,
+        "windows": #"""
+        [{"workspace":"1","app-name":"Safari","app-bundle-id":"com.apple.Safari","window-id":1,"window-title":"Safari"},
+         {"workspace":"2","app-name":"Xcode","app-bundle-id":"com.apple.dt.Xcode","window-id":2,"window-title":"StableBar"},
+         {"workspace":"2","app-name":"Terminal","app-bundle-id":"com.apple.Terminal","window-id":3,"window-title":"zsh"},
+         {"workspace":"3","app-name":"Mail","app-bundle-id":"com.apple.mail","window-id":4,"window-title":"Inbox"},
+         {"workspace":"3","app-name":"Calendar","app-bundle-id":"com.apple.iCal","window-id":5,"window-title":"Calendar"},
+         {"workspace":"4","app-name":"Music","app-bundle-id":"com.apple.Music","window-id":6,"window-title":"Music"}]
+        """#,
+        "system": #"{"text":"18%","icon":"cpu","value":0.18,"fields":{"cpu":"18","memory":"54"},"values":{"cpu":0.18,"memory":0.54}}"#,
+        "battery": #"""
+        {"text":"82%","icon":"battery.75percent","values":{"percent":0.82},
+         "fields":{"percent":"82","state":"battery","present":"true"}}
+        """#,
+        "calendar": #"""
+        {"text":"Design review","icon":"calendar",
+         "fields":{"access":"granted","phase":"soon","title":"Design review","start":"10:30","end":"11:15","minutes":"12"},
+         "lists":{"today":[{"title":"Standup","start":"09:15","end":"09:30"},{"title":"Design review","start":"10:30","end":"11:15"},
+         {"title":"Lunch with Ana","start":"12:30","end":"13:30"},{"title":"1:1 with Sam","start":"15:00","end":"15:30"},
+         {"title":"Release planning","start":"16:30","end":"17:15"}]}}
+        """#,
+        "controls": #"""
+        {"text":"balanced · 35%","fields":{"enabled":"true","mode":"balanced"},"values":{"level":35},
+         "lists":{"apps":[{"name":"Finder"},{"name":"Calendar"},{"name":"Activity Monitor"},{"name":"Terminal"}]}}
+        """#
+    ]
+
+    /// The widgets setup adds, between an Apple logo, the active app, the battery and the time as fixed text.
+    private static let barWidgets: [[String: ConfigurationValue]] =
+        widgets(#"[{ "id": "apple", "type": "text", "position": "left", "text": "", "icon": "apple.logo" }]"#)
+        + SetupPreferences.WidgetSet.workspaces(.aerospace).widgets
+        + widgets(#"[{ "id": "active-app", "type": "activeApp", "position": "left" }]"#)
+        + SetupPreferences.WidgetSet.meetings.widgets + SetupPreferences.WidgetSet.system.widgets
+        + widgets(#"""
+        [
+          { "id": "battery", "type": "battery", "position": "right" },
+          { "id": "clock", "type": "text", "position": "right", "text": "Thu 22 Oct  09:41" }
+        ]
+        """#)
+
+    /// A popup with the controls from examples/interactive.
+    private static let controlsWidget = widgets(#"""
+    [{
+      "id": "controls", "type": "script", "position": "right", "interval": 3600, "command": "/bin/cat \"$CONFIG_DIR/controls.json\"",
+      "popup": {
+        "dismissOnAction": false,
+        "style": { "width": 300 },
+        "layout": {
+          "type": "column",
+          "children": [
+            { "type": "text", "text": "Controls", "role": "heading" },
+            { "type": "slider", "title": "Level", "source": "level", "min": 0, "max": 100, "onChange": "true" },
+            { "type": "toggle", "title": "Enabled", "source": "enabled", "onChange": "true" },
+            {
+              "type": "segmented", "title": "Mode", "source": "mode", "onChange": "true",
+              "options": [{ "title": "Quiet", "value": "quiet" }, { "title": "Balanced", "value": "balanced" }, { "title": "Focus", "value": "focus" }]
+            },
+            { "type": "divider", "role": "separator" },
+            {
+              "type": "search", "title": "Find an app", "source": "apps", "searchFields": ["name"],
+              "row": { "type": "field", "field": "name", "role": "primary" }
+            }
+          ]
+        }
+      }
+    }]
+    """#)[0]
+
+    private static func widgets(_ json: String) -> [[String: ConfigurationValue]] {
+        try! JSONDecoder().decode([[String: ConfigurationValue]].self, from: Data(json.utf8))
+    }
+}

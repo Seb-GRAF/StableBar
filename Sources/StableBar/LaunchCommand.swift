@@ -8,6 +8,7 @@ enum LaunchCommand {
     case control(URL, RuntimeRequest)
     case packages(URL, String, URL?)
     case installFromStore(URL, String)
+    case renderDocsImages(URL)
     case help
 
     static let configurationURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/stablebar/config.json")
@@ -99,6 +100,8 @@ enum LaunchCommand {
                 : .trigger(arguments[1], environment)
         case "--reload" where arguments.count == 1:
             self = targeted ? .control(url, RuntimeRequest(action: .reload)) : .reload
+        case "--render-docs-images" where arguments.count == 2:
+            self = .renderDocsImages(URL(filePath: (arguments[1] as NSString).expandingTildeInPath))
         case "--help" where arguments.count == 1:
             self = .help
         default:

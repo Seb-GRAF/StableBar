@@ -44,6 +44,18 @@ struct StableBarApp {
                     exit(0)
                 }
                 dispatchMain()
+            case let .renderDocsImages(directory):
+                NSApplication.shared.setActivationPolicy(.accessory)
+                Task {
+                    do {
+                        try await DocsImages.render(to: directory)
+                    } catch {
+                        FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
+                        exit(1)
+                    }
+                    exit(0)
+                }
+                NSApplication.shared.run()
             case .help:
                 print(LaunchCommand.usage)
             case let .run(url):
