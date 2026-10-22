@@ -208,6 +208,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             customization.show(store: store, widgetID: id)
         }
         store.onEndThemeTrial = { [weak self] in self?.themeTrial.cancel() }
+        store.barPanel = { [weak self] displayID in
+            self?.panels.values.first { $0.screen.map(BarDisplay.init)?.id == displayID }
+        }
         store.onTryThemes = { [weak self] displayID in
             let screens = NSScreen.screens
             guard screens.indices.contains(displayID - 1) else { return }

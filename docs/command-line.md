@@ -33,6 +33,7 @@ Without `id`, `unset` can also address widget definitions by their ID and profil
 
 - `--validate [PATH]`: compose and validate files without starting scripts.
 - `--refresh ID`: refresh a running widget. Hidden, suspended providers must first be made visible or explicitly resumed with **Settings → Status → Resume for testing**.
+- `--popup ID`: open the popup or menu of a widget, or close it when it's open. It opens on the active display, as `"display": "active"` defines it; a widget in the **More widgets** menu opens its popup under that menu. Key bindings can call it, for example in `aerospace.toml`: `alt-c = 'exec-and-forget /Applications/StableBar.app/Contents/MacOS/StableBar --popup agenda'`.
 - `--trigger EVENT [KEY=VALUE ...]`: send an event. Without `--config`, this broadcasts to all subscribed bars for compatibility; with `--config`, it targets that configuration.
 - `--reload`: reload configuration; without `--config`, notify all running bars.
 - `--packages`, `--inspect-package PATH`, `--install-package PATH|ID`, `--enable-package ID VERSION [--persist]`, `--uninstall-package ID VERSION`: review and manage packages. `--install-package` installs a folder, or a package from the [store](packages.md#store) when its argument is not a folder. Installation does not enable commands. Uninstall requires the bar to be running and always saves configuration edits before removing that version. Package selections belong in the root file or its includes; use profile widget overrides to hide package widgets contextually.

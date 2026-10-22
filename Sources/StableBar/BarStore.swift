@@ -27,6 +27,7 @@ final class BarStore: NSObject {
     var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
+    var barPanel: (Int) -> BarPanel? = { _ in nil }
     var onEndThemeTrial: (() -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var screenDocuments: [String: [String: ConfigurationValue]] = [:]
@@ -835,6 +836,29 @@ final class BarStore: NSObject {
                 throw CommandFailure(message: "Widget is suspended. Choose Resume for testing in Status or make a consumer visible before refreshing.")
             }
             script.refresh(ScriptEvent(sender: "manual"))
+        case .popup:
+            guard let id = request.id, configuration?.widgets.contains(where: { $0.id == id }) == true else {
+                throw CommandFailure(message: "Unknown widget: \(request.id ?? "").")
+            }
+            if popupWidgetID == id {
+                popup.close()
+                break
+            }
+            func find(_ name: String, in view: NSView) -> NSView? {
+                view.identifier?.rawValue == name ? view : view.subviews.lazy.compactMap { find(name, in: $0) }.first
+            }
+            let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID
+            guard let bar = barPanel(activeID),
+                  let widget = barEditing.widgets(on: BarDisplay(screen: bar.screen!)).first(where: { $0.id == id }),
+                  let anchor = find(id, in: bar.contentView!) ?? find(BarView.moreWidgetsID, in: bar.contentView!) else {
+                throw CommandFailure(message: "Widget \(id) is not on the bar of the active display.")
+            }
+            guard let content = widgetPopup(widget, store: self) else {
+                throw CommandFailure(message: "Widget \(id) has no popup or menu.")
+            }
+            let config = configuration!.onScreen(ScreenKind(BarDisplay(screen: bar.screen!)))
+            popup.open(content, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
+                       store: self, anchor: anchor, onHover: false)
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))

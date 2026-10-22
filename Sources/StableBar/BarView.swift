@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BarView: View {
+    static let moreWidgetsID = "StableBar.moreWidgets"
     let store: BarStore
     let display: BarDisplay
     var nativeDecorations = false
@@ -59,7 +60,7 @@ struct BarView: View {
                         if let x = plan.overflowX {
                             overflowMenu(units.filter { plan.overflow.contains($0.id) }, config: config)
                                 .frame(width: 30, height: geometry.size.height / scale)
-                                .background(PopupAnchor(view: overflowAnchor, popup: store.popup))
+                                .background(PopupAnchor(view: overflowAnchor, popup: store.popup, id: Self.moreWidgetsID))
                                 .offset(x: x)
                         }
                     }
@@ -277,7 +278,7 @@ struct BarUnitSurface<Content: View>: View {
 }
 
 @MainActor
-private func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfiguration? {
+func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfiguration? {
     if widget.id == AppUpdate.widgetID { return AppUpdate.popup }
     if let popup = widget.popup { return popup }
     if let name = widget.popupName { return store.configuration?.popups[name] }

@@ -71,6 +71,29 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
+@Test @MainActor func popupCommandTogglesTheWidgetsPopupOnTheActiveDisplay() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"agenda-command","type":"text","text":"Agenda","position":"right",
+      "popup":{"style":{},"layout":{"type":"text","text":"Today"}}}]}
+    """#.utf8))
+    let popup = WidgetPopup(present: { _, _ in })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    store.barPanel = { _ in bar.panel }
+    let anchor = try #require(bar.anchors("agenda-command").first)
+    _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
+    #expect(store.presentations["agenda-command"]?.popupAnchor == ObjectIdentifier(anchor))
+    _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
+    #expect(!popup.isOpen)
+    #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .popup, id: "missing")) }
+}
+
 @Test @MainActor func hoveringPopupsWaitsAndKeepsBothTheWidgetAndPopupReachable() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"popups":{"details":{"openOnHover":true,"style":{},"layout":{"type":"text","text":"Details"}}},
