@@ -125,7 +125,6 @@ final class WindowClearance: NSObject {
 
     func requestAccess() {
         AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
         refreshPermission()
     }
 

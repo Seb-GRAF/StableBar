@@ -49,7 +49,6 @@ struct SourcePermissionList: View {
                     } else {
                         Button("Allow…") {
                             AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-                            openPrivacyPane(permission.privacyPane)
                             accessibilityAccess = AXIsProcessTrusted()
                         }
                     }
