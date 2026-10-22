@@ -48,7 +48,7 @@ struct SourcePermissionList: View {
                         allowed
                     } else {
                         Button("Allow…") {
-                            AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+                            requestAccessibility()
                             accessibilityAccess = AXIsProcessTrusted()
                         }
                     }
@@ -74,6 +74,16 @@ struct SourcePermissionList: View {
         }
         .font(.callout)
         .foregroundStyle(SettingsPalette.success)
+    }
+}
+
+@MainActor
+func requestAccessibility() {
+    if UserDefaults.standard.bool(forKey: "promptedForAccessibility") {
+        openPrivacyPane("Privacy_Accessibility")
+    } else {
+        UserDefaults.standard.set(true, forKey: "promptedForAccessibility")
+        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
     }
 }
 

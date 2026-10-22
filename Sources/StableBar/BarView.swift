@@ -732,7 +732,7 @@ struct AppMenuView: View {
                     Image(systemName: "exclamationmark.triangle").padding(padding).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings.")
+                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to ask for access; later clicks open System Settings.")
             }
             ForEach(Array(items.prefix(expandOnHover && !expanded ? 1 : items.count).enumerated()), id: \.offset) { index, item in
                 AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,

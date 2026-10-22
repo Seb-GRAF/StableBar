@@ -124,7 +124,7 @@ final class WindowClearance: NSObject {
     }
 
     func requestAccess() {
-        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
+        requestAccessibility()
         refreshPermission()
     }
 
