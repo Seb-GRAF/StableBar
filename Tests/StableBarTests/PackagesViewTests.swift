@@ -391,8 +391,8 @@ final class PackagesViewTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         let table = try XCTUnwrap(tables(in: host).first)
-        XCTAssertEqual(table.numberOfRows, 4)
-        XCTAssertEqual(table.selectedRow, 1)
+        XCTAssertEqual(table.numberOfRows, 3)
+        XCTAssertEqual(table.selectedRow, 2)
         XCTAssertTrue(textFields(host).contains("Ready to customize"))
         XCTAssertFalse(window.isVisible)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)

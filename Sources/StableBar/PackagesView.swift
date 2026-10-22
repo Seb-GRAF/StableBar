@@ -116,6 +116,10 @@ struct PackagesView: View {
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(searching ? Color.accentColor : SettingsPalette.groupBorder,
                                                                      lineWidth: searching ? 2 : 1))
             Spacer()
+            ProgressView().controlSize(.small).opacity(library.loadingStore ? 1 : 0)
+            Button("Reload Store", systemImage: "arrow.clockwise") { Task { await library.loadStore(reload: true) } }
+                .labelStyle(.iconOnly).buttonStyle(.borderless).help("Reload the Store and check for updates")
+                .disabled(library.loadingStore)
             Button("Open a folder…", systemImage: "folder", action: chooseFolder)
                 .controlSize(.small)
         }
@@ -131,19 +135,21 @@ struct PackagesView: View {
         }
         return VStack(spacing: 0) {
             List(selection: selection) {
+                BuiltInRow(themes: gallery.choices.filter(\.isBundled).count).tag(LibraryRow.builtIn)
                 if let reviewed {
                     Section("Not installed") {
-                        VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .top, spacing: 8) {
                             PackagePreview(screenshotData: reviewed.screenshotData, look: reviewed.themePreview?.light,
-                                           widgets: reviewed.inspection.widgets).frame(height: 64)
-                            PackageRow(manifest: reviewed.inspection.manifest, source: library.source(reviewed))
+                                           widgets: reviewed.inspection.widgets)
+                                .frame(width: 128, height: 64).scaleEffect(0.5625).frame(width: 72, height: 36)
+                            PackageRow(manifest: reviewed.inspection.manifest)
                         }
-                            .tag(LibraryRow.package(reviewed.inspection.manifest.id))
+                        .tag(LibraryRow.package(reviewed.inspection.manifest.id))
                     }
                 }
                 rows("Updates available (\(library.updates.count))", packages.filter { library.update(for: $0) != nil })
                 rows("On your bar", packages.filter { $0.kind != .theme && library.isActive($0) && library.update(for: $0) == nil })
-                rows("Installed, not on your bar", packages.filter { $0.kind != .theme && !library.isActive($0) && library.update(for: $0) == nil })
+                rows("Not on your bar", packages.filter { $0.kind != .theme && !library.isActive($0) && library.update(for: $0) == nil })
                 rows("Themes", packages.filter { $0.kind == .theme && library.update(for: $0) == nil })
                 if library.installed.isEmpty {
                     Text("Nothing installed yet. Get packages from the Store or open a folder.")
@@ -151,19 +157,9 @@ struct PackagesView: View {
                 } else if packages.isEmpty && !library.search.isEmpty {
                     Text("No packages match your search.").font(.caption).foregroundStyle(.secondary)
                 }
-                Section("Included") {
-                    BuiltInRow(themes: gallery.choices.filter(\.isBundled).count).tag(LibraryRow.builtIn)
-                }
             }
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            HStack {
-                if library.loadingStore { ProgressView().controlSize(.small) }
-                Button("Check for updates") { Task { await library.loadStore(reload: true) } }
-                    .disabled(library.loadingStore)
-                Spacer()
-            }
-            .font(.caption).padding(12)
             if library.storeError != nil {
                 Text("Store unavailable. Installed packages are still available.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -177,9 +173,10 @@ struct PackagesView: View {
         if !packages.isEmpty {
             Section(title) {
                 ForEach(packages, id: \.id) { manifest in
-                    VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8) {
                         PackageListPreview(key: manifest.versionKey) { try await library.preview(manifest) }
-                        PackageRow(manifest: manifest, source: library.source(of: manifest), update: library.update(for: manifest)?.version,
+                            .frame(width: 128).scaleEffect(0.5625).frame(width: 72, height: 36)
+                        PackageRow(manifest: manifest, update: library.update(for: manifest)?.version,
                                    updating: library.updating.contains(manifest.id), inUse: manifest.kind == .theme && library.isActive(manifest)) {
                             Task { await library.update(manifest) }
                         }
@@ -215,10 +212,6 @@ struct PackagesView: View {
                 SettingsSegments(selection: $showingThemes, options: [(nil, "All"), (false, "Widgets"), (true, "Themes")], stretches: false)
                     .fixedSize()
                 Spacer()
-                ProgressView().controlSize(.small).opacity(library.loadingStore ? 1 : 0)
-                Button("Reload Store", systemImage: "arrow.clockwise") { Task { await library.loadStore(reload: true) } }
-                    .labelStyle(.iconOnly).buttonStyle(.borderless).help("Reload Store")
-                    .disabled(library.loadingStore)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -333,53 +326,44 @@ private enum LibraryRow: Hashable {
 
 private struct PackageRow: View {
     let manifest: WidgetPackageManifest
-    let source: PackageSource?
     var update: String?
     var updating = false
     var inUse = false
     var onUpdate: (() -> Void)?
-    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            PackageIcon(id: manifest.id, name: manifest.name)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(manifest.name).fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
-                Text(manifest.description ?? "").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                HStack(spacing: 5) {
-                    if let source { PackageSourceBadge(source: source, onSelection: prominence == .increased) }
-                    Text(manifest.version).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                    if inUse { PackageTag(title: "In use", tint: SettingsPalette.success) }
-                }
-                .padding(.top, 3)
-                if let update {
-                    Button(updating ? "Updating…" : "Update to \(update)") { onUpdate?() }
-                        .buttonStyle(.borderedProminent).controlSize(.mini)
-                        .disabled(updating)
-                        .accessibilityLabel("Update \(manifest.name) to \(update)")
-                }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(manifest.name).fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
+            HStack(spacing: 5) {
+                Text(manifest.version).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                if inUse { PackageTag(title: "In use", tint: SettingsPalette.success) }
+            }
+            if let update {
+                Button(updating ? "Updating…" : "Update to \(update)") { onUpdate?() }
+                    .buttonStyle(.borderedProminent).controlSize(.mini)
+                    .disabled(updating)
+                    .accessibilityLabel("Update \(manifest.name) to \(update)")
+                    .padding(.top, 2)
             }
         }
-        .frame(height: update == nil ? 54 : 76, alignment: .top)
-        .padding(.vertical, 3)
+        .frame(height: update == nil ? 36 : 58, alignment: .top)
     }
 }
 
 private struct BuiltInRow: View {
     let themes: Int
-    @Environment(\.backgroundProminence) private var prominence
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            BuiltInIcon()
-            VStack(alignment: .leading, spacing: 1) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 72, height: 36)
+                .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 5))
+            VStack(alignment: .leading, spacing: 2) {
                 Text("StableBar Essentials").fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
                 Text("\(WidgetAddCatalog.builtIns.count) widgets · \(themes) themes").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                PackageSourceBadge(source: .included, onSelection: prominence == .increased).padding(.top, 3)
             }
         }
-        .frame(height: 54, alignment: .top)
-        .padding(.vertical, 3)
     }
 }
 

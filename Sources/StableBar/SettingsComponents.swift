@@ -385,7 +385,6 @@ enum PackageSource {
 
 struct PackageSourceBadge: View {
     let source: PackageSource
-    var onSelection = false
 
     var body: some View {
         HStack(spacing: 3) {
@@ -393,10 +392,10 @@ struct PackageSourceBadge: View {
             Text(source.title)
         }
             .font(.system(size: 10.5, weight: .semibold))
-            .foregroundStyle(onSelection ? AnyShapeStyle(.white) : AnyShapeStyle(source.tint))
+            .foregroundStyle(source.tint)
             .padding(.horizontal, 6)
             .frame(height: 17)
-            .background(onSelection ? AnyShapeStyle(.white.opacity(0.22)) : background, in: RoundedRectangle(cornerRadius: 5))
+            .background(background, in: RoundedRectangle(cornerRadius: 5))
             .fixedSize()
     }
 

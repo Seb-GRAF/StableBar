@@ -429,7 +429,6 @@ struct BuiltInPackagesView: View {
                                         .font(.system(size: 12)).foregroundStyle(.secondary)
                                         .lineLimit(2, reservesSpace: true)
                                     HStack {
-                                        PackageSourceBadge(source: .included)
                                         Spacer()
                                         Button("Add to bar") {
                                             setup.beginSheet()
