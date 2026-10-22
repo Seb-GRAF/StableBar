@@ -144,7 +144,8 @@ final class AppMenu: NSObject, NSMenuDelegate {
     }
 
     private func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
-        readAttribute(name, element)
+        AXUIElementSetMessagingTimeout(element, 0.1)
+        return readAttribute(name, element)
     }
 
     private func children(of element: AXUIElement) -> [AXUIElement] {
