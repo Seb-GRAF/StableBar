@@ -3,6 +3,57 @@ import CoreGraphics
 import Testing
 @testable import StableBar
 
+@Test(arguments: [250.0, 1000, 2000, 3000])
+func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double) {
+    var hover = MenuBarHover(milliseconds: milliseconds, menuBars: [CGRect(x: 0, y: 0, width: 1440, height: 30)])
+    let edge = CGPoint(x: 100, y: 0)
+    let held = CGPoint(x: 100, y: 4)
+    let end = 1 + milliseconds / 1000
+    #expect(hover.move(edge, now: 1) == held)
+    #expect(hover.move(edge, now: end - 0.001) == held)
+    #expect(hover.reveal(held, now: end - 0.001) == nil)
+    #expect(hover.reveal(held, now: end) == edge)
+    #expect(hover.move(CGPoint(x: 300, y: 20), now: end + 0.1) == CGPoint(x: 300, y: 20))
+    #expect(hover.move(edge, now: end + 0.2) == edge)
+}
+
+@Test func menuBarDelayCancelsWhenThePointerLeavesAndStartsAFreshWait() {
+    var hover = MenuBarHover(milliseconds: 2000, menuBars: [CGRect(x: 0, y: 0, width: 1440, height: 30)])
+    let edge = CGPoint(x: 100, y: 0)
+    let held = CGPoint(x: 100, y: 4)
+    #expect(hover.move(edge, now: 1) == held)
+    #expect(hover.move(CGPoint(x: 100, y: 10), now: 2).y == 10)
+    #expect(hover.reveal(held, now: 3) == nil)
+    #expect(hover.move(edge, now: 4) == held)
+    #expect(hover.reveal(held, now: 5.999) == nil)
+    #expect(hover.reveal(held, now: 6) == edge)
+    _ = hover.move(CGPoint(x: 100, y: 100), now: 7)
+    #expect(hover.move(edge, now: 8) == held)
+    hover.cancel()
+    #expect(hover.reveal(held, now: 10) == nil)
+    #expect(hover.move(edge, now: 11) == held)
+    #expect(hover.reveal(CGPoint(x: 100, y: 100), now: 13) == nil)
+}
+
+@Test func menuBarDelayStartsANewWaitOnEachDisplayAndUsesItsTopEdge() {
+    let main = CGRect(x: 0, y: 0, width: 1440, height: 38)
+    let other = CGRect(x: -1920, y: -200, width: 1920, height: 24)
+    var hover = MenuBarHover(milliseconds: 1000, menuBars: [main, other])
+    #expect(hover.move(CGPoint(x: 100, y: 0), now: 1) == CGPoint(x: 100, y: 4))
+    #expect(hover.move(CGPoint(x: -100, y: -200), now: 1.5) == CGPoint(x: -100, y: -196))
+    #expect(hover.reveal(CGPoint(x: -100, y: -196), now: 2) == nil)
+    #expect(hover.reveal(CGPoint(x: -100, y: -196), now: 2.5) == CGPoint(x: -100, y: -200))
+    #expect(hover.move(CGPoint(x: 100, y: 0), now: 3) == CGPoint(x: 100, y: 4))
+    #expect(hover.reveal(CGPoint(x: 100, y: 4), now: 4) == CGPoint(x: 100, y: 0))
+}
+
+@Test func menuBarDelayZeroLeavesThePointerUnchanged() {
+    var hover = MenuBarHover(milliseconds: 0, menuBars: [CGRect(x: 0, y: 0, width: 1440, height: 30)])
+    let edge = CGPoint(x: 100, y: 0)
+    #expect(hover.move(edge, now: 1) == edge)
+    #expect(hover.deadline == nil)
+}
+
 @Test func windowClearanceMovesOnlyOverlappingWindowsAndShrinksToTheDock() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 60, width: 1440, height: 812),

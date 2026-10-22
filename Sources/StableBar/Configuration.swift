@@ -500,6 +500,7 @@ struct BarSettings: Decodable, Sendable {
     var margin = 0.0
     var keepWindowsClear = false
     var keepNotificationsClear = false
+    var menuBarRevealDelay = 0.0
     var inset = 12.0
     var spacing = 8.0
     var background = BackgroundFill.color(HexColor(0x00000000))
@@ -513,7 +514,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, inset, spacing, background, motion, popupTransition, animationDuration, notchWidth, notchSpacing, style, appearance, glass
+        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, inset, spacing, background, motion, popupTransition, animationDuration, notchWidth, notchSpacing, style, appearance, glass
     }
 
     init() {}
@@ -530,6 +531,7 @@ struct BarSettings: Decodable, Sendable {
         margin = try values.decodeIfPresent(Double.self, forKey: .margin) ?? margin
         keepWindowsClear = try values.decodeIfPresent(Bool.self, forKey: .keepWindowsClear) ?? keepWindowsClear
         keepNotificationsClear = try values.decodeIfPresent(Bool.self, forKey: .keepNotificationsClear) ?? keepNotificationsClear
+        menuBarRevealDelay = try values.decodeIfPresent(Double.self, forKey: .menuBarRevealDelay) ?? menuBarRevealDelay
         inset = try values.decodeIfPresent(Double.self, forKey: .inset) ?? inset
         spacing = try values.decodeIfPresent(Double.self, forKey: .spacing) ?? spacing
         background = try values.decodeIfPresent(BackgroundFill.self, forKey: .background) ?? background

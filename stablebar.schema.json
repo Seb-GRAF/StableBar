@@ -1590,6 +1590,10 @@
           "$ref": "#/definitions/boolean",
           "description": "Move notification banners below the bar using Accessibility access on macOS 26. Disabled by default."
         },
+        "menuBarRevealDelay": {
+          "$ref": "#/definitions/number",
+          "description": "Milliseconds to hold at the top edge before revealing the hidden macOS menu bar. Requires Accessibility access. 0 adds no delay."
+        },
         "glass": {
           "$ref": "#/definitions/glass"
         },

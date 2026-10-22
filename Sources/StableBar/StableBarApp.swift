@@ -263,6 +263,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func sleeping() {
         store.setSleeping(true)
         store.windowClearance.stop()
+        store.menuBarDelay.stop()
     }
 
     @objc private func woke() {
@@ -341,6 +342,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.windowClearance.update(windows: store.clearanceConfiguration?.bar.keepWindowsClear == true,
                                      notifications: store.clearanceConfiguration?.bar.keepNotificationsClear == true,
                                      displays: clearanceDisplays)
+        store.menuBarDelay.update(milliseconds: config.bar.menuBarRevealDelay, menuBars: screens.map {
+            CGRect(x: $0.frame.minX, y: screens[0].frame.maxY - $0.frame.maxY, width: $0.frame.width,
+                   height: max(NSStatusBar.system.thickness, $0.safeAreaInsets.top))
+        })
         if store.barEditing.isActive {
             if editingKeyboard.start(store: store) {
                 let screen = screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main

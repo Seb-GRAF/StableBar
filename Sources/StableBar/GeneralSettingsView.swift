@@ -13,6 +13,15 @@ struct GeneralSettingsView: View {
                         LoginItemSettings()
                     }
                     .id(SettingsSearchResult.login.id)
+                    SettingsGroup("Native menu bar") {
+                        let bar = StyleFields(store: store, path: "bar",
+                            values: (try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:],
+                            set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
+                            unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
+                        bar.number("Reveal delay", "menuBarRevealDelay", default: 0, in: 0...10000, step: 100, unit: "ms",
+                                   hint: "Wait at the top edge before showing the hidden macOS menu bar. 0 adds no delay. Requires Accessibility access.")
+                    }
+                    .id(SettingsSearchResult.menuBar.id)
                     SettingsGroup("Windows and notifications") {
                         let bar = StyleFields(store: store, path: "bar",
                             values: (try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:],
@@ -116,10 +125,11 @@ struct GeneralSettingsView: View {
 
     private var requiredPermissions: [SourcePermission] {
         var permissions = store.registry.permissions(for: store.configuration)
-        if store.configuration?.bar.keepWindowsClear == true || store.configuration?.bar.keepNotificationsClear == true {
+        if store.configuration?.bar.keepWindowsClear == true || store.configuration?.bar.keepNotificationsClear == true
+            || (store.configuration?.bar.menuBarRevealDelay ?? 0) > 0 {
             permissions.removeAll { $0.privacyPane == SourcePermission.accessibility.privacyPane }
             permissions.append(SourcePermission(title: "Accessibility",
-                detail: "StableBar needs access to move windows and notifications clear of the bar, and to show app menus.",
+                detail: "StableBar needs access to move windows and notifications, show app menus, and delay the native menu bar.",
                 symbol: "accessibility", privacyPane: "Privacy_Accessibility"))
         }
         return permissions

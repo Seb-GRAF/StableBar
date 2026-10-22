@@ -1,0 +1,8 @@
+{
+  "bar": {
+    "menuBarRevealDelay": 2000
+  },
+  "widgets": [
+    { "id": "clock", "type": "clock", "position": "right" }
+  ]
+}

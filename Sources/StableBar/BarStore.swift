@@ -11,6 +11,7 @@ final class BarStore: NSObject {
     var scripts: [String: ScriptWidget] = [:]
     let workspaceStore: WorkspaceStore
     let windowClearance = WindowClearance()
+    let menuBarDelay = MenuBarDelay()
     let appMenu = AppMenu()
     let popup: WidgetPopup
     var update: AppUpdate?
@@ -1031,6 +1032,7 @@ final class BarStore: NSObject {
         managesConnections = false
         popup.close()
         windowClearance.stop()
+        menuBarDelay.stop()
         appMenu.read(nil)
         reloadTask?.cancel()
         configurationWatcher.stop()
