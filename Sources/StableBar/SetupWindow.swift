@@ -68,7 +68,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     }
 
     private func showCard() {
-        session!.step = 4
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 640),
                               styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = "Set up StableBar"
@@ -85,7 +84,6 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             session: session!, arrangeBar: arrangeBar, customizeWidgets: customizeWidgets, showProfile: showProfile,
             back: { [weak self] in
                 guard let self else { return }
-                session!.step = 3
                 showTour(intro: false)
                 card?.close()
             },
