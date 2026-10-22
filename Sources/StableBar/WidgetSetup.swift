@@ -227,6 +227,11 @@ final class WidgetSetup {
     }
 
     func remove(_ id: String) throws {
+        if let package = store.widgetPackageIDs[id] {
+            var selection = try store.effectiveDocument["packages"]!.decoded([[String: ConfigurationValue]].self).first { $0["id"] == .string(package) }!
+            selection["enabled"] = .bool(false)
+            return try store.customizationHistory.change(ConfigurationEdit(action: .package, properties: selection))
+        }
         try store.customizationHistory.change(ConfigurationEdit(action: .remove, id: id))
     }
 

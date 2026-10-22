@@ -107,7 +107,7 @@ struct ScreenBand: View {
                 }
             }
         } label: {
-            Text(name(setup))
+            Text("\(name(setup)) · \(ownBars.contains(setup) ? "own bar" : "shared bar")")
         }
         .menuStyle(.button)
         .controlSize(.small)

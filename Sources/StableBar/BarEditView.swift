@@ -344,9 +344,10 @@ struct BarEditTile: View {
                     Button(position.menuTitle) { editing.move(entry.id, to: position, on: display) }
                 }
             }
-            if let screen = NSScreen.screens.map(BarDisplay.init).first(where: { $0.id == display }),
-               !editing.otherKinds(showing: entry.widget, besides: ScreenKind(screen)).isEmpty {
-                Button("Hide on \(ScreenKind(screen).title)") { editing.hide(entry.id, from: ScreenKind(screen), on: display) }
+            if let screen = NSScreen.screens.map(BarDisplay.init).first(where: { $0.id == display }) {
+                Menu("Shows On") {
+                    WidgetScreensMenu(store: store, widget: entry.widget, screen: ScreenKind(screen)) { editing.set(entry.id, $0, on: display) }
+                }
             }
             Button("Remove Widget") { editing.remove(entry.id, on: display) }
             Divider()

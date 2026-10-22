@@ -375,7 +375,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.sessionEdits.count, 1)
     }
 
-    @MainActor func testRemovingAPackageWidgetTurnsItOffTakesItOffTheEditBarAndAddingItBackRestoresIt() throws {
+    @MainActor func testRemovingAPackageWidgetTakesItsPackageOffTheBarAndAddingItBackRestoresIt() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let source = fixture.directory.appending(path: "source")
@@ -393,7 +393,8 @@ final class BarEditingTests: XCTestCase {
         store.barEditing.begin()
         store.barEditing.remove("note")
         XCTAssertNil(store.barEditing.error)
-        XCTAssertEqual(store.configuration?.widgets.map(\.enabled), [false])
+        XCTAssertEqual(store.configuration?.widgets.map(\.id), [])
+        XCTAssertEqual(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self).map(\.enabled), [false])
         for display in [laptop, external] {
             XCTAssertTrue(store.barEditing.entries(on: display).isEmpty, "A removed widget must leave the edit bar")
         }

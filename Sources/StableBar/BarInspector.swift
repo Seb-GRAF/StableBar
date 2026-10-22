@@ -48,6 +48,7 @@ struct BarInspector: View {
     let names: [String: String]
     let source: (WidgetConfiguration) -> PackageSource
     let useSharedBar: (ScreenSetup) -> Void
+    let remove: (String) -> Void
     @Binding var scrollPositions: [String: String]
     @State private var fontFamilies: [String] = []
     @State private var customClockFormat = false
@@ -151,10 +152,14 @@ struct BarInspector: View {
                 Text(typeName(widget))
                 PackageSourceBadge(source: source(widget))
             }
-            Toggle("Show on bar", isOn: Binding(get: { widget.enabled }, set: { editor.set(["enabled": .bool($0)], for: widget.id) }))
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .help("Show this widget in the bar")
+            Text("Shows on").font(.system(size: 12)).foregroundStyle(.secondary)
+            Menu {
+                WidgetScreensMenu(store: store, widget: widget, screen: screen) { editor.set($0, for: widget.id) }
+            } label: {
+                Text(store.screensTitle(for: widget))
+            }
+            .fixedSize()
+            .help("Choose the screens this widget shows on")
             moreMenu(widget)
         }
     }
@@ -189,7 +194,8 @@ struct BarInspector: View {
             }
             Divider()
             Button("Reset to defaults…") { resetting = widget }
-            Button("Remove from bar", role: .destructive) { editor.change(ConfigurationEdit(action: .remove, id: widget.id)) }
+            Button("Remove from bar", role: .destructive) { remove(widget.id) }
+                .disabled(!editor.canRemove(widget))
         } label: {
             Image(systemName: "ellipsis")
         }
@@ -514,51 +520,6 @@ struct BarInspector: View {
                         .labelsHidden()
                         .frame(width: 200)
                 }
-            }
-        }
-        SettingsGroup("Screens") {
-            let displays = NSScreen.screens.map(BarDisplay.init)
-            if case let .ids(ids) = widget.display {
-                SettingRow(title: "Show on", hint: "Specific screens: \(ids.map(String.init).joined(separator: ", ")). Change them with Edit as JSON.") {}
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    SettingRow(title: "Show on", hint: "Same as the eye in the list. Screens of the same kind show the same widgets.") {}
-                    HStack(spacing: 8) {
-                        ForEach(ScreenKind.allCases, id: \.self) { kind in
-                            let shown = kind.shows(widget.display, among: displays, activeID: store.activeDisplayID)
-                            Button { editor.setWidget(widget, shown: !shown, on: kind) } label: {
-                                HStack(spacing: 7) {
-                                    Image(systemName: kind.symbol).font(.system(size: 15))
-                                    Text(kind.name).font(.system(size: 12.5))
-                                    Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.accentColor)
-                                        .opacity(shown ? 1 : 0)
-                                }
-                                .padding(.horizontal, 11)
-                                .frame(height: 32)
-                                .background(shown ? AnyShapeStyle(Color.accentColor.opacity(0.2)) : AnyShapeStyle(SettingsPalette.control),
-                                            in: RoundedRectangle(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(shown ? Color.accentColor : SettingsPalette.groupBorder,
-                                                                                        lineWidth: shown ? 1.5 : 1))
-                                .contentShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(shown ? .isSelected : [])
-                        }
-                    }
-                    .padding(.leading, 17)
-                }
-                .groupRow()
-            }
-            SettingRow(title: "Rule") {
-                Picker("Rule", selection: Binding(get: { WidgetScreenChoice(widget.display) }, set: {
-                    if $0 != WidgetScreenChoice(widget.display), let properties = $0.properties { editor.set(properties, for: widget.id) }
-                })) {
-                    ForEach(WidgetScreenChoice.allCases.filter { $0 != .specific || WidgetScreenChoice(widget.display) == .specific }, id: \.self) {
-                        Text($0.title).tag($0)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 200)
             }
         }
         SettingsGroup("Position") {

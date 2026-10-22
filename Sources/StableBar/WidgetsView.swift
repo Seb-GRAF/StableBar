@@ -37,6 +37,7 @@ struct WidgetsView: View {
     @State private var setup: WidgetSetup
     @State private var dragSession = WidgetDragSession()
     @State private var adding: WidgetAddPopoverModel?
+    @State private var addingAt: WidgetPosition?
     @State private var sharing: ScreenSetup?
     @State private var scrollPositions: [String: String] = [:]
 
@@ -68,7 +69,7 @@ struct WidgetsView: View {
                     .background(SettingsPalette.sidebar)
                 Divider()
                 BarInspector(editor: editor, screen: screen, kinds: kinds, names: names, source: source, useSharedBar: { sharing = $0 },
-                             scrollPositions: $scrollPositions)
+                             remove: remove, scrollPositions: $scrollPositions)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .overlay(alignment: .top) { Divider() }
@@ -110,13 +111,24 @@ struct WidgetsView: View {
                         .accessibilityAddTraits(.isButton)
                         ForEach(positions, id: \.self) { position in
                             let section = shown.filter { $0.position == position }
-                            groupTitle(position.title)
+                            HStack(alignment: .bottom, spacing: 0) {
+                                groupTitle(position.title)
+                                Spacer(minLength: 0)
+                                Button { openAdd(at: position) } label: {
+                                    Image(systemName: "plus").font(.system(size: 11, weight: .medium)).frame(width: 20, height: 20).contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.secondary)
+                                .help("Add a widget to \(position.title)")
+                                .accessibilityLabel("Add a widget to \(position.title)")
+                                .popover(isPresented: addPopover(shown: addingAt == position), arrowEdge: .trailing) { addPopoverContent }
+                            }
                             ForEach(section) { widget in
                                 widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown, changed: changed.contains(widget.id))
                             }
                             WidgetDragRow(session: dragSession, widgetID: nil, name: "", insertionKey: dropKey(position),
-                                          select: {}, move: { move($0, to: position) }) {
-                                Text(section.isEmpty ? "Drop widgets here" : "")
+                                          select: { if section.isEmpty { openAdd(at: position) } }, move: { move($0, to: position) }) {
+                                Text(section.isEmpty ? "Add or drop widgets here" : "")
                                     .font(.system(size: 11))
                                     .foregroundStyle(.tertiary)
                                     .padding(.horizontal, 8)
@@ -137,10 +149,11 @@ struct WidgetsView: View {
                                 let selected = selectedWidget == widget.id
                                 ListRow(selected: selected, dimmed: true,
                                         eye: ("eye.slash", "Show on this screen", { editor.setWidget(widget, shown: true, on: screen) })) { _ in
-                                    WidgetRowLabel(symbol: widget.content.symbol, name: names[widget.id] ?? widget.id, subtitle: hiddenSubtitle(widget, displays: displays),
+                                    WidgetRowLabel(symbol: widget.content.symbol, name: names[widget.id] ?? widget.id, subtitle: store.screensTitle(for: widget),
                                                    selected: selected, dimmed: true, changed: changed.contains(widget.id))
                                 }
                                 .onTapGesture { select(widget.id) }
+                                .contextMenu { screensAndRemove(widget) }
                                 .accessibilityElement(children: .combine)
                                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
                             }
@@ -157,12 +170,12 @@ struct WidgetsView: View {
             Divider()
             HStack {
                 Button { openAdd() } label: { Label("Add widget", systemImage: "plus") }
-                    .popover(isPresented: Binding(get: { adding != nil }, set: { if !$0 { adding?.cancel(); adding = nil } }), arrowEdge: .top) {
-                        if let adding {
-                            WidgetAddPopoverView(model: adding, store: store, showsTitle: false)
-                        }
-                    }
+                    .popover(isPresented: addPopover(shown: addingAt == nil), arrowEdge: .top) { addPopoverContent }
                 Spacer()
+                let removing = widgets.first { $0.id == selectedWidget }
+                Button { if let removing { remove(removing.id) } } label: { Label("Remove", systemImage: "minus") }
+                    .disabled(removing.map { !editor.canRemove($0) } ?? true)
+                    .help(removing.map(removeHelp) ?? "Select a widget to remove it")
             }
             .padding(8)
             .background {
@@ -187,7 +200,7 @@ struct WidgetsView: View {
 
     private func widgetRow(_ widget: WidgetConfiguration, name: String, position: WidgetPosition, listed: [WidgetConfiguration], changed: Bool) -> some View {
         let selected = selectedWidget == widget.id
-        let subtitle = rowSubtitle(widget)
+        let subtitle = store.screensTitle(for: widget)
         return ListRow(selected: selected, eye: ("eye", "Hide on this screen", { editor.setWidget(widget, shown: false, on: screen) })) { hovering in
             WidgetDragRow(session: dragSession, widgetID: widget.id, name: name, insertionKey: dropKey(position, before: widget.id),
                           select: { select(widget.id) }, move: { move($0, to: position, before: widget.id) }) {
@@ -212,7 +225,7 @@ struct WidgetsView: View {
                 }
             }
             Divider()
-            Button("Hide on \(screen.phrase)") { editor.setWidget(widget, shown: false, on: screen) }
+            screensAndRemove(widget)
         }
     }
 
@@ -220,23 +233,26 @@ struct WidgetsView: View {
         Rectangle().fill(Color.accentColor).frame(height: 2).opacity(dragSession.insertion == key ? 1 : 0).allowsHitTesting(false)
     }
 
-    private func rowSubtitle(_ widget: WidgetConfiguration) -> String {
-        let displays = NSScreen.screens.map(BarDisplay.init)
-        let kind = switch source(widget) {
-        case .builtIn, .included: "Built-in"
-        case .store: "Store package"
-        case .listed: "Listed in Store"
-        case .installed: "Installed package"
-        case .local: "Local package"
+    @ViewBuilder private func screensAndRemove(_ widget: WidgetConfiguration) -> some View {
+        Menu("Shows on") {
+            WidgetScreensMenu(store: store, widget: widget, screen: screen) { editor.set($0, for: widget.id) }
         }
-        let elsewhere = ScreenKind.allCases.contains { $0 != screen && $0.shows(widget.display, among: displays, activeID: store.activeDisplayID) }
-        return elsewhere ? kind : kind + " · this screen only"
+        Divider()
+        Button("Remove from bar", role: .destructive) { remove(widget.id) }
+            .disabled(!editor.canRemove(widget))
     }
 
-    private func hiddenSubtitle(_ widget: WidgetConfiguration, displays: [BarDisplay]) -> String {
-        if !widget.enabled { return "Turned off" }
-        let kinds = ScreenKind.allCases.filter { $0.shows(widget.display, among: displays, activeID: store.activeDisplayID) }
-        return kinds.isEmpty ? "Hidden everywhere" : kinds.map(\.name).joined(separator: " and ") + " only"
+    private func removeHelp(_ widget: WidgetConfiguration) -> String {
+        guard !editor.canRemove(widget), let origin = store.origins["widgets.\(widget.id).id"] else { return "Remove the selected widget from this bar" }
+        return "Defined in \(store.sourceText(origin)). Remove it there, or choose Hidden everywhere."
+    }
+
+    private var addPopoverContent: some View {
+        adding.map { WidgetAddPopoverView(model: $0, store: store, showsTitle: false) }
+    }
+
+    private func addPopover(shown: Bool) -> Binding<Bool> {
+        Binding(get: { adding != nil && shown }, set: { if !$0 { adding?.cancel(); adding = nil } })
     }
 
     private var profileWidgets: Set<String> {
@@ -260,8 +276,9 @@ struct WidgetsView: View {
         editor.showWidget(id)
     }
 
-    private func openAdd() {
-        let position = WidgetPlacement.destination(selectedID: selectedWidget, widgets: widgets)
+    private func openAdd(at group: WidgetPosition? = nil) {
+        let position = group ?? WidgetPlacement.destination(selectedID: selectedWidget, widgets: widgets)
+        addingAt = group
         let existingIDs = Set(widgets.map(\.id))
         adding = WidgetAddPopoverModel(setup: setup, position: position, before: nil, kinds: kinds) { id in
             for widget in widgets where !existingIDs.contains(widget.id) {
@@ -270,6 +287,12 @@ struct WidgetsView: View {
             select(id)
             adding = nil
         }
+    }
+
+    private func remove(_ id: String) {
+        editor.finishEditing()
+        do { try setup.remove(id) }
+        catch { editor.error = errorMessage(error) }
     }
 
     private func move(_ id: String, to position: WidgetPosition, before anchor: String? = nil) {

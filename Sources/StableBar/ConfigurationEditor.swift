@@ -85,6 +85,10 @@ final class ConfigurationEditor {
         store.origins["widgets.\(widget.id).id"]?.file == store.configurationURL.standardizedFileURL.path
     }
 
+    func canRemove(_ widget: WidgetConfiguration) -> Bool {
+        store.widgetPackageIDs[widget.id] != nil || definedInMainFile(widget)
+    }
+
     func troubleshoot(_ id: String) {
         finishEditing()
         searchTarget = nil
