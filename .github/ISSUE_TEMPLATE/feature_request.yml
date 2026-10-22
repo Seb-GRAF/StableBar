@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Much of StableBar is configuration, so check the [README](https://github.com/Seb-GRAF/StableBar#readme) and the [examples](https://github.com/Seb-GRAF/StableBar/tree/main/examples) first. Search [open and closed issues](https://github.com/Seb-GRAF/StableBar/issues?q=is%3Aissue) too: closed ones include declined requests and their reasons.
+        Much of StableBar is configuration, so check the [user guide](https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md) and the [examples](https://github.com/Seb-GRAF/StableBar/tree/main/examples) first. Search [open and closed issues](https://github.com/Seb-GRAF/StableBar/issues?q=is%3Aissue) too: closed ones include declined requests and their reasons.
 
   - type: textarea
     id: problem

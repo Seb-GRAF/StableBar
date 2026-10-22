@@ -1,5 +1,5 @@
 name: Bug report
-description: StableBar crashes, shows something wrong, or behaves differently from the README.
+description: StableBar crashes, shows something wrong, or behaves differently from the user guide.
 labels:
   - bug
   - needs-triage
@@ -33,7 +33,7 @@ body:
     id: expected
     attributes:
       label: Expected
-      description: What should happen instead, and the README section that describes it, if there is one.
+      description: What should happen instead, and the section of the user guide that describes it, if there is one.
     validations:
       required: true
 

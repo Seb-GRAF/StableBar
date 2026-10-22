@@ -1,6 +1,6 @@
 /// The events StableBar knows. Widgets and providers subscribe to them with `events`, beside
-/// distributed notification names. README.md lists the same events, in the same order, in the
-/// table under "Script events"; `builtInEventsMatchTheReadmeTable` checks it.
+/// distributed notification names. docs/create-a-widget.md lists the same events, in the same order,
+/// in the table under "Script events"; `builtInEventsMatchTheGuideTable` checks it.
 enum BuiltInEvent: String, CaseIterable, Sendable {
     case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange
 

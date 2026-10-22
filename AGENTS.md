@@ -1,6 +1,6 @@
 # StableBar
 
-StableBar is a native macOS bar built with Swift, AppKit and SwiftUI as a Swift package (macOS 14+, Swift 6). It reads a JSON configuration, by default `~/.config/stablebar/config.json`, and is controlled from its menu-bar icon, the Settings window and the `StableBar` command line. In code, the Settings window is still called Customize (`CustomizationWindow`, `--customize`). The [README](README.md) is the user manual; [CONTRIBUTING.md](CONTRIBUTING.md) covers the pull request flow and releases.
+StableBar is a native macOS bar built with Swift, AppKit and SwiftUI as a Swift package (macOS 14+, Swift 6). It reads a JSON configuration, by default `~/.config/stablebar/config.json`, and is controlled from its menu-bar icon, the Settings window and the `StableBar` command line. In code, the Settings window is still called Customize (`CustomizationWindow`, `--customize`). The [user guide](docs/README.md) in `docs/` is the user manual, and the [README](README.md) is the project's front page; [CONTRIBUTING.md](CONTRIBUTING.md) covers building, the pull request flow and releases.
 
 ## Protect the developer's setup
 
@@ -32,19 +32,19 @@ A configuration change rarely lives in one place. Before calling one done, say w
 - **Decoding.** Unknown properties are errors, so a new property needs a coding key and an entry in [stablebar.schema.json](stablebar.schema.json). `schemaListsTheSamePropertiesAsTheDecoders` fails when they differ.
 - **Layers.** Values can come from includes, templates, profiles and package overrides, not only the main file.
 - **Editing.** The Appearance, Your bar and Profiles sections in Settings, and the command-line edits, which share `ConfigurationEdits.swift`.
-- **Docs.** The README section that documents the feature, and the setups in [examples](examples).
+- **Docs.** The page in [docs](docs) that documents the feature, and the setups in [examples](examples).
 
 ## Pull requests
 
 - Never push to `main`. Open a pull request only when the developer asks for one.
 - Titles follow Conventional Commits in plain words, such as `fix: keep the clock visible on a notched display`. Every commit message is checked too, and the types of the commits that reach `main` decide the next release (see [Commits and releases](CONTRIBUTING.md#commits-and-releases)).
 - Fill in the [pull request template](.github/pull_request_template.md), and end the description with the model and harness that did the work.
-- Upload screenshots and recordings to the pull request; never commit them.
+- Upload screenshots and recordings to the pull request; never commit them. The images in `docs/images` are the exception: they illustrate the README and the guide, and CI draws them (see [Docs images](CONTRIBUTING.md#docs-images)).
 - Keep to one problem per pull request.
 
 ## Documentation and work artifacts
 
-- The README is the user manual, and the triage skill relies on it to tell whether something is already supported. When you change how a feature behaves, update its section. Don't add notes that the code already answers.
+- The guide in `docs/` is the user manual, and the triage skill relies on it to tell whether something is already supported. When you change how a feature behaves, update its section. Keep the README short: it introduces StableBar and links to the guide. Don't add notes that the code already answers.
 - Don't commit plans, specs, research notes or scratch files, even when a skill suggests it. Keep them outside the repository; the issue or pull request is the record.
 
 ## Skills

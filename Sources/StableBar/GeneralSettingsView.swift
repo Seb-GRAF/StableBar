@@ -69,7 +69,7 @@ struct GeneralSettingsView: View {
                             Button("Open setup…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
                         }
                         SettingRow(title: "User guide") {
-                            Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar#readme")!) }
+                            Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md")!) }
                         }
                     }
                     .id(SettingsSearchResult.help.id)

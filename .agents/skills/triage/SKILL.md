@@ -38,8 +38,8 @@ Read the body and comments of every result before ruling it in or out. A title c
 and comments link fixes in progress and record maintainer decisions.
 
 **Code and docs on current main.** The local checkout can be stale or on another branch. Run
-`git fetch origin`, then `git grep -n -i "<term>" origin/main`. `README.md` documents almost every
-configuration feature; `examples/` holds working setups.
+`git fetch origin`, then `git grep -n -i "<term>" origin/main`. The guide in `docs/` documents almost
+every configuration feature; `examples/` holds working setups.
 
 **Releases.** `CHANGELOG.md` lists released fixes and features. `git tag --contains <sha>` names the
 release that shipped a commit; commits after the newest tag on `origin/main` are unreleased.
@@ -53,7 +53,7 @@ search first.
 | --- | --- | --- |
 | Tracked | An open issue or PR covers the same underlying problem | Link it. If the report adds evidence (environment, steps, logs), draft a comment for it. Never file a duplicate. |
 | Fixed | A commit on main or a release fixes it | Name the release or short SHA and how to get it: update, or build `main` while unreleased. |
-| Supported | Current configuration already does it | Link the README section and give a minimal config snippet. A wrong or hard-to-find doc is a separate problem: search for it, then treat it as new. |
+| Supported | Current configuration already does it | Link the section of the guide in `docs/` and give a minimal config snippet. A wrong or hard-to-find doc is a separate problem: search for it, then treat it as new. |
 | Declined | Closed as not planned or `wontfix` | Cite the issue and the maintainer's reason. Draft a comment there only if the report answers that reason. |
 | New | Nothing above matches | Draft an issue (section 4). |
 | Needs info | You cannot tell which problem it is | Ask the specific questions. |
@@ -87,11 +87,11 @@ user to drag any screenshots into the issue after it exists.
 
 ## 5. Report
 
-Start with one line per problem: its outcome and the issue, PR, commit or README section that decides
+Start with one line per problem: its outcome and the issue, PR, commit or guide section that decides
 it. Then list:
 
 - **Checked:** your issue and PR queries, and what you read on `main` and in releases.
-- **Evidence:** issue and PR numbers, short SHAs, file paths or README sections.
+- **Evidence:** issue and PR numbers, short SHAs, file paths or guide sections.
 - **Draft:** the issue or comment text, and its status (posted with URL, or awaiting approval).
 - **Questions for the reporter**, when there are any.
 

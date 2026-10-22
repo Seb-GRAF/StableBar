@@ -327,10 +327,10 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
     #expect(script.output.text == "\(home)|payload")
 }
 
-@Test func builtInEventsMatchTheReadmeTable() throws {
-    let readme = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .appending(path: "README.md")
-    let lines = try String(contentsOf: readme, encoding: .utf8).components(separatedBy: "\n")
+@Test func builtInEventsMatchTheGuideTable() throws {
+    let guide = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "docs/create-a-widget.md")
+    let lines = try String(contentsOf: guide, encoding: .utf8).components(separatedBy: "\n")
     let header = try #require(lines.firstIndex(of: "| Event | Sent when | `INFO` |"))
     let rows = lines[(header + 2)...].prefix { $0.hasPrefix("| ") }.map { row in
         row.dropFirst(2).dropLast(2).components(separatedBy: " | ")

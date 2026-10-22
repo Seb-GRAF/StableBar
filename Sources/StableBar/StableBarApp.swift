@@ -413,7 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             })
     }
     @objc private func showUserGuide() {
-        NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar#readme")!)
+        NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md")!)
     }
     @objc private func quit() { NSApp.terminate(nil) }
 

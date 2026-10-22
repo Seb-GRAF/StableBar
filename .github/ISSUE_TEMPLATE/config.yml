@@ -2,5 +2,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Configuration help
-    url: https://github.com/Seb-GRAF/StableBar#layout-and-style
-    about: The README documents almost every configuration option, and examples/ holds working setups.
+    url: https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md
+    about: The user guide documents almost every configuration option, and examples/ holds working setups.
