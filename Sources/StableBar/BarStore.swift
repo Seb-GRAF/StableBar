@@ -106,7 +106,11 @@ final class BarStore: NSObject {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             if !FileManager.default.fileExists(atPath: sharedConfigurationURL.path) {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
-                try writeConfiguration(Data(contentsOf: template), to: sharedConfigurationURL)
+                let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
+                let data = try SetupPreferences(placement: placement).applying(
+                    to: Data(contentsOf: template),
+                    menuBarHeight: max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0))
+                try writeConfiguration(data, to: sharedConfigurationURL)
             }
             try migrateConfigurationFile(sharedConfigurationURL)
             if !UserDefaults.standard.bool(forKey: "migratedEarlierColors") {

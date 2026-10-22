@@ -11,7 +11,7 @@
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>LSUIElement</key><true/>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSAppleEventsUsageDescription</key><string>Read app status and run actions configured in your widgets.</string>
+    <key>NSAppleEventsUsageDescription</key><string>Hide the macOS menu bar when StableBar replaces it, read app status and run actions configured in your widgets.</string>
     <key>NSCalendarsFullAccessUsageDescription</key><string>Show your next meeting and today's agenda in calendar widgets.</string>
     <key>SUFeedURL</key><string>https://github.com/Seb-GRAF/StableBar/releases/download/appcast/appcast.xml</string>
     <key>SUEnableAutomaticChecks</key><true/>

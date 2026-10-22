@@ -6,9 +6,12 @@ struct SetupTourView: View {
     let finish: () -> Void
     let skip: () -> Void
     let reveal: () -> Void
+    let lower: () -> Void
+    let showProfile: ((String) -> Void)?
     @State private var start: Date
     @State private var departure: Date?
     @State private var phase: Phase
+    @State private var menuBarQuestion: Bool
     @State private var looks: [(name: String, look: Configuration)] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -17,20 +20,24 @@ struct SetupTourView: View {
     private static let pages = [
         ("Start from a preset.", "Your bar changes as you choose. Presets add widgets and never remove yours."),
         ("Give it your style.", "Flip through themes with ← and →. Keep current leaves your theme as it is."),
-        ("Choose where it sits.", "Below the menu bar keeps macOS menus visible. The top edge suits a menu bar that hides itself."),
+        ("Choose where it sits.", "On the top edge, StableBar replaces the macOS menu bar. Below it, macOS menus stay visible."),
+        ("Finishing touches.", "Choose what StableBar may do. Permission buttons ask macOS right away."),
         ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
     ]
 
     init(session: SetupSession, screen: NSScreen, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
-         reveal: @escaping () -> Void) {
+         reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?) {
         _session = Bindable(session)
         self.screen = screen
         self.finish = finish
         self.skip = skip
         self.reveal = reveal
+        self.lower = lower
+        self.showProfile = showProfile
         _start = State(initialValue: intro ? .now : .distantPast)
         _departure = State(initialValue: intro ? nil : .distantPast)
         _phase = State(initialValue: intro ? .intro : .tour)
+        _menuBarQuestion = State(initialValue: intro && !session.menuBarHides)
     }
 
     private var barFrame: CGRect {
@@ -70,6 +77,9 @@ struct SetupTourView: View {
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            session.refreshAccess()
+        }
         .task {
             guard let configuration = session.store.configuration else { return }
             let themes = session.themes.filter { $0.isBundled && ["blueprint", "leman", "rose-pine"].contains($0.manifest.id) && $0.key != session.currentThemeKey }
@@ -82,7 +92,7 @@ struct SetupTourView: View {
             looks = [(session.currentTheme, configuration)] + previews
         }
         .task(id: departure) {
-            guard let departure, phase == .intro else { return }
+            guard let departure, phase == .intro, !menuBarQuestion else { return }
             try? await Task.sleep(for: .seconds(SetupDemo.landing + departure.timeIntervalSinceNow))
             guard !Task.isCancelled else { return }
             reveal()
@@ -94,7 +104,8 @@ struct SetupTourView: View {
 
     private func intro(size: CGSize, bar: CGRect, now: Date) -> some View {
         let t = now.timeIntervalSince(start)
-        let d = departure.map { now.timeIntervalSince($0) } ?? -1
+        let elapsed = departure.map { now.timeIntervalSince($0) } ?? -1
+        let d = menuBarQuestion ? min(elapsed, SetupDemo.flight) : elapsed
         let home = size.height * 0.42
         let stageWidth = min(size.width - 200, 1080)
         let stage = CGRect(x: (size.width - stageWidth) / 2, y: home - bar.height / 2, width: stageWidth, height: bar.height)
@@ -206,13 +217,59 @@ struct SetupTourView: View {
                     .opacity(progress(d, 0.6, 0.4) * (1 - progress(d, SetupDemo.flight, 0.2)))
                     .position(x: size.width / 2, y: size.height - 89)
             }
+            if menuBarQuestion && elapsed >= SetupDemo.flight {
+                let asked = UnitCurve.easeOut.value(at: progress(elapsed, SetupDemo.flight, 0.45))
+                VStack(spacing: 12) {
+                    Text("Make it your menu bar.").font(.system(size: 34, weight: .semibold)).tracking(-0.5)
+                    Text("StableBar takes the top edge, and the macOS menu bar hides until you point at it.")
+                        .font(.system(size: 16))
+                        .foregroundStyle(.white.opacity(0.6))
+                    if let error = session.error {
+                        Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                    }
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 560)
+                .foregroundStyle(.white)
+                .opacity(asked)
+                .blur(radius: 8 * (1 - asked))
+                .offset(y: 14 * (1 - asked))
+                .position(x: size.width / 2, y: stage.minY - 110)
+                HStack(spacing: 24) {
+                    Button {
+                        Task {
+                            await session.place(.top)
+                            if session.menuBarHides && menuBarQuestion { land() }
+                        }
+                    } label: {
+                        Text("Replace the menu bar").frame(height: 48)
+                    }
+                    .buttonStyle(SetupButtonStyle())
+                    .keyboardShortcut(.defaultAction)
+                    Button("Keep the menu bar") {
+                        session.preferences.placement = .belowMenuBar
+                        land()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .keyboardShortcut(.cancelAction)
+                }
+                .opacity(asked)
+                .position(x: size.width / 2, y: size.height - 89)
+            }
         }
+    }
+
+    private func land() {
+        menuBarQuestion = false
+        departure = .now.addingTimeInterval(-SetupDemo.flight)
     }
 
     private var pointer: some View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.up")
-            Text(session.step == 3 ? "Try it on your bar" : "Live on your bar")
+            Text(session.step == Self.pages.count - 1 ? "Try it on your bar" : "Live on your bar")
                 .contentTransition(.opacity)
         }
         .font(.system(size: 12, weight: .medium))
@@ -249,6 +306,7 @@ struct SetupTourView: View {
                 case 0: presets
                 case 1: themes
                 case 2: placement
+                case 3: access
                 default: hints
                 }
             }
@@ -281,9 +339,11 @@ struct SetupTourView: View {
     private var presets: some View {
         HStack(spacing: 12) {
             ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
-                let selected = session.preferences == preset.preferences(sets: session.sets)
+                let chosen = preset.preferences(sets: session.sets, placement: session.preferences.placement)
+                let selected = session.preferences == chosen
                 SetupTile(selected: selected) {
-                    session.preferences = selected ? SetupPreferences() : preset.preferences(sets: session.sets)
+                    session.preferences = selected ? SetupPreferences(placement: session.preferences.placement) : chosen
+                    if session.preferences.placement == .top { Task { await session.place(.top) } }
                 } label: {
                     VStack(alignment: .leading, spacing: 8) {
                         Image(systemName: preset.symbol).font(.system(size: 20)).frame(height: 26)
@@ -341,15 +401,8 @@ struct SetupTourView: View {
     private var placement: some View {
         VStack(spacing: 32) {
             HStack(spacing: 16) {
-                placementTile(.top, title: "Top edge", detail: "Covers the menu bar area.")
+                placementTile(.top, title: "Top edge", detail: "Hides the macOS menu bar.")
                 placementTile(.belowMenuBar, title: "Below menu bar", detail: "Keeps macOS menus visible.")
-            }
-            if session.placement == .top && !session.menuBarHides {
-                Label("The macOS menu bar covers a bar on the top edge until it hides automatically. You can turn that on before you finish.",
-                      systemImage: "menubar.rectangle")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .frame(maxWidth: 520)
             }
             if session.base?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
                 HStack(spacing: 12) {
@@ -363,7 +416,7 @@ struct SetupTourView: View {
 
     private func placementTile(_ placement: SetupPreferences.Placement, title: String, detail: String) -> some View {
         SetupTile(selected: session.placement == placement) {
-            session.preferences.placement = placement
+            Task { await session.place(placement) }
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 VStack(spacing: 3) {
@@ -385,18 +438,149 @@ struct SetupTourView: View {
     }
 
     private var hints: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            hint("cursorarrow.click", "Click a widget", "Opens its details and actions.")
-            hint("contextualmenu.and.cursorarrow", "Right-click the bar", "Edit Bar in Place, Try Themes and Settings.")
-            hint("menubar.rectangle", "Use the menu-bar icon", "Opens Settings and this guide again.")
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 20) {
+                hint("cursorarrow.click", "Click a widget", "Opens its details and actions.")
+                hint("contextualmenu.and.cursorarrow", "Right-click the bar", "Edit Bar in Place, Try Themes and Settings.")
+                hint("menubar.rectangle", "Use the menu-bar icon", "Opens Settings and this guide again.")
+            }
+            .padding(24)
+            .frame(width: 440, alignment: .leading)
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+            profileNotice
+        }
+    }
+
+    private var profileSettings: [(String, ConfigurationOrigin)] {
+        let store = session.store
+        let settings = [("Appearance", "bar.appearance"), ("Placement", "bar.offset"),
+                        ("Window clearance", "bar.keepWindowsClear"), ("Notification clearance", "bar.keepNotificationsClear")]
+            + (store.configuration?.widgets.flatMap { widget -> [(String, String)] in
+                var settings = [(widget.id, "widgets.\(widget.id).enabled")]
+                if case .clock = widget.content { settings.append(("Clock \(widget.id)", "widgets.\(widget.id).format")) }
+                return settings
+            } ?? [])
+        return settings.compactMap { title, path in
+            guard let origin = store.origins[path], origin.profile != nil else { return nil }
+            return (title, origin)
+        }
+    }
+
+    @ViewBuilder private var profileNotice: some View {
+        if !profileSettings.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("Active profiles control some settings", systemImage: "info.circle").font(.system(size: 13, weight: .semibold))
+                ForEach(profileSettings, id: \.0) { title, origin in
+                    Text("\(title): \(session.store.sourceText(origin)).")
+                    if let showProfile {
+                        Button("Edit \(origin.profile!) profile…") {
+                            lower()
+                            showProfile(origin.profile!)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                Text("Setup saves your defaults. These profiles still take priority, so a saved change may not change the bar now. Review the controlling settings in Profiles.")
+                if let configuration = session.store.configuration {
+                    Text("Effective placement: \(configuration.bar.offset.formatted()) pt from top.")
+                }
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.6))
+            .frame(width: 440, alignment: .leading)
+        }
+    }
+
+    private var access: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            hint("accessibility", "Allow Accessibility", "Lets StableBar move windows and notifications. Menu widgets also use it.") {
+                if session.accessibilityAccess {
+                    Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
+                } else {
+                    Button("Allow…") {
+                        lower()
+                        session.store.windowClearance.requestAccess()
+                    }
+                    .buttonStyle(SetupButtonStyle(prominent: false))
+                }
+            }
+            if session.needsCalendarAccess {
+                hint("calendar", "Allow Calendars", "Meetings shows your next meeting and today's agenda.") {
+                    switch session.calendarAccess {
+                    case .fullAccess:
+                        Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
+                    case .notDetermined:
+                        Button("Allow…") { Task { await session.requestCalendarAccess() } }
+                            .buttonStyle(SetupButtonStyle(prominent: false))
+                    default:
+                        Button("Open Settings…") {
+                            lower()
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                        }
+                        .buttonStyle(SetupButtonStyle(prominent: false))
+                    }
+                }
+            }
+            if session.needsCalendarSetup {
+                HStack {
+                    Text(session.preferences.deferMeetings
+                         ? "Meetings will stay turned off. Turn it on in Settings → Bar when you are ready to allow Calendar access."
+                         : "Without Calendar access, Meetings is saved turned off. Existing widgets stay unchanged.")
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 12)
+                    Button(session.preferences.deferMeetings ? "Set up Calendar access now" : "Set up Meetings later") {
+                        session.preferences.deferMeetings.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            hint("macwindow", "Keep windows clear of StableBar", "Moves and resizes ordinary windows. Fullscreen windows stay unchanged.") {
+                Toggle("Keep windows clear of StableBar", isOn: Binding(
+                    get: { session.preferences.keepWindowsClear ?? (session.base?.bar.keepWindowsClear == true) },
+                    set: { session.preferences.keepWindowsClear = $0 }))
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+            hint("bell", "Keep notifications clear of StableBar", "Moves banners below the bar. Requires macOS 26.") {
+                Toggle("Keep notifications clear of StableBar", isOn: Binding(
+                    get: { session.preferences.keepNotificationsClear ?? (session.base?.bar.keepNotificationsClear == true) },
+                    set: { session.preferences.keepNotificationsClear = $0 }))
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+            hint("power", "Open at login", appIsInApplications()
+                 ? "Starts StableBar when you log in." : "Move StableBar to Applications to start it at login.") {
+                if appIsInApplications() {
+                    Toggle("Open at login", isOn: Binding(
+                        get: { session.openAtLogin ?? (session.loginStatus == .enabled || session.loginStatus == .requiresApproval) },
+                        set: { session.openAtLogin = $0 }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                } else {
+                    Button("Show in Finder") {
+                        lower()
+                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                    }
+                    .buttonStyle(SetupButtonStyle(prominent: false))
+                }
+            }
+            if let source = session.sets.compactMap({ set -> WorkspaceSource? in
+                if case let .workspaces(source) = set { return source }
+                return nil
+            }).first {
+                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .aerospace ? "Set gaps.outer.top in AeroSpace to leave room for the bar." : "Use yabai’s external_bar setting to leave room for the bar.")")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+            }
         }
         .padding(24)
-        .frame(width: 440, alignment: .leading)
+        .frame(width: 600, alignment: .leading)
         .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
     }
 
-    private func hint(_ symbol: String, _ title: String, _ detail: String) -> some View {
+    private func hint<Control: View>(_ symbol: String, _ title: String, _ detail: String,
+                                     @ViewBuilder control: () -> Control = { EmptyView() }) -> some View {
         HStack(spacing: 14) {
             Image(systemName: symbol)
                 .font(.system(size: 17))
@@ -404,8 +588,10 @@ struct SetupTourView: View {
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 14, weight: .semibold))
-                Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 12)
+            control()
         }
     }
 
@@ -429,10 +615,14 @@ struct SetupTourView: View {
                 .disabled(session.step == 0)
                 .frame(width: 96, alignment: .trailing)
             Button {
-                if session.step == Self.pages.count - 1 { finish() }
-                else { withAnimation(.smooth(duration: 0.5)) { session.step += 1 } }
+                if session.step == Self.pages.count - 1 {
+                    session.finish()
+                    if session.finished { finish() }
+                } else {
+                    withAnimation(.smooth(duration: 0.5)) { session.step += 1 }
+                }
             } label: {
-                Text("Continue").frame(width: 164, height: 48)
+                Text(session.step == Self.pages.count - 1 ? "Finish setup" : "Continue").frame(width: 164, height: 48)
             }
             .buttonStyle(SetupButtonStyle())
             .keyboardShortcut(.defaultAction)

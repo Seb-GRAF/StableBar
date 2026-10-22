@@ -15,7 +15,7 @@ struct SetupDemo: View {
     static let landing = 12.0
 
     private static let headlines = [("Built from widgets.", 0.9, 3.5), ("Click any of them.", 3.8, 7.3),
-                                    ("Dress it in any theme.", 7.7, 10.9)]
+                                    ("Dress it in any theme.", 7.7, 10.85)]
     /// The parts in bar order, with when each lands.
     private static let parts = [("workspaces", 1.1), ("active app", 1.24), ("now playing", 1.8),
                                 ("cpu", 1.66), ("battery", 1.52), ("clock", 1.38)]
@@ -64,7 +64,7 @@ struct SetupDemo: View {
             .font(.system(size: 15, weight: .medium, design: .monospaced))
             .foregroundStyle(.white.opacity(0.7))
             .animation(.smooth(duration: 0.4), value: theme.to)
-            .opacity(1 - progress(elapsed, 10.9, 0.35))
+            .opacity(1 - progress(elapsed, 10.85, 0.35))
             .position(x: stage.midX, y: stage.maxY + 48)
             ForEach(Self.headlines.indices, id: \.self) { index in
                 let (text, start, end) = Self.headlines[index]

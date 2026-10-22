@@ -533,7 +533,7 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
 func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let url = repository.appending(path: "Resources/config.json")
-    let data = try preset.preferences(sets: [.system, .meetings, .workspaces(.aerospace)])
+    let data = try preset.preferences(sets: [.system, .meetings, .workspaces(.aerospace)], placement: .current)
         .applying(to: Data(contentsOf: url), menuBarHeight: 24)
     var loader = ConfigurationLoader()
     loader.themesDirectory = repository.appending(path: "Resources/themes")

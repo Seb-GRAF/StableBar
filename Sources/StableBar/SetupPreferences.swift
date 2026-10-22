@@ -172,14 +172,14 @@ struct SetupPreferences: Equatable {
             }
         }
 
-        func preferences(sets: [WidgetSet]) -> SetupPreferences {
+        func preferences(sets: [WidgetSet], placement: Placement) -> SetupPreferences {
             switch self {
-            case .minimal: SetupPreferences(theme: .builtIn)
-            case .developer: SetupPreferences(appearance: .dark, theme: .package(id: "blueprint", version: nil),
+            case .minimal: SetupPreferences(placement: placement, theme: .builtIn)
+            case .developer: SetupPreferences(appearance: .dark, placement: placement, theme: .package(id: "blueprint", version: nil),
                                               widgetSets: sets.filter { $0 != .meetings })
-            case .workday: SetupPreferences(theme: .package(id: "leman", version: nil), widgetSets: [.meetings])
+            case .workday: SetupPreferences(placement: placement, theme: .package(id: "leman", version: nil), widgetSets: [.meetings])
             case .notch: SetupPreferences(placement: .top, theme: .package(id: "notch", version: nil))
-            case .everything: SetupPreferences(theme: .package(id: "rose-pine", version: nil), widgetSets: sets)
+            case .everything: SetupPreferences(placement: placement, theme: .package(id: "rose-pine", version: nil), widgetSets: sets)
             }
         }
     }
