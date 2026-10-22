@@ -187,7 +187,10 @@ final class SetupSession {
             try await setMenuBarHidden(placement == .top)
             preferences.placement = placement
         } catch {
-            self.error = "StableBar couldn’t \(placement == .top ? "hide" : "show") the macOS menu bar. \(errorMessage(error))"
+            let detail = errorMessage(error).contains("-1743")
+                ? "Allow StableBar in System Settings → Privacy & Security → Automation."
+                : errorMessage(error)
+            self.error = "StableBar couldn’t \(placement == .top ? "hide" : "show") the macOS menu bar. \(detail)"
         }
     }
 
