@@ -14,7 +14,7 @@ final class ThemePreviewTests: XCTestCase {
         XCTAssertNil(choices.first?.edit.properties)
         let bundled = choices.filter { $0.isBundled && !$0.isBuiltIn }
         XCTAssertEqual(bundled.map(\.title), bundled.map(\.title).sorted())
-        XCTAssertEqual(bundled.count, 5)
+        XCTAssertEqual(bundled.count, 15)
         XCTAssertEqual(choices.last?.key, installed.key)
         XCTAssertEqual(choices.last?.edit.properties, installed.selection)
         XCTAssertEqual(themeChoices(packages: fixture.packages.directory, themesDirectory: fixture.themes).map(\.key), Array(choices.dropFirst()).map(\.key))

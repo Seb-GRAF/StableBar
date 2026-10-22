@@ -1,0 +1,10 @@
+{
+  "id": "gruvbox",
+  "name": "Gruvbox",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Gruvbox palette, set in Rockwell, with red, orange and yellow 70s stripes along the bottom of the bar.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

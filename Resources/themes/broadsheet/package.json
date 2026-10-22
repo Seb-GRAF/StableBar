@@ -1,0 +1,10 @@
+{
+  "id": "broadsheet",
+  "name": "Broadsheet",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Newsprint: salmon paper in light and ink in dark, set in Georgia above a heavy rule, with the focused workspace underlined in claret.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

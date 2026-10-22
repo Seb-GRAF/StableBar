@@ -1,0 +1,10 @@
+{
+  "id": "synthwave",
+  "name": "Synthwave",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "An 80s sunset: a violet-to-magenta strip with neon glowing text in Futura and a pink-to-cyan line under the focused workspace. Pastel in light.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

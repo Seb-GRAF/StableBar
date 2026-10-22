@@ -1,0 +1,47 @@
+{
+  "tokens": {
+    "surface": { "light": "#eff1f5", "dark": "#313244" },
+    "surfaceRaised": { "light": "#ccd0da", "dark": "#45475a" },
+    "text": { "light": "#4c4f69", "dark": "#cdd6f4" },
+    "textMuted": { "light": "#6c6f85", "dark": "#a6adc8" },
+    "accent": { "light": "#8839ef", "dark": "#cba6f7" },
+    "track": { "light": "#bcc0cc", "dark": "#585b70" },
+    "hairline": { "light": "#4c4f691f", "dark": "#cdd6f41f" },
+    "warning": { "light": "#c64f00", "dark": "#fab387" },
+    "critical": { "light": "#d20f39", "dark": "#f38ba8" }
+  },
+  "bar": {
+    "style": {
+      "background": { "light": "#dce0e8ee", "dark": "#11111bee" }
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": null,
+    "accentText": { "light": "#eff1f5", "dark": "#1e1e2e" },
+    "cornerRadius": 14,
+    "fontSize": 13,
+    "fontWeight": "medium"
+  },
+  "popupDefaults": {
+    "background": { "light": "#eff1f5ee", "dark": "#1e1e2eee" },
+    "borderColor": "@token.hairline",
+    "shadowColor": { "light": "#4c4f6926", "dark": "#00000066" }
+  },
+  "workspaceDefaults": {
+    "indicator": "background",
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "background": "@token.accent",
+          "foreground": { "light": "#eff1f5", "dark": "#1e1e2e" }
+        }
+      }
+    }
+  }
+}

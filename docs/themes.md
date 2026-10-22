@@ -2,10 +2,10 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/themes-dark.webp">
-  <img src="images/themes-light.webp" alt="One bar shown in the Built-in, Blueprint, Everforest, Léman, Notch and Rosé Pine themes">
+  <img src="images/themes-light.webp" alt="One bar shown in each theme that ships with StableBar">
 </picture>
 
-StableBar ships with five themes and the Built-in fallback. Themes follow the system's appearance, or the one `bar.appearance` sets. Notch stays black in both appearances.
+StableBar ships with fifteen themes and the Built-in fallback. Themes follow the system's appearance, or the one `bar.appearance` sets. Notch stays black in both appearances.
 
 | Theme | ID | Look |
 | --- | --- | --- |
@@ -15,6 +15,16 @@ StableBar ships with five themes and the Built-in fallback. Themes follow the sy
 | **Léman** | `leman` | A rounded floating bar in lake blue-green colors, with a teal accent. |
 | **Blueprint** | `blueprint` | A thin outlined bar in tracing-paper and cyanotype colors, set in Menlo. |
 | **Notch** | `notch` | A pure black strip that blends into the MacBook notch, with a cyan accent. |
+| **Catppuccin** | `catppuccin` | Rounded pills on a solid strip in Latte and Mocha colors, with a Mauve pill for the focused workspace. |
+| **Nord** | `nord` | A slim 30 pt strip in Snow Storm and Polar Night colors, set in Avenir Next, with a short frost dash under the focused workspace. |
+| **Kanagawa** | `kanagawa` | A strip in Lotus and Wave colors, set in Hiragino Mincho, with a red seal on the focused workspace. |
+| **Gruvbox** | `gruvbox` | A strip in Gruvbox colors, set in Rockwell, with red, orange and yellow 70s stripes along its bottom. |
+| **Phosphor** | `phosphor` | An amber CRT terminal: glowing Monaco on black in dark, brown ink on paper in light, with the focused workspace in reverse video. |
+| **Platinum** | `platinum` | The Mac OS 8 and 9 look: a beveled gray strip set in Geneva, a pressed focused workspace and a blue highlight on hover. |
+| **Synthwave** | `synthwave` | A violet-to-magenta gradient strip with glowing Futura text and a pink-to-cyan line under the focused workspace; pastel in light. |
+| **Broadsheet** | `broadsheet` | Salmon newsprint or ink, set in Georgia above a heavy rule, with the focused workspace underlined in claret. |
+| **Handheld** | `handheld` | A framed screen in four shades of early handheld-console green, set in Silom. |
+| **Brutalist** | `brutalist` | Square boxes with heavy outlines on a concrete strip, set in bold DIN, with a blue block for the focused workspace and yellow on hover. |
 
 Choose one in setup or in **Settings → Theme**. Theme cards show the same sample bar in each theme's style: three workspaces, Finder, a battery percentage and a clock. The sample shows the theme's bar, widget tiles, fonts, colors and workspace indicator, in the light or dark appearance your bar uses now. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
 

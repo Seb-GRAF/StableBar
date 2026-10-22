@@ -1,0 +1,10 @@
+{
+  "id": "platinum",
+  "name": "Platinum",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "The Mac OS 8 and 9 look: a beveled gray strip set in Geneva, a pressed button for the focused workspace and a blue highlight on hover. Graphite in dark.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

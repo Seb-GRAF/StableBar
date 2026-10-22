@@ -40,7 +40,7 @@ The same bar in each theme that ships with StableBar. Choose one during setup, c
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/themes-dark.webp">
-  <img src="docs/images/themes-light.webp" alt="One bar shown in the Built-in, Blueprint, Everforest, Léman, Notch and Rosé Pine themes">
+  <img src="docs/images/themes-light.webp" alt="One bar shown in each theme that ships with StableBar">
 </picture>
 
 ## Popups

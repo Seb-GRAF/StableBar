@@ -1,0 +1,73 @@
+{
+  "tokens": {
+    "surface": { "light": "#fbe9ffee", "dark": "#241040ee" },
+    "surfaceRaised": { "light": "#ffffffa6", "dark": "#ffffff1f" },
+    "text": { "light": "#3b1d5e", "dark": "#fff0fc" },
+    "textMuted": { "light": "#73548f", "dark": "#d4a8e8" },
+    "accent": { "light": "#e0218a", "dark": "#2de2e6" },
+    "track": { "light": "#3b1d5e26", "dark": "#fff0fc33" },
+    "hairline": { "light": "#e0218a33", "dark": "#ff71ce4d" },
+    "warning": { "light": "#b35c00", "dark": "#ffd319" },
+    "critical": { "light": "#d1003f", "dark": "#ff3864" }
+  },
+  "bar": {
+    "style": {
+      "background": {
+        "gradient": {
+          "colors": [
+            { "light": "#ffd3ec", "dark": "#1d0f45" },
+            { "light": "#e7d7ff", "dark": "#3f1260" },
+            { "light": "#c9f2ff", "dark": "#7a1957" }
+          ]
+        }
+      },
+      "borderColor": { "light": "#e0218a66", "dark": "#ff71ce" },
+      "borderWidth": 1
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": { "light": "#ff71ce4d", "dark": "#ff2a8acc" },
+    "shadowRadius": 5,
+    "accentText": { "light": "#ffffff", "dark": "#1d0f45" },
+    "cornerRadius": 6,
+    "fontName": "Futura",
+    "fontSize": 12,
+    "fontWeight": "medium"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "shadowColor": { "light": "#3b1d5e33", "dark": "#ff2a8a59" },
+    "cornerRadius": 10
+  },
+  "workspaceDefaults": {
+    "indicator": "underline",
+    "indicatorStyle": {
+      "height": 2,
+      "offsetY": 4,
+      "background": {
+        "gradient": {
+          "colors": [{ "light": "#e0218a", "dark": "#ff2a8a" }, { "light": "#00a3c4", "dark": "#2de2e6" }]
+        }
+      },
+      "states": {
+        "visible": {
+          "background": "@token.track"
+        }
+      }
+    },
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "foreground": "@token.text"
+        }
+      }
+    }
+  }
+}

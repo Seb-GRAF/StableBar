@@ -1,0 +1,10 @@
+{
+  "id": "nord",
+  "name": "Nord",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Nord palette, Snow Storm in light and Polar Night in dark: a slim strip set in Avenir Next, with a short frost dash under the focused workspace.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

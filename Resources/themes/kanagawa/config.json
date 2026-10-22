@@ -1,0 +1,49 @@
+{
+  "tokens": {
+    "surface": { "light": "#f2ecbcee", "dark": "#1f1f28ee" },
+    "surfaceRaised": { "light": "#e5ddb0", "dark": "#2a2a37" },
+    "text": { "light": "#545464", "dark": "#dcd7ba" },
+    "textMuted": { "light": "#716e61", "dark": "#938f84" },
+    "accent": { "light": "#c84053", "dark": "#c34043" },
+    "track": { "light": "#dcd5ac", "dark": "#363646" },
+    "hairline": { "light": "#5454641f", "dark": "#dcd7ba1f" },
+    "warning": { "light": "#a85600", "dark": "#ff9e3b" },
+    "critical": { "light": "#c0262d", "dark": "#ff5d62" }
+  },
+  "bar": {
+    "style": {
+      "background": "@token.surface"
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": null,
+    "accentText": { "light": "#f2ecbc", "dark": "#f2ecbc" },
+    "cornerRadius": 4,
+    "fontName": "Hiragino Mincho ProN",
+    "fontSize": 13,
+    "fontWeight": "regular"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "shadowColor": { "light": "#5454641f", "dark": "#00000066" }
+  },
+  "workspaceDefaults": {
+    "indicator": "background",
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "background": "@token.accent",
+          "foreground": { "light": "#f2ecbc", "dark": "#f2ecbc" },
+          "cornerRadius": 2
+        }
+      }
+    }
+  }
+}

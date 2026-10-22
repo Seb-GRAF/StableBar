@@ -1,0 +1,61 @@
+{
+  "tokens": {
+    "surface": { "light": "#eceff4ee", "dark": "#2e3440ee" },
+    "surfaceRaised": { "light": "#d8dee9", "dark": "#3b4252" },
+    "text": { "light": "#2e3440", "dark": "#eceff4" },
+    "textMuted": { "light": "#4c566a", "dark": "#a3acbd" },
+    "accent": { "light": "#5e81ac", "dark": "#88c0d0" },
+    "track": { "light": "#d8dee9", "dark": "#4c566a" },
+    "hairline": { "light": "#2e34401f", "dark": "#eceff41f" },
+    "warning": { "light": "#a8592b", "dark": "#ebcb8b" },
+    "critical": { "light": "#a5414b", "dark": "#d57780" }
+  },
+  "bar": {
+    "height": 30,
+    "style": {
+      "background": "@token.surface"
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": null,
+    "accentText": { "light": "#eceff4", "dark": "#2e3440" },
+    "cornerRadius": 5,
+    "fontName": "Avenir Next",
+    "fontSize": 12,
+    "fontWeight": "medium"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "shadowColor": { "light": "#2e34401f", "dark": "#00000059" },
+    "cornerRadius": 8
+  },
+  "workspaceDefaults": {
+    "indicator": "underline",
+    "indicatorStyle": {
+      "width": 12,
+      "height": 3,
+      "cornerRadius": 1.5,
+      "offsetY": 4,
+      "background": "@token.accent",
+      "states": {
+        "visible": {
+          "background": "@token.track"
+        }
+      }
+    },
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "foreground": "@token.text"
+        }
+      }
+    }
+  }
+}

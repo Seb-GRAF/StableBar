@@ -32,7 +32,7 @@ final class ThemeTrialTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertEqual(trial.selectedIndex, trial.choices.count - 1)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         trial.next()
         XCTAssertEqual(trial.selectedIndex, 0)
         for index in 1...trial.choices.count {
@@ -217,7 +217,7 @@ final class ThemeTrialTests: XCTestCase {
     }
 
     @MainActor func testCancelRestoresEveryComposedLayerAndLeavesAllFilesAndHistoryUntouched() throws {
-        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"theme":{"id":"rose-pine"},"templates":{"label":{"type":"text","position":"left","style":{"paddingHorizontal":7}}},"widgets":[{"id":"label","template":"label","text":"Label"}],"widgetOverrides":{"label":{"style":{"fontSize":17}}},"profiles":[{"name":"work","configuration":{"bar":{"inset":19}}}]}"#)
+        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"theme":{"id":"synthwave"},"templates":{"label":{"type":"text","position":"left","style":{"paddingHorizontal":7}}},"widgets":[{"id":"label","template":"label","text":"Label"}],"widgetOverrides":{"label":{"style":{"fontSize":17}}},"profiles":[{"name":"work","configuration":{"bar":{"inset":19}}}]}"#)
         defer { fixture.close() }
         try fixture.write(#"{"defaults":{"cornerRadius":4}}"#, to: fixture.directory.appending(path: "included.json"))
         let installed = try fixture.theme(#"{"bar":{"height":57},"defaults":{"fontSize":22}}"#)
@@ -267,11 +267,11 @@ final class ThemeTrialTests: XCTestCase {
         trial.cancel()
         XCTAssertNil(trial.error)
         XCTAssertFalse(trial.isActive)
-        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("rose-pine")]))
+        XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("synthwave")]))
         XCTAssertNil(try fixture.document()["bar"])
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(store.configuration?.bar.margin, 9)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertEqual(try encodedEdits(store), edits)
         XCTAssertFalse(store.customizationHistory.hasPendingChanges)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
@@ -280,7 +280,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
         XCTAssertEqual(try encodedEdits(store), edits)
         try store.customizationHistory.redo()
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         XCTAssertEqual(try encodedEdits(store), edits)
     }
 
@@ -288,22 +288,22 @@ final class ThemeTrialTests: XCTestCase {
         let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[]}"#)
         defer { fixture.close() }
         let includedURL = fixture.directory.appending(path: "included.json")
-        try fixture.write(#"{"theme":{"id":"rose-pine"}}"#, to: includedURL)
+        try fixture.write(#"{"theme":{"id":"synthwave"}}"#, to: includedURL)
         let included = try Data(contentsOf: includedURL)
         let store = try loadedStore(fixture)
         defer { store.stop() }
         let trial = ThemeTrial(store: store)
-        XCTAssertEqual(trial.choice?.key, "rose-pine")
+        XCTAssertEqual(trial.choice?.key, "synthwave")
         trial.next()
         XCTAssertTrue(trial.choice?.isBuiltIn == true)
-        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 6)
         trial.keep()
         XCTAssertNil(trial.error)
         XCTAssertEqual(try fixture.document()["theme"], .object(["id": .string("built-in")]))
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
     }
 
     @MainActor func testInstalledThemeSettingsSurvivePreviewAndKeepAndOtherPackageFilesStayUntouched() throws {
@@ -414,20 +414,20 @@ final class ThemeTrialTests: XCTestCase {
             defer { fixture.close() }
             let store = try loadedStore(fixture)
             defer { store.stop() }
-            let themeEdit = ConfigurationEdit(action: .theme, properties: ["id": .string("rose-pine")])
+            let themeEdit = ConfigurationEdit(action: .theme, properties: ["id": .string("synthwave")])
             try store.setSessionEdits([themeEdit] + pendingEdits)
             let trial = ThemeTrial(store: store)
-            XCTAssertEqual(trial.choice?.key, "rose-pine")
+            XCTAssertEqual(trial.choice?.key, "synthwave")
             trial.next()
-            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
+            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 6)
             try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["inset": .number(23)])], persist: false)
             store.reloadConfiguration()
-            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
+            XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 6)
             XCTAssertEqual(store.configuration?.bar.inset, 23)
             let edits = try encodedEdits(store)
             if keep { trial.keep() } else { trial.cancel() }
             XCTAssertNil(trial.error)
-            XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+            XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
             XCTAssertEqual(store.configuration?.bar.margin, 9)
             XCTAssertEqual(store.configuration?.bar.inset, 23)
             XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
@@ -446,7 +446,7 @@ final class ThemeTrialTests: XCTestCase {
         let cancelled = ThemeTrial(store: store)
         XCTAssertFalse(cancelled.handleKey(48)) // Tab remains available to focus controls.
         XCTAssertTrue(cancelled.handleKey(123))
-        XCTAssertEqual(cancelled.choice?.key, "rose-pine")
+        XCTAssertEqual(cancelled.choice?.key, "synthwave")
         XCTAssertTrue(cancelled.handleKey(124))
         XCTAssertTrue(cancelled.choice?.isBuiltIn == true)
         XCTAssertTrue(cancelled.handleKey(123))
@@ -532,7 +532,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(store.effectiveDocument, baseline)
         trial.previous()
         XCTAssertEqual(trial.choice?.key, broken[0].key)
-        XCTAssertEqual(trial.position, "7 of 8")
+        XCTAssertEqual(trial.position, "17 of 18")
         XCTAssertFalse(trial.canKeep)
         XCTAssertNotNil(trial.error)
         XCTAssertTrue(trial.handleKey(36))
@@ -540,10 +540,10 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
         trial.previous()
-        XCTAssertEqual(trial.choice?.key, "rose-pine")
+        XCTAssertEqual(trial.choice?.key, "synthwave")
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertEqual(store.configuration?.defaults.cornerRadius, 6)
         let lastGood = store.effectiveDocument
         for choice in broken {
             trial.next()
@@ -556,7 +556,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertTrue(trial.choice?.isBuiltIn == true)
         XCTAssertTrue(trial.canKeep)
         XCTAssertNil(trial.error)
-        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 13)
+        XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 6)
         trial.cancel()
         XCTAssertEqual(store.effectiveDocument, baseline)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)

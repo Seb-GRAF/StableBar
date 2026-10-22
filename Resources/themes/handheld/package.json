@@ -1,0 +1,10 @@
+{
+  "id": "handheld",
+  "name": "Handheld",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Four shades of green from early handheld game screens, set in Silom on a framed screen: pea-soup LCD in light, backlit in dark.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

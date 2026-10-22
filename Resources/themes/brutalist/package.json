@@ -1,0 +1,10 @@
+{
+  "id": "brutalist",
+  "name": "Brutalist",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Raw concrete: square white boxes with heavy black outlines, set in bold DIN, with a blue block for the focused workspace and yellow on hover. Inverted in dark.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

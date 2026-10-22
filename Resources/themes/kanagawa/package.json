@@ -1,0 +1,10 @@
+{
+  "id": "kanagawa",
+  "name": "Kanagawa",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Kanagawa palette, Lotus in light and Wave in dark, set in Hiragino Mincho, with a red seal on the focused workspace.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

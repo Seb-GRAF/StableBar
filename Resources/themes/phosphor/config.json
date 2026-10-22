@@ -1,0 +1,49 @@
+{
+  "tokens": {
+    "surface": { "light": "#f6f1e6ee", "dark": "#110d06ee" },
+    "surfaceRaised": { "light": "#ebe2cf", "dark": "#2b2009" },
+    "text": { "light": "#5c3a00", "dark": "#ffb000" },
+    "textMuted": { "light": "#87683b", "dark": "#b8800c" },
+    "accent": { "light": "#a86400", "dark": "#ffcc5c" },
+    "track": { "light": "#5c3a0026", "dark": "#ffb00033" },
+    "hairline": { "light": "#5c3a001f", "dark": "#ffb00040" },
+    "warning": { "light": "#b84e00", "dark": "#ff7a1a" },
+    "critical": { "light": "#b3261e", "dark": "#ff4d3d" }
+  },
+  "bar": {
+    "style": {
+      "background": "@token.surface"
+    }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": null,
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": null,
+    "accent": "@token.accent",
+    "shadowColor": { "light": "#00000000", "dark": "#ffb00080" },
+    "shadowRadius": 4,
+    "accentText": { "light": "#f6f1e6", "dark": "#110d06" },
+    "cornerRadius": 0,
+    "fontName": "Monaco",
+    "fontSize": 12,
+    "fontWeight": "regular"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": { "light": "#5c3a0040", "dark": "#ffb00059" },
+    "shadowColor": { "light": "#0000001a", "dark": "#000000a6" }
+  },
+  "workspaceDefaults": {
+    "indicator": "background",
+    "style": {
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "background": "@token.text",
+          "foreground": { "light": "#f6f1e6", "dark": "#110d06" }
+        }
+      }
+    }
+  }
+}
