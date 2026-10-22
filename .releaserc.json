@@ -11,7 +11,7 @@
         "prepareCmd": "./scripts/set-version.sh ${nextRelease.version} $GITHUB_RUN_NUMBER && STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh"
       }
     ],
-    ["@semantic-release/git", { "assets": ["CHANGELOG.md", "Resources/Info.plist"] }],
+    ["@semantic-release/git", { "assets": ["CHANGELOG.md", "Resources/Info.plist", "docs/images/*.webp"] }],
     ["@semantic-release/github", { "assets": [{ "path": "dist/StableBar.dmg" }] }]
   ]
 }

@@ -98,6 +98,36 @@ jobs:
           path: release-build.tar
           retention-days: 1
 
+  # Draws the images in docs/images from each push to main, so a broken render shows up before a
+  # stable release needs it. The release commits them beside CHANGELOG.md.
+  docs-images:
+    name: Docs images
+    env:
+      STABLEBAR_PREBUILT_DIR: release-build
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-build
+      - name: Extract release binary
+        run: |
+          mkdir release-build
+          tar -xf release-build.tar -C release-build
+      - name: Render
+        run: |
+          brew install webp
+          ./scripts/render-docs-images.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docs-images
+          path: docs/images/*.webp
+          retention-days: 1
+
   commits:
     name: Commit messages
     if: github.event_name == 'pull_request'
@@ -207,7 +237,7 @@ jobs:
     name: Release
     env:
       STABLEBAR_PREBUILT_DIR: release-build
-    needs: [test, build]
+    needs: [test, build, docs-images]
     if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/main'
     runs-on: macos-26
     timeout-minutes: 20
@@ -254,6 +284,10 @@ jobs:
         run: |
           mkdir release-build
           tar -xf release-build.tar -C release-build
+      - uses: actions/download-artifact@v8
+        with:
+          name: docs-images
+          path: docs/images
       - name: Set up Developer ID signing
         env:
           DEVELOPER_ID_CERTIFICATE: ${{ secrets.DEVELOPER_ID_CERTIFICATE }}

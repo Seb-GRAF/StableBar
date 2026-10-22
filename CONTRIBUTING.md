@@ -41,7 +41,7 @@ Queued pushes skip builds when `main` has already moved on. Tests and release co
 Both release channels come from `main`:
 
 - **Beta:** after the tests pass on `main`, CI builds `dist/StableBar.dmg` as the next version plus `-beta.<UTC timestamp>.<run number>`, such as `0.5.0-beta.20261020103000.114`, and publishes it as a GitHub prerelease. The timestamp uses `YYYYMMDDHHMMSS` so GitHub's alphabetical prerelease sorting keeps same-day betas in order when the run number gains a digit. A beta commits nothing. A push with no releasable commits since the last stable release makes no beta.
-- **Stable:** a maintainer starts it from **Actions → CI → Run workflow** on `main`. It releases the newest commit on `main`, and only once that commit has shipped as a beta, so stable ships what beta users have run. It sets `CFBundleShortVersionString` to the version and `CFBundleVersion` to the run number in [Resources/Info.plist](Resources/Info.plist) with `scripts/set-version.sh`, adds its notes to `CHANGELOG.md`, commits both as `chore(release): <version>`, tags `v<version>` and publishes a GitHub release with the DMG.
+- **Stable:** a maintainer starts it from **Actions → CI → Run workflow** on `main`. It releases the newest commit on `main`, and only once that commit has shipped as a beta, so stable ships what beta users have run. It sets `CFBundleShortVersionString` to the version and `CFBundleVersion` to the run number in [Resources/Info.plist](Resources/Info.plist) with `scripts/set-version.sh`, adds its notes to `CHANGELOG.md`, commits both with the [docs images](#docs-images) as `chore(release): <version>`, tags `v<version>` and publishes a GitHub release with the DMG.
 
 To retry a missing beta, use **Actions → CI → Run workflow** on `main` and choose **beta** as the release channel. The default channel is **stable**.
 
@@ -55,6 +55,10 @@ Both jobs sign and notarize the app with a Developer ID when the repository has 
 `scripts/publish-appcast.sh` adds each signed release to `appcast.xml` in the `appcast` prerelease, the feed every release checks, with betas on Sparkle's `beta` channel. Each item carries its GitHub release notes, whose bullet points the update tile's popup lists, and a link to the release.
 
 Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their stamped version and build number. Other app builds get Development metadata from the checkout's Git revision, including changes since its nearest release tag and a `-dirty` suffix for local changes. Without Git metadata, the version is `0.0.0-dev`. This changes only the built app's plist; the tracked release plist stays untouched.
+
+## Docs images
+
+`scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data and a fixed time, and writes them as WebP. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main`, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/DocsImages.swift).
 
 ## Agent skills
 
