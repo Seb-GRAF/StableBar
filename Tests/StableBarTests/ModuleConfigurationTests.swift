@@ -368,6 +368,24 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(store.configurationError == nil)
 }
 
+@Test @MainActor func aJSONErrorAtLaunchReloadsOnceTheFileIsFixed() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    try writeConfiguration(#"{"bar":{"height":37},"widgets":["#, to: root)
+    let store = BarStore(configurationURL: root)
+    defer { store.stop() }
+    store.start()
+    #expect(store.configurationError != nil)
+    try writeConfiguration(#"{"bar":{"height":37},"widgets":[]}"#, to: root)
+    for _ in 0..<100 {
+        if store.configuration != nil { break }
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(store.configuration?.bar.height == 37)
+    #expect(store.configurationError == nil)
+}
+
 @Test func unknownPropertiesFailWithTheirPath() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "strict.json")
     var loader = ConfigurationLoader()

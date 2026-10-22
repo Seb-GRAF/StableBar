@@ -118,15 +118,15 @@ final class BarStore: NSObject {
                 try migrateEarlierColors(sharedConfigurationURL)
                 UserDefaults.standard.set(true, forKey: "migratedEarlierColors")
             }
-            if let setup {
-                screenSetup = setup
-                configurationURL = barURL(for: setup)
-            }
-            reloadConfiguration()
-            packageLibrary.startUpdateChecks()
         } catch {
             configurationError = errorMessage(error)
         }
+        if let setup {
+            screenSetup = setup
+            configurationURL = barURL(for: setup)
+        }
+        reloadConfiguration()
+        packageLibrary.startUpdateChecks()
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(updateActiveApp), name: NSWorkspace.didActivateApplicationNotification, object: nil)
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
