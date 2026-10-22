@@ -1641,6 +1641,10 @@
           ],
           "description": "How popups open and close. Omit to use the motion's."
         },
+        "morphPopups": {
+          "$ref": "#/definitions/boolean",
+          "description": "When a popup opens while another is open on the same bar, move and reshape the open popup into the new one instead of closing it. Disabled by default."
+        },
         "animationDuration": {
           "$ref": "#/definitions/number",
           "description": "Seconds that widget and layout animations last. Omit to use the motion's."
@@ -1800,6 +1804,9 @@
             },
             "popupTransition": {
               "$ref": "#/definitions/bar/properties/popupTransition"
+            },
+            "morphPopups": {
+              "$ref": "#/definitions/bar/properties/morphPopups"
             }
           },
           "description": "Bar settings that replace the shared ones on this kind of screen."

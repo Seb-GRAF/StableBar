@@ -42,6 +42,32 @@ struct PopupShadowView: View {
     }
 }
 
+struct PopupMorphView: View {
+    let from: PopupView
+    let to: PopupView
+    let fromBox: CGRect
+    let toBox: CGRect
+    let glass: GlassSettings
+    let animation: WidgetAnimation
+    let finished: () -> Void
+    @State private var moved = false
+
+    var body: some View {
+        let box = moved ? toBox : fromBox
+        ZStack(alignment: .top) {
+            from.frame(width: fromBox.width, height: fromBox.height).opacity(moved ? 0 : 1)
+            to.frame(width: toBox.width, height: toBox.height).opacity(moved ? 1 : 0)
+        }
+        .frame(width: box.width, height: box.height, alignment: .top)
+        .modifier(PopupBackground(style: moved ? to.style : from.style, glass: glass))
+        .offset(x: box.minX, y: box.minY)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear {
+            withAnimation(animation.value, completionCriteria: .removed) { moved = true } completion: { finished() }
+        }
+    }
+}
+
 extension PopupTransition {
     @MainActor func animate(_ content: NSView, source: CGFloat, closing: Bool, with animation: WidgetAnimation) {
         let bounds = content.bounds
@@ -96,6 +122,9 @@ final class WidgetPopup {
     private weak var hoveredAnchor: NSView?
     private var pointerInPopup = false
     private var pinned = false
+    private var closesAfterClick = false
+    private var shown: (view: PopupView, inset: CGFloat)?
+    private var morph: (panel: PopupPanel, link: CADisplayLink)?
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
         if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
@@ -202,11 +231,20 @@ final class WidgetPopup {
 
     func open(_ popup: PopupConfiguration, widget: WidgetConfiguration, defaults: WidgetStyle,
               store: BarStore, anchor: NSView, onHover: Bool) {
+        let window = anchor.window!
+        let screen = window.screen!
+        let bar = store.configuration!.bar(on: ScreenKind(BarDisplay(screen: screen)))
+        let animation = popup.animation ?? bar.motion.popupAnimation
+        var from: (view: PopupView, box: NSRect, windows: [NSPanel])?
+        if let shown, let panel, bar.morphPopups, self.anchor?.window === window, animation.duration > 0,
+           !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            from = (shown.view, panel.frame.insetBy(dx: shown.inset, dy: shown.inset), [panel, shadowWindow].compactMap { $0 })
+            self.panel = nil
+            shadowWindow = nil
+        }
         close()
         pinned = !onHover
         hoveredAnchor = onHover ? anchor : nil
-        let window = anchor.window!
-        let screen = window.screen!
         let frame = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let popupTop = popupAttachmentTop(anchor: frame, window: window.frame, geometry: (window as? BarPanel)?.barGeometry)
         let style = popup.baseStyle(widget: widget, defaults: defaults)
@@ -223,7 +261,8 @@ final class WidgetPopup {
         let panel = PopupPanel(contentRect: NSRect(x: x - shadowInset, y: popupTop - popup.offset + shadowInset,
                                                   width: width + shadowInset * 2, height: 0),
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        let host = NSHostingView(rootView: PopupView(popup: popup, style: style, store: store, widget: widget)
+        let view = PopupView(popup: popup, style: style, store: store, widget: widget)
+        let host = NSHostingView(rootView: view
             .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen)))
             .frame(width: width)
             .onPreferenceChange(PopupHeightPreference.self) { [weak self, weak panel] contentHeight in
@@ -269,6 +308,7 @@ final class WidgetPopup {
             .flatMap { NSAppearance(named: $0 == .dark ? .darkAqua : .aqua) }
         panel.contentView = PopupRevealView(content: host, size: panel.frame.size)
         self.panel = panel
+        shown = (view, shadowInset)
         // macOS outlines a window and shapes its shadow from what the window draws. In the popup's window, the popup's
         // own shadow would get that outline near its outer edge, so it gets a window of its own behind the popup.
         let drawsShadow = style.shadowColor.map { $0.light & 0xff > 0 || $0.dark & 0xff > 0 } ?? false
@@ -278,12 +318,10 @@ final class WidgetPopup {
         self.store = store
         store.setPopupVisibleWidget(widget.id, anchor: anchor)
         self.anchor = anchor
-        let bar = store.configuration!.bar(on: ScreenKind(BarDisplay(screen: screen)))
-        let animation = popup.animation ?? bar.motion.popupAnimation
         self.animation = animation
         transition = bar.popupTransition ?? bar.motion.popupTransition
         source = frame.midX - panel.frame.minX
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .rightMouseDown, .keyDown]) { [weak self] event in
             let handled = MainActor.assumeIsolated {
                 guard let self else { return false }
                 if event.type == .keyDown {
@@ -291,11 +329,19 @@ final class WidgetPopup {
                         self.close()
                         return true
                     }
+                } else if event.type == .leftMouseUp {
+                    if self.closesAfterClick { Task { @MainActor in if self.closesAfterClick { self.close() } } }
                 } else if event.window === self.panel {
                     self.keepOpen()
                 } else {
                     let onAnchor = event.window === anchor.window && anchor.bounds.contains(anchor.convert(event.locationInWindow, from: nil))
-                    if !onAnchor { self.close() }
+                    if !onAnchor {
+                        if bar.morphPopups && event.type == .leftMouseDown && event.window === anchor.window {
+                            self.closesAfterClick = true
+                        } else {
+                            self.close()
+                        }
+                    }
                 }
                 return false
             }
@@ -304,10 +350,46 @@ final class WidgetPopup {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated { self?.close() }
         }
+        let windows = [panel, shadow].compactMap { $0 }
+        if let from {
+            let toBox = panel.frame.insetBy(dx: shadowInset, dy: shadowInset)
+            let union = from.box.union(toBox)
+            func local(_ box: NSRect) -> CGRect {
+                CGRect(x: box.minX - union.minX, y: union.maxY - box.maxY, width: box.width, height: box.height)
+            }
+            let morph = PopupPanel(contentRect: union, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            morph.title = "\(widget.id) popup morph"
+            morph.isOpaque = false
+            morph.backgroundColor = .clear
+            morph.hasShadow = true
+            morph.ignoresMouseEvents = true
+            morph.hidesOnDeactivate = false
+            morph.isReleasedWhenClosed = false
+            morph.level = panel.level
+            morph.collectionBehavior = panel.collectionBehavior
+            morph.appearance = panel.appearance
+            var fromView = from.view
+            var toView = view
+            fromView.drawsBackground = false
+            toView.drawsBackground = false
+            morph.contentView = NSHostingView(rootView: PopupMorphView(from: fromView, to: toView, fromBox: local(from.box), toBox: local(toBox),
+                                                                       glass: bar.glass, animation: animation) { [weak self, weak morph] in
+                if let morph, morph === self?.morph?.panel { self?.finishMorph() }
+            }
+            .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen))))
+            let link = morph.displayLink(target: morph, selector: #selector(NSWindow.invalidateShadow))
+            link.add(to: .main, forMode: .common)
+            self.morph = (morph, link)
+            present(morph, true)
+            Task { @MainActor in from.windows.forEach { $0.close() } }
+            for window in windows { window.alphaValue = 0 }
+            present(panel, onHover)
+            if panel.isVisible { shadow?.order(.below, relativeTo: panel.windowNumber) }
+            return
+        }
         panel.alphaValue = 0
         present(panel, onHover)
         if panel.isVisible { shadow?.order(.below, relativeTo: panel.windowNumber) }
-        let windows = [panel, shadow].compactMap { $0 }
         if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             CATransaction.begin()
             CATransaction.setCompletionBlock { [weak self] in
@@ -327,6 +409,15 @@ final class WidgetPopup {
         } completionHandler: {
             Task { @MainActor in panel.invalidateShadow() }
         }
+    }
+
+    private func finishMorph() {
+        guard let morph else { return }
+        for window in [panel, shadowWindow].compactMap({ $0 }) { window.alphaValue = 1 }
+        panel?.invalidateShadow()
+        morph.link.invalidate()
+        morph.panel.close()
+        self.morph = nil
     }
 
     private func makeShadowWindow(behind panel: PopupPanel, appearance: WidgetAppearance, inset: CGFloat) -> NSPanel {
@@ -354,12 +445,14 @@ final class WidgetPopup {
         hoveredAnchor = nil
         pointerInPopup = false
         pinned = false
+        closesAfterClick = false
         store?.setPopupVisibleWidget(nil)
         store = nil
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         localMonitor = nil
         globalMonitor = nil
+        finishMorph()
         let windows = [panel, shadowWindow].compactMap { $0 }
         if let animation {
             if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
@@ -377,6 +470,7 @@ final class WidgetPopup {
         }
         panel = nil
         shadowWindow = nil
+        shown = nil
         widgetID = nil
         anchor = nil
         animation = nil

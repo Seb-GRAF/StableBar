@@ -12,7 +12,7 @@ Unknown properties are errors, so a misspelled key cannot be silently ignored. T
 "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json"
 ```
 
-- `bar`: `height`, `offset`, `margin`, `inset`, `spacing`, `background`, `motion` and `popupTransition` (see [Animation](create-a-widget.md#animation)), `animationDuration` (seconds), `displayScale`, `appearance` (`light` or `dark` keeps the bar and its popups in that appearance; omit it to follow the system).
+- `bar`: `height`, `offset`, `margin`, `inset`, `spacing`, `background`, `motion`, `popupTransition` and `morphPopups` (see [Animation](create-a-widget.md#animation)), `animationDuration` (seconds), `displayScale`, `appearance` (`light` or `dark` keeps the bar and its popups in that appearance; omit it to follow the system).
 - `defaults`: styles inherited by every widget.
 - `popupDefaults`: styles inherited by every popup, over `defaults`.
 - `workspaceSource`: `aerospace` (default), `yabai` or `spaces` (macOS Spaces, see [macOS Spaces workspaces](widgets.md#macos-spaces-workspaces)), for workspace widgets and active-display tracking.

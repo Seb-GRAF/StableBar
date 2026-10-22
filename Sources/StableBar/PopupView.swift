@@ -5,6 +5,7 @@ struct PopupView: View {
     let style: WidgetStyle
     let store: BarStore
     let widget: WidgetConfiguration
+    var drawsBackground = true
     @Environment(\.screenKind) private var screenKind
 
     private var mode: ModePresentation {
@@ -25,7 +26,7 @@ struct PopupView: View {
         let samples = script?.samples ?? []
         let menu = script?.output.menu ?? widget.menu ?? []
         let error = script?.error ?? store.actionErrors[widget.id]
-        ScrollView {
+        let content = ScrollView {
             VStack(alignment: .leading, spacing: appearance.spacing) {
                 PopupBlockView(block: popup.layout, inheritedStyle: style, fields: fields,
                                context: BlockContext(lists: lists, samples: samples, menu: menu,
@@ -52,14 +53,31 @@ struct PopupView: View {
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))
-        .modifier(GlassBackground(fill: presentationStyle.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.popups,
-                                  shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
-        .overlay {
-            RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+        Group {
+            if drawsBackground {
+                content.modifier(PopupBackground(style: presentationStyle, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings()))
+            } else {
+                content
+            }
         }
         .accessibilityIdentifier("\(widget.id)-popup")
+    }
+}
+
+struct PopupBackground: ViewModifier {
+    let style: WidgetStyle
+    let glass: GlassSettings
+
+    func body(content: Content) -> some View {
+        let appearance = WidgetAppearance(style, defaults: WidgetStyle())
+        content
+            .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))
+            .modifier(GlassBackground(fill: style.background, glass: glass, surface: \.popups,
+                                      shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
+            .overlay {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius)
+                    .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            }
     }
 }
 

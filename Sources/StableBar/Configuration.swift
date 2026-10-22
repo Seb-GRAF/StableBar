@@ -505,6 +505,7 @@ struct BarSettings: Decodable, Sendable {
     var background = BackgroundFill.color(HexColor(0x00000000))
     var motion = BarMotion.smooth
     var popupTransition: PopupTransition?
+    var morphPopups = false
     var animationDuration: Double?
     var notchWidth: Double?
     var notchSpacing = 16.0
@@ -513,7 +514,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, inset, spacing, background, motion, popupTransition, animationDuration, notchWidth, notchSpacing, style, appearance, glass
+        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, inset, spacing, background, motion, popupTransition, morphPopups, animationDuration, notchWidth, notchSpacing, style, appearance, glass
     }
 
     init() {}
@@ -535,6 +536,7 @@ struct BarSettings: Decodable, Sendable {
         background = try values.decodeIfPresent(BackgroundFill.self, forKey: .background) ?? background
         motion = try values.decodeIfPresent(BarMotion.self, forKey: .motion) ?? motion
         popupTransition = try values.decodeIfPresent(PopupTransition.self, forKey: .popupTransition)
+        morphPopups = try values.decodeIfPresent(Bool.self, forKey: .morphPopups) ?? morphPopups
         animationDuration = try values.decodeIfPresent(Double.self, forKey: .animationDuration)
         notchWidth = try values.decodeIfPresent(Double.self, forKey: .notchWidth)
         notchSpacing = try values.decodeIfPresent(Double.self, forKey: .notchSpacing) ?? notchSpacing
@@ -556,7 +558,7 @@ struct BarSettings: Decodable, Sendable {
 
 struct ScreenConfiguration: Decodable, Sendable {
     static let barKeys: Set<String> = ["height", "offset", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "style",
-                                       "glass", "appearance", "motion", "popupTransition"]
+                                       "glass", "appearance", "motion", "popupTransition", "morphPopups"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?
     let hasLook: Bool
