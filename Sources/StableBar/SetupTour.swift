@@ -5,10 +5,11 @@ struct SetupTourView: View {
     let screen: NSScreen
     let finish: () -> Void
     let skip: () -> Void
+    let reveal: () -> Void
     @State private var start: Date
     @State private var departure: Date?
     @State private var phase: Phase
-    @State private var wallpaper: CGImage?
+    @State private var looks: [(name: String, look: Configuration)] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Phase { case intro, wallpaper, tour }
@@ -20,11 +21,13 @@ struct SetupTourView: View {
         ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
     ]
 
-    init(session: SetupSession, screen: NSScreen, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void) {
+    init(session: SetupSession, screen: NSScreen, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
+         reveal: @escaping () -> Void) {
         _session = Bindable(session)
         self.screen = screen
         self.finish = finish
         self.skip = skip
+        self.reveal = reveal
         _start = State(initialValue: intro ? .now : .distantPast)
         _departure = State(initialValue: intro ? nil : .distantPast)
         _phase = State(initialValue: intro ? .intro : .tour)
@@ -42,19 +45,11 @@ struct SetupTourView: View {
             let size = proxy.size
             let bar = barFrame
             ZStack {
-                Color.black.opacity(0.82)
-                Group {
-                    if let wallpaper {
-                        Image(decorative: wallpaper, scale: 1)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: size.width, height: size.height)
-                            .clipped()
-                    }
-                    RadialGradient(colors: [.black.opacity(0.3), .black.opacity(0.75)], center: .center,
-                                   startRadius: size.height * 0.15, endRadius: size.width * 0.7)
-                }
-                .opacity(phase == .intro ? 0 : 1)
+                Color.black
+                SetupBackdrop(size: size)
+                    .opacity(phase == .intro ? 0.4 : 1)
+                RadialGradient(colors: [.black.opacity(0.3), .black.opacity(0.75)], center: .center,
+                               startRadius: size.height * 0.15, endRadius: size.width * 0.7)
                 TimelineView(.animation(paused: phase == .tour)) { context in
                     intro(size: size, bar: bar, now: context.date)
                 }
@@ -76,18 +71,21 @@ struct SetupTourView: View {
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
         .task {
-            let url = NSWorkspace.shared.desktopImageURL(for: screen)
-            wallpaper = await Task.detached {
-                guard let url, let image = CIImage(contentsOf: url) else { return nil }
-                let scale = 320 / image.extent.width
-                let small = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-                let blurred = small.clampedToExtent().applyingGaussianBlur(sigma: 6).cropped(to: small.extent)
-                return CIContext().createCGImage(blurred, from: blurred.extent)
+            guard let configuration = session.store.configuration else { return }
+            let themes = session.themes.filter { $0.isBundled && ["blueprint", "leman", "rose-pine"].contains($0.manifest.id) && $0.key != session.currentThemeKey }
+            let directory = session.store.themesDirectory
+            let previews = await Task.detached {
+                themes.compactMap { theme in
+                    (try? ThemePreview(choice: theme, themesDirectory: directory)).map { (name: theme.title, look: $0.dark) }
+                }
             }.value
+            looks = [(session.currentTheme, configuration)] + previews
         }
         .task(id: departure) {
-            guard departure != nil, phase == .intro else { return }
-            try? await Task.sleep(for: .seconds(1.4))
+            guard let departure, phase == .intro else { return }
+            try? await Task.sleep(for: .seconds(SetupDemo.landing + departure.timeIntervalSinceNow))
+            guard !Task.isCancelled else { return }
+            reveal()
             withAnimation(.easeInOut(duration: 0.9)) { phase = .wallpaper }
             try? await Task.sleep(for: .seconds(0.9))
             withAnimation(.smooth(duration: 0.5)) { phase = .tour }
@@ -98,6 +96,8 @@ struct SetupTourView: View {
         let t = now.timeIntervalSince(start)
         let d = departure.map { now.timeIntervalSince($0) } ?? -1
         let home = size.height * 0.42
+        let stageWidth = min(size.width - 200, 1080)
+        let stage = CGRect(x: (size.width - stageWidth) / 2, y: home - bar.height / 2, width: stageWidth, height: bar.height)
         let beam = size.width * 0.55 * UnitCurve.easeOut.value(at: progress(t, 0.45, 0.8))
         let condense = UnitCurve.easeInOut.value(at: progress(t, 1.25, 0.6))
         let shown = progress(t, 1.75, 0.4)
@@ -106,7 +106,7 @@ struct SetupTourView: View {
         let height = 2 + 66 * condense
         let leaving = 1 - progress(d, 0, 0.25)
         let ready = UnitCurve.easeOut.value(at: progress(t, 3.1, 0.45))
-        let spread = UnitCurve.easeOut.value(at: progress(d, 0.65, 0.6))
+        let spread = UnitCurve.easeOut.value(at: progress(d, SetupDemo.landing - 0.1, 0.6))
         let shine = t > 4 ? progress(t.truncatingRemainder(dividingBy: 4.5), 0, 0.9) : 0
         let settled = t > 2
         let name = Array("StableBar")
@@ -119,8 +119,11 @@ struct SetupTourView: View {
                 .fill(glow)
                 .frame(width: size.width * spread, height: 2)
                 .background(Rectangle().fill(glow).frame(height: 8).blur(radius: 12))
-                .opacity(spread * (1 - 0.4 * progress(d, 1.3, 0.8)))
+                .opacity(spread * (1 - 0.4 * progress(d, SetupDemo.landing + 0.55, 0.8)))
                 .position(x: size.width / 2, y: bar.maxY)
+            if d >= 0 && d < SetupDemo.landing + 0.3 && !looks.isEmpty {
+                SetupDemo(looks: looks, elapsed: d, size: size, stage: stage, target: bar)
+            }
             ZStack {
                 Capsule()
                     .strokeBorder(LinearGradient(colors: [.white.opacity(condense), .white, .white.opacity(condense)],
@@ -128,17 +131,20 @@ struct SetupTourView: View {
                     .background(Capsule().fill(.orange).blur(radius: 10).opacity(0.5 * (1 - condense)))
                     .opacity(progress(t, 0.45, 0.2) * (1 - shown))
                 Group {
-                    Capsule().fill(LinearGradient(colors: [Color(white: 0.17), Color(white: 0.08)], startPoint: .top, endPoint: .bottom))
-                    Capsule().fill(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .white.opacity(0.14), location: 0.5),
-                                                          .init(color: .clear, location: 1)],
-                                                  startPoint: UnitPoint(x: shine * 1.6 - 0.6, y: 0),
-                                                  endPoint: UnitPoint(x: shine * 1.6 - 0.2, y: 1)))
+                    Group {
+                        Capsule().fill(LinearGradient(colors: [Color(white: 0.17), Color(white: 0.08)], startPoint: .top, endPoint: .bottom))
+                        Capsule().fill(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .white.opacity(0.14), location: 0.5),
+                                                              .init(color: .clear, location: 1)],
+                                                      startPoint: UnitPoint(x: shine * 1.6 - 0.6, y: 0),
+                                                      endPoint: UnitPoint(x: shine * 1.6 - 0.2, y: 1)))
+                    }
+                    .opacity(1 - progress(d, 0.4, 0.4))
                     Capsule().strokeBorder(ember, lineWidth: 1.5)
                     Capsule().strokeBorder(ember, lineWidth: 4).blur(radius: 8).opacity(0.5)
                 }
                 .opacity(shown)
             }
-            .frame(width: width + (size.width - width) * morph, height: height + (bar.height - height) * morph)
+            .frame(width: width + (stage.width - width) * morph, height: height + (stage.height - height) * morph)
             .overlay {
                 HStack(spacing: 12) {
                     Image(nsImage: NSApp.applicationIconImage)
@@ -175,8 +181,8 @@ struct SetupTourView: View {
                 .foregroundStyle(.white)
                 .opacity(1 - progress(d, 0, 0.15))
             }
-            .opacity(1 - progress(d, 0.6, 0.25))
-            .position(x: size.width / 2, y: home + (bar.midY - home) * morph)
+            .opacity(1 - progress(d, 1.3, 0.5))
+            .position(x: size.width / 2, y: home)
             Text("A native, configurable bar for your Mac.")
                 .font(.system(size: 17, weight: .medium, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.85))
@@ -191,12 +197,16 @@ struct SetupTourView: View {
                     .opacity(ready * leaving)
                     .offset(y: 12 * (1 - ready))
                     .position(x: size.width / 2, y: size.height - 89)
+                Button("Skip intro") { departure = .now.addingTimeInterval(-SetupDemo.flight) }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(d < 0 || d >= SetupDemo.flight)
+                    .opacity(progress(d, 0.6, 0.4) * (1 - progress(d, SetupDemo.flight, 0.2)))
+                    .position(x: size.width / 2, y: size.height - 89)
             }
         }
-    }
-
-    private func progress(_ time: Double, _ start: Double, _ duration: Double) -> Double {
-        min(max((time - start) / duration, 0), 1)
     }
 
     private var pointer: some View {
@@ -447,6 +457,42 @@ struct SetupTourView: View {
         .animation(.snappy, value: active)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(session.step + 1) of \(Self.pages.count)")
+    }
+}
+
+/// How far `time` is through the span that begins at `start` and lasts `duration`, from 0 to 1.
+func progress(_ time: Double, _ start: Double, _ duration: Double) -> Double {
+    min(max((time - start) / duration, 0), 1)
+}
+
+/// Setup's two amber backgrounds, drifting and fading into each other.
+private struct SetupBackdrop: View {
+    let size: CGSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let light = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic")!)!
+    private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            ZStack {
+                layer(Self.light, t: t, phase: 0)
+                layer(Self.dark, t: t, phase: 2).opacity(0.5 + 0.5 * sin(t / 4))
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    private func layer(_ image: NSImage, t: Double, phase: Double) -> some View {
+        Image(nsImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: size.width, height: size.height)
+            .scaleEffect(1.4 + 0.08 * sin(t / 7 + phase))
+            .rotationEffect(.degrees(12 * sin(t / 11 + phase)))
+            .offset(x: size.width * 0.06 * sin(t / 9 + phase), y: size.height * 0.06 * cos(t / 8 + phase))
     }
 }
 

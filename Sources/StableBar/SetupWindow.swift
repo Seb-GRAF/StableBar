@@ -37,11 +37,12 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + (intro ? 1 : -1))
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
         let host = NSHostingView(rootView: SetupTourView(session: session!, screen: screen, intro: intro,
                                                          finish: { [weak self] in self?.showCard() },
-                                                         skip: { [weak self] in self?.closeTour() }))
+                                                         skip: { [weak self] in self?.closeTour() },
+                                                         reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) }))
         host.sizingOptions = []
         panel.contentView = host
         panel.alphaValue = 0

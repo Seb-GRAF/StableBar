@@ -94,8 +94,8 @@ struct ThemeCard: View {
 struct ThemeSampleBar: View {
     let look: Configuration
 
-    private var barStyle: WidgetStyle { look.bar.style.resolved(for: StyleStates()) }
-    private var stripHeight: Double { max(0, look.bar.height - 2 * look.bar.margin) }
+    var barStyle: WidgetStyle { look.bar.style.resolved(for: StyleStates()) }
+    var stripHeight: Double { max(0, look.bar.height - 2 * look.bar.margin) }
     private let workspace: WorkspaceConfiguration?
 
     init(look: Configuration) {
@@ -105,7 +105,7 @@ struct ThemeSampleBar: View {
 
     var body: some View {
         HStack(spacing: look.bar.spacing) {
-            workspaces
+            workspaces(active: 1)
             tile(role: .primary) { Text("Finder") }
             Spacer(minLength: 0)
             tile(role: .value) {
@@ -130,14 +130,14 @@ struct ThemeSampleBar: View {
         .allowsHitTesting(false)
     }
 
-    private var workspaces: some View {
+    func workspaces(active: Int) -> some View {
         let style = look.defaults.resolved(for: StyleStates())
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let focused = workspace?.cellStyle(.focused) ?? WorkspaceCellStyle()
         let underline = focused.underline
         return HStack(spacing: appearance.spacing) {
             ForEach(1...3, id: \.self) { number in
-                workspaceCell(number, appearance: appearance)
+                workspaceCell(number, focused: number == active, appearance: appearance)
             }
         }
         .modifier(ThemeSampleTile(style: style, verticalPadding: false))
@@ -153,8 +153,7 @@ struct ThemeSampleBar: View {
         }
     }
 
-    private func workspaceCell(_ number: Int, appearance: WidgetAppearance) -> some View {
-        let focused = number == 1
+    private func workspaceCell(_ number: Int, focused: Bool, appearance: WidgetAppearance) -> some View {
         let cell = workspace?.cellStyle(focused ? .focused : .empty) ?? WorkspaceCellStyle()
         let style = cell.resting
         let underline = cell.underline
@@ -183,7 +182,7 @@ struct ThemeSampleBar: View {
             }
     }
 
-    private func tile<Content: View>(role: PresentationRole, @ViewBuilder content: () -> Content) -> some View {
+    func tile<Content: View>(role: PresentationRole, @ViewBuilder content: () -> Content) -> some View {
         let style = look.roleStyle(role).inheriting(look.defaults).resolved(for: StyleStates())
         return content().modifier(ThemeSampleTile(style: style))
     }

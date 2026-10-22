@@ -15,6 +15,7 @@ cp -R "$build/Sparkle.framework" "$sparkle"
 ./scripts/prepare-app-info.sh "$app/Contents/Info.plist"
 cp Resources/config.json "$app/Contents/Resources/config.json"
 cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
+cp Resources/SetupAmberLight.heic Resources/SetupAmberDark.heic "$app/Contents/Resources/"
 rm -rf "$app/Contents/Resources/themes"
 cp -R Resources/themes "$app/Contents/Resources/themes"
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
