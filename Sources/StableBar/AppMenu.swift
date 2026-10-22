@@ -14,6 +14,7 @@ final class AppMenu: NSObject, NSMenuDelegate {
     private(set) var isTrusted: Bool
     @ObservationIgnored private let checkAccess: () -> Bool
     @ObservationIgnored private let readAttribute: @Sendable (String, AXUIElement) -> CFTypeRef?
+    @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var app: NSRunningApplication?
     @ObservationIgnored private var menus: [NSMenu: AXUIElement] = [:]
     @ObservationIgnored private var nextTitle: Int?
@@ -24,9 +25,11 @@ final class AppMenu: NSObject, NSMenuDelegate {
              var value: CFTypeRef?
              guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
              return value
-         }) {
+         },
+         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.checkAccess = checkAccess
         self.readAttribute = readAttribute
+        self.sleep = sleep
         isTrusted = checkAccess()
         super.init()
     }
@@ -35,10 +38,11 @@ final class AppMenu: NSObject, NSMenuDelegate {
         if let app, app.processIdentifier == ProcessInfo.processInfo.processIdentifier || app.bundleIdentifier == "org.stablebar.app" { return }
         readTask?.cancel()
         self.app = app
+        let sleep = sleep
         readTask = Task { [weak self] in
             do {
                 for delay in [0, 250, 500, 1000, 2000] {
-                    try await Task.sleep(for: .milliseconds(delay))
+                    try await sleep(.milliseconds(delay))
                     guard let self else { return }
                     if try await readItems() { return }
                 }

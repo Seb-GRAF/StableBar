@@ -22,6 +22,7 @@ private final class MenuReadFixture: @unchecked Sendable {
     var title = "First"
     private let lock = NSLock()
     private var menuBarReads: [pid_t] = []
+    private var retries = 0
     var reads: [pid_t] { lock.withLock { menuBarReads } }
     let menuBar = AXUIElementCreateApplication(10)
     let apple = AXUIElementCreateApplication(11)
@@ -44,6 +45,27 @@ private final class MenuReadFixture: @unchecked Sendable {
         }
     }
 
+    func sleep(_ duration: Duration) async throws {
+        guard duration != .zero else { return }
+        while true {
+            try Task.checkCancellation()
+            if takeRetry() { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    func allowRetry() {
+        lock.withLock { retries += 1 }
+    }
+
+    private func takeRetry() -> Bool {
+        lock.withLock {
+            guard retries > 0 else { return false }
+            retries -= 1
+            return true
+        }
+    }
+
     @MainActor func waitForReads(_ count: Int) async throws {
         while reads.count < count { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(10))
@@ -55,7 +77,7 @@ private final class MenuReadFixture: @unchecked Sendable {
     attribute: String
 ) async throws {
     let source = MenuReadFixture()
-    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     menu.read(MenuApplication(pid: 100))
     await menu.readTask?.value
     let apple = try #require(menu.appleMenu)
@@ -68,6 +90,7 @@ private final class MenuReadFixture: @unchecked Sendable {
 
     source.failedAttribute = nil
     source.title = "Recovered"
+    source.allowRetry()
     await menu.readTask?.value
     #expect(menu.appleMenu == apple)
     #expect(menu.items.map(\.title) == ["Recovered", "File"])
@@ -77,11 +100,12 @@ private final class MenuReadFixture: @unchecked Sendable {
 @Test @MainActor func menuRecoversWhenItsFirstReadFails() async throws {
     let source = MenuReadFixture()
     source.failedAttribute = kAXMenuBarAttribute
-    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     menu.read(MenuApplication(pid: 100))
     try await source.waitForReads(1)
     #expect(menu.items.isEmpty)
     source.failedAttribute = nil
+    source.allowRetry()
     await menu.readTask?.value
     #expect(menu.appleMenu?.title == "Apple")
     #expect(menu.items.map(\.title) == ["First", "File"])
@@ -90,7 +114,7 @@ private final class MenuReadFixture: @unchecked Sendable {
 @Test(arguments: [false, true])
 @MainActor func switchingAppsCancelsThePreviousMenuRetry(secondReadFails: Bool) async throws {
     let source = MenuReadFixture()
-    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     menu.read(MenuApplication(pid: 100))
     await menu.readTask?.value
     source.failedAttribute = kAXMenuBarAttribute
@@ -102,6 +126,7 @@ private final class MenuReadFixture: @unchecked Sendable {
     menu.read(MenuApplication(pid: 200))
     try await source.waitForReads(3)
     source.failedAttribute = nil
+    source.allowRetry()
     await previousRetry?.value
     await menu.readTask?.value
     #expect(menu.items.map(\.title) == ["Second", "File"])
@@ -110,7 +135,7 @@ private final class MenuReadFixture: @unchecked Sendable {
 
 @Test @MainActor func disablingMenusCancelsRecoveryAndClearsThem() async throws {
     let source = MenuReadFixture()
-    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     menu.read(MenuApplication(pid: 100))
     await menu.readTask?.value
     source.failedAttribute = kAXMenuBarAttribute
@@ -128,13 +153,14 @@ private final class MenuReadFixture: @unchecked Sendable {
 
 @Test @MainActor func revokingAccessDuringMenuRecoveryClearsTheMenus() async throws {
     let source = MenuReadFixture()
-    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
+    let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     menu.read(MenuApplication(pid: 100))
     await menu.readTask?.value
     source.failedAttribute = kAXMenuBarAttribute
     menu.refresh()
     try await source.waitForReads(2)
     source.trusted = false
+    source.allowRetry()
     await menu.readTask?.value
     #expect(!menu.isTrusted)
     #expect(menu.appleMenu == nil)
