@@ -183,6 +183,7 @@ jobs:
         env:
           VERSION: ${{ steps.next.outputs.version }}
         run: |
+          brew install create-dmg
           ./scripts/set-version.sh "$VERSION" "$GITHUB_RUN_NUMBER"
           STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
       - name: Publish the beta
@@ -264,7 +265,9 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+        run: |
+          brew install create-dmg
+          npx semantic-release
       # semantic-release exits successfully without releasing when main moved during this run or
       # there was nothing to release. Don't let that look like a release.
       - name: Require a stable tag

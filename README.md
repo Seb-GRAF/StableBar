@@ -59,11 +59,13 @@ Only an app signed with a Developer ID updates itself, because the update must b
 
 ### Build an installer
 
+Install [create-dmg](https://github.com/create-dmg/create-dmg) once with `brew install create-dmg`, then run:
+
 ```sh
 ./scripts/package.sh
 ```
 
-This creates `dist/StableBar.dmg` with the app and an Applications shortcut. It builds in a temporary directory, leaving a running `dist/StableBar.app` untouched. The app and installer target the build Mac's processor family.
+This creates `dist/StableBar.dmg` with a custom background and the app beside an Applications shortcut. It builds in a temporary directory, leaving a running `dist/StableBar.app` untouched. The app and installer target the build Mac's processor family.
 
 Local builds are ad-hoc signed. For public distribution without an unidentified-developer warning, use a Developer ID Application certificate and a saved `notarytool` keychain profile:
 
