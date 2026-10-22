@@ -194,6 +194,44 @@ private enum FrontmostApp {
     #expect(try drawing(long, style: #"{"width":160,"maxWidth":40}"#).width == 320, "A fixed width wins over maxWidth")
 }
 
+@Test @MainActor func scrollingTextPreservesFontColorAndClipping() throws {
+    for (font, size) in [(Font.system(size: 13), 13.0), (.custom("Menlo", size: 15).bold(), 15.0)] {
+        for text in ["Mikasa", "Mikasa — Moha MMZ, the extended mix that keeps going"] {
+            let content = ScrollingText(text: text, font: font, fontSize: size, speed: 20)
+                .frame(width: 160, alignment: .leading)
+                .foregroundStyle(.orange)
+            let expected = try draw(Text(text).font(font).fixedSize()
+                .frame(width: 160, height: size * 1.3, alignment: .topLeading)
+                .clipped().foregroundStyle(.orange))
+            let reduced = try draw(content.transformEnvironment(\.self) { $0._accessibilityReduceMotion = true })
+            let measured = try draw(content.environment(\.measuringBarWidths, true))
+            #expect(reduced.difference(from: expected) <= tolerance)
+            #expect(measured.difference(from: expected) <= tolerance)
+        }
+    }
+}
+
+@Test @MainActor func scrollingTextNativeLayerMatchesTheMeasuredText() async throws {
+    let configuration = try decode(Configuration.self, ##"""
+    {"bar":{"height":36},"defaults":{"fontName":"Menlo","fontSize":15,"fontWeight":"bold","foreground":"#ff8800"},
+     "widgets":[{"id":"title","type":"text","position":"left","text":"Mikasa — Moha MMZ, the extended mix that keeps going",
+       "layout":{"type":"field","field":"text","scrollSpeed":20,"style":{"width":160}}}]}
+    """##)
+    let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+    let native = OffscreenBar(configuration: configuration, display: display, width: 400)
+    let measured = OffscreenBar(configuration: configuration, display: display, width: 400)
+    defer { native.close(); measured.close() }
+    measured.host.rootView = AnyView(measured.host.rootView.environment(\.measuringBarWidths, true))
+    await native.settle()
+    await measured.settle()
+    let actual = try native.bitmap()
+    let expected = try measured.bitmap()
+    #expect(actual.pixelsWide == expected.pixelsWide && actual.pixelsHigh == expected.pixelsHigh)
+    let actualBytes = UnsafeBufferPointer(start: try #require(actual.bitmapData), count: actual.bytesPerRow * actual.pixelsHigh)
+    let expectedBytes = UnsafeBufferPointer(start: try #require(expected.bitmapData), count: expected.bytesPerRow * expected.pixelsHigh)
+    #expect(zip(actualBytes, expectedBytes).allSatisfy { abs(Int($0) - Int($1)) <= tolerance })
+}
+
 @Test @MainActor func blocksStayWithinTheirMinimumAndMaximumWidths() throws {
     func width(_ json: String, fillsWidth: Bool = false, offered: CGFloat? = nil) throws -> Int {
         let block = try decode(PopupBlock.self, json)
