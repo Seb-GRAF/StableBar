@@ -15,13 +15,13 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     let theme = directory.appending(path: "bar/themes/dark.json")
     let shared = directory.appending(path: "shared/clock.json")
     try writeConfiguration(##"""
-    {"bar":{"height":36,"style":{"foreground":"#eeeeee","fontSize":11}},
+    {"bar":{"height":36,"menuBarRevealDelay":500,"style":{"foreground":"#eeeeee","fontSize":11}},
      "defaults":{"fontSize":12,"background":"#111111"},
      "environment":{"SHARED":"theme","THEME":"dark"},
      "popups":{"details":{"height":180,"style":{"fontSize":12},"layout":{"type":"text","text":"Details"}}}}
     """##, to: theme)
     try writeConfiguration(#"""
-    {"includes":["../themes/dark.json"],"bar":{"height":38},
+    {"includes":["../themes/dark.json"],"bar":{"height":38,"menuBarRevealDelay":1000},
      "widgets":[{"id":"system","type":"text","position":"left","text":"System","popupName":"details"}]}
     """#, to: module)
     try writeConfiguration(#"""
@@ -29,7 +29,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     """#, to: shared)
     try writeConfiguration(##"""
     {"includes":["modules/system.json","../shared/clock.json"],
-     "bar":{"height":44,"style":{"fontSize":15}},"defaults":{"foreground":"#abcdef"},
+     "bar":{"height":44,"menuBarRevealDelay":2000,"style":{"fontSize":15}},"defaults":{"foreground":"#abcdef"},
      "environment":{"SHARED":"root"},"popups":{"details":{"openOnHover":true,"style":{"foreground":"#abcdef"}}},
      "widgets":[{"id":"local","type":"text","position":"right","text":"Local"}]}
     """##, to: root)
@@ -37,6 +37,8 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     let configuration = try loader.load(root)
     #expect(configuration.widgets.map(\.id) == ["system", "clock", "local"])
     #expect(configuration.bar.height == 44)
+    #expect(configuration.bar.menuBarRevealDelay == 2000)
+    #expect(loader.contributions["bar.menuBarRevealDelay"]?.map(\.value) == [.number(500), .number(1000), .number(2000)])
     #expect(configuration.bar.style.fontSize == 15)
     #expect(configuration.bar.style.foreground == HexColor(0xeeeeeeff))
     #expect(configuration.defaults.fontSize == 13)
@@ -56,18 +58,20 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     let root = directory.appending(path: "config.json")
     let module = directory.appending(path: "module.json")
     try writeConfiguration(#"""
-    {"templates":{"base":{"type":"clock","position":"right","style":{"fontSize":11}}},
+    {"bar":{"menuBarRevealDelay":1000},"templates":{"base":{"type":"clock","position":"right","style":{"fontSize":11}}},
      "widgetOverrides":{"time":{"style":{"fontSize":15}}},
      "defaults":{"foreground":"@token.missing"}}
     """#, to: module)
     try writeConfiguration(##"""
     {"includes":["module.json"],"widgets":[{"id":"time","template":"base","style":{"fontSize":13}}],
-     "profiles":[{"name":"work","configuration":{"defaults":{"foreground":"#123456"},
+     "profiles":[{"name":"work","configuration":{"bar":{"menuBarRevealDelay":3000},"defaults":{"foreground":"#123456"},
                   "widgetOverrides":{"time":{"style":{"fontSize":18}}}}}]}
     """##, to: root)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root)
     #expect(configuration.widgets[0].style.fontSize == 18)
+    #expect(configuration.bar.menuBarRevealDelay == 3000)
+    #expect(loader.contributions["bar.menuBarRevealDelay"]?.last?.origin.profile == "work")
     let history = try #require(loader.contributions["widgets.time.style.fontSize"])
     #expect(history.map(\.value) == [.number(11), .number(13), .number(15), .number(18)])
     #expect(history.first?.origin.detail == "(template base)")

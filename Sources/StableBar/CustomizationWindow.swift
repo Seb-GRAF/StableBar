@@ -34,6 +34,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         }
         if let widgetID { editor?.showWidget(widgetID) }
         if let section { editor?.section = section }
+        NSApplication.shared.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         window!.makeKeyAndOrderFront(nil)
     }
@@ -45,6 +46,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         store?.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
+        NSApplication.shared.setActivationPolicy(.accessory)
     }
 }
 

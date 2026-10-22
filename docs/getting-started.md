@@ -40,6 +40,18 @@ Beta version names include a UTC timestamp and build number, such as `0.5.0-beta
 
 Only an app signed with a Developer ID updates itself, because the update must be signed by the same developer as the app it replaces. Ad-hoc signed releases and the builds you make yourself don't check for updates; **Settings → General → Updates** links to the releases page instead.
 
+## Delay the native menu bar
+
+When the macOS menu bar hides automatically, **Settings → General → Native menu bar → Reveal delay** sets how long to hold the pointer at the top edge before it appears. Enter milliseconds: `1000` is one second, `2000` is two, and `3000` is three. `0`, the default, adds no delay. Allow StableBar in **System Settings → Privacy & Security → Accessibility**.
+
+StableBar holds mouse movement four points below each display's top edge until the delay expires. Moving away cancels the wait. Drag events pass through. This works while menu-bar auto-hide is enabled and StableBar is running; turning the delay off or quitting restores normal pointer behavior. The wait is added before macOS's own reveal animation.
+
+Set `bar.menuBarRevealDelay` in JSON, including in an included file or a profile. See the [menu-bar delay example](../examples/menu-bar-delay/config.json):
+
+```json
+{ "bar": { "menuBarRevealDelay": 2000 } }
+```
+
 ## Keeping windows clear of the bar
 
 macOS provides no public API for a custom bar to reserve screen space. Without a tiling window manager, enable **Settings → General → Windows and notifications → Keep windows clear of the bar** (`bar.keepWindowsClear`, off by default) and allow StableBar in **System Settings → Privacy & Security → Accessibility**. StableBar then moves overlapping ordinary windows below the bar and reduces their height when needed to keep them above the Dock. It follows each display's bar height, offset and scale, and waits until you finish dragging before adjusting a window. See [the window clearance example](../examples/window-clearance/config.json).
