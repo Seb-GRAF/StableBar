@@ -503,7 +503,9 @@ struct BarSettings: Decodable, Sendable {
     var inset = 12.0
     var spacing = 8.0
     var background = BackgroundFill.color(HexColor(0x00000000))
-    var animationDuration = 0.22
+    var motion = BarMotion.smooth
+    var popupTransition: PopupTransition?
+    var animationDuration: Double?
     var notchWidth: Double?
     var notchSpacing = 16.0
     var style = WidgetStyle()
@@ -511,7 +513,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, inset, spacing, background, animationDuration, notchWidth, notchSpacing, style, appearance, glass
+        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, inset, spacing, background, motion, popupTransition, animationDuration, notchWidth, notchSpacing, style, appearance, glass
     }
 
     init() {}
@@ -531,7 +533,9 @@ struct BarSettings: Decodable, Sendable {
         inset = try values.decodeIfPresent(Double.self, forKey: .inset) ?? inset
         spacing = try values.decodeIfPresent(Double.self, forKey: .spacing) ?? spacing
         background = try values.decodeIfPresent(BackgroundFill.self, forKey: .background) ?? background
-        animationDuration = try values.decodeIfPresent(Double.self, forKey: .animationDuration) ?? animationDuration
+        motion = try values.decodeIfPresent(BarMotion.self, forKey: .motion) ?? motion
+        popupTransition = try values.decodeIfPresent(PopupTransition.self, forKey: .popupTransition)
+        animationDuration = try values.decodeIfPresent(Double.self, forKey: .animationDuration)
         notchWidth = try values.decodeIfPresent(Double.self, forKey: .notchWidth)
         notchSpacing = try values.decodeIfPresent(Double.self, forKey: .notchSpacing) ?? notchSpacing
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? style
@@ -542,11 +546,17 @@ struct BarSettings: Decodable, Sendable {
     func scale(for display: BarDisplay) -> Double {
         displayScale[display.isBuiltIn ? "builtIn" : "external"] ?? 1
     }
+
+    var animation: WidgetAnimation {
+        var animation = motion.animation
+        animation.duration = animationDuration ?? animation.duration
+        return animation
+    }
 }
 
 struct ScreenConfiguration: Decodable, Sendable {
     static let barKeys: Set<String> = ["height", "offset", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "style",
-                                       "glass", "appearance"]
+                                       "glass", "appearance", "motion", "popupTransition"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?
     let hasLook: Bool

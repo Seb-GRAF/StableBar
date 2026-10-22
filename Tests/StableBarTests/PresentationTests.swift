@@ -133,7 +133,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     let bar = BarView(store: store, display: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: nil))
     let widgets = Dictionary(uniqueKeysWithValues: configuration.widgets.map {
         ($0.id, WidgetView(widget: $0, defaults: configuration.defaults, popupDefaults: configuration.popupDefaults, store: store,
-                           monitor: 1, animationDuration: 0.2))
+                           monitor: 1, defaultAnimation: WidgetAnimation(duration: 0.2), defaultTransition: .none))
     })
     var updates = 0
     func invalidated(by extra: String) throws -> [String] {
@@ -216,7 +216,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     let configuration = try #require(store.configuration)
     let widgets = Dictionary(uniqueKeysWithValues: configuration.widgets.map {
         ($0.id, WidgetView(widget: $0, defaults: configuration.defaults, popupDefaults: configuration.popupDefaults, store: store,
-                           monitor: 1, animationDuration: 0.2))
+                           monitor: 1, defaultAnimation: WidgetAnimation(duration: 0.2), defaultTransition: .none))
     })
     func invalidated(by change: () -> Void) -> [String] {
         let views = OSAllocatedUnfairLock(initialState: [String]())

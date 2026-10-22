@@ -230,8 +230,8 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
         {"windows":true,"titleLength":\(length),"appGlyphs":{"*":"F"}}
         """.utf8))
         let view = WorkspaceView(workspaceStore: store, monitor: 1,
-                                 appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), animationDuration: 0,
-                                 configuration: configuration)
+                                 appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()),
+                                 configuration: configuration, animation: WidgetAnimation(duration: 0))
         return try #require(ImageRenderer(content: view).nsImage).size.width
     }
     let shortened = try width("👨‍👩‍👧‍👦Résumé document", length: 4)
@@ -267,7 +267,7 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
                   apps: [WorkspaceApp(workspace: "2", name: "Finder", bundleID: "com.apple.finder")])
     ]
     let view = WorkspaceView(workspaceStore: workspaceStore, monitor: 1,
-                             appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), animationDuration: 0)
+                             appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), animation: WidgetAnimation(duration: 0))
     let initialWidth = try #require(ImageRenderer(content: view).nsImage).size.width
     workspaceStore.workspaces[1] = Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1,
                                        apps: workspaceStore.workspaces[1].apps)

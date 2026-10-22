@@ -320,7 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let frame = NSRect(x: screen.frame.minX, y: top - bar.offset - height, width: screen.frame.width, height: height)
             if wasEditing && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
-                    context.duration = bar.animationDuration
+                    context.duration = bar.animation.duration
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     panel.animator().setFrame(frame, display: true)
                 }

@@ -27,7 +27,7 @@ struct BarUnit: Identifiable {
     var isSpacer: Bool { widgets.count == 1 && widgets[0].content == .spacer }
 
     /// How the unit enters and leaves the bar: the first transition its widgets set.
-    var transition: WidgetTransition { widgets.lazy.compactMap(\.transition).first ?? WidgetTransition.none }
+    var transition: WidgetTransition? { widgets.lazy.compactMap(\.transition).first }
 
     static func make(widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration]) -> [BarUnit] {
         var units: [BarUnit] = []

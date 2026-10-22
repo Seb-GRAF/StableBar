@@ -186,7 +186,8 @@ struct BarInspector: View {
                     ForEach(PresentationRole.allCases, id: \.rawValue) { Text($0.rawValue.capitalized).tag($0.rawValue) }
                 }
                 if widget.drawsTransitions {
-                    Picker("Transition", selection: string("transition", for: widget, fallback: WidgetTransition.none.rawValue)) {
+                    Picker("Transition", selection: string("transition", for: widget,
+                                                            fallback: (store.configuration?.bar.motion.transition ?? .none).rawValue)) {
                         ForEach(WidgetTransition.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
                     }
                 }

@@ -3,7 +3,7 @@ import Foundation
 enum SettingsSearchResult: String, CaseIterable, Identifiable {
     case login, windows, workspaces, access, configuration, updates, help
     case barSize, barLook, barPlacement, screenSetups, everyWidget, widgetContent, widgetStyle, widgetBehavior, addWidget
-    case theme, colors, glass, popups, roles, workspaceStyle, modeAliases
+    case theme, colors, glass, popups, animation, roles, workspaceStyle, modeAliases
     case profiles, library, store, status
 
     var id: String { rawValue }
@@ -33,6 +33,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .colors: ("Theme colors", .appearance, "Theme › Theme colors", "tokens accent text surface palette")
         case .glass: ("Liquid Glass", .appearance, "Theme › Liquid Glass", "transparency see-through blur")
         case .popups: ("Popup colors", .appearance, "Theme › Popups", "popover background border shadow weight")
+        case .animation: ("Animation", .appearance, "Theme › Animation", "motion smooth subtle snappy bouncy speed transition fade unfold slide zoom popup")
         case .roles: ("Presentation roles", .appearance, "Theme › Advanced", "role time status style")
         case .workspaceStyle: ("Workspace look", .appearance, "Theme › Advanced", "defaults indicator empty focused")
         case .modeAliases: ("AeroSpace mode names", .appearance, "Theme › Advanced", "mode aliases mapping")

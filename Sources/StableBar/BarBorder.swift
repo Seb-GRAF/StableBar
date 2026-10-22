@@ -14,7 +14,7 @@ struct BarSurface: ViewModifier {
             .modifier(GlassBackground(fill: style.background ?? settings.background, glass: settings.glass, surface: \.bar,
                                       shape: RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0))))
             .overlay { BarBorder(style: style) }
-            .animation(reduceMotion ? nil : .easeOut(duration: settings.animationDuration), value: style)
+            .animation(reduceMotion ? nil : settings.animation.value, value: style)
     }
 }
 

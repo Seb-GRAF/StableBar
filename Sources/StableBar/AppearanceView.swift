@@ -50,7 +50,10 @@ struct AppearanceView: View {
                         if screen == nil { overrides }
                         colors(appearance)
                         HStack(alignment: .top, spacing: 20) {
-                            widgets
+                            VStack(spacing: 22) {
+                                widgets
+                                animation
+                            }
                             VStack(spacing: 22) {
                                 popups
                                 bar
@@ -285,6 +288,18 @@ struct AppearanceView: View {
             defaults.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var animation: some View {
+        let values = editor.values("bar", on: screen)
+        let bar = editor.fields(["bar"], on: screen, values: values)
+        let motion = (try? values["motion"]?.decoded(BarMotion.self)) ?? .smooth
+        return ThemeGroup(title: "Animation") {
+            bar.choice("Motion", "motion", choices: BarMotion.allCases.map(\.rawValue), default: BarMotion.smooth.rawValue)
+            bar.choice("Popups", "popupTransition", choices: PopupTransition.allCases.map(\.rawValue), default: motion.popupTransition.rawValue)
+        }
+        .frame(maxWidth: .infinity)
+        .id(SettingsSearchResult.animation.id)
     }
 
     private var popups: some View {

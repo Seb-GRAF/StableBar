@@ -42,6 +42,43 @@ struct PopupShadowView: View {
     }
 }
 
+extension PopupTransition {
+    @MainActor func animate(_ content: NSView, source: CGFloat, closing: Bool, with animation: WidgetAnimation) {
+        let bounds = content.bounds
+        let layer = content.layer!
+        let change: CABasicAnimation
+        switch self {
+        case .unfold:
+            let mask = CALayer()
+            mask.backgroundColor = .black
+            mask.anchorPoint = CGPoint(x: 0, y: 1)
+            mask.frame = bounds
+            layer.mask = mask
+            change = animation.layerAnimation(keyPath: "bounds.size.height")
+            change.fromValue = closing ? bounds.height : 0
+            change.toValue = closing ? 0 : bounds.height
+        case .fade, .slide, .zoom:
+            let hidden = switch self {
+            case .slide: CATransform3DMakeTranslation(0, 12, 0)
+            case .zoom: scaled(0.5, around: CGPoint(x: source, y: bounds.maxY))
+            default: scaled(0.97, around: CGPoint(x: bounds.midX, y: bounds.maxY))
+            }
+            change = animation.layerAnimation(keyPath: "transform")
+            change.fromValue = closing ? CATransform3DIdentity : hidden
+            change.toValue = closing ? hidden : CATransform3DIdentity
+        }
+        if closing {
+            change.fillMode = .forwards
+            change.isRemovedOnCompletion = false
+        }
+        (layer.mask ?? layer).add(change, forKey: "reveal")
+    }
+
+    private func scaled(_ scale: CGFloat, around point: CGPoint) -> CATransform3D {
+        CATransform3DTranslate(CATransform3DScale(CATransform3DMakeTranslation(point.x, point.y, 0), scale, scale, 1), -point.x, -point.y, 0)
+    }
+}
+
 @MainActor
 final class WidgetPopup {
     private let present: (PopupPanel, Bool) -> Void
@@ -53,6 +90,8 @@ final class WidgetPopup {
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var animation: WidgetAnimation?
+    private var transition = PopupTransition.fade
+    private var source: CGFloat = 0
     private var hoverTask: Task<Void, Never>?
     private weak var hoveredAnchor: NSView?
     private var pointerInPopup = false
@@ -239,8 +278,11 @@ final class WidgetPopup {
         self.store = store
         store.setPopupVisibleWidget(widget.id, anchor: anchor)
         self.anchor = anchor
-        let animation = popup.animation ?? WidgetAnimation(duration: 0.15)
+        let bar = store.configuration!.bar(on: ScreenKind(BarDisplay(screen: screen)))
+        let animation = popup.animation ?? bar.motion.popupAnimation
         self.animation = animation
+        transition = bar.popupTransition ?? bar.motion.popupTransition
+        source = frame.midX - panel.frame.minX
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             let handled = MainActor.assumeIsolated {
                 guard let self else { return false }
@@ -267,15 +309,16 @@ final class WidgetPopup {
         if panel.isVisible { shadow?.order(.below, relativeTo: panel.windowNumber) }
         let windows = [panel, shadow].compactMap { $0 }
         if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-            for window in windows {
-                let reveal = window.contentView!
-                let top = CATransform3DMakeTranslation(reveal.bounds.midX, reveal.bounds.maxY, 0)
-                let scale = CABasicAnimation(keyPath: "transform")
-                scale.fromValue = CATransform3DTranslate(CATransform3DScale(top, 0.97, 0.97, 1), -reveal.bounds.midX, -reveal.bounds.maxY, 0)
-                scale.duration = animation.duration
-                scale.timingFunction = animation.timingFunction
-                reveal.layer!.add(scale, forKey: "reveal")
+            CATransaction.begin()
+            CATransaction.setCompletionBlock { [weak self] in
+                Task { @MainActor in
+                    guard panel === self?.panel else { return }
+                    for window in windows { window.contentView!.layer!.mask = nil }
+                    panel.invalidateShadow()
+                }
             }
+            for window in windows { transition.animate(window.contentView!, source: source, closing: false, with: animation) }
+            CATransaction.commit()
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = animation.duration
@@ -319,6 +362,9 @@ final class WidgetPopup {
         globalMonitor = nil
         let windows = [panel, shadowWindow].compactMap { $0 }
         if let animation {
+            if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                for window in windows { transition.animate(window.contentView!, source: source, closing: true, with: animation) }
+            }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = animation.duration
                 context.timingFunction = animation.timingFunction

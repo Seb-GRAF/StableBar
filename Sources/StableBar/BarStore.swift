@@ -693,7 +693,7 @@ final class BarStore: NSObject {
                 || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
                 || widget.overlay?.usesModeStates(roles: configuration.roles) == true
                 || script?.output.styles?.values.contains(where: \.usesModeStates) == true
-            let animation = script?.output.animation ?? widget.animation ?? WidgetAnimation(duration: configuration.bar.animationDuration)
+            let animation = script?.output.animation ?? widget.animation ?? configuration.bar.animation
             let state = dataState(script?.output, rules: widget.rules)
             var screenStyles: [String: ResolvedWidgetStyle] = [:]
             for (kind, look) in configuration.screenLooks {
@@ -707,7 +707,8 @@ final class BarStore: NSObject {
                                              screenStyles: screenStyles,
                                              hidden: script?.output.hidden == true && script?.error == nil,
                                              display: script?.output.display,
-                                             visibility: visibilityAnimation(widget.transition, animation: animation, reduceMotion: reduceMotion))
+                                             visibility: visibilityAnimation(widget.transition ?? configuration.bar.motion.transition, animation: animation,
+                                                                             reduceMotion: reduceMotion))
             presentations[widget.id]?.show(script?.output.temporary, output: script?.outputNumber ?? 0,
                                            animation: reduceMotion ? nil : animation)
         }

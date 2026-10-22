@@ -53,7 +53,7 @@ struct BarView: View {
                                         anchors.viewports[unit.id] = bounds
                                     }
                                     .offset(x: placement.x)
-                                    .transition(visibilityTransition(unit.transition, still: reduceMotion))
+                                    .transition(visibilityTransition(unit.transition ?? config.bar.motion.transition, still: reduceMotion))
                             }
                         }
                         if let x = plan.overflowX {
@@ -63,7 +63,7 @@ struct BarView: View {
                                 .offset(x: x)
                         }
                     }
-                    .animation(reduceMotion ? nil : .easeOut(duration: config.bar.animationDuration), value: store.update?.version != nil)
+                    .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
                     .overlay {
                         HStack(spacing: 0) {
                             ForEach(units) { unit in
@@ -87,7 +87,7 @@ struct BarView: View {
                         let animates = BarUnit.animatesResize(units, measured: measuredUnits, from: measuredWidths, to: widths,
                                                               reduceMotion: reduceMotion, providerType: config.providerType(of:))
                         measuredUnits = Set(widths.keys)
-                        withAnimation(animates ? .easeOut(duration: config.bar.animationDuration) : nil) {
+                        withAnimation(animates ? config.bar.animation.value : nil) {
                             measuredWidths.merge(widths) { $1 }
                         }
                     }
@@ -112,7 +112,7 @@ struct BarView: View {
                 .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : store.configuration.map { .easeOut(duration: $0.bar(on: ScreenKind(display)).animationDuration) },
+        .animation(reduceMotion ? nil : store.configuration.map { .easeOut(duration: $0.bar(on: ScreenKind(display)).animation.duration) },
                    value: store.barEditing.isActive && !preview)
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
@@ -247,9 +247,9 @@ struct BarUnitView: View {
             BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
                 ForEach(unit.widgets) { widget in
                     WidgetView(widget: widget, defaults: config.defaults, popupDefaults: config.popupDefaults, store: store,
-                               monitor: display, animationDuration: config.bar.animationDuration)
+                               monitor: display, defaultAnimation: config.bar.animation, defaultTransition: config.bar.motion.transition)
                         .environment(\.barUnitID, unit.id)
-                        .transition(visibilityTransition(widget.transition, still: reduceMotion || measuring))
+                        .transition(visibilityTransition(widget.transition ?? config.bar.motion.transition, still: reduceMotion || measuring))
                 }
             }
         }
@@ -301,7 +301,8 @@ struct WidgetView: View {
     let popupDefaults: WidgetStyle
     let store: BarStore
     let monitor: Int
-    let animationDuration: Double
+    let defaultAnimation: WidgetAnimation
+    let defaultTransition: WidgetTransition
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -315,8 +316,8 @@ struct WidgetView: View {
 
     /// How the widget's text, field and symbol blocks show changes.
     private var motion: BlockMotion {
-        BlockMotion(transition: widget.transition ?? WidgetTransition.none,
-                    animation: store.scripts[widget.id]?.output.animation ?? widget.animation ?? WidgetAnimation(duration: animationDuration))
+        BlockMotion(transition: widget.transition ?? defaultTransition,
+                    animation: store.scripts[widget.id]?.output.animation ?? widget.animation ?? defaultAnimation)
     }
 
     var body: some View {
@@ -326,7 +327,7 @@ struct WidgetView: View {
         let isOpen = store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor)
         let style = resolution.style(hovered: hovered, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-        let animation = output?.animation ?? widget.animation ?? WidgetAnimation(duration: animationDuration)
+        let animation = output?.animation ?? widget.animation ?? defaultAnimation
         let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: 0,
                                  bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: 0)
         // Workspace and menu buttons include vertical padding so their selection fills the tile.
@@ -479,20 +480,16 @@ struct WidgetView: View {
         case .workspaces where widget.layout == nil:
             WorkspaceView(workspaceStore: store.workspaceStore, monitor: monitor,
                           appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
-                          animationDuration: animationDuration, padding: padding,
-                          configuration: widget.workspace, animation: widget.animation, defaults: resolution.base,
+                          padding: padding, configuration: widget.workspace, animation: widget.animation ?? defaultAnimation,
+                          defaults: resolution.base,
                           modeAliases: store.configuration?.look(on: screenKind).modeAliases ?? [:], widgetID: widget.id)
         case let .appMenu(expandOnHover) where widget.layout == nil:
-            AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expandOnHover,
-                        hovering: measuring ? store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true : hovered,
+            AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expandOnHover, hovering: hovered,
+                        expanded: store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true,
                         appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                         padding: padding, requestAccess: store.windowClearance.requestAccess) { expanded in
                 if !measuring && expandOnHover {
-                    if expanded {
-                        store.presentations[widget.id]?.expandedDisplays.insert(monitor)
-                    } else {
-                        store.presentations[widget.id]?.expandedDisplays.remove(monitor)
-                    }
+                    store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
             }
         case .appleMenu where widget.layout == nil:
@@ -585,10 +582,9 @@ struct WorkspaceView: View {
     let workspaceStore: WorkspaceStore
     let monitor: Int
     let appearance: WidgetAppearance
-    let animationDuration: Double
     var padding = EdgeInsets()
     var configuration: WorkspaceConfiguration?
-    var animation: WidgetAnimation?
+    let animation: WidgetAnimation
     var defaults = WidgetStyle()
     var modeAliases: [String: String] = [:]
     var widgetID = ""
@@ -681,7 +677,7 @@ struct WorkspaceView: View {
                     return BarAnchors(underlines: [widgetID: WorkspaceUnderlineAnchor(widget: widgetID, cell: anchor,
                         selection: workspace.name,
                         style: styles.underline, color: styles.underline.background?.firstColor.color ?? appearance.accent,
-                        animation: animation ?? WidgetAnimation(curve: .smooth, duration: animationDuration))])
+                        animation: animation)])
                 }
                 .buttonStyle(.plain)
                 .onHover { hoveredWorkspace = $0 ? workspace.name : nil }
@@ -692,7 +688,7 @@ struct WorkspaceView: View {
             }
         }
         .fixedSize(horizontal: true, vertical: false)
-        .animation(reduceMotion ? nil : (animation?.value ?? .smooth(duration: animationDuration)), value: workspaces)
+        .animation(reduceMotion ? nil : animation.value, value: workspaces)
     }
 
     @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle) -> some View {
@@ -717,6 +713,7 @@ struct AppMenuView: View {
     let items: [AppMenuItem]
     var expandOnHover = false
     var hovering = false
+    var expanded = false
     var isAppleMenu = false
     let appearance: WidgetAppearance
     let padding: EdgeInsets
@@ -735,16 +732,18 @@ struct AppMenuView: View {
                 .buttonStyle(.plain)
                 .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings.")
             }
-            ForEach(Array(items.prefix(expandOnHover && !hovering && openTitle == nil ? 1 : items.count).enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.prefix(expandOnHover && !expanded ? 1 : items.count).enumerated()), id: \.offset) { index, item in
                 AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,
                              highlighted: openTitle.map { $0 == index } ?? (hoveredItem == item), anchors: $anchors) {
                     appMenu.open(index, of: items, at: items.indices.map { anchors[$0]! }) { openTitle = $0 }
                     openTitle = nil
                 }
                 .onHover { hoveredItem = $0 ? item : nil }
+                .transition(.opacity)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
+        .clipped()
         .onHover { if $0 { appMenu.refresh() } }
         .onChange(of: hovering || openTitle != nil, initial: true) { _, expanded in expansionChanged(expanded) }
         .onDisappear { expansionChanged(false) }

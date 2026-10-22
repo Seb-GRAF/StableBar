@@ -122,7 +122,7 @@ private func block(_ json: String) throws -> PopupBlock {
       {"id":"d","type":"text","text":"D","position":"right"}]}
     """#.utf8))
     let units = BarUnit.make(widgets: configuration.widgets, groups: configuration.groups)
-    #expect(units.map(\.transition) == [.roll, .fade, WidgetTransition.none])
+    #expect(units.map(\.transition) == [.roll, .fade, nil])
 }
 
 @Test(arguments: [#""type":"activeApp""#, #""type":"appMenu","expandOnHover":true"#,
@@ -241,4 +241,9 @@ private struct Probe: View {
 
 @Test func theBarMeasuresWidgetsInTheMeasuringCopy() {
     #expect(String(reflecting: BarView.Body.self).contains("MeasuringCopy"))
+}
+
+@Test func animationDurationTimesTheBarsMotionAndKeepsItsCurve() throws {
+    let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"motion":"bouncy","animationDuration":0}"#.utf8))
+    #expect(bar.animation == WidgetAnimation(curve: .bouncy, duration: 0))
 }

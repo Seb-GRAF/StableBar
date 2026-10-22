@@ -212,7 +212,7 @@ private final class MenuReadFixture: @unchecked Sendable {
     await menu.readTask?.value
     var expanded: Bool?
     func content(hovering: Bool) -> AppMenuView {
-        AppMenuView(appMenu: menu, items: menu.items, expandOnHover: true, hovering: hovering,
+        AppMenuView(appMenu: menu, items: menu.items, expandOnHover: true, hovering: hovering, expanded: hovering,
                     appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()),
                     padding: EdgeInsets(), requestAccess: {}) { expanded = $0 }
     }

@@ -790,7 +790,9 @@
                 "easeOut",
                 "easeInOut",
                 "smooth",
-                "spring"
+                "spring",
+                "snappy",
+                "bouncy"
               ]
             },
             {
@@ -1600,8 +1602,48 @@
         "background": {
           "$ref": "#/definitions/background"
         },
+        "motion": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "subtle",
+                "smooth",
+                "snappy",
+                "bouncy"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How widgets, popups and changing text animate where they set no animation or transition of their own. Defaults to smooth."
+        },
+        "popupTransition": {
+          "anyOf": [
+            {
+              "enum": [
+                "fade",
+                "unfold",
+                "slide",
+                "zoom"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How popups open and close. Omit to use the motion's."
+        },
         "animationDuration": {
-          "$ref": "#/definitions/number"
+          "$ref": "#/definitions/number",
+          "description": "Seconds that widget and layout animations last. Omit to use the motion's."
         },
         "notchWidth": {
           "$ref": "#/definitions/number"
@@ -1752,6 +1794,12 @@
             },
             "appearance": {
               "$ref": "#/definitions/bar/properties/appearance"
+            },
+            "motion": {
+              "$ref": "#/definitions/bar/properties/motion"
+            },
+            "popupTransition": {
+              "$ref": "#/definitions/bar/properties/popupTransition"
             }
           },
           "description": "Bar settings that replace the shared ones on this kind of screen."

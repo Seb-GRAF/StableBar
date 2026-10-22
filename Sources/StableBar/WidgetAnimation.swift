@@ -3,7 +3,7 @@ import QuartzCore
 
 struct WidgetAnimation: Decodable, Equatable, Sendable {
     enum Curve: String, Decodable, Sendable {
-        case linear, easeIn, easeOut, easeInOut, smooth, spring
+        case linear, easeIn, easeOut, easeInOut, smooth, spring, snappy, bouncy
     }
 
     var curve: Curve = .easeOut
@@ -31,6 +31,8 @@ struct WidgetAnimation: Decodable, Equatable, Sendable {
         case .easeInOut: .easeInOut(duration: duration)
         case .smooth: .smooth(duration: duration)
         case .spring: .spring(duration: duration)
+        case .snappy: .snappy(duration: duration)
+        case .bouncy: .bouncy(duration: duration)
         }
     }
 
@@ -40,8 +42,83 @@ struct WidgetAnimation: Decodable, Equatable, Sendable {
         case .easeIn: CAMediaTimingFunction(name: .easeIn)
         case .easeOut: CAMediaTimingFunction(name: .easeOut)
         case .easeInOut: CAMediaTimingFunction(name: .easeInEaseOut)
-        case .smooth, .spring: CAMediaTimingFunction(controlPoints: 0.15, 0.05, 0.25, 1)
+        case .smooth, .spring, .snappy: CAMediaTimingFunction(controlPoints: 0.15, 0.05, 0.25, 1)
+        case .bouncy: CAMediaTimingFunction(controlPoints: 0.34, 1.4, 0.64, 1)
         }
+    }
+
+    func layerAnimation(keyPath: String) -> CABasicAnimation {
+        switch curve {
+        case .snappy, .bouncy:
+            let spring = CASpringAnimation(perceptualDuration: duration, bounce: curve == .snappy ? 0.15 : 0.3)
+            spring.keyPath = keyPath
+            spring.duration = spring.settlingDuration
+            return spring
+        default:
+            let animation = CABasicAnimation(keyPath: keyPath)
+            animation.duration = duration
+            animation.timingFunction = timingFunction
+            return animation
+        }
+    }
+}
+
+enum BarMotion: String, Decodable, CaseIterable, Sendable {
+    case none, subtle, smooth, snappy, bouncy
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let motion = BarMotion(rawValue: try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Use none, subtle, smooth, snappy or bouncy.")
+        }
+        self = motion
+    }
+
+    var animation: WidgetAnimation {
+        switch self {
+        case .none: WidgetAnimation(duration: 0)
+        case .subtle: WidgetAnimation(curve: .easeOut, duration: 0.22)
+        case .smooth: WidgetAnimation(curve: .smooth, duration: 0.35)
+        case .snappy: WidgetAnimation(curve: .snappy, duration: 0.3)
+        case .bouncy: WidgetAnimation(curve: .bouncy, duration: 0.45)
+        }
+    }
+
+    var popupAnimation: WidgetAnimation {
+        switch self {
+        case .none: WidgetAnimation(duration: 0)
+        case .subtle: WidgetAnimation(curve: .easeOut, duration: 0.15)
+        case .smooth: WidgetAnimation(curve: .smooth, duration: 0.25)
+        case .snappy: WidgetAnimation(curve: .snappy, duration: 0.35)
+        case .bouncy: WidgetAnimation(curve: .bouncy, duration: 0.4)
+        }
+    }
+
+    var popupTransition: PopupTransition {
+        switch self {
+        case .none, .subtle, .smooth: .fade
+        case .snappy, .bouncy: .zoom
+        }
+    }
+
+    var transition: WidgetTransition {
+        switch self {
+        case .none, .subtle: .none
+        case .smooth, .snappy: .fade
+        case .bouncy: .roll
+        }
+    }
+}
+
+enum PopupTransition: String, Decodable, CaseIterable, Sendable {
+    case fade, unfold, slide, zoom
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let transition = PopupTransition(rawValue: try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Use fade, unfold, slide or zoom.")
+        }
+        self = transition
     }
 }
 
