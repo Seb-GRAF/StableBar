@@ -55,7 +55,7 @@ struct BarUnit: Identifiable {
         !reduceMotion && units.contains { unit in
             previous[unit.id] != widths[unit.id] && unit.widgets.contains {
                 $0.id == AppUpdate.widgetID
-                    || (($0.content == .activeApp || $0.content == .appMenu(expandOnHover: true) || providerType($0) == DataSourceType.audio.name)
+                    || (($0.content == .activeApp || $0.content == .appMenu(expandOnHover: true) || $0.hoverLayout != nil || providerType($0) == DataSourceType.audio.name)
                         && measured.contains(unit.id))
             }
         }

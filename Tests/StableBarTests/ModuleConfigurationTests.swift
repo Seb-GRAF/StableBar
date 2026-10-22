@@ -103,13 +103,14 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
        "base":{"type":"script","position":"right","interval":30,"events":["base"],
                "environment":{"BASE":"yes","SHARED":"base"},
                "style":{"foreground":"#eeeeee","fontSize":12},
+               "hoverLayout":{"type":"text","text":"Adjust","style":{"width":100}},
                "layout":{"type":"row","style":{"spacing":6},"children":[{"type":"text","text":"base"}]}},
        "metric":{"template":"base","style":{"fontSize":14,"background":"#111111"},
-                 "layout":{"style":{"paddingHorizontal":8}}}
+                 "hoverLayout":{"style":{"height":16}},"layout":{"style":{"paddingHorizontal":8}}}
      },"widgets":[{"id":"cpu","template":"metric","command":"echo 10%","interval":null,
                    "events":["refresh"],"environment":{"SHARED":"widget"},
                    "style":{"foreground":"#abcdef"},
-                   "layout":{"children":[{"type":"field","field":"text"}]}}]}
+                   "hoverLayout":{"style":{"width":120}},"layout":{"children":[{"type":"field","field":"text"}]}}]}
     """##.utf8)
     let configuration = try JSONDecoder().decode(Configuration.self, from: data)
     let widget = configuration.widgets[0]
@@ -120,13 +121,17 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(widget.style.fontSize == 14)
     #expect(widget.style.foreground == HexColor(0xabcdefff))
     #expect(widget.style.background == .color(HexColor(0x111111ff)))
+    #expect(widget.hoverLayout?.style.width == 120)
+    #expect(widget.hoverLayout?.style.height == 16)
     #expect(widget.layout?.style.spacing == 6)
     #expect(widget.layout?.style.paddingHorizontal == 8)
-    guard case let .row(children) = widget.layout?.content,
+    guard case let .text(hoverText) = widget.hoverLayout?.content,
+          case let .row(children) = widget.layout?.content,
           case let .field(field) = children[0].content else {
         Issue.record("The template layout was not preserved.")
         return
     }
+    #expect(hoverText == "Adjust")
     #expect(children.count == 1)
     #expect(field == "text")
 }

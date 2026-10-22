@@ -5,7 +5,7 @@ extension WidgetConfiguration {
     /// Whether `transition` changes anything: workspaces and spacers draw their own views, which
     /// have no text or symbols to transition, unless they have a `layout` or `overlay`.
     var drawsTransitions: Bool {
-        !content.drawsOwnView || layout != nil || overlay != nil
+        !content.drawsOwnView || layout != nil || hoverLayout != nil || overlay != nil
     }
 }
 

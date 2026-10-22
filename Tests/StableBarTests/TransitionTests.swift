@@ -125,7 +125,8 @@ private func block(_ json: String) throws -> PopupBlock {
     #expect(units.map(\.transition) == [.roll, .fade, WidgetTransition.none])
 }
 
-@Test(arguments: [#""type":"activeApp""#, #""type":"appMenu","expandOnHover":true"#])
+@Test(arguments: [#""type":"activeApp""#, #""type":"appMenu","expandOnHover":true"#,
+                  #""type":"text","text":"Timer","hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,"onChange":"set-duration","style":{"width":100}}"#])
 func appWidgetsThatStayedInTheBarAnimateTheirResize(content: String) throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"app",\#(content),"position":"left"},

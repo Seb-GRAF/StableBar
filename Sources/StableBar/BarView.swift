@@ -334,7 +334,17 @@ struct WidgetView: View {
         case .workspaces, .appMenu, .appleMenu: widget.layout == nil
         default: false
         }
-        let tile = content(resolution, open: isOpen, padding: padding)
+        let tile = Group {
+            if let layout = widget.hoverLayout {
+                HoverLayoutView(widget: widget, layout: layout, store: store, monitor: monitor,
+                                style: resolution.layoutStyle(configured: true, hovered: hovered, open: isOpen),
+                                hovered: hovered, motion: motion, runAction: blockAction) {
+                    content(resolution, open: isOpen, padding: padding)
+                }
+            } else {
+                content(resolution, open: isOpen, padding: padding)
+            }
+        }
             .overlay(alignment: .topTrailing) {
                 if widget.id == AppUpdate.widgetID {
                     Circle()
@@ -367,6 +377,9 @@ struct WidgetView: View {
                     .help("Dismiss package update notification")
                 }
                 .buttonStyle(.plain)
+            } else if widget.hoverLayout != nil, let command = output?.onClick ?? widget.onClick {
+                Button { runAction(command, sender: "mouse.clicked", button: "left") } label: { tile }
+                    .buttonStyle(.plain)
             } else if let popup = widgetPopup(widget, store: store) {
                 Button {
                     guard store.barEditing.allowsWidgetActions else { return }
@@ -438,7 +451,7 @@ struct WidgetView: View {
                     store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
                                      store: store, anchor: popupAnchor, onHover: true)
                 }
-            } else if let tooltip, !tooltip.isEmpty {
+            } else if widget.hoverLayout == nil, let tooltip, !tooltip.isEmpty {
                 store.popup.hover(inside, store: store, anchor: popupAnchor) {
                     store.popup.showTooltip(tooltip, widget: widget, defaults: popupDefaults.inheriting(defaults),
                                             store: store, anchor: popupAnchor)

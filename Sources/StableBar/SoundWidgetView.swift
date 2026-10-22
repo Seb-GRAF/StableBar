@@ -29,10 +29,18 @@ struct SoundWidgetView: View {
         let volume = store.scripts[widget.id]?.output.values?["volume"]
         let expanded = volume != nil && store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true
         let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
-        HStack(spacing: appearance.spacing) {
-            if expanded, let volume, Self.opensBeforeIcon(widget.position) { slider(volume, appearance: appearance) }
-            WidgetBlocks(widget: widget, store: store, style: style, block: expanded ? Self.icon : nil, motion: motion, runAction: runAction)
-            if expanded, let volume, !Self.opensBeforeIcon(widget.position) { slider(volume, appearance: appearance) }
+        Group {
+            if let volume {
+                HoverExpansionLayout(expansion: expanded ? 1 : 0, spacing: appearance.spacing, controlsBefore: Self.opensBeforeIcon(widget.position)) {
+                    slider(volume, appearance: appearance)
+                        .allowsHitTesting(expanded)
+                        .accessibilityHidden(!expanded)
+                    WidgetBlocks(widget: widget, store: store, style: style, block: expanded ? Self.icon : nil, motion: motion, runAction: runAction)
+                }
+                .clipped()
+            } else {
+                WidgetBlocks(widget: widget, store: store, style: style, motion: motion, runAction: runAction)
+            }
         }
         .onChange(of: hovered || dragging) { _, open in expand(open) }
         .onDisappear { expand(false) }
@@ -66,7 +74,6 @@ struct SoundWidgetView: View {
         }
         .font(appearance.font)
         .foregroundStyle(appearance.foreground)
-        .transition(.opacity)
     }
 
     private func set(_ volume: Double) {

@@ -1354,6 +1354,13 @@
             }
           ]
         },
+        "hoverLayout": {
+          "description": "Extra blocks revealed beside the widget on hover. Sliders stay open while dragging.",
+          "anyOf": [
+            { "$ref": "#/definitions/block" },
+            { "type": "null" }
+          ]
+        },
         "overlay": {
           "anyOf": [
             {

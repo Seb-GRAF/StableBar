@@ -690,6 +690,7 @@ final class BarStore: NSObject {
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
                                                       role: configuration.roleStyle(widget.role)))
             let usesMode = base.usesModeStates || widget.layout?.usesModeStates(roles: configuration.roles) == true
+                || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
                 || widget.overlay?.usesModeStates(roles: configuration.roles) == true
                 || script?.output.styles?.values.contains(where: \.usesModeStates) == true
             let animation = script?.output.animation ?? widget.animation ?? WidgetAnimation(duration: configuration.bar.animationDuration)

@@ -371,6 +371,14 @@ struct PopupBlockView: View {
     }
 }
 
+struct ControlEditingPreference: PreferenceKey {
+    static let defaultValue = false
+
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 private struct PopupSlider: View {
     let title: String
     let value: Double
@@ -391,6 +399,7 @@ private struct PopupSlider: View {
         }
         .accessibilityLabel(title)
         .onChange(of: value) { if !editing { localValue = nil } }
+        .preference(key: ControlEditingPreference.self, value: editing)
     }
 }
 

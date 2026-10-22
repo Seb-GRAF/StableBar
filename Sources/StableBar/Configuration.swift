@@ -381,6 +381,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let style: WidgetStyle
     let display: DisplaySelection
     let layout: PopupBlock?
+    let hoverLayout: PopupBlock?
     let overlay: PopupBlock?
     let animation: WidgetAnimation?
     var workspace: WorkspaceConfiguration?
@@ -397,7 +398,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
-        case display, layout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
+        case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
         case expandOnHover
     }
 
@@ -423,6 +424,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? WidgetStyle()
         display = try values.decodeIfPresent(DisplaySelection.self, forKey: .display) ?? .all
         layout = try values.decodeIfPresent(PopupBlock.self, forKey: .layout)
+        hoverLayout = try values.decodeIfPresent(PopupBlock.self, forKey: .hoverLayout)
         overlay = try values.decodeIfPresent(PopupBlock.self, forKey: .overlay)
         animation = try values.decodeIfPresent(WidgetAnimation.self, forKey: .animation)
         workspace = try values.decodeIfPresent(WorkspaceConfiguration.self, forKey: .workspace)

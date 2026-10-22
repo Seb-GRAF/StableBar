@@ -1053,6 +1053,27 @@ With access, the provider updates at each minute and phase boundary and when you
 }
 ```
 
+### Controls on hover
+
+Set `hoverLayout` to reveal extra blocks beside a widget when the pointer enters it. It uses the same blocks as `layout` and `popup`, including sliders. On the right of the bar, the controls open to the left so the widget stays under the pointer. Neighboring widgets move aside, and a slider stays open while you drag it. Motion follows the widget's `animation` and respects Reduce Motion.
+
+```json
+"hoverLayout": {
+  "type": "slider",
+  "title": "Duration (minutes)",
+  "source": "duration",
+  "min": 15,
+  "max": 240,
+  "step": 15,
+  "onChange": "my-timer set-duration \"$VALUE\"",
+  "style": { "width": 100, "height": 16 }
+}
+```
+
+Provide the current slider value in script output `values.duration`; `onChange` receives `VALUE` when the drag ends. Inline control labels are hidden, with their titles kept for accessibility. Set a width on sliders to give them space in the bar.
+
+A widget with `hoverLayout` runs its `onClick` command when clicked, even when it also has a popup. Without `onClick`, clicking still opens its popup. Tooltips stay hidden while inline controls are available. Add or edit `hoverLayout` through the widget's **Edit as JSON…** action or the CLI; includes, templates, profiles, and package overrides merge it like `layout`. Set it to `null` to remove it.
+
 ## Adaptive layout and groups
 
 Widgets keep their configured order within `left`, `notchLeft`, `center`, `notchRight`, and `right`. The center cluster shifts within the free space before anything overflows. On a notched screen, `center` widgets join the right side of the notch; neither side can use the other side's space.

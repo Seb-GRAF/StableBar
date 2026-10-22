@@ -205,6 +205,7 @@ extension Configuration {
             || widgets.contains { widget in
                 widget.enabled && (widget.style.usesModeStates || roleStyle(widget.role).usesModeStates
                     || widget.layout?.usesModeStates(roles: roles) == true
+                    || widget.hoverLayout?.usesModeStates(roles: roles) == true
                     || widget.overlay?.usesModeStates(roles: roles) == true || widget.workspace?.usesModeStates == true
                     || widget.popup.map { $0.style.usesModeStates || $0.layout.usesModeStates(roles: roles) } == true)
             }

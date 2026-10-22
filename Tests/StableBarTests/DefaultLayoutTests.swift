@@ -371,6 +371,50 @@ private enum FrontmostApp {
     #expect(WidgetPosition.allCases.filter(SoundWidgetView.opensBeforeIcon) == [.right], "Only the right of the bar grows to the left")
 }
 
+@Test(arguments: [true, false]) @MainActor
+func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBefore: Bool) throws {
+    for expansion in stride(from: 0.0, through: 1.0, by: 0.1) {
+        let drawing = try draw(HoverExpansionLayout(expansion: expansion, spacing: 6, controlsBefore: controlsBefore) {
+            Color(.sRGB, red: 0, green: 0, blue: 1).frame(width: 100, height: 16)
+            Color(.sRGB, red: 1, green: 0, blue: 0).frame(width: 24, height: 16)
+        }.clipped())
+        #expect(drawing.height == 32)
+        let start = controlsBefore ? drawing.width - 48 : 0
+        for x in (start + 2)..<(start + 46) {
+            let pixel = (drawing.width * 16 + x) * 4
+            #expect(drawing.rgba[pixel] == 255)
+            #expect(drawing.rgba[pixel + 2] == 0)
+        }
+    }
+}
+
+@Test @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay() throws {
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    store.configuration = try decode(Configuration.self, #"""
+    {"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
+     "hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,
+                    "onChange":"set-duration","style":{"width":100,"height":16}}}]}
+    """#)
+    store.preparePresentations()
+    let widget = try #require(store.configuration?.widgets.first)
+    let layout = try #require(widget.hoverLayout)
+    let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: true, hovered: false, open: false)
+    func drawing(on display: Int) throws -> Drawing {
+        try draw(HoverLayoutView(widget: widget, layout: layout, store: store, monitor: display, style: style,
+                                 hovered: false, motion: BlockMotion(), runAction: { _, _ in }) {
+            Text("60m").frame(height: 16)
+        }.environment(\.measuringBarWidths, true))
+    }
+    let rest = try drawing(on: 1)
+    try #require(store.presentations["timer"]).setExpanded(true, on: 1)
+    let open = try drawing(on: 1)
+    #expect(open.width > rest.width + 190)
+    #expect(open.height == rest.height)
+    #expect(try drawing(on: 2).width == rest.width)
+    try #require(store.presentations["timer"]).setExpanded(false, on: 1)
+    #expect(try drawing(on: 1).width == rest.width)
+}
+
 @Test @MainActor func onlyActiveAppBlocksRedrawWhenTheFrontmostAppChanges() async throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
     let note = try decode(WidgetConfiguration.self, #"{"id":"note","type":"text","text":"Ready","position":"left"}"#)
