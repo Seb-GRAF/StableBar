@@ -36,6 +36,10 @@ struct PopupView: View {
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     target.open()
+                }, quit: { pid in
+                    guard store.barEditing.allowsWidgetActions else { return }
+                    if popup.dismissOnAction { store.popup.close() }
+                    confirmQuit(pid)
                 }, states: states, update: store.update) { command, environment in
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                     store.runAction(command, widget: widget,
@@ -103,6 +107,8 @@ struct BlockContext {
     var fillsWidth = true
     /// Opens an `open` or `openField` block's target; a popup's also closes the popup when its actions dismiss it.
     let open: (OpenTarget) -> Void
+    /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
+    var quit: (pid_t) -> Void = { _ in }
     /// The widget's states, such as `open`; each block adds its own hover.
     var states = StyleStates()
     /// False when the inherited style already has the widget's hover and open states, as in default
@@ -230,6 +236,11 @@ struct PopupBlockView: View {
                     .buttonStyle(.plain)
             } else if let value = block.openField.flatMap({ fields[$0] }) ?? block.open {
                 Button { if let target = OpenTarget(value) { context.open(target) } } label: {
+                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+            } else if let pid = block.quitField.flatMap({ fields[$0] }).flatMap({ pid_t($0) }) {
+                Button { context.quit(pid) } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
@@ -527,6 +538,13 @@ struct WidgetImage: View {
                     url = source
                 } else {
                     url = URL(filePath: NSString(string: path).expandingTildeInPath)
+                }
+                if url.isFileURL {
+                    let file = try url.resourceValues(forKeys: [.isApplicationKey, .isExecutableKey, .isRegularFileKey, .contentTypeKey])
+                    if file.isApplication == true || file.isExecutable == true && file.isRegularFile == true && file.contentType?.conforms(to: .image) != true {
+                        image = NSWorkspace.shared.icon(forFile: url.path)
+                        return
+                    }
                 }
                 let data: Data
                 if url.isFileURL {

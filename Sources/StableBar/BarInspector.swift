@@ -371,8 +371,7 @@ struct BarInspector: View {
 
     @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
         if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
-           type == "battery" || type == "audio" {
-            let source = type == "battery" ? "percent" : "volume"
+           let source = ["battery": "percent", "audio": "volume", "system": "cpu"][type] {
             let current = WidgetMetricDisplay.current(editor.properties(for: widget.id)["layout"], source: source)
             SettingsGroup("Display") {
                 SettingRow(title: "Show") {

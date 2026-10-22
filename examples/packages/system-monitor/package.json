@@ -1,7 +1,14 @@
 {
   "id": "system-monitor",
   "name": "System monitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "kind": "widgets",
-  "entry": "config.json"
+  "entry": "config.json",
+  "settings": {
+    "interval": { "type": "number", "title": "Refresh every (seconds)", "default": 2 },
+    "processes": { "type": "number", "title": "Apps to list", "description": "How many apps the popup lists. Each app's helper processes count toward it.", "default": 5 },
+    "sortBy": { "type": "string", "title": "List the apps using the most", "choices": ["memory", "cpu"], "default": "memory" },
+    "cpuWarning": { "type": "number", "title": "CPU warning", "description": "The CPU use, from 0 to 1, at which the widget takes the warning color. Set it above 1 to turn it off.", "default": 0.9 },
+    "memoryWarning": { "type": "number", "title": "Memory warning", "description": "The memory use, from 0 to 1, at which the widget takes the warning color. Memory pressure and heat always warn.", "default": 0.9 }
+  }
 }

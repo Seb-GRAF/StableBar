@@ -998,6 +998,9 @@
         "openField": {
           "$ref": "#/definitions/string"
         },
+        "quitField": {
+          "$ref": "#/definitions/string"
+        },
         "lineWidth": {
           "$ref": "#/definitions/number"
         },
@@ -1532,6 +1535,9 @@
           "$ref": "#/definitions/number"
         },
         "now": {
+          "$ref": "#/definitions/number"
+        },
+        "processes": {
           "$ref": "#/definitions/number"
         }
       }

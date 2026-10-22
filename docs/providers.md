@@ -43,7 +43,7 @@ Native providers use public macOS APIs and launch no shell commands:
 
 | Type | Output contract |
 | --- | --- |
-| `system` | `value` and `values.cpu`: CPU fraction; `values.memory`: used-memory fraction; `values.memoryUsed` and `values.memoryTotal`: bytes. `fields.cpu` and `fields.memory` are whole percentages. Used memory includes internal, wired and compressed pages, excluding purgeable pages. |
+| `system` | `value` and `values.cpu`: CPU fraction, made of `values.cpuUser` for programs and `values.cpuSystem` for macOS itself; `values.memory`: used-memory fraction; `values.memoryUsed` and `values.memoryTotal`: bytes. `fields.cpu`, `fields.cpuUser`, `fields.cpuSystem` and `fields.memory` are whole percentages; `fields.memoryUsed`, `fields.memoryCompressed` and `fields.swap` are sizes such as `18.2 GB`. `fields.pressure`: macOS's memory pressure, `normal`, `warning` or `critical`; `fields.thermal`: `nominal`, `fair`, `serious` or `critical`, rising as the Mac slows itself down to cool off; `fields.load`: the 1, 5 and 15 minute load averages; `fields.uptime`: the time since startup, such as `3d 4h`. Used memory includes internal, wired and compressed pages, excluding purgeable pages. With `processes`, also `lists.memory` and `lists.cpu`; see [Processes](#processes). |
 | `network` | `values.download` and `values.upload`: aggregate bytes/second across up `en*` Wi-Fi/Ethernet interfaces. `fields.interface`: interface names. `lists.interfaces`: rows with `name`, `download`, `upload`. Virtual VPN interfaces are excluded to avoid counting the same traffic twice. |
 | `battery` | `value` and `values.percent`: charge fraction. `fields.percent`: whole percentage; `fields.state`: `charging`, `charged`, `battery` or `ac`; `fields.present`: `true`/`false`; optional `fields.timeRemaining`: minutes. Desktops without a battery return `AC` without a charge value. Updates when the charge, the time remaining or the power source changes, without polling. |
 | `audio` | `value` and `values.volume`: output-volume fraction when supported. `icon`: `speaker.slash` while muted or without an output device, else `speaker` at zero and `speaker.wave.1`, `speaker.wave.2` or `speaker.wave.3` as the volume rises past each third (`speaker.wave.2` without a volume control). `fields.device`, `fields.deviceID`, `fields.volumeAvailable` and optional `fields.muted`; `lists.devices`: output-device rows with `id` and `name`. When the volume or mute state changes, as `volumeChange` reports it, `temporary` shows `fields.changedVolume` for 1.5 seconds: the volume, such as `62%`, empty while muted or without a volume control. Fixed-volume devices can omit volume, and no output device returns `No output`. Updates as soon as the volume, the mute state or the default output device changes, without polling. |
@@ -54,6 +54,14 @@ Fractions use 0–1. CPU and network rates are deltas; their first sample after 
 Native providers can't return `state`. Give their widgets `rules` to set a data state from `values` or `fields`, such as a battery `warning` at 20 %; see [Data states](styling.md#data-states).
 
 Scripts and providers expose diagnostics in **Settings → Status** and the runtime query: running/suspended state, last event/start/update, execution duration, bounded stdout/stderr, execution/failure/restart counts and next retry delay. Streams and the native sources macOS notifies of changes, such as `battery` and `audio`, count as running while connected, and each update sets their last update time. CPU time is cumulative completed-command CPU time, not a live resource meter for a running stream. Diagnostics and graph history survive style-only edits and suspension. The existing process-group cancellation limit for deliberately detached descendants also applies to streams.
+
+## Processes
+
+Set `processes` on a `system` provider to list the apps and processes using the most memory in `lists.memory`, and the most CPU in `lists.cpu`, that many of each. A process whose program lies inside a running app, such as a browser's helpers, counts toward that app's row. Each row has `name`, `pid` (the app's, for an app), `path` (the app or program, which an [`image`](popups.md) block shows as its icon), `memory`, such as `1.2 GB`, and `cpu`, a whole percentage of one core, which passes 100 when a process uses several. Only your own processes are listed, the ones you can quit without an administrator's password. A [`quitField`](popups.md) block quits a row's app or process. `processes` defaults to `0`, which lists none and doesn't read them.
+
+```json
+"providers": { "system": { "type": "system", "interval": 2, "processes": 5 } }
+```
 
 ## Calendar
 

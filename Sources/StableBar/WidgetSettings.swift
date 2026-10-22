@@ -132,8 +132,8 @@ struct WidgetClockFormat {
     }
 }
 
-/// How a battery or sound widget shows its value. `source` names the value: `percent` for battery,
-/// `volume` for sound.
+/// How a battery, sound or system widget shows its value. `source` names the value: `percent` for
+/// battery, `volume` for sound, `cpu` for system.
 enum WidgetMetricDisplay: String, CaseIterable {
     case standard, changes, icon, value, meter, graph, custom
 
@@ -150,9 +150,13 @@ enum WidgetMetricDisplay: String, CaseIterable {
     }
 
     /// The choices for `source`, its default first: sound's shows the volume only after a change,
-    /// so it adds that and keeps icon and value as a layout of its own.
+    /// so it adds that and keeps icon and value as a layout of its own, and system's draws a graph.
     static func choices(for source: String) -> [Self] {
-        source == "volume" ? [.changes] + allCases.filter { $0 != .changes } : allCases.filter { $0 != .changes }
+        switch source {
+        case "volume": [.changes] + allCases.filter { $0 != .changes }
+        case "cpu": [.graph] + allCases.filter { $0 != .changes && $0 != .graph }
+        default: allCases.filter { $0 != .changes }
+        }
     }
 
     /// The `layout` that shows this choice, `null` for the default layout, or nil for a custom one.
@@ -160,8 +164,9 @@ enum WidgetMetricDisplay: String, CaseIterable {
         let icon: ConfigurationValue = .object(["type": .string("symbol"), "source": .string("icon")])
         let text: ConfigurationValue = .object(["type": .string("field"), "field": .string("text")])
         switch self {
-        case .standard where source == "volume": return .object(["type": .string("row"), "children": .array([icon, text])])
+        case .standard where source == "volume" || source == "cpu": return .object(["type": .string("row"), "children": .array([icon, text])])
         case .standard, .changes: return .null
+        case .graph where source == "cpu": return .null
         case .icon: return .object(["type": .string("row"), "children": .array([icon])])
         case .value: return .object(["type": .string("row"), "children": .array([text])])
         case .meter, .graph:

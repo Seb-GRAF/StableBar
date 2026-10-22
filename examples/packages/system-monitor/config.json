@@ -2,46 +2,209 @@
   "tokens": {
     "textMuted": { "light": "#6e6e73", "dark": "#a1a1a6" },
     "surfaceRaised": { "light": "#ffffff", "dark": "#323438" },
-    "track": { "light": "#1d1d1f26", "dark": "#f5f5f726" }
+    "track": { "light": "#1d1d1f26", "dark": "#f5f5f726" },
+    "warning": { "light": "#c93400", "dark": "#ffb340" },
+    "critical": { "light": "#d70015", "dark": "#ff6961" }
   },
   "providers": {
-    "system": { "type": "system", "interval": 2 }
+    "system": { "type": "system", "interval": "@setting.interval", "processes": "@setting.processes" }
   },
   "popups": {
     "system-monitor": {
-      "style": { "width": 240, "spacing": 8 },
+      "style": { "width": 320, "spacing": 12 },
       "layout": {
         "type": "column",
         "children": [
-          { "type": "graph", "height": 36 },
           {
             "type": "row",
+            "style": { "spacing": 16 },
             "children": [
-              { "type": "text", "text": "CPU", "style": { "foreground": "@token.textMuted" } },
-              { "type": "field", "field": "cpu", "alignment": "trailing" },
-              { "type": "text", "text": "%", "style": { "width": 14 } }
+              {
+                "type": "column",
+                "style": { "spacing": 6 },
+                "children": [
+                  {
+                    "type": "row",
+                    "style": { "fontWeight": "semibold", "spacing": 0 },
+                    "children": [
+                      { "type": "text", "text": "CPU", "role": "key" },
+                      { "type": "field", "field": "cpu", "alignment": "trailing", "role": "value" },
+                      { "type": "text", "text": "%", "role": "value", "style": { "width": 12 } }
+                    ]
+                  },
+                  { "type": "graph", "height": 28, "role": "meter" },
+                  {
+                    "type": "column",
+                    "style": { "fontSize": 11.5, "spacing": 3 },
+                    "children": [
+                      {
+                        "type": "row",
+                        "style": { "spacing": 0 },
+                        "children": [
+                          { "type": "text", "text": "User", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "cpuUser", "alignment": "trailing", "role": "value" },
+                          { "type": "text", "text": "%", "role": "value", "style": { "width": 12 } }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "style": { "spacing": 0 },
+                        "children": [
+                          { "type": "text", "text": "System", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "cpuSystem", "alignment": "trailing", "role": "value" },
+                          { "type": "text", "text": "%", "role": "value", "style": { "width": 12 } }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Load", "role": "key", "style": { "foreground": "@token.textMuted", "width": 32 } },
+                          { "type": "field", "field": "load", "alignment": "trailing", "role": "value" }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Thermal", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "thermal", "alignment": "trailing", "role": "value" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": "column",
+                "style": { "spacing": 6 },
+                "children": [
+                  {
+                    "type": "row",
+                    "style": { "fontWeight": "semibold", "spacing": 0 },
+                    "children": [
+                      { "type": "text", "text": "Memory", "role": "key" },
+                      { "type": "field", "field": "memory", "alignment": "trailing", "role": "value" },
+                      { "type": "text", "text": "%", "role": "value", "style": { "width": 12 } }
+                    ]
+                  },
+                  {
+                    "type": "column", "style": { "height": 28 },
+                    "children": [{ "type": "progress", "source": "memory", "height": 4, "role": "meter", "style": { "background": "@token.track" } }]
+                  },
+                  {
+                    "type": "column",
+                    "style": { "fontSize": 11.5, "spacing": 3 },
+                    "children": [
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Used", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "memoryUsed", "alignment": "trailing", "role": "value" }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Compressed", "role": "key", "style": { "foreground": "@token.textMuted", "width": 72 } },
+                          { "type": "field", "field": "memoryCompressed", "alignment": "trailing", "role": "value" }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Swap", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "swap", "alignment": "trailing", "role": "value" }
+                        ]
+                      },
+                      {
+                        "type": "row",
+                        "children": [
+                          { "type": "text", "text": "Pressure", "role": "key", "style": { "foreground": "@token.textMuted" } },
+                          { "type": "field", "field": "pressure", "alignment": "trailing", "role": "value" }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
             ]
           },
-          { "type": "progress", "source": "cpu", "height": 4, "style": { "background": "@token.track" } },
+          { "type": "divider", "role": "separator" },
+          {
+            "type": "column",
+            "style": { "spacing": 2 },
+            "children": [
+              {
+                "type": "row",
+                "style": { "fontSize": 11.5, "foreground": "@token.textMuted", "spacing": 8, "paddingHorizontal": 4 },
+                "children": [
+                  { "type": "text", "text": "Apps", "role": "key" },
+                  { "type": "text", "text": "Memory", "alignment": "trailing", "style": { "width": 64 } },
+                  { "type": "text", "text": "CPU", "alignment": "trailing", "style": { "width": 44 } },
+                  { "type": "text", "text": "", "style": { "width": 16 } }
+                ]
+              },
+              {
+                "type": "list",
+                "source": "@setting.sortBy",
+                "style": { "fontSize": 12 },
+                "row": {
+                  "type": "row",
+                  "style": { "spacing": 8, "paddingHorizontal": 4, "paddingVertical": 3, "cornerRadius": 6, "hoverBackground": "@token.surfaceRaised" },
+                  "children": [
+                    { "type": "image", "source": "path", "style": { "width": 16, "height": 16 } },
+                    { "type": "field", "field": "name" },
+                    { "type": "field", "field": "memory", "alignment": "trailing", "style": { "width": 64 } },
+                    {
+                      "type": "row",
+                      "style": { "width": 44, "spacing": 0 },
+                      "children": [
+                        { "type": "field", "field": "cpu", "alignment": "trailing" },
+                        { "type": "text", "text": "%", "style": { "width": 12 } }
+                      ]
+                    },
+                    {
+                      "type": "symbol", "name": "xmark.circle.fill", "quitField": "pid",
+                      "style": { "width": 16, "iconSize": 12, "foreground": "@token.textMuted", "hoverForeground": "@token.critical" }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          { "type": "divider", "role": "separator" },
           {
             "type": "row",
+            "style": { "fontSize": 11.5 },
             "children": [
-              { "type": "text", "text": "Memory", "style": { "foreground": "@token.textMuted" } },
-              { "type": "field", "field": "memory", "alignment": "trailing" },
-              { "type": "text", "text": "%", "style": { "width": 14 } }
+              { "type": "text", "text": "Up", "style": { "foreground": "@token.textMuted", "width": 18 } },
+              { "type": "field", "field": "uptime", "style": { "foreground": "@token.textMuted", "maxWidth": 80 } },
+              {
+                "type": "text", "text": "Open Activity Monitor", "open": "com.apple.ActivityMonitor", "alignment": "trailing", "role": "button",
+                "style": { "paddingHorizontal": 6, "paddingVertical": 4, "cornerRadius": 6, "hoverBackground": "@token.surfaceRaised" }
+              }
             ]
-          },
-          { "type": "progress", "source": "memory", "height": 4, "style": { "background": "@token.track" } },
-          { "type": "divider" },
-          {
-            "type": "text", "text": "Open Activity Monitor", "open": "com.apple.ActivityMonitor",
-            "style": { "paddingHorizontal": 6, "paddingVertical": 4, "cornerRadius": 6, "hoverBackground": "@token.surfaceRaised" }
           }
         ]
       }
     }
   },
   "widgets": [
-    { "id": "system-monitor", "type": "system", "position": "right", "popupName": "system-monitor" }
+    {
+      "id": "system-monitor", "type": "system", "position": "right", "popupName": "system-monitor",
+      "style": {
+        "states": {
+          "warning": { "foreground": "@token.warning", "accent": "@token.warning" },
+          "critical": { "foreground": "@token.critical", "accent": "@token.critical" }
+        }
+      },
+      "rules": [
+        { "when": { "field": "pressure", "equals": "critical" }, "state": "critical" },
+        { "when": { "field": "thermal", "equals": "critical" }, "state": "critical" },
+        { "when": { "field": "pressure", "equals": "warning" }, "state": "warning" },
+        { "when": { "field": "thermal", "equals": "serious" }, "state": "warning" },
+        { "when": { "value": "cpu", "above": "@setting.cpuWarning" }, "state": "warning" },
+        { "when": { "value": "memory", "above": "@setting.memoryWarning" }, "state": "warning" }
+      ]
+    }
   ]
 }

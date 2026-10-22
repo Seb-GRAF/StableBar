@@ -382,6 +382,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
         (#"{"widgets":[{"id":"date","type":"clock","position":"right","open":"file:///Applications/Calendar.app"}]}"#, "widgets.date: open: Use an http, https, mailto or x-apple.systempreferences URL, or an application bundle identifier such as com.apple.iCal."),
         (#"{"widgets":[{"id":"date","type":"clock","position":"right","onClick":"open -a Calendar","open":"com.apple.iCal"}]}"#, "widgets.date: open: A widget cannot set both onClick and open."),
         (#"{"widgets":[],"popups":{"agenda":{"style":{},"layout":{"type":"row","onClickField":"joinCommand","openField":"link","children":[]}}}}"#, "popups.agenda.layout.open: A block cannot combine onClick or onClickField with open or openField."),
+        (#"{"widgets":[],"popups":{"apps":{"style":{},"layout":{"type":"row","quitField":"pid","open":"com.apple.ActivityMonitor","children":[]}}}}"#, "popups.apps.layout.quitField: A block cannot combine quitField with onClick, onClickField, open or openField."),
         (#"{"widgets":[}"#, "The given data was not valid JSON. Unexpected character '}' around line 1, column 13.")
     ] {
         let error = #expect(throws: (any Error).self) { try loader.load(url, data: Data(json.utf8)) }
@@ -470,7 +471,8 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
         + registry.types.filter(\.isNative).map(\.name)))
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
-        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#)
+        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
+        .processes: ("5", #""5""#)
     ]
     #expect(Set(registry.types.flatMap(\.optionalSettings)) == Set(samples.keys))
     for type in registry.types {

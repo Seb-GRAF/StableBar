@@ -77,6 +77,7 @@ struct PopupBlock: Decodable, Sendable {
     let onClickField: String?
     let open: String?
     let openField: String?
+    let quitField: String?
     let hideWhenEmpty: String?
     let scrollSpeed: Double?
     /// Whether a field block draws tabular digits. Configured field blocks do; the default layouts of
@@ -94,7 +95,7 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, transition
+        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, transition
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -110,6 +111,7 @@ struct PopupBlock: Decodable, Sendable {
         onClickField = nil
         open = nil
         openField = nil
+        quitField = nil
         self.hideWhenEmpty = hideWhenEmpty
         scrollSpeed = nil
         self.monospacedDigits = monospacedDigits
@@ -136,6 +138,10 @@ struct PopupBlock: Decodable, Sendable {
         }
         if onClick != nil || onClickField != nil, open != nil || openField != nil {
             throw DecodingError.dataCorruptedError(forKey: .open, in: values, debugDescription: "A block cannot combine onClick or onClickField with open or openField.")
+        }
+        quitField = try values.decodeIfPresent(String.self, forKey: .quitField)
+        if quitField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .quitField, in: values, debugDescription: "A block cannot combine quitField with onClick, onClickField, open or openField.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)

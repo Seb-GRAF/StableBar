@@ -13,9 +13,10 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let lookahead: Double
     let soon: Int
     let now: Int
+    let processes: Int
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now
+        case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
     }
 
     init(type: String) {
@@ -30,6 +31,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         lookahead = 24
         soon = 15
         now = 5
+        processes = 0
     }
 
     init(from decoder: Decoder) throws {
@@ -49,6 +51,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         lookahead = try values.decodeIfPresent(Double.self, forKey: .lookahead) ?? 24
         soon = try values.decodeIfPresent(Int.self, forKey: .soon) ?? 15
         now = try values.decodeIfPresent(Int.self, forKey: .now) ?? 5
+        processes = try values.decodeIfPresent(Int.self, forKey: .processes) ?? 0
         guard interval > 0, interval.isFinite else {
             throw DecodingError.dataCorruptedError(forKey: .interval, in: values,
                                                   debugDescription: "A provider interval must be greater than zero and finite.")
@@ -56,6 +59,9 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         guard timeout > 0, timeout.isFinite else {
             throw DecodingError.dataCorruptedError(forKey: .timeout, in: values,
                                                   debugDescription: "A provider timeout must be greater than zero and finite.")
+        }
+        guard processes >= 0 else {
+            throw DecodingError.dataCorruptedError(forKey: .processes, in: values, debugDescription: "A provider's processes must be zero or more.")
         }
     }
 }

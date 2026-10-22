@@ -186,10 +186,27 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(reset.download == 0)
     #expect(reset.upload == 0)
     let cpu = CPUTicks(user: 120, system: 120, idle: 150, nice: 110)
-    #expect(cpu.usage(since: CPUTicks(user: 100, system: 100, idle: 100, nice: 100)) == 0.5)
-    #expect(cpu.usage(since: cpu) == 0)
+    #expect(cpu.usage(since: CPUTicks(user: 100, system: 100, idle: 100, nice: 100)) == (0.3, 0.2))
+    #expect(cpu.usage(since: cpu) == (0, 0))
     #expect(CPUTicks(user: 4, system: 0, idle: 5, nice: 0)
-        .usage(since: CPUTicks(user: UInt32.max, system: 0, idle: 0, nice: 0)) == 0.5)
+        .usage(since: CPUTicks(user: UInt32.max, system: 0, idle: 0, nice: 0)) == (0.5, 0))
+}
+
+@Test func processListsAddAnAppsProcessesToItsRow() {
+    let samples = [
+        ProcessSample(pid: 10, path: "/Applications/Figma.app/Contents/MacOS/Figma", memory: 300, cpuTime: 0),
+        ProcessSample(pid: 11, path: "/Applications/Figma.app/Contents/Frameworks/Figma Helper.app/Contents/MacOS/Figma Helper", memory: 500, cpuTime: 0),
+        ProcessSample(pid: 20, path: "/opt/homebrew/bin/node", memory: 600, cpuTime: 0),
+        ProcessSample(pid: 30, path: "/Applications/Xcode.app/Contents/Developer/usr/bin/git", memory: 100, cpuTime: 0)
+    ]
+    let lists = processLists(samples, cpu: [11: 0.25, 20: 0.5, 30: 1.5], apps: ["/Applications/Figma.app": (pid: 10, name: "Figma")], count: 2)
+    #expect(lists["memory"]?.map { $0["name"] } == ["Figma", "node"])
+    #expect(lists["memory"]?.first?["pid"] == "10")
+    #expect(lists["memory"]?.first?["path"] == "/Applications/Figma.app")
+    #expect(lists["memory"]?.first?["cpu"] == "25")
+    // Xcode isn't running, so its git counts on its own.
+    #expect(lists["cpu"]?.map { $0["name"] } == ["git", "node"])
+    #expect(lists["cpu"]?.first?["cpu"] == "150")
 }
 
 @Test func networkRecordsSkipShortAddressMessagesAndDownInterfaces() {

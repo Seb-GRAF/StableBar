@@ -101,9 +101,19 @@ extension DataSourceType {
         PushSource(monitor: PowerMonitor())
     }
 
-    static let system = DataSourceType(name: "system", isNative: true, symbol: "cpu", settings: [], continuous: false) { _, _ in
+    /// With `processes`, its output also lists the apps and processes using the most memory and CPU.
+    static let system = DataSourceType(name: "system", isNative: true, symbol: "cpu", settings: [], optionalSettings: [.processes],
+                                       continuous: false) { provider, _ in
         let metrics = NativeMetrics()
-        return PollingSource { _ in .output(Result { try metrics.system() }) }
+        let processes = ProcessMetrics()
+        return PollingSource { _ in
+            let lists = provider.processes > 0 ? await processes.lists(count: provider.processes) : nil
+            return .output(Result {
+                var output = try metrics.system()
+                output.lists = lists
+                return output
+            })
+        }
     }
 
     static let network = DataSourceType(name: "network", isNative: true, symbol: "network", settings: [], continuous: false) { _, _ in

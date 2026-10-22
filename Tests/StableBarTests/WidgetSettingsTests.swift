@@ -22,6 +22,13 @@ final class WidgetSettingsTests: XCTestCase {
         XCTAssertEqual(try fixture.document(), before)
     }
 
+    func testSystemStartsWithItsGraphAndKeepsIconAndValueAsAChoice() {
+        XCTAssertEqual(WidgetMetricDisplay.current(nil, source: "cpu"), .graph)
+        for choice in WidgetMetricDisplay.choices(for: "cpu") where choice != .custom {
+            XCTAssertEqual(WidgetMetricDisplay.current(choice.layout(for: "cpu"), source: "cpu"), choice)
+        }
+    }
+
     @MainActor func testSoundStartsWithItsValueOnChangeAndKeepsIconAndValueAsAChoice() throws {
         let fixture = try ThemeGalleryFixture(#"{"providers":{"speakers":{"type":"audio"}},"widgets":[{"id":"sound","type":"provider","provider":"speakers","position":"right"}]}"#)
         defer { fixture.close() }

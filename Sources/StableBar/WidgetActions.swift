@@ -48,6 +48,28 @@ enum OpenTarget {
     }
 }
 
+/// Asks whether to quit process `pid`, naming it or the app it is, then quits it or, with Force Quit, ends it at once.
+@MainActor func confirmQuit(_ pid: pid_t) {
+    let app = NSRunningApplication(processIdentifier: pid)
+    var name = [CChar](repeating: 0, count: 2 * Int(MAXCOMLEN) + 1)
+    proc_name(pid, &name, UInt32(name.count))
+    let alert = NSAlert()
+    alert.messageText = "Quit “\(app?.localizedName ?? name.withUnsafeBufferPointer { String(cString: $0.baseAddress!) })”?"
+    alert.informativeText = "Force Quit ends it at once, losing any unsaved changes."
+    alert.addButton(withTitle: "Quit")
+    alert.addButton(withTitle: "Force Quit")
+    alert.addButton(withTitle: "Cancel")
+    NSApp.activate(ignoringOtherApps: true)
+    let response = alert.runModal()
+    guard response != .alertThirdButtonReturn else { return }
+    let force = response == .alertSecondButtonReturn
+    if let app {
+        _ = force ? app.forceTerminate() : app.terminate()
+    } else if kill(pid, force ? SIGKILL : SIGTERM) != 0 {
+        NSAlert(error: POSIXError(POSIXErrorCode(rawValue: errno)!)).runModal()
+    }
+}
+
 struct WidgetActionContext: Sendable {
     let sender: String
     var button: String?
