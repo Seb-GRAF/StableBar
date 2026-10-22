@@ -64,9 +64,15 @@ struct AeroSpaceEvent: Decodable, Sendable {
 }
 
 enum WorkspaceSource: String, Decodable, Sendable {
-    case aerospace, yabai
+    case aerospace, yabai, spaces
 
-    var title: String { self == .aerospace ? "AeroSpace" : "yabai" }
+    var title: String {
+        switch self {
+        case .aerospace: "AeroSpace"
+        case .yabai: "yabai"
+        case .spaces: "Spaces"
+        }
+    }
 }
 
 func workspaceSnapshot(workspaces: Data, windows: Data) throws -> [Workspace] {
@@ -106,6 +112,7 @@ final class WorkspaceStore {
     private var stopping = false
     private var task: Task<Void, Never>?
     private var process: Process?
+    private var spaceObservers: [NSObjectProtocol] = []
 
     func workspaces(on monitor: Int, showEmpty: Bool) -> [Workspace] {
         workspaces.filter {
@@ -129,6 +136,18 @@ final class WorkspaceStore {
         cancelConnection()
         if source == .yabai {
             task = Task { }
+            requestRefresh()
+            return
+        }
+        if source == .spaces {
+            task = Task { }
+            let center = NSWorkspace.shared.notificationCenter
+            spaceObservers = [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification,
+                              NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification].map {
+                center.addObserver(forName: $0, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.requestRefresh() }
+                }
+            }
             requestRefresh()
             return
         }
@@ -224,10 +243,10 @@ final class WorkspaceStore {
     }
 
     private func refresh() async throws {
-        let executable = try executable()
         let snapshot: [Workspace]
         switch source {
         case .aerospace:
+            let executable = try executable()
             async let spaces = runCommand(executable, arguments: [
                 "list-workspaces", "--all", "--format",
                 "%{workspace} %{workspace-is-focused} %{workspace-is-visible} %{monitor-appkit-nsscreen-screens-id}", "--json"
@@ -237,6 +256,7 @@ final class WorkspaceStore {
             ])
             snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows)
         case .yabai:
+            let executable = try executable()
             async let spaces = runCommand(executable, arguments: ["-m", "query", "--spaces"])
             async let windows = runCommand(executable, arguments: ["-m", "query", "--windows"])
             async let displays = runCommand(executable, arguments: ["-m", "query", "--displays"])
@@ -246,6 +266,8 @@ final class WorkspaceStore {
             }
             snapshot = try await yabaiSnapshot(spaces: spaces, windows: windows, displays: displays,
                                                screenIDs: screens, bundleIDs: bundleIDs)
+        case .spaces:
+            snapshot = try currentSpaces()
         }
         try Task.checkCancellation()
         let previousWorkspace = workspaces.first(where: \.isFocused)?.name
@@ -255,6 +277,11 @@ final class WorkspaceStore {
     }
 
     func select(_ workspace: Workspace) {
+        if source == .spaces {
+            do { try switchToDesktop(Int(workspace.name)!) }
+            catch { self.error = error.localizedDescription }
+            return
+        }
         Task {
             do {
                 let arguments = source == .aerospace ? ["workspace", workspace.name] : ["-m", "space", "--focus", workspace.name]
@@ -267,6 +294,10 @@ final class WorkspaceStore {
     }
 
     func focus(_ window: WorkspaceWindow) {
+        if source == .spaces {
+            NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
+            return
+        }
         Task {
             do {
                 let arguments = source == .aerospace ? ["focus", "--window-id", String(window.id)] : ["-m", "window", "--focus", String(window.id)]
@@ -316,5 +347,7 @@ final class WorkspaceStore {
         task = nil
         if let process, process.isRunning { process.terminate() }
         process = nil
+        for observer in spaceObservers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        spaceObservers = []
     }
 }

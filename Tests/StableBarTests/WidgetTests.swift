@@ -191,6 +191,36 @@ func popupFoldKeepsTheScrollViewportAndPosition(documentHeight: Double) {
     #expect(disconnected[0].apps.map(\.name) == ["Finder", "Safari"])
 }
 
+@Test func spacesSnapshotNumbersDesktopsAcrossDisplays() throws {
+    func plist(_ value: Any) throws -> Data {
+        try PropertyListSerialization.data(fromPropertyList: value, format: .binary, options: 0)
+    }
+    let displays = try plist([
+        ["Display Identifier": "LEFT", "Current Space": ["ManagedSpaceID": 3, "type": 0],
+         "Spaces": [["ManagedSpaceID": 1, "type": 0], ["ManagedSpaceID": 2, "type": 4], ["ManagedSpaceID": 3, "type": 0]]],
+        ["Display Identifier": "GONE", "Current Space": ["ManagedSpaceID": 4, "type": 0], "Spaces": [["ManagedSpaceID": 4, "type": 0]]],
+        ["Display Identifier": "RIGHT", "Current Space": ["ManagedSpaceID": 5, "type": 0], "Spaces": [["ManagedSpaceID": 5, "type": 0]]],
+    ])
+    let windows = try plist([
+        ["kCGWindowNumber": 11, "kCGWindowOwnerPID": 41, "kCGWindowOwnerName": "Safari", "kCGWindowName": "Docs", "kCGWindowLayer": 0],
+        ["kCGWindowNumber": 12, "kCGWindowOwnerPID": 42, "kCGWindowOwnerName": "Finder", "kCGWindowLayer": 0],
+        ["kCGWindowNumber": 13, "kCGWindowOwnerPID": 41, "kCGWindowOwnerName": "Safari", "kCGWindowName": "Menu", "kCGWindowLayer": 101],
+        ["kCGWindowNumber": 14, "kCGWindowOwnerPID": 43, "kCGWindowOwnerName": "Helper", "kCGWindowLayer": 0],
+    ])
+    let snapshot = try spacesSnapshot(displays: displays, windows: windows,
+                                      windowSpaces: [11: [1], 12: [1, 5], 13: [1], 14: [3]], activeSpace: 5,
+                                      screenUUIDs: ["RIGHT", "LEFT"], bundleIDs: [41: "com.apple.Safari", 42: "com.apple.finder"])
+    #expect(snapshot.map(\.name) == ["1", "2", "4"])
+    #expect(snapshot.map(\.monitor) == [2, 2, 1])
+    #expect(snapshot.map(\.isVisible) == [false, true, true])
+    #expect(snapshot.map(\.isFocused) == [false, false, true])
+    #expect(snapshot[0].windows.map(\.id) == [11, 12])
+    #expect(snapshot[0].windows.map(\.title) == ["Docs", ""])
+    #expect(snapshot[0].apps.map(\.name) == ["Finder", "Safari"])
+    #expect(snapshot[1].apps.isEmpty)
+    #expect(snapshot[2].apps.map(\.bundleID) == ["com.apple.finder"])
+}
+
 @Test(arguments: [WorkspaceSource.aerospace, .yabai]) @MainActor
 func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)

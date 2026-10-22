@@ -29,7 +29,7 @@ struct GeneralSettingsView: View {
                         SettingRow(title: "Workspace manager") {
                             SettingsSegments(selection: Binding(get: { source }, set: {
                                 if $0 != source { editor.change(ConfigurationEdit(action: .workspaceSource, name: $0.rawValue)) }
-                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai")], stretches: false)
+                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai"), (.spaces, "Spaces")], stretches: false)
                         }
                         connection
                     }

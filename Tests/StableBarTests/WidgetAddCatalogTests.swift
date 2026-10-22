@@ -19,7 +19,7 @@ final class WidgetAddCatalogTests: XCTestCase {
             }
         }
         XCTAssertTrue(choices.first { $0.id == "calendar" }!.description.contains("Calendar access"))
-        XCTAssertTrue(choices.first { $0.id == "workspaces" }!.description.contains("AeroSpace or yabai"))
+        XCTAssertTrue(choices.first { $0.id == "workspaces" }!.description.contains("AeroSpace, yabai or macOS Spaces"))
         XCTAssertEqual(choices.filter { $0.matches("SOUND") }.map(\.id), ["audio"])
     }
 

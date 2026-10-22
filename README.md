@@ -25,7 +25,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 ## Features
 
-- **Native.** Swift, AppKit and SwiftUI, with no web view or private window-server API. One panel per display; workspace changes update the widgets in place instead of recreating windows.
+- **Native.** Swift, AppKit and SwiftUI, with no web view or private window-server API, except in the opt-in [macOS Spaces](docs/widgets.md#macos-spaces-workspaces) workspace source. One panel per display; workspace changes update the widgets in place instead of recreating windows.
 - **Guided setup.** Pick a preset, a theme and a placement, and watch each choice on your real bar. Then edit the bar in place, in Settings or in JSON.
 - **Themes.** Six ship with the app and more come from the store. **Save as Theme…** turns your own look into one. Experimental Liquid Glass on macOS 26.
 - **Built-in widgets.** Workspaces, app menus, the active app, clock, CPU and memory, network, battery, sound and calendar, without running a script.

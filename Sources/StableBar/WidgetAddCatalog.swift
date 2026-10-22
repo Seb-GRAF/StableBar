@@ -39,7 +39,7 @@ enum WidgetAddCatalog {
         .init(id: "system", name: "CPU", symbol: "cpu", description: "CPU and memory use.", properties: ["type": .string("system")]),
         .init(id: "network", name: "Network", symbol: "network", description: "Your network connection and activity.", properties: ["type": .string("network")]),
         .init(id: "calendar", name: "Calendar", symbol: "calendar", description: "Upcoming events. Asks for Calendar access.", properties: ["type": .string("calendar")]),
-        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace or yabai.", properties: ["type": .string("workspaces")]),
+        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai or macOS Spaces.", properties: ["type": .string("workspaces")]),
         .init(id: "text", name: "Text", symbol: "textformat", description: "Your own text and optional icon.", properties: ["type": .string("text"), "text": .string("New widget")]),
         .init(id: "spacer", name: "Spacer", symbol: "arrow.left.and.right", description: "Space between widgets.", properties: ["type": .string("spacer")]),
         .init(id: "script", name: "Script", symbol: "terminal", description: "Run a shell command on a schedule.", properties: ["type": .string("script"), "command": .string("date +%H:%M"), "interval": .number(30)], isScript: true)

@@ -15,7 +15,7 @@ Unknown properties are errors, so a misspelled key cannot be silently ignored. T
 - `bar`: `height`, `offset`, `margin`, `inset`, `spacing`, `background`, `motion` and `popupTransition` (see [Animation](create-a-widget.md#animation)), `animationDuration` (seconds), `displayScale`, `appearance` (`light` or `dark` keeps the bar and its popups in that appearance; omit it to follow the system).
 - `defaults`: styles inherited by every widget.
 - `popupDefaults`: styles inherited by every popup, over `defaults`.
-- `workspaceSource`: `aerospace` (default) or `yabai`, for workspace widgets and active-display tracking.
+- `workspaceSource`: `aerospace` (default), `yabai` or `spaces` (macOS Spaces, see [macOS Spaces workspaces](widgets.md#macos-spaces-workspaces)), for workspace widgets and active-display tracking.
 - `widgets`: ordered widget definitions with unique `id`, `type`, `position` and optional `style`, `icon`, `onClick` or `open`, `menu`, `popup`.
 - `position`: `left`, `notchLeft`, `center`, `notchRight` or `right`.
 - Colors: `#RRGGBB` or `#RRGGBBAA` (alpha last), or `{ "light": "#RRGGBB", "dark": "#RRGGBB" }` for a color that follows the light or dark appearance.
