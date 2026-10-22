@@ -47,12 +47,13 @@ func commandOutputHasABoundedSize(stderr: Bool) async {
 func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
+    // The timeout must leave a busy runner time to start the shell and write the marker.
     let task = Task {
         try await runCommand("/bin/zsh", arguments: ["-c", "trap '' TERM; sleep 30 & printf '%s' $! > '\(marker.path).tmp'; mv '\(marker.path).tmp' '\(marker.path)'; wait"],
-                             timeout: timeout ? 0.3 : 10)
+                             timeout: timeout ? 2 : 10)
     }
     defer { task.cancel() }
-    for _ in 0..<200 {
+    for _ in 0..<2000 {
         if FileManager.default.fileExists(atPath: marker.path) { break }
         try await Task.sleep(for: .milliseconds(5))
     }
@@ -64,13 +65,13 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 0.3 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
     #expect(start.duration(to: .now) < .seconds(5))
-    for _ in 0..<200 {
+    for _ in 0..<2000 {
         if kill(child, 0) == -1 { break }
         try await Task.sleep(for: .milliseconds(5))
     }
@@ -93,15 +94,16 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
     let start = ContinuousClock.now
+    // The timeout must leave a busy runner time to start the shell and write the marker.
     do {
-        _ = try await runCommand("/bin/sh", arguments: ["-c", "sleep 30 & printf '%s' $! > '\(marker.path)'"], timeout: 0.3)
+        _ = try await runCommand("/bin/sh", arguments: ["-c", "sleep 30 & printf '%s' $! > '\(marker.path)'"], timeout: 2)
         Issue.record("The command completed while a child still held its pipes.")
     } catch {
-        #expect(error.localizedDescription == "Command timed out after 0.3 seconds.")
+        #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
     }
     #expect(start.duration(to: .now) < .seconds(5))
     let child = try #require(Int32(String(contentsOf: marker, encoding: .utf8)))
-    for _ in 0..<200 {
+    for _ in 0..<2000 {
         if kill(child, 0) == -1 { break }
         try await Task.sleep(for: .milliseconds(5))
     }
@@ -113,6 +115,7 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
 func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
+    // The timeout must leave a busy runner time to start perl and write the marker.
     let task = Task {
         try await runCommand("/usr/bin/perl", arguments: ["-MPOSIX", "-e", """
             if (fork() == 0) {
@@ -121,12 +124,12 @@ func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async 
                 print $marker $$;
                 close($marker);
                 rename($ARGV[0] . '.tmp', $ARGV[0]);
-                exec('/bin/sleep', '3');
+                exec('/bin/sleep', '30');
             }
-            """, marker.path], timeout: timeout ? 0.5 : 10)
+            """, marker.path], timeout: timeout ? 2 : 10)
     }
     defer { task.cancel() }
-    for _ in 0..<200 {
+    for _ in 0..<2000 {
         if FileManager.default.fileExists(atPath: marker.path) { break }
         try await Task.sleep(for: .milliseconds(5))
     }
@@ -140,18 +143,19 @@ func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async 
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 0.5 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(1.5))
+    #expect(start.duration(to: .now) < .seconds(5))
 }
 
 @Test(arguments: [false, true])
 func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
+    // The timeout must leave a busy runner time to start perl and write the marker.
     let task = Task {
         try await runCommand("/usr/bin/perl", arguments: ["-MPOSIX", "-e", """
             POSIX::setpgid(0, getpgrp(getppid()));
@@ -159,11 +163,11 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
             print $marker "$$ ", getpgrp(0);
             close($marker);
             rename($ARGV[0] . '.tmp', $ARGV[0]);
-            exec('/bin/sleep', '3');
-            """, marker.path], timeout: timeout ? 0.5 : 10)
+            exec('/bin/sleep', '30');
+            """, marker.path], timeout: timeout ? 2 : 10)
     }
     defer { task.cancel() }
-    for _ in 0..<200 {
+    for _ in 0..<2000 {
         if FileManager.default.fileExists(atPath: marker.path) { break }
         try await Task.sleep(for: .milliseconds(5))
     }
@@ -180,12 +184,12 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 0.5 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(1.5))
+    #expect(start.duration(to: .now) < .seconds(5))
     #expect(kill(process, 0) == -1)
     #expect(errno == ESRCH)
 }
