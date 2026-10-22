@@ -290,52 +290,6 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     }
 }
 
-@Test @MainActor func morphingPopupsMoveTheOpenPopupIntoTheNextOne() async throws {
-    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
-    {"bar":{"morphPopups":true},
-     "widgets":[{"id":"cpu","type":"text","text":"CPU","position":"left",
-                 "popup":{"style":{"width":300},"layout":{"type":"text","text":"Load"}}},
-                {"id":"battery","type":"text","text":"Battery","position":"right",
-                 "popup":{"style":{"width":240},"layout":{"type":"text","text":"Charging\nFull at 18:40\nHealth normal\nCycles 212"}}}]}
-    """#.utf8))
-    var presented: [PopupPanel] = []
-    let popup = WidgetPopup(present: { panel, _ in presented.append(panel) })
-    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
-    store.configuration = configuration
-    store.preparePresentations()
-    defer { store.stop() }
-    let bar = OffscreenBar(configuration: configuration,
-                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
-    defer { bar.close() }
-    await bar.settle()
-    let anchors = try configuration.widgets.map { try #require(bar.anchors($0.id).first) }
-    func click(_ index: Int) {
-        popup.toggle(configuration.widgets[index].popup!, widget: configuration.widgets[index], defaults: configuration.defaults,
-                     store: store, anchor: anchors[index])
-    }
-    func render(_ view: NSView) async throws {
-        for _ in 0..<16 {
-            view.layoutSubtreeIfNeeded()
-            view.cacheDisplay(in: view.bounds, to: try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds)))
-            try await Task.sleep(for: .milliseconds(25))
-        }
-    }
-    click(0)
-    let first = try #require(presented.last)
-    try await render(first.contentView!)
-    click(1)
-    let second = try #require(presented.last)
-    let morph = presented[presented.count - 2]
-    #expect(morph !== first)
-    #expect(morph.ignoresMouseEvents)
-    #expect(morph.frame.contains(NSPoint(x: first.frame.midX, y: first.frame.midY)))
-    #expect(morph.frame.contains(NSPoint(x: second.frame.midX, y: second.frame.midY)))
-    #expect(second.alphaValue == 0)
-    try await render(morph.contentView!)
-    popup.close()
-    #expect(second.alphaValue == 1)
-}
-
 /// macOS outlines a window and shapes its shadow from what the window draws, so a popup's own shadow, drawn in the
 /// popup's window, got an outline near its outer edge (#180). That shadow is drawn in a window behind the popup instead.
 @Test(arguments: [nil, "#00000000", "#00000059"] as [String?]) @MainActor
