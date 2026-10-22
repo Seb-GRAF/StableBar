@@ -262,13 +262,22 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Stable ships only a commit that beta users already ran.
+      # Stable ships only a commit that beta users already ran. A stable tag on this commit means a
+      # release failed after pushing its tag; this run finishes its GitHub release and feed item.
       - name: Require a beta of this commit
+        id: tags
         run: |
+          stable=$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          if [[ -n "$stable" ]]; then
+            echo "${stable#v}" > .next-version
+            echo "finish=${stable#v}" >> "$GITHUB_OUTPUT"
+            echo "Finishing $stable."
+            exit 0
+          fi
           beta=$(git tag --points-at HEAD --list 'v*-beta.*')
           if [[ -z "$beta" ]]; then
             echo "::error::The newest commit on main, $GITHUB_SHA, has no beta. Its beta may still be" \
-              "building, or it has nothing to release, such as the commit a stable release makes."
+              "building, or it has nothing to release."
             exit 1
           fi
           echo "Releasing the commit that shipped as $beta."
@@ -297,11 +306,34 @@ jobs:
           NOTARY_API_ISSUER: ${{ vars.NOTARY_API_ISSUER }}
         run: ./scripts/import-developer-id.sh
       - name: Release
+        if: steps.tags.outputs.finish == ''
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
         run: |
           brew install create-dmg
           npx semantic-release
+      # The commit already carries the version, and its message carries the release notes.
+      # @semantic-release/github uploads to a draft release and publishes it once the DMG is in.
+      # A DMG the release already has is reused, so people never get two builds of one version.
+      - name: Finish the release
+        if: steps.tags.outputs.finish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tags.outputs.finish }}
+        run: |
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx StableBar.dmg; then
+            gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern StableBar.dmg --dir dist
+          else
+            brew install create-dmg
+            STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
+            if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              gh release upload "v$VERSION" dist/StableBar.dmg --repo "$GITHUB_REPOSITORY" --clobber
+            else
+              gh release create "v$VERSION" dist/StableBar.dmg --repo "$GITHUB_REPOSITORY" --verify-tag \
+                --title "v$VERSION" --notes "$(git log -1 --format=%b)"
+            fi
+          fi
+          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
       # semantic-release exits successfully without releasing when main moved during this run or
       # there was nothing to release. Don't let that look like a release.
       - name: Require a stable tag

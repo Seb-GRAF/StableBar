@@ -104,6 +104,8 @@ Both release channels come from `main`:
 
 To retry a missing beta, use **Actions → CI → Run workflow** on `main` and choose **beta** as the release channel. The default channel is **stable**.
 
+A stable release pushes its commit and tag before it publishes the GitHub release and the update feed. If it fails after that, start a new stable release from **Run workflow** before anything else lands on `main`; **Re-run jobs** would check out the commit before the tag. When the newest commit already carries a stable tag, the run reuses that version's DMG, or builds it again if the release has none, publishes its GitHub release and adds it to the update feed.
+
 Both jobs use the CI run number, which only goes up, so a stable build always numbers higher than the betas before it. In-app updates compare that number to find the newest release.
 
 Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed: Sparkle installs an update only when it's signed by the same developer as the running app. Without one, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:
