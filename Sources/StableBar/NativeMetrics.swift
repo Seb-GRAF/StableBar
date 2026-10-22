@@ -181,12 +181,12 @@ actor CalendarMetrics {
         fields["access"] = "granted"
         fields["phase"] = countdown.phase
         fields["minutes"] = String(countdown.minutes)
-        return ScriptOutput(text: next.title, icon: "calendar", fields: fields, lists: ["today": agenda],
+        return ScriptOutput(text: next.title ?? "", icon: "calendar", fields: fields, lists: ["today": agenda],
                             values: ["remaining": countdown.remaining], targets: ["remaining": countdown.target], interval: countdown.delay)
     }
 
     private func meetingFields(_ event: EKEvent) -> [String: String] {
-        var fields: [String: String] = ["title": event.title, "start": event.startDate.formatted(date: .omitted, time: .shortened),
+        var fields: [String: String] = ["title": event.title ?? "", "start": event.startDate.formatted(date: .omitted, time: .shortened),
                                         "end": event.endDate.formatted(date: .omitted, time: .shortened)]
         if let link = meetingLink([event.url?.absoluteString, event.location, event.notes].compactMap { $0 }) {
             fields["link"] = link
