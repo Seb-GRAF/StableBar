@@ -21,7 +21,7 @@ struct BarPreview: View {
                                      isPortrait: screen.isPortrait)
             let height = store.configuration?.barGeometry(for: display).layoutHeight ?? 0
             ZStack(alignment: .top) {
-                Wallpaper(screen: kind.screens.first)
+                Wallpaper()
                 BarView(store: store, display: display, preview: true)
                     .allowsHitTesting(false)
                     .overlayPreferenceValue(BarAnchorPreference.self) { anchors in

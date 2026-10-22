@@ -375,7 +375,7 @@ struct SetupTourView: View {
                     Spacer()
                 }
                 .frame(width: 232, height: 124)
-                .background { Wallpaper(screen: screen) }
+                .background { Wallpaper() }
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text(title).font(.system(size: 15, weight: .semibold))
                 Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
@@ -470,7 +470,7 @@ private struct SetupBackdrop: View {
     let size: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let light = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic")!)!
+    private static let light = Wallpaper.image
     private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
 
     var body: some View {

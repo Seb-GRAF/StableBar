@@ -34,24 +34,15 @@ extension ScreenKind {
 }
 
 struct Wallpaper: View {
-    var screen: NSScreen?
-    @State private var image: NSImage?
+    static let image = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic")!)!
 
     var body: some View {
         GeometryReader { geometry in
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                    .clipped()
-            } else {
-                SettingsPalette.background
-            }
-        }
-        .task(id: screen) {
-            image = (screen ?? NSScreen.main).flatMap { NSWorkspace.shared.desktopImageURL(for: $0) }
-                .flatMap(NSImage.init(contentsOf:))
+            Image(nsImage: Self.image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                .clipped()
         }
     }
 }
@@ -189,7 +180,7 @@ private struct ScreenThumbnail: View {
         let notched = kind.display.notch != nil
         Button(action: select) {
             VStack(spacing: 4) {
-                Wallpaper(screen: kind.screens.first)
+                Wallpaper()
                     .overlay(alignment: .top) {
                         HStack(spacing: 2) {
                             blocks([.left, .notchLeft])
