@@ -34,15 +34,19 @@ extension ScreenKind {
 }
 
 struct Wallpaper: View {
-    static let image = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic")!)!
+    static let image = Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
 
     var body: some View {
         GeometryReader { geometry in
-            Image(nsImage: Self.image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
-                .clipped()
+            if let image = Self.image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                    .clipped()
+            } else {
+                SettingsPalette.background
+            }
         }
     }
 }

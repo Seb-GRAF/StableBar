@@ -470,7 +470,7 @@ private struct SetupBackdrop: View {
     let size: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let light = Wallpaper.image
+    private static let light = Wallpaper.image!
     private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
 
     var body: some View {
