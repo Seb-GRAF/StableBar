@@ -237,10 +237,15 @@ struct NumberField: View {
         .onAppear { text = formatted(value) }
         .onChange(of: value) { if !focused { text = formatted(value) } }
         .onChange(of: focused) { if !focused { commit() } }
+        .onChange(of: text) {
+            if focused, let number = typedNumber, range.contains(number), number != value { value = number }
+        }
     }
 
+    private var typedNumber: Double? { Double(text.replacingOccurrences(of: ",", with: ".")) }
+
     private func commit() {
-        guard let number = Double(text.replacingOccurrences(of: ",", with: ".")) else { text = formatted(value); return }
+        guard let number = typedNumber else { text = formatted(value); return }
         let clamped = min(max(number, range.lowerBound), range.upperBound)
         if clamped != value { value = clamped }
         text = formatted(clamped)
