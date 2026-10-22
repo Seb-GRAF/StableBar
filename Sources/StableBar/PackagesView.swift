@@ -47,15 +47,27 @@ struct PackagesView: View {
                 VStack(spacing: 0) {
                     topBar
                     Divider()
-                    HStack(spacing: 0) {
-                        Group {
-                            if library.showingStore { storeList } else { list }
+                    if !library.showingStore {
+                        HStack(spacing: 0) {
+                            list
+                                .frame(width: 256)
+                                .background(SettingsPalette.sidebar)
+                                .disabled(busy)
+                            Divider()
+                            detail
                         }
-                        .frame(width: 256)
-                        .background(SettingsPalette.sidebar)
-                        .disabled(library.draft?.working == true || !additions.isEmpty || library.pendingUpdate != nil)
-                        Divider()
-                        detail
+                    } else if library.draft != nil || library.loading {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Button("Store", systemImage: "chevron.left") { library.deselect() }
+                                .buttonStyle(.borderless)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .disabled(busy)
+                            Divider()
+                            detail
+                        }
+                    } else {
+                        storeGrid.disabled(busy)
                     }
                 }
             }
@@ -203,32 +215,31 @@ struct PackagesView: View {
         })
     }
 
-    private var storeList: some View {
+    private var busy: Bool {
+        library.draft?.working == true || !additions.isEmpty || library.pendingUpdate != nil
+    }
+
+    private var storeGrid: some View {
         let entries = library.entries.filter { entry in
             (showingThemes == nil || showingThemes == (entry.kind == .theme)) && matches(entry.name, entry.description, id: entry.id)
         }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
                 SettingsSegments(selection: $showingThemes, options: [(nil, "All"), (false, "Widgets"), (true, "Themes")], stretches: false)
                     .fixedSize()
-                Spacer()
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            if let error = library.storeError {
-                SettingsCallout(systemImage: "wifi.exclamationmark",
-                                text: Text("Store unavailable. Installed packages are still available.\n") + Text(error).font(.caption))
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 8)
-            }
-            List(selection: storeSelection) {
-                ForEach(entries, id: \.id) { entry in
-                    VStack(alignment: .leading, spacing: 8) {
-                        PackageListPreview(key: "\(entry.id)/\(entry.version)") { try await library.preview(entry) }
-                        StoreRow(entry: entry, installed: library.installed.contains { $0.id == entry.id },
-                                 getting: library.getting.contains(entry.id) || library.updating.contains(entry.id),
-                                 update: library.updates.contains { $0.id == entry.id }) {
+                if let error = library.storeError {
+                    SettingsCallout(systemImage: "wifi.exclamationmark",
+                                    text: Text("Store unavailable. Installed packages are still available.\n") + Text(error).font(.caption))
+                        .textSelection(.enabled)
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
+                    ForEach(entries, id: \.id) { entry in
+                        StoreCard(entry: entry, library: library) {
+                            Task {
+                                await library.selectStore(entry)
+                                tab = .overview
+                            }
+                        } get: {
                             tab = .overview
                             Task {
                                 if let manifest = library.updates.first(where: { $0.id == entry.id }) { await library.update(manifest) }
@@ -236,35 +247,26 @@ struct PackagesView: View {
                             }
                         }
                     }
-                    .tag(entry.id)
                 }
                 if entries.isEmpty && !library.search.isEmpty && !library.entries.isEmpty {
                     Text("No packages match your search.").font(.caption).foregroundStyle(.secondary)
                 }
+                if let error = library.error { errorLabel(error) }
             }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
+            .padding(20)
         }
         .overlay {
             if library.loadingStore && library.entries.isEmpty { ProgressView("Loading Store…") }
         }
     }
 
-    private var storeSelection: Binding<String?> {
-        Binding(get: { library.selectedID }, set: { id in
-            if let entry = library.entries.first(where: { $0.id == id }) {
-                Task {
-                    await library.selectStore(entry)
-                    tab = .overview
-                }
-            }
-        })
-    }
-
     private func showStore(_ showing: Bool) {
         library.showingStore = showing
-        let ids = showing ? library.entries.map(\.id) : library.installed.map(\.id)
-        if let id = library.draft?.inspection.manifest.id, !ids.contains(id) { library.deselect() }
+        if showing {
+            library.deselect()
+        } else if let id = library.draft?.inspection.manifest.id, !library.installed.contains(where: { $0.id == id }) {
+            library.deselect()
+        }
     }
 
     private var detail: some View {
@@ -282,12 +284,7 @@ struct PackagesView: View {
                     }
                     .onDisappear { showsLoading = false }
             } else if reviewing == nil {
-                if library.showingStore {
-                    ContentUnavailableView("Select a package", systemImage: "shippingbox",
-                                           description: Text("Choose a package from the Store to see its details."))
-                } else {
-                    BuiltInPackagesView(store: store, gallery: gallery, search: library.search)
-                }
+                BuiltInPackagesView(store: store, gallery: gallery, search: library.search)
             } else {
                 Spacer()
             }
@@ -367,38 +364,51 @@ private struct BuiltInRow: View {
     }
 }
 
-private struct StoreRow: View {
+private struct StoreCard: View {
     let entry: PackageIndex.Entry
-    let installed: Bool
-    let getting: Bool
-    let update: Bool
+    let library: PackageLibrary
+    let open: () -> Void
     let get: () -> Void
+    @State private var hovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            PackageIcon(id: entry.id, name: entry.name)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(entry.name).fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
+        let update = library.updates.contains { $0.id == entry.id }
+        VStack(alignment: .leading, spacing: 10) {
+            PackageListPreview(key: "\(entry.id)/\(entry.version)") { try await library.preview(entry) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(entry.description ?? "")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+            }
+            HStack(spacing: 8) {
                 Text([entry.kind == .theme ? "Theme" : "Widget", entry.author.map { "by \($0)" }].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                Spacer(minLength: 0)
+                if library.getting.contains(entry.id) || library.updating.contains(entry.id) {
+                    Text(update ? "Updating…" : "Getting…").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                } else if update {
+                    Button("Update", action: get).buttonStyle(.borderedProminent).controlSize(.small)
+                        .accessibilityLabel("Update \(entry.name)")
+                } else if library.installed.contains(where: { $0.id == entry.id }) {
+                    Label("Installed", systemImage: "checkmark").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                } else {
+                    Button("Get", action: get)
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .controlSize(.small)
+                        .accessibilityLabel("Get \(entry.name)")
+                }
             }
-            Spacer(minLength: 0)
-            if getting {
-                Text(update ? "Updating…" : "Getting…").font(.system(size: 11.5)).foregroundStyle(.secondary)
-            } else if update {
-                Button("Update", action: get).buttonStyle(.borderedProminent).controlSize(.small)
-                    .accessibilityLabel("Update \(entry.name)")
-            } else if installed {
-                Label("Installed", systemImage: "checkmark").font(.system(size: 11.5)).foregroundStyle(.secondary)
-            } else {
-                Button("Get", action: get)
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    .controlSize(.small)
-                    .accessibilityLabel("Get \(entry.name)")
-            }
+            .frame(height: 22)
         }
-        .padding(.vertical, 3)
+        .padding(14)
+        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11)
+            .strokeBorder(hovering ? Color(nsColor: .tertiaryLabelColor) : SettingsPalette.groupBorder))
+        .contentShape(RoundedRectangle(cornerRadius: 11))
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: open)
     }
 }
 
