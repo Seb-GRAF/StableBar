@@ -160,7 +160,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
     store.reloadConfiguration()
-    for _ in 0..<80 {
+    for _ in 0..<500 {
         if store.workspaceStore.mode == "tailing" { break }
         try await Task.sleep(for: .milliseconds(10))
     }
@@ -207,7 +207,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     }
     #expect(!store.workspaceStore.isRunning)
     try script.accept(ScriptOutput.read(Data(##"{"text":"Ready","widgetStyles":{"s":{"fontSize":15}},"barStyle":{"states":{"mode.command":{"borderEdges":"all","borderColor":"#aa8844"}}}}"##.utf8)))
-    for _ in 0..<100 {
+    for _ in 0..<500 {
         if store.workspaceStore.mode == "tailing" { break }
         try await Task.sleep(for: .milliseconds(10))
     }

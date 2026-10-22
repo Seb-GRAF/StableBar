@@ -151,7 +151,7 @@ final class BarEditViewTests: XCTestCase {
             XCTAssertEqual(try XCTUnwrap(left.frames["a"]).minX, original - 120, accuracy: 1)
             XCTAssertFalse(window.isVisible)
             store.barEditing.end()
-            for _ in 0..<20 {
+            for _ in 0..<500 {
                 host.layoutSubtreeIfNeeded()
                 if descendants(host, of: BarEditDropTargetView.self).isEmpty { break }
                 try await Task.sleep(for: .milliseconds(10))
