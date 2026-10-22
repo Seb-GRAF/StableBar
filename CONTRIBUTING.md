@@ -15,7 +15,7 @@ Node.js runs only the release tooling and the commit message check. `npm ci` ins
 
 ## How we work
 
-1. **Start from an issue** for bugs and features, using the issue forms. The [triage skill](#agent-skills) checks whether a report is already tracked, fixed or supported. A small, obvious fix can go straight to a pull request.
+1. **Start from an issue** for every `fix`, `feat` or `perf` change, using the issue forms, and link it from the pull request. The [triage skill](#agent-skills) checks whether a report is already tracked, fixed or supported. Other changes, such as CI, tests or docs, can go straight to a pull request.
 2. **Branch from `main` and open a pull request.** Nobody pushes to `main` directly. Fill in the template: the problem, the changes, how you tested them and how to merge. Upload screenshots of visible changes to the pull request instead of committing them.
 3. **Keep one problem per pull request.** Unrelated fixes and cleanups get their own.
 4. **Wait for CI.** `Test` and `Commit messages` must pass.

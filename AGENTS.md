@@ -37,6 +37,7 @@ A configuration change rarely lives in one place. Before calling one done, say w
 ## Pull requests
 
 - Never push to `main`. Open a pull request only when the developer asks for one.
+- A `fix`, `feat` or `perf` pull request needs an issue. Before opening it, search with the `triage` skill. If an open issue covers the problem, link it. If none does, file one with `triage` (the request for the pull request covers filing it) and link that. If triage finds the problem already fixed or declined, tell the developer before going on. Other types, such as `ci`, `test`, `docs` or `chore`, can skip the issue.
 - Titles follow Conventional Commits in plain words, such as `fix: keep the clock visible on a notched display`. Every commit message is checked too, and the types of the commits that reach `main` decide the next release (see [Commits and releases](CONTRIBUTING.md#commits-and-releases)).
 - Fill in the [pull request template](.github/pull_request_template.md), and end the description with the model and harness that did the work.
 - Upload screenshots and recordings to the pull request; never commit them.
