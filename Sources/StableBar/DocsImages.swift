@@ -15,8 +15,9 @@ enum DocsImages {
             func store(_ name: String, theme: String?, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
                 try sampleStore(in: samples.appending(path: "\(name)-\(appearance)"), theme: theme, dark: dark, widgets: widgets)
             }
-            func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore]) async throws {
-                try await snapshot(content, size: size, dark: dark, stores: stores, to: directory.appending(path: "\(name)-\(appearance).png"))
+            func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore], ready: () -> Bool = { true }) async throws {
+                try await snapshot(content, size: size, dark: dark, stores: stores, ready: ready,
+                                   to: directory.appending(path: "\(name)-\(appearance).png"))
             }
 
             let bar = try store("bar", theme: "rose-pine")
@@ -43,7 +44,9 @@ enum DocsImages {
             let editor = ConfigurationEditor(store: bar)
             editor.section = .appearance
             try await save(SettingsView(store: bar, editor: editor).background(Color(nsColor: .windowBackgroundColor)), "settings",
-                           size: NSSize(width: 1080, height: 760), stores: [bar])
+                           size: NSSize(width: 1080, height: 760), stores: [bar]) {
+                !editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }
+            }
             bar.stop()
         }
     }
@@ -138,10 +141,11 @@ enum DocsImages {
         return store
     }
 
-    /// Waits for the sample workspaces and every sample command's output, adds the CPU history they
-    /// can't supply and lets the views settle, then draws the content at twice its size in an
-    /// offscreen window below the desktop icons.
-    private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], to url: URL) async throws {
+    /// Waits for the sample workspaces, every sample command's output and `ready`, adds the CPU
+    /// history they can't supply and lets the views settle, then draws the content at twice its size
+    /// in an offscreen window below the desktop icons.
+    private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], ready: () -> Bool,
+                                 to url: URL) async throws {
         let view = NSHostingView(rootView: content
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -155,7 +159,7 @@ enum DocsImages {
         window.backgroundColor = .clear
         window.contentView = view
         window.orderFrontRegardless()
-        while stores.contains(where: { $0.workspaceStore.workspaces.isEmpty || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
+        while !ready() || stores.contains(where: { $0.workspaceStore.workspaces.isEmpty || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
             try await Task.sleep(for: .milliseconds(100))
         }
         for store in stores { store.scripts["system-monitor"]?.samples = cpuHistory }
