@@ -409,7 +409,7 @@ struct PopupBlockView: View {
             Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1)
         case let .symbol(name, source):
             let symbol = source.flatMap { fields[$0] } ?? name
-            ZStack(alignment: .leading) {
+            ZStack {
                 if let widest = block.widestSymbol { Image(systemName: widest).font(.system(size: appearance.iconSize)).hidden() }
                 ResolvedBlockMotion(motion: context.motion, block: block) { transition, animation in
                     Image(systemName: symbol)

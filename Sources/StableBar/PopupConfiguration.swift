@@ -104,7 +104,7 @@ struct PopupBlock: Decodable, Sendable {
     /// Whether the block is at least a line of its text tall, as built-in widgets that show only an
     /// icon are. Default layouts set it; configured blocks can't.
     let keepsLineHeight: Bool
-    /// A symbol a symbol block keeps the width of, its own drawn at its leading edge, so changing
+    /// A symbol a symbol block keeps the width of, its own centered in it, so changing
     /// between narrower symbols doesn't resize it. Default layouts set it; configured blocks can't.
     let widestSymbol: String?
     /// How a text, field or symbol block shows changed content; nil uses its widget's.
