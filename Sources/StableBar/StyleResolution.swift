@@ -220,6 +220,14 @@ func dataState(_ output: ScriptOutput?, rules: [StyleRule] = []) -> String? {
     return rules.first { $0.when.matches(output) }?.state
 }
 
+func widgetDataState(_ output: ScriptOutput?, widget: WidgetConfiguration, providers: [String: ProviderConfiguration]) -> String? {
+    if widget.details, widget.rules.isEmpty, let name = widget.providerName,
+       let provider = providers[name], provider.type == "system", let output {
+        return systemWarning(output, provider: provider)
+    }
+    return dataState(output, rules: widget.rules)
+}
+
 /// Sets a widget's data state while its output matches `when`.
 struct StyleRule: Decodable, Equatable, Sendable {
     let when: RuleCondition

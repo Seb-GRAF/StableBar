@@ -3,6 +3,14 @@ import Darwin
 import EventKit
 import Foundation
 
+func systemWarning(_ output: ScriptOutput, provider: ProviderConfiguration) -> String? {
+    guard let values = output.values else { return nil }
+    if output.fields?["pressure"] == "critical" || output.fields?["thermal"] == "critical" { return "critical" }
+    if output.fields?["pressure"] == "warning" || output.fields?["thermal"] == "serious"
+        || values["cpu"]! > provider.cpuWarning || values["memory"]! > provider.memoryWarning { return "warning" }
+    return nil
+}
+
 struct NetworkCounters: Sendable {
     let received: UInt64
     let sent: UInt64
@@ -260,7 +268,7 @@ final class NativeMetrics {
                                      "memoryUsed": used, "memoryTotal": total])
     }
 
-    func networkRates() throws -> ScriptOutput {
+    func networkRates(units: NetworkUnits = .bytes) throws -> ScriptOutput {
         var query: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var size = 0
         guard sysctl(&query, UInt32(query.count), nil, &size, nil, 0) == 0 else {
@@ -289,12 +297,14 @@ final class NativeMetrics {
             }
             download += rates.download
             upload += rates.upload
-            interfaces.append(["name": name, "download": String(Int(rates.download)), "upload": String(Int(rates.upload))])
+            interfaces.append(["name": name, "download": String(Int(rates.download)), "upload": String(Int(rates.upload)),
+                               "downloadRate": units.rate(rates.download), "uploadRate": units.rate(rates.upload)])
         }
         network = current
         networkTime = now
-        return ScriptOutput(text: "↓\(Int(download / 1024)) ↑\(Int(upload / 1024)) KiB/s", icon: "network",
-                            fields: ["interface": current.keys.sorted().joined(separator: ", ")], lists: ["interfaces": interfaces],
+        return ScriptOutput(text: "↓\(units.rate(download)) ↑\(units.rate(upload))", icon: "network",
+                            fields: ["interface": current.keys.sorted().joined(separator: ", "),
+                                     "downloadRate": units.rate(download), "uploadRate": units.rate(upload)], lists: ["interfaces": interfaces],
                             values: ["download": download, "upload": upload])
     }
 }

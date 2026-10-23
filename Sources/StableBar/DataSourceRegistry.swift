@@ -102,7 +102,7 @@ extension DataSourceType {
     }
 
     /// With `processes`, its output also lists the apps and processes using the most memory and CPU.
-    static let system = DataSourceType(name: "system", isNative: true, symbol: "cpu", settings: [], optionalSettings: [.processes],
+    static let system = DataSourceType(name: "system", isNative: true, symbol: "cpu", settings: [], optionalSettings: [.processes, .sortBy, .cpuWarning, .memoryWarning],
                                        continuous: false) { provider, _ in
         let metrics = NativeMetrics()
         let processes = ProcessMetrics()
@@ -111,14 +111,15 @@ extension DataSourceType {
             return .output(Result {
                 var output = try metrics.system()
                 output.lists = lists
+                output.lists?["apps"] = lists?[provider.sortBy.rawValue]
                 return output
             })
         }
     }
 
-    static let network = DataSourceType(name: "network", isNative: true, symbol: "network", settings: [], continuous: false) { _, _ in
+    static let network = DataSourceType(name: "network", isNative: true, symbol: "network", settings: [], optionalSettings: [.units], continuous: false) { provider, _ in
         let metrics = NativeMetrics()
-        return PollingSource { _ in .output(Result { try metrics.networkRates() }) }
+        return PollingSource { _ in .output(Result { try metrics.networkRates(units: provider.units) }) }
     }
 
     static let audio = DataSourceType(name: "audio", isNative: true, symbol: "speaker.wave.2", settings: [], continuous: true,

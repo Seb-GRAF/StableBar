@@ -3,15 +3,20 @@ import XCTest
 
 final class WidgetAddCatalogTests: XCTestCase {
     func testEveryBuiltInHasUsefulMetadataAndValidDefaults() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = fixture.themes
         let choices = WidgetAddCatalog.compose()
-        XCTAssertEqual(choices.map(\.name), ["Clock", "Active app", "Apple menu", "App menus", "Battery", "Sound", "CPU", "Network", "Calendar", "Workspaces", "Text", "Spacer", "Script"])
+        XCTAssertEqual(choices.map(\.name), ["Clock & date", "Active app", "Apple menu", "App menus", "Battery", "Sound", "System monitor", "Network", "Calendar", "Workspaces", "Text", "Spacer", "Script"])
         XCTAssertEqual(Set(choices.map(\.id)).count, choices.count)
         XCTAssertTrue(choices.last!.isScript)
         for choice in choices {
             XCTAssertFalse(choice.symbol.isEmpty)
             XCTAssertFalse(choice.description.isEmpty)
             let edit = try XCTUnwrap(choice.add(position: .right, id: "new"))
-            let configuration = try ConfigurationValue.object(["widgets": .array([.object(edit.properties!)])]).decoded(Configuration.self)
+            let data = try configurationData(["widgets": .array([.object(edit.properties!)])])
+            let configuration = try loader.load(fixture.url, data: data)
             XCTAssertEqual(configuration.widgets[0].position, .right)
             if choice.id == "text" { XCTAssertEqual(configuration.widgets[0].content, .text("New widget")) }
             if ["battery", "audio", "system", "network", "calendar"].contains(choice.id) {
@@ -23,15 +28,17 @@ final class WidgetAddCatalogTests: XCTestCase {
         XCTAssertEqual(choices.filter { $0.matches("SOUND") }.map(\.id), ["audio"])
     }
 
-    func testStorePackagesNeverReplaceBuiltInChoices() throws {
-        let entries = try [entry("battery-plus"), entry("battery-other"), entry("date")]
+    func testEssentialsReplaceOnlyTheirOfficialStoreDuplicates() throws {
+        var privateDate = try entry("date")
+        privateDate.sourceID = "acme"
+        let entries = try [entry("battery-plus"), entry("battery-other"), entry("date"), privateDate]
         let choices = WidgetAddCatalog.compose(entries)
-        XCTAssertEqual(choices.count, WidgetAddCatalog.builtIns.count + entries.count)
+        XCTAssertEqual(choices.count, WidgetAddCatalog.builtIns.count + entries.count - 1)
         let battery = try XCTUnwrap(choices.first { $0.id == "battery" })
         XCTAssertNil(battery.package)
         XCTAssertEqual(battery.properties, WidgetAddCatalog.builtIns.first { $0.id == "battery" }?.properties)
-        XCTAssertEqual(choices.filter { $0.package != nil }.map(\.id), ["store/battery-other", "store/battery-plus", "store/date"])
-        XCTAssertTrue(choices.contains { $0.id == "store/date" && $0.matches("Store") })
+        XCTAssertEqual(choices.filter { $0.package != nil }.map(\.id), ["store/battery-other", "store/battery-plus", "store/acme/date"])
+        XCTAssertFalse(choices.contains { $0.id == "store/date" })
         XCTAssertTrue(choices.last!.isScript)
     }
 

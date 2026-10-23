@@ -399,7 +399,30 @@ struct BarInspector: View {
         } else {
             switch widget.content {
             case let .clock(format):
-                SettingsGroup("Format") { clockFormats(widget, format: format).groupRow() }
+                SettingsGroup("Clock & date") {
+                    TimelineView(.periodic(from: .now, by: format.contains("s") ? 1 : 60)) { context in
+                        Text(widget.label(output: nil, activeApp: nil, date: context.date).text)
+                            .font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                    }
+                    .groupRow()
+                    clockFormats(widget, format: format).groupRow()
+                    SettingRow(title: "Time zone") {
+                        Picker("Time zone", selection: Binding(get: { widget.timeZone ?? "" }, set: {
+                            editor.set(["timeZone": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                        })) {
+                            Text("Follow this Mac").tag("")
+                            Text("UTC").tag("UTC")
+                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { zone in
+                                Text(zone.replacingOccurrences(of: "_", with: " ")).tag(zone)
+                            }
+                        }
+                        .labelsHidden().frame(width: 220)
+                    }
+                }
+                iconGroup(widget)
+            case let .provider(name):
+                NativeWidgetSettings(editor: editor, widget: widget, provider: store.configuration!.providers[name]!)
                 iconGroup(widget)
             case .text:
                 SettingsGroup("Text") {
@@ -465,11 +488,24 @@ struct BarInspector: View {
         return VStack(alignment: .leading, spacing: 8) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 5, alignment: .leading)], alignment: .leading, spacing: 5) {
                 ForEach(WidgetClockFormat.common, id: \.value) { choice in
-                    chip(choice.sample, selected: !custom && format == choice.value) {
-                        customClockFormat = false
-                        editor.set(["format": .string(choice.value)], for: widget.id)
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            customClockFormat = false
+                            editor.set(["format": .string(choice.value)], for: widget.id)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(choice.title).font(.system(size: 10)).opacity(0.65)
+                            Text(choice.sample).font(.system(size: 12, weight: .medium)).monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(9)
+                        .background(!custom && format == choice.value ? Color.accentColor.opacity(0.16) : SettingsPalette.control,
+                                    in: RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(!custom && format == choice.value ? Color.accentColor : .clear))
+                        .contentShape(RoundedRectangle(cornerRadius: 7))
                     }
-                    .help(choice.title)
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(!custom && format == choice.value ? .isSelected : [])
                 }
                 chip("Custom…", selected: custom) { customClockFormat = true }
             }
@@ -503,7 +539,20 @@ struct BarInspector: View {
 
     @ViewBuilder private func behaviorPanel(_ widget: WidgetConfiguration) -> some View {
         SettingsGroup("Clicks") {
-            clickRow(widget)
+            if EssentialsPopup.kind(for: widget, providerType: store.configuration?.providerType(of: widget)) != nil,
+               widget.popup == nil, widget.popupName == nil {
+                SettingRow(title: "Details popup", hint: "Custom click actions take precedence") {
+                    Toggle("Details popup", isOn: Binding(get: { widget.details }, set: {
+                        editor.set(["details": .bool($0)], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            }
+            if case .essentials? = widgetPopup(widget, store: store)?.layout.content {
+                SettingRow(title: "Click") { Text("Show details").foregroundStyle(.secondary) }
+            } else {
+                clickRow(widget)
+            }
             if let popup = widget.popup {
                 SettingRow(title: "Open its popup on hover") {
                     Toggle("Open its popup on hover", isOn: Binding(get: { popup.openOnHover }, set: {

@@ -278,7 +278,7 @@ final class ConfigurationHistory {
     }
 
     private func control(for edit: ConfigurationEdit) -> Control? {
-        guard [.set, .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .modeAliases].contains(edit.action),
+        guard [.set, .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .providers, .modeAliases].contains(edit.action),
               let properties = edit.properties else { return nil }
         return Control(action: edit.action, id: edit.id, paths: propertyPaths(properties), name: nil)
     }

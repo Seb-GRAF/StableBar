@@ -1,0 +1,14 @@
+{
+  "providers": {
+    "system": { "type": "system", "interval": 2, "processes": 5, "sortBy": "memory", "cpuWarning": 0.9, "memoryWarning": 0.9 },
+    "network": { "type": "network", "interval": 5, "units": "bytes" },
+    "calendar": { "type": "calendar", "lookahead": 24, "soon": 15, "now": 5 }
+  },
+  "widgets": [
+    { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm", "details": true },
+    { "id": "battery", "type": "battery", "position": "right", "details": true },
+    { "id": "system", "type": "system", "position": "right", "details": true },
+    { "id": "network", "type": "network", "position": "right", "details": true },
+    { "id": "calendar", "type": "calendar", "position": "right", "details": true }
+  ]
+}

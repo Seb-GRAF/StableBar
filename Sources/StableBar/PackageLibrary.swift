@@ -312,7 +312,8 @@ final class PackageLibrary {
         let sourceOrder = Dictionary(sources.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         func group(_ entry: PackageIndex.Entry) -> Int { updated.contains(entry.key) ? 0 : owned.contains(entry.id) ? 1 : 2 }
         return entries.filter { entry in
-            (showingThemes == nil || showingThemes == (entry.kind == .theme)) && (sourceID == nil || entry.sourceID == sourceID)
+            (!WidgetAddCatalog.includes(entry) || owned.contains(entry.id))
+                && (showingThemes == nil || showingThemes == (entry.kind == .theme)) && (sourceID == nil || entry.sourceID == sourceID)
                 && matchesSearch(entry.name, entry.description, entry.id, sourceName(entry.sourceID))
         }.sorted {
             if group($0) != group($1) { return group($0) < group($1) }

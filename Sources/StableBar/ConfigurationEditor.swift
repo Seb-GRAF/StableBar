@@ -76,7 +76,7 @@ final class ConfigurationEditor {
 
     func reset(_ widget: WidgetConfiguration) {
         let keys = definedInMainFile(widget)
-            ? ["style", "role", "rules", "transition", "animation", "tooltip", "onClick", "open", "actions", "expandOnHover", "format", "workspace"]
+            ? ["style", "role", "rules", "transition", "animation", "tooltip", "onClick", "open", "actions", "expandOnHover", "format", "timeZone", "workspace"]
             : WidgetConfiguration.CodingKeys.allCases.map(\.stringValue).filter { !["id", "position", "display", "enabled", "group"].contains($0) }
         change(ConfigurationEdit(action: .unset, id: widget.id, properties: Dictionary(uniqueKeysWithValues: keys.map { ($0, .null) })))
     }
@@ -203,6 +203,19 @@ final class ConfigurationEditor {
             return
         }
         change(ConfigurationEdit(action: .set, id: id, properties: properties))
+    }
+
+    func setProvider(_ properties: [String: ConfigurationValue], for widget: WidgetConfiguration) {
+        let name = widget.providerName!
+        let provider = store.configuration!.providers[name]!
+        var changes = properties
+        changes["type"] = .string(provider.type)
+        let configured = try! store.effectiveDocument["providers"]?.decoded([String: ConfigurationValue].self)
+        if provider.type == "system", configured?[name] == nil {
+            changes["interval"] = changes["interval"] ?? .number(provider.interval)
+            changes["processes"] = changes["processes"] ?? .number(Double(provider.processes))
+        }
+        change(ConfigurationEdit(action: .providers, properties: [name: .object(changes)]))
     }
 
     func replaceProperties(_ properties: [String: ConfigurationValue]) {

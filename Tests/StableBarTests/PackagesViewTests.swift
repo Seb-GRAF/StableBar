@@ -4,6 +4,29 @@ import XCTest
 @testable import StableBar
 
 final class PackagesViewTests: XCTestCase {
+    @MainActor func testEssentialsHideStoreDuplicatesButKeepInstalledUpdates() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "date", kind: "widgets", configuration: #"{"widgets":[]}"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+        defer { library.stopUpdateChecks() }
+        await library.loadInstalled()
+        await library.loadStore()
+        XCTAssertTrue(library.storeEntries(showingThemes: false, sourceID: nil).isEmpty)
+        let old = try fixture.packages.install(fixture.directory.appending(path: "sources/date"))
+        _ = try await index.add(id: "date", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "2")
+        await library.loadInstalled()
+        await library.loadStore(reload: true)
+        XCTAssertEqual(library.storeEntries(showingThemes: false, sourceID: nil).map(\.id), ["date"])
+        XCTAssertEqual(library.updates.map(\.id), ["date"])
+        await library.update(old.manifest)
+        XCTAssertNil(library.error)
+        XCTAssertEqual(try fixture.packages.list().map(\.versionKey), ["date/1", "date/2"])
+    }
+
     @MainActor func testPackageUpdateNoticesPersistDismissalAndReturnOnlyForNewVersions() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

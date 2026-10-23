@@ -12,9 +12,41 @@
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
 | `system`, `network`, `battery`, `audio`, `calendar` | Native CPU and memory, network, battery, audio output or calendar data | — |
 
-**Add widget** includes Clock, Active app, Apple menu, App menus, Battery, Sound, CPU, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu and App menus need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
+**Add widget** includes Clock & date, Active app, Apple menu, App menus, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu and App menus need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
+
+## Essentials details and settings
+
+**Clock & date**, **Battery**, **System monitor**, **Network** and **Calendar** include detail popups when added from Essentials or **Add widget**. They replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed packages keep their settings and remain available for updates; private sources can still offer packages with those IDs.
+
+Select a widget in **Settings → Bar → Content** to change what it shows. **Behavior → Details popup** turns its built-in popup on or off. Existing configurations can opt in with `"details": true`. A custom `popup`, `popupName`, menu, `onClick` or `open` keeps its action instead of the built-in details.
+
+- **Clock & date:** choose a time, date or combined format, or enter a custom DateFormatter pattern. Choose **Follow this Mac** or a time zone. The popup shows the current time and date and a month calendar with previous/next month and Today controls. **Open Calendar** opens the Calendar app; the month view needs no Calendar permission. The week starts on the day in your macOS regional settings.
+- **Battery:** keeps the native battery glyph and its percentage/charging tooltip. The existing display choices can show a percentage, meter or graph. Its details show charge, power source, a time estimate when available, battery health and Battery settings.
+- **System monitor:** shows CPU and memory, load, heat, memory pressure, swap and uptime, plus the apps using the most memory or CPU. The quit button asks before quitting. Set the refresh interval, number of apps, sort order and warning thresholds in Content. Set the app count to 0 to stop app sampling; set a threshold to 101% to turn off that threshold. Pressure and heat still warn. Newly added System monitor widgets use the theme’s warning and critical colors.
+- **Network:** shows upload/download rates and a breakdown by active network interface. Choose bytes (KiB/s, MiB/s) or bits (kbit/s, Mbit/s), and the refresh interval. It uses the same native Ethernet/Wi-Fi interface counters as before.
+- **Calendar:** shows the next meeting and its countdown, today’s agenda and meeting links. Set the rolling lookahead and the upcoming/starting warning times. Calendar access is requested when its source runs. The lookahead is a number of hours, not a today-only cutoff.
+
+Data settings belong to the widget’s provider. Widgets sharing that provider share its settings; the inspector says so when several widgets use it. Edits made while editing a profile stay in that profile and support Undo. Custom layouts remain available through **Edit as JSON…**.
+
+```json
+{
+  "providers": {
+    "system": { "type": "system", "interval": 2, "processes": 5, "sortBy": "memory", "cpuWarning": 0.9, "memoryWarning": 0.9 },
+    "network": { "type": "network", "interval": 5, "units": "bytes" }
+  },
+  "widgets": [
+    { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm", "timeZone": "Europe/Zurich", "details": true },
+    { "id": "battery", "type": "battery", "position": "right", "details": true },
+    { "id": "system", "type": "system", "position": "right", "details": true },
+    { "id": "network", "type": "network", "position": "right", "details": true },
+    { "id": "calendar", "type": "calendar", "position": "right", "details": true }
+  ]
+}
+```
+
+A System monitor widget with details creates a default system provider sampling every 2 seconds and listing 5 apps, unless that provider is already configured. Other provider defaults are unchanged. For an older widget, turn on Details and set the app count in Content to show its app list.
 
 ## App menus
 

@@ -149,7 +149,7 @@ extension BarStore {
                 if let style = output.style { runtime.append(("Widget output style", style)) }
                 if let color = output.color { runtime.append(("Widget output color", WidgetStyle(foreground: color))) }
             }
-            states = StyleStates(data: dataState(scripts[widget.id]?.output, rules: widget.rules), mode: modePresentation, hover: hover)
+            states = StyleStates(data: widgetDataState(scripts[widget.id]?.output, widget: widget, providers: configuration.providers), mode: modePresentation, hover: hover)
             scope = hover ? "Widget while hovered, with current data and mode states. Popup-open and workspace-cell states are separate."
                 : "Widget at rest, with current data and mode states. Hover, popup-open and workspace-cell states are separate."
         } else if let configuration, path == "bar.style" {

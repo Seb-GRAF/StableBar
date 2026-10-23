@@ -1245,6 +1245,15 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "details": {
+          "default": false,
+          "description": "Show the built-in details popup for Clock, Battery, System monitor, Network or Calendar. Custom popups and click actions take precedence.",
+          "$ref": "#/definitions/boolean"
+        },
+        "timeZone": {
+          "description": "Clock time zone identifier. Omit to follow the Mac.",
+          "$ref": "#/definitions/string"
+        },
         "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "id": {
           "$ref": "#/definitions/string",
@@ -1493,6 +1502,48 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "sortBy": {
+          "default": "memory",
+          "description": "Sort the system provider apps list.",
+          "anyOf": [
+            {
+              "enum": [
+                "memory",
+                "cpu"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            { "type": "null" }
+          ]
+        },
+        "units": {
+          "default": "bytes",
+          "description": "Network rate display units.",
+          "anyOf": [
+            {
+              "enum": [
+                "bytes",
+                "bits"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            { "type": "null" }
+          ]
+        },
+        "cpuWarning": {
+          "default": 0.9,
+          "description": "System warning threshold from 0 to 1; above 1 disables this threshold.",
+          "$ref": "#/definitions/number"
+        },
+        "memoryWarning": {
+          "default": 0.9,
+          "description": "System warning threshold from 0 to 1; above 1 disables this threshold.",
+          "$ref": "#/definitions/number"
+        },
         "type": {
           "anyOf": [
             {

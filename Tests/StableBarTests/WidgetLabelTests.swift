@@ -95,3 +95,32 @@ private func output(_ json: String) throws -> ScriptOutput {
     #expect(label.overlaid(by: ["text": "62", "icon": ""]).icon == nil)
     #expect(label.overlaid(by: ["device": "Headphones"]).fields["device"] == "Headphones")
 }
+
+@Test func clockTimeZoneChangesTheDateAcrossMidnight() throws {
+    let date = ISO8601DateFormatter().date(from: "2024-03-01T00:30:00Z")!
+    func clock(_ zone: String) throws -> WidgetConfiguration {
+        try ConfigurationValue.object(["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
+                                        "format": .string("yyyy-MM-dd HH:mm"), "timeZone": .string(zone)]).decoded(WidgetConfiguration.self)
+    }
+    #expect(try clock("UTC").label(output: nil, activeApp: nil, date: date).text == "2024-03-01 00:30")
+    #expect(try clock("America/New_York").label(output: nil, activeApp: nil, date: date).text == "2024-02-29 19:30")
+    #expect(throws: (any Error).self) { try clock("Not/A_Time_Zone") }
+}
+
+@Test func monthCalendarKeepsLeapDayAndNavigatesAcrossTheYearBoundary() {
+    let date = ISO8601DateFormatter().date(from: "2024-03-01T00:30:00Z")!
+    let zone = TimeZone(identifier: "America/New_York")!
+    let february = ClockMonth(date: date, offset: 0, timeZone: zone)
+    let dates = february.days.compactMap { $0 }
+    #expect(dates.count == 29)
+    #expect(february.calendar.component(.day, from: dates.last!) == 29)
+    #expect(february.calendar.isDate(dates.last!, inSameDayAs: date))
+    let december = ClockMonth(date: date, offset: -2, timeZone: zone)
+    #expect(december.calendar.component(.year, from: december.month) == 2023)
+    #expect(december.calendar.component(.month, from: december.month) == 12)
+    let march = ClockMonth(date: date, offset: 1, timeZone: zone)
+    let marchDays = march.days.compactMap { $0 }
+    #expect(marchDays.count == 31)
+    #expect(Set(marchDays.map { march.calendar.component(.day, from: $0) }).count == 31)
+    #expect(march.calendar.component(.hour, from: marchDays.last!) == 0)
+}

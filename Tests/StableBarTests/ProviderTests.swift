@@ -452,3 +452,57 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         }
     }
 }
+
+@Test func networkRatesChooseUnitsAndConvertBytesToBits() {
+    #expect(NetworkUnits.bytes.rate(0) == "0 B/s")
+    #expect(NetworkUnits.bytes.rate(1536) == "1.5 KiB/s")
+    #expect(NetworkUnits.bytes.rate(2_621_440) == "2.5 MiB/s")
+    #expect(NetworkUnits.bits.rate(125_000) == "1.0 Mbit/s")
+    #expect(NetworkUnits.bits.rate(1_250_000_000) == "10 Gbit/s")
+}
+
+@Test func systemWarningsRespectThresholdsWithoutSuppressingHeatOrPressure() throws {
+    let provider = try ConfigurationValue.object(["type": .string("system"), "cpuWarning": .number(0.8), "memoryWarning": .number(1.01)])
+        .decoded(ProviderConfiguration.self)
+    var output = ScriptOutput(text: "", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.8, "memory": 0.99])
+    #expect(systemWarning(output, provider: provider) == nil)
+    output.values!["cpu"] = 0.81
+    #expect(systemWarning(output, provider: provider) == "warning")
+    output.values!["cpu"] = 0.1
+    output.fields!["thermal"] = "serious"
+    #expect(systemWarning(output, provider: provider) == "warning")
+    output.fields!["pressure"] = "critical"
+    #expect(systemWarning(output, provider: provider) == "critical")
+}
+
+@Test @MainActor func nativeSystemWarningsLeaveExistingWidgetsAndPackageRulesInControl() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"providers":{"system":{"type":"system","cpuWarning":-1}},"widgets":[
+      {"id":"old","type":"system","position":"right"},
+      {"id":"new","type":"system","position":"right","details":true},
+      {"id":"custom","type":"system","position":"right","details":true,"rules":[
+        {"when":{"value":"cpu","above":1.01},"state":"warning"},
+        {"when":{"field":"thermal","equals":"critical"},"state":"critical"}]}]}
+    """#.utf8))
+    let source = DataSourceType.system.makeSource(configuration.providers["system"]!, [:])
+    let updates = AsyncStream<SourceUpdate>.makeStream()
+    defer { source.stop(); updates.continuation.finish() }
+    source.start { updates.continuation.yield($0) }
+    source.refresh(event: ScriptEvent(sender: "test"))
+    var iterator = updates.stream.makeAsyncIterator()
+    let update = try #require(await iterator.next())
+    guard case let .output(result, _) = update else { Issue.record("Expected a system reading"); return }
+    var output = try result.get()
+    #expect(output.state == nil)
+    output.values = ["cpu": 0.95, "memory": 0.5]
+    output.fields = ["pressure": "normal", "thermal": "nominal"]
+    func state(_ index: Int, _ output: ScriptOutput) -> String? {
+        widgetDataState(output, widget: configuration.widgets[index], providers: configuration.providers)
+    }
+    #expect(state(0, output) == nil)
+    #expect(state(1, output) == "warning")
+    #expect(state(2, output) == nil)
+    #expect(state(1, ScriptOutput(text: "…")) == nil)
+    output.fields!["thermal"] = "critical"
+    #expect(state(2, output) == "critical")
+}

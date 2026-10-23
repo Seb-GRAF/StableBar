@@ -14,9 +14,14 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let soon: Int
     let now: Int
     let processes: Int
+    let sortBy: ProcessSort
+    let units: NetworkUnits
+    let cpuWarning: Double
+    let memoryWarning: Double
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
+        case sortBy, units, cpuWarning, memoryWarning
     }
 
     init(type: String) {
@@ -32,6 +37,10 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         soon = 15
         now = 5
         processes = 0
+        sortBy = .memory
+        units = .bytes
+        cpuWarning = 0.9
+        memoryWarning = 0.9
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +61,10 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         soon = try values.decodeIfPresent(Int.self, forKey: .soon) ?? 15
         now = try values.decodeIfPresent(Int.self, forKey: .now) ?? 5
         processes = try values.decodeIfPresent(Int.self, forKey: .processes) ?? 0
+        sortBy = try values.decodeIfPresent(ProcessSort.self, forKey: .sortBy) ?? .memory
+        units = try values.decodeIfPresent(NetworkUnits.self, forKey: .units) ?? .bytes
+        cpuWarning = try values.decodeIfPresent(Double.self, forKey: .cpuWarning) ?? 0.9
+        memoryWarning = try values.decodeIfPresent(Double.self, forKey: .memoryWarning) ?? 0.9
         guard interval > 0, interval.isFinite else {
             throw DecodingError.dataCorruptedError(forKey: .interval, in: values,
                                                   debugDescription: "A provider interval must be greater than zero and finite.")
@@ -63,6 +76,23 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         guard processes >= 0 else {
             throw DecodingError.dataCorruptedError(forKey: .processes, in: values, debugDescription: "A provider's processes must be zero or more.")
         }
+    }
+}
+
+enum ProcessSort: String, Decodable, Sendable {
+    case memory, cpu
+}
+
+enum NetworkUnits: String, Decodable, Sendable {
+    case bytes, bits
+
+    func rate(_ bytes: Double) -> String {
+        let base = self == .bytes ? 1024.0 : 1000.0
+        let units = self == .bytes ? ["B/s", "KiB/s", "MiB/s", "GiB/s"] : ["bit/s", "kbit/s", "Mbit/s", "Gbit/s"]
+        var value = self == .bytes ? bytes : bytes * 8
+        var index = 0
+        while value >= base && index < units.count - 1 { value /= base; index += 1 }
+        return String(format: value < 10 && index > 0 ? "%.1f %@" : "%.0f %@", value, units[index])
     }
 }
 

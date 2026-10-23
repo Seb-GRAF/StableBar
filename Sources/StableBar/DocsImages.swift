@@ -40,6 +40,34 @@ enum DocsImages {
             try await save(popups.background { backdrop(dark: dark) }, "popups", size: NSSize(width: 1100, height: 330), stores: [controls])
             controls.stop()
 
+            let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: nil, dark: dark,
+                                             widgets: ["clock", "battery", "system", "network", "calendar"].map { type in
+                WidgetAddCatalog.builtIns.first { $0.id == type }!.add(position: .right, id: type)!.properties!
+            }, native: true)
+            let details = VStack(alignment: .leading, spacing: 20) {
+                self.bar(essentials)
+                HStack(alignment: .top, spacing: 18) {
+                    ForEach(["clock", "battery", "network"], id: \.self) { id in essentialsPopup(essentials, id) }
+                }
+                HStack(alignment: .top, spacing: 18) {
+                    ForEach(["system", "calendar"], id: \.self) { id in essentialsPopup(essentials, id) }
+                }
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            try await save(details.background { backdrop(dark: dark) }, "essentials", size: NSSize(width: 1100, height: 1050), stores: [essentials])
+            essentials.showScreenSetup(ScreenSetup([display]))
+            let essentialsEditor = ConfigurationEditor(store: essentials)
+            essentialsEditor.showWidget("system")
+            essentialsEditor.widgetTab = .content
+            try await save(SettingsView(store: essentials, editor: essentialsEditor).background(Color(nsColor: .windowBackgroundColor)),
+                           "essentials-settings", size: NSSize(width: 1080, height: 760), stores: [essentials])
+            essentialsEditor.showWidget("clock")
+            essentialsEditor.widgetTab = .content
+            try await save(SettingsView(store: essentials, editor: essentialsEditor).background(Color(nsColor: .windowBackgroundColor)),
+                           "essentials-clock-settings", size: NSSize(width: 1080, height: 760), stores: [essentials])
+            essentials.stop()
+
             bar.showScreenSetup(ScreenSetup([display]))
             let editor = ConfigurationEditor(store: bar)
             editor.section = .appearance
@@ -107,11 +135,24 @@ enum DocsImages {
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
     }
 
+    @ViewBuilder private static func essentialsPopup(_ store: BarStore, _ id: String) -> some View {
+        let configuration = store.configuration!
+        let widget = configuration.widgets.first { $0.id == id }!
+        let popup = widgetPopup(widget, store: store)!
+        VStack(alignment: .leading, spacing: 8) {
+            Text(WidgetDisplayName.title(for: widget.content, providers: configuration.providers)).font(.system(size: 12, weight: .semibold))
+            PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults)),
+                      store: store, widget: widget)
+                .frame(width: popup.style.width!)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// A bar whose data comes from sample files, with Finder as the active app. Its workspaces come
     /// from a stand-in for AeroSpace, so the bar never reaches the AeroSpace running on this Mac, and
     /// its battery from a stand-in for the Mac's, so it draws as a battery provider does.
     private static func sampleStore(in directory: URL, theme: String?, dark: Bool,
-                                    widgets: [[String: ConfigurationValue]]) throws -> BarStore {
+                                    widgets: [[String: ConfigurationValue]], native: Bool = false) throws -> BarStore {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (name, json) in sampleOutput { try Data(json.utf8).write(to: directory.appending(path: "\(name).json")) }
         let aerospace = directory.appending(path: "aerospace")
@@ -132,6 +173,7 @@ enum DocsImages {
             })),
             "widgets": .array(widgets.map(ConfigurationValue.object))
         ]
+        if native { configuration["providers"] = nil }
         if let theme { configuration["theme"] = .object(["id": .string(theme)]) }
         let url = directory.appending(path: "config.json")
         try JSONEncoder().encode(configuration).write(to: url)
@@ -139,6 +181,10 @@ enum DocsImages {
         let registry = DataSourceRegistry(types: DataSourceRegistry.builtIn.types.map { type in
             var type = type
             if type.name == DataSourceType.battery.name { type.makeSource = { _, _ in PushSource(monitor: SampleBattery(output: battery)) } }
+            if native, let json = sampleOutput[type.name] {
+                let output = try! ScriptOutput.read(Data(json.utf8))
+                type.makeSource = { _, _ in PushSource(monitor: SampleBattery(output: output)) }
+            }
             return type
         })
         let store = BarStore(configurationURL: url, registry: registry)
@@ -166,10 +212,13 @@ enum DocsImages {
         window.backgroundColor = .clear
         window.contentView = view
         window.orderFrontRegardless()
-        while !ready() || stores.contains(where: { $0.workspaceStore.workspaces.isEmpty || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
+        while !ready() || stores.contains(where: { ($0.configuration!.widgets.contains { $0.content == .workspaces } && $0.workspaceStore.workspaces.isEmpty) || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
             try await Task.sleep(for: .milliseconds(100))
         }
-        for store in stores { store.scripts["system-monitor"]?.samples = cpuHistory }
+        for store in stores {
+            store.scripts["system-monitor"]?.samples = cpuHistory
+            store.scripts["system"]?.samples = cpuHistory
+        }
         try await Task.sleep(for: .seconds(3))
         let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
                                      bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -200,10 +249,19 @@ enum DocsImages {
          {"workspace":"3","app-name":"Calendar","app-bundle-id":"com.apple.iCal","window-id":5,"window-title":"Calendar"},
          {"workspace":"4","app-name":"Music","app-bundle-id":"com.apple.Music","window-id":6,"window-title":"Music"}]
         """#,
-        "system": #"{"text":"18%","icon":"cpu","value":0.18,"fields":{"cpu":"18","memory":"54"},"values":{"cpu":0.18,"memory":0.54}}"#,
+        "system": #"""
+        {"text":"18%","icon":"cpu","value":0.18,
+         "fields":{"cpu":"18","cpuUser":"12","cpuSystem":"6","memory":"54","memoryUsed":"17.3 GB","memoryCompressed":"1.2 GB",
+                   "swap":"256 MB","pressure":"normal","thermal":"nominal","load":"1.62 1.80 1.74","uptime":"2d 4h"},
+         "values":{"cpu":0.18,"memory":0.54},
+         "lists":{"apps":[{"name":"Xcode","pid":"100","path":"/Applications/Xcode.app","memory":"2.1 GB","cpu":"12"},
+                          {"name":"Safari","pid":"101","path":"/Applications/Safari.app","memory":"840 MB","cpu":"4"},
+                          {"name":"Finder","pid":"102","path":"/System/Library/CoreServices/Finder.app","memory":"120 MB","cpu":"1"}]}}
+        """#,
+        "network": #"{"text":"↓1.2 MiB/s ↑240 KiB/s","icon":"network","fields":{"interface":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"},"lists":{"interfaces":[{"name":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"}]},"values":{"download":1258291,"upload":245760}}"#,
         "battery": #"""
         {"text":"82%","icon":"battery.75percent","values":{"percent":0.82},
-         "fields":{"percent":"82","state":"battery","present":"true"}}
+         "fields":{"percent":"82","state":"battery","present":"true","health":"normal","timeRemaining":"285"}}
         """#,
         "calendar": #"""
         {"text":"Design review","icon":"calendar",

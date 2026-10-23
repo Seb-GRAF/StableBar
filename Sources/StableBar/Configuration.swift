@@ -373,6 +373,8 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let content: WidgetContent
     let icon: String?
     let tooltip: String?
+    let details: Bool
+    let timeZone: String?
     let onClick: String?
     let open: String?
     let menu: [WidgetMenuItem]?
@@ -399,7 +401,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover
+        case expandOnHover, details, timeZone
     }
 
     init(from decoder: Decoder) throws {
@@ -410,6 +412,11 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         position = try values.decode(WidgetPosition.self, forKey: .position)
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         tooltip = try values.decodeIfPresent(String.self, forKey: .tooltip)
+        details = try values.decodeIfPresent(Bool.self, forKey: .details) ?? false
+        timeZone = try values.decodeIfPresent(String.self, forKey: .timeZone)
+        if let timeZone, TimeZone(identifier: timeZone) == nil {
+            throw DecodingError.dataCorruptedError(forKey: .timeZone, in: values, debugDescription: "Use a time zone identifier such as Europe/Zurich or America/New_York.")
+        }
         onClick = try values.decodeIfPresent(String.self, forKey: .onClick)
         open = try values.decodeIfPresent(String.self, forKey: .open)
         if let open, OpenTarget(open) == nil {
@@ -667,7 +674,12 @@ struct Configuration: Decodable, Sendable {
         for widget in widgets {
             if case let .provider(name) = widget.content, providers[name] == nil {
                 guard DataSourceRegistry.builtIn[name]?.isNative == true else { throw CommandFailure(message: "Unknown provider: \(name).") }
-                providers[name] = ProviderConfiguration(type: name)
+                if name == "system", widgets.contains(where: { $0.providerName == name && $0.details }) {
+                    providers[name] = try ConfigurationValue.object(["type": .string(name), "interval": .number(2), "processes": .number(5)])
+                        .decoded(ProviderConfiguration.self)
+                } else {
+                    providers[name] = ProviderConfiguration(type: name)
+                }
             }
         }
         let shown = Set(widgets.filter(\.enabled).compactMap(\.providerName))

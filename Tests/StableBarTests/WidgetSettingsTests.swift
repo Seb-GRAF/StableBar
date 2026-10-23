@@ -2,6 +2,59 @@ import XCTest
 @testable import StableBar
 
 final class WidgetSettingsTests: XCTestCase {
+    @MainActor func testProviderSettingsStayInTheEditedProfileAndPreserveTheIncludedSource() throws {
+        let fixture = try ThemeGalleryFixture(#"{"includes":["source.json"],"profiles":[{"name":"work","configuration":{}}]}"#)
+        defer { fixture.close() }
+        let module = fixture.directory.appending(path: "source.json")
+        let source = Data(#"{"providers":{"machine":{"type":"system","interval":9,"processes":3}},"widgets":[{"id":"cpu","type":"provider","provider":"machine","details":true,"position":"left"},{"id":"cpu-copy","type":"provider","provider":"machine","position":"right"}]}"#.utf8)
+        try source.write(to: module)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editor = ConfigurationEditor(store: store)
+        editor.editBar(for: "work")
+        let before = try fixture.document()
+        editor.setProvider(["sortBy": .string("cpu"), "cpuWarning": .number(0.7)], for: store.configuration!.widgets[0])
+        try editor.history.flush()
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.configuration?.providers["machine"]?.sortBy, .cpu)
+        XCTAssertEqual(store.configuration?.providers["machine"]?.interval, 9)
+        XCTAssertEqual(store.configuration?.providers["machine"]?.processes, 3)
+        XCTAssertNil(try fixture.document()["providers"])
+        XCTAssertEqual(try Data(contentsOf: module), source)
+        editor.undo()
+        XCTAssertEqual(try fixture.document(), before)
+        XCTAssertEqual(store.configuration?.providers["machine"]?.sortBy, .memory)
+    }
+
+    @MainActor func testEditingAnImplicitEssentialsProviderKeepsItsSamplingDefaults() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"cpu","type":"system","details":true,"position":"right"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editor = ConfigurationEditor(store: store)
+        editor.setProvider(["sortBy": .string("cpu")], for: store.configuration!.widgets[0])
+        try editor.history.flush()
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.configuration?.providers["system"]?.processes, 5)
+        XCTAssertEqual(store.configuration?.providers["system"]?.interval, 2)
+        XCTAssertEqual(store.configuration?.providers["system"]?.sortBy, .cpu)
+        editor.undo()
+        XCTAssertNil(try fixture.document()["providers"])
+    }
+
+    @MainActor func testBuiltInDetailsKeepCustomPopupAndClickActions() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","details":true,"position":"left"},{"id":"open","type":"clock","details":true,"position":"left","open":"com.apple.iCal"},{"id":"command","type":"clock","details":true,"position":"left","onClick":"echo keep"},{"id":"custom","type":"clock","details":true,"position":"left","popup":{"style":{"width":220},"layout":{"type":"text","text":"Keep"}}},{"id":"plain","type":"clock","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let widgets = store.configuration!.widgets
+        XCTAssertNotNil(widgetPopup(widgets[0], store: store))
+        XCTAssertNil(widgetPopup(widgets[1], store: store))
+        XCTAssertNil(widgetPopup(widgets[2], store: store))
+        XCTAssertEqual(widgetPopup(widgets[3], store: store)?.style.width, 220)
+        XCTAssertNil(widgetPopup(widgets[4], store: store))
+    }
+
     @MainActor func testMetricDisplayChoicesReplaceContentAndUndoWithoutChangingPlacementOrActions() throws {
         let fixture = try ThemeGalleryFixture(#"{"providers":{"power":{"type":"battery"}},"widgets":[{"id":"power","type":"provider","provider":"power","position":"left","open":"com.apple.systempreferences","layout":{"type":"row","style":{"spacing":8},"children":[{"type":"text","text":"Custom"}]}}]}"#)
         defer { fixture.close() }

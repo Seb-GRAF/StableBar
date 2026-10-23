@@ -66,6 +66,7 @@ indirect enum PopupContent: Sendable {
     case appIcon
     /// The update on offer and its download button, drawn by the update tile's popup. Configurations can't use it.
     case appUpdate
+    case essentials(EssentialsPopup, timeZone: String?)
 }
 
 struct PopupBlock: Decodable, Sendable {

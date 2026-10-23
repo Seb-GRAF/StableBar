@@ -122,7 +122,11 @@ struct WidgetClockFormat {
         Self(title: "Time with seconds", value: "HH:mm:ss"),
         Self(title: "Day and time", value: "EEE HH:mm"),
         Self(title: "Date and time", value: "EEE d MMM  HH:mm"),
-        Self(title: "Date", value: "d MMM")
+        Self(title: "Date", value: "EEE d MMM"),
+        Self(title: "Short date", value: "d MMM"),
+        Self(title: "Full date", value: "EEEE d MMMM"),
+        Self(title: "Date + 12-hour time", value: "EEE d MMM  h:mm a"),
+        Self(title: "Date + seconds", value: "EEE d MMM  HH:mm:ss")
     ]
 
     var sample: String {

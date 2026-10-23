@@ -3,9 +3,14 @@ import XCTest
 
 final class WidgetDisplayNameTests: XCTestCase {
     func testEveryBuiltInUsesTheAddListNameInsteadOfItsGeneratedID() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        var loader = ConfigurationLoader()
+        loader.themesDirectory = fixture.themes
         for choice in WidgetAddCatalog.builtIns {
             let properties = try XCTUnwrap(choice.add(position: .right, id: "widget-1a2b3c4d")?.properties)
-            let widget = try ConfigurationValue.object(properties).decoded(WidgetConfiguration.self)
+            let data = try configurationData(["widgets": .array([.object(properties)])])
+            let widget = try loader.load(fixture.url, data: data).widgets[0]
             XCTAssertEqual(WidgetDisplayName.title(for: widget.content), choice.name)
             XCTAssertEqual(WidgetDisplayName.name(for: widget), choice.id == "text" ? "New widget" : choice.name)
             XCTAssertEqual(widget.id, "widget-1a2b3c4d")
@@ -14,7 +19,7 @@ final class WidgetDisplayNameTests: XCTestCase {
 
     func testProviderAliasesUseTheirDataSourceAndCustomSourcesUseAPlainFallback() throws {
         let provider = try ConfigurationValue.object(["type": .string("system")]).decoded(ProviderConfiguration.self)
-        XCTAssertEqual(WidgetDisplayName.title(for: .provider("usage"), providers: ["usage": provider]), "CPU")
+        XCTAssertEqual(WidgetDisplayName.title(for: .provider("usage"), providers: ["usage": provider]), "System monitor")
         XCTAssertEqual(WidgetDisplayName.title(for: .provider("script-1234")), "Custom widget")
     }
 
@@ -34,22 +39,22 @@ final class WidgetDisplayNameTests: XCTestCase {
             XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: "Weather"), "Weather")
         }
         let generated = try widgets(#"[{"id":"widget-ABCDEF12","type":"clock","position":"right"}]"#)
-        XCTAssertEqual(WidgetDisplayName.names(for: generated), ["widget-ABCDEF12": "Clock"])
+        XCTAssertEqual(WidgetDisplayName.names(for: generated), ["widget-ABCDEF12": "Clock & date"])
     }
 
     func testMatchingGeneratedNamesAreUniqueAcrossPositionsKindsAndPackagesAndAvoidChosenNames() throws {
         let widgets = try widgets(#"""
         [{"id":"widget-00000001","type":"clock","position":"left"},
          {"id":"widget-00000002","type":"clock","position":"right"},
-         {"id":"Clock","type":"clock","position":"right"},
-         {"id":"Clock 1","type":"clock","position":"right"},
-         {"id":"widget-00000003","type":"text","text":"Clock 2","position":"right"},
+         {"id":"Clock & date","type":"clock","position":"right"},
+         {"id":"Clock & date 1","type":"clock","position":"right"},
+         {"id":"widget-00000003","type":"text","text":"Clock & date 2","position":"right"},
          {"id":"widget-00000004","type":"text","text":"Hello","position":"left"},
          {"id":"widget-00000005","type":"text","text":"Hello","position":"right"}]
         """#)
         let names = WidgetDisplayName.names(for: widgets)
-        XCTAssertEqual(names, ["widget-00000001": "Clock 3", "widget-00000002": "Clock 4", "Clock": "Clock", "Clock 1": "Clock 1",
-                               "widget-00000003": "Clock 2", "widget-00000004": "Hello 1", "widget-00000005": "Hello 2"])
+        XCTAssertEqual(names, ["widget-00000001": "Clock & date 3", "widget-00000002": "Clock & date 4", "Clock & date": "Clock & date", "Clock & date 1": "Clock & date 1",
+                               "widget-00000003": "Clock & date 2", "widget-00000004": "Hello 1", "widget-00000005": "Hello 2"])
         XCTAssertEqual(Set(names.values).count, widgets.count)
         for widget in widgets where widget.id.hasPrefix("widget-") { XCTAssertFalse(try XCTUnwrap(names[widget.id]).contains(widget.id)) }
         let others = try self.widgets(#"""
@@ -90,7 +95,7 @@ final class WidgetDisplayNameTests: XCTestCase {
         defer { store.stop() }
         XCTAssertEqual(store.widgetPackageNames, ["current": "Weather", "forecast": "Weather", "widget-00000001": "Weather"])
         for widget in try XCTUnwrap(store.configuration?.widgets) {
-            let expected = widget.id == "widget-1a2b3c4d" ? "Clock" : "Weather"
+            let expected = widget.id == "widget-1a2b3c4d" ? "Clock & date" : "Weather"
             XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id]), expected)
         }
         store.reloadConfiguration()

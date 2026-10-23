@@ -288,6 +288,10 @@ func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfigu
             layout: PopupBlock(content: .menu)
         )
     }
+    if widget.details, widget.onClick == nil, widget.open == nil, store.scripts[widget.id]?.output.onClick == nil,
+       let kind = EssentialsPopup.kind(for: widget, providerType: store.configuration?.providerType(of: widget)) {
+        return kind.popup(timeZone: widget.timeZone)
+    }
     return nil
 }
 

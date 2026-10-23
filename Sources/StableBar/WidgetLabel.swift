@@ -21,6 +21,7 @@ extension WidgetConfiguration {
         case let .clock(format):
             let formatter = DateFormatter()
             formatter.dateFormat = format
+            formatter.timeZone = timeZone.flatMap(TimeZone.init(identifier:)) ?? .autoupdatingCurrent
             text = formatter.string(from: date)
         case .activeApp:
             text = activeApp ?? "Desktop"
@@ -75,6 +76,13 @@ extension WidgetConfiguration {
         case .provider where (providerType ?? providerName) == DataSourceType.battery.name && output?.fields?["present"] != "false":
             guard output != nil else { return nil }
             return PopupBlock(content: .row([PopupBlock(content: .battery(source: "percent"))]), keepsLineHeight: true)
+        case .provider where (providerType ?? providerName) == "calendar" && details:
+            return PopupBlock(content: .row([
+                PopupBlock(content: .symbol(name: "calendar", source: nil)),
+                PopupBlock(content: .field("text"), style: WidgetStyle(maxWidth: 180), monospacedDigits: false),
+                PopupBlock(content: .field("minutes"), hideWhenEmpty: "minutes"),
+                PopupBlock(content: .text("min"), hideWhenEmpty: "minutes")
+            ]), keepsLineHeight: true)
         case .script, .provider:
             guard let output else { return nil }
             let type = providerType ?? providerName

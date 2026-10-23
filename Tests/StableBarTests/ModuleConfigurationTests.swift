@@ -500,7 +500,8 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
         .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
-        .processes: ("5", #""5""#)
+        .processes: ("5", #""5""#), .sortBy: (#""cpu""#, #""unknown""#), .units: (#""bits""#, #""unknown""#),
+        .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#)
     ]
     #expect(Set(registry.types.flatMap(\.optionalSettings)) == Set(samples.keys))
     for type in registry.types {

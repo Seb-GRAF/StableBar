@@ -394,6 +394,8 @@ struct PopupBlockView: View {
             if let update = context.update, let version = update.version {
                 UpdateDetails(update: update, version: version, appearance: appearance)
             }
+        case let .essentials(kind, timeZone):
+            EssentialsDetails(kind: kind, timeZone: timeZone, fields: fields, context: context, appearance: appearance)
         }
     }
 }
