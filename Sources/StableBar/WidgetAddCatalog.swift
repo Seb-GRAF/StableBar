@@ -59,8 +59,9 @@ enum WidgetAddCatalog {
     static func includes(_ manifest: WidgetPackageManifest, record: PackageInstallRecord?) -> Bool {
         guard manifest.kind == .widgets else { return false }
         if let record {
-            guard record.source == PackageSource.storeID, !record.isLocal(version: manifest.version) else { return false }
-        } else {
+            guard record.source == PackageSource.storeID || record.isLocal else { return false }
+        }
+        if record == nil || record?.isLocal(version: manifest.version) == true {
             guard manifest.repository?.absoluteString == "https://github.com/Seb-GRAF/stablebar-packages" else { return false }
         }
         return builtIns.contains { $0.replacesPackage == manifest.id }

@@ -5,45 +5,76 @@ import XCTest
 
 final class PackagesViewTests: XCTestCase {
     @MainActor func testStoreEssentialsBecomeBuiltInAndKeepEditingAndUndo() async throws {
-        let fixture = try ThemeGalleryFixture()
+        for record in [PackageInstallRecord(PackageSource.store), .local] {
+            let fixture = try ThemeGalleryFixture()
+            defer { fixture.close() }
+            let index = LocalPackageIndex(fixture: fixture)
+            let configuration = #"{"widgets":[{"id":"date","type":"clock","position":"right","format":"@setting.format","open":"com.apple.iCal"}]}"#
+            let settings = #"{"format":{"type":"string","default":"EEE d MMM"}}"#
+            _ = try await index.add(id: "date", kind: "widgets", configuration: configuration, settings: settings)
+            let source = fixture.directory.appending(path: "sources/date")
+            let manifestURL = source.appending(path: "package.json")
+            var manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: manifestURL))
+            manifest["repository"] = .string("https://github.com/Seb-GRAF/stablebar-packages")
+            try configurationData(manifest).write(to: manifestURL)
+            let installed = try fixture.packages.install(source, record: record)
+            try fixture.write(#"{"packages":[{"id":"date","version":"1","settings":{"format":"yyyy-MM-dd"}}],"profiles":[{"name":"work","configuration":{}}]}"#, to: fixture.url)
+            let store = try fixture.store()
+            defer { store.stop() }
+            try store.applyEdits([], persist: false)
+            let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
+            defer { library.stopUpdateChecks() }
+            _ = try await index.add(id: "date", kind: "widgets", configuration: configuration, settings: settings, version: "2")
+            await library.loadInstalled()
+            await library.loadStore()
+            XCTAssertEqual(store.builtInWidgetIDs, ["date"])
+            XCTAssertEqual(library.origin(of: installed.manifest), .builtIn)
+            XCTAssertTrue(library.installedPackages.isEmpty)
+            XCTAssertTrue(library.storeEntries(showingThemes: false, sourceID: nil).isEmpty)
+            XCTAssertTrue(library.updates.isEmpty)
+            let editor = ConfigurationEditor(store: store)
+            editor.editBar(for: "work")
+            let before = try fixture.document()
+            editor.set(["format": .string("HH:mm")], for: "date")
+            try editor.history.flush()
+            XCTAssertNil(editor.error)
+            XCTAssertEqual(store.configuration?.widgets.first?.content, .clock(format: "HH:mm"))
+            XCTAssertEqual(try fixture.document()["packages"], before["packages"])
+            editor.undo()
+            XCTAssertEqual(try fixture.document(), before)
+            XCTAssertEqual(store.configuration?.widgets.first?.content, .clock(format: "yyyy-MM-dd"))
+            editor.endProfileEditing()
+            try WidgetSetup(store: store).remove("date")
+            XCTAssertTrue(store.configuration!.widgets.isEmpty)
+            try store.customizationHistory.undo()
+            XCTAssertEqual(store.configuration?.widgets.map(\.id), ["date"])
+            XCTAssertEqual(try fixture.packages.list().count, 1)
+        }
+    }
+
+    @MainActor func testEssentialsRenderWhenAnEnabledPackageIsMissing() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"packages":[{"id":"system-monitor","version":"1.1.1"}]}"#)
         defer { fixture.close() }
-        let index = LocalPackageIndex(fixture: fixture)
-        let configuration = #"{"widgets":[{"id":"date","type":"clock","position":"right","format":"@setting.format","open":"com.apple.iCal"}]}"#
-        let settings = #"{"format":{"type":"string","default":"EEE d MMM"}}"#
-        _ = try await index.add(id: "date", kind: "widgets", configuration: configuration, settings: settings)
-        let installed = try fixture.packages.install(fixture.directory.appending(path: "sources/date"),
-            record: PackageInstallRecord(source: PackageSource.storeID, name: PackageSource.store.name, url: PackageSource.store.url))
-        try fixture.write(#"{"packages":[{"id":"date","version":"1","settings":{"format":"yyyy-MM-dd"}}],"profiles":[{"name":"work","configuration":{}}]}"#, to: fixture.url)
-        let store = try fixture.store()
+        let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
         defer { store.stop() }
-        try store.applyEdits([], persist: false)
-        let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
-        defer { library.stopUpdateChecks() }
-        _ = try await index.add(id: "date", kind: "widgets", configuration: configuration, settings: settings, version: "2")
-        await library.loadInstalled()
-        await library.loadStore()
-        XCTAssertEqual(store.builtInWidgetIDs, ["date"])
-        XCTAssertEqual(library.origin(of: installed.manifest), .builtIn)
-        XCTAssertTrue(library.installedPackages.isEmpty)
-        XCTAssertTrue(library.storeEntries(showingThemes: false, sourceID: nil).isEmpty)
-        XCTAssertTrue(library.updates.isEmpty)
-        let editor = ConfigurationEditor(store: store)
-        editor.editBar(for: "work")
-        let before = try fixture.document()
-        editor.set(["format": .string("HH:mm")], for: "date")
-        try editor.history.flush()
-        XCTAssertNil(editor.error)
-        XCTAssertEqual(store.configuration?.widgets.first?.content, .clock(format: "HH:mm"))
-        XCTAssertEqual(try fixture.document()["packages"], before["packages"])
-        editor.undo()
-        XCTAssertEqual(try fixture.document(), before)
-        XCTAssertEqual(store.configuration?.widgets.first?.content, .clock(format: "yyyy-MM-dd"))
-        editor.endProfileEditing()
-        try WidgetSetup(store: store).remove("date")
-        XCTAssertTrue(store.configuration!.widgets.isEmpty)
-        try store.customizationHistory.undo()
-        XCTAssertEqual(store.configuration?.widgets.map(\.id), ["date"])
-        XCTAssertEqual(try fixture.packages.list().count, 1)
+        store.reloadConfiguration()
+        XCTAssertNotNil(store.configurationError)
+        XCTAssertTrue(store.effectiveDocument.isEmpty)
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 900, height: 620),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let host = NSHostingView(rootView: BuiltInPackagesView(store: store, gallery: ThemeGallery(store: store), search: "System monitor"))
+        host.sizingOptions = []
+        window.contentView = host
+        for _ in 0..<30 {
+            host.layoutSubtreeIfNeeded()
+            if host.subviews.contains(where: { String(describing: type(of: $0)).contains("PlatformContainer") }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(host.subviews.first { String(describing: type(of: $0)).contains("PlatformContainer") })
+        XCTAssertFalse(window.isVisible)
     }
 
     @MainActor func testEssentialsHideStoreDuplicatesButKeepLocalCopyUpdates() async throws {

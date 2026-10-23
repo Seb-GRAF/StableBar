@@ -424,10 +424,10 @@ struct BuiltInPackagesView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
                             ForEach(widgets) { choice in
                                 VStack(alignment: .leading, spacing: 12) {
-                                    let tokens = try! store.effectiveDocument["tokens"]!.decoded([String: ConfigurationValue].self)
-                                    let widget = try! substituteConfigurationReferences(.object(choice.add(position: .right, id: choice.id)!.properties!),
+                                    let tokens = (try? store.effectiveDocument["tokens"]?.decoded([String: ConfigurationValue].self)) ?? [:]
+                                    let widget = try? substituteConfigurationReferences(.object(choice.add(position: .right, id: choice.id)!.properties!),
                                                                                         prefix: "@token.", values: tokens).decoded(WidgetConfiguration.self)
-                                    PackagePreview(screenshotData: nil, look: nil, widgets: [widget]).frame(height: 64)
+                                    PackagePreview(screenshotData: nil, look: nil, widgets: widget.map { [$0] } ?? []).frame(height: 64)
                                     HStack(spacing: 10) {
                                         Image(systemName: choice.symbol)
                                             .font(.system(size: 17))

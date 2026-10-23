@@ -194,7 +194,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
 }
 
-@Test func storeEssentialsUpgradeInPlaceAndKeepOverridesAndRollbackFiles() throws {
+@Test(arguments: [false, true]) func storeEssentialsUpgradeInPlaceAndKeepOverridesAndRollbackFiles(fromFolder: Bool) throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     let packages: [(String, String, String, String)] = [
@@ -218,7 +218,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
         try fixture.write(#"{"id":"\#(id)","name":"\#(id)","version":"1","kind":"widgets","entry":"config.json","repository":"https://github.com/Seb-GRAF/stablebar-packages","settings":{\#(settings)}}"#, to: source.appending(path: "package.json"))
         let data = ["network-speed": providers, "calendar-agenda": calendar, "system-monitor": system][id] ?? ""
         try fixture.write(#"{"providers":{\#(data)},"popups":{"\#(id)":{"style":{},"layout":{"type":"text","text":"Old details"}}},"widgets":[{"id":"\#(id)","position":"right","popupName":"\#(id)",\#(properties)}]}"#, to: source.appending(path: "config.json"))
-        let installed = try fixture.packages.install(source, record: PackageInstallRecord(source: PackageSource.storeID, name: PackageSource.store.name, url: PackageSource.store.url))
+        let installed = try fixture.packages.install(source, record: fromFolder ? .local : PackageInstallRecord(PackageSource.store))
         for name in ["package.json", "config.json"] {
             let file = installed.directory.appending(path: name)
             installedFiles[file] = try Data(contentsOf: file)
@@ -272,7 +272,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(try loader.load(fixture.url).widgets.map(\.id) == configuration.widgets.map(\.id))
 }
 
-@Test func essentialsUpgradeDistinguishesLegacyStorePrivateAndLocalCopies() throws {
+@Test func essentialsUpgradeRecognizesOfficialFoldersAndPreservesPrivateCopies() throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     let directory = fixture.packages.directory.appending(path: "date/1")
@@ -283,15 +283,24 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(try loader.load(fixture.url).widgets[0].details)
     let official = PackageInstallRecord(source: PackageSource.storeID, name: PackageSource.store.name, url: PackageSource.store.url)
     let privateCopy = PackageInstallRecord(source: "team", name: "Team", url: URL(string: "https://example.com/index.json"))
-    for record in [PackageInstallRecord.local, privateCopy, official.settingLocal("1", true)] {
+    for record in [PackageInstallRecord.local, official, official.settingLocal("1", true)] {
+        try JSONEncoder().encode(record).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
+        #expect(try loader.load(fixture.url).widgets[0].details)
+        #expect(loader.builtInWidgetIDs == ["date"])
+    }
+    for record in [privateCopy, privateCopy.settingLocal("1", true)] {
         try JSONEncoder().encode(record).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
         let configuration = try loader.load(fixture.url)
         #expect(!configuration.widgets[0].details)
         #expect(configuration.widgets[0].open == "com.apple.iCal")
         #expect(loader.builtInWidgetIDs.isEmpty)
     }
-    try JSONEncoder().encode(official).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
-    #expect(try loader.load(fixture.url).widgets[0].details)
+    try fixture.write(#"{"id":"date","name":"My date","version":"1","kind":"widgets","entry":"config.json","repository":"https://example.com/my-date"}"#, to: directory.appending(path: "package.json"))
+    for record in [PackageInstallRecord.local, official.settingLocal("1", true)] {
+        try JSONEncoder().encode(record).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
+        #expect(try loader.load(fixture.url).widgets[0].open == "com.apple.iCal")
+        #expect(loader.builtInWidgetIDs.isEmpty)
+    }
     #expect(try loader.load(fixture.url, data: Data(#"{"packages":[{"id":"date","version":"1","enabled":false}]}"#.utf8)).widgets.isEmpty)
     #expect(loader.builtInWidgetIDs.isEmpty)
 }
