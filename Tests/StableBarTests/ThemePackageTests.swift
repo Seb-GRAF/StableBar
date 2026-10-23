@@ -194,6 +194,108 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
 }
 
+@Test func storeEssentialsUpgradeInPlaceAndKeepOverridesAndRollbackFiles() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let packages: [(String, String, String, String)] = [
+        ("date", #""format":{"type":"string","default":"EEE d MMM"}"#,
+         #""format":"yyyy-MM-dd""#, #""type":"clock","format":"@setting.format","open":"com.apple.iCal""#),
+        ("battery-status", "", "", #""type":"battery","layout":{"type":"field","field":"text"}"#),
+        ("network-speed", #""interval":{"type":"number","default":5}"#,
+         #""interval":12"#, #""type":"provider","provider":"network-speed""#),
+        ("calendar-agenda", #""lookahead":{"type":"number","default":24},"soon":{"type":"number","default":15},"now":{"type":"number","default":5}"#,
+         #""lookahead":48,"soon":30,"now":10"#, #""type":"provider","provider":"calendar-agenda","layout":{"type":"field","field":"text"}"#),
+        ("system-monitor", #""interval":{"type":"number","default":2},"processes":{"type":"number","default":5},"sortBy":{"type":"string","default":"memory"},"cpuWarning":{"type":"number","default":0.9},"memoryWarning":{"type":"number","default":0.9}"#,
+         #""interval":8,"processes":3,"sortBy":"cpu","cpuWarning":1.01,"memoryWarning":0.75"#, #""type":"system","rules":[{"when":{"value":"cpu","above":"@setting.cpuWarning"},"state":"warning"}]"#)
+    ]
+    let providers = #""network-speed":{"type":"network","interval":"@setting.interval"}"#
+    let calendar = #""calendar-agenda":{"type":"calendar","lookahead":"@setting.lookahead","soon":"@setting.soon","now":"@setting.now"}"#
+    let system = #""system":{"type":"system","interval":"@setting.interval","processes":"@setting.processes"}"#
+    var selections: [String] = []
+    var installedFiles: [URL: Data] = [:]
+    for (id, settings, saved, properties) in packages {
+        let source = fixture.directory.appending(path: "source/\(id)")
+        try fixture.write(#"{"id":"\#(id)","name":"\#(id)","version":"1","kind":"widgets","entry":"config.json","repository":"https://github.com/Seb-GRAF/stablebar-packages","settings":{\#(settings)}}"#, to: source.appending(path: "package.json"))
+        let data = ["network-speed": providers, "calendar-agenda": calendar, "system-monitor": system][id] ?? ""
+        try fixture.write(#"{"providers":{\#(data)},"popups":{"\#(id)":{"style":{},"layout":{"type":"text","text":"Old details"}}},"widgets":[{"id":"\#(id)","position":"right","popupName":"\#(id)",\#(properties)}]}"#, to: source.appending(path: "config.json"))
+        let installed = try fixture.packages.install(source, record: PackageInstallRecord(source: PackageSource.storeID, name: PackageSource.store.name, url: PackageSource.store.url))
+        for name in ["package.json", "config.json"] {
+            let file = installed.directory.appending(path: name)
+            installedFiles[file] = try Data(contentsOf: file)
+        }
+        selections.append(#"{"id":"\#(id)","version":"1","settings":{\#(saved)}}"#)
+    }
+    let included = fixture.directory.appending(path: "included.json")
+    try fixture.write(#"{"packages":[\#(selections.joined(separator: ","))],"widgetOverrides":{"date":{"position":"left","display":"external","group":"dates"}},"groups":{"dates":{}}}"#, to: included)
+    try fixture.write(#"""
+    {"includes":["included.json"],"widgetOrder":["system-monitor","date","calendar-agenda","battery-status","network-speed"],
+     "profiles":[{"name":"work","when":{"appearance":"dark"},"configuration":{
+       "widgetOverrides":{"date":{"format":"dd/MM/yyyy","open":"com.apple.iCal"},"network-speed":{"enabled":false},
+                          "battery-status":{"layout":{"type":"field","field":"text"}},
+                          "system-monitor":{"rules":[{"when":{"value":"cpu","above":0.4},"state":"custom"}]}},
+       "popups":{"calendar-agenda":{"style":{"width":400}}},
+       "providers":{"network-speed":{"interval":20}}}}]}
+    """#, to: fixture.url)
+    let before = try Data(contentsOf: fixture.url)
+    let includedBefore = try Data(contentsOf: included)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(fixture.url)
+    #expect(loader.builtInWidgetIDs == Set(packages.map(\.0)))
+    #expect(configuration.widgets.map(\.id) == ["system-monitor", "date", "calendar-agenda", "battery-status", "network-speed"])
+    #expect(configuration.widgets.allSatisfy { $0.details && $0.popupName == nil && $0.layout == nil })
+    let date = configuration.widgets[1]
+    #expect(date.content == .clock(format: "yyyy-MM-dd"))
+    #expect(date.position == .left && date.display == .external && date.group == "dates")
+    #expect(date.open == nil)
+    #expect(configuration.providers["network-speed"]?.interval == 12)
+    #expect(configuration.providers["calendar-agenda"]?.lookahead == 48)
+    #expect(configuration.providers["calendar-agenda"]?.soon == 30)
+    #expect(configuration.providers["calendar-agenda"]?.now == 10)
+    #expect(configuration.providers["system"]?.interval == 8)
+    #expect(configuration.providers["system"]?.processes == 3)
+    #expect(configuration.providers["system"]?.sortBy == .cpu)
+    #expect(configuration.providers["system"]?.cpuWarning == 1.01)
+    #expect(configuration.providers["system"]?.memoryWarning == 0.75)
+    #expect(configuration.widgets[0].rules.isEmpty)
+    let dark = try loader.load(fixture.url, context: ConfigurationContext(appearance: "dark"))
+    #expect(dark.widgets[1].content == .clock(format: "dd/MM/yyyy"))
+    #expect(dark.widgets[1].open == "com.apple.iCal")
+    #expect(dark.widgets[0].rules.first?.state == "custom")
+    #expect(dark.widgets[2].popupName == "calendar-agenda")
+    #expect(dark.popups["calendar-agenda"]?.style.width == 400)
+    #expect(dark.widgets[3].layout != nil)
+    #expect(!dark.widgets[4].enabled)
+    #expect(dark.providers["network-speed"]?.interval == 20)
+    #expect(try Data(contentsOf: fixture.url) == before)
+    #expect(try Data(contentsOf: included) == includedBefore)
+    for (file, data) in installedFiles { #expect(try Data(contentsOf: file) == data) }
+    #expect(try loader.load(fixture.url).widgets.map(\.id) == configuration.widgets.map(\.id))
+}
+
+@Test func essentialsUpgradeDistinguishesLegacyStorePrivateAndLocalCopies() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let directory = fixture.packages.directory.appending(path: "date/1")
+    try fixture.write(#"{"id":"date","name":"Date","version":"1","kind":"widgets","entry":"config.json","repository":"https://github.com/Seb-GRAF/stablebar-packages"}"#, to: directory.appending(path: "package.json"))
+    try fixture.write(#"{"widgets":[{"id":"date","type":"clock","position":"right","format":"EEE d MMM","open":"com.apple.iCal"}]}"#, to: directory.appending(path: "config.json"))
+    try fixture.write(#"{"packages":[{"id":"date","version":"1"}]}"#, to: fixture.url)
+    var loader = ConfigurationLoader()
+    #expect(try loader.load(fixture.url).widgets[0].details)
+    let official = PackageInstallRecord(source: PackageSource.storeID, name: PackageSource.store.name, url: PackageSource.store.url)
+    let privateCopy = PackageInstallRecord(source: "team", name: "Team", url: URL(string: "https://example.com/index.json"))
+    for record in [PackageInstallRecord.local, privateCopy, official.settingLocal("1", true)] {
+        try JSONEncoder().encode(record).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
+        let configuration = try loader.load(fixture.url)
+        #expect(!configuration.widgets[0].details)
+        #expect(configuration.widgets[0].open == "com.apple.iCal")
+        #expect(loader.builtInWidgetIDs.isEmpty)
+    }
+    try JSONEncoder().encode(official).write(to: directory.deletingLastPathComponent().appending(path: PackageInstallRecord.fileName))
+    #expect(try loader.load(fixture.url).widgets[0].details)
+    #expect(try loader.load(fixture.url, data: Data(#"{"packages":[{"id":"date","version":"1","enabled":false}]}"#.utf8)).widgets.isEmpty)
+    #expect(loader.builtInWidgetIDs.isEmpty)
+}
+
 @Test func packagesInstallWithoutExecutingAndComposePinnedSettingsAndAssets() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

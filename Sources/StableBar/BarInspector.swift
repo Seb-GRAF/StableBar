@@ -386,7 +386,7 @@ struct BarInspector: View {
                 }
             }
         }
-        if let packageID = store.widgetPackageIDs[widget.id] {
+        if let packageID = store.widgetPackageIDs[widget.id], !store.builtInWidgetIDs.contains(widget.id) {
             SettingsCallout(systemImage: source(widget).symbol,
                             text: Text("Settings from the **\(store.widgetPackageNames[widget.id] ?? packageID)** package, shared by its widgets.")) {
                 Button("Open package") { editor.showPackage(packageID) }.controlSize(.small)

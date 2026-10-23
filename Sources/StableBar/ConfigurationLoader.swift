@@ -260,6 +260,7 @@ struct ConfigurationLoader {
     private(set) var contributions: [String: [ConfigurationContribution]] = [:]
     private(set) var widgetPackageNames: [String: String] = [:]
     private(set) var widgetPackageIDs: [String: String] = [:]
+    private(set) var builtInWidgetIDs: Set<String> = []
     private(set) var activeProfiles: [String] = []
     private(set) var profiles: [ConfigurationProfile] = []
     private(set) var pinnedProfile: String?
@@ -272,6 +273,7 @@ struct ConfigurationLoader {
     private var packageBoundaries: [String: URL] = [:]
     private var packageNames: [String: String] = [:]
     private var packageIDs: [String: String] = [:]
+    private var essentialsPopupNames: [String: String] = [:]
 
     mutating func load(_ url: URL, data: Data? = nil,
                        context: ConfigurationContext = ConfigurationContext(),
@@ -299,6 +301,8 @@ struct ConfigurationLoader {
         packageIDs = [:]
         widgetPackageNames = [:]
         widgetPackageIDs = [:]
+        builtInWidgetIDs = []
+        essentialsPopupNames = [:]
         var base = try read(url.standardizedFileURL, data: data, path: [])
         var theme = base.values["theme"]
         if let screen, let look = try base.values["screens"]?.decoded([String: [String: ConfigurationValue]].self)[screen.rawValue] {
@@ -341,7 +345,13 @@ struct ConfigurationLoader {
             throw theme ? WidgetPackageError.notATheme(selection.id) : WidgetPackageError.themeInPackages(selection.id)
         }
         try packageStore.validateContents(at: directory)
-        return try readPackage(at: directory, manifest: manifest, settings: selection.settings)
+        let layer = try readPackage(at: directory, manifest: manifest, settings: selection.settings)
+        guard !theme, WidgetAddCatalog.builtIns.contains(where: { $0.replacesPackage == manifest.id }) else { return layer }
+        guard WidgetAddCatalog.includes(manifest, record: try packageStore.record(id: manifest.id)) else { return layer }
+        builtInWidgetIDs.insert(manifest.id)
+        let widget = try layer.values["widgets"]!.decoded([[String: ConfigurationValue]].self)[0]
+        essentialsPopupNames[manifest.id] = try widget["popupName"]?.decoded(String.self)
+        return try upgradedEssentialsPackage(layer, manifest: manifest, settings: selection.settings)
     }
 
     private mutating func readBundledTheme(_ selection: WidgetPackageSelection) throws -> ConfigurationLayer {
@@ -408,6 +418,12 @@ struct ConfigurationLoader {
         for definition in definitions {
             var expanded = try expandWidgetTemplate(definition, templates: templates)
             let id = try (expanded["id"] ?? .null).decoded(String.self)
+            if let popup = essentialsPopupNames[id],
+               layer.origins.contains(where: { path, source in
+                   path.hasPrefix("popups.\(popup).") && source.file != layer.origins["widgets.\(id).id"]!.file
+               }) {
+                expanded["popupName"] = .string(popup)
+            }
             if let properties = overrides[id] {
                 guard properties["id"] == nil else { throw ConfigurationCompositionError.widgetOverrideID(id) }
                 expanded.merge(properties) { $1.overriding($0) }

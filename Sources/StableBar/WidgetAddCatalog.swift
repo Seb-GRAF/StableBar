@@ -56,6 +56,16 @@ enum WidgetAddCatalog {
         entry.sourceID == PackageSource.storeID && entry.kind != .theme && builtIns.contains { $0.replacesPackage == entry.id }
     }
 
+    static func includes(_ manifest: WidgetPackageManifest, record: PackageInstallRecord?) -> Bool {
+        guard manifest.kind == .widgets else { return false }
+        if let record {
+            guard record.source == PackageSource.storeID, !record.isLocal(version: manifest.version) else { return false }
+        } else {
+            guard manifest.repository?.absoluteString == "https://github.com/Seb-GRAF/stablebar-packages" else { return false }
+        }
+        return builtIns.contains { $0.replacesPackage == manifest.id }
+    }
+
     /// Store packages keep `store/<id>`; a private source's are `store/<source id>/<id>`, so the same ID can appear once per source.
     static func compose(_ packages: [PackageIndex.Entry] = [], sourceNames: [String: String] = [:]) -> [WidgetAddChoice] {
         var choices = builtIns.filter { !$0.isScript }

@@ -26,7 +26,7 @@ final class WidgetAddPopoverTests: XCTestCase {
         let labels = accessibleText(host)
         XCTAssertEqual(host.rootView.title, "ADD HERE")
         XCTAssertTrue(labels.contains("Search widgets"), "Missing search: \(labels)")
-        XCTAssertTrue(host.rootView.model.choices.contains { $0.name == "Clock" })
+        XCTAssertTrue(host.rootView.model.choices.contains { $0.name == "Clock & date" })
         let frames = try model.choices.prefix(3).map { try XCTUnwrap(choiceFrames[$0.id]) }
         XCTAssertTrue(frames.allSatisfy { $0.width > 0 && $0.height > 0 })
         XCTAssertEqual(frames[0].midY, frames[1].midY, accuracy: 1)

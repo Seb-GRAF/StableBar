@@ -38,6 +38,7 @@ final class BarStore: NSObject {
     var contributions: [String: [ConfigurationContribution]] = [:]
     var widgetPackageNames: [String: String] = [:]
     var widgetPackageIDs: [String: String] = [:]
+    var builtInWidgetIDs: Set<String> = []
     var activeProfiles: [String] = []
     var profiles: [ConfigurationProfile] = []
     var pinnedProfile: String?
@@ -583,6 +584,7 @@ final class BarStore: NSObject {
         pinnedProfile = loader.pinnedProfile
         widgetPackageNames = loader.widgetPackageNames
         widgetPackageIDs = loader.widgetPackageIDs
+        builtInWidgetIDs = loader.builtInWidgetIDs
         contributions = loader.contributions
         if effectiveDocument == loader.document {
             origins = loader.origins

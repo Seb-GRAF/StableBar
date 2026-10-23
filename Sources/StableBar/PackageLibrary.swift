@@ -143,7 +143,8 @@ final class PackageLibrary {
     var installedPackages: [WidgetPackageManifest] {
         var result: [WidgetPackageManifest] = []
         let newest = installed.sorted { $0.version.compare($1.version, options: .numeric) == .orderedDescending }
-        for manifest in installed.filter(isActive) + newest where !result.contains(where: { $0.id == manifest.id }) {
+        for manifest in installed.filter(isActive) + newest where !result.contains(where: { $0.id == manifest.id })
+            && !WidgetAddCatalog.includes(manifest, record: records[manifest.id]) {
             result.append(manifest)
         }
         return result.sorted { ($0.name, $0.id) < ($1.name, $1.id) }
@@ -175,6 +176,7 @@ final class PackageLibrary {
     /// The only source an installed package can update from: the one that installed it.
     /// Packages without a record, or opened from a folder, update from the Store; a removed source gives none.
     func updateSourceID(for manifest: WidgetPackageManifest) -> String? {
+        guard !WidgetAddCatalog.includes(manifest, record: records[manifest.id]) else { return nil }
         guard let record = records[manifest.id], !record.isLocal else { return PackageSource.storeID }
         return sources.contains { $0.id == record.source } ? record.source : nil
     }
@@ -288,7 +290,8 @@ final class PackageLibrary {
     }
 
     func origin(of manifest: WidgetPackageManifest) -> PackageOrigin? {
-        .installed(record: records[manifest.id], version: manifest.version,
+        if WidgetAddCatalog.includes(manifest, record: records[manifest.id]) { return .builtIn }
+        return .installed(record: records[manifest.id], version: manifest.version,
                    listedInStore: entries.contains { $0.sourceID == PackageSource.storeID && $0.id == manifest.id }, sources: sources)
     }
 
@@ -308,7 +311,7 @@ final class PackageLibrary {
     /// by name, description, ID or source name. Entries with an update come first, then installed packages,
     /// including another source's copy, then the rest; each group by name, then in source order.
     func storeEntries(showingThemes: Bool?, sourceID: String?) -> [PackageIndex.Entry] {
-        let updated = Set(updates.compactMap { update(for: $0)?.key }), owned = Set(installed.map(\.id))
+        let updated = Set(updates.compactMap { update(for: $0)?.key }), owned = Set(installedPackages.map(\.id))
         let sourceOrder = Dictionary(sources.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
         func group(_ entry: PackageIndex.Entry) -> Int { updated.contains(entry.key) ? 0 : owned.contains(entry.id) ? 1 : 2 }
         return entries.filter { entry in

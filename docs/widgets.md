@@ -18,9 +18,9 @@ The AeroSpace connection subscribes to workspace, monitor, window and focus even
 
 ## Essentials details and settings
 
-**Clock & date**, **Battery**, **System monitor**, **Network** and **Calendar** include detail popups when added from Essentials or **Add widget**. They replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed packages keep their settings and remain available for updates; private sources can still offer packages with those IDs.
+**Clock & date**, **Battery**, **System monitor**, **Network** and **Calendar** include detail popups when added from Essentials or **Add widget**. They replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed Store copies become built-in automatically and keep their saved settings and overrides; local folders and private sources can still offer packages with those IDs.
 
-Select a widget in **Settings → Bar → Content** to change what it shows. **Behavior → Details popup** turns its built-in popup on or off. Existing configurations can opt in with `"details": true`. A custom `popup`, `popupName`, menu, `onClick` or `open` keeps its action instead of the built-in details.
+Select a widget in **Settings → Bar → Content** to change what it shows. **Behavior → Details popup** turns its built-in popup on or off. Existing native widgets can opt in with `"details": true`. The five former Store packages gain Essentials details automatically when the app updates, while preserving saved settings and overrides. A custom `popup`, `popupName`, menu, `onClick` or `open` keeps its action instead of the built-in details.
 
 - **Clock & date:** choose a time, date or combined format, or enter a custom DateFormatter pattern. Choose **Follow this Mac** or a time zone. The popup shows the current time and date and a month calendar with previous/next month and Today controls. **Open Calendar** opens the Calendar app; the month view needs no Calendar permission. The week starts on the day in your macOS regional settings.
 - **Battery:** keeps the native battery glyph and its percentage/charging tooltip. The existing display choices can show a percentage, meter or graph. Its details show charge, power source, a time estimate when available, battery health and Battery settings.
