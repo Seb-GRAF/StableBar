@@ -12,7 +12,7 @@
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
 | `system`, `network`, `battery`, `audio`, `calendar` | Native CPU and memory, network, battery, audio output or calendar data | — |
 
-**Add widget** includes Clock & date, Active app, Apple menu, App menus, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu and App menus need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
+**Add widget** includes Clock & date, Active app, Apple menu, App menus, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu and App menus need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
@@ -95,6 +95,19 @@ done
 
 Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` if you use a different configuration. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
 
+## OmniWM workspaces
+
+[OmniWM](https://github.com/OmniNull/OmniWM) runs on Apple Silicon Macs with macOS 26 or later. Turn on **Enable IPC** in OmniWM's menu, then set the source:
+
+```json
+{
+  "workspaceSource": "omniwm",
+  "widgets": [{ "id": "spaces", "type": "workspaces", "position": "left" }]
+}
+```
+
+StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. If the widget says it can't reach OmniWM, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
+
 ## macOS Spaces workspaces
 
 Without a tiling window manager, workspace widgets can show your Mission Control Spaces:
@@ -110,7 +123,7 @@ Choose **Spaces** under **Settings → General → Workspaces** to set the same 
 
 Clicking a desktop posts its **Switch to Desktop N** shortcut. Turn those shortcuts on in **System Settings → Keyboard → Keyboard Shortcuts → Mission Control**, and allow StableBar in **System Settings → Privacy & Security → Accessibility**. macOS offers the shortcuts for desktops 1 to 16. Clicking a window title brings its app to the front. Window titles need Screen Recording access; without it they are empty.
 
-macOS has no public API that lists Spaces or their windows, so this source uses private window-server functions. A macOS update can break it; AeroSpace and yabai don't depend on them.
+macOS has no public API that lists Spaces or their windows, so this source uses private window-server functions. A macOS update can break it; AeroSpace, yabai and OmniWM don't depend on them.
 
 ## Workspace appearance
 

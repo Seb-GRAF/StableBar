@@ -16,7 +16,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .login: ("Open at login", .general, "General", "startup launch")
         case .menuBar: ("Native menu bar reveal delay", .general, "General › Native menu bar", "macOS hide hover throttle wait seconds milliseconds accessibility")
         case .windows: ("Keep windows clear of the bar", .general, "General", "windows notifications overlap clearance accessibility")
-        case .workspaces: ("Workspace manager", .general, "General", "aerospace yabai spaces mission control desktops source reconnect connection")
+        case .workspaces: ("Workspace manager", .general, "General", "aerospace yabai omniwm spaces mission control desktops source reconnect connection")
         case .access: ("Permissions", .general, "General", "access accessibility calendar location automation denied")
         case .configuration: ("Configuration file", .general, "General", "json path reload finder temporary")
         case .commandLine: ("Install the stablebar command", .general, "General › Command line", "terminal shell path cli script usr local bin")

@@ -46,7 +46,7 @@ enum WidgetAddCatalog {
               ])])], replacesPackage: "system-monitor"),
         .init(id: "network", name: "Network", symbol: "network", description: "Upload and download rates, with activity for each interface.", properties: ["type": .string("network"), "details": .bool(true)], replacesPackage: "network-speed"),
         .init(id: "calendar", name: "Calendar", symbol: "calendar", description: "Your next meeting and today’s agenda. Asks for Calendar access.", properties: ["type": .string("calendar"), "details": .bool(true)], replacesPackage: "calendar-agenda"),
-        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai or macOS Spaces.", properties: ["type": .string("workspaces")]),
+        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai, OmniWM or macOS Spaces.", properties: ["type": .string("workspaces")]),
         .init(id: "text", name: "Text", symbol: "textformat", description: "Your own text and optional icon.", properties: ["type": .string("text"), "text": .string("New widget")]),
         .init(id: "spacer", name: "Spacer", symbol: "arrow.left.and.right", description: "Space between widgets.", properties: ["type": .string("spacer")]),
         .init(id: "script", name: "Script", symbol: "terminal", description: "Run a shell command on a schedule.", properties: ["type": .string("script"), "command": .string("date +%H:%M"), "interval": .number(30)], isScript: true)

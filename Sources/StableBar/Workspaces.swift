@@ -9,7 +9,10 @@ struct Workspace: Decodable, Identifiable, Sendable, Equatable {
     let monitor: Int
     var apps: [WorkspaceApp] = []
     var windows: [WorkspaceWindow] = []
+    /// A name the window manager shows instead of `name`, such as an OmniWM workspace's display name.
+    var displayName: String?
     var id: String { name }
+    var label: String { displayName ?? name }
 
     enum CodingKeys: String, CodingKey {
         case name = "workspace"
@@ -36,16 +39,19 @@ struct WorkspaceWindow: Decodable, Identifiable, Sendable, Equatable {
     let id: Int
     let title: String
     let app: WorkspaceApp
+    /// OmniWM's session-scoped window ID, which `omniwmctl window focus` takes instead of `id`.
+    var reference: String?
 
     enum CodingKeys: String, CodingKey {
         case id = "window-id"
         case title = "window-title"
     }
 
-    init(id: Int, title: String, app: WorkspaceApp) {
+    init(id: Int, title: String, app: WorkspaceApp, reference: String? = nil) {
         self.id = id
         self.title = title
         self.app = app
+        self.reference = reference
     }
 
     init(from decoder: Decoder) throws {
@@ -64,14 +70,38 @@ struct AeroSpaceEvent: Decodable, Sendable {
 }
 
 enum WorkspaceSource: String, Decodable, Sendable {
-    case aerospace, yabai, spaces
+    case aerospace, yabai, omniwm, spaces
 
     var title: String {
         switch self {
         case .aerospace: "AeroSpace"
         case .yabai: "yabai"
+        case .omniwm: "OmniWM"
         case .spaces: "Spaces"
         }
+    }
+
+    /// The source's command on `path`, or the `omniwmctl` inside OmniWM's app. Spaces needs no command.
+    func executable(path: String) -> String? {
+        let name: String
+        switch self {
+        case .aerospace, .yabai: name = rawValue
+        case .omniwm: name = "omniwmctl"
+        case .spaces: return nil
+        }
+        if let directory = path.split(separator: ":").first(where: { FileManager.default.isExecutableFile(atPath: "\($0)/\(name)") }) {
+            return "\(directory)/\(name)"
+        }
+        guard self == .omniwm,
+              let bundled = NSWorkspace.shared.urlForApplication(withBundleIdentifier: omniwmBundleID)?
+                .appending(path: "Contents/MacOS/omniwmctl").path,
+              FileManager.default.isExecutableFile(atPath: bundled) else { return nil }
+        return bundled
+    }
+
+    /// The window manager setup offers workspaces for: the configured one, else the first one installed.
+    static func detected(path: String, preferring configured: WorkspaceSource) -> WorkspaceSource? {
+        [configured, .aerospace, .yabai, .omniwm].first { $0.executable(path: path) != nil }
     }
 }
 
@@ -151,10 +181,12 @@ final class WorkspaceStore {
             requestRefresh()
             return
         }
+        let omniwm = source == .omniwm
+        let title = source.title
         observers = [NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
             guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
-                    == "bobko.aerospace" else { return }
+                    == (omniwm ? omniwmBundleID : "bobko.aerospace") else { return }
             MainActor.assumeIsolated { self?.start() }
         }]
         task = Task {
@@ -165,26 +197,29 @@ final class WorkspaceStore {
                     let stream = Process()
                     let output = Pipe()
                     stream.executableURL = URL(filePath: try executable())
-                    stream.arguments = ["subscribe", "focused-workspace-changed", "focused-monitor-changed", "focus-changed",
-                                        "window-detected", "mode-changed"]
+                    // Without --reconnect, omniwmctl exits when OmniWM quits, so this loop reports it and retries.
+                    stream.arguments = omniwm
+                        ? ["subscribe", "active-workspace,focused-monitor,focus,windows-changed,layout-changed,display-changed",
+                           "--no-send-initial", "--format", "ndjson"]
+                        : ["subscribe", "focused-workspace-changed", "focused-monitor-changed", "focus-changed",
+                           "window-detected", "mode-changed"]
                     stream.standardOutput = output
                     stream.standardError = FileHandle.standardError
                     let pending = OSAllocatedUnfairLock(initialState: Data())
-                    let events = AsyncStream<AeroSpaceEvent> { continuation in
+                    let lines = AsyncStream<Data> { continuation in
                         output.fileHandleForReading.readabilityHandler = { handle in
                             let data = handle.availableData
                             if data.isEmpty { continuation.finish(); return }
-                            let parsed = pending.withLock { pending -> [AeroSpaceEvent] in
+                            let parsed = pending.withLock { pending -> [Data] in
                                 pending.append(data)
-                                var parsed: [AeroSpaceEvent] = []
+                                var parsed: [Data] = []
                                 while let newline = pending.firstIndex(of: 10) {
-                                    let line = Data(pending[..<newline])
+                                    parsed.append(Data(pending[..<newline]))
                                     pending.removeSubrange(...newline)
-                                    if let event = try? JSONDecoder().decode(AeroSpaceEvent.self, from: line) { parsed.append(event) }
                                 }
                                 return parsed
                             }
-                            for event in parsed { continuation.yield(event) }
+                            for line in parsed { continuation.yield(line) }
                         }
                         continuation.onTermination = { _ in output.fileHandleForReading.readabilityHandler = nil }
                     }
@@ -196,13 +231,15 @@ final class WorkspaceStore {
                         if stream.isRunning { stream.terminate() }
                     }
                     requestRefresh()
-                    // subscribe sends the current mode immediately on every connection. Consume
+                    // AeroSpace's subscribe sends the current mode immediately on every connection. Consume
                     // that initial snapshot and later events independently of workspace queries.
-                    for await event in events {
+                    var failure: String?
+                    for await line in lines {
                         try Task.checkCancellation()
-                        receive(event)
+                        if omniwm { failure = receiveOmniWM(line) ?? failure }
+                        else if let event = try? JSONDecoder().decode(AeroSpaceEvent.self, from: line) { receive(event) }
                     }
-                    throw CommandFailure(message: "AeroSpace disconnected. Reconnecting…")
+                    throw CommandFailure(message: failure ?? "\(title) disconnected. Reconnecting…")
                 } catch {
                     if Task.isCancelled { return }
                     acceptMode(nil)
@@ -229,6 +266,14 @@ final class WorkspaceStore {
         } else {
             requestRefresh()
         }
+    }
+
+    /// Refreshes on an event and returns the failure a line reports, such as IPC being off.
+    private func receiveOmniWM(_ line: Data) -> String? {
+        guard let response = try? JSONDecoder().decode(OmniWMResponse<OmniWMEmpty>.self, from: line) else { return nil }
+        if !response.ok { return response.failureMessage }
+        if response.kind == "event" { requestRefresh() } else { connectionError = nil }
+        return nil
     }
 
     func acceptMode(_ mode: String?) {
@@ -270,12 +315,20 @@ final class WorkspaceStore {
             async let spaces = runCommand(executable, arguments: ["-m", "query", "--spaces"])
             async let windows = runCommand(executable, arguments: ["-m", "query", "--windows"])
             async let displays = runCommand(executable, arguments: ["-m", "query", "--displays"])
-            let screens = NSScreen.screens.map { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value }
             let bundleIDs = NSWorkspace.shared.runningApplications.reduce(into: [Int32: String]()) { result, app in
                 result[app.processIdentifier] = app.bundleIdentifier
             }
             snapshot = try await yabaiSnapshot(spaces: spaces, windows: windows, displays: displays,
-                                               screenIDs: screens, bundleIDs: bundleIDs)
+                                               screenIDs: screenIDs, bundleIDs: bundleIDs)
+        case .omniwm:
+            let executable = try executable()
+            async let spaces = omniwmCommand(executable, arguments: [
+                "query", "workspaces", "--fields", "raw-name,display-name,display,is-visible,is-current"
+            ])
+            async let windows = omniwmCommand(executable, arguments: [
+                "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad"
+            ])
+            snapshot = try await omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: screenIDs)
         case .spaces:
             snapshot = try currentSpaces()
         }
@@ -287,31 +340,32 @@ final class WorkspaceStore {
     }
 
     func select(_ workspace: Workspace) {
-        if source == .spaces {
+        switch source {
+        case .spaces:
             do { try switchToDesktop(Int(workspace.name)!) }
             catch { self.error = error.localizedDescription }
-            return
-        }
-        Task {
-            do {
-                let arguments = source == .aerospace ? ["workspace", workspace.name] : ["-m", "space", "--focus", workspace.name]
-                _ = try await runCommand(executable(), arguments: arguments)
-                if source == .yabai { try await refresh() }
-            } catch {
-                self.error = error.localizedDescription
-            }
+        case .aerospace: run(["workspace", workspace.name])
+        case .yabai: run(["-m", "space", "--focus", workspace.name])
+        case .omniwm: run(["workspace", "focus-name", workspace.name])
         }
     }
 
     func focus(_ window: WorkspaceWindow) {
-        if source == .spaces {
-            NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
-            return
+        switch source {
+        case .spaces: NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
+        case .aerospace: run(["focus", "--window-id", String(window.id)])
+        case .yabai: run(["-m", "window", "--focus", String(window.id)])
+        case .omniwm: if let reference = window.reference { run(["window", "focus", reference]) }
         }
+    }
+
+    /// yabai sends no events of its own, so its workspaces refresh after each click.
+    private func run(_ arguments: [String]) {
+        let source = source
         Task {
             do {
-                let arguments = source == .aerospace ? ["focus", "--window-id", String(window.id)] : ["-m", "window", "--focus", String(window.id)]
-                _ = try await runCommand(executable(), arguments: arguments)
+                if source == .omniwm { _ = try await omniwmCommand(executable(), arguments: arguments) }
+                else { _ = try await runCommand(executable(), arguments: arguments) }
                 if source == .yabai { try await refresh() }
             } catch {
                 self.error = error.localizedDescription
@@ -319,13 +373,16 @@ final class WorkspaceStore {
         }
     }
 
+    private var screenIDs: [UInt32] {
+        NSScreen.screens.map { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value }
+    }
+
     private func executable() throws -> String {
         if let executablePath { return try executablePath() }
-        let directories = shellEnvironment.withLock { $0["PATH"] ?? "" }.split(separator: ":")
-        guard let directory = directories.first(where: { FileManager.default.isExecutableFile(atPath: "\($0)/\(source.rawValue)") }) else {
+        guard let executable = source.executable(path: shellEnvironment.withLock { $0["PATH"] ?? "" }) else {
             throw CommandFailure(message: "\(source.title) is not on your login shell's PATH.")
         }
-        return "\(directory)/\(source.rawValue)"
+        return executable
     }
 
     func trigger() {

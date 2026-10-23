@@ -30,7 +30,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 - **Themes.** Six ship with the app and more come from the store. **Save as Theme…** turns your own look into one. Experimental Liquid Glass on macOS 26.
 - **Built-in widgets.** Workspaces, app menus, the active app, clock, CPU and memory, network, battery, sound and calendar, without running a script.
 - **Any script is a widget.** Print text or JSON from any language, refresh on a timer or on events, and open a popup with graphs, lists and controls.
-- **Window managers.** Workspaces from [AeroSpace](https://github.com/nikitabobko/AeroSpace) or [yabai](https://github.com/koekeishiya/yabai). Without one, StableBar can keep windows and notifications clear of the bar.
+- **Window managers.** Workspaces from [AeroSpace](https://github.com/nikitabobko/AeroSpace), [yabai](https://github.com/koekeishiya/yabai) or [OmniWM](https://github.com/OmniNull/OmniWM). Without one, StableBar can keep windows and notifications clear of the bar.
 - **Every display.** Notch-aware placement, widgets per kind of screen and a separate bar for each screen setup.
 - **Scriptable.** The command line queries and edits the running bar and sends events from other tools.
 

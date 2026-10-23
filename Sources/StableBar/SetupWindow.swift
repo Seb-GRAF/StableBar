@@ -136,10 +136,8 @@ final class SetupSession {
         currentThemeKey = store.selectedThemeKey
         themes = themeChoices(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               selectedKey: currentThemeKey)
-        let path = shellEnvironment.withLock { $0["PATH", default: ""] }.split(separator: ":")
-        let source = [store.configuration?.workspaceSource ?? .aerospace, .aerospace, .yabai].first { source in
-            path.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(source.rawValue)") }
-        }
+        let source = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
+                                              preferring: store.configuration?.workspaceSource ?? .aerospace)
         sets = [.system, .meetings] + (source.map { [.workspaces($0)] } ?? [])
         sessionEdits = store.sessionEdits
         preview()

@@ -28,7 +28,7 @@ struct GeneralSettingsView: View {
                             set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
                             unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
                         bar.toggle("Keep windows clear of the bar", "keepWindowsClear", default: false,
-                                   hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace or yabai sets gaps.")
+                                   hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace, yabai or OmniWM sets gaps.")
                         bar.toggle("Keep notifications clear of the bar", "keepNotificationsClear", default: false,
                                    hint: "macOS 26 and later")
                     }
@@ -38,7 +38,7 @@ struct GeneralSettingsView: View {
                         SettingRow(title: "Workspace manager") {
                             SettingsSegments(selection: Binding(get: { source }, set: {
                                 if $0 != source { editor.change(ConfigurationEdit(action: .workspaceSource, name: $0.rawValue)) }
-                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai"), (.spaces, "Spaces")], stretches: false)
+                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai"), (.omniwm, "OmniWM"), (.spaces, "Spaces")], stretches: false)
                         }
                         connection
                     }

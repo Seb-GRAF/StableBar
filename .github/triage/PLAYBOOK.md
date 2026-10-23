@@ -64,7 +64,7 @@ configuration:
 - Script widgets and commands: run the command from the configuration with `/bin/zsh -c`
   to see its output and exit status. Ask first when the command changes anything.
 - Crash reports and the system log, at the paths in the context file.
-- Displays, the notch, Spaces, and AeroSpace or yabai with their versions and
+- Displays, the notch, Spaces, and AeroSpace, yabai or OmniWM with their versions and
   configuration, when the problem involves placement or workspaces.
 - Preferences, with the `defaults` command in the context file.
 

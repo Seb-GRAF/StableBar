@@ -569,7 +569,7 @@ struct SetupTourView: View {
                 if case let .workspaces(source) = set { return source }
                 return nil
             }).first {
-                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .aerospace ? "Set gaps.outer.top in AeroSpace to leave room for the bar." : "Use yabai’s external_bar setting to leave room for the bar.")")
+                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
             }
         }

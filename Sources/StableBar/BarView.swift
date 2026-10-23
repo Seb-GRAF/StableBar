@@ -163,7 +163,7 @@ struct BarView: View {
                         }
                         if widget.content == .workspaces && popup == nil && command == nil {
                             ForEach(store.workspaceStore.workspaces.filter { $0.monitor == display.id }) { workspace in
-                                Button("Workspace \(workspace.name)") { store.workspaceStore.select(workspace) }
+                                Button("Workspace \(workspace.label)") { store.workspaceStore.select(workspace) }
                             }
                         } else if popup == nil && command == nil, let items = menuItems {
                             ForEach(items, id: \.self) { item in
@@ -618,10 +618,10 @@ struct WorkspaceView: View {
                 let glyph = styles.glyph(hovered: hovered)
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
-                        Text(workspace.name)
+                        Text(workspace.label)
                     }
-                    .help("Switch to workspace \(workspace.name)")
-                    .accessibilityLabel("Workspace \(workspace.name)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
+                    .help("Switch to workspace \(workspace.label)")
+                    .accessibilityLabel("Workspace \(workspace.label)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
                     .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
                     if configuration?.showApps != false {
                         if configuration?.windows == true {
@@ -667,7 +667,7 @@ struct WorkspaceView: View {
                     Button { workspaceStore.select(workspace) } label: {
                         Color.clear.contentShape(Rectangle())
                     }
-                    .accessibilityLabel("Switch to workspace \(workspace.name)")
+                    .accessibilityLabel("Switch to workspace \(workspace.label)")
                 }
                 .background {
                     if indicator == .background && workspace.isFocused {

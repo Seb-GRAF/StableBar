@@ -191,6 +191,38 @@ func popupFoldKeepsTheScrollViewportAndPosition(documentHeight: Double) {
     #expect(disconnected[0].apps.map(\.name) == ["Finder", "Safari"])
 }
 
+@Test func omniwmSnapshotMapsDisplaysWindowsAndTheCurrentWorkspace() throws {
+    let spaces = Data(#"""
+    {"ok":true,"kind":"query","status":"success","result":{"kind":"workspaces","payload":{"workspaces":[
+      {"rawName":"1","displayName":"Web","display":{"id":"display:80","name":"Built-in","isMain":true},"isVisible":true,"isCurrent":true},
+      {"rawName":"2","displayName":"2","display":{"id":"display:90","name":"Studio","isMain":false},"isVisible":true,"isCurrent":false},
+      {"rawName":"3","displayName":"3","display":{"id":"display:80","name":"Built-in","isMain":true},"isVisible":false,"isCurrent":false},
+      {"rawName":"4","displayName":"4","display":{"id":"display:70","name":"Gone","isMain":false},"isVisible":true,"isCurrent":false},
+      {"rawName":"5","displayName":"5","isVisible":false,"isCurrent":false}]}}}
+    """#.utf8)
+    let windows = Data(#"""
+    {"ok":true,"kind":"query","status":"success","result":{"kind":"windows","payload":{"windows":[
+      {"id":"ow_a","windowId":11,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Safari","bundleId":"com.apple.Safari"},"title":"Docs","isScratchpad":false},
+      {"id":"ow_b","windowId":12,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Ghostty"},"isScratchpad":false},
+      {"id":"ow_c","windowId":13,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Safari","bundleId":"com.apple.Safari"},"title":"Mail","isScratchpad":false},
+      {"id":"ow_d","windowId":14,"workspace":{"id":"u2","rawName":"2","displayName":"2","number":2},"app":{"name":"Notes","bundleId":"com.apple.Notes"},"title":"Scratch","isScratchpad":true},
+      {"id":"ow_e","windowId":15,"app":{"name":"Finder","bundleId":"com.apple.finder"},"title":"Unassigned","isScratchpad":false}]}}}
+    """#.utf8)
+    let snapshot = try omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: [90, 80])
+    #expect(snapshot.map(\.name) == ["1", "2", "3"])
+    #expect(snapshot.map(\.label) == ["Web", "2", "3"])
+    #expect(snapshot.map(\.monitor) == [2, 1, 2])
+    #expect(snapshot.map(\.isFocused) == [true, false, false])
+    #expect(snapshot.map(\.isVisible) == [true, true, false])
+    #expect(snapshot[0].windows.map(\.id) == [11, 12, 13])
+    #expect(snapshot[0].windows.map(\.reference) == ["ow_a", "ow_b", "ow_c"])
+    #expect(snapshot[0].windows.map(\.title) == ["Docs", "", "Mail"])
+    #expect(snapshot[0].windows.map(\.app.bundleID) == ["com.apple.Safari", "Ghostty", "com.apple.Safari"])
+    #expect(snapshot[0].apps.map(\.name) == ["Ghostty", "Safari"])
+    #expect(snapshot[1].windows.isEmpty)
+    #expect(snapshot[2].apps.isEmpty)
+}
+
 @Test func spacesSnapshotNumbersDesktopsAcrossDisplays() throws {
     func plist(_ value: Any) throws -> Data {
         try PropertyListSerialization.data(fromPropertyList: value, format: .binary, options: 0)
@@ -247,6 +279,95 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
     #expect(store.error == "Window no longer exists")
     let calls = try String(contentsOf: log, encoding: .utf8).split(separator: "\n")
     #expect(calls.first == (source == .aerospace ? "focus --window-id 73" : "-m window --focus 73"))
+}
+
+@MainActor private func omniwmFixture(_ body: String) throws -> (store: WorkspaceStore, log: URL, directory: URL) {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let executable = directory.appending(path: "omniwmctl")
+    let log = directory.appending(path: "calls")
+    try Data("#!/bin/sh\necho \"$*\" >> '\(log.path)'\n\(body)\n".utf8).write(to: executable)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+    let store = WorkspaceStore()
+    store.reconnectDelay = 30
+    store.executablePath = { executable.path }
+    return (store, log, directory)
+}
+
+private func calls(_ log: URL) -> [Substring] {
+    ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n")
+}
+
+@Test @MainActor func omniwmClicksFocusWorkspacesByRawNameAndWindowsByTheirOpaqueID() async throws {
+    let fixture = try omniwmFixture("""
+    case "$1" in
+      workspace) printf '%s\\n' '{"ok":false,"kind":"workspace","status":"ignored","code":"no_change"}'; exit 1 ;;
+      window) printf '%s\\n' '{"ok":false,"kind":"window","status":"error","code":"not_found"}'; exit 1 ;;
+    esac
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    fixture.store.source = .omniwm
+    fixture.store.select(Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1, displayName: "Web"))
+    for _ in 0..<100 where calls(fixture.log).isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(fixture.store.error == nil)
+    let app = WorkspaceApp(workspace: "1", name: "Safari", bundleID: "com.apple.Safari")
+    fixture.store.focus(WorkspaceWindow(id: 11, title: "Docs", app: app, reference: "ow_a"))
+    for _ in 0..<100 where fixture.store.error == nil { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(fixture.store.error == "OmniWM: not_found")
+    #expect(calls(fixture.log) == ["workspace focus-name 1 --format json", "window focus ow_a --format json"])
+}
+
+@Test @MainActor func omniwmEventsRefreshWorkspacesAfterTheSubscriptionStarts() async throws {
+    let fixture = try omniwmFixture("""
+    case "$1" in
+      subscribe)
+        printf '%s\\n' '{"ok":true,"kind":"subscribe","status":"subscribed"}'
+        /bin/sleep 0.3
+        printf '%s\\n' '{"ok":true,"kind":"event","channel":"active-workspace","status":"success"}'
+        exec /bin/sleep 30 ;;
+      query)
+        if [ "$2" = workspaces ]; then printf '%s\\n' '{"ok":true,"result":{"payload":{"workspaces":[]}}}'
+        else printf '%s\\n' '{"ok":true,"result":{"payload":{"windows":[]}}}'; fi ;;
+    esac
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    fixture.store.configure(source: .omniwm, workspaces: true, mode: false)
+    for _ in 0..<200 where calls(fixture.log).filter({ $0.hasPrefix("query workspaces") }).count < 2 {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    let made = calls(fixture.log)
+    #expect(made.contains("subscribe active-workspace,focused-monitor,focus,windows-changed,layout-changed,display-changed --no-send-initial --format ndjson"))
+    #expect(made.filter { $0 == "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json" }.count == 2)
+    #expect(made.contains("query windows --fields id,window-id,workspace,app,title,is-scratchpad --format json"))
+    #expect(fixture.store.error == nil)
+    #expect(fixture.store.isRunning)
+}
+
+@Test @MainActor func omniwmConnectionFailuresSayHowToTurnOnIPC() async throws {
+    let fixture = try omniwmFixture("""
+    printf '%s\\n' '{"ok":false,"source":"cli","status":"error","code":"transport_failure","message":"omniwmctl: No such file or directory","exitCode":2}'
+    exit 2
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    fixture.store.configure(source: .omniwm, workspaces: true, mode: false)
+    for _ in 0..<100 where fixture.store.connectionError == nil { try await Task.sleep(for: .milliseconds(20)) }
+    let message = "Can't reach OmniWM. Check that it's running and that Enable IPC is on in its menu."
+    #expect(fixture.store.connectionError == message)
+    #expect(fixture.store.error == message)
+}
+
+@Test func setupDetectsTheConfiguredWindowManagerBeforeOthersOnThePath() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    for name in ["yabai", "omniwmctl"] {
+        FileManager.default.createFile(atPath: directory.appending(path: name).path, contents: Data("#!/bin/sh\n".utf8),
+                                       attributes: [.posixPermissions: 0o700])
+    }
+    #expect(WorkspaceSource.detected(path: directory.path, preferring: .omniwm) == .omniwm)
+    #expect(WorkspaceSource.detected(path: directory.path, preferring: .aerospace) == .yabai)
+    #expect(WorkspaceSource.omniwm.executable(path: directory.path) == directory.appending(path: "omniwmctl").path)
 }
 
 @Test @MainActor func workspaceWindowTitlesUseTheConfiguredCharacterLimit() throws {
@@ -307,6 +428,16 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
     renderer.proposedSize = ProposedViewSize(width: initialWidth, height: nil)
     #expect(expandedWidth > initialWidth)
     #expect(try #require(renderer.nsImage).size.width == expandedWidth)
+}
+
+@Test @MainActor func workspaceCellsShowTheWindowManagersDisplayName() throws {
+    let workspaceStore = WorkspaceStore()
+    workspaceStore.workspaces = [Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1)]
+    let view = WorkspaceView(workspaceStore: workspaceStore, monitor: 1,
+                             appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), animation: WidgetAnimation(duration: 0))
+    let numbered = try #require(ImageRenderer(content: view).nsImage).size.width
+    workspaceStore.workspaces = [Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1, displayName: "Research")]
+    #expect(try #require(ImageRenderer(content: view).nsImage).size.width > numbered)
 }
 
 @Test func appGlyphsMatchExactKeysThenTheLongestPrefixThenTheFallback() {

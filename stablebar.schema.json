@@ -155,7 +155,7 @@
     },
     "workspaceSource": {
       "type": "string",
-      "enum": ["aerospace", "yabai", "spaces"]
+      "enum": ["aerospace", "yabai", "omniwm", "spaces"]
     },
     "modeAliases": {
       "anyOf": [
