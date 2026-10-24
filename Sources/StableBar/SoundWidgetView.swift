@@ -14,6 +14,7 @@ struct SoundWidgetView: View {
     let runAction: (String, [String: String]) -> Void
     @State private var dragging = false
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The icon alone, drawn like the default layout's, while the slider shows the volume.
@@ -47,7 +48,7 @@ struct SoundWidgetView: View {
     }
 
     private func expand(_ open: Bool) {
-        guard !measuring else { return }
+        guard !measuring, moreWidgetsAnchor == nil else { return }
         store.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
     }
 }

@@ -12,6 +12,7 @@ struct HoverLayoutView<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var editing = false
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -36,7 +37,7 @@ struct HoverLayoutView<Content: View>: View {
     }
 
     private func expand(_ open: Bool) {
-        guard !measuring else { return }
+        guard !measuring, moreWidgetsAnchor == nil else { return }
         store.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
     }
 }

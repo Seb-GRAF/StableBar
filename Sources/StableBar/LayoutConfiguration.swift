@@ -76,10 +76,14 @@ struct BarPlacement: Equatable {
     let width: CGFloat
 }
 
+struct BarOverflow: Equatable {
+    let x: CGFloat
+    let ids: [String]
+}
+
 struct AdaptiveBarPlan {
     var placements: [String: BarPlacement] = [:]
-    var overflow: Set<String> = []
-    var overflowX: CGFloat?
+    var overflow: [BarOverflow] = []
 }
 
 struct AdaptiveBarPlanner {
@@ -92,42 +96,45 @@ struct AdaptiveBarPlanner {
     func plan(width: CGFloat, items: [BarLayoutItem]) -> AdaptiveBarPlan {
         var result = AdaptiveBarPlan()
         if let notch {
-            let left = items.filter { $0.position == .left || $0.position == .notchLeft }
-            let right = items.filter { $0.position != .left && $0.position != .notchLeft }
-            let leftEnd = max(inset, notch.lowerBound - notchSpacing)
-            let rightStart = min(width - inset, notch.upperBound + notchSpacing)
-            let leftVisible = fitting(left, capacity: leftEnd - inset, overflow: &result.overflow)
-            var rightVisible = fitting(right, capacity: width - inset - rightStart, overflow: &result.overflow)
-            let reserve = result.overflow.isEmpty ? 0 : overflowWidth + spacing
-            if reserve > 0 {
-                rightVisible = fitting(rightVisible, capacity: width - inset - rightStart - reserve, overflow: &result.overflow)
-                result.overflowX = width - inset - overflowWidth
-            }
-            place(leftVisible, start: inset, end: leftEnd, positions: [.left, .notchLeft], result: &result)
-            place(rightVisible, start: rightStart, end: width - inset - reserve,
-                  positions: [.notchRight, .center, .right], result: &result)
+            let left: [WidgetPosition] = [.left, .notchLeft]
+            let right: [WidgetPosition] = [.notchRight, .center, .right]
+            segment(left.flatMap { position in items.filter { $0.position == position } },
+                    start: inset, end: max(inset, notch.lowerBound - notchSpacing), buttonAtEnd: true, positions: left, result: &result)
+            segment(right.flatMap { position in items.filter { $0.position == position } },
+                    start: min(width - inset, notch.upperBound + notchSpacing), end: width - inset, buttonAtEnd: false,
+                    positions: right, result: &result)
         } else {
-            var visible = fitting(items, capacity: width - inset * 2, overflow: &result.overflow)
-            let reserve = result.overflow.isEmpty ? 0 : overflowWidth + spacing
-            if reserve > 0 {
-                visible = fitting(visible, capacity: width - inset * 2 - reserve, overflow: &result.overflow)
-                result.overflowX = width - inset - overflowWidth
-            }
-            place(visible, start: inset, end: width - inset - reserve,
-                  positions: [.left, .notchLeft, .center, .notchRight, .right], result: &result)
+            segment(items, start: inset, end: width - inset, buttonAtEnd: true,
+                    positions: [.left, .notchLeft, .center, .notchRight, .right], result: &result)
         }
         return result
     }
 
-    private func fitting(_ items: [BarLayoutItem], capacity: CGFloat, overflow: inout Set<String>) -> [BarLayoutItem] {
+    private func segment(_ items: [BarLayoutItem], start: CGFloat, end: CGFloat, buttonAtEnd: Bool,
+                         positions: [WidgetPosition], result: inout AdaptiveBarPlan) {
+        var visible = fitting(items, capacity: end - start, fromEnd: buttonAtEnd)
+        if visible.count == items.count {
+            place(visible, start: start, end: end, positions: positions, result: &result)
+            return
+        }
+        let reserve = overflowWidth + spacing
+        visible = fitting(visible, capacity: end - start - reserve, fromEnd: buttonAtEnd)
+        let hidden = positions.flatMap { position in
+            items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
+        }
+        result.overflow.append(BarOverflow(x: buttonAtEnd ? end - overflowWidth : start, ids: hidden.map(\.id)))
+        place(visible, start: buttonAtEnd ? start : start + reserve, end: buttonAtEnd ? end - reserve : end,
+              positions: positions, result: &result)
+    }
+
+    private func fitting(_ items: [BarLayoutItem], capacity: CGFloat, fromEnd: Bool) -> [BarLayoutItem] {
         var visible = items
         let candidates = items.enumerated().filter { $0.element.canOverflow && !$0.element.isSpacer }.sorted {
             if $0.element.priority != $1.element.priority { return $0.element.priority < $1.element.priority }
-            return $0.offset > $1.offset
+            return fromEnd ? $0.offset > $1.offset : $0.offset < $1.offset
         }
         for candidate in candidates {
             if occupiedWidth(visible) <= capacity { break }
-            overflow.insert(candidate.element.id)
             visible.removeAll { $0.id == candidate.element.id }
         }
         return visible

@@ -2,6 +2,11 @@ import SwiftUI
 
 struct BarView: View {
     static let moreWidgetsID = "StableBar.moreWidgets"
+
+    static func moreWidgetsID(_ position: WidgetPosition, notched: Bool) -> String {
+        notched && [.left, .notchLeft].contains(position) ? "\(moreWidgetsID).left" : moreWidgetsID
+    }
+
     let store: BarStore
     let display: BarDisplay
     var nativeDecorations = false
@@ -9,7 +14,6 @@ struct BarView: View {
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var expandedUnits: Set<String> = []
-    @State private var overflowAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -58,14 +62,17 @@ struct BarView: View {
                                     .transition(visibilityTransition(unit.transition ?? config.bar.motion.transition, still: reduceMotion))
                             }
                         }
-                        if let x = plan.overflowX {
-                            overflowMenu(units.filter { plan.overflow.contains($0.id) }, config: config)
+                        ForEach(plan.overflow, id: \.x) { overflow in
+                            let overflowUnits = overflow.ids.map { id in units.first { $0.id == id }! }
+                            MoreWidgetsButton(units: overflowUnits, config: config, store: store, display: display,
+                                              id: Self.moreWidgetsID(overflowUnits[0].position, notched: notch != nil))
                                 .frame(width: 30, height: geometry.size.height / scale)
-                                .background(PopupAnchor(view: overflowAnchor, popup: store.popup, id: Self.moreWidgetsID))
-                                .offset(x: x)
+                                .offset(x: overflow.x)
+                                .transition(.opacity)
                         }
                     }
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
+                    .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow)
                     .overlay {
                         HStack(spacing: 0) {
                             ForEach(units) { unit in
@@ -152,68 +159,33 @@ struct BarView: View {
             BarUnitView(unit: unit, config: config, store: store, display: display.id)
         }
     }
+}
 
-    private func overflowMenu(_ units: [BarUnit], config: Configuration) -> some View {
-        Menu {
-            ForEach(units) { unit in
-                Section {
-                    ForEach(unit.widgets) { widget in
-                        let popup = widgetPopup(widget, store: store)
-                        let command = store.scripts[widget.id]?.output.onClick ?? widget.onClick
-                        let menuItems: [AppMenuItem]? = switch widget.content {
-                        case .appleMenu: [store.appMenu.appleMenu].compactMap { $0 }
-                        case .appMenu: store.appMenu.items
-                        default: nil
-                        }
-                        if widget.content == .workspaces && popup == nil && command == nil {
-                            ForEach(store.workspaceStore.workspaces.filter { $0.monitor == display.id }) { workspace in
-                                Button("Workspace \(workspace.label)") { store.workspaceStore.select(workspace) }
-                            }
-                        } else if popup == nil && command == nil, let items = menuItems {
-                            ForEach(items, id: \.self) { item in
-                                Button(item.title) {
-                                    guard let popup = store.appMenu.popup(for: item) else { return }
-                                    store.popup.toggle(popup, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
-                                                       store: store, anchor: overflowAnchor)
-                                }
-                            }
-                        } else {
-                            Button(overflowTitle(widget)) {
-                                if let popup {
-                                    store.popup.toggle(popup, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults), store: store, anchor: overflowAnchor)
-                                } else if let command {
-                                    store.runAction(command, widget: widget,
-                                                    event: ScriptEvent(sender: "mouse.clicked", environment: ["BUTTON": "left", "SID": String(display.id)]))
-                                } else if let open = widget.open {
-                                    OpenTarget(open)!.open()
-                                } else if widget.content == .controlCenter {
-                                    store.appMenu.openControlCenter()
-                                } else if widget.content == .menuBarItems {
-                                    Task {
-                                        guard let popup = await store.appMenu.menuBarItemsPopup() else { return }
-                                        store.popup.toggle(popup, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
-                                                           store: store, anchor: overflowAnchor)
-                                    }
-                                }
-                            }
-                            .disabled(popup == nil && command == nil && widget.open == nil
-                                      && widget.content != .controlCenter && widget.content != .menuBarItems)
-                        }
-                    }
+private struct MoreWidgetsButton: View {
+    let units: [BarUnit]
+    let config: Configuration
+    let store: BarStore
+    let display: BarDisplay
+    let id: String
+    @State private var anchor = NSView()
+
+    var body: some View {
+        Button {
+            store.popup.showWidgets(defaults: config.popupDefaults.inheriting(config.defaults), store: store, anchor: anchor) {
+                HStack(spacing: config.bar.spacing) {
+                    ForEach(units) { BarUnitView(unit: $0, config: config, store: store, display: display.id) }
                 }
+                .environment(\.moreWidgetsAnchor, anchor)
+                .environment(\.screenKind, ScreenKind(display))
             }
         } label: {
             Image(systemName: "ellipsis").frame(width: 30, height: 24).contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .background(PopupAnchor(view: anchor, popup: store.popup, id: id))
+        .onChange(of: units.map(\.id)) { store.popup.removeAnchor(anchor) }
         .accessibilityLabel("More widgets")
         .help("More widgets")
-    }
-
-    private func overflowTitle(_ widget: WidgetConfiguration) -> String {
-        let text = store.label(for: widget).text
-        return text.isEmpty ? widget.id : text
     }
 }
 
@@ -235,6 +207,7 @@ extension EnvironmentValues {
         get { self[MeasuringBarWidthsKey.self] }
         set { self[MeasuringBarWidthsKey.self] = newValue }
     }
+    @Entry var moreWidgetsAnchor: NSView?
 }
 
 /// Marks the bar's hidden copy that measures widget widths and keeps it still: nothing animates there.
@@ -331,10 +304,13 @@ struct WidgetView: View {
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
+    @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.style]))
     }
+
+    private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }
 
     private var inlineHoverControls: Bool { store.configuration?.bar.inlineHoverControls == true }
 
@@ -363,7 +339,7 @@ struct WidgetView: View {
         } else if let popup = widgetPopup(widget, store: store) {
             Button {
                 guard store.barEditing.allowsWidgetActions else { return }
-                store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: popupAnchor)
+                store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
             } label: {
                 if widget.id == AppUpdate.widgetID {
                     tile.accessibilityLabel(widget.tooltip!)
@@ -384,10 +360,10 @@ struct WidgetView: View {
         } else if widget.content == .menuBarItems {
             Button {
                 guard store.barEditing.allowsWidgetActions else { return }
-                if store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor) { return store.popup.close() }
+                if store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(clickAnchor) { return store.popup.close() }
                 Task {
                     guard let popup = await store.appMenu.menuBarItemsPopup() else { return }
-                    store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: popupAnchor)
+                    store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
                 }
             } label: { tile }
                 .buttonStyle(.plain)
@@ -523,7 +499,7 @@ struct WidgetView: View {
 
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
         guard let popup = store.appMenu.popup(for: item) else { return }
-        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: anchor)
+        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
     private func runAction(_ command: String, sender: String, button: String? = nil) {
@@ -542,12 +518,13 @@ struct WidgetView: View {
                           modeAliases: store.configuration?.look(on: screenKind).modeAliases ?? [:], widgetID: widget.id,
                           allowsWindowDragging: store.barEditing.allowsWidgetActions)
         case let .appMenu(expandOnHover) where widget.layout == nil:
-            AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expandOnHover, hovering: hovered,
+            let expands = expandOnHover && moreWidgetsAnchor == nil
+            AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
                         expanded: store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true,
                         appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                         padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess) { expanded in
-                if !measuring && expandOnHover {
+                if !measuring && expands {
                     store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
             }
