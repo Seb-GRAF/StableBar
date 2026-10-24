@@ -272,6 +272,13 @@ final class WidgetPopup {
         }
     }
 
+    func showRow(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView, @ViewBuilder row: () -> some View) {
+        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor,
+                    maxWidth: anchor.window!.screen!.visibleFrame.width - 16, alignment: .leading, ignoresMouseEvents: false) { _ in row() }
+        self.store = store
+        watchEvents(anchor: anchor, pinnable: false)
+    }
+
     func showWidgets(defaults: WidgetStyle, store: BarStore, anchor: NSView, @ViewBuilder widgets: () -> some View) {
         guard store.barEditing.allowsWidgetActions else { return }
         if self.anchor === anchor {
@@ -294,7 +301,8 @@ final class WidgetPopup {
     /// Shows `content` in a tooltip under `anchor`, drawn in the widget's popup style, which opens and closes with the
     /// bar's popup motion.
     private func openTooltip(id: String, style widgetStyle: WidgetStyle, defaults: WidgetStyle, store: BarStore, anchor: NSView,
-                             maxWidth: CGFloat = 320, ignoresMouseEvents: Bool, @ViewBuilder content: (WidgetStyle) -> some View) {
+                             maxWidth: CGFloat = 320, alignment: PopupAlignment = .center, ignoresMouseEvents: Bool,
+                             @ViewBuilder content: (WidgetStyle) -> some View) {
         let window = anchor.window!
         let screen = window.screen!
         let kind = ScreenKind(BarDisplay(screen: screen))
@@ -322,7 +330,8 @@ final class WidgetPopup {
                 if panel === self?.panel { self?.hoverPopup(inside) }
             })
         let size = host.fittingSize
-        let x = min(max(frame.midX - size.width / 2, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
+        let alignedX = alignment == .leading ? frame.minX - shadowInset : frame.midX - size.width / 2
+        let x = min(max(alignedX, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
         panel.setFrame(NSRect(x: x, y: top - size.height - 6 + shadowInset, width: size.width, height: size.height), display: false)
         panel.title = "\(id) tooltip"
         panel.isOpaque = false

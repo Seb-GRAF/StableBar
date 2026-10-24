@@ -65,10 +65,11 @@ struct BarUnit: Identifiable {
 struct BarLayoutItem {
     let id: String
     let position: WidgetPosition
-    let width: CGFloat
+    var width: CGFloat
     var priority = 0
     var canOverflow = true
     var isSpacer = false
+    var growth: CGFloat = 0
 }
 
 struct BarPlacement: Equatable {
@@ -85,6 +86,7 @@ struct BarOverflow: Equatable {
 struct AdaptiveBarPlan {
     var placements: [String: BarPlacement] = [:]
     var overflow: [BarOverflow] = []
+    var cramped: Set<String> = []
 }
 
 struct AdaptiveBarPlanner {
@@ -114,17 +116,26 @@ struct AdaptiveBarPlanner {
     private func segment(_ items: [BarLayoutItem], start: CGFloat, end: CGFloat, buttonAtEnd: Bool,
                          positions: [WidgetPosition], result: inout AdaptiveBarPlan) {
         var visible = fitting(items, capacity: end - start, fromEnd: buttonAtEnd)
-        if visible.count == items.count {
-            place(visible, start: start, end: end, positions: positions, result: &result)
-            return
+        let overflows = visible.count < items.count
+        let reserve = overflows ? overflowWidth + spacing : 0
+        if overflows {
+            visible = fitting(visible, capacity: end - start - reserve, fromEnd: buttonAtEnd)
         }
-        let reserve = overflowWidth + spacing
-        visible = fitting(visible, capacity: end - start - reserve, fromEnd: buttonAtEnd)
-        let hidden = positions.flatMap { position in
-            items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
+        var room = end - start - reserve - occupiedWidth(visible)
+        for index in visible.indices where visible[index].growth > 0 {
+            if visible[index].growth <= room {
+                visible[index].width += visible[index].growth
+                room -= visible[index].growth
+            } else {
+                result.cramped.insert(visible[index].id)
+            }
         }
         place(visible, start: buttonAtEnd ? start : start + reserve, end: buttonAtEnd ? end - reserve : end,
               positions: positions, result: &result)
+        guard overflows else { return }
+        let hidden = positions.flatMap { position in
+            items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
+        }
         let placed = visible.map { result.placements[$0.id]! }
         let x = buttonAtEnd
             ? placed.map { $0.x + $0.width + spacing }.max() ?? end - overflowWidth

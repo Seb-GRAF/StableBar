@@ -216,6 +216,28 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(plan.placements["cpu"] == BarPlacement(x: 732, width: 150))
 }
 
+@Test func hoverGrowthTakesOnlyFreeRoomAndNeverHidesOrMovesOtherWidgets() {
+    let planner = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600)
+    func plan(growth: CGFloat) -> AdaptiveBarPlan {
+        planner.plan(width: 1000, items: [
+            BarLayoutItem(id: "apple", position: .left, width: 30),
+            BarLayoutItem(id: "spaces", position: .left, width: 150),
+            BarLayoutItem(id: "menus", position: .left, width: 60, growth: growth),
+            BarLayoutItem(id: "music", position: .notchLeft, width: 50)
+        ])
+    }
+    let fits = plan(growth: 40)
+    #expect(fits.overflow.isEmpty && fits.cramped.isEmpty)
+    #expect(fits.placements["spaces"] == BarPlacement(x: 48, width: 150))
+    #expect(fits.placements["menus"] == BarPlacement(x: 206, width: 100))
+    #expect(fits.placements["music"] == BarPlacement(x: 330, width: 50))
+    let tooWide = plan(growth: 300)
+    #expect(tooWide.overflow.isEmpty)
+    #expect(tooWide.cramped == ["menus"])
+    #expect(tooWide.placements["spaces"] == BarPlacement(x: 48, width: 150))
+    #expect(tooWide.placements["menus"] == BarPlacement(x: 206, width: 60))
+}
+
 @Test func namedGroupsCollapseAsAUnitAndKeepOriginalMemberOrder() throws {
     let config = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"groups":{"stats":{"style":{}}},"widgets":[

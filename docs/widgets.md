@@ -54,7 +54,7 @@ A System monitor widget with details creates a default system provider sampling 
 
 ## App menus
 
-An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus moves neighboring widgets to make room. The menus stay expanded while one is open. Leave the setting off to show all titles.
+An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus takes the free room beside them and slides only the widgets in that room; nothing hides or moves out of the way. When the menus don't fit there, hovering the app name opens them as a row under the bar instead: click a title to open its menu, then move across the titles. The menus stay expanded while one is open. Leave the setting off to show all titles.
 
 Click a title to open its menu in a popup below the bar, drawn in your theme's popup style. While a menu is open, move the pointer onto another title to switch to its menu, as in the macOS menu bar; with **Morph between popups** on, the open menu changes into the next one. Rest the pointer on an item with a submenu, or click it, to open the submenu beside it.
 

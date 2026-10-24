@@ -17,7 +17,7 @@ struct BarView: View {
     var preview = false
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
-    @State private var expandedUnits: Set<String> = []
+    @State private var restingWidths: [String: CGFloat] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -39,9 +39,12 @@ struct BarView: View {
                 let widgets = store.barEditing.widgets(on: display)
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
+                    let growth = Dictionary(uniqueKeysWithValues: units.map { unit in
+                        (unit.id, max((measuredWidths[unit.id] ?? 0) - (restingWidths[unit.id] ?? 0), 0))
+                    })
                     let items = units.map { unit in
-                        BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0, priority: unit.priority,
-                                      canOverflow: unit.canOverflow && !expandedUnits.contains(unit.id), isSpacer: unit.isSpacer)
+                        BarLayoutItem(id: unit.id, position: unit.position, width: restingWidths[unit.id] ?? 0, priority: unit.priority,
+                                      canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!)
                     }
                     let moreWidth = measuredWidths[Self.moreWidgetsUnit.id] ?? 0
                     let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
@@ -58,6 +61,7 @@ struct BarView: View {
                                 case .notchLeft, .center, .notchRight: .center
                                 }
                                 unitView(unit, config: config, width: placement.width)
+                                    .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
                                     .geometryGroup()
                                     .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
                                     .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
@@ -101,11 +105,12 @@ struct BarView: View {
                         let animates = BarUnit.animatesResize(units, measured: measuredUnits, from: measuredWidths, to: widths,
                                                               reduceMotion: reduceMotion, providerType: config.providerType(of:))
                         measuredUnits = Set(widths.keys)
-                        expandedUnits = Set(units.filter { unit in
+                        let expanded = Set(units.filter { unit in
                             unit.widgets.contains { store.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
                         }.map(\.id))
                         withAnimation(animates ? config.bar.animation.value : nil) {
                             measuredWidths.merge(widths) { $1 }
+                            restingWidths.merge(widths.filter { !expanded.contains($0.key) }) { $1 }
                         }
                     }
                     .onChange(of: visible, initial: true) { _, ids in if !preview { store.setVisibleWidgets(ids: ids, displayID: display.id) } }
@@ -155,7 +160,7 @@ struct BarView: View {
 
     @ViewBuilder
     private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat) -> some View {
-        if width < measuredWidths[unit.id, default: 0] - 0.5 {
+        if width < restingWidths[unit.id, default: 0] - 0.5 {
             ScrollView(.horizontal) {
                 BarUnitView(unit: unit, config: config, store: store, display: display.id).fixedSize()
             }
@@ -212,6 +217,11 @@ extension EnvironmentValues {
         set { self[MeasuringBarWidthsKey.self] = newValue }
     }
     @Entry var moreWidgetsAnchor: NSView?
+    @Entry var barExpansion: BarExpansion?
+}
+
+enum BarExpansion {
+    case collapsed, granted, cramped
 }
 
 /// Marks the bar's hidden copy that measures widget widths and keeps it still: nothing animates there.
@@ -309,6 +319,7 @@ struct WidgetView: View {
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
     @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
+    @Environment(\.barExpansion) private var barExpansion
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.style]))
@@ -501,6 +512,14 @@ struct WidgetView: View {
         .accessibilityIdentifier(widget.id)
     }
 
+    private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
+        store.popup.hover(true, store: store, anchor: popupAnchor) {
+            store.popup.showRow(widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: popupAnchor) {
+                AppMenuRow(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults), appearance: appearance, padding: padding)
+            }
+        }
+    }
+
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
         guard let popup = store.appMenu.popup(for: item) else { return }
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
@@ -523,14 +542,17 @@ struct WidgetView: View {
                           allowsWindowDragging: store.barEditing.allowsWidgetActions)
         case let .appMenu(expandOnHover) where widget.layout == nil:
             let expands = expandOnHover && moreWidgetsAnchor == nil
+            let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
             AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
-                        expanded: store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true,
-                        appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
-                        padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
+                        expanded: barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
+                        appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess) { expanded in
                 if !measuring && expands {
                     store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
+            }
+            .onChange(of: barExpansion == .cramped && hovered) { _, cramped in
+                if cramped { showMenuRow(appearance: appearance, padding: padding) }
             }
         case .appleMenu where widget.layout == nil:
             AppMenuView(appMenu: store.appMenu, items: [store.appMenu.appleMenu].compactMap { $0 }, isAppleMenu: true,
@@ -788,6 +810,22 @@ struct WorkspaceView: View {
                 .interpolation(.high)
                 .frame(width: style.width ?? 14, height: style.height ?? 14)
         }
+    }
+}
+
+private struct AppMenuRow: View {
+    let widget: WidgetConfiguration
+    let store: BarStore
+    let defaults: WidgetStyle
+    let appearance: WidgetAppearance
+    let padding: EdgeInsets
+
+    var body: some View {
+        AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, appearance: appearance, padding: padding,
+                    openAnchor: store.presentations[widget.id]?.innerPopupAnchor, open: { item, anchor in
+            guard let popup = store.appMenu.popup(for: item) else { return }
+            store.innerPopup.toggle(popup, widget: widget, defaults: defaults, store: store, anchor: anchor)
+        }, requestAccess: store.windowClearance.requestAccess)
     }
 }
 
