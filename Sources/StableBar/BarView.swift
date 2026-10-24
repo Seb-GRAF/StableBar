@@ -67,7 +67,7 @@ struct BarView: View {
                                     .transition(visibilityTransition(unit.transition ?? config.bar.motion.transition, still: reduceMotion))
                             }
                         }
-                        ForEach(plan.overflow, id: \.x) { overflow in
+                        ForEach(plan.overflow, id: \.atEnd) { overflow in
                             let overflowUnits = overflow.ids.map { id in units.first { $0.id == id }! }
                             MoreWidgetsButton(units: overflowUnits, config: config, store: store, display: display,
                                               id: Self.moreWidgetsID(overflowUnits[0].position, notched: notch != nil))
@@ -77,7 +77,7 @@ struct BarView: View {
                         }
                     }
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
-                    .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow)
+                    .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow.map(\.ids))
                     .overlay {
                         HStack(spacing: 0) {
                             ForEach(units + [Self.moreWidgetsUnit]) { unit in

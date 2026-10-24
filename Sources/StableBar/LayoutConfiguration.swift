@@ -78,6 +78,7 @@ struct BarPlacement: Equatable {
 
 struct BarOverflow: Equatable {
     let x: CGFloat
+    let atEnd: Bool
     let ids: [String]
 }
 
@@ -122,9 +123,13 @@ struct AdaptiveBarPlanner {
         let hidden = positions.flatMap { position in
             items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
         }
-        result.overflow.append(BarOverflow(x: buttonAtEnd ? end - overflowWidth : start, ids: hidden.map(\.id)))
         place(visible, start: buttonAtEnd ? start : start + reserve, end: buttonAtEnd ? end - reserve : end,
               positions: positions, result: &result)
+        let placed = visible.map { result.placements[$0.id]! }
+        let x = buttonAtEnd
+            ? placed.map { $0.x + $0.width + spacing }.max() ?? end - overflowWidth
+            : placed.map { $0.x - spacing - overflowWidth }.min() ?? start
+        result.overflow.append(BarOverflow(x: x, atEnd: buttonAtEnd, ids: hidden.map(\.id)))
     }
 
     private func fitting(_ items: [BarLayoutItem], capacity: CGFloat, fromEnd: Bool) -> [BarLayoutItem] {
