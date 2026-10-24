@@ -453,7 +453,7 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
     for index in 1...9 {
         workspaces.append(Workspace(name: String(index), isFocused: index == 1, isVisible: index == 1, monitor: 1))
     }
-    let fixture = OffscreenBar(configuration: config, display: display, width: 80, workspaces: workspaces)
+    let fixture = OffscreenBar(configuration: config, display: display, width: 70, workspaces: workspaces)
     defer { fixture.close() }
     await fixture.settle()
     func scrolls(_ view: NSView) -> [NSScrollView] {

@@ -2,6 +2,10 @@ import SwiftUI
 
 struct BarView: View {
     static let moreWidgetsID = "StableBar.moreWidgets"
+    static let moreWidgetsUnit = BarUnit(id: "widget:\(moreWidgetsID).button", widgets: [try! ConfigurationValue.object([
+        "id": .string("\(moreWidgetsID).button"), "position": .string("right"), "type": .string("text"), "text": .string(""),
+        "icon": .string("ellipsis"), "tooltip": .string("More widgets")
+    ]).decoded(WidgetConfiguration.self)], style: nil)
 
     static func moreWidgetsID(_ position: WidgetPosition, notched: Bool) -> String {
         notched && [.left, .notchLeft].contains(position) ? "\(moreWidgetsID).left" : moreWidgetsID
@@ -39,8 +43,9 @@ struct BarView: View {
                         BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0, priority: unit.priority,
                                       canOverflow: unit.canOverflow && !expandedUnits.contains(unit.id), isSpacer: unit.isSpacer)
                     }
+                    let moreWidth = measuredWidths[Self.moreWidgetsUnit.id] ?? 0
                     let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
-                                                  notchSpacing: config.bar.notchSpacing, notch: notch)
+                                                  notchSpacing: config.bar.notchSpacing, notch: notch, overflowWidth: moreWidth)
                         .plan(width: geometry.size.width / scale, items: items)
                     let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
                     ZStack(alignment: .topLeading) {
@@ -66,7 +71,7 @@ struct BarView: View {
                             let overflowUnits = overflow.ids.map { id in units.first { $0.id == id }! }
                             MoreWidgetsButton(units: overflowUnits, config: config, store: store, display: display,
                                               id: Self.moreWidgetsID(overflowUnits[0].position, notched: notch != nil))
-                                .frame(width: 30, height: geometry.size.height / scale)
+                                .frame(width: moreWidth, height: geometry.size.height / scale)
                                 .offset(x: overflow.x)
                                 .transition(.opacity)
                         }
@@ -75,7 +80,7 @@ struct BarView: View {
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow)
                     .overlay {
                         HStack(spacing: 0) {
-                            ForEach(units) { unit in
+                            ForEach(units + [Self.moreWidgetsUnit]) { unit in
                                 BarUnitView(unit: unit, config: config, store: store, display: display.id)
                                     .fixedSize()
                                     .background {
@@ -179,13 +184,12 @@ private struct MoreWidgetsButton: View {
                 .environment(\.screenKind, ScreenKind(display))
             }
         } label: {
-            Image(systemName: "ellipsis").frame(width: 30, height: 24).contentShape(Rectangle())
+            BarUnitView(unit: BarView.moreWidgetsUnit, config: config, store: store, display: display.id)
         }
         .buttonStyle(.plain)
         .background(PopupAnchor(view: anchor, popup: store.popup, id: id))
         .onChange(of: units.map(\.id)) { store.popup.removeAnchor(anchor) }
         .accessibilityLabel("More widgets")
-        .help("More widgets")
     }
 }
 

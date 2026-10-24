@@ -91,7 +91,7 @@ struct AdaptiveBarPlanner {
     let spacing: CGFloat
     let notchSpacing: CGFloat
     let notch: ClosedRange<CGFloat>?
-    let overflowWidth: CGFloat = 30
+    var overflowWidth: CGFloat = 30
 
     func plan(width: CGFloat, items: [BarLayoutItem]) -> AdaptiveBarPlan {
         var result = AdaptiveBarPlan()
