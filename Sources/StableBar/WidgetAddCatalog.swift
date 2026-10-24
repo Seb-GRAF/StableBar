@@ -38,7 +38,7 @@ enum WidgetAddCatalog {
         .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "The Apple menu. Needs Accessibility access.", properties: ["type": .string("appleMenu")]),
         .init(id: "appMenu", name: "App menus", symbol: "menubar.rectangle", description: "The frontmost app’s menus. Needs Accessibility access.", properties: ["type": .string("appMenu")]),
         .init(id: "controlCenter", name: "Control Center", symbol: "switch.2", description: "Opens macOS Control Center. Needs Accessibility access.", properties: ["type": .string("controlCenter")]),
-        .init(id: "menuBarItems", name: "Menu bar items", symbol: "ellipsis", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")]),
+        .init(id: "menuBarItems", name: "Menu bar items", symbol: "square.grid.2x2", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")]),
         .init(id: "battery", name: "Battery", symbol: "battery.100percent", description: "The native battery indicator, with charge, power and health details.", properties: ["type": .string("battery"), "details": .bool(true)], replacesPackage: "battery-status"),
         .init(id: "audio", name: "Sound", symbol: "speaker.wave.2", description: "The volume and current audio output.", properties: ["type": .string("audio")]),
         .init(id: "system", name: "System monitor", symbol: "cpu", description: "CPU, memory and the apps using them, with adjustable warnings.",

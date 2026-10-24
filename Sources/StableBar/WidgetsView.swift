@@ -26,7 +26,7 @@ extension WidgetContent {
         case .appMenu: "menubar.rectangle"
         case .appleMenu: "apple.logo"
         case .controlCenter: "switch.2"
-        case .menuBarItems: "ellipsis"
+        case .menuBarItems: "square.grid.2x2"
         case .clock: "clock"
         case .text: "textformat"
         case .script: "terminal"

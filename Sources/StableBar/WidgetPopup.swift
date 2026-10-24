@@ -259,17 +259,37 @@ final class WidgetPopup {
 
     func showTooltip(_ text: String, widget: WidgetConfiguration, defaults: WidgetStyle,
                      store: BarStore, anchor: NSView) {
-        openTooltip(widget: widget, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: true) { _ in Text(text) }
+        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: true) { _ in Text(text) }
     }
 
     /// Shows a widget's hover controls in a tooltip under it, drawn in the tooltip's style. The pointer can move into
     /// it, and it stays open while a control in it is dragged.
     func showControls(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView,
                       @ViewBuilder controls: (WidgetStyle) -> some View) {
-        openTooltip(widget: widget, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: false) { style in
+        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: false) { style in
             controls(style)
                 .onPreferenceChange(ControlEditingPreference.self) { [weak self] editing in self?.editControls(editing) }
         }
+    }
+
+    func showRow(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView, @ViewBuilder row: () -> some View) {
+        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor,
+                    maxWidth: anchor.window!.screen!.visibleFrame.width - 16, alignment: .leading, ignoresMouseEvents: false) { _ in row() }
+        self.store = store
+        watchEvents(anchor: anchor, pinnable: false)
+    }
+
+    func showWidgets(defaults: WidgetStyle, store: BarStore, anchor: NSView, @ViewBuilder widgets: () -> some View) {
+        guard store.barEditing.allowsWidgetActions else { return }
+        if self.anchor === anchor {
+            close()
+            return
+        }
+        openTooltip(id: BarView.moreWidgetsID, style: WidgetStyle(), defaults: defaults, store: store, anchor: anchor,
+                    maxWidth: anchor.window!.screen!.visibleFrame.width - 16, ignoresMouseEvents: false) { _ in widgets() }
+        pinned = true
+        hoveredAnchor = nil
+        watchEvents(anchor: anchor, pinnable: false)
     }
 
     /// Keeps hover controls open while they're dragged, even with the pointer outside them, and closes them after.
@@ -280,8 +300,9 @@ final class WidgetPopup {
 
     /// Shows `content` in a tooltip under `anchor`, drawn in the widget's popup style, which opens and closes with the
     /// bar's popup motion.
-    private func openTooltip(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView,
-                             ignoresMouseEvents: Bool, @ViewBuilder content: (WidgetStyle) -> some View) {
+    private func openTooltip(id: String, style widgetStyle: WidgetStyle, defaults: WidgetStyle, store: BarStore, anchor: NSView,
+                             maxWidth: CGFloat = 320, alignment: PopupAlignment = .center, ignoresMouseEvents: Bool,
+                             @ViewBuilder content: (WidgetStyle) -> some View) {
         let window = anchor.window!
         let screen = window.screen!
         let kind = ScreenKind(BarDisplay(screen: screen))
@@ -292,11 +313,11 @@ final class WidgetPopup {
         parentPopup = window as? PopupPanel
         let frame = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let top = popupAttachmentTop(anchor: frame, window: window.frame, geometry: (window as? BarPanel)?.barGeometry)
-        let style = resolveStyle([defaults, widget.style], states: StyleStates(mode: store.modePresentation(on: kind)))
+        let style = resolveStyle([defaults, widgetStyle], states: StyleStates(mode: store.modePresentation(on: kind)))
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
         let panel = PopupPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        let host = NSHostingView(rootView: TooltipWidth(maxWidth: 320 - shadowInset * 2) {
+        let host = NSHostingView(rootView: TooltipWidth(maxWidth: maxWidth - shadowInset * 2) {
                 content(style)
                     .font(appearance.font)
                     .foregroundStyle(appearance.foreground)
@@ -309,9 +330,10 @@ final class WidgetPopup {
                 if panel === self?.panel { self?.hoverPopup(inside) }
             })
         let size = host.fittingSize
-        let x = min(max(frame.midX - size.width / 2, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
+        let alignedX = alignment == .leading ? frame.minX - shadowInset : frame.midX - size.width / 2
+        let x = min(max(alignedX, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
         panel.setFrame(NSRect(x: x, y: top - size.height - 6 + shadowInset, width: size.width, height: size.height), display: false)
-        panel.title = "\(widget.id) tooltip"
+        panel.title = "\(id) tooltip"
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true

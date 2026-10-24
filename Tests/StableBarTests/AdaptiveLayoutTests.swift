@@ -171,8 +171,7 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         BarLayoutItem(id: "weather", position: .right, width: 100),
         BarLayoutItem(id: "clock", position: .right, width: 80, priority: 20)
     ])
-    #expect(plan.overflow == ["weather"])
-    #expect(plan.overflowX == 260)
+    #expect(plan.overflow == [BarOverflow(x: 260, atEnd: true, ids: ["weather"])])
     #expect(plan.placements["workspaces"] == BarPlacement(x: 10, width: 150))
     #expect(plan.placements["clock"] == BarPlacement(x: 172, width: 80))
 }
@@ -197,11 +196,46 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         BarLayoutItem(id: "center", position: .center, width: 120),
         BarLayoutItem(id: "clock", position: .right, width: 80)
     ])
-    #expect(plan.overflow == ["music"])
+    #expect(plan.overflow == [BarOverflow(x: 218, atEnd: true, ids: ["music"])])
     #expect(plan.placements["left"] == BarPlacement(x: 10, width: 200))
     #expect(plan.placements["center"]!.x >= 620)
-    #expect(plan.placements["clock"]!.x + 80 == 952)
-    #expect(plan.overflowX == 960)
+    #expect(plan.placements["clock"]!.x + 80 == 990)
+}
+
+@Test func notchedSidesOverflowTheWidgetsNextToTheNotchIntoAButtonBesideTheRest() {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600).plan(width: 1000, items: [
+        BarLayoutItem(id: "music", position: .notchLeft, width: 100),
+        BarLayoutItem(id: "apple", position: .left, width: 150),
+        BarLayoutItem(id: "menus", position: .left, width: 150),
+        BarLayoutItem(id: "weather", position: .notchRight, width: 150),
+        BarLayoutItem(id: "cpu", position: .right, width: 150),
+        BarLayoutItem(id: "clock", position: .right, width: 100)
+    ])
+    #expect(plan.overflow == [BarOverflow(x: 326, atEnd: true, ids: ["music"]), BarOverflow(x: 694, atEnd: false, ids: ["weather"])])
+    #expect(plan.placements["menus"] == BarPlacement(x: 168, width: 150))
+    #expect(plan.placements["cpu"] == BarPlacement(x: 732, width: 150))
+}
+
+@Test func hoverGrowthTakesOnlyFreeRoomAndNeverHidesOrMovesOtherWidgets() {
+    let planner = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600)
+    func plan(growth: CGFloat) -> AdaptiveBarPlan {
+        planner.plan(width: 1000, items: [
+            BarLayoutItem(id: "apple", position: .left, width: 30),
+            BarLayoutItem(id: "spaces", position: .left, width: 150),
+            BarLayoutItem(id: "menus", position: .left, width: 60, growth: growth),
+            BarLayoutItem(id: "music", position: .notchLeft, width: 50)
+        ])
+    }
+    let fits = plan(growth: 40)
+    #expect(fits.overflow.isEmpty && fits.cramped.isEmpty)
+    #expect(fits.placements["spaces"] == BarPlacement(x: 48, width: 150))
+    #expect(fits.placements["menus"] == BarPlacement(x: 206, width: 100))
+    #expect(fits.placements["music"] == BarPlacement(x: 330, width: 50))
+    let tooWide = plan(growth: 300)
+    #expect(tooWide.overflow.isEmpty)
+    #expect(tooWide.cramped == ["menus"])
+    #expect(tooWide.placements["spaces"] == BarPlacement(x: 48, width: 150))
+    #expect(tooWide.placements["menus"] == BarPlacement(x: 206, width: 60))
 }
 
 @Test func namedGroupsCollapseAsAUnitAndKeepOriginalMemberOrder() throws {
@@ -218,7 +252,7 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 16, notch: nil).plan(width: 200, items: units.map {
         BarLayoutItem(id: $0.id, position: $0.position, width: 120, priority: $0.priority, canOverflow: $0.canOverflow)
     })
-    #expect(plan.overflow == ["group:stats"])
+    #expect(plan.overflow.map(\.ids) == [["group:stats"]])
     #expect(plan.placements["widget:clock"] != nil)
 }
 
@@ -227,9 +261,8 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         BarLayoutItem(id: "required", position: .left, width: 200, canOverflow: false),
         BarLayoutItem(id: "optional", position: .right, width: 50)
     ])
-    #expect(plan.overflow == ["optional"])
+    #expect(plan.overflow == [BarOverflow(x: 60, atEnd: true, ids: ["optional"])])
     #expect(plan.placements["required"] == BarPlacement(x: 10, width: 42))
-    #expect(plan.overflowX == 60)
 }
 
 @Test func equalPriorityOverflowOrderIsDeterministicAndSpacersUseRemainingWidth() {
@@ -238,7 +271,7 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         BarLayoutItem(id: "first", position: .left, width: 100),
         BarLayoutItem(id: "last", position: .right, width: 100)
     ])
-    #expect(compact.overflow == ["last"])
+    #expect(compact.overflow.map(\.ids) == [["last"]])
     let roomy = planner.plan(width: 500, items: [
         BarLayoutItem(id: "first", position: .left, width: 100),
         BarLayoutItem(id: "space", position: .left, width: 10, isSpacer: true),

@@ -875,7 +875,8 @@ final class BarStore: NSObject {
             let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID
             guard let bar = barPanel(activeID),
                   let widget = barEditing.widgets(on: BarDisplay(screen: bar.screen!)).first(where: { $0.id == id }),
-                  let anchor = find(id, in: bar.contentView!) ?? find(BarView.moreWidgetsID, in: bar.contentView!) else {
+                  let anchor = find(id, in: bar.contentView!)
+                    ?? find(BarView.moreWidgetsID(widget.position, notched: BarDisplay(screen: bar.screen!).notch != nil), in: bar.contentView!) else {
                 throw CommandFailure(message: "Widget \(id) is not on the bar of the active display.")
             }
             guard let content = widgetPopup(widget, store: self) else {

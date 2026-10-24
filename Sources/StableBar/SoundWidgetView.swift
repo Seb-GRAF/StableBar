@@ -14,6 +14,8 @@ struct SoundWidgetView: View {
     let runAction: (String, [String: String]) -> Void
     @State private var dragging = false
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
+    @Environment(\.barExpansion) private var barExpansion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The icon alone, drawn like the default layout's, while the slider shows the volume.
@@ -25,7 +27,7 @@ struct SoundWidgetView: View {
 
     var body: some View {
         let volume = store.scripts[widget.id]?.output.values?["volume"]
-        let expanded = volume != nil && store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true
+        let expanded = volume != nil && (barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true))
         let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
         Group {
             if volume != nil {
@@ -47,7 +49,7 @@ struct SoundWidgetView: View {
     }
 
     private func expand(_ open: Bool) {
-        guard !measuring else { return }
+        guard !measuring, moreWidgetsAnchor == nil else { return }
         store.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
     }
 }
