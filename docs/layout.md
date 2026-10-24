@@ -43,7 +43,7 @@ Right-click a screen thumbnail, or use its **⋯** button, to split or copy that
 
 Widgets keep their configured order within `left`, `notchLeft`, `center`, `notchRight`, and `right`. The center cluster shifts within the free space before anything overflows. On a notched screen, `center` widgets join the right side of the notch; neither side can use the other side's space.
 
-Set `priority` on a widget to keep it visible longer; higher numbers win. The default is `0`. When space runs out, lower-priority widgets move to the **More widgets** menu. Equal priorities overflow from the end of the configuration first. The menu still opens their popups and runs their click actions. Workspaces remain selectable there. Widgets return automatically when space becomes available.
+Set `priority` on a widget to keep it visible longer; higher numbers win. The default is `0`. When space runs out, lower-priority widgets move to the **More widgets** menu. Equal priorities overflow from the end of the configuration first. The menu still opens their popups and runs their click actions. Workspaces remain selectable there. Widgets return automatically when space becomes available. A widget that grows under the pointer, such as app menus that expand on hover, keeps its place; its neighbors make room.
 
 Use `"overflow": "never"` for essential widgets. If these alone exceed the available width, their containers scroll horizontally so the full content remains reachable. This is useful for a required workspace list on a narrow display.
 

@@ -8,6 +8,7 @@ struct BarView: View {
     var preview = false
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
+    @State private var expandedUnits: Set<String> = []
     @State private var overflowAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -31,8 +32,8 @@ struct BarView: View {
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
                     let items = units.map { unit in
-                        BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0,
-                                      priority: unit.priority, canOverflow: unit.canOverflow, isSpacer: unit.isSpacer)
+                        BarLayoutItem(id: unit.id, position: unit.position, width: measuredWidths[unit.id] ?? 0, priority: unit.priority,
+                                      canOverflow: unit.canOverflow && !expandedUnits.contains(unit.id), isSpacer: unit.isSpacer)
                     }
                     let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
                                                   notchSpacing: config.bar.notchSpacing, notch: notch)
@@ -88,6 +89,9 @@ struct BarView: View {
                         let animates = BarUnit.animatesResize(units, measured: measuredUnits, from: measuredWidths, to: widths,
                                                               reduceMotion: reduceMotion, providerType: config.providerType(of:))
                         measuredUnits = Set(widths.keys)
+                        expandedUnits = Set(units.filter { unit in
+                            unit.widgets.contains { store.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
+                        }.map(\.id))
                         withAnimation(animates ? config.bar.animation.value : nil) {
                             measuredWidths.merge(widths) { $1 }
                         }
