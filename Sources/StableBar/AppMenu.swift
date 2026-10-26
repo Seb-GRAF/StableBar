@@ -14,6 +14,7 @@ struct AppMenuEntry {
     let isEnabled: Bool
     let isChecked: Bool
     let hasSubmenu: Bool
+    var symbol: String? = nil
     var icon: NSImage? = nil
     var menuBarDisplay: CGDirectDisplayID? = nil
 }
@@ -118,10 +119,20 @@ final class AppMenu: NSObject {
             entries.append(AppMenuEntry(title: title, element: child,
                                         isEnabled: attribute(kAXEnabledAttribute, of: child) as? Bool == true,
                                         isChecked: attribute(kAXMenuItemMarkCharAttribute, of: child) as? String != nil,
-                                        hasSubmenu: submenu(of: child) != nil))
+                                        hasSubmenu: submenu(of: child) != nil,
+                                        symbol: title.isEmpty ? nil : symbol(for: title, of: child)))
         }
         if entries.last?.title.isEmpty == true { entries.removeLast() }
         return entries
+    }
+
+    /// Accessibility doesn't share menu item images, so standard commands get the symbols macOS 26 gives their actions, found by title or shortcut.
+    /// Earlier versions draw menus without them.
+    private func symbol(for title: String, of item: AXUIElement) -> String? {
+        guard #available(macOS 26, *) else { return nil }
+        if let symbol = menuItemSymbol(title: title) { return symbol }
+        guard let key = attribute(kAXMenuItemCmdCharAttribute, of: item) as? String else { return nil }
+        return menuShortcutSymbols[MenuShortcut(key: key, modifiers: attribute(kAXMenuItemCmdModifiersAttribute, of: item) as? Int ?? 0)]
     }
 
     private func submenu(of element: AXUIElement) -> AXUIElement? {
@@ -295,6 +306,58 @@ private struct FoundMenuBarItem {
 
 private let menuBarSymbols = ["com.apple.menuextra.battery": "battery.100percent", "com.apple.menuextra.clock": "clock",
                               "com.apple.menuextra.controlcenter": "switch.2", "com.apple.Spotlight": "magnifyingglass"]
+
+// The symbols AppKit gives standard menu actions on macOS 26, with public stand-ins for its private Help and Emoji & Symbols ones.
+// Names with an underscore are AppKit's own images, not SF Symbols.
+let menuTitleSymbols = [
+    "Settings…": "gear", "Preferences…": "gear", "Hide Others": "Hide_others", "Show All": "macwindow.on.rectangle", "Quit": "Quit_app",
+    "New": "plus", "Open…": "arrow.up.forward", "Close": "xmark", "Close Window": "xmark", "Close Tab": "xmark", "Close All": "xmark.rectangle",
+    "Save": "square.and.arrow.down", "Save…": "square.and.arrow.down", "Save As…": "square.and.arrow.down.on.square",
+    "Duplicate": "plus.square.on.square", "Rename…": "pencil", "Move To…": "folder", "Revert to Saved": "arrow.counterclockwise",
+    "Export as PDF…": "arrow.up.document", "Page Setup…": "text.page", "Print…": "printer",
+    "Undo": "arrow.uturn.backward", "Redo": "arrow.uturn.forward", "Cut": "scissors", "Copy": "document.on.document", "Paste": "document.on.clipboard",
+    "Paste and Match Style": "Paste_and_Match", "Paste and Retain Style": "Paste_and_Retain", "Delete": "trash", "Select All": "character.textbox",
+    "Copy Link": "link", "Start Dictation…": "microphone", "Emoji & Symbols": "face.smiling", "Show Fonts": "textformat",
+    "Show Colors": "paintpalette", "Start Speaking": "play", "Stop Speaking": "stop", "Customize Toolbar…": "wrench.adjustable",
+    "Show Sidebar": "sidebar.leading", "Hide Sidebar": "sidebar.leading", "Zoom In": "plus.magnifyingglass", "Zoom Out": "minus.magnifyingglass",
+    "Minimize": "minus.rectangle", "Minimize All": "minus.rectangle",
+    "Zoom": "square.arrowtriangle.4.outward", "Zoom All": "square.arrowtriangle.4.outward",
+    "Bring All to Front": "square.3.layers.3d", "Arrange in Front": "square.3.layers.3d", "Merge All Windows": "macwindow.on.rectangle",
+    "Move Tab to New Window": "macwindow.badge.plus", "Show Next Tab": "chevron.forward.square", "Show Previous Tab": "chevron.backward.square",
+]
+
+let menuTitlePrefixSymbols = ["About ": "info.circle", "Quit ": "Quit_app", "Undo ": "arrow.uturn.backward", "Redo ": "arrow.uturn.forward"]
+let menuTitleSuffixSymbols = [" Help": "questionmark.circle"]
+
+func menuItemSymbol(title: String) -> String? {
+    let title = title.replacingOccurrences(of: "...", with: "…")
+    return menuTitleSymbols[title] ?? menuTitlePrefixSymbols.first { title.hasPrefix($0.key) }?.value
+        ?? menuTitleSuffixSymbols.first { title.hasSuffix($0.key) }?.value
+}
+
+struct MenuShortcut: Hashable {
+    let key: String
+    let modifiers: Int
+
+    /// `modifiers` holds the Accessibility menu modifier flags: 0 is ⌘ alone, then 1 adds ⇧, 2 ⌥, 4 ⌃, and 8 removes ⌘.
+    init(key: String, modifiers: Int = 0) {
+        self.key = key.uppercased()
+        self.modifiers = modifiers
+    }
+}
+
+// Shortcuts that mean the same command in nearly every app, for menus in other languages. ⌘P is left out: some apps use it for Go to File.
+let menuShortcutSymbols: [MenuShortcut: String] = [
+    MenuShortcut(key: "Q"): "Quit_app", MenuShortcut(key: "H"): "Hide_app",
+    MenuShortcut(key: "H", modifiers: 2): "Hide_others", MenuShortcut(key: ","): "gear",
+    MenuShortcut(key: "N"): "plus", MenuShortcut(key: "O"): "arrow.up.forward", MenuShortcut(key: "W"): "xmark",
+    MenuShortcut(key: "S"): "square.and.arrow.down", MenuShortcut(key: "Z"): "arrow.uturn.backward",
+    MenuShortcut(key: "Z", modifiers: 1): "arrow.uturn.forward", MenuShortcut(key: "X"): "scissors",
+    MenuShortcut(key: "C"): "document.on.document", MenuShortcut(key: "V"): "document.on.clipboard",
+    MenuShortcut(key: "V", modifiers: 3): "Paste_and_Match",
+    MenuShortcut(key: "A"): "character.textbox", MenuShortcut(key: "M"): "minus.rectangle",
+    MenuShortcut(key: "?"): "questionmark.circle", MenuShortcut(key: "?", modifiers: 1): "questionmark.circle",
+]
 
 private func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> CGRect {
     var position = CGPoint.zero

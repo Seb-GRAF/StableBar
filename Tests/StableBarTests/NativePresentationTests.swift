@@ -238,6 +238,68 @@ private final class MenuReadFixture: @unchecked Sendable {
     #expect(!window.isVisible)
 }
 
+private final class MenuItemsFixture: @unchecked Sendable {
+    struct Row {
+        let title: String
+        var key: String?
+        var modifiers = 0
+    }
+
+    let item = AXUIElementCreateApplication(20)
+    let menu = AXUIElementCreateApplication(21)
+    let rows: [Row]
+    let elements: [AXUIElement]
+
+    init(_ rows: [Row]) {
+        self.rows = rows
+        elements = rows.indices.map { AXUIElementCreateApplication(pid_t(30 + $0)) }
+    }
+
+    func read(_ name: String, _ element: AXUIElement) -> CFTypeRef? {
+        if element == item { return name == kAXChildrenAttribute ? [menu] as CFArray : nil }
+        if element == menu {
+            return name == kAXRoleAttribute ? kAXMenuRole as CFString : name == kAXChildrenAttribute ? elements as CFArray : nil
+        }
+        guard let row = elements.firstIndex(of: element).map({ rows[$0] }) else { return nil }
+        switch name {
+        case kAXTitleAttribute: return row.title as CFString
+        case kAXEnabledAttribute: return kCFBooleanTrue
+        case kAXMenuItemCmdCharAttribute: return row.key as CFString?
+        case kAXMenuItemCmdModifiersAttribute: return row.key == nil ? nil : row.modifiers as CFNumber
+        default: return nil
+        }
+    }
+}
+
+@Test @MainActor func appMenuEntriesShowTheSymbolsMacOSGivesStandardCommands() throws {
+    let source = MenuItemsFixture([
+        .init(title: "About Docker Desktop"), .init(title: "Go to the Dashboard"), .init(title: ""), .init(title: "Settings..."),
+        .init(title: "Quit Docker Desktop"), .init(title: "Beenden", key: "q"), .init(title: "Andere ausblenden", key: "H", modifiers: 2),
+        .init(title: "Go to File…", key: "P"), .init(title: "Log Out…", key: "Q", modifiers: 1), .init(title: "Docker Desktop Help"),
+    ])
+    let menu = AppMenu(checkAccess: { true }, readAttribute: source.read)
+    guard case let .appMenu(entries) = menu.popup(forMenuBarItem: source.item).layout.content else {
+        Issue.record("expected an app menu")
+        return
+    }
+    let symbols: [String?] = if #available(macOS 26, *) {
+        ["info.circle", nil, nil, "gear", "Quit_app", "Quit_app", "Hide_others", nil, nil, "questionmark.circle"]
+    } else {
+        Array(repeating: nil, count: 10)
+    }
+    #expect(entries.map(\.symbol) == symbols)
+}
+
+@Test @MainActor func everyMenuSymbolDraws() {
+    guard #available(macOS 26, *) else { return }
+    let names = Set(menuTitleSymbols.values).union(menuTitlePrefixSymbols.values).union(menuTitleSuffixSymbols.values)
+        .union(menuShortcutSymbols.values)
+    for name in names.sorted() {
+        let size = ImageRenderer(content: menuSymbol(name).font(.system(size: 13))).nsImage?.size ?? .zero
+        #expect(size.width >= 8 && size.height >= 8, "\(name)")
+    }
+}
+
 /// Actual AppKit/SwiftUI rendering, in a window that is never ordered onto the user's screen.
 @MainActor final class PresentationHostingView: NSHostingView<AnyView> {
     private(set) var layoutCalls = 0

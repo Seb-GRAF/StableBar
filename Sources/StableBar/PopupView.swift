@@ -983,12 +983,13 @@ struct AppMenuList: View {
 
     var body: some View {
         let checks = entries.contains(where: \.isChecked)
+        let symbols = entries.contains { $0.symbol != nil }
         VStack(spacing: 0) {
             ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
                 if entry.title.isEmpty {
                     Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1).padding(.vertical, 4)
                 } else {
-                    AppMenuRow(entry: entry, checks: checks, appearance: appearance, open: submenu == index) { row in
+                    AppMenuRow(entry: entry, checks: checks, symbols: symbols, appearance: appearance, open: submenu == index) { row in
                         guard submenu != index else { return }
                         let opens = entry.hasSubmenu && entry.isEnabled
                         submenu = opens ? index : nil
@@ -1005,6 +1006,7 @@ struct AppMenuList: View {
 private struct AppMenuRow: View {
     let entry: AppMenuEntry
     let checks: Bool
+    let symbols: Bool
     let appearance: WidgetAppearance
     let open: Bool
     let rest: (NSView) -> Void
@@ -1019,6 +1021,9 @@ private struct AppMenuRow: View {
             HStack(spacing: 4) {
                 if checks {
                     Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).frame(width: 14).opacity(entry.isChecked ? 1 : 0)
+                }
+                if symbols {
+                    ZStack { if let symbol = entry.symbol { menuSymbol(symbol) } }.frame(width: 18)
                 }
                 Text(entry.title).lineLimit(1)
                 Spacer(minLength: 8)
@@ -1039,6 +1044,11 @@ private struct AppMenuRow: View {
             rest(anchor)
         }
     }
+}
+
+/// AppKit's own menu images, such as Quit's, aren't SF Symbols but load from its bundle the same way.
+func menuSymbol(_ name: String) -> Image {
+    NSImage(systemSymbolName: name, accessibilityDescription: nil) == nil ? Image(name, bundle: Bundle(for: NSApplication.self)) : Image(systemName: name)
 }
 
 struct MenuBarItemsRow: View {
