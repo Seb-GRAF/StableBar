@@ -18,10 +18,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 <br>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.webp">
-  <img src="docs/images/hero-light.webp" alt="StableBar with workspaces, the active app, the next meeting, CPU and memory use, the battery and the time. Today's agenda is open below the meeting.">
-</picture>
+<img src="https://gist.githubusercontent.com/M4n0x/4cdcb17cafe64fdfae1d3b2b736f7582/raw/0717ce239736c9ca78a387e346844bb139ef4f77/stablebar-tour.gif" alt="StableBar in use: today's agenda opens below the meeting widget, Edit Bar in Place drags the meeting widget across the bar while the others slide aside, an app's icon moves to another workspace, and Try Themes steps through Built-in, Blueprint, Broadsheet and Brutalist">
 
 ## Features
 
@@ -36,8 +33,6 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 - **Every display.** Notch-aware placement, widgets per kind of screen and a separate bar for each screen setup.
 - **Updates in the bar.** When a release is out, an icon fades into the bar. Click it to read every change since your version, then download, install and relaunch.
 - **Command line.** `stablebar` queries and edits the running bar and sends events from other tools, and `stablebar triage` hands a problem or an idea to a coding agent.
-
-<img src="https://gist.githubusercontent.com/M4n0x/4cdcb17cafe64fdfae1d3b2b736f7582/raw/0717ce239736c9ca78a387e346844bb139ef4f77/stablebar-tour.gif" alt="StableBar in use: today's agenda opens below the meeting widget, Edit Bar in Place drags the meeting widget across the bar while the others slide aside, an app's icon moves to another workspace, and Try Themes steps through Built-in, Blueprint, Broadsheet and Brutalist">
 
 ## Themes
 

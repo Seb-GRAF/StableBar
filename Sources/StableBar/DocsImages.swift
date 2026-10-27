@@ -83,13 +83,12 @@ enum DocsImages {
     }
 
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+    private static let darkBackdrop = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
     /// The themes the README shows, a quiet few with different shapes; the guide shows them all.
     private static let themePicks = ["built-in", "rose-pine", "leman", "nord", "notch"]
 
-    /// A soft gray behind the bars and popups, so the themes carry the color.
     private static func backdrop(dark: Bool) -> some View {
-        LinearGradient(colors: dark ? [Color(white: 0.22), Color(white: 0.12)] : [Color(white: 0.95), Color(white: 0.85)],
-                       startPoint: .top, endPoint: .bottom)
+        Image(nsImage: dark ? darkBackdrop : Wallpaper.image!).resizable().scaledToFill()
     }
 
     private static func bar(_ store: BarStore) -> some View {
