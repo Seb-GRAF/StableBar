@@ -24,11 +24,14 @@ enum DocsImages {
             try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 270), stores: [bar])
 
             let themes = try ThemeCatalog(packages: samples.appending(path: "packages")).choices.map { choice in
-                (choice.manifest.name, try store(choice.manifest.id, theme: choice.isBuiltIn ? nil : choice.manifest.id))
+                (choice.manifest.id, choice.manifest.name, try store(choice.manifest.id, theme: choice.isBuiltIn ? nil : choice.manifest.id))
             }
             try await save(gallery(themes, dark: dark).background { backdrop(dark: dark) }, "themes",
-                           size: NSSize(width: 1100, height: 78 * CGFloat(themes.count) + 10), stores: themes.map(\.1))
-            themes.forEach { $0.1.stop() }
+                           size: NSSize(width: 1100, height: galleryHeight(themes.count)), stores: themes.map(\.2))
+            let picks = themePicks.compactMap { id in themes.first { $0.0 == id } }
+            try await save(gallery(picks, dark: dark).background { backdrop(dark: dark) }, "themes-picks",
+                           size: NSSize(width: 1100, height: galleryHeight(picks.count)), stores: picks.map(\.2))
+            themes.forEach { $0.2.stop() }
 
             let controls = try store("controls", theme: "rose-pine", widgets: barWidgets + [controlsWidget])
             let popups = HStack(alignment: .top, spacing: 24) {
@@ -80,10 +83,13 @@ enum DocsImages {
     }
 
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
-    private static let darkBackdrop = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
+    /// The themes the README shows, a quiet few with different shapes; the guide shows them all.
+    private static let themePicks = ["built-in", "rose-pine", "leman", "nord", "notch"]
 
+    /// A soft gray behind the bars and popups, so the themes carry the color.
     private static func backdrop(dark: Bool) -> some View {
-        Image(nsImage: dark ? darkBackdrop : Wallpaper.image!).resizable().scaledToFill()
+        LinearGradient(colors: dark ? [Color(white: 0.22), Color(white: 0.12)] : [Color(white: 0.95), Color(white: 0.85)],
+                       startPoint: .top, endPoint: .bottom)
     }
 
     private static func bar(_ store: BarStore) -> some View {
@@ -106,22 +112,24 @@ enum DocsImages {
             .frame(maxHeight: .infinity, alignment: .top)
     }
 
-    private static func gallery(_ themes: [(String, BarStore)], dark: Bool) -> some View {
+    private static func gallery(_ themes: [(String, String, BarStore)], dark: Bool) -> some View {
         VStack(spacing: 0) {
-            ForEach(themes, id: \.0) { name, store in
-                VStack(alignment: .leading, spacing: 4) {
+            ForEach(themes, id: \.0) { _, name, store in
+                VStack(alignment: .leading, spacing: 3) {
                     Text(name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(dark ? Color.white.opacity(0.72) : Color.black.opacity(0.55))
                         .padding(.leading, 16)
                     bar(store)
                 }
-                .frame(height: 78, alignment: .top)
+                .frame(height: 64, alignment: .top)
             }
         }
-        .padding(.top, 12)
+        .padding(.top, 10)
         .frame(maxHeight: .infinity, alignment: .top)
     }
+
+    private static func galleryHeight(_ count: Int) -> CGFloat { 64 * CGFloat(count) + 12 }
 
     private static func popup(_ store: BarStore, _ id: String) -> some View {
         let configuration = store.configuration!.look(on: .monitor)

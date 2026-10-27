@@ -26,21 +26,24 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 ## Features
 
 - **Native.** Swift, AppKit and SwiftUI, with no web view or private window-server API, except in the opt-in [macOS Spaces](docs/widgets.md#macos-spaces-workspaces) workspace source. One panel per display; workspace changes update the widgets in place instead of recreating windows.
-- **Guided setup.** Pick a preset, a theme and a placement, and watch each choice on your real bar. Then edit the bar in place, in Settings or in JSON.
-- **Themes.** Fifteen ship with the app and more come from the store. **Save as Theme…** turns your own look into one. Experimental Liquid Glass on macOS 26.
+- **Edit the bar in place.** Drag widgets along the bar itself, on every display, while the others slide aside to make room. **+** adds a widget exactly where it sits, and **Undo** takes back any change. Settings and the JSON file edit the same bar.
+- **Guided setup.** Pick a preset, a theme and a placement, and watch each choice on your real bar.
+- **Themes and motion.** Fifteen ship with the app and more come from the store. **Save as Theme…** turns your own look into one. Widgets slide aside for their neighbors, popups fade or zoom out of their widget and changing text cross-fades or rolls, in one of four motion styles or none. Experimental Liquid Glass on macOS 26.
+- **Store.** Install widgets and themes from **Settings → Packages** after reviewing the commands, permissions and hosts they use; an update keeps the previous version to roll back to. Share a package with a `stablebar://package` link, or host a private source for your team.
 - **Built-in widgets.** Workspaces, app menus, the active app, clock, CPU and memory, network, battery, sound and calendar, without running a script.
 - **Any script is a widget.** Print text or JSON from any language, refresh on a timer or on events, and open a popup with graphs, lists and controls.
-- **Window managers.** Workspaces from [AeroSpace](https://github.com/nikitabobko/AeroSpace), [yabai](https://github.com/koekeishiya/yabai) or [OmniWM](https://github.com/OmniNull/OmniWM). Without one, StableBar can keep windows and notifications clear of the bar.
+- **Window managers.** Workspaces from [AeroSpace](https://github.com/nikitabobko/AeroSpace), [yabai](https://github.com/koekeishiya/yabai) or [OmniWM](https://github.com/OmniNull/OmniWM). With AeroSpace or yabai, drag an app's icon onto another workspace to move its windows. Without a window manager, StableBar can keep windows and notifications clear of the bar.
 - **Every display.** Notch-aware placement, widgets per kind of screen and a separate bar for each screen setup.
+- **Updates in the bar.** When a release is out, an icon fades into the bar. Click it to read every change since your version, then download, install and relaunch.
 - **Scriptable.** The command line queries and edits the running bar and sends events from other tools.
 
 ## Themes
 
-The same bar in each theme that ships with StableBar. Choose one during setup, cycle through them on your own bar with **Try Themes…**, or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages).
+The same bar in five of the themes that ship with StableBar. Choose one during setup, cycle through all of them on your own bar with **Try Themes…**, see each one in [Themes](docs/themes.md), or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages).
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/themes-dark.webp">
-  <img src="docs/images/themes-light.webp" alt="One bar shown in each theme that ships with StableBar">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/themes-picks-dark.webp">
+  <img src="docs/images/themes-picks-light.webp" alt="One bar in five themes: Built-in, Rosé Pine, Léman, Nord and Notch">
 </picture>
 
 ## Popups
