@@ -37,6 +37,8 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 - **Updates in the bar.** When a release is out, an icon fades into the bar. Click it to read every change since your version, then download, install and relaunch.
 - **Scriptable.** The command line queries and edits the running bar and sends events from other tools.
 
+<img src="https://gist.githubusercontent.com/M4n0x/4cdcb17cafe64fdfae1d3b2b736f7582/raw/0717ce239736c9ca78a387e346844bb139ef4f77/stablebar-tour.gif" alt="StableBar in use: today's agenda opens below the meeting widget, Edit Bar in Place drags the meeting widget across the bar while the others slide aside, an app's icon moves to another workspace, and Try Themes steps through Built-in, Blueprint, Broadsheet and Brutalist">
+
 ## Themes
 
 The same bar in five of the themes that ship with StableBar. Choose one during setup, cycle through all of them on your own bar with **Try Themes…**, see each one in [Themes](docs/themes.md), or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages).
