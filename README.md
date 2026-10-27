@@ -35,7 +35,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 - **Window managers.** Workspaces from [AeroSpace](https://github.com/nikitabobko/AeroSpace), [yabai](https://github.com/koekeishiya/yabai) or [OmniWM](https://github.com/OmniNull/OmniWM). With AeroSpace or yabai, drag an app's icon onto another workspace to move its windows. Without a window manager, StableBar can keep windows and notifications clear of the bar.
 - **Every display.** Notch-aware placement, widgets per kind of screen and a separate bar for each screen setup.
 - **Updates in the bar.** When a release is out, an icon fades into the bar. Click it to read every change since your version, then download, install and relaunch.
-- **Scriptable.** The command line queries and edits the running bar and sends events from other tools.
+- **Command line.** `stablebar` queries and edits the running bar and sends events from other tools, and `stablebar triage` hands a problem or an idea to a coding agent.
 
 <img src="https://gist.githubusercontent.com/M4n0x/4cdcb17cafe64fdfae1d3b2b736f7582/raw/0717ce239736c9ca78a387e346844bb139ef4f77/stablebar-tour.gif" alt="StableBar in use: today's agenda opens below the meeting widget, Edit Bar in Place drags the meeting widget across the bar while the others slide aside, an app's icon moves to another workspace, and Try Themes steps through Built-in, Blueprint, Broadsheet and Brutalist">
 
@@ -113,6 +113,20 @@ printf '{"text":"%s","icon":"internaldrive"}' "$used"
 
 [Create a widget](docs/create-a-widget.md) covers the output format, events and layouts. Share a widget as a [package](docs/packages.md), or install others from the store in **Settings → Packages**.
 
+## Command line
+
+Install the `stablebar` command from **Settings → General → Command line**, then drive the running bar from any terminal or script:
+
+```sh
+stablebar --query clock
+stablebar --set clock '{"format":"HH:mm:ss"}'
+stablebar --trigger build_finished STATUS=success
+```
+
+Changes last for the session unless you add `--persist`. [Command-line controls](docs/command-line.md) lists every command.
+
+`stablebar triage` hands a problem with your bar, or an idea for StableBar, to Claude Code or Codex. The agent looks at your configuration, the running bar and recent crashes, reads StableBar's source for your version and searches the issues on GitHub. Then it offers to fix your setup, comment on an issue or file a new one, and changes or posts nothing until you say yes.
+
 ## Documentation
 
 The [user guide](docs/README.md) documents every feature and configuration option. Start with [Getting started](docs/getting-started.md), or try one of the working setups in [examples](examples).
@@ -123,7 +137,7 @@ StableBar is built by [Sebastien Graf](https://github.com/Seb-GRAF) and [Steve M
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build StableBar, run the tests and open a pull request. Report security issues privately, as described in [SECURITY.md](.github/SECURITY.md).
+Bug reports, ideas and pull requests are welcome; `stablebar triage` checks a report against the existing issues before filing it. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build StableBar, run the tests and open a pull request. Report security issues privately, as described in [SECURITY.md](.github/SECURITY.md).
 
 ## License
 
