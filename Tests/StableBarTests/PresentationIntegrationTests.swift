@@ -182,6 +182,87 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
+@Test(arguments: [-400.0, 0.0, 400.0]) func popupHoverTriangleFollowsThePopupEdges(originX: Double) {
+    let origin = NSPoint(x: originX, y: 100)
+    let frame = NSRect(x: -200, y: -100, width: 200, height: 100)
+    let left = (origin.x + frame.minX) / 2
+    let right = (origin.x + frame.maxX) / 2
+    #expect(popupHoverTriangleContains(NSPoint(x: (left + right) / 2, y: 50), from: origin, to: frame))
+    #expect(popupHoverTriangleContains(NSPoint(x: left, y: 50), from: origin, to: frame))
+    #expect(popupHoverTriangleContains(NSPoint(x: right, y: 50), from: origin, to: frame))
+    #expect(!popupHoverTriangleContains(NSPoint(x: left - 1, y: 50), from: origin, to: frame))
+    #expect(!popupHoverTriangleContains(NSPoint(x: right + 1, y: 50), from: origin, to: frame))
+    #expect(!popupHoverTriangleContains(NSPoint(x: origin.x, y: 101), from: origin, to: frame))
+    #expect(!popupHoverTriangleContains(NSPoint(x: frame.midX, y: -1), from: origin, to: frame))
+    #expect(!popupHoverTriangleContains(origin, from: origin, to: frame.offsetBy(dx: 0, dy: 100)))
+}
+
+@Test(arguments: [false, true], ["enter", "stop", "away"]) @MainActor
+func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(replace: Bool, finish: String) async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"bar":{"morphPopups":false},
+     "popups":{"details":{"openOnHover":true,"animation":{"duration":0},
+       "style":{},"layout":{"type":"text","text":"Details"}}},
+     "widgets":[{"id":"first","type":"text","text":"First","position":"right","popupName":"details"},
+                {"id":"second","type":"text","text":"Second","position":"right","popupName":"details"}]}
+    """#.utf8))
+    var presentations: [PopupPanel] = []
+    var point = NSPoint.zero
+    var moving = false
+    var samples = 0
+    let popup = WidgetPopup(present: { panel, _ in presentations.append(panel) }, mouseLocation: {
+        if moving {
+            point.y -= 0.25
+            samples += 1
+        }
+        return point
+    })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let anchors = try configuration.widgets.map { try #require(bar.anchors($0.id).first) }
+    let details = try #require(configuration.popups["details"])
+    let frame = bar.panel.convertToScreen(anchors[0].convert(anchors[0].bounds, to: nil))
+    popup.open(details, widget: configuration.widgets[0], defaults: configuration.defaults,
+               store: store, anchor: anchors[0], onHover: true)
+    point = NSPoint(x: frame.midX, y: frame.minY)
+    popup.hover(false, store: store, anchor: anchors[0]) {}
+    let target = try #require(presentations.first).frame
+    point.x += (target.midX - point.x) * (frame.maxY - point.y) / (frame.maxY - target.maxY)
+    moving = true
+    if replace {
+        popup.hover(true, store: store, anchor: anchors[1]) {
+            popup.showTooltip("Neighbour", widget: configuration.widgets[1], defaults: configuration.defaults,
+                              store: store, anchor: anchors[1])
+        }
+    }
+    try await waitForPopup { samples >= 4 }
+    #expect(samples >= 4)
+    #expect(popup.isOpen)
+    #expect(presentations.count == 1)
+    moving = false
+    if finish == "enter" {
+        if replace { popup.hover(false, store: store, anchor: anchors[1]) {} }
+        popup.hoverPopup(true)
+        try await Task.sleep(for: .milliseconds(250))
+        #expect(popup.isOpen)
+        #expect(presentations.count == 1)
+        popup.hoverPopup(false)
+        try await waitForPopup { !popup.isOpen }
+        #expect(!popup.isOpen)
+    } else {
+        if finish == "away" { point.x = target.minX - 100 }
+        try await waitForPopup { replace ? presentations.count == 2 : !popup.isOpen }
+        #expect(replace ? presentations.count == 2 : !popup.isOpen)
+    }
+    #expect(presentations.allSatisfy { !$0.isVisible })
+}
+
 /// Only the open state sets a background, so opening the popup makes glass start drawing behind the widget,
 /// as leaving a widget whose hover background disappears does.
 @Test(arguments: [false, true]) @MainActor func clickedPopupStaysOpenWhenItsWidgetBackgroundChanges(glass: Bool) async throws {

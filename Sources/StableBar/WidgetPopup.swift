@@ -159,6 +159,7 @@ extension PopupTransition {
 @MainActor
 final class WidgetPopup {
     private let present: (PopupPanel, Bool) -> Void
+    private let mouseLocation: () -> NSPoint
     private var panel: PopupPanel?
     private(set) var shadowWindow: NSPanel?
     private var widgetID: String?
@@ -173,6 +174,7 @@ final class WidgetPopup {
     private var source: CGFloat = 0
     private var hoverTask: Task<Void, Never>?
     private weak var hoveredAnchor: NSView?
+    private var hoverOrigin: NSPoint?
     private var pointerInPopup = false
     private var editingControls = false
     private var pinned = false
@@ -190,8 +192,9 @@ final class WidgetPopup {
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
         if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
-    }) {
+    }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
         self.present = present
+        self.mouseLocation = mouseLocation
     }
 
     var isOpen: Bool { panel != nil }
@@ -217,15 +220,24 @@ final class WidgetPopup {
         if inside {
             hoverTask?.cancel()
             hoveredAnchor = anchor
-            guard self.anchor !== anchor else { return }
-            // Moving from one widget to the next while something opened on hover shows the next one at once.
+            guard self.anchor !== anchor else {
+                hoverOrigin = nil
+                return
+            }
             let delay = panel == nil ? store.configuration!.bar.hoverDelay : 0
             hoverTask = Task {
-                do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
+                do {
+                    try await Task.sleep(for: .milliseconds(delay))
+                    try await waitForHoverPath()
+                } catch { return }
                 guard store.barEditing.allowsWidgetActions else { return }
                 await show()
             }
         } else if hoveredAnchor === anchor {
+            if self.anchor === anchor, !panel!.ignoresMouseEvents {
+                let frame = anchor.window!.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+                hoverOrigin = NSPoint(x: mouseLocation().x, y: frame.maxY)
+            }
             hoveredAnchor = nil
             hoverTask?.cancel()
             closeAfterHover()
@@ -234,14 +246,32 @@ final class WidgetPopup {
 
     func hoverPopup(_ inside: Bool) {
         pointerInPopup = inside
-        if inside { hoverTask?.cancel() } else { closeAfterHover() }
+        if inside {
+            hoverOrigin = nil
+            hoverTask?.cancel()
+        } else { closeAfterHover() }
+    }
+
+    private func waitForHoverPath() async throws {
+        guard let hoverOrigin else { return }
+        let frame = panel!.frame.insetBy(dx: shown!.inset, dy: shown!.inset)
+        var point = mouseLocation()
+        while popupHoverTriangleContains(point, from: hoverOrigin, to: frame) {
+            try await Task.sleep(for: .milliseconds(200))
+            let next = mouseLocation()
+            guard next.y < point.y else { return }
+            point = next
+        }
     }
 
     private func closeAfterHover() {
         guard !pinned, panel != nil, hoveredAnchor == nil, !pointerInPopup, !editingControls else { return }
         hoverTask?.cancel()
         hoverTask = Task { [weak self] in
-            do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+            do {
+                try await self?.waitForHoverPath()
+                try await Task.sleep(for: .milliseconds(200))
+            } catch { return }
             self?.close()
         }
     }
@@ -630,6 +660,7 @@ final class WidgetPopup {
         hoverTask?.cancel()
         hoverTask = nil
         hoveredAnchor = nil
+        hoverOrigin = nil
         pointerInPopup = false
         editingControls = false
         pinned = false
@@ -849,6 +880,14 @@ final class WidgetPopup {
     func removeAnchor(_ view: NSView) {
         if anchor === view || hoveredAnchor === view { close() }
     }
+}
+
+func popupHoverTriangleContains(_ point: NSPoint, from origin: NSPoint, to popup: NSRect) -> Bool {
+    guard origin.y > popup.maxY, point.y <= origin.y, point.y >= popup.maxY else { return false }
+    let progress = (origin.y - point.y) / (origin.y - popup.maxY)
+    let left = origin.x + (popup.minX - origin.x) * progress
+    let right = origin.x + (popup.maxX - origin.x) * progress
+    return point.x >= left && point.x <= right
 }
 
 struct PopupAnchor: NSViewRepresentable {
