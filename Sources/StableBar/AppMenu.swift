@@ -329,6 +329,39 @@ struct MenuBarItemReference: Decodable, Equatable, Sendable {
     }
 }
 
+enum MenuBarItemsEntry: Decodable, Equatable, Sendable {
+    case item(MenuBarItemReference)
+    case symbol
+
+    init(from decoder: Decoder) throws {
+        guard let name = try? decoder.singleValueContainer().decode(String.self) else {
+            self = .item(try MenuBarItemReference(from: decoder))
+            return
+        }
+        guard name == "symbol" else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath,
+                                                                    debugDescription: "Use \"symbol\" or an object that names an app."))
+        }
+        self = .symbol
+    }
+
+    var configurationValue: ConfigurationValue {
+        switch self {
+        case let .item(reference): reference.configurationValue
+        case .symbol: .string("symbol")
+        }
+    }
+}
+
+extension [MenuBarItemsEntry] {
+    var references: [MenuBarItemReference] {
+        compactMap { entry in
+            if case let .item(reference) = entry { return reference }
+            return nil
+        }
+    }
+}
+
 enum MenuBarItemPlacement: CaseIterable {
     case bar, row, hidden
 
@@ -338,12 +371,6 @@ enum MenuBarItemPlacement: CaseIterable {
         case .row: "Row"
         case .hidden: "Hidden"
         }
-    }
-}
-
-extension [MenuBarItem] {
-    func shown(by shown: [MenuBarItemReference]) -> [(item: MenuBarItem, reference: Int)] {
-        shown.indices.flatMap { index in filter(shown[index].matches).map { ($0, index) } }
     }
 }
 
@@ -361,27 +388,27 @@ enum MenuBarItemSource {
     }
 }
 
-func menuBarItemsProperties(shown: [MenuBarItemReference], hidden: [MenuBarItemReference], moving source: MenuBarItemSource,
+func menuBarItemsProperties(shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry], moving source: MenuBarItemSource,
                             to placement: MenuBarItemPlacement, before index: Int?, among items: [MenuBarItem]) -> [String: ConfigurationValue] {
     guard placement != source.placement || index != nil else { return [:] }
     var nextShown = shown
     var nextHidden = hidden
     var index = index
-    let reference: MenuBarItemReference
+    let entry: MenuBarItemsEntry
     switch source {
     case let .item(item):
         let several = items.filter { $0.bundleID == item.bundleID && $0.appName == item.appName }.count > 1
-        reference = MenuBarItemReference(app: item.bundleID ?? item.appName, item: several ? item.identifier ?? item.entry.title : nil)
+        entry = .item(MenuBarItemReference(app: item.bundleID ?? item.appName, item: several ? item.identifier ?? item.entry.title : nil))
     case let .shown(position):
-        reference = nextShown.remove(at: position)
+        entry = nextShown.remove(at: position)
         if placement == .bar, let before = index, before > position { index = before - 1 }
     case let .hidden(position):
-        reference = nextHidden.remove(at: position)
+        entry = nextHidden.remove(at: position)
         if placement == .hidden, let before = index, before > position { index = before - 1 }
     }
     switch placement {
-    case .bar: nextShown.insert(reference, at: index ?? nextShown.count)
-    case .hidden: nextHidden.insert(reference, at: index ?? nextHidden.count)
+    case .bar: nextShown.insert(entry, at: index ?? nextShown.count)
+    case .hidden: nextHidden.insert(entry, at: index ?? nextHidden.count)
     case .row: break
     }
     var properties: [String: ConfigurationValue] = [:]

@@ -1432,9 +1432,16 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/menuBarItem"
+            "anyOf": [
+              {
+                "const": "symbol"
+              },
+              {
+                "$ref": "#/definitions/menuBarItem"
+              }
+            ]
           },
-          "description": "Menu bar items a menuBarItems widget shows on the bar beside its symbol, in this order, instead of in its row."
+          "description": "What a menuBarItems widget shows on the bar, in this order: menu bar items instead of in its row, and \"symbol\", the widget's own symbol, which opens the row. Without \"symbol\" here or in hidden, the symbol comes last."
         },
         "hidden": {
           "type": [
@@ -1442,9 +1449,16 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/menuBarItem"
+            "anyOf": [
+              {
+                "const": "symbol"
+              },
+              {
+                "$ref": "#/definitions/menuBarItem"
+              }
+            ]
           },
-          "description": "Menu bar items a menuBarItems widget leaves out of its row."
+          "description": "Menu bar items a menuBarItems widget leaves out of its row, and \"symbol\" to leave out its symbol."
         },
         "text": {
           "$ref": "#/definitions/string"

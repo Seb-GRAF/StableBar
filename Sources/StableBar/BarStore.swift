@@ -182,7 +182,7 @@ final class BarStore: NSObject {
     }
 
     @objc private func readMenuBarItems() {
-        guard configuration?.widgets.contains(where: { $0.enabled && !$0.shownMenuBarItems.isEmpty }) == true else { return }
+        guard configuration?.widgets.contains(where: { $0.enabled && $0.drawsMenuBarItems }) == true else { return }
         Task { _ = await appMenu.readMenuBarItems(requestingAccess: false) }
     }
 
@@ -196,8 +196,8 @@ final class BarStore: NSObject {
     }
 
     func move(_ source: MenuBarItemSource, to placement: MenuBarItemPlacement, before index: Int?, in widget: WidgetConfiguration) {
-        guard case let .menuBarItems(_, shown, hidden) = widget.content else { return }
-        let properties = menuBarItemsProperties(shown: shown, hidden: hidden, moving: source, to: placement, before: index,
+        guard case let .menuBarItems(_, _, hidden) = widget.content else { return }
+        let properties = menuBarItemsProperties(shown: widget.shownMenuBarItems, hidden: hidden, moving: source, to: placement, before: index,
                                                 among: appMenu.menuBarItems)
         do {
             try customizationHistory.change(ConfigurationEdit(action: .set, id: widget.id, properties: properties))

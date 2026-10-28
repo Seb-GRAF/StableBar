@@ -362,7 +362,7 @@ enum WidgetContent: Equatable, Sendable {
     case appMenu(expandOnHover: Bool)
     case appleMenu
     case controlCenter
-    case menuBarItems(openOnHover: Bool, shown: [MenuBarItemReference], hidden: [MenuBarItemReference])
+    case menuBarItems(openOnHover: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
     case clock(format: String)
     case text(String)
     case script(command: String, interval: Double?)
@@ -460,8 +460,8 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "controlCenter": content = .controlCenter
         case "menuBarItems":
             content = .menuBarItems(openOnHover: try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? true,
-                                    shown: try values.decodeIfPresent([MenuBarItemReference].self, forKey: .shown) ?? [],
-                                    hidden: try values.decodeIfPresent([MenuBarItemReference].self, forKey: .hidden) ?? [])
+                                    shown: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .shown) ?? [],
+                                    hidden: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .hidden) ?? [])
         case "clock": content = .clock(format: try values.decodeIfPresent(String.self, forKey: .format) ?? "EEE d MMM  HH:mm")
         case "text": content = .text(try values.decode(String.self, forKey: .text))
         case "script":
@@ -493,9 +493,14 @@ extension WidgetConfiguration {
         return nil
     }
 
-    var shownMenuBarItems: [MenuBarItemReference] {
-        if case let .menuBarItems(_, shown, _) = content, layout == nil { return shown }
-        return []
+    var shownMenuBarItems: [MenuBarItemsEntry] {
+        guard case let .menuBarItems(_, shown, hidden) = content else { return [] }
+        return shown.contains(.symbol) || hidden.contains(.symbol) ? shown : shown + [.symbol]
+    }
+
+    var drawsMenuBarItems: Bool {
+        guard case .menuBarItems = content, layout == nil else { return false }
+        return shownMenuBarItems != [.symbol]
     }
 }
 

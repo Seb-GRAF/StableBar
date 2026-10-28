@@ -474,6 +474,23 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
                                                      .menuBarItems(openOnHover: false, shown: [], hidden: [])])
 }
 
+@Test func menuBarItemsPutTheirSymbolLastUnlessPlacedOrHidden() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"last","type":"menuBarItems","position":"right","shown":[{"app":"Granola"}]},
+                {"id":"first","type":"menuBarItems","position":"right","shown":["symbol",{"app":"Granola"}]},
+                {"id":"hidden","type":"menuBarItems","position":"right","shown":[{"app":"Granola"}],"hidden":["symbol"]},
+                {"id":"plain","type":"menuBarItems","position":"right"}]}
+    """#.utf8))
+    let granola = MenuBarItemsEntry.item(MenuBarItemReference(app: "Granola", item: nil))
+    #expect(configuration.widgets.map(\.shownMenuBarItems) == [[granola, .symbol], [.symbol, granola], [granola], [.symbol]])
+    #expect(configuration.widgets.map(\.drawsMenuBarItems) == [true, true, true, false])
+    #expect(throws: (any Error).self) {
+        try JSONDecoder().decode(Configuration.self, from: Data(#"""
+        {"widgets":[{"id":"items","type":"menuBarItems","position":"right","shown":["grid"]}]}
+        """#.utf8))
+    }
+}
+
 @Test func examplesAndTheStarterConfigurationStayValid() throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     var loader = ConfigurationLoader()

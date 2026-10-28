@@ -1067,7 +1067,7 @@ struct MenuBarItemsRow: View {
                     hover(entry.title, anchor, inside)
                 }
                 .contextMenu {
-                    MenuBarItemCommands(source: .item(item), shownCount: 0) { placement, _ in place(item, placement) }
+                    MenuBarItemCommands(source: .item(item), shownCount: 0, isSymbol: false) { placement, _ in place(item, placement) }
                 }
             }
         }

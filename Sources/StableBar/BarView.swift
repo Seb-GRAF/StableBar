@@ -372,8 +372,8 @@ struct WidgetView: View {
         } else if widget.content == .controlCenter {
             Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
                 .buttonStyle(MouseDownButtonStyle())
-        } else if case let .menuBarItems(_, _, hidden) = widget.content, widget.shownMenuBarItems.isEmpty {
-            Button { toggleMenuBarItems(leavingOut: hidden, anchor: clickAnchor) } label: { tile }
+        } else if case let .menuBarItems(_, _, hidden) = widget.content, !widget.drawsMenuBarItems {
+            Button { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) } label: { tile }
                 .buttonStyle(.plain)
         } else {
             tile
@@ -392,9 +392,9 @@ struct WidgetView: View {
                 store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
                                  store: store, anchor: popupAnchor, onHover: true)
             }
-        } else if case let .menuBarItems(openOnHover: true, _, hidden) = widget.content, widget.shownMenuBarItems.isEmpty,
+        } else if case let .menuBarItems(openOnHover: true, _, hidden) = widget.content, !widget.drawsMenuBarItems,
                   widgetPopup(widget, store: store) == nil, widget.onClick == nil, widget.open == nil {
-            hoverMenuBarItems(inside, leavingOut: hidden, anchor: popupAnchor)
+            hoverMenuBarItems(inside, leavingOut: hidden.references, anchor: popupAnchor)
         } else if !inlineHoverControls, widget.hoverLayout != nil || (isSound && output?.values?["volume"] != nil) {
             store.popup.hover(inside, store: store, anchor: popupAnchor) {
                 store.popup.showControls(widget: widget, defaults: popupDefaults.inheriting(defaults), store: store,
@@ -430,7 +430,7 @@ struct WidgetView: View {
         // Workspace and menu buttons include vertical padding so their selection fills the tile.
         let hasCells = switch widget.content {
         case .workspaces, .appMenu, .appleMenu: widget.layout == nil
-        case .menuBarItems: !widget.shownMenuBarItems.isEmpty
+        case .menuBarItems: widget.drawsMenuBarItems
         default: false
         }
         let tile = Group {
@@ -576,8 +576,8 @@ struct WidgetView: View {
                         appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                         padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess)
-        case let .menuBarItems(openOnHover, _, hidden) where !widget.shownMenuBarItems.isEmpty:
-            let leftOut = widget.shownMenuBarItems + hidden
+        case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
+            let leftOut = widget.shownMenuBarItems.references + hidden.references
             MenuBarItemsView(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults),
                              appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                              padding: padding, symbol: store.label(for: widget).icon!) { anchor in
@@ -881,41 +881,53 @@ private struct MenuBarItemsView: View {
         let shown = widget.shownMenuBarItems
         let openAnchor = store.presentations[widget.id]?.popupAnchor
         HStack(spacing: 0) {
-            ForEach(Array(store.appMenu.menuBarItems.shown(by: shown).enumerated()), id: \.offset) { _, shownItem in
-                let (item, reference) = shownItem
-                MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor) { anchor in
-                    open(item, anchor: anchor)
-                } hover: { anchor, inside in
-                    if inside, switches(to: anchor) {
-                        if item.entry.hasSubmenu { open(item, anchor: anchor) } else { store.popup.close() }
+            ForEach(Array(shown.enumerated()), id: \.offset) { position, entry in
+                switch entry {
+                case .symbol:
+                    MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
+                        if inside, switches(to: anchor) { toggleRow(anchor) }
+                        hoverRow(inside, anchor)
+                    } label: {
+                        Image(systemName: symbol).font(.system(size: appearance.iconSize))
                     }
-                    store.popup.hover(inside, store: store, anchor: anchor) {
-                        store.popup.showTooltip(item.entry.title, widget: widget, defaults: defaults, store: store, anchor: anchor)
-                    }
-                } label: {
-                    if let icon = shown[reference].icon {
-                        Image(systemName: icon).font(.system(size: appearance.iconSize))
-                    } else {
-                        Image(nsImage: item.entry.icon!).resizable().scaledToFit().frame(height: appearance.iconSize)
-                    }
-                }
-                .accessibilityLabel(item.entry.title)
-                .contextMenu {
-                    MenuBarItemCommands(source: .shown(reference), shownCount: shown.count) { placement, index in
-                        store.move(.shown(reference), to: placement, before: index, in: widget)
+                    .accessibilityLabel("Menu bar items")
+                    .contextMenu { commands(position, count: shown.count, isSymbol: true) }
+                case let .item(reference):
+                    ForEach(Array(store.appMenu.menuBarItems.filter(reference.matches).enumerated()), id: \.offset) { _, item in
+                        itemCell(item, icon: reference.icon, openAnchor: openAnchor)
+                            .contextMenu { commands(position, count: shown.count, isSymbol: false) }
                     }
                 }
             }
-            MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
-                if inside, switches(to: anchor) { toggleRow(anchor) }
-                hoverRow(inside, anchor)
-            } label: {
-                Image(systemName: symbol).font(.system(size: appearance.iconSize))
-            }
-            .accessibilityLabel("Menu bar items")
         }
         .fixedSize(horizontal: true, vertical: false)
         .onHover { if $0 { Task { await store.appMenu.readMenuBarItems(requestingAccess: false) } } }
+    }
+
+    private func itemCell(_ item: MenuBarItem, icon: String?, openAnchor: ObjectIdentifier?) -> some View {
+        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor) { anchor in
+            open(item, anchor: anchor)
+        } hover: { anchor, inside in
+            if inside, switches(to: anchor) {
+                if item.entry.hasSubmenu { open(item, anchor: anchor) } else { store.popup.close() }
+            }
+            store.popup.hover(inside, store: store, anchor: anchor) {
+                store.popup.showTooltip(item.entry.title, widget: widget, defaults: defaults, store: store, anchor: anchor)
+            }
+        } label: {
+            if let icon {
+                Image(systemName: icon).font(.system(size: appearance.iconSize))
+            } else {
+                Image(nsImage: item.entry.icon!).resizable().scaledToFit().frame(height: appearance.iconSize)
+            }
+        }
+        .accessibilityLabel(item.entry.title)
+    }
+
+    private func commands(_ position: Int, count: Int, isSymbol: Bool) -> some View {
+        MenuBarItemCommands(source: .shown(position), shownCount: count, isSymbol: isSymbol) { placement, index in
+            store.move(.shown(position), to: placement, before: index, in: widget)
+        }
     }
 
     private func switches(to anchor: NSView) -> Bool {
@@ -936,6 +948,7 @@ private struct MenuBarItemsView: View {
 struct MenuBarItemCommands: View {
     let source: MenuBarItemSource
     let shownCount: Int
+    let isSymbol: Bool
     let move: (MenuBarItemPlacement, Int?) -> Void
 
     var body: some View {
@@ -945,7 +958,7 @@ struct MenuBarItemCommands: View {
             Divider()
         }
         if source.placement != .bar { Button("Show on Bar") { move(.bar, nil) } }
-        if source.placement != .row { Button("Move to Row") { move(.row, nil) } }
+        if source.placement != .row && !isSymbol { Button("Move to Row") { move(.row, nil) } }
         if source.placement != .hidden { Button("Hide") { move(.hidden, nil) } }
     }
 }
