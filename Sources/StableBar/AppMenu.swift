@@ -30,6 +30,7 @@ final class AppMenu: NSObject {
     @ObservationIgnored private var submenus: [PopupPanel] = []
     @ObservationIgnored private(set) var readTask: Task<Void, Never>?
     @ObservationIgnored private var menuBarPresses = 0
+    private(set) var menuBarItems: [MenuBarItem] = []
     @ObservationIgnored var hidesMenuBar = false {
         didSet { if hidesMenuBar != oldValue { setMenuBarHidden(hidesMenuBar) } }
     }
@@ -189,11 +190,10 @@ final class AppMenu: NSObject {
         popup(entries(of: element))
     }
 
-    /// The row of menu bar items, or nil without Accessibility access, which it asks for if `requestingAccess`.
-    func menuBarItemsPopup(requestingAccess: Bool = true) async -> PopupConfiguration? {
+    func readMenuBarItems(requestingAccess: Bool) async -> Bool {
         guard checkAccess() else {
             if requestingAccess { requestAccessibility() }
-            return nil
+            return false
         }
         let apps = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
@@ -220,16 +220,24 @@ final class AppMenu: NSObject {
             for await found in group { items += found }
             return items
         }
-        let entries = items.sorted { $0.frame.midX < $1.frame.midX }.compactMap { item in
+        menuBarItems = items.sorted { $0.frame.midX < $1.frame.midX }.compactMap { item in
             menuBarDisplay(of: item.frame).map { display in
                 let app = apps[item.pid]!
-                return AppMenuEntry(title: item.description ?? app.localizedName ?? "", element: item.element, isEnabled: true, isChecked: false,
-                                    hasSubmenu: item.hasMenu, icon: menuBarIcon(identifier: item.identifier, app: app),
-                                    menuBarDisplay: display)
+                return MenuBarItem(entry: AppMenuEntry(title: item.description ?? app.localizedName ?? "", element: item.element, isEnabled: true,
+                                                       isChecked: false, hasSubmenu: item.hasMenu, icon: menuBarIcon(identifier: item.identifier, app: app),
+                                                       menuBarDisplay: display),
+                                   bundleID: app.bundleIdentifier, appName: app.localizedName ?? "", identifier: item.identifier)
             }
         }
-        return PopupConfiguration(style: WidgetStyle(paddingHorizontal: 5, paddingVertical: 5, spacing: 0, width: Double(entries.count * 28 + 10)),
-                                  layout: PopupBlock(content: .menuBarItems(entries)))
+        return true
+    }
+
+    /// The row of menu bar items, or nil without Accessibility access, which it asks for if `requestingAccess`.
+    func menuBarItemsPopup(leavingOut references: [MenuBarItemReference], requestingAccess: Bool = true) async -> PopupConfiguration? {
+        guard await readMenuBarItems(requestingAccess: requestingAccess) else { return nil }
+        let items = menuBarItems.filter { item in !references.contains { $0.matches(item) } }
+        return PopupConfiguration(style: WidgetStyle(paddingHorizontal: 5, paddingVertical: 5, spacing: 0, width: Double(items.count * 28 + 10)),
+                                  layout: PopupBlock(content: .menuBarItems(items)))
     }
 
     func press(_ entry: AppMenuEntry) {
@@ -280,6 +288,85 @@ final class AppMenu: NSObject {
     private func children(of element: AXUIElement) -> [AXUIElement] {
         attribute(kAXChildrenAttribute, of: element) as? [AXUIElement] ?? []
     }
+}
+
+struct MenuBarItem {
+    let entry: AppMenuEntry
+    let bundleID: String?
+    let appName: String
+    let identifier: String?
+}
+
+struct MenuBarItemReference: Decodable, Equatable, Sendable {
+    let app: String
+    var item: String?
+    var icon: String?
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case app, item, icon }
+
+    init(app: String, item: String?) {
+        self.app = app
+        self.item = item
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        app = try values.decode(String.self, forKey: .app)
+        item = try values.decodeIfPresent(String.self, forKey: .item)
+        icon = try values.decodeIfPresent(String.self, forKey: .icon)
+    }
+
+    func matches(_ item: MenuBarItem) -> Bool {
+        (app == item.bundleID || app == item.appName) && (self.item == nil || self.item == item.identifier || self.item == item.entry.title)
+    }
+
+    var configurationValue: ConfigurationValue {
+        var value: [String: ConfigurationValue] = ["app": .string(app)]
+        if let item { value["item"] = .string(item) }
+        if let icon { value["icon"] = .string(icon) }
+        return .object(value)
+    }
+}
+
+enum MenuBarItemPlacement: CaseIterable {
+    case bar, row, hidden
+
+    var title: String {
+        switch self {
+        case .bar: "Bar"
+        case .row: "Row"
+        case .hidden: "Hidden"
+        }
+    }
+}
+
+extension [MenuBarItem] {
+    func shown(by shown: [MenuBarItemReference]) -> [(item: MenuBarItem, reference: Int)] {
+        shown.indices.flatMap { index in filter(shown[index].matches).map { ($0, index) } }
+    }
+}
+
+func menuBarItemPlacement(of item: MenuBarItem, shown: [MenuBarItemReference], hidden: [MenuBarItemReference]) -> MenuBarItemPlacement {
+    shown.contains { $0.matches(item) } ? .bar : hidden.contains { $0.matches(item) } ? .hidden : .row
+}
+
+func menuBarItemsProperties(shown: [MenuBarItemReference], hidden: [MenuBarItemReference], placing item: MenuBarItem,
+                            in placement: MenuBarItemPlacement, among items: [MenuBarItem]) -> [String: ConfigurationValue] {
+    guard placement != menuBarItemPlacement(of: item, shown: shown, hidden: hidden) else { return [:] }
+    var nextShown = shown.filter { !$0.matches(item) }
+    var nextHidden = hidden.filter { !$0.matches(item) }
+    let several = items.filter { $0.bundleID == item.bundleID && $0.appName == item.appName }.count > 1
+    let reference = MenuBarItemReference(app: item.bundleID ?? item.appName, item: several ? item.identifier ?? item.entry.title : nil)
+    switch placement {
+    case .bar: nextShown.append(reference)
+    case .hidden: nextHidden.append(reference)
+    case .row: break
+    }
+    var properties: [String: ConfigurationValue] = [:]
+    if nextShown != shown { properties["shown"] = .array(nextShown.map(\.configurationValue)) }
+    if nextHidden != hidden { properties["hidden"] = .array(nextHidden.map(\.configurationValue)) }
+    return properties
 }
 
 private struct FoundMenuBarItem {

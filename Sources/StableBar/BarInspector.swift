@@ -477,6 +477,23 @@ struct BarInspector: View {
                     }
                 }
                 iconGroup(widget)
+            case let .menuBarItems(_, shown, hidden):
+                SettingsGroup("Menu bar items") {
+                    let items = store.appMenu.menuBarItems
+                    if items.isEmpty {
+                        SettingRow(title: "Items", hint: "Allow StableBar in Privacy & Security → Accessibility to list them") {}
+                    }
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        SettingRow(title: item.entry.title) {
+                            SettingsSegments(selection: Binding(get: { menuBarItemPlacement(of: item, shown: shown, hidden: hidden) }, set: {
+                                editor.set(menuBarItemsProperties(shown: shown, hidden: hidden, placing: item, in: $0, among: items), for: widget.id)
+                            }), options: MenuBarItemPlacement.allCases.map { ($0, $0.title) }, stretches: false)
+                            .fixedSize()
+                        }
+                    }
+                }
+                .task { _ = await store.appMenu.readMenuBarItems(requestingAccess: false) }
+                iconGroup(widget)
             default:
                 if widget.content.drawsOwnView {
                     SettingsCallout(systemImage: "sparkle",
@@ -576,7 +593,7 @@ struct BarInspector: View {
                     }))
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
                 }
-            } else if case let .menuBarItems(openOnHover) = widget.content {
+            } else if case let .menuBarItems(openOnHover, _, _) = widget.content {
                 SettingRow(title: "Open on hover", hint: "When off, a click opens the list") {
                     Toggle("Open on hover", isOn: Binding(get: { openOnHover }, set: {
                         editor.set(["openOnHover": .bool($0)], for: widget.id)

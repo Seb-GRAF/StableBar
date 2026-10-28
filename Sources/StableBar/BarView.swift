@@ -372,14 +372,8 @@ struct WidgetView: View {
         } else if widget.content == .controlCenter {
             Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
                 .buttonStyle(MouseDownButtonStyle())
-        } else if case .menuBarItems = widget.content {
-            Button {
-                guard store.barEditing.allowsWidgetActions, !store.popup.toggleIfOpen(widget.id, anchor: clickAnchor) else { return }
-                Task {
-                    guard let popup = await store.appMenu.menuBarItemsPopup() else { return }
-                    store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
-                }
-            } label: { tile }
+        } else if case let .menuBarItems(_, _, hidden) = widget.content, widget.shownMenuBarItems.isEmpty {
+            Button { toggleMenuBarItems(leavingOut: hidden, anchor: clickAnchor) } label: { tile }
                 .buttonStyle(.plain)
         } else {
             tile
@@ -398,13 +392,9 @@ struct WidgetView: View {
                 store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
                                  store: store, anchor: popupAnchor, onHover: true)
             }
-        } else if case .menuBarItems(openOnHover: true) = widget.content, widgetPopup(widget, store: store) == nil,
-                  widget.onClick == nil, widget.open == nil {
-            store.popup.hover(inside, store: store, anchor: popupAnchor) {
-                guard let popup = await store.appMenu.menuBarItemsPopup(requestingAccess: false), !Task.isCancelled else { return }
-                store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
-                                 store: store, anchor: popupAnchor, onHover: true)
-            }
+        } else if case let .menuBarItems(openOnHover: true, _, hidden) = widget.content, widget.shownMenuBarItems.isEmpty,
+                  widgetPopup(widget, store: store) == nil, widget.onClick == nil, widget.open == nil {
+            hoverMenuBarItems(inside, leavingOut: hidden, anchor: popupAnchor)
         } else if !inlineHoverControls, widget.hoverLayout != nil || (isSound && output?.values?["volume"] != nil) {
             store.popup.hover(inside, store: store, anchor: popupAnchor) {
                 store.popup.showControls(widget: widget, defaults: popupDefaults.inheriting(defaults), store: store,
@@ -440,6 +430,7 @@ struct WidgetView: View {
         // Workspace and menu buttons include vertical padding so their selection fills the tile.
         let hasCells = switch widget.content {
         case .workspaces, .appMenu, .appleMenu: widget.layout == nil
+        case .menuBarItems: !widget.shownMenuBarItems.isEmpty
         default: false
         }
         let tile = Group {
@@ -526,6 +517,22 @@ struct WidgetView: View {
         }
     }
 
+    private func toggleMenuBarItems(leavingOut references: [MenuBarItemReference], anchor: NSView) {
+        guard store.barEditing.allowsWidgetActions, !store.popup.toggleIfOpen(widget.id, anchor: anchor) else { return }
+        Task {
+            guard let popup = await store.appMenu.menuBarItemsPopup(leavingOut: references) else { return }
+            store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: anchor)
+        }
+    }
+
+    private func hoverMenuBarItems(_ inside: Bool, leavingOut references: [MenuBarItemReference], anchor: NSView) {
+        store.popup.hover(inside, store: store, anchor: anchor) {
+            guard let popup = await store.appMenu.menuBarItemsPopup(leavingOut: references, requestingAccess: false), !Task.isCancelled else { return }
+            store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
+                             store: store, anchor: anchor, onHover: true)
+        }
+    }
+
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
         guard let popup = store.appMenu.popup(for: item) else { return }
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
@@ -569,6 +576,15 @@ struct WidgetView: View {
                         appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                         padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess)
+        case let .menuBarItems(openOnHover, _, hidden) where !widget.shownMenuBarItems.isEmpty:
+            let leftOut = widget.shownMenuBarItems + hidden
+            MenuBarItemsView(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults),
+                             appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
+                             padding: padding, symbol: store.label(for: widget).icon!) { anchor in
+                toggleMenuBarItems(leavingOut: leftOut, anchor: anchor)
+            } hoverRow: { inside, anchor in
+                if openOnHover { hoverMenuBarItems(inside, leavingOut: leftOut, anchor: anchor) }
+            }
         case .provider where isSound && inlineHoverControls:
             SoundWidgetView(widget: widget, store: store, monitor: monitor,
                             style: resolution.layoutStyle(configured: false, hovered: hovered, open: open),
@@ -847,6 +863,108 @@ struct WorkspaceView: View {
                 .modifier(AppNameTooltip(name: app.name, magnifier: magnifier, spacing: spacing, hover: appNameTooltip))
         } else {
             icon
+        }
+    }
+}
+
+private struct MenuBarItemsView: View {
+    let widget: WidgetConfiguration
+    let store: BarStore
+    let defaults: WidgetStyle
+    let appearance: WidgetAppearance
+    let padding: EdgeInsets
+    let symbol: String
+    let toggleRow: (NSView) -> Void
+    let hoverRow: (Bool, NSView) -> Void
+
+    var body: some View {
+        let shown = widget.shownMenuBarItems
+        let openAnchor = store.presentations[widget.id]?.popupAnchor
+        HStack(spacing: 0) {
+            ForEach(Array(store.appMenu.menuBarItems.shown(by: shown).enumerated()), id: \.offset) { _, shownItem in
+                let (item, reference) = shownItem
+                MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor) { anchor in
+                    open(item, anchor: anchor)
+                } hover: { anchor, inside in
+                    if inside, switches(to: anchor) {
+                        if item.entry.hasSubmenu { open(item, anchor: anchor) } else { store.popup.close() }
+                    }
+                    store.popup.hover(inside, store: store, anchor: anchor) {
+                        store.popup.showTooltip(item.entry.title, widget: widget, defaults: defaults, store: store, anchor: anchor)
+                    }
+                } label: {
+                    if let icon = shown[reference].icon {
+                        Image(systemName: icon).font(.system(size: appearance.iconSize))
+                    } else {
+                        Image(nsImage: item.entry.icon!).resizable().scaledToFit().frame(height: appearance.iconSize)
+                    }
+                }
+                .accessibilityLabel(item.entry.title)
+                .contextMenu {
+                    Button("Move Left") { store.moveShownMenuBarItem(reference, by: -1, in: widget) }.disabled(reference == 0)
+                    Button("Move Right") { store.moveShownMenuBarItem(reference, by: 1, in: widget) }.disabled(reference == shown.count - 1)
+                    Button("Move to Row") { store.place(item, .row, in: widget) }
+                    Button("Hide") { store.place(item, .hidden, in: widget) }
+                }
+            }
+            MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
+                if inside, switches(to: anchor) { toggleRow(anchor) }
+                hoverRow(inside, anchor)
+            } label: {
+                Image(systemName: symbol).font(.system(size: appearance.iconSize))
+            }
+            .accessibilityLabel("Menu bar items")
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .onHover { if $0 { Task { await store.appMenu.readMenuBarItems(requestingAccess: false) } } }
+    }
+
+    private func switches(to anchor: NSView) -> Bool {
+        let openAnchor = store.presentations[widget.id]?.popupAnchor
+        return openAnchor != nil && openAnchor != ObjectIdentifier(anchor) && store.popup.pinned
+    }
+
+    private func open(_ item: MenuBarItem, anchor: NSView) {
+        if item.entry.hasSubmenu {
+            store.popup.toggle(store.appMenu.popup(forMenuBarItem: item.entry.element), widget: widget, defaults: defaults, store: store, anchor: anchor)
+        } else if store.barEditing.allowsWidgetActions {
+            store.popup.close()
+            store.appMenu.press(item.entry)
+        }
+    }
+}
+
+private struct MenuBarItemCell<Label: View>: View {
+    let appearance: WidgetAppearance
+    let padding: EdgeInsets
+    let openAnchor: ObjectIdentifier?
+    let click: (NSView) -> Void
+    let hover: (NSView, Bool) -> Void
+    @ViewBuilder let label: () -> Label
+    @State private var hovered = false
+    @State private var anchor = NSView()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let highlighted = openAnchor.map { $0 == ObjectIdentifier(anchor) } ?? hovered
+        Button { click(anchor) } label: {
+            ZStack {
+                Text(" ").hidden()
+                label()
+            }
+            .padding(.horizontal, 7)
+            .padding(padding)
+            .background {
+                if highlighted { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
+            }
+            .background(MenuAnchor(view: anchor))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
+        .onHover { inside in
+            hovered = inside
+            hover(anchor, inside)
         }
     }
 }

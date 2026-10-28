@@ -859,6 +859,25 @@
         }
       }
     },
+    "menuBarItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app"],
+      "properties": {
+        "app": {
+          "$ref": "#/definitions/string",
+          "description": "The bundle ID or name of the app whose menu bar items this names."
+        },
+        "item": {
+          "$ref": "#/definitions/string",
+          "description": "The Accessibility identifier or title of one of the app's items. Without it, every item of the app."
+        },
+        "icon": {
+          "$ref": "#/definitions/string",
+          "description": "An SF Symbol a shown item draws in place of its icon."
+        }
+      }
+    },
     "menuItem": {
       "type": "object",
       "additionalProperties": false,
@@ -1406,6 +1425,26 @@
         "openOnHover": {
           "$ref": "#/definitions/boolean",
           "description": "Open the list of menu bar items when the pointer rests on menuBarItems widgets; false opens it on click. On by default."
+        },
+        "shown": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/menuBarItem"
+          },
+          "description": "Menu bar items a menuBarItems widget shows on the bar beside its symbol, in this order, instead of in its row."
+        },
+        "hidden": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/menuBarItem"
+          },
+          "description": "Menu bar items a menuBarItems widget leaves out of its row."
         },
         "text": {
           "$ref": "#/definitions/string"

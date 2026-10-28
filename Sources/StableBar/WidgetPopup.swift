@@ -175,7 +175,7 @@ final class WidgetPopup {
     private weak var hoveredAnchor: NSView?
     private var pointerInPopup = false
     private var editingControls = false
-    private var pinned = false
+    private(set) var pinned = false
     private var closesAfterClick = false
     private var shown: (inset: CGFloat, cornerRadius: CGFloat)?
     private var morph: (panel: PopupPanel, link: CADisplayLink, from: PopupPanel)?

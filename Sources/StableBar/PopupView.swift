@@ -59,7 +59,10 @@ struct PopupView: View {
                         store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.inheriting(look.defaults),
                                                      store: store, anchor: anchor)
                     }
-                }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, states: states, update: store.update) { command, environment in
+                }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
+                    store.popup.close()
+                    store.place(item, placement, in: widget)
+                }, states: states, update: store.update) { command, environment in
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                     store.runAction(command, widget: widget,
                                     event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
@@ -153,6 +156,7 @@ struct BlockContext {
     var openMenuBarItem: (AXUIElement?, NSView) -> Void = { _, _ in }
     var hoverMenuBarItem: (String, NSView, Bool) -> Void = { _, _, _ in }
     var menuBarItemAnchor: ObjectIdentifier?
+    var placeMenuBarItem: (MenuBarItem, MenuBarItemPlacement) -> Void = { _, _ in }
     /// The widget's states, such as `open`; each block adds its own hover.
     var states = StyleStates()
     /// False when the inherited style already has the widget's hover and open states, as in default
@@ -468,9 +472,9 @@ struct PopupBlockView: View {
             }
         case let .appMenu(entries):
             AppMenuList(entries: entries, appearance: appearance, openSubmenu: context.openSubmenu, press: context.pressMenuItem)
-        case let .menuBarItems(entries):
-            MenuBarItemsRow(entries: entries, appearance: appearance, openAnchor: context.menuBarItemAnchor, open: context.openMenuBarItem,
-                            hover: context.hoverMenuBarItem, press: context.pressMenuItem)
+        case let .menuBarItems(items):
+            MenuBarItemsRow(items: items, appearance: appearance, openAnchor: context.menuBarItemAnchor, open: context.openMenuBarItem,
+                            hover: context.hoverMenuBarItem, press: context.pressMenuItem, place: context.placeMenuBarItem)
         case let .essentials(kind, timeZone):
             EssentialsDetails(kind: kind, timeZone: timeZone, fields: fields, context: context, appearance: appearance)
         }
@@ -1042,16 +1046,18 @@ private struct AppMenuRow: View {
 }
 
 struct MenuBarItemsRow: View {
-    let entries: [AppMenuEntry]
+    let items: [MenuBarItem]
     let appearance: WidgetAppearance
     let openAnchor: ObjectIdentifier?
     let open: (AXUIElement?, NSView) -> Void
     let hover: (String, NSView, Bool) -> Void
     let press: (AppMenuEntry) -> Void
+    let place: (MenuBarItem, MenuBarItemPlacement) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                let entry = item.entry
                 MenuBarItemButton(entry: entry, appearance: appearance, openAnchor: openAnchor) { anchor in
                     if entry.hasSubmenu { open(entry.element, anchor) } else { press(entry) }
                 } hover: { anchor, inside in
@@ -1059,6 +1065,10 @@ struct MenuBarItemsRow: View {
                         open(entry.hasSubmenu ? entry.element : nil, anchor)
                     }
                     hover(entry.title, anchor, inside)
+                }
+                .contextMenu {
+                    Button("Show on Bar") { place(item, .bar) }
+                    Button("Hide") { place(item, .hidden) }
                 }
             }
         }

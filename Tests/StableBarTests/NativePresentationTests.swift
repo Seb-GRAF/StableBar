@@ -284,6 +284,31 @@ private func makeApp(_ path: String, in directory: URL, info: [String: String] =
     #expect(icon.cgImage(forProposedRect: nil, context: nil, hints: nil)?.width == 36)
 }
 
+@Test func menuBarItemsGoWhereTheirReferencesPutThem() {
+    func item(_ title: String, app: String, bundleID: String?, identifier: String? = nil) -> MenuBarItem {
+        MenuBarItem(entry: AppMenuEntry(title: title, element: AXUIElementCreateApplication(1), isEnabled: true, isChecked: false, hasSubmenu: false),
+                    bundleID: bundleID, appName: app, identifier: identifier)
+    }
+    let wifi = item("Wi‑Fi", app: "Control Center", bundleID: "com.apple.controlcenter", identifier: "com.apple.menuextra.wifi")
+    let battery = item("Battery", app: "Control Center", bundleID: "com.apple.controlcenter", identifier: "com.apple.menuextra.battery")
+    let granola = item("Granola", app: "Granola", bundleID: "com.granola.app")
+    let docker = item("Docker Desktop", app: "Docker Desktop", bundleID: nil)
+    let items = [docker, granola, wifi, battery]
+    let shown = [MenuBarItemReference(app: "com.apple.controlcenter", item: "Battery"), MenuBarItemReference(app: "Granola", item: nil)]
+    #expect(items.shown(by: shown).map { "\($0.item.entry.title) \($0.reference)" } == ["Battery 0", "Granola 1"])
+    #expect(items.shown(by: [MenuBarItemReference(app: "Control Center", item: nil)]).map(\.item.entry.title) == ["Wi‑Fi", "Battery"])
+
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: wifi, in: .bar, among: items) == [
+        "shown": .array(shown.map(\.configurationValue) + [.object(["app": .string("com.apple.controlcenter"), "item": .string("com.apple.menuextra.wifi")])])
+    ])
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: granola, in: .hidden, among: items) == [
+        "shown": .array([shown[0].configurationValue]), "hidden": .array([.object(["app": .string("com.granola.app")])])
+    ])
+    #expect(menuBarItemsProperties(shown: [], hidden: [MenuBarItemReference(app: "Docker Desktop", item: nil)], placing: docker,
+                                   in: .row, among: items) == ["hidden": .array([])])
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: battery, in: .bar, among: items).isEmpty)
+}
+
 @Test func menuBarSymbolsAreSystemSymbols() {
     #expect(menuBarSymbols.values.filter { NSImage(systemSymbolName: $0, accessibilityDescription: nil) == nil }.isEmpty)
 }
