@@ -30,6 +30,8 @@ final class AppMenu: NSObject {
     @ObservationIgnored private var submenus: [PopupPanel] = []
     @ObservationIgnored private(set) var readTask: Task<Void, Never>?
     @ObservationIgnored private var menuBarPresses = 0
+    @ObservationIgnored private var revealedPresses = 0
+    @ObservationIgnored private var pressedItem: AXUIElement?
     private(set) var menuBarItems: [MenuBarItem] = []
     @ObservationIgnored var hidesMenuBar = false {
         didSet { if hidesMenuBar != oldValue { setMenuBarHidden(hidesMenuBar) } }
@@ -195,6 +197,7 @@ final class AppMenu: NSObject {
             if requestingAccess { requestAccessibility() }
             return false
         }
+        guard revealedPresses == 0 else { return true }
         let apps = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications
             .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
             .map { ($0.processIdentifier, $0) })
@@ -249,6 +252,14 @@ final class AppMenu: NSObject {
         }
     }
 
+    func pressUnlessOpen(_ entry: AppMenuEntry) {
+        var pid: pid_t = 0
+        AXUIElementGetPid(entry.element, &pid)
+        if let pressedItem, CFEqual(pressedItem, entry.element), showsPanel(pid) { return }
+        pressedItem = entry.element
+        press(entry)
+    }
+
     private func pressInMenuBar(_ item: AXUIElement, on display: CGDirectDisplayID) {
         let top = CGDisplayBounds(display).minY
         let readAttribute = readAttribute, sleep = sleep
@@ -258,6 +269,7 @@ final class AppMenu: NSObject {
                 return
             }
             menuBarPresses += 1
+            revealedPresses += 1
             let press = menuBarPresses
             setMenuBarHidden(true)
             setMenuBarShown(true, on: display)
@@ -276,6 +288,7 @@ final class AppMenu: NSObject {
                     try? await sleep(.milliseconds(100))
                 }
             }.value
+            revealedPresses -= 1
             if press == menuBarPresses, !hidesMenuBar { setMenuBarHidden(false) }
         }
     }
@@ -513,7 +526,8 @@ private func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElemen
 private func showsPanel(_ pid: pid_t) -> Bool {
     let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]]
     return windows.contains {
-        $0[kCGWindowOwnerPID as String] as? pid_t == pid && CGRect(dictionaryRepresentation: $0[kCGWindowBounds as String] as! CFDictionary)!.height > 100
+        $0[kCGWindowOwnerPID as String] as? pid_t == pid && $0[kCGWindowLayer as String] as! Int > 0
+            && CGRect(dictionaryRepresentation: $0[kCGWindowBounds as String] as! CFDictionary)!.height > 100
     }
 }
 

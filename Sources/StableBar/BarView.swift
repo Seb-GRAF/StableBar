@@ -905,7 +905,7 @@ private struct MenuBarItemsView: View {
     }
 
     private func itemCell(_ item: MenuBarItem, icon: String?, openAnchor: ObjectIdentifier?) -> some View {
-        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor) { anchor in
+        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
             if inside, switches(to: anchor) {
@@ -940,7 +940,7 @@ private struct MenuBarItemsView: View {
             store.popup.toggle(store.appMenu.popup(forMenuBarItem: item.entry.element), widget: widget, defaults: defaults, store: store, anchor: anchor)
         } else if store.barEditing.allowsWidgetActions {
             store.popup.close()
-            store.appMenu.press(item.entry)
+            store.appMenu.pressUnlessOpen(item.entry)
         }
     }
 }
@@ -967,6 +967,7 @@ private struct MenuBarItemCell<Label: View>: View {
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     let openAnchor: ObjectIdentifier?
+    var actsOnMouseDown = false
     let click: (NSView) -> Void
     let hover: (NSView, Bool) -> Void
     @ViewBuilder let label: () -> Label
@@ -976,7 +977,7 @@ private struct MenuBarItemCell<Label: View>: View {
 
     var body: some View {
         let highlighted = openAnchor.map { $0 == ObjectIdentifier(anchor) } ?? hovered
-        Button { click(anchor) } label: {
+        let button = Button { click(anchor) } label: {
             ZStack {
                 Text(" ").hidden()
                 label()
@@ -989,7 +990,9 @@ private struct MenuBarItemCell<Label: View>: View {
             .background(MenuAnchor(view: anchor))
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        Group {
+            if actsOnMouseDown { button.buttonStyle(MouseDownButtonStyle()) } else { button.buttonStyle(.plain) }
+        }
         .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onHover { inside in
             hovered = inside
