@@ -298,15 +298,29 @@ private func makeApp(_ path: String, in directory: URL, info: [String: String] =
     #expect(items.shown(by: shown).map { "\($0.item.entry.title) \($0.reference)" } == ["Battery 0", "Granola 1"])
     #expect(items.shown(by: [MenuBarItemReference(app: "Control Center", item: nil)]).map(\.item.entry.title) == ["Wi‑Fi", "Battery"])
 
-    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: wifi, in: .bar, among: items) == [
-        "shown": .array(shown.map(\.configurationValue) + [.object(["app": .string("com.apple.controlcenter"), "item": .string("com.apple.menuextra.wifi")])])
+    func value(_ references: [MenuBarItemReference]) -> ConfigurationValue { .array(references.map(\.configurationValue)) }
+    let wifiReference = MenuBarItemReference(app: "com.apple.controlcenter", item: "com.apple.menuextra.wifi")
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .item(wifi), to: .bar, before: 1, among: items) == [
+        "shown": value([shown[0], wifiReference, shown[1]])
     ])
-    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: granola, in: .hidden, among: items) == [
-        "shown": .array([shown[0].configurationValue]), "hidden": .array([.object(["app": .string("com.granola.app")])])
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .item(granola), to: .hidden, before: nil, among: items) == [
+        "hidden": value([MenuBarItemReference(app: "com.granola.app", item: nil)])
     ])
-    #expect(menuBarItemsProperties(shown: [], hidden: [MenuBarItemReference(app: "Docker Desktop", item: nil)], placing: docker,
-                                   in: .row, among: items) == ["hidden": .array([])])
-    #expect(menuBarItemsProperties(shown: shown, hidden: [], placing: battery, in: .bar, among: items).isEmpty)
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .shown(0), to: .bar, before: 2, among: items) == [
+        "shown": value([shown[1], shown[0]])
+    ])
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .shown(1), to: .bar, before: 0, among: items) == [
+        "shown": value([shown[1], shown[0]])
+    ])
+    var symbol = shown[1]
+    symbol.icon = "waveform"
+    #expect(menuBarItemsProperties(shown: [shown[0], symbol], hidden: [], moving: .shown(1), to: .hidden, before: nil, among: items) == [
+        "shown": value([shown[0]]), "hidden": value([symbol])
+    ])
+    #expect(menuBarItemsProperties(shown: [], hidden: [MenuBarItemReference(app: "Docker Desktop", item: nil)], moving: .hidden(0),
+                                   to: .row, before: nil, among: items) == ["hidden": .array([])])
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .shown(0), to: .bar, before: nil, among: items).isEmpty)
+    #expect(menuBarItemsProperties(shown: shown, hidden: [], moving: .item(docker), to: .row, before: nil, among: items).isEmpty)
 }
 
 @Test func menuBarSymbolsAreSystemSymbols() {

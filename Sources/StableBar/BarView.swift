@@ -901,10 +901,9 @@ private struct MenuBarItemsView: View {
                 }
                 .accessibilityLabel(item.entry.title)
                 .contextMenu {
-                    Button("Move Left") { store.moveShownMenuBarItem(reference, by: -1, in: widget) }.disabled(reference == 0)
-                    Button("Move Right") { store.moveShownMenuBarItem(reference, by: 1, in: widget) }.disabled(reference == shown.count - 1)
-                    Button("Move to Row") { store.place(item, .row, in: widget) }
-                    Button("Hide") { store.place(item, .hidden, in: widget) }
+                    MenuBarItemCommands(source: .shown(reference), shownCount: shown.count) { placement, index in
+                        store.move(.shown(reference), to: placement, before: index, in: widget)
+                    }
                 }
             }
             MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
@@ -931,6 +930,23 @@ private struct MenuBarItemsView: View {
             store.popup.close()
             store.appMenu.press(item.entry)
         }
+    }
+}
+
+struct MenuBarItemCommands: View {
+    let source: MenuBarItemSource
+    let shownCount: Int
+    let move: (MenuBarItemPlacement, Int?) -> Void
+
+    var body: some View {
+        if case let .shown(position) = source {
+            Button("Move Left") { move(.bar, position - 1) }.disabled(position == 0)
+            Button("Move Right") { move(.bar, position + 2) }.disabled(position == shownCount - 1)
+            Divider()
+        }
+        if source.placement != .bar { Button("Show on Bar") { move(.bar, nil) } }
+        if source.placement != .row { Button("Move to Row") { move(.row, nil) } }
+        if source.placement != .hidden { Button("Hide") { move(.hidden, nil) } }
     }
 }
 

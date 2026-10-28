@@ -195,18 +195,10 @@ final class BarStore: NSObject {
         }
     }
 
-    func place(_ item: MenuBarItem, _ placement: MenuBarItemPlacement, in widget: WidgetConfiguration) {
+    func move(_ source: MenuBarItemSource, to placement: MenuBarItemPlacement, before index: Int?, in widget: WidgetConfiguration) {
         guard case let .menuBarItems(_, shown, hidden) = widget.content else { return }
-        save(menuBarItemsProperties(shown: shown, hidden: hidden, placing: item, in: placement, among: appMenu.menuBarItems), for: widget)
-    }
-
-    func moveShownMenuBarItem(_ reference: Int, by offset: Int, in widget: WidgetConfiguration) {
-        var shown = widget.shownMenuBarItems
-        shown.swapAt(reference, reference + offset)
-        save(["shown": .array(shown.map(\.configurationValue))], for: widget)
-    }
-
-    private func save(_ properties: [String: ConfigurationValue], for widget: WidgetConfiguration) {
+        let properties = menuBarItemsProperties(shown: shown, hidden: hidden, moving: source, to: placement, before: index,
+                                                among: appMenu.menuBarItems)
         do {
             try customizationHistory.change(ConfigurationEdit(action: .set, id: widget.id, properties: properties))
             if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }

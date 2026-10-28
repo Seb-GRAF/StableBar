@@ -187,7 +187,9 @@ Clicking an icon whose app has an ordinary menu opens that menu below it, in you
 
 ### Items on the bar
 
-Items you use all day can sit on the bar beside the grid symbol, as they do in the macOS menu bar, and items you never use can leave the row. Select Menu bar items in **Settings → Bar** and, under **Content → Menu bar items**, set each item to **Bar**, **Row** or **Hidden**. You can also right-click an icon in the row and choose **Show on Bar** or **Hide**, and right-click an item on the bar to move it left or right, back to the row, or to hide it.
+Items you use all day can sit on the bar beside the grid symbol, as they do in the macOS menu bar, and items you never use can leave the row. Select Menu bar items in **Settings → Bar** and open **Content**. **Menu bar items** shows the items in three strips: **On the bar**, in their order and followed by the grid symbol; **In the row**, in menu bar order; and **Hidden**. Drag an icon to another strip, or within **On the bar** to change its place; a line shows where it will go. Right-click an icon to move it left or right, onto the bar, back to the row or into **Hidden**. Select an icon to see its name and app, choose **Bar**, **Row** or **Hidden** for it, and, for an item on the bar, enter an SF Symbol to draw in place of its icon. An item whose app isn't running stays in its strip, dimmed, so you can still move it.
+
+On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click an item on the bar for the same commands as in Settings.
 
 Items on the bar open as they do in the row: a click opens the item's menu or panel, and while one of their menus is open, moving the pointer to another item switches to its menu. Rest the pointer on an item to see its name. An item disappears from the bar while its app isn't running, and comes back when the app launches. The grid symbol lists the items that are neither on the bar nor hidden.
 

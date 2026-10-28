@@ -61,7 +61,7 @@ struct PopupView: View {
                     }
                 }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
                     store.popup.close()
-                    store.place(item, placement, in: widget)
+                    store.move(.item(item), to: placement, before: nil, in: widget)
                 }, states: states, update: store.update) { command, environment in
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                     store.runAction(command, widget: widget,
@@ -1067,8 +1067,7 @@ struct MenuBarItemsRow: View {
                     hover(entry.title, anchor, inside)
                 }
                 .contextMenu {
-                    Button("Show on Bar") { place(item, .bar) }
-                    Button("Hide") { place(item, .hidden) }
+                    MenuBarItemCommands(source: .item(item), shownCount: 0) { placement, _ in place(item, placement) }
                 }
             }
         }

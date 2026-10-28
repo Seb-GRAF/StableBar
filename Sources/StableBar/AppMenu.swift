@@ -347,20 +347,41 @@ extension [MenuBarItem] {
     }
 }
 
-func menuBarItemPlacement(of item: MenuBarItem, shown: [MenuBarItemReference], hidden: [MenuBarItemReference]) -> MenuBarItemPlacement {
-    shown.contains { $0.matches(item) } ? .bar : hidden.contains { $0.matches(item) } ? .hidden : .row
+enum MenuBarItemSource {
+    case item(MenuBarItem)
+    case shown(Int)
+    case hidden(Int)
+
+    var placement: MenuBarItemPlacement {
+        switch self {
+        case .item: .row
+        case .shown: .bar
+        case .hidden: .hidden
+        }
+    }
 }
 
-func menuBarItemsProperties(shown: [MenuBarItemReference], hidden: [MenuBarItemReference], placing item: MenuBarItem,
-                            in placement: MenuBarItemPlacement, among items: [MenuBarItem]) -> [String: ConfigurationValue] {
-    guard placement != menuBarItemPlacement(of: item, shown: shown, hidden: hidden) else { return [:] }
-    var nextShown = shown.filter { !$0.matches(item) }
-    var nextHidden = hidden.filter { !$0.matches(item) }
-    let several = items.filter { $0.bundleID == item.bundleID && $0.appName == item.appName }.count > 1
-    let reference = MenuBarItemReference(app: item.bundleID ?? item.appName, item: several ? item.identifier ?? item.entry.title : nil)
+func menuBarItemsProperties(shown: [MenuBarItemReference], hidden: [MenuBarItemReference], moving source: MenuBarItemSource,
+                            to placement: MenuBarItemPlacement, before index: Int?, among items: [MenuBarItem]) -> [String: ConfigurationValue] {
+    guard placement != source.placement || index != nil else { return [:] }
+    var nextShown = shown
+    var nextHidden = hidden
+    var index = index
+    let reference: MenuBarItemReference
+    switch source {
+    case let .item(item):
+        let several = items.filter { $0.bundleID == item.bundleID && $0.appName == item.appName }.count > 1
+        reference = MenuBarItemReference(app: item.bundleID ?? item.appName, item: several ? item.identifier ?? item.entry.title : nil)
+    case let .shown(position):
+        reference = nextShown.remove(at: position)
+        if placement == .bar, let before = index, before > position { index = before - 1 }
+    case let .hidden(position):
+        reference = nextHidden.remove(at: position)
+        if placement == .hidden, let before = index, before > position { index = before - 1 }
+    }
     switch placement {
-    case .bar: nextShown.append(reference)
-    case .hidden: nextHidden.append(reference)
+    case .bar: nextShown.insert(reference, at: index ?? nextShown.count)
+    case .hidden: nextHidden.insert(reference, at: index ?? nextHidden.count)
     case .row: break
     }
     var properties: [String: ConfigurationValue] = [:]

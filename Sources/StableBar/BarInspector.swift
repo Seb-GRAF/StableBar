@@ -479,20 +479,8 @@ struct BarInspector: View {
                 iconGroup(widget)
             case let .menuBarItems(_, shown, hidden):
                 SettingsGroup("Menu bar items") {
-                    let items = store.appMenu.menuBarItems
-                    if items.isEmpty {
-                        SettingRow(title: "Items", hint: "Allow StableBar in Privacy & Security → Accessibility to list them") {}
-                    }
-                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                        SettingRow(title: item.entry.title) {
-                            SettingsSegments(selection: Binding(get: { menuBarItemPlacement(of: item, shown: shown, hidden: hidden) }, set: {
-                                editor.set(menuBarItemsProperties(shown: shown, hidden: hidden, placing: item, in: $0, among: items), for: widget.id)
-                            }), options: MenuBarItemPlacement.allCases.map { ($0, $0.title) }, stretches: false)
-                            .fixedSize()
-                        }
-                    }
+                    MenuBarItemsSettings(store: store, editor: editor, widget: widget, shown: shown, hidden: hidden)
                 }
-                .task { _ = await store.appMenu.readMenuBarItems(requestingAccess: false) }
                 iconGroup(widget)
             default:
                 if widget.content.drawsOwnView {
