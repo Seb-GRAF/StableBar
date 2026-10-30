@@ -1812,7 +1812,7 @@ function drawMoon(s, c) {
   c.save(); c.beginPath(); c.rect(0, 0, g.W, g.horizon); c.clip();
   c.globalAlpha = m.a;
   s.sprite('moon', sz, sz, m.x, m.y, x => {
-    const D = Math.PI / 180, H = Math.PI / 2, CREASES = [22 * D, 55 * D];
+    const D = Math.PI / 180, H = Math.PI / 2, CREASES = [36 * D, 66 * D];
     // the crescent (t from -90°, the top horn, to 90°): its outer edge half a circle, its inner one a narrower half
     // ellipse, the two nearly meeting at the horns
     const outer = t => [Math.cos(t) * r, Math.sin(t) * r], inner = t => [(Math.cos(t) * 0.38 + 0.02) * r, Math.sin(t) * 0.97 * r];
@@ -1829,23 +1829,23 @@ function drawMoon(s, c) {
     x.beginPath();
     for (const k of CREASES) for (const sg of [-1, 1]) {
       const [ox, oy] = outer(sg * k), [ix, iy] = inner(sg * k);
-      ribbon(x, [[lerp(ix, ox, 0.08), lerp(iy, oy, 0.08)], [(ix + ox) / 2, (iy + oy) / 2 - sg * 0.05 * r], [lerp(ix, ox, 0.92), lerp(iy, oy, 0.92)]], DET * 0.8, 30 + k * 10 + sg, { tin: 2, tout: 2 });
+      ribbon(x, [[lerp(ix, ox, 0.08), lerp(iy, oy, 0.08)], [(ix + ox) / 2, (iy + oy) / 2 - sg * 0.035 * r], [lerp(ix, ox, 0.92), lerp(iy, oy, 0.92)]], DET * 0.8, 30 + k * 10 + sg, { tin: 2, tout: 2 });
     }
     loop(x, piece(-H, H), DET, 11);
     x.fillStyle = INK; x.fill();
     // a shine along each piece, near its outer edge
     x.beginPath();
-    for (const [t, w] of [[0, 10], [-38, 8], [38, 8], [-72, 5], [72, 5]]) {
+    for (const [t, w] of [[0, 12], [-51, 8], [51, 8], [-78, 5], [78, 5]]) {
       const pts = [];
       for (let i = 0; i <= 4; i++) { const tt = (t + (i / 4 - 0.5) * w * 2) * D; pts.push([Math.cos(tt) * 0.86 * r, Math.sin(tt) * 0.86 * r]); }
       ribbon(x, pts, TEX * 1.2, 5 + t / 9, { tin: 2, tout: 2 });
     }
     x.fillStyle = rgba(C.crumb); x.fill();
-    // a closed eye with lashes, and a small smile, on the middle piece
+    // a closed eye with lashes, and a small smile, along the inner edge of the middle piece
     x.beginPath();
-    ribbon(x, ellipse(r * 0.73, -r * 0.12, r * 0.11, r * 0.07, 9, 0.15 * Math.PI, 0.85 * Math.PI), TEX * 1.2, 2, { tin: 2, tout: 2 });
-    for (const k of [0.3, 0.5, 0.7]) { const a = k * Math.PI, ex = r * 0.73 + Math.cos(a) * r * 0.11, ey = -r * 0.12 + Math.sin(a) * r * 0.07; ribbon(x, [[ex, ey], [ex + Math.cos(a) * 2.4 * u, ey + Math.sin(a) * 2.4 * u]], TEX, k * 9, { tin: 1, tout: 1 }); }
-    ribbon(x, ellipse(r * 0.71, r * 0.12, r * 0.09, r * 0.06, 9, 0.2 * Math.PI, 0.8 * Math.PI), TEX * 1.1, 4, { tin: 2, tout: 2 });
+    ribbon(x, ellipse(r * 0.62, -r * 0.2, r * 0.17, r * 0.11, 9, 0.15 * Math.PI, 0.85 * Math.PI), TEX * 1.2, 2, { tin: 2, tout: 2 });
+    for (const k of [0.3, 0.5, 0.7]) { const a = k * Math.PI, ex = r * 0.62 + Math.cos(a) * r * 0.17, ey = -r * 0.2 + Math.sin(a) * r * 0.11; ribbon(x, [[ex, ey], [ex + Math.cos(a) * 3 * u, ey + Math.sin(a) * 3 * u]], TEX, k * 9, { tin: 1, tout: 1 }); }
+    ribbon(x, ellipse(r * 0.52, r * 0.3, r * 0.15, r * 0.1, 9, 0.2 * Math.PI, 0.8 * Math.PI), TEX * 1.1, 4, { tin: 2, tout: 2 });
     x.fillStyle = INK; x.fill();
   });
   c.restore();
