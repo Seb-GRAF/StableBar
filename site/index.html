@@ -45,8 +45,9 @@
 const root = document.documentElement;
 root.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
 root.classList.add("js");
-// the landing film: once a session, opening at the top of the page, with motion allowed (see land() in main.js)
-try { if (!sessionStorage.getItem("landed") && !location.hash && !matchMedia("(prefers-reduced-motion: reduce)").matches) root.classList.add("intro"); } catch {}
+// the landing film: once a session, opening at the top of the page, with motion allowed; ?intro plays it again
+// (see land() in main.js)
+try { if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (new URLSearchParams(location.search).has("intro") || (!sessionStorage.getItem("landed") && !location.hash))) root.classList.add("intro"); } catch {}
 </script>
 <script src="scene.js" defer></script>
 <script src="main.js" defer></script>
