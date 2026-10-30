@@ -879,7 +879,7 @@ for (const b of nightSwitches) b.addEventListener("click", e => {
 
 measureMarks();
 try {
-  if (window.Hill?.Scene) scene = new window.Hill.Scene(document.getElementById("scene"), { topInset: restHeight(), dusk: root.dataset.mode === "dark" ? 1 : hour().d, held: root.classList.contains("intro") });
+  if (window.Hill?.Scene) scene = new window.Hill.Scene(document.getElementById("scene"), { topInset: restHeight(), dusk: root.dataset.mode === "dark" ? 1 : hour().d });
 } catch (err) {
   console.warn("The drawing didn't start:", err);
   scene = null;
@@ -974,11 +974,13 @@ function onBar(event, key, info = {}) {
   }
 }
 
-/* The landing: the camera starts up in the sky with the bar in the middle of it, comes down to the hill as the bar
-   flies up to its place, and the lighthouse sweeps its light along the bar. Once a session, opening at the top, with
-   motion allowed (the class comes from the page's head); any scroll, key, click or tap ends it at once. */
+/* The opening: a title card over the whole drawing with the bar big in the middle of it. After a moment the bar
+   stretches up into its place at the top, the card drifts away, the notes come in, and the lighthouse sweeps its
+   light along the bar. Once a session, opening at the top, with motion allowed (the class comes from the page's
+   head; ?intro plays it again); any scroll, key, click or tap ends it at once. */
 let landed = !root.classList.contains("intro"), sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
+const opening = document.getElementById("opening");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 function land(skip) {
   if (landed) return;
@@ -987,15 +989,38 @@ function land(skip) {
   clearTimeout(landTimer);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
   if (skip) root.classList.add("intro-skip");
-  root.classList.remove("intro", "intro-run");
+  root.classList.remove("intro", "op-bar-in", "op-page-in");
+  opening.remove();
   measureMarks();
   lumRects = null;
-  sendBar(); // the bar's widgets where they now stand, at the top, for the sweep and the ball game
-  S("hold", false);
+  sendBar(); // the bar's widgets where they stand, for the sweep and the ball game
+  S("labels", true);
   if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
   else if (S("sweepBar", 1.1)) sweptUntil = performance.now() + 1800;
 }
 function skipLanding() { land(true); }
+/* The card's bar stretches into the real one: a copy of it leaves the card and grows to the window's width as it
+   rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens; the real bar fades
+   in under it, the copy fades away and the notes come in */
+function expandOpening() {
+  if (landed) return;
+  const pill = opening.querySelector(".op-bar"), a = pill.getBoundingClientRect(), b = bar.getBoundingClientRect(), k = b.height / a.height;
+  const fly = pill.cloneNode(true);
+  fly.classList.add("op-fly");
+  opening.append(fly);
+  pill.style.visibility = "hidden";
+  const grow = fly.animate([
+    { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, transform: "scale(1)", borderRadius: "22px" },
+    { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width / k}px`, transform: `scale(${k})`, borderRadius: "0px" },
+  ], { duration: 720, easing: "cubic-bezier(.6, 0, .2, 1)", fill: "forwards" });
+  for (const el of opening.querySelectorAll(".op-mark, .op-line")) el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-28px)" }], { duration: 460, easing: "ease-in", fill: "forwards" });
+  grow.finished.then(() => {
+    if (landed) return;
+    root.classList.add("op-bar-in");
+    fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" });
+    setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 120);
+  }, () => {});
+}
 /* While the light sweeps the bar, each widget it passes glows for a moment */
 function sweepGlow(s) {
   const now = performance.now();
@@ -1011,10 +1036,11 @@ if (!landed) {
   if (scrollY > 0 || document.hidden) land(true);
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
-    runTimer = setTimeout(() => root.classList.add("intro-run"), 380);
-    landTimer = setTimeout(() => land(false), 380 + 1500);
+    S("labels", false);
+    runTimer = setTimeout(expandOpening, 1150);
+    landTimer = setTimeout(() => land(false), 1150 + 1250);
   }
-}
+} else opening.remove();
 
 /* The lamp-lit tour, for pointers that hover: the widget under the pointer takes the lamp's glow (the beam
    already follows the pointer) and a paper tag hangs under it on a string. Keyboard focus shows it too.

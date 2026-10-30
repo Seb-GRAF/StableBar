@@ -104,17 +104,52 @@ h1, h2, h3 { text-wrap: balance; }
   position: fixed; left: 0; top: 0; z-index: 0; width: 100%; height: 100vh; height: 100lvh;
   background: linear-gradient(var(--sky) 0 61%, var(--sea) 61%);
 }
-/* The landing (see land() in main.js): the camera starts up in the sky, the bar in the middle of it and the
-   headline below, then comes down to the hill as the bar flies up to its place */
-.intro .scene { background: var(--sky); }
-.intro .scene canvas { transform: translateY(72vh); }
-.intro .hero { transform: translateY(64vh); }
-.intro .dock { transform: translateY(calc(46vh - var(--bar-h) / 2)); }
-.intro-run .scene canvas, .intro-run .hero { transform: none; transition: transform 1.4s cubic-bezier(.45, 0, .2, 1); }
-.intro-run .dock { transform: none; transition: transform 1.25s cubic-bezier(.55, 0, .2, 1) .15s; }
-.intro-skip .scene canvas, .intro-skip .hero, .intro-skip .dock { transition: none !important; }
-/* on phones the headline starts higher, so its big words are on screen from the first frame */
-@media (max-width: 699.98px), (max-aspect-ratio: 10/11) { .intro .hero { transform: translateY(38vh); } }
+/* The opening (see land() in main.js): a title card over the whole drawing, with the bar big in the middle of it.
+   The bar then stretches up into its place at the top, the card drifts away and the page comes in. The title is
+   the page's largest text, so it is also its first large paint. */
+.opening { display: none; }
+.intro .opening {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(16px, 3vh, 32px); padding: 0 28vw 16vh 2vw; pointer-events: none; text-align: center;
+  --tile-h: 38px; --bar-font: 400 16px/1 var(--mac); --w-radius: 16px; --halo: var(--sky);
+}
+.op-mark {
+  font: 800 clamp(76px, 10vw, 136px)/.92 var(--display); font-variation-settings: "INFM" 70, "BNCE" 25; letter-spacing: -.012em;
+  color: var(--pen); rotate: -1.5deg; text-shadow: 0 0 22px var(--halo), 0 0 6px var(--halo);
+}
+.op-mark .op-b { background: linear-gradient(transparent 16%, var(--hi) 16% 88%, transparent 88%); padding: 0 .03em; margin: 0 -.03em; }
+.op-bar {
+  display: flex; align-items: center; gap: 8px; width: min(780px, 100%); padding: 7px 8px; border-radius: 22px;
+  background: color-mix(in srgb, #ffffff 36%, transparent); box-shadow: inset 0 0 0 1px #ffffffb3, 0 20px 44px -20px #0b1d4a73;
+  -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
+}
+.op-bar .w { gap: 8px; padding: 0 13px; }
+.op-bar svg { width: 18px; height: 18px; }
+.op-app { gap: 15px !important; }
+.op-app b { font-weight: 700; }
+.op-gap { flex: 1; }
+.op-sun .on, [data-mode="dark"] .op-sun .off { display: none; }
+[data-mode="dark"] .op-sun .on { display: block; }
+.op-line { font: 600 clamp(18px, 1.7vw, 23px)/1.3 var(--hand); color: var(--pen); text-shadow: 0 0 14px var(--halo), 0 0 4px var(--halo); }
+[data-mode="dark"] .op-mark, [data-mode="dark"] .op-line { color: #f2eeff; }
+[data-mode="dark"] .op-bar { background: color-mix(in srgb, #0d1030 42%, transparent); box-shadow: inset 0 0 0 1px #ffffff2e, 0 20px 44px -20px #000000a6; }
+/* the card's bar on its way up: a copy of it, out of the card, that stretches and shrinks into the real bar */
+.op-fly { position: fixed; margin: 0; transform-origin: 0 0; }
+/* behind the card the page waits: the bar and the notes come in once the bar has reached the top */
+.intro .dock { opacity: 0; pointer-events: none; }
+.intro .hero > * { opacity: 0; translate: 0 14px; }
+.intro.op-bar-in .dock { opacity: 1; transition: opacity .3s; }
+.intro.op-page-in .hero > * { opacity: 1; translate: none; transition: opacity .45s, translate .5s var(--ease); }
+.intro-skip .dock, .intro-skip .hero > * { transition: none !important; }
+@media (max-width: 699.98px), (max-aspect-ratio: 10/11) {
+  /* on phones the card sits low, over the sea under the lighthouse, its title on two lines */
+  .intro .opening { justify-content: flex-end; padding: 0 4vw 10vh; --tile-h: 36px; --halo: #14184acc; }
+  .op-mark { font-size: clamp(64px, 21vw, 112px); line-height: .86; color: #fff; }
+  .op-mark .op-w1, .op-mark .op-w2 { display: block; }
+  .op-line { color: #fff; }
+  .op-app span, .op-snd, .opening .clock .day { display: none; }
+  .op-bar { width: auto; min-width: min(330px, 92vw); }
+}
 .scene canvas { display: block; }
 main, .site-foot { position: relative; z-index: 1; }
 main { overflow-x: clip; }

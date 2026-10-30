@@ -380,6 +380,8 @@ class Scene {
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
+  // the drawing's own labels ("a lighthouse (stable)" and the others), off while the page's title card is up
+  labels(on) { this.noLabels = !on; this.wake(); }
   // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
   sweepBar(dur = 1) {
     const L = this.g.lamp, ts = this.bar;
@@ -1479,7 +1481,7 @@ function drawScene(s, c) {
   for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
   // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
   drawStates(s, c);
-  if (s.pres.hero > 0.01) drawLabels(s, c);
+  if (s.pres.hero > 0.01 && !s.noLabels) drawLabels(s, c);
   drawSplashes(s, c);
   drawBall(s, c);
   drawDoodles(s, c);
