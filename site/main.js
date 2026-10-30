@@ -879,7 +879,7 @@ for (const b of nightSwitches) b.addEventListener("click", e => {
 
 measureMarks();
 try {
-  if (window.Hill?.Scene) scene = new window.Hill.Scene(document.getElementById("scene"), { topInset: restHeight(), dusk: root.dataset.mode === "dark" ? 1 : hour().d });
+  if (window.Hill?.Scene) scene = new window.Hill.Scene(document.getElementById("scene"), { topInset: restHeight(), dusk: root.dataset.mode === "dark" ? 1 : hour().d, held: root.classList.contains("intro") });
 } catch (err) {
   console.warn("The drawing didn't start:", err);
   scene = null;
@@ -898,7 +898,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { lightWords(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (landed) lightWords(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -971,6 +971,48 @@ function onBar(event, key, info = {}) {
     const dx = info.dx || 14, to = `translateX(${dx}px) rotate(${Math.sign(dx) * 3}deg)`;
     el.style.zIndex = "3";
     shove = { el, to, a: el.animate([{ transform: "none" }, { transform: to }], { duration: 620, easing: "cubic-bezier(.3, 1.5, .5, 1)", fill: "forwards" }) };
+  }
+}
+
+/* The landing: the camera starts up in the sky with the bar in the middle of it, comes down to the hill as the bar
+   flies up to its place, and the lighthouse sweeps its light along the bar. Once a session, opening at the top, with
+   motion allowed (the class comes from the page's head); any scroll, key, click or tap ends it at once. */
+let landed = !root.classList.contains("intro"), sweptUntil = 0, runTimer = 0, landTimer = 0;
+const swept = new Map();
+const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
+function land(skip) {
+  if (landed) return;
+  landed = true;
+  clearTimeout(runTimer);
+  clearTimeout(landTimer);
+  for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
+  if (skip) root.classList.add("intro-skip");
+  root.classList.remove("intro", "intro-run");
+  measureMarks();
+  lumRects = null;
+  sendBar(); // the bar's widgets where they now stand, at the top, for the sweep and the ball game
+  S("hold", false);
+  if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
+  else if (S("sweepBar", 1.1)) sweptUntil = performance.now() + 1800;
+}
+function skipLanding() { land(true); }
+/* While the light sweeps the bar, each widget it passes glows for a moment */
+function sweepGlow(s) {
+  const now = performance.now();
+  if (now < sweptUntil) for (const w of bar.querySelectorAll(".w[data-key]")) {
+    if (w.hidden || w.classList.contains("over") || !w.offsetWidth) continue;
+    const r = w.getBoundingClientRect();
+    if (s.inBeam(r.left + r.width / 2, r.top + r.height / 2) > .45) { w.classList.add("swept"); swept.set(w, now + 420); }
+  }
+  for (const [w, until] of swept) if (now > until) { w.classList.remove("swept"); swept.delete(w); }
+}
+if (!landed) {
+  try { sessionStorage.setItem("landed", "1"); } catch {}
+  if (scrollY > 0 || document.hidden) land(true);
+  else {
+    for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
+    runTimer = setTimeout(() => root.classList.add("intro-run"), 380);
+    landTimer = setTimeout(() => land(false), 380 + 1500);
   }
 }
 

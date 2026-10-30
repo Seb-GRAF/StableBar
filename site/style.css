@@ -104,6 +104,17 @@ h1, h2, h3 { text-wrap: balance; }
   position: fixed; left: 0; top: 0; z-index: 0; width: 100%; height: 100vh; height: 100lvh;
   background: linear-gradient(var(--sky) 0 61%, var(--sea) 61%);
 }
+/* The landing (see land() in main.js): the camera starts up in the sky, the bar in the middle of it and the
+   headline below, then comes down to the hill as the bar flies up to its place */
+.intro .scene { background: var(--sky); }
+.intro .scene canvas { transform: translateY(72vh); }
+.intro .hero { transform: translateY(64vh); }
+.intro .dock { transform: translateY(calc(46vh - var(--bar-h) / 2)); }
+.intro-run .scene canvas, .intro-run .hero { transform: none; transition: transform 1.4s cubic-bezier(.45, 0, .2, 1); }
+.intro-run .dock { transform: none; transition: transform 1.25s cubic-bezier(.55, 0, .2, 1) .15s; }
+.intro-skip .scene canvas, .intro-skip .hero, .intro-skip .dock { transition: none !important; }
+/* on phones the headline starts higher, so its big words are on screen from the first frame */
+@media (max-width: 699.98px), (max-aspect-ratio: 10/11) { .intro .hero { transform: translateY(38vh); } }
 .scene canvas { display: block; }
 main, .site-foot { position: relative; z-index: 1; }
 main { overflow-x: clip; }
@@ -247,6 +258,8 @@ main { overflow-x: clip; }
    and a paper tag hangs under it on a doodled string (placed by main.js) */
 #bar .w.lamp { background-image: linear-gradient(0deg, #ffe04a80, #ffe04a00 82%); box-shadow: inset 0 0 0 1px var(--w-border), 0 0 0 1.5px #ffd43bb3, 0 6px 14px -2px #ffd43bf0; }
 #bar .w.dl.lamp { background-image: none; box-shadow: 0 6px 14px -2px #ffd43bf0; }
+/* the landing's sweep: each widget glows as the light passes over it */
+#bar .w.swept { background-image: linear-gradient(0deg, #ffe04a80, #ffe04a00 82%); box-shadow: inset 0 0 0 1px var(--w-border), 0 0 0 1.5px #ffd43bb3, 0 6px 14px -2px #ffd43bf0; }
 .lamp-tag { position: absolute; left: 0; top: 0; z-index: 4; width: 0; height: 0; pointer-events: none; transform-origin: 0 0; }
 .lamp-tag[hidden] { display: none; }
 .lt-s { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: visible; }

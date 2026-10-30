@@ -242,6 +242,7 @@ class Scene {
     this.onBar = null;
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
+    this.held = !!this.o.held; this.sweep = null;
     this.box = { v: null, cl: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -377,6 +378,17 @@ class Scene {
       .map(t => ({ key: String(t.key), x0: t.x0 - this.ox, x1: t.x1 - this.ox, y: t.y - this.oy }));
     if (!this.bar.length) { this.endBall(); this.endBore(); }
     this.wake();
+  }
+  // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
+  hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
+  // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
+  sweepBar(dur = 1) {
+    const L = this.g.lamp, ts = this.bar;
+    if (this.reduced || !ts.length || document.hidden) return false;
+    const y = Math.min(...ts.map(t => t.y)) - 12 * this.g.u, x0 = Math.min(...ts.map(t => (t.x0 + t.x1) / 2)), x1 = Math.max(...ts.map(t => (t.x0 + t.x1) / 2));
+    this.sweep = { t0: this.t, lead: 0.3, dur, tail: 0.25, a0: Math.atan2(y - L.y, x0 - L.x), a1: Math.atan2(y - L.y, x1 - L.x) };
+    this.wake();
+    return true;
   }
   play() {
     if (this.reduced || this.ball || document.hidden) return false;
@@ -567,6 +579,12 @@ class Scene {
   }
   // the bored trick holds the light on its widget
   beamLock() {
+    const w = this.sweep;
+    if (w) {
+      const a = this.t - w.t0;
+      if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.a0 : lerp(w.a0, w.a1, smooth(0, 1, (a - w.lead) / w.dur));
+      this.sweep = null;
+    }
     const b = this.bore;
     if (!b || !((b.phase === 'look' && this.t - b.at > 0.35) || b.phase === 'push')) return null;
     return Math.atan2(b.y - this.g.lamp.y, b.x - this.g.lamp.x);
@@ -905,6 +923,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
+    if (this.sweep) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
@@ -964,7 +983,7 @@ class Scene {
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
-    if (!this.flocked) this.flock();
+    if (!this.flocked && !this.held) this.flock();
     this.updateObjs(dt);
     this.updateMeadow();
     this.updateBox(dt);
@@ -980,7 +999,7 @@ class Scene {
     b.steer = rm ? (steering || b.steer > 0.5 ? 1 : 0) : lerp(b.steer, steering ? 1 : 0, Math.min(1, dt * (steering ? 4 : 0.7)));
     if (!rm) b.phi += dt * TAU / 15;
     const c = Math.cos(b.phi), sn = Math.sin(b.phi);
-    if (lock != null) b.sa += angDiff(lock, b.sa) * Math.min(1, dt * 3.2);
+    if (lock != null) b.sa += angDiff(lock, b.sa) * Math.min(1, dt * (this.sweep ? 9 : 3.2));
     else if (this.ptr.on && steering) {
       const want = this.clampAim(Math.atan2(this.ptr.y - L.y, this.ptr.x - L.x));
       b.sa = rm ? want : b.sa + angDiff(want, b.sa) * Math.min(1, dt * 5);
