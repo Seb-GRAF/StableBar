@@ -35,10 +35,10 @@
   "sameAs": "https://github.com/Seb-GRAF/StableBar"
 }
 </script>
-<meta name="theme-color" content="#15110d">
+<meta name="theme-color" content="#86cbf2">
 <link rel="icon" href="images/icon-64.png">
 <link rel="apple-touch-icon" href="images/icon-256.png">
-<link rel="preload" href="fonts/host-grotesk.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/shantell-sans-display.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fonts/atkinson-hyperlegible-next.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css">
 <script>
@@ -46,6 +46,7 @@ const root = document.documentElement;
 root.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
 root.classList.add("js");
 </script>
+<script src="scene.js" defer></script>
 <script src="main.js" defer></script>
 </head>
 <body>
@@ -60,6 +61,8 @@ root.classList.add("js");
   <symbol id="i-disk" viewBox="0 0 16 16"><rect x="1.5" y="4.5" width="13" height="7" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="11.6" cy="8" r=".9" fill="currentColor"/><path d="M4 8h4" stroke="currentColor" stroke-width="1.2"/></symbol>
   <symbol id="i-down" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M8 4.2v6.6M5.2 8.2 8 11l2.8-2.8" fill="none" stroke="var(--amber)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-apple" viewBox="0 0 15 18"><path d="M12.5 9.6c0-2 1.6-2.9 1.7-3a3.7 3.7 0 0 0-2.9-1.6c-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7A3.9 3.9 0 0 0 2.4 7c-1.4 2.4-.4 6 1 7.9.7 1 1.4 2 2.4 2 1 0 1.3-.6 2.5-.6s1.5.6 2.5.6c1 0 1.7-1 2.3-1.9.7-1 1-2 1-2.1 0 0-2-.8-2-3.3ZM10.6 3.6c.5-.7.9-1.6.8-2.6-.8 0-1.8.5-2.4 1.2-.5.6-1 1.6-.8 2.5.9.1 1.8-.5 2.4-1.1Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 20 20"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-moon-fill" viewBox="0 0 20 20"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7Z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
 
   <symbol id="i-note" viewBox="0 0 16 16"><path d="M6 12.2V3.6l7-1.6v8.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="4.4" cy="12.2" r="1.9" fill="currentColor"/><circle cx="11.4" cy="10.4" r="1.9" fill="currentColor"/></symbol>
   <symbol id="i-open" viewBox="0 0 16 16"><path d="M5 11 11 5M6 4.6h5.4V10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -96,357 +99,265 @@ root.classList.add("js");
   <symbol id="i-tool" viewBox="0 0 16 16"><path d="M9.8 2.4a3.4 3.4 0 0 0-3.6 4.5L2.4 10.7a1.4 1.4 0 0 0 2 2l3.8-3.8a3.4 3.4 0 0 0 4.5-3.6l-2 2-1.8-.3-.3-1.8z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></symbol>
 
   <symbol id="p-check" viewBox="0 0 12 12"><path d="m2 6.4 2.6 2.6L10 3.3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+
+  <!-- the key's drawings, in the felt pen -->
+  <symbol id="k-sheep" viewBox="0 0 32 24"><g stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20v3M13 20.5v2.8M18 20.5v2.8M22 20v3" fill="none"/><path d="M6.4 16.4c-3-.4-3.6-4.4-.8-5.4-.2-3.2 3.6-4.6 5.4-2.6 1.4-3 6-3 7.2-.2 2.8-1.2 5.6 1.2 4.6 3.8 2.4 1 1.8 5-1.2 5 .2 2.6-4.4 3.4-6 1.4-1.6 2-6.4 1.8-7-.8-.8.2-1.6.1-2.2-.2Z" fill="#fff"/><path d="M23.4 9.2c1.6-1.4 4.4-1 5.4.8 1 1.8.2 4.4-1.8 5-1.8.6-3.6-.2-4.2-1.8" fill="#111"/><path d="M24 9.4c-.8-.9-2.2-1-2.8-.2" fill="none"/></g><circle cx="26.6" cy="11.2" r=".9" fill="#fff"/></symbol>
+  <symbol id="k-duck" viewBox="0 0 32 24"><g stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.2 13.4c.6 5 5 7.6 11.4 7.6 6.6 0 10.8-2.6 11.2-6.6.2-2.2-1.6-3.2-3.6-2.4-1.6.6-3.2.2-4.2-1.2-1.6 2-5.2 2.8-8.4 2.4-2.6-.4-4.8-.8-6.4.2Z" fill="#ffe04a"/><circle cx="19.4" cy="7.4" r="4.6" fill="#ffe04a"/><path d="M23.6 7.6c1.8-.6 3.8 0 4.8 1.2-1.3 1-3.3 1.3-4.9.7" fill="#ff8a3d"/><path d="M9.6 14.6c2 1.6 5.2 1.5 6.8-.4" fill="none"/></g><circle cx="20.6" cy="6.4" r="1" fill="#111"/></symbol>
+  <symbol id="k-moon" viewBox="0 0 32 24"><g stroke="#111" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 3A9 9 0 1 0 24.2 15.8 7.5 7.5 0 0 1 16.5 3Z" fill="#ffe04a"/><path d="M11.6 11.4q1.4 1.2 2.8 0M12.4 16.4q1.6.9 3 0" fill="none"/></g><path d="M26.5 4.5v3M25 6h3M28.5 10.5v2M27.5 11.5h2" stroke="#111" stroke-width="1.3" stroke-linecap="round"/></symbol>
+  <symbol id="k-arrow" viewBox="0 0 160 40"><path d="M150 37C138 8 52 0 16 31" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="M10 19.5 15.5 32l12-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></symbol>
 </svg>
 
 <a class="skip" href="#main">Skip to content</a>
-<div class="page">
-  <header class="top">
-    <a class="brand" href="#"><img src="images/icon-64.png" alt="">StableBar</a>
-    <nav class="nav">
-      <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">Guide</a>
-      <a href="#store">Store</a>
-      <a class="gh" href="https://github.com/Seb-GRAF/StableBar/tree/main/examples">Examples</a>
-      <a class="gh" href="https://github.com/Seb-GRAF/StableBar">GitHub</a>
-      <button class="mode" id="mode" aria-label="Dark mode" aria-pressed="true">
-        <svg class="moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7Z"/></svg>
-        <svg class="sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.6"/><path d="M10 1.8v1.8M10 16.4v1.8M1.8 10h1.8M16.4 10h1.8M4.2 4.2l1.3 1.3M14.5 14.5l1.3 1.3M4.2 15.8l1.3-1.3M14.5 5.5l1.3-1.3"/></svg>
-      </button>
-    </nav>
-  </header>
+<div class="scene" id="scene" aria-hidden="true"></div>
 
-  <main id="main">
-  <section class="hero">
-    <h1>A native, configurable<br class="wide"> menu bar for macOS.</h1>
-    <p class="lede">Themes, widgets and popups, set up in the app or in plain JSON.</p>
-    <div class="get">
-      <a class="cta" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac <span class="ver">v0.9.0</span></a>
-      <p class="req">macOS 14 or later on Apple silicon.<br>Free and open source, MIT License.</p>
+<header class="dock" id="dock" data-theme="built-in">
+  <div class="bar ws-fill" id="bar" role="toolbar" aria-label="StableBar">
+    <div class="g" id="gl">
+      <div class="w apple" data-key="apple" data-pri="1" role="img" aria-label="Apple menu"><svg style="width:13px;height:15px;fill:currentColor"><use href="#i-apple"/></svg></div>
+      <div class="w ws" data-key="ws" data-pri="never">
+        <span class="ind"></span>
+        <button class="wsi" data-ws="1" aria-label="Workspace 1" aria-pressed="false">1 <img class="ai" src="images/apps/ghostty.webp" alt="" width="14" height="14"></button>
+        <button class="wsi on" data-ws="2" aria-label="Workspace 2" aria-pressed="true">2 <img class="ai" src="images/apps/t3-code.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/finder.svg" alt="" width="14" height="14"></button>
+        <button class="wsi" data-ws="3" aria-label="Workspace 3" aria-pressed="false">3 <img class="ai" src="images/apps/vscodium.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/chromium.webp" alt="" width="14" height="14"></button>
+        <button class="wsi" data-ws="4" aria-label="Workspace 4" aria-pressed="false">4 <img class="ai" src="images/apps/ollama.webp" alt="" width="14" height="14"></button>
+      </div>
+      <div class="w app finder" data-key="app" data-pri="2"><span class="name">Finder</span><span class="menus"><span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span></span></span></div>
+      <div class="w app site" data-key="site" data-pri="8" data-pop="site"><button type="button" class="name" aria-expanded="false">StableBar</button><span class="menus"><span><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">Guide</a><a href="#store">Store</a><a href="https://github.com/Seb-GRAF/StableBar/tree/main/examples">Examples</a><a href="https://github.com/Seb-GRAF/StableBar">GitHub</a></span></span></div>
+    </div>
+    <div class="g" id="gc"></div>
+    <div class="g" id="gr">
+      <button class="w more" data-key="more" data-pop="more" aria-expanded="false" aria-label="More widgets" hidden>•••</button>
+      <button class="w np" data-key="np" data-pri="3" data-pop="np" aria-expanded="false" aria-label="Now playing: Midnight City · M83"><i class="art"></i><span class="track">Midnight City · M83</span><span class="eq"><i></i><i></i><i></i><i></i></span></button>
+      <button class="w" data-key="meeting" data-pri="1" data-pop="agenda" aria-expanded="false"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
+      <button class="w" data-key="system" data-pri="0" data-pop="system" aria-expanded="false"><svg><use href="#i-cpu"/></svg><span class="vh">CPU </span>18%<span class="vh">,</span>&nbsp;&nbsp;<svg><use href="#i-mem"/></svg><span class="vh">memory </span>54%</button>
+      <div class="w snd" data-key="sound" data-pri="0"><span class="slide"><span><input type="range" min="0" max="100" value="64" aria-label="Volume"><span class="pct num">64%</span></span></span><svg role="img" aria-label="Sound"><use href="#i-snd"/></svg></div>
+      <div class="w" data-key="battery" data-pri="1"><svg style="width:19px"><use href="#i-bat"/></svg><span class="vh">Battery </span>82%</div>
+      <div class="w num clock" data-key="clock" data-pri="5" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</div>
+      <a class="w dl" data-key="dl" data-pri="9" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><span><svg><use href="#i-down"/></svg>Download</span></a>
+      <button class="w moon" data-key="moon" data-pri="never" id="night" aria-label="Night" aria-pressed="false"><svg class="off" aria-hidden="true"><use href="#i-moon"/></svg><svg class="on" aria-hidden="true"><use href="#i-moon-fill"/></svg></button>
+    </div>
+  </div>
+
+  <div class="pop" id="pop">
+    <div class="pane menu" data-id="more">
+      <p>More widgets</p>
+      <button data-for="np" data-open="np"><i class="art"></i>Midnight City · M83</button>
+      <button data-for="meeting" data-open="agenda"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
+      <button data-for="system" data-open="system"><svg><use href="#i-cpu"/></svg>CPU 18%&nbsp;&nbsp;Memory 54%</button>
+      <button data-for="sound"><svg><use href="#i-snd"/></svg>Sound</button>
+      <button data-for="battery"><svg><use href="#i-bat"/></svg>Battery 82%</button>
+      <button data-for="clock" class="clock" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</button>
+      <button data-for="app">Finder</button>
+      <button data-for="apple">Apple menu</button>
+    </div>
+    <div class="pane menu" data-id="site">
+      <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">User guide</a>
+      <a href="#store">Widget store</a>
+      <a href="https://github.com/Seb-GRAF/StableBar/tree/main/examples">Examples</a>
+      <a href="https://github.com/Seb-GRAF/StableBar/releases">Releases</a>
+      <a href="https://github.com/Seb-GRAF/StableBar">Source on GitHub</a>
+    </div>
+    <div class="pane np-pop" data-id="np">
+      <div class="src"><svg><use href="#i-note"/></svg>Music<svg class="go"><use href="#i-open"/></svg></div>
+      <div class="now"><i class="art"></i><div><b>Midnight City</b><b>M83</b><span>Hurry Up, We’re Dreaming</span></div></div>
+      <div class="meter"><i id="np-bar"></i></div>
+      <div class="times num"><span id="np-at">1:27</span><span>4:03</span></div>
+      <div class="ctrl">
+        <button aria-label="Shuffle"><svg><use href="#i-shuffle"/></svg></button>
+        <button aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
+        <button class="play" id="np-play" aria-label="Pause"><svg class="pause"><use href="#i-pause"/></svg><svg class="resume"><use href="#i-play"/></svg></button>
+        <button aria-label="Next"><svg><use href="#i-next"/></svg></button>
+        <button aria-label="Repeat"><svg><use href="#i-repeat"/></svg></button>
+      </div>
+      <label class="vol"><svg><use href="#i-vol"/></svg><input type="range" min="0" max="100" value="64" aria-label="Volume"><svg><use href="#i-snd"/></svg></label>
+    </div>
+    <div class="pane" data-id="agenda">
+      <p class="hd">Today</p>
+      <div class="row"><span>09:15</span><span>Standup</span></div>
+      <div class="row"><span>10:30</span><span>Design review</span></div>
+      <div class="row"><span>12:30</span><span>Lunch with Ana</span></div>
+      <div class="row"><span>15:00</span><span>1:1 with Sam</span></div>
+      <div class="row"><span>16:30</span><span>Release planning</span></div>
+      <div class="sep"></div>
+      <div>Calendar</div>
+    </div>
+    <div class="pane" data-id="system" style="width:260px">
+      <p class="hd">System</p>
+      <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none"><polyline points="0,30 14,27 28,31 42,24 56,26 70,22 84,29 98,25 112,27 126,18 140,23 154,13 168,28 182,24 196,26 210,20 220,22"/></svg>
+      <div class="kv"><span>CPU</span><span>18 %</span></div>
+      <div class="meter"><i style="width:18%"></i></div>
+      <div class="kv"><span>Memory</span><span>54 %</span></div>
+      <div class="meter"><i style="width:54%"></i></div>
+      <div class="sep"></div>
+      <div>Activity Monitor</div>
+    </div>
+  </div>
+
+  <div class="edit-ctl" id="edit-ctl">
+    <span class="hint">Drag to move · − removes · + adds</span>
+    <button class="b" id="edit-undo" aria-label="Undo bar change" title="Undo (⌘Z)" disabled>Undo</button>
+    <button class="b done" id="edit-done" aria-label="Finish editing the bar" title="Finish editing the bar (Esc)">Done</button>
+  </div>
+  <div class="addpop" id="addpop" role="dialog" aria-label="Add here" hidden></div>
+  <div class="ctx" id="ctx" role="menu" hidden></div>
+  <p class="vh" id="edit-help">Drag it, or use the Left and Right arrow keys, to move it. Delete removes it.</p>
+  <p class="vh" id="edit-live" aria-live="polite"></p>
+</header>
+
+<main id="main">
+  <section class="hero" id="hero" data-state="hero" data-dusk="0" aria-labelledby="h-hero">
+    <div class="note hero-note" data-ink>
+      <h1 id="h-hero"><span class="lumen">A</span> <span class="lumen">native,</span> <span class="lumen">configurable</span> <span class="lumen">menu</span> <span class="lumen">bar</span> <span class="lumen">for</span> <span class="lumen">macOS.</span></h1>
+      <p class="lede">Themes, widgets and popups, set up in the app or in plain JSON.</p>
+      <div class="get">
+        <a class="cta" data-ink="pill" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac <span class="ver">v0.9.0</span></a>
+        <p class="req">macOS 14 or later on Apple silicon.<br>Free and open source, MIT License.</p>
+      </div>
+      <div class="hero-foot">
+        <p class="cap">This is not a menu bar.* <small>*It is.</small></p>
+        <p class="quiet"><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">User guide</a><a href="https://github.com/Seb-GRAF/StableBar">GitHub</a></p>
+      </div>
     </div>
 
-    <div class="desk" id="desk" data-theme="built-in">
-      <div class="wall"></div>
-
-      <div class="dock" id="dock">
-        <div class="bar ws-fill" id="bar" role="toolbar" aria-label="StableBar">
-          <div class="g" id="gl">
-            <div class="w apple" data-key="apple" data-pri="1" role="img" aria-label="Apple menu"><svg style="width:13px;height:15px;fill:currentColor"><use href="#i-apple"/></svg></div>
-            <div class="w ws" data-key="ws" data-pri="never">
-              <span class="ind"></span>
-              <button class="wsi" data-ws="1" aria-label="Workspace 1" aria-pressed="false">1 <img class="ai" src="images/apps/ghostty.webp" alt="" width="14" height="14"></button>
-              <button class="wsi on" data-ws="2" aria-label="Workspace 2" aria-pressed="true">2 <img class="ai" src="images/apps/t3-code.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/finder.svg" alt="" width="14" height="14"></button>
-              <button class="wsi" data-ws="3" aria-label="Workspace 3" aria-pressed="false">3 <img class="ai" src="images/apps/vscodium.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/chromium.webp" alt="" width="14" height="14"></button>
-              <button class="wsi" data-ws="4" aria-label="Workspace 4" aria-pressed="false">4 <img class="ai" src="images/apps/ollama.webp" alt="" width="14" height="14"></button>
-            </div>
-            <div class="w app finder" data-key="app" data-pri="2"><span class="name">Finder</span><span class="menus"><span><span>File</span><span>Edit</span><span>View</span><span>Go</span><span>Window</span><span>Help</span></span></span></div>
-            <div class="w app site" data-key="site" data-pri="8" data-pop="site"><span class="name">StableBar</span><span class="menus"><span><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">Guide</a><a href="#store">Store</a><a href="https://github.com/Seb-GRAF/StableBar/tree/main/examples">Examples</a><a href="https://github.com/Seb-GRAF/StableBar">GitHub</a></span></span></div>
-          </div>
-          <div class="g" id="gc"></div>
-          <div class="g" id="gr">
-            <button class="w more" data-key="more" data-pop="more" aria-expanded="false" aria-label="More widgets" hidden>•••</button>
-            <button class="w np" data-key="np" data-pri="3" data-pop="np" aria-expanded="false" aria-label="Now playing: Midnight City · M83"><i class="art"></i><span class="track">Midnight City · M83</span><span class="eq"><i></i><i></i><i></i><i></i></span></button>
-            <button class="w" data-key="meeting" data-pri="1" data-pop="agenda" aria-expanded="false"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
-            <button class="w" data-key="system" data-pri="0" data-pop="system" aria-expanded="false"><svg><use href="#i-cpu"/></svg><span class="vh">CPU </span>18%<span class="vh">,</span>&nbsp;&nbsp;<svg><use href="#i-mem"/></svg><span class="vh">memory </span>54%</button>
-            <div class="w snd" data-key="sound" data-pri="0"><span class="slide"><span><input type="range" min="0" max="100" value="64" aria-label="Volume"><span class="pct num">64%</span></span></span><svg role="img" aria-label="Sound"><use href="#i-snd"/></svg></div>
-            <div class="w" data-key="battery" data-pri="1"><svg style="width:19px"><use href="#i-bat"/></svg><span class="vh">Battery </span>82%</div>
-            <div class="w num clock" data-key="clock" data-pri="5" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</div>
-            <a class="w dl" data-key="dl" data-pri="9" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><span><svg><use href="#i-down"/></svg>Download</span></a>
-          </div>
-        </div>
-
-        <div class="pop" id="pop">
-          <div class="pane menu" data-id="more">
-            <p>More widgets</p>
-            <button data-for="np" data-open="np"><i class="art"></i>Midnight City · M83</button>
-            <button data-for="meeting" data-open="agenda"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</button>
-            <button data-for="system" data-open="system"><svg><use href="#i-cpu"/></svg>CPU 18%&nbsp;&nbsp;Memory 54%</button>
-            <button data-for="sound"><svg><use href="#i-snd"/></svg>Sound</button>
-            <button data-for="battery"><svg><use href="#i-bat"/></svg>Battery 82%</button>
-            <button data-for="clock" class="clock" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</button>
-            <button data-for="app">Finder</button>
-            <button data-for="apple">Apple menu</button>
-          </div>
-          <div class="pane menu" data-id="site">
-            <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">User guide</a>
-            <a href="#store">Widget store</a>
-            <a href="https://github.com/Seb-GRAF/StableBar/tree/main/examples">Examples</a>
-            <a href="https://github.com/Seb-GRAF/StableBar/releases">Releases</a>
-            <a href="https://github.com/Seb-GRAF/StableBar">Source on GitHub</a>
-          </div>
-          <div class="pane np-pop" data-id="np">
-            <div class="src"><svg><use href="#i-note"/></svg>Music<svg class="go"><use href="#i-open"/></svg></div>
-            <div class="now"><i class="art"></i><div><b>Midnight City</b><b>M83</b><span>Hurry Up, We’re Dreaming</span></div></div>
-            <div class="meter"><i id="np-bar"></i></div>
-            <div class="times num"><span id="np-at">1:27</span><span>4:03</span></div>
-            <div class="ctrl">
-              <button aria-label="Shuffle"><svg><use href="#i-shuffle"/></svg></button>
-              <button aria-label="Previous"><svg><use href="#i-prev"/></svg></button>
-              <button class="play" id="np-play" aria-label="Pause"><svg class="pause"><use href="#i-pause"/></svg><svg class="resume"><use href="#i-play"/></svg></button>
-              <button aria-label="Next"><svg><use href="#i-next"/></svg></button>
-              <button aria-label="Repeat"><svg><use href="#i-repeat"/></svg></button>
-            </div>
-            <label class="vol"><svg><use href="#i-vol"/></svg><input type="range" min="0" max="100" value="64" aria-label="Volume"><svg><use href="#i-snd"/></svg></label>
-          </div>
-          <div class="pane" data-id="agenda">
-            <p class="hd">Today</p>
-            <div class="row"><span>09:15</span><span>Standup</span></div>
-            <div class="row"><span>10:30</span><span>Design review</span></div>
-            <div class="row"><span>12:30</span><span>Lunch with Ana</span></div>
-            <div class="row"><span>15:00</span><span>1:1 with Sam</span></div>
-            <div class="row"><span>16:30</span><span>Release planning</span></div>
-            <div class="sep"></div>
-            <div>Calendar</div>
-          </div>
-          <div class="pane" data-id="system" style="width:260px">
-            <p class="hd">System</p>
-            <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none"><polyline points="0,30 14,27 28,31 42,24 56,26 70,22 84,29 98,25 112,27 126,18 140,23 154,13 168,28 182,24 196,26 210,20 220,22"/></svg>
-            <div class="kv"><span>CPU</span><span>18 %</span></div>
-            <div class="meter"><i style="width:18%"></i></div>
-            <div class="kv"><span>Memory</span><span>54 %</span></div>
-            <div class="meter"><i style="width:54%"></i></div>
-            <div class="sep"></div>
-            <div>Activity Monitor</div>
-          </div>
-        </div>
-
-        <div class="edit-ctl" id="edit-ctl">
-          <span class="hint idle">Right-click the bar, or</span>
-          <button class="start" id="edit-start">Edit Bar in Place</button>
-          <span class="hint editing-hint">Drag to move · − removes · + adds</span>
-          <button class="b" id="edit-undo" aria-label="Undo bar change" title="Undo (⌘Z)" disabled>Undo</button>
-          <button class="b done" id="edit-done" aria-label="Finish editing the bar" title="Finish editing the bar (Esc)">Done</button>
-        </div>
-        <div class="addpop" id="addpop" role="dialog" aria-label="Add here" hidden></div>
-        <div class="ctx" id="ctx" role="menu" hidden></div>
-        <p class="vh" id="edit-help">Drag it, or use the Left and Right arrow keys, to move it. Delete removes it.</p>
-        <p class="vh" id="edit-live" aria-live="polite"></p>
+    <div class="note key" data-ink role="group" aria-labelledby="key-t">
+      <p class="key-t" id="key-t"><span class="mouse">The light follows your pointer.</span><span class="touch">Drag sideways to steer the light.</span></p>
+      <div class="keys">
+        <button type="button" data-drop="sheep"><svg aria-hidden="true"><use href="#k-sheep"/></svg>Drop a sheep</button>
+        <button type="button" data-drop="duck"><svg aria-hidden="true"><use href="#k-duck"/></svg>Drop a duck</button>
+        <button type="button" class="night" aria-pressed="false"><svg aria-hidden="true"><use href="#k-moon"/></svg>Night</button>
       </div>
-
-      <div class="layer theme-layer">
-        <div class="win theme-win" role="group" aria-labelledby="theme-title">
-          <div class="tb"><span class="tl"><i></i><i></i><i></i></span><b id="theme-title">Theme</b><span class="save">Save as Theme…</span></div>
-          <div class="cards" id="cards"></div>
-        </div>
-      </div>
-      <div class="layer term-layer">
-        <div class="win term" role="group" aria-label="Terminal">
-          <div class="tb"><span class="tl"><i></i><i></i><i></i></span><span class="title">zsh</span></div>
-          <pre><button data-run="popup"><span class="p" aria-hidden="true">%</span> StableBar --popup agenda</button><button data-run="seconds"><span class="p" aria-hidden="true">%</span> StableBar --set clock '{"format":"HH:mm:ss"}'</button><div class="out" id="out" aria-live="polite">Click a line to run it on the bar above.</div></pre>
-        </div>
-      </div>
+      <p class="key-or"><span class="mouse">Or click the hill or the sea.</span><span class="touch">Or tap the hill or the sea.</span></p>
     </div>
   </section>
 
-  <section class="stop first">
-    <h2>Configure all of it.</h2>
-    <div class="body">
-      <p><strong>Edit the bar where it is.</strong> Drag widgets between positions, take one off with −, and add one with + right where it should go. Changes save as you go, with Undo.</p>
-      <button class="more-link try" id="try-edit">Try it on the bar above</button>
+  <section class="sec edit" id="edit" data-state="edit" data-dusk="0.18" aria-labelledby="h-edit">
+    <div class="note taped" data-ink>
+      <i class="tape2" aria-hidden="true"></i>
+      <h2 id="h-edit">Edit the bar where it is.</h2>
+      <p>Drag widgets between positions, take one off with −, and add one with + right where it should go. Changes save as you go, with Undo.</p>
+      <figure class="fig-edit screen" data-theme="built-in" role="img" aria-label="The bar while you edit it: a tray for each position, a minus on every widget, and a plus where one can be added. An arrow drags the calendar widget to the center.">
+        <span class="trays">
+          <span class="tray"><span class="tile"><span class="w apple"><svg style="width:13px;height:15px;fill:currentColor"><use href="#i-apple"/></svg></span><span class="minus"></span></span><span class="tile"><span class="w ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="minus"></span></span><span class="add"><svg><use href="#i-plus"/></svg></span></span>
+          <span class="tray center"><span class="add"><svg><use href="#i-plus"/></svg></span></span>
+          <span class="tray"><span class="add"><svg><use href="#i-plus"/></svg></span><span class="tile cal"><span class="w"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</span><span class="minus"></span></span><span class="tile"><span class="w num clock" data-format="time">09:41</span><span class="minus"></span></span></span>
+        </span>
+        <svg class="arrow" viewBox="0 0 160 40" preserveAspectRatio="none"><use href="#k-arrow"/></svg>
+        <span class="drag-note">drag</span>
+      </figure>
+      <button class="try" id="try-edit" type="button">Try it on the bar above</button>
       <p>Every widget, style and popup is also a setting, per display and per kind of screen, in Settings or in plain JSON. StableBar applies the file when you save it, and keeps the last working bar if a change is invalid.</p>
-      <p><strong>Tiling, natively.</strong> Workspaces come straight from AeroSpace, yabai or OmniWM, with app icons or one item per window, and update in place instead of recreating windows.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/widgets.md">Workspaces in the guide</a>
-    </div>
-    <div class="fig specs">
-      <div>
-        <h3>Window managers</h3>
-        <ul>
-          <li><b>AeroSpace and OmniWM</b><span>Workspace, monitor, window and focus events, live. Reconnects when the window manager restarts.</span></li>
-          <li><b>yabai</b><span>Spaces, windows and displays, refreshed by yabai signals.</span></li>
-          <li><b>One item per window</b><span>Window titles in the workspace; click one to focus it.</span></li>
-          <li><b>No tiling manager</b><span>macOS Spaces, and windows kept clear of the bar.</span></li>
-        </ul>
-      </div>
-      <div>
-        <h3>Configuration</h3>
-        <ul>
-          <li><b>On the bar itself</b><span>Drag, add and remove widgets where they sit, with Undo.</span></li>
-          <li><b>JSON with a schema</b><span>Completion and validation in your editor.</span></li>
-          <li><b>Every style</b><span>Fonts, colors, padding, corners and borders, per widget or per theme.</span></li>
-          <li><b>Per kind of screen</b><span>Its own layout, size and theme on the laptop or a monitor.</span></li>
-          <li><b>Profiles</b><span>A different bar on battery, in dark mode or for one app.</span></li>
-        </ul>
-      </div>
+      <p class="cap">The keeper rearranges things when bored.</p>
     </div>
   </section>
 
-  <section class="stop flip">
-    <h2>Popups</h2>
-    <div class="body">
-      <p>Any widget can open a popup. Build it from rows, columns, text, graphs, lists, buttons, sliders, toggles and search fields, filled with the widget's data.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/popups.md">Custom popups in the guide</a>
-    </div>
-    <div class="fig" data-theme="built-in">
-      <div class="pops">
-        <div class="pop p1" style="width:260px">
-          <p class="hd">System</p>
-          <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none"><polyline points="0,30 14,27 28,31 42,24 56,26 70,22 84,29 98,25 112,27 126,18 140,23 154,13 168,28 182,24 196,26 210,20 220,22"/></svg>
-          <div class="kv"><span>CPU</span><span>18 %</span></div>
-          <div class="meter"><i style="width:18%"></i></div>
-          <div class="kv"><span>Memory</span><span>54 %</span></div>
-          <div class="meter"><i style="width:54%"></i></div>
-          <div class="sep"></div>
-          <div>Activity Monitor</div>
-        </div>
-        <div class="pop p2">
-          <p class="hd">Today</p>
-          <div class="row"><span>09:15</span><span>Standup</span></div>
-          <div class="row"><span>10:30</span><span>Design review</span></div>
-          <div class="row"><span>12:30</span><span>Lunch with Ana</span></div>
-          <div class="row"><span>15:00</span><span>1:1 with Sam</span></div>
-          <div class="row"><span>16:30</span><span>Release planning</span></div>
-          <div class="sep"></div>
-          <div>Calendar</div>
-        </div>
-        <div class="pop p3">
-          <p class="hd">Controls</p>
-          <label class="ctl"><span>Level</span><input type="range" min="0" max="100" value="62" aria-label="Level"></label>
-          <label class="check"><input type="checkbox" checked>Enabled</label>
-          <div class="ctl"><span>Mode</span><div class="seg"><button aria-pressed="false">Quiet</button><button class="on" aria-pressed="true">Balanced</button><button aria-pressed="false">Focus</button></div></div>
-          <div class="sep"></div>
-          <input class="search" placeholder="Find an app" aria-label="Find an app">
-          <div class="apps"><div>Finder</div><div>Calendar</div><div>Activity Monitor</div><div>Terminal</div></div>
-        </div>
+  <section class="sec themes" id="themes" data-state="themes" data-dusk="0.4" aria-labelledby="h-themes">
+    <div class="note line-note" data-ink>
+      <h2 id="h-themes">Themes</h2>
+      <p>Choose a theme during setup, cycle through them on your own bar with <strong>Try&nbsp;Themes…</strong>, or get more from the Store. <strong>Save&nbsp;as&nbsp;Theme…</strong> turns your own look into one.</p>
+      <div class="line" role="group" aria-label="Theme for the bar at the top">
+        <button class="tag" type="button" data-theme-pick="built-in" aria-pressed="true"><span class="shot ws-fill" data-theme="built-in" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Built-in</span></button>
+        <button class="tag" type="button" data-theme-pick="catppuccin" aria-pressed="false"><span class="shot ws-fill" data-theme="catppuccin" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Catppuccin</span></button>
+        <button class="tag" type="button" data-theme-pick="gruvbox" aria-pressed="false"><span class="shot ws-text" data-theme="gruvbox" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Gruvbox</span></button>
+        <button class="tag" type="button" data-theme-pick="leman" aria-pressed="false"><span class="shot ws-fill" data-theme="leman" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Léman</span></button>
+        <button class="tag" type="button" data-theme-pick="nord" aria-pressed="false"><span class="shot ws-under" data-theme="nord" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Nord</span></button>
+        <button class="tag" type="button" data-theme-pick="notch" aria-pressed="false"><span class="shot ws-text" data-theme="notch" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Notch</span></button>
+        <button class="tag" type="button" data-theme-pick="phosphor" aria-pressed="false"><span class="shot ws-fill" data-theme="phosphor" aria-hidden="true"><span class="mini"><span class="strip"></span><span class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t">Finder</span></span><span class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></span></span></span><span class="nm">Phosphor</span></button>
       </div>
-    </div>
-  </section>
-
-  <section class="stop wide">
-    <h2>Themes</h2>
-    <div class="body">
-      <p>Choose a theme during setup, cycle through them on your own bar with <strong>Try&nbsp;Themes…</strong>, or get more from the store. <strong>Save&nbsp;as&nbsp;Theme…</strong> turns your own look into one.</p>
       <p>Pick one here and the bar at the top changes with it.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/themes.md">Themes in the guide</a>
-    </div>
-    <div class="fig">
-      <div class="board" id="board"><a class="card store" href="https://github.com/Seb-GRAF/stablebar-packages">More themes in the store<svg><use href="#i-open"/></svg></a></div>
+      <p class="links"><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/themes.md">Themes in the guide</a><a href="https://github.com/Seb-GRAF/stablebar-packages">More themes in the Store</a></p>
+      <p class="cap">Same lighthouse, different pyjamas.</p>
     </div>
   </section>
 
-  <section class="stop">
-    <h2>Any script is a widget</h2>
-    <div class="body">
+  <section class="sec widgets" id="widgets" data-state="widgets" data-dusk="0.6" aria-labelledby="h-widgets">
+    <div class="note notebook" data-ink="torn">
+      <h2 id="h-widgets">Any script is a widget.</h2>
       <p>A widget can run any command that prints text or a JSON object. Refresh it on a timer or on events, and give it a popup with graphs, lists and controls.</p>
-      <p>The command line queries and edits the running bar, and other tools can send it events.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/create-a-widget.md">Create a widget</a>
-    </div>
-    <div class="fig scripts">
-      <div class="code">
-        <div class="fn"><span>widgets/disk.sh</span><span>sh</span></div>
-<pre tabindex="0"><span class="c">#!/bin/sh</span>
+      <div class="script">
+        <div class="code">
+          <div class="fn"><span>widgets/disk.sh</span><span>sh</span></div>
+<pre tabindex="0" aria-label="widgets/disk.sh"><span class="c">#!/bin/sh</span>
 used=$(df -h / | awk 'NR == 2 { print $5 }')
 printf '{"text":"%s","icon":"internaldrive"}' "$used"</pre>
+        </div>
+        <div class="result screen" data-theme="built-in" role="group" aria-label="The disk widget on the bar"><div class="w new"><svg><use href="#i-disk"/></svg>61%</div><div class="w"><svg style="width:19px"><use href="#i-bat"/></svg>82%</div><div class="w num clock" data-format="time">09:41</div></div>
       </div>
-      <div class="code">
-        <div class="fn"><span>config.json</span><span>json</span></div>
-<pre tabindex="0">{
-  "id": "disk", "type": "script",
-  "position": "right", "interval": 300,
-  "command": "~/.config/stablebar/widgets/disk.sh"
-}</pre>
+      <p class="links"><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/create-a-widget.md">Create a widget</a></p>
+
+      <div class="store" id="store">
+        <h3>Or get one from the Store.</h3>
+        <p>Add widgets other people wrote, from Settings or the bar’s <strong>+</strong>, without writing a script. Before anything runs, StableBar shows what a package does: the commands it runs, the hosts it contacts and the macOS permissions it uses.</p>
+        <div class="store-fig">
+          <div class="win store-win" data-theme="built-in" role="group" aria-label="StableBar Settings, Packages">
+            <div class="tb"><span class="tl"><i></i><i></i><i></i></span><span class="tabs" aria-hidden="true"><span>Installed</span><span class="on">Store</span></span><span class="find" aria-hidden="true">Search packages</span></div>
+            <div class="pkgs">
+              <div class="pkg" data-id="now-playing"><div class="pv"><div class="w"><i class="art"></i>Midnight City · M83</div></div><b>Now playing</b><p>Shows the playing or paused track from Music or Spotify with its artwork and bouncing bars while it plays.</p><div class="by"><span>Widget · by Seb-GRAF</span><span class="state"><svg viewBox="0 0 12 12" aria-hidden="true"><use href="#p-check"/></svg>Installed</span></div></div>
+              <div class="pkg" data-id="ai-usage"><div class="pv"><div class="w"><svg><use href="#i-asterisk"/></svg><span class="gauge"><i style="--p:42%"></i><i style="--p:64%"></i></span>42%&nbsp;&nbsp;<svg><use href="#i-term"/></svg><span class="gauge"><i style="--p:18%"></i><i style="--p:30%"></i></span>18%</div></div><b>AI usage</b><p>Shows your Claude Code and Codex limits in one widget, with reset countdowns and weekly pace.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get AI usage">Get</button></div></div>
+              <div class="pkg" data-id="dock-badges"><div class="pv"><div class="w"><svg><use href="#i-badge"/></svg>2</div></div><b>Dock badges</b><p>Shows the total unread count from running apps’ Dock badges, with a popup that opens each app.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Dock badges">Get</button></div></div>
+              <div class="pkg" data-id="github-notifications"><div class="pv"><div class="w"><svg><use href="#i-bell"/></svg>3</div></div><b>GitHub notifications</b><p>Shows your unread GitHub notification count and lists the latest ones, each opening on GitHub.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get GitHub notifications">Get</button></div></div>
+              <div class="pkg" data-id="homebrew-outdated"><div class="pv"><div class="w"><svg><use href="#i-box"/></svg>4</div></div><b>Homebrew outdated</b><p>Shows how many Homebrew formulae and casks are outdated, and lists them.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Homebrew outdated">Get</button></div></div>
+              <div class="pkg" data-id="weather"><div class="pv"><div class="w"><svg><use href="#i-weather"/></svg>14°</div></div><b>Weather</b><p>Shows the current temperature and conditions from wttr.in, with feels-like, humidity, wind and today’s high and low.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Weather">Get</button></div></div>
+            </div>
+          </div>
+          <div class="addpop review pkg-review" id="pkg-review" role="dialog" aria-label="Review package" hidden></div>
+        </div>
+        <p class="links"><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/packages.md">Packages and the Store in the guide</a></p>
       </div>
-      <div class="result" data-theme="built-in" role="group" aria-label="The disk widget on the bar"><div class="w new"><svg><use href="#i-disk"/></svg>61%</div><div class="w"><svg style="width:19px"><use href="#i-bat"/></svg>82%</div><div class="w num clock" data-format="time">09:41</div></div>
+      <p class="cap">This one was written by a sheep. Allegedly.</p>
     </div>
   </section>
 
-  <section class="stop flip" id="store">
-    <h2>The Store</h2>
-    <div class="body">
-      <p>Add widgets other people wrote, from Settings or the bar’s <strong>+</strong>, without writing a script. Before anything runs, StableBar shows what a package does: the commands it runs, the hosts it contacts and the macOS permissions it uses.</p>
-      <p><strong>Checked on the way in.</strong> Every Store package is open source, and the Store builds and publishes it, not its author. A maintainer reads each version that runs commands, and StableBar checks every download against its SHA-256. Tokens stay in your Keychain, and versions stay pinned until you choose another.</p>
-      <p><strong>Your team’s own widgets.</strong> Host a private source for packages that can’t be public, and invite your team with a join link. A <code>stablebar://</code> link opens one package’s page in StableBar.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/packages.md">Packages and the store in the guide</a>
-    </div>
-    <div class="fig">
-      <div class="win store-win" data-theme="built-in" role="group" aria-label="StableBar Settings, Packages">
-        <div class="tb"><span class="tl"><i></i><i></i><i></i></span><span class="tabs" aria-hidden="true"><span>Installed</span><span class="on">Store</span></span><span class="find" aria-hidden="true">Search packages</span></div>
-        <div class="kinds" aria-hidden="true"><span class="on">All</span><span>Widgets</span><span>Themes</span></div>
-        <div class="pkgs">
-          <div class="pkg" data-id="now-playing"><div class="pv"><div class="w"><i class="art"></i>Midnight City · M83</div></div><b>Now playing</b><p>Shows the playing or paused track from Music or Spotify with its artwork and bouncing bars while it plays.</p><div class="by"><span>Widget · by Seb-GRAF</span><span class="state"><svg viewBox="0 0 12 12" aria-hidden="true"><use href="#p-check"/></svg>Installed</span></div></div>
-          <div class="pkg" data-id="ai-usage"><div class="pv"><div class="w"><svg><use href="#i-asterisk"/></svg><span class="gauge"><i style="--p:42%"></i><i style="--p:64%"></i></span>42%&nbsp;&nbsp;<svg><use href="#i-term"/></svg><span class="gauge"><i style="--p:18%"></i><i style="--p:30%"></i></span>18%</div></div><b>AI usage</b><p>Shows your Claude Code and Codex limits in one widget, with reset countdowns and weekly pace.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get AI usage">Get</button></div></div>
-          <div class="pkg" data-id="dock-badges"><div class="pv"><div class="w"><svg><use href="#i-badge"/></svg>2</div></div><b>Dock badges</b><p>Shows the total unread count from running apps’ Dock badges, with a popup that opens each app.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Dock badges">Get</button></div></div>
-          <div class="pkg" data-id="github-notifications"><div class="pv"><div class="w"><svg><use href="#i-bell"/></svg>3</div></div><b>GitHub notifications</b><p>Shows your unread GitHub notification count and lists the latest ones, each opening on GitHub.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get GitHub notifications">Get</button></div></div>
-          <div class="pkg" data-id="homebrew-outdated"><div class="pv"><div class="w"><svg><use href="#i-box"/></svg>4</div></div><b>Homebrew outdated</b><p>Shows how many Homebrew formulae and casks are outdated, and lists them.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Homebrew outdated">Get</button></div></div>
-          <div class="pkg" data-id="weather"><div class="pv"><div class="w"><svg><use href="#i-weather"/></svg>14°</div></div><b>Weather</b><p>Shows the current temperature and conditions from wttr.in, with feels-like, humidity, wind and today’s high and low.</p><div class="by"><span>Widget · by Seb-GRAF</span><button class="pkg-get" aria-label="Get Weather">Get</button></div></div>
+  <section class="sec tiling" id="tiling" data-state="tiling" data-dusk="0.8" aria-labelledby="h-tiling">
+    <div class="note postcard" data-ink>
+      <div class="pc-msg">
+        <h2 id="h-tiling">Tiling, natively.</h2>
+        <p>Workspaces come straight from AeroSpace, yabai or OmniWM, with app icons or one item per window, and update in place instead of recreating windows. Without a tiling manager, the bar shows macOS Spaces.</p>
+      </div>
+      <div class="pc-addr" aria-hidden="true">
+        <span class="stamp"><svg viewBox="0 0 40 48"><path d="M6 44h28M12 44l3-30h10l3 30" fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/><path d="M14.2 22h11.6l.7 7H13.5zM13 35h14l.6 6H12.4z" fill="#ff4a36"/><path d="M14 14h12l-6-8z" fill="#ff4a36" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/><circle cx="20" cy="17.5" r="2.2" fill="#fff" stroke="#111" stroke-width="1.2"/><path d="M23 16 38 10v14z" fill="#ffe04a" opacity=".85"/></svg></span>
+        <svg class="postmark" viewBox="0 0 74 50"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="22" cy="25" r="17"/><circle cx="22" cy="25" r="12.5" stroke-dasharray="2 3"/><path d="M42 13c5-3 9 3 14 0s9-3 14 0M42 25c5-3 9 3 14 0s9-3 14 0M42 37c5-3 9 3 14 0s9-3 14 0"/></g></svg>
+        <span class="to">To</span>
+        <span class="addr">AeroSpace</span>
+        <span class="addr">yabai</span>
+        <span class="addr">OmniWM</span>
+      </div>
+      <div class="pc-ws screen" data-theme="built-in">
+        <div class="ws-big ws-fill" role="group" aria-label="Workspaces">
+          <button class="wsi" data-ws="1" aria-label="Workspace 1" aria-pressed="false">1 <img class="ai" src="images/apps/ghostty.webp" alt="" width="14" height="14"></button>
+          <button class="wsi on" data-ws="2" aria-label="Workspace 2" aria-pressed="true">2 <img class="ai" src="images/apps/t3-code.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/finder.svg" alt="" width="14" height="14"></button>
+          <button class="wsi" data-ws="3" aria-label="Workspace 3" aria-pressed="false">3 <img class="ai" src="images/apps/vscodium.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/chromium.webp" alt="" width="14" height="14"></button>
+          <button class="wsi" data-ws="4" aria-label="Workspace 4" aria-pressed="false">4 <img class="ai" src="images/apps/ollama.webp" alt="" width="14" height="14"></button>
         </div>
       </div>
-      <div class="addpop review pkg-review" id="pkg-review" role="dialog" aria-label="Review package" hidden></div>
+      <div class="pc-foot">
+        <p class="cap">Every window gets its own little room.</p>
+        <p class="links"><a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/widgets.md">Workspaces in the guide</a></p>
+      </div>
     </div>
   </section>
 
-  <section class="stop">
-    <h2>Every display</h2>
-    <div class="body">
-      <p>Placement that knows about the notch, widgets per kind of screen, and a separate bar for each screen setup. Each kind of screen can have its own theme.</p>
-      <a class="more-link" href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/layout.md">Displays and layout</a>
-    </div>
-    <div class="setup">
-      <figure class="cap monitor" data-theme="leman">
-        <div class="bar ws-fill" aria-hidden="true">
-          <div class="g gl">
-            <div class="w ws"><span class="wsi">1 <img class="ai" src="images/apps/ghostty.webp" alt="" width="14" height="14"></span><span class="wsi on">2 <img class="ai" src="images/apps/t3-code.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/finder.svg" alt="" width="14" height="14"></span><span class="wsi">3 <img class="ai" src="images/apps/vscodium.webp" alt="" width="14" height="14"><img class="ai" src="images/apps/chromium.webp" alt="" width="14" height="14"></span><span class="wsi">4 <img class="ai" src="images/apps/ollama.webp" alt="" width="14" height="14"></span></div>
-            <div class="w app"><span class="name">Finder</span></div>
-          </div>
-          <div class="g">
-            <div class="w meeting"><svg><use href="#i-cal"/></svg>Design review&nbsp;&nbsp;10:30</div>
-            <div class="w cpu open"><svg><use href="#i-cpu"/></svg>18%&nbsp;&nbsp;<svg><use href="#i-mem"/></svg>54%</div>
-            <div class="w num clock" data-format="full">Thu 22 Oct&nbsp;&nbsp;09:41</div>
-          </div>
-        </div>
-        <div class="pop open" aria-hidden="true">
-          <p class="hd">System</p>
-          <svg class="graph" viewBox="0 0 220 44" preserveAspectRatio="none"><polyline points="0,26 14,29 28,24 42,27 56,21 70,25 84,23 98,28 112,22 126,24 140,16 154,22 168,25 182,19 196,23 210,27 220,24"/></svg>
-          <div class="kv"><span>CPU</span><span>18 %</span></div>
-          <div class="meter"><i style="width:18%"></i></div>
-          <div class="kv"><span>Memory</span><span>54 %</span></div>
-          <div class="meter"><i style="width:54%"></i></div>
-          <div class="sep"></div>
-          <div>Activity Monitor</div>
-        </div>
-        <figcaption><b>Monitor.</b> Léman, with more room for widgets.</figcaption>
-      </figure>
-      <figure class="cap laptop" data-theme="notch">
-        <span class="notch"></span>
-        <div class="bar ws-text" aria-hidden="true">
-          <div class="g">
-            <div class="w ws"><span class="wsi">1</span><span class="wsi on">2</span><span class="wsi">3</span></div>
-            <div class="w app"><span class="name">Finder</span></div>
-          </div>
-          <div class="g">
-            <div class="w"><svg style="width:19px"><use href="#i-bat"/></svg>82%</div>
-            <div class="w num clock" data-format="time">09:41</div>
-          </div>
-        </div>
-        <figcaption><b>Laptop.</b> Notch, split around the notch and blending into it, with the battery only here.</figcaption>
-      </figure>
-    </div>
-  </section>
-
-  <section class="install">
-    <div class="copy">
-      <h2>See it on your own bar.</h2>
-      <p class="lede">Setup walks you through a preset, a theme and a placement, and shows each choice on your real bar. Nothing is saved until you click Finish setup.</p>
+  <section class="sec install" id="install" data-state="install" data-dusk="1" aria-labelledby="h-install">
+    <div class="note recipe" data-ink>
+      <h2 id="h-install">See it on your own bar.</h2>
+      <ol class="steps">
+        <li>Download StableBar.</li>
+        <li>Open it from Applications.</li>
+        <li>Setup walks you through a preset, a theme and a placement, and shows each choice on your real bar.</li>
+        <li>Nothing is saved until you click <strong>Finish setup</strong>.</li>
+      </ol>
       <div class="get">
-        <a class="cta" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac <span class="ver">v0.9.0</span></a>
+        <a class="cta" data-ink="pill" href="https://github.com/Seb-GRAF/StableBar/releases/download/v0.9.0/StableBar.dmg"><svg aria-hidden="true"><use href="#i-apple"/></svg>Download for Mac <span class="ver">v0.9.0</span></a>
         <p class="req">macOS 14 or later on Apple silicon.<br>Releases update themselves.</p>
       </div>
-      <p class="req brew">Or with Homebrew: <code>brew install --cask seb-graf/tap/stablebar</code></p>
-    </div>
-    <div class="desktop">
-      <div class="wall"></div>
-      <div class="win dmg" id="dmg">
-        <div class="tb"><span class="tl"><i></i><i></i><i></i></span><span class="title">StableBar</span></div>
-        <div class="stage">
-          <div class="slot"><div class="ico"><img class="app-ico" id="app-ico" src="images/icon-256.png" alt="" draggable="false"></div>StableBar</div>
-          <div class="arrow"><svg viewBox="0 0 72 14" aria-hidden="true"><path d="M1 7h68M63 1.5 69 7l-6 5.5"/></svg>Drag to download</div>
-          <div class="slot"><div class="ico"><svg class="folder" id="folder" viewBox="0 0 80 64" aria-hidden="true"><path d="M4 12a6 6 0 0 1 6-6h18l6 6h36a6 6 0 0 1 6 6v36a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z" fill="#3b8ee8"/><path d="M4 22a6 6 0 0 1 6-6h60a6 6 0 0 1 6 6v32a6 6 0 0 1-6 6H10a6 6 0 0 1-6-6z" fill="#62adf5"/><path d="M33 47h14M40 30v13M35 38l5 5 5-5" fill="none" stroke="#2f7dd6" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>Applications</div>
-        </div>
-        <p class="foot">Then open StableBar from Applications.</p>
-      </div>
+      <p class="brew">Or with Homebrew: <code>brew install --cask seb-graf/tap/stablebar</code></p>
+      <p class="cap">The lamp is on. Come in.</p>
     </div>
   </section>
-  </main>
+</main>
 
-  <footer>
-    <span>StableBar is a free, open-source alternative to SketchyBar, built by Sebastien Graf and Steve Mendes Reis. It is available under the MIT License, including commercial use and redistribution.</span>
+<footer class="site-foot">
+  <p>StableBar is a free, open-source alternative to SketchyBar, built by Sebastien Graf and Steve Mendes Reis. It is available under the MIT License, including commercial use and redistribution.</p>
+  <nav aria-label="Footer">
     <a href="https://github.com/Seb-GRAF/StableBar">Source on GitHub</a>
     <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">User guide</a>
     <a href="https://github.com/Seb-GRAF/stablebar-packages">Widget store</a>
@@ -454,7 +365,7 @@ printf '{"text":"%s","icon":"internaldrive"}' "$used"</pre>
     <a href="https://github.com/Seb-GRAF/StableBar/releases">Releases</a>
     <a href="privacy.html">Privacy Policy</a>
     <a href="terms.html">Terms of Service</a>
-  </footer>
-</div>
+  </nav>
+</footer>
 </body>
 </html>

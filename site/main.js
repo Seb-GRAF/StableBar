@@ -1,3 +1,8 @@
+/* stablebar.app: the bar demos, the paper notes, and the drawing behind them (scene.js).
+   Everything here works without the drawing; the drawing only adds to it. */
+(() => {
+"use strict";
+const root = document.documentElement;
 const THEMES = [
   ["built-in", "Built-in", "ws-fill"],
   ["catppuccin", "Catppuccin", "ws-fill"],
@@ -7,7 +12,6 @@ const THEMES = [
   ["notch", "Notch", "ws-text"],
   ["phosphor", "Phosphor", "ws-fill"],
 ];
-const desk = document.getElementById("desk");
 const dock = document.getElementById("dock");
 const bar = document.getElementById("bar");
 const gl = document.getElementById("gl");
@@ -17,10 +21,24 @@ const more = bar.querySelector(".more");
 const pop = document.getElementById("pop");
 const panes = [...pop.querySelectorAll(".pane")];
 const menu = pop.querySelector('[data-id="more"]');
+const heroNote = document.querySelector(".hero-note");
 const reduce = matchMedia("(prefers-reduced-motion: reduce)");
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 let openId = null;
 let editing = false;
+
+/* The drawing, if scene.js is there. Every call goes through S, so a scene that fails never takes the page with it. */
+let scene = null;
+let sceneFailed = false;
+function S(method, ...args) {
+  if (!scene || typeof scene[method] !== "function") return undefined;
+  try { return scene[method](...args); } catch (err) {
+    if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
+    return undefined;
+  }
+}
+/* The bar's height when it isn't being edited; Nord is shorter */
+const restHeight = () => parseFloat(getComputedStyle(dock).getPropertyValue("--rest-h")) || 40;
 
 /* Now playing: the track moves on while it plays */
 const track = { at: 87, length: 243, playing: true };
@@ -49,28 +67,19 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
-/* Sample bars: three workspaces, Finder, battery and clock, as in Settings' theme cards */
-function mini() {
-  return `<div class="mini"><div class="strip"></div>
-    <div class="g"><span class="t ws"><span class="wsi on">1</span><span class="wsi">2</span><span class="wsi">3</span></span><span class="t"><span>Finder</span></span></div>
-    <div class="g"><span class="t"><svg style="width:17px;height:14px"><use href="#i-bat"/></svg>82%</span><span class="t num">9:41</span></div></div>`;
-}
-const cards = document.getElementById("cards");
-const store = document.querySelector("#board .store");
-for (const [id, name, ws] of THEMES) {
-  const card = `<button class="card" data-theme-pick="${id}"><div class="shot ${ws}" data-theme="${id}" aria-hidden="true">${mini()}</div><div class="nm">${name}<svg viewBox="0 0 12 12"><use href="#p-check"/></svg></div></button>`;
-  cards.insertAdjacentHTML("beforeend", card);
-  store.insertAdjacentHTML("beforebegin", card);
-}
-
+/* Themes: the tags on the washing line restyle the bar, and dress the lighthouse to match */
 function setTheme(id) {
-  desk.dataset.theme = id;
+  dock.dataset.theme = id;
   bar.className = `bar ${THEMES.find(t => t[0] === id)[2]}`;
   for (const b of document.querySelectorAll("[data-theme-pick]")) {
     b.classList.toggle("on", b.dataset.themePick === id);
     b.setAttribute("aria-pressed", b.dataset.themePick === id);
   }
-  requestAnimationFrame(fit);
+  S("setTheme", id);
+  requestAnimationFrame(() => {
+    fit();
+    S("setTopInset", restHeight());
+  });
 }
 for (const b of document.querySelectorAll("[data-theme-pick]")) b.addEventListener("click", () => setTheme(b.dataset.themePick));
 
@@ -119,6 +128,8 @@ function place() {
   pop.style.width = `${pane.offsetWidth}px`;
   pop.style.height = `${pane.offsetHeight}px`;
 }
+/* The control that opens a widget's popup: the widget itself, or the app name in StableBar's menus */
+const popButton = w => w.matches("button") ? w : w.querySelector(":scope > button");
 /* Opening another widget's popup morphs the open one into it, as the app does */
 function open(id) {
   if (id !== openId && anchorFor(id).hidden) return;
@@ -129,7 +140,7 @@ function open(id) {
   for (const p of panes) p.classList.toggle("on", p.dataset.id === openId);
   for (const w of bar.querySelectorAll("[data-pop]")) {
     w.classList.toggle("open", w.dataset.pop === openId || Boolean(openId && anchorFor(openId) === w));
-    if (w.matches("button")) w.setAttribute("aria-expanded", w.classList.contains("open"));
+    popButton(w)?.setAttribute("aria-expanded", w.classList.contains("open"));
   }
   place();
 }
@@ -139,29 +150,33 @@ for (const w of bar.querySelectorAll("[data-pop]")) w.addEventListener("click", 
   open(w.dataset.pop);
 });
 for (const b of menu.querySelectorAll("[data-open]")) b.addEventListener("click", e => { e.stopPropagation(); open(b.dataset.open); });
-document.addEventListener("click", e => { if (openId && !e.target.closest(".pop, .win, .card, .w")) open(openId); });
+document.addEventListener("click", e => { if (openId && !e.target.closest(".pop, .win, .tag, .w")) open(openId); });
 /* Escape closes the popup and returns focus to its widget */
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape" || !openId) return;
   const from = pop.contains(document.activeElement) && anchorFor(openId);
   open(openId);
-  if (from) from.focus();
+  if (from) (popButton(from) || from).focus();
 });
 
-/* Workspaces: the focus highlight slides to the one you click, as on the real bar */
+/* Workspaces: the focus highlight slides to the one you click, as on the real bar.
+   The postcard's large widget is the same four workspaces, and the drawing's beach huts follow. */
 const ind = bar.querySelector(".ind");
 function slide() {
   const on = bar.querySelector(".wsi.on");
   ind.style.setProperty("--x", `${on.offsetLeft}px`);
   ind.style.setProperty("--w", `${on.offsetWidth}px`);
 }
-for (const el of bar.querySelectorAll(".wsi")) el.addEventListener("click", () => {
-  bar.querySelectorAll(".wsi").forEach(e => {
-    e.classList.toggle("on", e === el);
-    e.setAttribute("aria-pressed", e === el);
-  });
+function focusWorkspace(n) {
+  for (const e of document.querySelectorAll(".wsi[data-ws]")) {
+    const on = e.dataset.ws === String(n);
+    e.classList.toggle("on", on);
+    e.setAttribute("aria-pressed", on);
+  }
   slide();
-});
+  S("setWorkspace", n);
+}
+for (const el of document.querySelectorAll(".wsi[data-ws]")) el.addEventListener("click", () => focusWorkspace(Number(el.dataset.ws)));
 
 /* The app's menus open on hover when the bar has room for them */
 const finder = bar.querySelector(".finder");
@@ -187,48 +202,12 @@ volume.addEventListener("input", () => {
   volume.style.setProperty("--v", `${volume.value}%`);
 });
 
-/* Controls */
-for (const seg of document.querySelectorAll(".seg")) for (const b of seg.querySelectorAll("button")) b.addEventListener("click", () => {
-  seg.querySelectorAll("button").forEach(x => {
-    x.classList.toggle("on", x === b);
-    x.setAttribute("aria-pressed", x === b);
-  });
-});
-for (const s of document.querySelectorAll(".search")) s.addEventListener("input", () => {
-  const q = s.value.toLowerCase();
-  s.nextElementSibling.querySelectorAll("div").forEach(d => d.hidden = !d.textContent.toLowerCase().includes(q));
-  place();
-});
-
-/* The terminal runs its commands against the bar */
-const out = document.getElementById("out");
-for (const b of document.querySelectorAll("[data-run]")) b.addEventListener("click", e => {
-  e.stopPropagation();
-  endEditing();
-  if (b.dataset.run === "popup") {
-    open("agenda");
-    out.textContent = `{"popup":"agenda","open":${openId === "agenda"}}`;
-  } else {
-    bar.querySelector(".clock").dataset.format = "seconds";
-    menu.querySelector(".clock").dataset.format = "seconds";
-    tick();
-    fit();
-    out.textContent = '{"set":"clock"}';
-  }
-  b.classList.add("ran");
-});
-
-/* The bar stays at the top of the window once the desk reaches it,
-   and becomes the page's header once the desk has scrolled away. */
+/* Once the page scrolls, a strip of paper slides in behind the bar. Once the headline has gone
+   under it, the bar becomes the page's header. While the bar is being edited it stays the demo. */
 function dockState() {
-  const r = desk.getBoundingClientRect();
-  const header = r.bottom <= 120;
-  const docked = r.top <= 0;
-  dock.classList.toggle("docked", docked);
-  dock.style.left = docked ? `${r.left}px` : "";
-  dock.style.width = docked ? `${r.width}px` : "";
+  dock.classList.toggle("scrolled", scrollY > 2);
+  const header = !editing && heroNote.getBoundingClientRect().bottom < restHeight() + 56;
   if (header === dock.classList.contains("header")) return;
-  if (header) endEditing();
   dock.classList.add("measure");
   dock.classList.toggle("header", header);
   fit();
@@ -237,133 +216,11 @@ function dockState() {
   dock.classList.remove("measure");
   dock.classList.toggle("header", header);
   if (openId) open(openId);
-  setTimeout(fit, 450);
 }
-
-let queued = false;
-addEventListener("scroll", () => {
-  if (queued) return;
-  queued = true;
-  requestAnimationFrame(() => { queued = false; dockState(); });
-}, { passive: true });
-
-/* Drag a window by its title bar. It leans into the motion and glides when let go. */
-const layers = [...desk.querySelectorAll(".layer")];
-const px = (el, name) => parseFloat(el.style.getPropertyValue(name)) || 0;
-function bounds(layer) {
-  return {
-    x: [8 - layer.offsetLeft, desk.clientWidth - layer.offsetWidth - 8 - layer.offsetLeft],
-    y: [bar.offsetHeight + 8 - layer.offsetTop, desk.clientHeight - 48 - layer.offsetTop],
-  };
-}
-function moveTo(layer, dx, dy) {
-  const b = bounds(layer);
-  const x = clamp(dx, ...b.x), y = clamp(dy, ...b.y);
-  layer.style.setProperty("--dx", `${x}px`);
-  layer.style.setProperty("--dy", `${y}px`);
-  return [x !== dx, y !== dy];
-}
-for (const layer of layers) {
-  const handle = layer.querySelector(".tb");
-  let drag = null, frame = 0, vx = 0, vy = 0;
-
-  function animate() {
-    const tilt = px(layer, "--tilt");
-    if (!drag) {
-      const [hitX, hitY] = moveTo(layer, px(layer, "--dx") + vx * 16, px(layer, "--dy") + vy * 16);
-      vx = hitX ? 0 : vx * .92;
-      vy = hitY ? 0 : vy * .92;
-    } else {
-      vx *= .85;
-    }
-    const target = drag ? clamp(vx * 6, -8, 8) : 0;
-    layer.style.setProperty("--tilt", `${tilt + (target - tilt) * .2}deg`);
-    if (drag || Math.abs(vx) + Math.abs(vy) > .01 || Math.abs(tilt) > .05) frame = requestAnimationFrame(animate);
-    else layer.style.setProperty("--tilt", "0deg");
-  }
-
-  handle.addEventListener("pointerdown", e => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    handle.setPointerCapture(e.pointerId);
-    layers.forEach(l => l.style.zIndex = l === layer ? 5 : 4);
-    const r = layer.getBoundingClientRect();
-    layer.style.transformOrigin = `${e.clientX - r.left}px ${e.clientY - r.top}px`;
-    drag = { x: e.clientX, y: e.clientY, dx: px(layer, "--dx"), dy: px(layer, "--dy"), lx: e.clientX, ly: e.clientY, t: e.timeStamp };
-    vx = vy = 0;
-    layer.classList.add("dragging");
-    cancelAnimationFrame(frame);
-    if (!reduce.matches) frame = requestAnimationFrame(animate);
-  });
-  handle.addEventListener("pointermove", e => {
-    if (!drag) return;
-    moveTo(layer, drag.dx + e.clientX - drag.x, drag.dy + e.clientY - drag.y);
-    const dt = Math.max(1, e.timeStamp - drag.t);
-    vx = vx * .5 + (e.clientX - drag.lx) / dt * .5;
-    vy = vy * .5 + (e.clientY - drag.ly) / dt * .5;
-    Object.assign(drag, { lx: e.clientX, ly: e.clientY, t: e.timeStamp });
-  });
-  const release = () => {
-    if (!drag) return;
-    drag = null;
-    layer.classList.remove("dragging");
-  };
-  handle.addEventListener("pointerup", release);
-  handle.addEventListener("pointercancel", release);
-}
-
-/* The disk image: drag StableBar onto Applications to download the DMG the buttons link */
-const ico = document.getElementById("app-ico");
-const folder = document.getElementById("folder");
-const dmg = document.querySelector(".install .cta").href;
-let grab = null;
-const overFolder = e => {
-  const r = folder.getBoundingClientRect();
-  return e.clientX > r.left - 20 && e.clientX < r.right + 20 && e.clientY > r.top - 20 && e.clientY < r.bottom + 20;
-};
-ico.addEventListener("pointerdown", e => {
-  if (ico.classList.contains("in")) return;
-  e.preventDefault();
-  ico.setPointerCapture(e.pointerId);
-  grab = { x: e.clientX, y: e.clientY };
-  ico.classList.add("dragging");
+/* The bar measures itself again once the header's menus and Download have finished opening or closing */
+bar.addEventListener("transitionend", e => {
+  if (e.propertyName === "grid-template-columns" && e.target.matches(".site .menus, .w.dl")) fit();
 });
-ico.addEventListener("pointermove", e => {
-  if (!grab) return;
-  ico.style.transform = `translate(${e.clientX - grab.x}px, ${e.clientY - grab.y}px) scale(1.06)`;
-  folder.classList.toggle("over", overFolder(e));
-});
-ico.addEventListener("pointerup", e => {
-  if (!grab) return;
-  grab = null;
-  ico.classList.remove("dragging");
-  folder.classList.remove("over");
-  if (!overFolder(e)) { ico.style.transform = ""; return; }
-  // Started from the drop itself, so the browser counts it as the visitor's own download.
-  location.href = dmg;
-  const f = folder.getBoundingClientRect();
-  const home = ico.parentElement.getBoundingClientRect();
-  ico.style.transform = `translate(${f.left + f.width / 2 - (home.left + home.width / 2)}px, ${f.top + f.height / 2 - (home.top + home.height / 2)}px) scale(.4)`;
-  ico.classList.add("in");
-  setTimeout(() => {
-    ico.style.transition = "none";
-    ico.style.transform = "";
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      ico.style.transition = "";
-      ico.classList.remove("in");
-    }));
-  }, 1600);
-});
-ico.addEventListener("pointercancel", () => { grab = null; ico.classList.remove("dragging"); ico.style.transform = ""; });
-
-/* The product pictures ease in as they scroll into view */
-const io = new IntersectionObserver(entries => {
-  for (const e of entries) if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
-}, { rootMargin: "0px 0px -10% 0px" });
-for (const el of document.querySelectorAll(".pops, .board, .scripts, .store-win, .setup, .install .desktop")) {
-  el.classList.add("reveal");
-  io.observe(el);
-}
 
 /* Edit Bar in Place: the bar becomes its own editor, as in the app. Each position gets a tray,
    widgets keep their look, − takes one off, + adds one where it sits, and Undo and Done wait below. */
@@ -373,10 +230,11 @@ const NAMES = { apple: "Apple menu", ws: "Workspaces", app: "App menus", np: "No
 const ease = "cubic-bezier(.22, 1, .36, 1)";
 const editCtl = document.getElementById("edit-ctl");
 const undoButton = document.getElementById("edit-undo");
+const tryEdit = document.getElementById("try-edit");
 const addPop = document.getElementById("addpop");
 const ctx = document.getElementById("ctx");
 const live = document.getElementById("edit-live");
-let past = [], future = [], drag = null, adding = null, made = 0;
+let past = [], future = [], drag = null, adding = null, made = 0, opener = null;
 
 const lane = i => trays[i].querySelector(".lane");
 const tilesIn = (i, except) => [...lane(i).querySelectorAll(":scope > .tile:not([hidden])")].filter(t => t !== except);
@@ -405,11 +263,13 @@ function tile(w) {
   return t;
 }
 
-function beginEditing() {
-  if (editing || dock.classList.contains("header")) return;
+function beginEditing(from) {
+  if (editing) return;
   if (openId) open(openId);
   closeMenu();
+  opener = from || (bar.contains(document.activeElement) ? document.activeElement : null);
   editing = true;
+  dockState();
   past = [];
   future = [];
   sound.classList.remove("expand");
@@ -417,7 +277,7 @@ function beginEditing() {
   for (const [i, g] of trays.entries()) {
     const l = document.createElement("div");
     l.className = "lane";
-    for (const w of [...g.children].filter(w => w.dataset.key && !w.matches(".more, .dl, .site"))) l.append(tile(w));
+    for (const w of [...g.children].filter(w => w.dataset.key && !w.matches(".more, .dl, .site, .moon"))) l.append(tile(w));
     const add = document.createElement("button");
     add.className = "add";
     add.title = add.ariaLabel = `Add a widget to ${TRAYS[i]}`;
@@ -469,8 +329,15 @@ function endEditing() {
   editing = false;
   dock.classList.remove("editing", "dragging");
   updateControls();
-  requestAnimationFrame(() => { fit(); slide(); });
+  requestAnimationFrame(() => { fit(); slide(); dockState(); });
   say("Finished editing the bar.");
+}
+/* Done and Escape hand focus back to whatever started editing */
+function finishEditing() {
+  const back = opener;
+  opener = null;
+  endEditing();
+  if (back?.isConnected && !back.closest("[inert]")) back.focus({ preventScroll: true });
 }
 
 function updateControls() {
@@ -588,7 +455,7 @@ function lift(e) {
   const copy = t.firstElementChild.cloneNode(true);
   copy.querySelector(".ind")?.remove();
   ghost.append(copy);
-  desk.append(ghost);
+  dock.append(ghost);
   drag.ghost = ghost;
   t.classList.add("lifted");
   dock.classList.add("dragging");
@@ -783,7 +650,7 @@ function add(c) {
   record(before, `Added ${c.name} to ${TRAYS[i]}.`);
 }
 
-/* The Store section: Get reviews a package, and Add to bar puts it on the bar at the top of the page */
+/* The Store: Get reviews a package, and Add to bar puts it on the bar at the top of the page */
 const pkgReview = document.getElementById("pkg-review");
 const storeWin = document.querySelector(".store-win");
 let reviewing = null;
@@ -797,6 +664,7 @@ function closeReview() {
   reviewing = null;
   pkgReview.hidden = true;
   storeWin.classList.remove("sheet");
+  storeWin.inert = false;
   if (pkgReview.contains(document.activeElement) && get.isConnected) get.focus({ preventScroll: true });
 }
 document.querySelector(".pkgs").addEventListener("click", e => {
@@ -809,6 +677,8 @@ document.querySelector(".pkgs").addEventListener("click", e => {
   pkgReview.innerHTML = reviewHTML(c, "Cancel", "Add to bar");
   pkgReview.hidden = false;
   storeWin.classList.add("sheet");
+  // the sheet covers the window, as on the Mac: what's under it can't take focus until it closes
+  storeWin.inert = true;
   pkgReview.querySelector(".back").addEventListener("click", closeReview);
   pkgReview.querySelector(".go").addEventListener("click", () => {
     closeReview();
@@ -845,41 +715,29 @@ function showMenu(x, y, items) {
 }
 function closeMenu() { ctx.hidden = true; }
 bar.addEventListener("contextmenu", e => {
-  if (dock.classList.contains("header") || innerWidth < 720 || e.target.closest(".menus a")) return;
+  if (innerWidth < 720 || e.target.closest(".menus a")) return;
   e.preventDefault();
   const t = editing && e.target.closest(".tile");
-  if (!editing) showMenu(e.clientX, e.clientY, [["Edit Bar in Place", beginEditing]]);
-  else if (t) showMenu(e.clientX, e.clientY, [["Move Left", () => step(t, -1)], ["Move Right", () => step(t, 1)], ["Remove Widget", () => remove(t)], null, ["Finish Editing Bar", endEditing]]);
-  else showMenu(e.clientX, e.clientY, [["Finish Editing Bar", endEditing]]);
+  if (!editing) showMenu(e.clientX, e.clientY, [["Edit Bar in Place", () => beginEditing(opener)]]);
+  else if (t) showMenu(e.clientX, e.clientY, [["Move Left", () => step(t, -1)], ["Move Right", () => step(t, 1)], ["Remove Widget", () => remove(t)], null, ["Finish Editing Bar", finishEditing]]);
+  else showMenu(e.clientX, e.clientY, [["Finish Editing Bar", finishEditing]]);
 });
+bar.addEventListener("contextmenu", () => { if (!editing && bar.contains(document.activeElement)) opener = document.activeElement; }, true);
 ctx.addEventListener("keydown", e => {
   const items = [...ctx.querySelectorAll("button")], k = items.indexOf(document.activeElement);
   if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); items[(k + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus(); }
 });
 
-document.getElementById("edit-start").addEventListener("click", e => {
+/* From the Edit section: the bar above turns into its own editor, right where you are */
+tryEdit.addEventListener("click", e => {
   e.stopPropagation();
-  beginEditing();
+  beginEditing(tryEdit);
   bar.querySelector(".tile")?.focus({ preventScroll: true });
-});
-/* From the Configure section: back to the bar, then edit it */
-document.getElementById("try-edit").addEventListener("click", e => {
-  e.stopPropagation();
-  scrollTo({ top: 0, behavior: reduce.matches ? "auto" : "smooth" });
-  const until = performance.now() + 2500;
-  const go = () => {
-    if (scrollY > 1) { if (performance.now() < until) requestAnimationFrame(go); return; }
-    dockState();
-    beginEditing();
-    bar.querySelector(".tile")?.focus({ preventScroll: true });
-  };
-  requestAnimationFrame(go);
 });
 undoButton.addEventListener("click", e => { e.stopPropagation(); undo(); });
 document.getElementById("edit-done").addEventListener("click", e => {
   e.stopPropagation();
-  endEditing();
-  document.getElementById("edit-start").focus({ preventScroll: true });
+  finishEditing();
 });
 document.addEventListener("click", e => {
   if (!ctx.hidden && !e.target.closest(".ctx")) closeMenu();
@@ -892,7 +750,7 @@ document.addEventListener("keydown", e => {
     if (!ctx.hidden) { closeMenu(); return; }
     if (adding) { closeAdd(); return; }
     if (drag?.started) { settle(false); drag = null; return; }
-    if (editing) { endEditing(); document.getElementById("edit-start").focus({ preventScroll: true }); }
+    if (editing) finishEditing();
   } else if (editing && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z" && !e.target.closest("input")) {
     e.preventDefault();
     e.shiftKey ? redo() : undo();
@@ -900,29 +758,260 @@ document.addEventListener("keydown", e => {
 });
 addEventListener("scroll", closeMenu, { passive: true });
 
-/* Light and dark: starts from the system setting, remembers the visitor's choice */
+/* ---------- The drawing ---------- */
+
+/* Scrolling brings the evening: each section holds its own hour, and the hours blend in between.
+   The night switch brings the night at once and keeps it. */
+const sections = [...document.querySelectorAll("main > section[data-state]")];
+let marks = [];
+function measureMarks() {
+  marks = sections.map(s => {
+    const r = s.getBoundingClientRect(), top = r.top + scrollY, h = r.height, pad = Math.min(h * .25, innerHeight * .4);
+    return { name: s.dataset.state, d: Number(s.dataset.dusk), top, bottom: top + h, a: top + pad, b: top + h - pad };
+  });
+}
+const smooth = t => t * t * (3 - 2 * t);
+function hour() {
+  const y = scrollY + innerHeight / 2;
+  let d = marks[0].d, name = marks[0].name;
+  for (let i = 0; i < marks.length; i++) {
+    const m = marks[i], n = marks[i + 1];
+    if (y >= m.top) name = m.name;
+    if (y >= m.a) d = m.d;
+    if (n && y > m.b && y < n.a) d = m.d + (n.d - m.d) * smooth((y - m.b) / (n.a - m.b));
+  }
+  return { d, name };
+}
+let lastDusk = -1, lastState = "";
+function updateDusk() {
+  if (!marks.length) return;
+  const { d, name } = hour();
+  const dusk = root.dataset.mode === "dark" ? 1 : d;
+  if (Math.abs(dusk - lastDusk) > .001) { lastDusk = dusk; S("setDusk", dusk); }
+  if (name !== lastState) { lastState = name; S("setState", name); }
+}
+
+/* Words in the headline light up when the beam crosses them */
+const lumens = [...document.querySelectorAll(".lumen")];
+let lumRects = null;
+function measureLumens() {
+  lumRects = lumens.map(el => {
+    const r = el.getBoundingClientRect();
+    return { el, x: r.left + r.width / 2, y: r.top + r.height / 2, on: el.classList.contains("lit"), seen: r.bottom > 0 && r.top < innerHeight };
+  });
+}
+function lightWords(s) {
+  if (!lumRects) measureLumens();
+  const I = s.beamI();
+  for (const r of lumRects) {
+    const on = r.seen && s.inBeam(r.x, r.y) * (.45 + .55 * I) > .35;
+    if (on !== r.on) { r.on = on; r.el.classList.toggle("lit", on); }
+  }
+}
+
+/* The night switch: the moon tile on the bar and the key's Night. Starts from the system setting,
+   remembers the visitor's choice, shared with the privacy and terms pages. */
 const themeColor = document.querySelector('meta[name="theme-color"]');
-const modeButton = document.getElementById("mode");
+const nightSwitches = [document.getElementById("night"), document.querySelector(".key .night")];
 function setMode(mode) {
   root.dataset.mode = mode;
-  themeColor.content = mode === "light" ? "#f5f0e8" : "#15110d";
-  modeButton.setAttribute("aria-pressed", mode === "dark");
+  themeColor.content = mode === "light" ? "#86cbf2" : "#232662";
+  for (const b of nightSwitches) b.setAttribute("aria-pressed", mode === "dark");
+  updateDusk();
 }
-setMode(root.dataset.mode);
-modeButton.addEventListener("click", () => {
+for (const b of nightSwitches) b.addEventListener("click", e => {
+  e.stopPropagation();
   const mode = root.dataset.mode === "light" ? "dark" : "light";
   localStorage.setItem("mode", mode);
-  if (document.startViewTransition && !reduce.matches) document.startViewTransition(() => setMode(mode));
-  else setMode(mode);
+  setMode(mode);
 });
 
-addEventListener("resize", () => { fit(); dockState(); });
-document.fonts.ready.then(fit);
+measureMarks();
+try {
+  if (window.Hill?.Scene) scene = new window.Hill.Scene(document.getElementById("scene"), { topInset: restHeight(), dusk: root.dataset.mode === "dark" ? 1 : hour().d });
+} catch (err) {
+  console.warn("The drawing didn't start:", err);
+  scene = null;
+}
+root.classList.toggle("has-scene", Boolean(scene));
+
+if (scene) {
+  scene.onFrame = s => {
+    try { lightWords(s); } catch (err) {
+      if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
+    }
+  };
+
+  /* The pointer and a finger steer the light and stir the grass, clouds and water.
+     On touch only a sideways drag steers; the page keeps its vertical scrolling (touch-action: pan-y). */
+  addEventListener("pointermove", e => S("pointer", e.clientX, e.clientY, e.pointerType), { passive: true });
+  addEventListener("pointerdown", e => S("pointer", e.clientX, e.clientY, e.pointerType), { passive: true });
+  addEventListener("pointerup", e => { if (e.pointerType !== "mouse") S("release"); }, { passive: true });
+  addEventListener("pointercancel", () => S("release"), { passive: true });
+  let swipe = null;
+  addEventListener("touchstart", e => { const t = e.touches[0]; swipe = t && { x: t.clientX, y: t.clientY, side: null }; }, { passive: true });
+  addEventListener("touchmove", e => {
+    const t = e.touches[0];
+    if (!t || !swipe) return;
+    if (swipe.side === null && Math.hypot(t.clientX - swipe.x, t.clientY - swipe.y) > 8) swipe.side = Math.abs(t.clientX - swipe.x) > Math.abs(t.clientY - swipe.y);
+    if (swipe.side) S("pointer", t.clientX, t.clientY, "touch");
+  }, { passive: true });
+  addEventListener("touchend", () => { swipe = null; S("release"); }, { passive: true });
+  addEventListener("touchcancel", () => { swipe = null; S("release"); }, { passive: true });
+  root.addEventListener("mouseleave", () => S("release"));
+  addEventListener("blur", () => S("release"));
+
+  /* A click or tap on the landscape, not on the page, drops something there.
+     A click that only closes a popup or a menu doesn't. */
+  let overlay = false;
+  document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
+  document.addEventListener("click", e => {
+    if (overlay || editing || e.detail === 0) return;
+    if (e.target.closest("a, button, input, label, pre, .note, .dock, .site-foot, [role='dialog']")) return;
+    if (String(getSelection?.() || "")) return;
+    S("tap", e.clientX, e.clientY);
+  });
+
+  /* The key's buttons drop the same surprises, for keyboards and screen readers too */
+  for (const b of document.querySelectorAll("[data-drop]")) b.addEventListener("click", () => S("surprise", b.dataset.drop));
+}
+
+/* ---------- The pen: every note, Download button, tag and key button gets a felt-pen outline,
+   drawn at its size in three slightly different states that the CSS steps through (the boil).
+   Inline SVG paths rather than images, so an outline never counts as the page's largest paint. ---------- */
+const INK = ".note, .cta, .tag, .keys button";
+const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const noise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1; };
+const r1 = v => Math.round(v * 10) / 10;
+const PAD = 8;
+
+/* The torn top of the notebook page: one tooth every 12 px or so, the same each time */
+function teeth(W, seed) {
+  const n = Math.max(6, Math.round(W / 12)), out = [];
+  for (let i = 0; i <= n; i++) out.push([W * i / n, 2 + 8 * hash(seed + i * 1.7) * (i % 2 ? 1 : .45)]);
+  return out;
+}
+/* The centre line of an outline, clockwise, starting a little way along the top */
+function perimeter(W, H, shape, radii, seed) {
+  const pts = [], step = 6;
+  const seg = (ax, ay, bx, by) => {
+    const n = Math.max(1, Math.round(Math.hypot(bx - ax, by - ay) / step));
+    for (let i = 0; i < n; i++) pts.push([ax + (bx - ax) * i / n, ay + (by - ay) * i / n]);
+  };
+  const arc = (cx, cy, r, a0, a1) => {
+    const n = Math.max(2, Math.round(r * Math.abs(a1 - a0) / step));
+    for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  };
+  const [tl, tr, br, bl] = radii.map(r => Math.min(r, W / 2, H / 2));
+  const x0 = PAD, y0 = PAD, x1 = PAD + W, y1 = PAD + H, Q = Math.PI / 2;
+  if (shape === "torn") {
+    const top = teeth(W, seed).map(([x, y]) => [x0 + x, y0 + y]);
+    for (let i = 0; i < top.length - 1; i++) seg(...top[i], ...top[i + 1]);
+    seg(x1, top.at(-1)[1], x1, y1 - br); arc(x1 - br, y1 - br, br, 0, Q);
+    seg(x1 - br, y1, x0 + bl, y1); arc(x0 + bl, y1 - bl, bl, Q, 2 * Q);
+    seg(x0, y1 - bl, x0, top[0][1]);
+    for (let i = 0; i < 3; i++) pts.push(top[i]);
+    return pts;
+  }
+  const sx = x0 + tl + (W - tl - tr) * (.12 + .2 * hash(seed));
+  seg(sx, y0, x1 - tr, y0); arc(x1 - tr, y0 + tr, tr, -Q, 0);
+  seg(x1, y0 + tr, x1, y1 - br); arc(x1 - br, y1 - br, br, 0, Q);
+  seg(x1 - br, y1, x0 + bl, y1); arc(x0 + bl, y1 - bl, bl, Q, 2 * Q);
+  seg(x0, y1 - bl, x0, y0 + tl); arc(x0 + tl, y0 + tl, tl, 2 * Q, 3 * Q);
+  seg(x0 + tl, y0, Math.min(sx + 26, x1 - tr), y0);
+  return pts;
+}
+/* A felt-pen stroke: a ribbon that wobbles a little, swells and thins, and tapers where the pen lifts.
+   The three boil states share the shape and differ only in the fine jitter. */
+function outline(W, H, shape, radii, seed, boil, weight) {
+  const c = perimeter(W, H, shape, radii, seed), n = c.length, L = [], R = [], j = seed + boil * 9.1;
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = c[Math.max(0, i - 1)], [bx, by] = c[Math.min(n - 1, i + 1)];
+    const len = Math.hypot(bx - ax, by - ay) || 1, nx = -(by - ay) / len, ny = (bx - ax) / len;
+    const off = noise(i * .031 + seed * 7.7) * 1.4 + noise(i * .21 + j * 3.1) * .55;
+    const ends = Math.min(1, (i + 1) / 7, (n - i) / 6);
+    const w = weight * (.8 + .22 * noise(i * .07 + seed * 5.3 + 40) + .1 * noise(i * .3 + j * 2.3)) * (.3 + .7 * ends) / 2;
+    const [x, y] = c[i];
+    L.push([x + nx * (off + w), y + ny * (off + w)]);
+    R.push([x + nx * (off - w), y + ny * (off - w)]);
+  }
+  const ring = [...L, ...R.reverse()];
+  let d = `M${r1(ring[0][0])} ${r1(ring[0][1])}`;
+  for (let i = 1; i < ring.length; i++) {
+    const [x, y] = ring[i], [nx, ny] = ring[(i + 1) % ring.length];
+    d += `Q${r1(x)} ${r1(y)} ${r1((x + nx) / 2)} ${r1((y + ny) / 2)}`;
+  }
+  return `${d}Z`;
+}
+function ink(el, seed) {
+  const W = el.offsetWidth, H = el.offsetHeight;
+  if (!W || !H || el.dataset.inkSize === `${W}x${H}`) return;
+  el.dataset.inkSize = `${W}x${H}`;
+  const shape = el.dataset.ink === "torn" ? "torn" : el.matches(".cta, .keys button") ? "pill" : "rect";
+  const cs = getComputedStyle(el);
+  const radii = shape === "pill" ? [H / 2, H / 2, H / 2, H / 2]
+    : [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(v => parseFloat(v) || 0);
+  const weight = el.matches(".note") ? 2.9 : 2.5;
+  let svg = el.querySelector(":scope > .pen");
+  if (!svg) {
+    svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "pen");
+    svg.setAttribute("aria-hidden", "true");
+    el.append(svg);
+  }
+  svg.setAttribute("viewBox", `0 0 ${W + PAD * 2} ${H + PAD * 2}`);
+  svg.innerHTML = [0, 1, 2].map(k => `<path class="p${k}" d="${outline(W, H, shape, radii, seed, k, weight)}"/>`).join("");
+  if (shape === "torn") el.style.setProperty("--torn", `polygon(${teeth(W, seed).map(([x, y]) => `${r1(x)}px ${r1(y)}px`).join(", ")}, 100% 100%, 0 100%)`);
+  el.classList.add("inked");
+}
+const inked = [...document.querySelectorAll(INK)];
+const seeds = new Map(inked.map((el, i) => [el, 1 + i * 2.3]));
+const pen = new ResizeObserver(entries => { for (const e of entries) ink(e.target, seeds.get(e.target)); });
+for (const el of inked) pen.observe(el);
+
+/* The boil rests after a few quiet seconds, like the drawing */
+let idleTimer = 0, lastWake = 0;
+function wake() {
+  const now = performance.now();
+  if (now - lastWake < 250) return;
+  lastWake = now;
+  root.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => root.classList.add("idle"), 6000);
+}
+for (const type of ["pointermove", "pointerdown", "keydown", "scroll", "wheel", "touchstart"]) addEventListener(type, wake, { passive: true });
+wake();
+
+/* ---------- Start ---------- */
+let queued = false;
+addEventListener("scroll", () => {
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    dockState();
+    updateDusk();
+    lumRects = null;
+  });
+}, { passive: true });
+addEventListener("resize", () => {
+  fit();
+  dockState();
+  measureMarks();
+  updateDusk();
+  lumRects = null;
+  S("setTopInset", restHeight());
+});
+document.fonts.ready.then(() => {
+  fit();
+  measureMarks();
+  updateDusk();
+  lumRects = null;
+});
+setMode(root.dataset.mode);
 setTheme("built-in");
+focusWorkspace(2);
 fit();
 dockState();
-
-/* Arrival: the headline settles, the bar's widgets come in from the left, then the windows and the agenda */
-bar.querySelectorAll(".g > .w").forEach((w, i) => w.style.setProperty("--i", i));
-requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add("arrived")));
-if (innerWidth >= 720) setTimeout(() => { if (!openId && !editing) open("agenda"); }, reduce.matches ? 0 : 1100);
+updateDusk();
+})();
