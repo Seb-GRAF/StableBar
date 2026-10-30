@@ -982,8 +982,8 @@ function onBar(event, key, info = {}) {
    lighthouse asleep and the drawing still. After a moment the day comes while it sleeps on; then it wakes up slowly,
    and its light reads the title; then the bar stretches up into its place at the top, the card drifts away, the
    notes come in, and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's
-   over. Once a session, opening at the top, with motion allowed (the class and the night come from the page's head;
-   ?intro plays it again); a scroll, a key, a click or a tap ends it at once. */
+   over. On every load at the top, with motion allowed (the class and the night come from the page's head); a scroll,
+   a key, a click or a tap ends it at once. */
 let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
@@ -1106,7 +1106,6 @@ function sweepGlow(s) {
   for (const [w, until] of swept) if (now > until) { w.classList.remove("swept"); swept.delete(w); }
 }
 if (!landed) {
-  try { sessionStorage.setItem("landed", "1"); } catch {}
   if (scrollY > 0 || document.hidden) land(true);
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
