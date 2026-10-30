@@ -222,7 +222,7 @@ const WAKE = {
   dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93], [1.14, 1.19]],
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
-// a knock at the cottage's door, in seconds from the knock: it opens over `open`, the keeper is in the doorway from
+// a visit at the cottage's door, in seconds from the third knock in a row: it opens over `open`, the keeper is in the doorway from
 // `keeper`[0] to [1], looking out to the left and from `right` to the right; he wonders (`huh`), turns his back at `turn`
 // and walks back in; it shuts over `shut`, and it's over at `end` (`away`, when he's out on the ridge and nobody comes)
 const VISIT = { open: [0.55, 0.8], keeper: [0.7, 2.95], right: 1.6, huh: 2.2, turn: 2.4, shut: [2.97, 3.22], end: 3.3, away: 1.6 };
@@ -263,7 +263,7 @@ class Scene {
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
     this.dozing = false; this.wokeAt = -9; this.waking = false; this.nightPath = this.riseAt = null; this.popped = false; this.frozen = false;
-    this.visit = null;
+    this.visit = null; this.knocks = { n: 0, at: -9 };
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -1066,7 +1066,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.visit || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1544,13 +1544,18 @@ class Scene {
     const d = this.g.cot.door, pad = this.ptr.kind === 'touch' ? 10 : 5;
     return !!d && x > d.x - pad && x < d.x + d.w + pad && y > d.y - pad && y < d.y + d.h + pad;
   }
-  // knock knock: the keeper comes to the door (see VISIT and drawVisit), unless he's out on the ridge with his tile
-  // (nobody comes) or already at the open door at night
+  // a knock: the door jumps and says so, a little more with each knock in a row; at the third the keeper comes to the
+  // door (see VISIT and drawVisit), unless he's out on the ridge with his tile (nobody comes) or already at the open
+  // door at night
   knock() {
-    const k = this.g.cot, d = k.door, u = this.g.u;
+    const k = this.g.cot, d = k.door, kn = this.knocks;
+    if (this.visit) return;
+    kn.n = this.t - kn.at < 2.5 ? kn.n + 1 : 1;
+    kn.at = this.t;
     this.doodles = this.doodles.filter(o => o.kind !== 'knock');
-    this.doodle('knock', k.x + k.w * 0.62, d.y + d.h * 0.3, { text: 'knock knock', align: 'left', life: 1.3 });
-    if (this.visit || this.pres.install > 0.01) return;
+    this.doodle('knock', k.x + k.w * 0.62, d.y + d.h * 0.3, { text: ['knock', 'knock knock', 'knock knock knock'][Math.min(kn.n, 3) - 1], align: 'left', life: 1.3 });
+    if (kn.n < 3 || this.pres.install > 0.01) return;
+    kn.n = 0;
     this.visit = { t0: this.t, away: this.pres.edit > 0.01, huh: false };
   }
   // a click or a tap: it hops (not without motion) and says so, higher and louder with each knock in a row
@@ -2581,14 +2586,15 @@ function drawEditKeeper(s, c, p) {
   c.globalAlpha = 1;
 }
 
-/* someone knocked at the cottage (see knock and VISIT): the door jumps under the knocks, then swings open on a lamp-lit
-   room; the keeper looks out to the left and to the right, sees nobody, turns his back, walks in and shuts it */
+/* someone knocked at the cottage (see knock and VISIT): the door jumps under each knock, and at the third swings open
+   on a lamp-lit room; the keeper looks out to the left and to the right, sees nobody, turns his back, walks in and shuts it */
 function drawVisit(s, c) {
   const v = s.visit, g = s.g, k = g.cot, d = k.door;
-  if (!v || !d) return;
-  const u = g.u, P = s.P, a = s.t - v.t0, rm = s.reduced, V = VISIT, sc = g.portrait ? 1.05 : 1.45;
-  const open = v.away ? 0 : rm ? (a >= V.open[0] && a < V.shut[1] ? 1 : 0) : smooth(V.open[0], V.open[1], a) * (1 - smooth(V.shut[0], V.shut[1], a));
-  const jig = rm || a > 0.45 ? 0 : Math.sin(a * 55) * 0.9 * u * (1 - a / 0.45);
+  if (!d) return;
+  const u = g.u, P = s.P, a = v ? s.t - v.t0 : -1, rm = s.reduced, V = VISIT, sc = g.portrait ? 1.05 : 1.45, ka = s.t - s.knocks.at;
+  const open = !v || v.away ? 0 : rm ? (a >= V.open[0] && a < V.shut[1] ? 1 : 0) : smooth(V.open[0], V.open[1], a) * (1 - smooth(V.shut[0], V.shut[1], a));
+  // each knock jolts it
+  const jig = rm || ka > 0.45 ? 0 : Math.sin(ka * 55) * 0.9 * u * (1 - ka / 0.45);
   if (open < 0.005 && jig === 0) return;
   const night = smooth(0.45, 0.75, s.d), warm = hex('#FFD45C');
   const frame = [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]];
