@@ -242,6 +242,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
+    this.dozing = false; this.wokeAt = -9; this.zAt = 0;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -389,6 +390,19 @@ class Scene {
     return true;
   }
   stopSweep() { this.sweep = null; this.wake(); }
+  // the opening: asleep, its eye shut and its lamp out, until the page wakes it to read the title
+  doze(on) {
+    if (on) this.dozing = true;
+    else if (this.dozing) {
+      this.dozing = false; this.wokeAt = this.t;
+      for (const d of this.doodles) if (d.kind === 'z') d.life = Math.min(d.life, this.t - d.t0 + 0.3);
+      this.blink.next = this.t + 0.6;
+    }
+    this.wake();
+  }
+  // 1 while asleep, easing to 0 as the eye opens; the light comes on once the eye is half open
+  drowsy() { return this.dozing ? 1 : 1 - smooth(0, 0.4, this.t - this.wokeAt); }
+  lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
   // the drawing's own labels ("a lighthouse (stable)" and the others), off while the page's title card is up
   labels(on) { this.noLabels = !on; this.wake(); }
   // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
@@ -933,7 +947,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep) return true;
+    if (this.sweep || this.t - this.wokeAt < 0.7) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
@@ -989,6 +1003,8 @@ class Scene {
       sc.x += sc.dir * 7 * u * dt;
       if (sc.x > sc.x1) sc.dir = -1; else if (sc.x < sc.x0) sc.dir = 1;
     }
+    // asleep: a z now and then
+    if (this.dozing && !rm && this.t > this.zAt) { const L = g.lamp, er = g.lh.er; this.zAt = this.t + 0.38; this.doodle('z', L.x + er * 2, L.y - er * 0.4, { life: 1.5 }); }
     // the eye blinks now and then
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
     this.updateBeam(dt);
@@ -1016,8 +1032,8 @@ class Scene {
     }
     const vx = lerp(c, Math.cos(b.sa), b.steer), vy = lerp(0.03 * Math.abs(c), Math.sin(b.sa), b.steer);
     b.a = Math.atan2(vy, vx);
-    b.len = clamp(Math.hypot(vx, vy));
-    b.flash = Math.pow(Math.max(0, sn), 14) * (1 - b.steer);
+    b.len = clamp(Math.hypot(vx, vy)) * this.lampOn();
+    b.flash = Math.pow(Math.max(0, sn), 14) * (1 - b.steer) * this.lampOn();
   }
   updateObjs(dt) {
     const g = this.g, u = g.u, G = 1500 * u, rm = this.reduced;
@@ -1762,7 +1778,7 @@ function drawHillLight(s, c) {
 /* the lamp's halo at night: hand-drawn rings and short rays, no blur */
 function drawHalo(s, c) {
   const g = s.g, u = g.u, P = s.P, L = g.lamp, er = g.lh.er;
-  const night = smooth(0.35, 0.85, s.d), f = s.beam.flash, k = Math.max(night * s.beamI(), f * 0.9);
+  const night = smooth(0.35, 0.85, s.d), f = s.beam.flash, k = Math.max(night * s.beamI(), f * 0.9) * s.lampOn();
   if (k < 0.02) return;
   const r1 = er * (2.1 + f * 0.6), r2 = er * (3 + f * 1.4);
   // the lit lantern: a flat disc of light just around the eye
@@ -1947,6 +1963,7 @@ function drawEye(s, c) {
   if (bl < 0.18 && !s.bore) shut = Math.max(shut, Math.sin(bl / 0.18 * Math.PI));
   if (wk < 0.6) shut = Math.max(shut, wk < 0.1 ? wk / 0.1 : wk < 0.45 ? 1 : 1 - (wk - 0.45) / 0.15);
   if (s.reduced && wk >= 0.6) shut = lerp(0.2, 0.02, night);
+  shut = Math.max(shut, s.drowsy());
   const lidCol = rgba(mul(hex('#FFFFFF'), P.paper));
   if (md.happy) {
     // shut, and pleased with itself: the lid line curves up
@@ -2661,8 +2678,8 @@ function quaver(c, x, y, sz, col, flip) {
   c.fillStyle = col; c.fill();
 }
 
-/* "boink!", "pok", "plop", "hehe", the whistled notes, the grazers' "nom"s and the box's "baa!": they pop in,
-   drift a little and fade (without motion they just show, and go) */
+/* "boink!", "pok", "plop", "hehe", the whistled notes, the grazers' "nom"s, the box's "baa!" and the sleeper's
+   z's: they pop in, drift a little and fade (without motion they just show, and go) */
 function drawDoodles(s, c) {
   if (!s.doodles.length) return;
   const g = s.g, u = g.u, P = s.P, rm = s.reduced, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
@@ -2670,6 +2687,12 @@ function drawDoodles(s, c) {
     const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
     if (f <= 0 || k <= 0.01) continue;
     c.save(); c.globalAlpha = f;
+    if (d.kind === 'z') {
+      // asleep: each z drifts up and away from the shut eye, growing as it goes
+      const er = g.lh.er, sz = Math.max(12, er * 1.1) * (0.8 + 0.7 * clamp(a / d.life));
+      label(c, 'z', d.x + (rm ? 0 : a * er * 1.3 + Math.sin(a * 4 + d.seed) * er * 0.15), d.y - (rm ? 0 : a * er * 2.2), sz * k, col, 'left', -0.15);
+      c.restore(); continue;
+    }
     if (d.kind === 'note') {
       const sz = 4.2 * u + 1.6;
       quaver(c, d.x + Math.sin(a * 4 + d.seed) * 5 * u, d.y - a * 36 * u, sz * k, col, d.flip);

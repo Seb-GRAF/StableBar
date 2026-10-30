@@ -974,9 +974,9 @@ function onBar(event, key, info = {}) {
   }
 }
 
-/* The opening: a title card over the whole drawing with the bar big in the middle of it. After a moment the bar
-   stretches up into its place at the top, the card drifts away, the notes come in, and the lighthouse sweeps its
-   light along the bar. Once a session, opening at the top, with motion allowed (the class comes from the page's
+/* The opening: a title card over the whole drawing with the bar big in the middle of it, and the lighthouse asleep.
+   It wakes up and reads the title with its light; then the bar stretches up into its place at the top, the card
+   drifts away, the notes come in, and the lighthouse sweeps its light along the bar. Once a session, opening at the top, with motion allowed (the class comes from the page's
    head; ?intro plays it again); any scroll, key, click or tap ends it at once. */
 let landed = !root.classList.contains("intro"), sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
@@ -989,6 +989,7 @@ function land(skip) {
   clearTimeout(landTimer);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
   if (skip) { root.classList.add("intro-skip"); S("stopSweep"); }
+  S("doze", false);
   reading = null;
   root.classList.remove("intro", "op-bar-in", "op-page-in");
   opening.remove();
@@ -1037,6 +1038,7 @@ function readTitle() {
     glow.append(copy);
   }
   mark.append(glow);
+  S("doze", false); // the lighthouse wakes up: its eye opens and its light comes on
   const letters = [...glow.querySelectorAll("i")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
   if (!S("sweepAlong", first.x - 10, (Math.min(...ys) + Math.max(...ys)) / 2, last.x + 10, (Math.min(...ys) + Math.max(...ys)) / 2, 1.1)) return;
@@ -1064,9 +1066,10 @@ if (!landed) {
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
     S("labels", false);
-    setTimeout(readTitle, 250);
-    runTimer = setTimeout(expandOpening, 2150);
-    landTimer = setTimeout(() => land(false), 2150 + 1250);
+    S("doze", true); // it starts asleep, and wakes to read the title
+    setTimeout(readTitle, 750);
+    runTimer = setTimeout(expandOpening, 2650);
+    landTimer = setTimeout(() => land(false), 2650 + 1250);
   }
 } else opening.remove();
 
