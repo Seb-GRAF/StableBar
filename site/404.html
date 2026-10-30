@@ -5,15 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Page not found · StableBar</title>
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#15110d">
+<meta name="theme-color" content="#86cbf2">
 <!-- GitHub Pages serves this page at any missing address, so every path starts at the root. -->
 <link rel="icon" href="/images/icon-64.png">
 <link rel="stylesheet" href="/style.css">
 <script>
 document.documentElement.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+if (document.documentElement.dataset.mode === "dark") document.querySelector('meta[name="theme-color"]').content = "#232662";
 </script>
 </head>
-<body>
+<body class="doc">
+<a class="skip" href="#main">Skip to content</a>
 <div class="page">
   <header class="top">
     <a class="brand" href="/"><img src="/images/icon-64.png" alt="">StableBar</a>
