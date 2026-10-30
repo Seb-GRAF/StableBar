@@ -19,6 +19,8 @@ const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b
 const mul = (a, b) => [a[0] * b[0] / 255, a[1] * b[1] / 255, a[2] * b[2] / 255];
 const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
 const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+// the light's turn that faces you (its rotation at a quarter turn), nearest to where it is
+const facing = phi => Math.PI / 2 + TAU * Math.round((phi - Math.PI / 2) / TAU);
 const stops = list => list.map(([d, p]) => [d, Object.fromEntries(Object.entries(p).map(([k, v]) => [k, hex(v)]))]);
 function palAt(list, d) {
   let i = 0;
@@ -207,6 +209,9 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
+// the opening's wake-up, in seconds after the eye starts to open: it opens, blinks twice, looks out to the left from
+// `left`, blinks, turns to the title from `turn` and reads it from `read` for `dur`; it's over at `end`
+const WAKE = { open: 0.85, blinks: [[0.95, 0.26], [1.3, 0.26], [2.35, 0.22]], left: 1.55, turn: 2.55, read: 3.15, dur: 1.1, end: 4.5 };
 // the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
 const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
 
@@ -228,7 +233,8 @@ class Scene {
     this.vel = { x: 0, y: 0 };
     this.wind = 0; this.windAmb = 0.3; this.windTotal = 0.3; this.drift = 0;
     this.beam = { a: Math.PI * 0.96, len: 1, flash: 0, phi: Math.PI * 0.96, steer: 0, sa: Math.PI * 0.96 };
-    this.blink = { next: 2.5, at: -9, wink: -9 };
+    this.blink = { next: 2.5, at: -9, wink: -9, dur: 0.18 }; this.blinks = [];
+    this.wakePath = null; this.gaze = null;
     this.ripples = []; this.objs = [];
     this.layers = { back: [], front: [] };
     this.sprites = new Map();
@@ -387,28 +393,28 @@ class Scene {
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
-  // the opening: the light swings to one point and sweeps along to another, once (viewport coordinates)
-  sweepAlong(x0, y0, x1, y1, dur = 1, lead = 0.35) {
+  // the opening's wake-up (see WAKE): facing you as the eye opens, it blinks; it looks out to the left and blinks
+  // again; then its light turns down to the title, from one point to another (viewport coordinates), and reads it
+  wakeRead(x0, y0, x1, y1) {
     if (this.reduced || document.hidden) return false;
-    const L = this.g.lamp, b = this.beam;
-    // it starts from exactly where the light points, steered from there on
-    b.sa = b.a; b.steer = 1;
-    this.sweep = { t0: this.t, lead, dur, tail: 0.3, from: b.a, a0: Math.atan2(y0 - this.oy - L.y, x0 - this.ox - L.x), a1: Math.atan2(y1 - this.oy - L.y, x1 - this.ox - L.x) };
+    const L = this.g.lamp, at = (x, y) => Math.atan2(y - this.oy - L.y, x - this.ox - L.x);
+    this.wakePath = { t0: this.t, phi: facing(this.beam.phi), aL: Math.PI + 0.12, a0: at(x0, y0), a1: at(x1, y1) };
+    this.blinks = WAKE.blinks.map(([d, dur]) => [this.t + d, dur]);
     this.wake();
     return true;
   }
-  stopSweep() { this.sweep = null; this.wake(); }
+  stopSweep() { this.sweep = this.wakePath = null; this.blinks = []; this.wake(); }
   // the opening: asleep, its eye shut and its lamp out, until the page wakes it to read the title
   doze(on) {
     if (on) this.dozing = true;
     else if (this.dozing) {
       this.dozing = false; this.wokeAt = this.t;
-      this.blink.next = this.t + 2.6; // a first blink once it's done reading
+      this.blink.next = this.t + WAKE.end + 1; // its own blinks once it's done waking up
     }
     this.wake();
   }
   // 1 while asleep, easing to 0 as the eye slowly opens; the light comes on once the eye is half open
-  drowsy() { return this.dozing ? 1 : 1 - smooth(0, 1.1, this.t - this.wokeAt); }
+  drowsy() { return this.dozing ? 1 : 1 - smooth(0, WAKE.open, this.t - this.wokeAt); }
   lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
   // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
   freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
@@ -424,7 +430,7 @@ class Scene {
     if (this.reduced || !ts.length || document.hidden) return false;
     const y = Math.min(...ts.map(t => t.y)) - 12 * this.g.u, x0 = Math.min(...ts.map(t => (t.x0 + t.x1) / 2)), x1 = Math.max(...ts.map(t => (t.x0 + t.x1) / 2));
     this.beam.sa = this.beam.a; this.beam.steer = 1;
-    this.sweep = { t0: this.t, lead: 0.85, dur, tail: 0.25, from: this.beam.a, a0: Math.atan2(y - L.y, x0 - L.x), a1: Math.atan2(y - L.y, x1 - L.x) };
+    this.sweep = { t0: this.t, lead: 0.85, dur, tail: 0.25, gaze: true, from: this.beam.a, a0: Math.atan2(y - L.y, x0 - L.x), a1: Math.atan2(y - L.y, x1 - L.x) };
     this.wake();
     return true;
   }
@@ -622,6 +628,8 @@ class Scene {
       const a = this.t - w.t0;
       if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.from + angDiff(w.a0, w.from) * smooth(0, 1, a / w.lead) : w.a0 + angDiff(w.a1, w.a0) * smooth(0, 1, (a - w.lead) / w.dur);
       this.sweep = null;
+      // having lit the whole bar, it turns to look straight at you for a moment
+      if (w.gaze) this.gaze = { phi: facing(this.beam.phi), until: this.t + 3.2 };
     }
     const b = this.bore;
     if (!b || !((b.phase === 'look' && this.t - b.at > 0.35) || b.phase === 'push')) return null;
@@ -932,6 +940,7 @@ class Scene {
     this.box.hop = this.box.peek = -9;
     this.ripples = [];
     this.endBall(); this.endBore();
+    this.wakePath = this.gaze = null; this.blinks = [];
     this.regrowAt = this.hatKick = -9;
     this.doodles = []; this.splashes = []; this.look = null;
   }
@@ -965,7 +974,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.t - this.wokeAt < 1.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < 1.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1025,8 +1034,9 @@ class Scene {
       sc.x += sc.dir * 7 * u * dt;
       if (sc.x > sc.x1) sc.dir = -1; else if (sc.x < sc.x0) sc.dir = 1;
     }
-    // the eye blinks now and then
-    if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
+    // the eye blinks now and then, and when told to (slower, as it wakes up)
+    if (!rm && this.blinks.length && this.t >= this.blinks[0][0]) { const [at, dur] = this.blinks.shift(); Object.assign(this.blink, { at, dur }); }
+    else if (!rm && this.t > this.blink.next) Object.assign(this.blink, { at: this.t, dur: 0.18, next: this.t + 3 + Math.random() * 5 });
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
     if (!this.flocked && !this.held) this.flock();
@@ -1039,17 +1049,33 @@ class Scene {
     this.splashes = this.splashes.filter(p => this.t - p.t0 < 0.7);
   }
   updateBeam(dt) {
-    const b = this.beam, L = this.g.lamp, now = performance.now() / 1000, rm = this.reduced;
-    const quiet = this.ptr.kind === 'touch' ? 3.2 : 5, lock = this.beamLock();
-    const steering = lock != null || (this.ptr.on && now - this.ptr.last < quiet);
-    b.steer = rm ? (steering || b.steer > 0.5 ? 1 : 0) : lerp(b.steer, steering ? 1 : 0, Math.min(1, dt * (steering ? 4 : 0.7)));
-    if (!rm) b.phi += dt * TAU / 15;
-    const c = Math.cos(b.phi), sn = Math.sin(b.phi);
-    if (lock != null) b.sa += angDiff(lock, b.sa) * Math.min(1, dt * (this.sweep ? 9 : 3.2));
-    else if (this.ptr.on && steering) {
-      const want = this.clampAim(Math.atan2(this.ptr.y - L.y, this.ptr.x - L.x));
-      b.sa = rm ? want : b.sa + angDiff(want, b.sa) * Math.min(1, dt * 5);
+    const b = this.beam, L = this.g.lamp, now = performance.now() / 1000, rm = this.reduced, wp = this.wakePath;
+    if (wp && (this.ball || this.t - wp.t0 > WAKE.end)) this.wakePath = null;
+    if (this.gaze && (this.ball || this.sweep || this.wakePath || this.t > this.gaze.until)) this.gaze = null;
+    if (this.wakePath) {
+      // waking up (see wakeRead): facing you (its light comes on toward you), then out to the left, then down to
+      // the title and across it
+      const w = this.t - wp.t0;
+      b.phi = wp.phi;
+      b.steer = smooth(WAKE.left, WAKE.left + 0.6, w);
+      b.sa = w < WAKE.turn ? wp.aL : w < WAKE.read ? wp.aL + angDiff(wp.a0, wp.aL) * smooth(WAKE.turn, WAKE.read, w)
+        : wp.a0 + angDiff(wp.a1, wp.a0) * smooth(WAKE.read, WAKE.read + WAKE.dur, w);
+    } else if (this.gaze) {
+      // looking at you: the light comes round to face you and stays there a moment (the pointer can wait)
+      b.phi = this.gaze.phi;
+      b.steer = lerp(b.steer, 0, Math.min(1, dt * 3));
+    } else {
+      const quiet = this.ptr.kind === 'touch' ? 3.2 : 5, lock = this.beamLock();
+      const steering = lock != null || (this.ptr.on && now - this.ptr.last < quiet);
+      b.steer = rm ? (steering || b.steer > 0.5 ? 1 : 0) : lerp(b.steer, steering ? 1 : 0, Math.min(1, dt * (steering ? 4 : 0.7)));
+      if (!rm) b.phi += dt * TAU / 15;
+      if (lock != null) b.sa += angDiff(lock, b.sa) * Math.min(1, dt * (this.sweep ? 9 : 3.2));
+      else if (this.ptr.on && steering) {
+        const want = this.clampAim(Math.atan2(this.ptr.y - L.y, this.ptr.x - L.x));
+        b.sa = rm ? want : b.sa + angDiff(want, b.sa) * Math.min(1, dt * 5);
+      }
     }
+    const c = Math.cos(b.phi), sn = Math.sin(b.phi);
     const vx = lerp(c, Math.cos(b.sa), b.steer), vy = lerp(0.03 * Math.abs(c), Math.sin(b.sa), b.steer);
     b.a = Math.atan2(vy, vx);
     b.len = clamp(Math.hypot(vx, vy)) * this.lampOn();
@@ -2101,7 +2127,7 @@ function drawEye(s, c) {
   let shut = lerp(lerp(0.2, 0.02, night), 0, wide);
   if (md.shut) shut = Math.max(shut, md.shut);
   shut = Math.max(shut, 0.5 * sq);
-  if (bl < 0.18 && !s.bore) shut = Math.max(shut, Math.sin(bl / 0.18 * Math.PI));
+  if (bl < s.blink.dur && !s.bore) shut = Math.max(shut, Math.sin(bl / s.blink.dur * Math.PI));
   if (wk < 0.6) shut = Math.max(shut, wk < 0.1 ? wk / 0.1 : wk < 0.45 ? 1 : 1 - (wk - 0.45) / 0.15);
   if (s.reduced && wk >= 0.6) shut = lerp(0.2, 0.02, night);
   shut = Math.max(shut, s.drowsy());

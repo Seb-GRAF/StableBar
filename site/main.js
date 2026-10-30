@@ -1025,8 +1025,8 @@ function wakeUp() {
   setMode(dayMode(), DAWN);
   S("freeze", false);
   readTitle();
-  runTimer = setTimeout(expandOpening, 2300);
-  landTimer = setTimeout(() => land(false), 2300 + 1300); // once the bar and the notes have come in
+  runTimer = setTimeout(expandOpening, 4550); // once it has read the title (WAKE in scene.js)
+  landTimer = setTimeout(() => land(false), 4550 + 1300); // once the bar and the notes have come in
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it
 let snoreAt = "";
@@ -1059,7 +1059,8 @@ function expandOpening() {
   }, () => {});
 }
 /* The light reads the title: a glowing copy of it sits behind the letters, one element per letter, and each letter
-   lights up once the beam has reached it (all of them by the end of the sweep) */
+   lights up once the beam has reached it while reading (all of them by the end). Before that the lighthouse wakes
+   up: it blinks at you, looks out to the left and blinks again (WAKE in scene.js) */
 let reading = null;
 function readTitle() {
   if (landed) return;
@@ -1076,13 +1077,12 @@ function readTitle() {
   S("doze", false); // the lighthouse wakes up: its eye opens and its light comes on
   const letters = [...glow.querySelectorAll("i")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
-  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
-  // it turns to the first letter while its eye opens, then reads across
-  if (!S("sweepAlong", first.x - 10, y, last.x + 10, y, 1.1, 0.8)) return;
-  reading = { letters, until: performance.now() + 2100 };
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2, now = performance.now();
+  if (!S("wakeRead", first.x - 10, y, last.x + 10, y)) return;
+  reading = { letters, from: now + 3050, until: now + 4350 };
 }
 function readGlow(s) {
-  if (!reading) return;
+  if (!reading || performance.now() < reading.from) return;
   const done = performance.now() > reading.until;
   for (const l of reading.letters) if (!l.el.classList.contains("lit") && (done || s.inBeam(l.x, l.y) > .45)) l.el.classList.add("lit");
   if (done) reading = null;
