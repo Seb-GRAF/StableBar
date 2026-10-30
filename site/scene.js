@@ -209,9 +209,14 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
-// the opening's wake-up, in seconds after the eye starts to open: it opens at once (over `open`), its light coming on
-// at the headline's first word, and reads the headline from `read` for `dur`; at `end` it goes on to sweep the bar
-const WAKE = { open: 0.45, read: 0.35, dur: 1.1, end: 1.6 };
+// the opening's wake-up, in seconds after the eye starts to open (while the bar rises): it opens over `open` and looks
+// at the headline, its lamp still out, then strains to light it, squeezing its eye shut for each of `pushes` ([when,
+// how long, how hard]). The light flickers after the second (`flicks`) and comes on after the third, at `on`, on the
+// headline's first word; it reads the headline from `read` for `dur`, and at `end` goes on to sweep the bar
+const WAKE = {
+  open: 0.55, pushes: [[0.8, 0.24, 0.7], [1.2, 0.28, 0.85], [1.74, 0.36, 1]], flicks: [[1.52, 1.59], [1.64, 1.69]],
+  on: 2.1, read: 2.36, dur: 1.1, end: 3.61,
+};
 // the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
 const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
 
@@ -248,7 +253,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
-    this.dozing = false; this.wokeAt = -9; this.frozen = false;
+    this.dozing = false; this.wokeAt = -9; this.waking = false; this.popped = false; this.frozen = false;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -406,23 +411,41 @@ class Scene {
   readingWords() { return !!this.wakePath || this.sweepingBar(); }
   // sweeping the bar: the page lights the widgets it passes
   sweepingBar() { return !!this.sweep?.bar; }
-  // the opening: asleep, its eye shut and its lamp out, until the page wakes it to read the title
-  doze(on) {
+  // the opening: asleep, its eye shut and its lamp out, until the page wakes it, to strain to light its lamp and read
+  // the title (see WAKE), or at once (now): its light comes on as the eye opens. Woken at once while it strains, it
+  // gives up the show and its light comes on.
+  doze(on, now) {
     if (on) this.dozing = true;
     else if (this.dozing) {
-      this.dozing = false; this.wokeAt = this.t; this.restAt = this.t;
+      this.dozing = false; this.wokeAt = this.t; this.restAt = this.t; this.waking = !now && !this.reduced;
       this.blink.next = this.t + WAKE.end + 4; // a first blink once it's done showing off (sooner if it looks at you)
-    }
+    } else if (now && this.straining()) { this.waking = false; this.wakePath = null; }
     this.wake();
   }
-  // 1 while asleep, easing to 0 as the eye opens; the light comes on once the eye is half open
+  // 1 while asleep, easing to 0 as the eye opens
   drowsy() {
     if (this.dozing) return 1;
-    // at once, wide awake: quick at first, settling as it opens all the way
+    // quick at first, settling as it opens all the way
     const a = clamp((this.t - this.wokeAt) / WAKE.open);
     return (1 - a) * (1 - a);
   }
-  lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
+  // still straining to light its lamp, in the opening's wake-up
+  straining() { return this.waking && this.t - this.wokeAt < WAKE.on; }
+  // how hard it squeezes its eye shut right now, straining (0 to 1)
+  squeeze() {
+    if (!this.straining() || this.reduced) return 0;
+    const a = this.t - this.wokeAt;
+    for (const [p, d, k] of WAKE.pushes) if (a >= p && a < p + d) return k * smooth(p, p + 0.06, a) * (1 - smooth(p + d - 0.07, p + d, a));
+    return 0;
+  }
+  // the lamp: out while asleep; waking up with the show, out but for its flickers until it comes on at once; else
+  // on once the eye is half open
+  lampOn() {
+    if (this.dozing) return 0;
+    const a = this.t - this.wokeAt;
+    if (this.waking) return a >= WAKE.on ? smooth(WAKE.on, WAKE.on + 0.1, a) : WAKE.flicks.some(([f0, f1]) => a >= f0 && a < f1) ? 0.22 : 0;
+    return 1 - smooth(0, 0.6, this.drowsy());
+  }
   // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
   freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
   // where the lamp is in the window, and the eye's size: the page puts the z's there
@@ -442,7 +465,7 @@ class Scene {
     return true;
   }
   play() {
-    if (this.reduced || this.ball || document.hidden) return false;
+    if (this.reduced || this.ball || document.hidden || this.straining()) return false;
     const h = hatGeom(this), pr = h.pr;
     if (!this.bar.some(t => t.y + pr < h.bob[1] - pr) || !this.seen(this.g.lamp.x, this.g.lamp.y)) return false;
     this.endBore();
@@ -644,9 +667,15 @@ class Scene {
     if (!b || !((b.phase === 'look' && this.t - b.at > 0.35) || b.phase === 'push')) return null;
     return Math.atan2(b.y - this.g.lamp.y, b.x - this.g.lamp.x);
   }
-  /* What the eye is up to: where it looks (a, m), and squint, wide, a heavier lid or a happy shut eye */
+  /* What the eye is up to: where it looks (a, m), and squint, wide, a heavier lid, a happy shut eye or a straining
+     squeeze */
   mood() {
     const L = this.g.lamp, b = this.bore;
+    if (this.straining()) {
+      // waking up: it looks at the headline, and squeezes its eye shut, straining to light its lamp
+      const k = this.squeeze(), wp = this.wakePath;
+      return { a: wp ? wp.a0 : 0, m: wp ? smooth(WAKE.open * 0.4, WAKE.open + 0.2, this.t - this.wokeAt) : 0, shut: Math.min(1, k * 1.5), strain: k };
+    }
     if (this.ball) return { a: Math.atan2(this.ball.y - L.y, this.ball.x - L.x), m: 1 };
     if (this.look && this.t < this.look.until) return { a: Math.atan2(this.look.y - L.y, this.look.x - L.x), m: 1 };
     if (!b) return null;
@@ -949,7 +978,7 @@ class Scene {
     this.box.hop = this.box.peek = -9;
     this.ripples = [];
     this.endBall(); this.endBore();
-    this.wakePath = this.gaze = null;
+    this.wakePath = this.gaze = null; this.waking = false;
     this.regrowAt = this.hatKick = -9;
     this.doodles = []; this.splashes = []; this.look = null;
   }
@@ -983,7 +1012,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < (this.waking ? WAKE.on : WAKE.open) + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1050,6 +1079,8 @@ class Scene {
     }
     // the eye blinks now and then
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
+    // its lamp lit at last, after all that straining: the hat jumps
+    if (this.waking && !this.popped && this.t - this.wokeAt >= WAKE.on) { this.popped = true; this.hatKick = this.t; }
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
     if (!this.flocked && !this.held) this.flock();
@@ -2119,12 +2150,14 @@ function drawTower(s, c) {
 }
 
 /* the eye in the lantern: an iris the colour of the light, a pupil that follows the beam (or the ball), a lid.
-   It also squints when up to something, goes wide when caught, and shuts happily when it got away with it. */
+   It also squints when up to something, goes wide when caught, shuts happily when it got away with it, and squeezes
+   shut, trembling, when it strains to light its lamp. */
 function drawEye(s, c) {
   const g = s.g, u = g.u, P = s.P, T = g.lh, L = g.lamp, er = T.er, B = s.beam;
-  const night = smooth(0.35, 0.8, s.d), md = s.mood() || {}, wide = md.wide || 0, sq = md.squint || 0;
+  const night = smooth(0.35, 0.8, s.d), md = s.mood() || {}, wide = md.wide || 0, sq = md.squint || 0, strain = md.strain || 0;
   const rx = er * 1.32 * (1 + 0.13 * wide), ry = er * 1.08 * (1 + 0.16 * wide);
   const eye = ellipse(L.x, L.y, rx, ry, 40);
+  c.save(); c.translate(Math.sin(s.t * 97) * 1.1 * u * strain, 0);
   print(c, eye, mix(mul(hex('#FFFFFF'), P.paper), P.beam, night * 0.25));
   // where it looks: along the beam, or straight at you when the light faces you, or wherever it's busy
   let look = clamp(B.len * 1.3) * (1 - B.flash), pa = B.a;
@@ -2152,6 +2185,12 @@ function drawEye(s, c) {
     // shut, and pleased with itself: the lid line curves up
     poly(c, eye); c.fillStyle = lidCol; c.fill();
     c.beginPath(); ribbon(c, ellipse(L.x, L.y + ry * 0.38, rx * 0.72, ry * 0.62, 16, 1.18 * Math.PI, 1.82 * Math.PI), DET, 5, { tin: 3, tout: 3 }); c.fillStyle = INK; c.fill();
+  } else if (shut > 0.86 && strain > 0.5) {
+    // squeezed shut, straining: a tight, crumpled line
+    poly(c, eye); c.fillStyle = lidCol; c.fill();
+    c.beginPath();
+    ribbon(c, [[-0.88, 0.02], [-0.44, 0.13], [0, 0.03], [0.44, 0.13], [0.88, 0.02]].map(([x, y]) => [L.x + x * rx, L.y + y * ry]), DET, 5, { tin: 3, tout: 3 });
+    c.fillStyle = INK; c.fill();
   } else if (shut > 0.86) {
     poly(c, eye); c.fillStyle = lidCol; c.fill();
     c.beginPath();
@@ -2175,15 +2214,17 @@ function drawEye(s, c) {
   }
   c.restore();
   c.beginPath(); loop(c, eye, SIL * 0.85, 8); c.fillStyle = INK; c.fill();
-  // caught: a start, in a few short strokes either side
-  if (wide > 0.05) {
+  // caught: a start, in a few short strokes either side (the same strokes when it strains)
+  const marks = Math.max(wide, strain);
+  if (marks > 0.05) {
     c.beginPath();
     for (const sx of [-1, 1]) for (const k of [-0.42, 0, 0.42]) {
-      const a = (sx < 0 ? Math.PI : 0) + sx * k, r0 = rx * 1.22, r1 = r0 + er * 0.55 * wide;
+      const a = (sx < 0 ? Math.PI : 0) + sx * k, r0 = rx * 1.22, r1 = r0 + er * 0.55 * marks;
       ribbon(c, [[L.x + Math.cos(a) * r0, L.y + Math.sin(a) * r0 * 0.9], [L.x + Math.cos(a) * r1, L.y + Math.sin(a) * r1 * 0.9]], TEX * 1.1, 20 + k * 7 + sx, { tin: 1, tout: 2 });
     }
     c.fillStyle = INK; c.fill();
   }
+  c.restore();
   // the gallery's railing passes in front of the eye
   const gw = T.wT * 0.95, top = T.top - T.gal * 0.42, rail = top - T.gal * 0.62;
   c.beginPath();
