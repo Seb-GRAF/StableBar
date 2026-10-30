@@ -388,10 +388,12 @@ class Scene {
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
   // the opening: the light swings to one point and sweeps along to another, once (viewport coordinates)
-  sweepAlong(x0, y0, x1, y1, dur = 1) {
+  sweepAlong(x0, y0, x1, y1, dur = 1, lead = 0.35) {
     if (this.reduced || document.hidden) return false;
-    const L = this.g.lamp;
-    this.sweep = { t0: this.t, lead: 0.35, dur, tail: 0.3, a0: Math.atan2(y0 - this.oy - L.y, x0 - this.ox - L.x), a1: Math.atan2(y1 - this.oy - L.y, x1 - this.ox - L.x) };
+    const L = this.g.lamp, b = this.beam;
+    // it starts from exactly where the light points, steered from there on
+    b.sa = b.a; b.steer = 1;
+    this.sweep = { t0: this.t, lead, dur, tail: 0.3, from: b.a, a0: Math.atan2(y0 - this.oy - L.y, x0 - this.ox - L.x), a1: Math.atan2(y1 - this.oy - L.y, x1 - this.ox - L.x) };
     this.wake();
     return true;
   }
@@ -401,12 +403,12 @@ class Scene {
     if (on) this.dozing = true;
     else if (this.dozing) {
       this.dozing = false; this.wokeAt = this.t;
-      this.blink.next = this.t + 0.6;
+      this.blink.next = this.t + 2.6; // a first blink once it's done reading
     }
     this.wake();
   }
-  // 1 while asleep, easing to 0 as the eye opens; the light comes on once the eye is half open
-  drowsy() { return this.dozing ? 1 : 1 - smooth(0, 0.4, this.t - this.wokeAt); }
+  // 1 while asleep, easing to 0 as the eye slowly opens; the light comes on once the eye is half open
+  drowsy() { return this.dozing ? 1 : 1 - smooth(0, 1.1, this.t - this.wokeAt); }
   lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
   // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
   freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
@@ -421,7 +423,8 @@ class Scene {
     const L = this.g.lamp, ts = this.bar;
     if (this.reduced || !ts.length || document.hidden) return false;
     const y = Math.min(...ts.map(t => t.y)) - 12 * this.g.u, x0 = Math.min(...ts.map(t => (t.x0 + t.x1) / 2)), x1 = Math.max(...ts.map(t => (t.x0 + t.x1) / 2));
-    this.sweep = { t0: this.t, lead: 0.3, dur, tail: 0.25, a0: Math.atan2(y - L.y, x0 - L.x), a1: Math.atan2(y - L.y, x1 - L.x) };
+    this.beam.sa = this.beam.a; this.beam.steer = 1;
+    this.sweep = { t0: this.t, lead: 0.85, dur, tail: 0.25, from: this.beam.a, a0: Math.atan2(y - L.y, x0 - L.x), a1: Math.atan2(y - L.y, x1 - L.x) };
     this.wake();
     return true;
   }
@@ -617,7 +620,7 @@ class Scene {
     const w = this.sweep;
     if (w) {
       const a = this.t - w.t0;
-      if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.a0 : w.a0 + angDiff(w.a1, w.a0) * smooth(0, 1, (a - w.lead) / w.dur);
+      if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.from + angDiff(w.a0, w.from) * smooth(0, 1, a / w.lead) : w.a0 + angDiff(w.a1, w.a0) * smooth(0, 1, (a - w.lead) / w.dur);
       this.sweep = null;
     }
     const b = this.bore;
@@ -961,7 +964,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.t - this.wokeAt < 0.7 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.t - this.wokeAt < 1.2 || this.t - this.labelsAt < 0.6) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;

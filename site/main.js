@@ -927,10 +927,11 @@ if (scene) {
 
   /* A click or tap on the landscape, not on the page, drops something there.
      A click that only closes a popup or a menu doesn't, nor one that ends the opening. */
-  let overlay = false;
+  let overlay = false, pressedInOpening = false;
+  addEventListener("pointerdown", () => { pressedInOpening = !landed; }, true);
   document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
   document.addEventListener("click", e => {
-    if (overlay || editing || e.detail === 0 || !landed || performance.now() < quietUntil) return;
+    if (overlay || editing || e.detail === 0 || !landed || pressedInOpening) return;
     if (e.target.closest("a, button, input, label, pre, .note, .dock, .site-foot, [role='dialog']")) return;
     if (String(getSelection?.() || "")) return;
     S("tap", e.clientX, e.clientY);
@@ -983,7 +984,7 @@ function onBar(event, key, info = {}) {
    and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's over. Once a
    session, opening at the top, with motion allowed (the class and the night come from the page's head; ?intro plays
    it again); a scroll, a key, a click or a tap ends it at once. */
-let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, quietUntil = 0, runTimer = 0, landTimer = 0;
+let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
@@ -1009,13 +1010,10 @@ function land(skip) {
   sendBar(); // the bar's widgets where they stand, for the sweep and the ball game
   S("labels", true);
   if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
-  else if (S("sweepBar", 1.1)) sweptUntil = performance.now() + 1800;
+  else if (S("sweepBar", 1.6)) sweptUntil = performance.now() + 2800;
 }
-// (a click or a tap that ends it doesn't also drop something on the landscape)
-function skipLanding(e) {
-  if (e.type === "pointerdown" || e.type === "touchstart") quietUntil = performance.now() + 1000;
-  land(true);
-}
+// (a click or a tap that ends it doesn't also drop something on the landscape: see pressedInOpening)
+function skipLanding() { land(true); }
 // nobody watching: it ends rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
 // waking up: the eye opens, the z's go, the day comes over a couple of seconds, and the light reads the title
@@ -1027,8 +1025,8 @@ function wakeUp() {
   setMode(dayMode(), DAWN);
   S("freeze", false);
   readTitle();
-  runTimer = setTimeout(expandOpening, 2000);
-  landTimer = setTimeout(() => land(false), 2000 + 1300); // once the bar and the notes have come in
+  runTimer = setTimeout(expandOpening, 2300);
+  landTimer = setTimeout(() => land(false), 2300 + 1300); // once the bar and the notes have come in
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it
 let snoreAt = "";
@@ -1078,8 +1076,10 @@ function readTitle() {
   S("doze", false); // the lighthouse wakes up: its eye opens and its light comes on
   const letters = [...glow.querySelectorAll("i")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
-  if (!S("sweepAlong", first.x - 10, (Math.min(...ys) + Math.max(...ys)) / 2, last.x + 10, (Math.min(...ys) + Math.max(...ys)) / 2, 1.1)) return;
-  reading = { letters, until: performance.now() + 1900 };
+  const y = (Math.min(...ys) + Math.max(...ys)) / 2;
+  // it turns to the first letter while its eye opens, then reads across
+  if (!S("sweepAlong", first.x - 10, y, last.x + 10, y, 1.1, 0.8)) return;
+  reading = { letters, until: performance.now() + 2100 };
 }
 function readGlow(s) {
   if (!reading) return;
