@@ -243,7 +243,7 @@ class Scene {
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
     this.dozing = false; this.wokeAt = -9; this.frozen = false;
-    this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
+    this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -917,6 +917,7 @@ class Scene {
   // reduced motion switched on: whatever is moving stops where it is
   still() {
     for (const o of this.objs) {
+      if (o.state === 'leap') this.endLeap(o);
       if (o.state === 'fly') { o.state = 'hover'; o.vx = o.vy = 0; }
       else if (o.state === 'fall') { o.y = o.ty; o.vy = 0; o.state = o.ride ? 'ride' : o.kind === 'duck' ? 'float' : 'land'; }
       o.land = -9;
@@ -965,12 +966,13 @@ class Scene {
   }
   busy() {
     if (this.sweep || this.t - this.wokeAt < 1.2 || this.t - this.labelsAt < 0.6) return true;
+    if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
     // (the grazing and its "nom"s are slow: they carry on at the idle rate)
     if (this.ball || this.bore || this.doodles.some(d => !d.calm) || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9 || this.t - this.box.hop < 0.8 || this.t - this.box.wob < 0.5) return true;
-    for (const o of this.objs) if (o.state === 'fall' || (o.state === 'fly' && !this.reduced) || o.dying != null || (o.land > 0 && this.t - o.land < 0.4)) return true;
+    for (const o of this.objs) if (o.state === 'fall' || o.state === 'leap' || (o.state === 'fly' && !this.reduced) || o.dying != null || (o.land > 0 && this.t - o.land < 0.4)) return true;
     return this.beam.steer > 0.01 && this.beam.steer < 0.99 && !this.reduced;
   }
   frame(now) {
@@ -1066,7 +1068,13 @@ class Scene {
         if (o.dying != null && (rm || this.t - o.dying > 0.7)) o.dead = true;
         continue;
       }
-      if (o.state === 'fall') {
+      if (o.state === 'leap') {
+        // out of the box onto the grass, or back in: a hop along an arc (out, it rises before it goes sideways)
+        const L = o.leap, f = clamp((this.t - L.t0) / L.dur);
+        o.x = lerp(L.x0, L.x1, L.in ? smooth(0, 0.85, f) : smooth(0.15, 1, f));
+        o.y = lerp(L.y0, L.y1, f) - 4 * L.h * f * (1 - f);
+        if (f >= 1) this.endLeap(o);
+      } else if (o.state === 'fall') {
         o.vy += G * dt; o.y += o.vy * dt;
         if (o.y >= o.ty) {
           o.y = o.ty; o.vy = 0; o.land = this.t;
@@ -1224,7 +1232,7 @@ class Scene {
     if (o.act == null) { o.act = 'idle'; o.until = t + 0.5 + R() * 2.5; o.hungry ??= t + 3 + R() * 10; o.head = 0; o.vd = 0; o.bites = 0; }
     o.vd ??= 0;
     const dx = o.x - this.ptr.x, dy = o.y - this.ptr.y;
-    const scared = this.ptr.on && !cow && o.dying == null && dx * dx + dy * dy < (110 * u) ** 2;
+    const scared = this.ptr.on && !cow && o.dying == null && o.act !== 'home' && dx * dx + dy * dy < (110 * u) ** 2;
     let wx = 0, wd = 0, head = 0;
     if (scared) {
       this.letGo(o);
@@ -1233,12 +1241,19 @@ class Scene {
     } else {
       if ((o.act === 'flee' || o.act === 'happy') && t > o.until) { o.act = 'idle'; o.until = t + 1.5 + R() * 3.5; }
       if (o.act === 'idle' && t > o.until) this.decide(o);
-      if (o.act === 'walk' || o.act === 'go') {
+      if (o.act === 'home') {
+        // called home: to the box's side, then a hop in (from wherever it got to, if that takes too long)
+        const h = this.homeSpot(o);
+        if (!h || t > o.until) return this.hopIn(o);
+        o.tx = h.x; o.td = h.d;
+      }
+      if (o.act === 'walk' || o.act === 'go' || o.act === 'home') {
         const ex = o.tx - o.x, ed = o.td - o.depth, dist = Math.hypot(ex, ed);
+        if (o.act === 'home' && dist < 3 * u) return this.hopIn(o);
         if (o.act === 'go' && dist < 2.5 * u && o.tuft) { o.act = 'eat'; o.bite = t + 0.8; o.flip = o.tuft.x < o.x; }
-        else if (dist < 2.5 * u || t > o.until || (o.act === 'go' && !o.tuft)) { this.letGo(o); o.act = 'idle'; o.until = t + 2 + R() * 4; }
+        else if (o.act !== 'home' && (dist < 2.5 * u || t > o.until || (o.act === 'go' && !o.tuft))) { this.letGo(o); o.act = 'idle'; o.until = t + 2 + R() * 4; }
         else {
-          const v = (o.act === 'go' ? 19 : 13) * u * (cow ? 0.65 : 1) * Math.min(1, dist / (6 * u));
+          const v = (o.act === 'home' ? 30 : o.act === 'go' ? 19 : 13) * u * (cow ? 0.65 : 1) * Math.min(1, dist / (6 * u));
           wx = ex / dist * v; wd = ed / dist * v;
         }
       }
@@ -1325,8 +1340,10 @@ class Scene {
   /* ----- the sheep in a box -----
      A cardboard box with three air holes sits on the grass where it's seen, clear of the lighthouse, the cottage,
      the little scenes and the animals. Now and then the sheep inside shifts and the box wobbles. When the light
-     finds it, two eyes look out through the holes (glinting at night); a click or a tap makes it hop and say baa.
-     It isn't a surprise: clicking it drops nothing. Its label shows in the first screen while it's in view. */
+     finds it, two eyes look out through the holes (glinting at night); a click or a tap makes it hop and say baa,
+     louder each time, and the fifth in a row lets the sheep out: the flaps burst open, it jumps onto the grass and
+     joins the others, and the box is empty. Knocking on the empty box calls the sheep home: it trots back and hops
+     in. It isn't a surprise: clicking it drops nothing. Its label shows in the first screen while it's in view. */
   placeBox() {
     const g = this.g, u = g.u, W = g.W, b = this.box, T = g.lh, ck = g.cot;
     b.v = `${this.layoutV}|${this.fontsV}`;
@@ -1362,9 +1379,11 @@ class Scene {
     const w = t - b.wob;
     if (!rm && w >= 0 && w < 0.5) rot = Math.sin(w / 0.5 * Math.PI * 3) * 0.05 * (1 - w / 0.5);
     const a = still ? -1 : t - b.hop;
+    const pa = t - b.burst;
+    if (!rm && b.out != null && pa >= 0 && pa < 0.25) sq += Math.sin(pa / 0.25 * Math.PI) * 0.12;
     if (!rm && a >= 0 && a < 0.75) {
       if (a < 0.08) sq = Math.sin(a / 0.08 * Math.PI) * 0.1;
-      else if (a < 0.52) { const f = (a - 0.08) / 0.44; y -= Math.sin(f * Math.PI) * 18 * k; rot -= Math.sin(f * Math.PI) * 0.14; }
+      else if (a < 0.52) { const f = (a - 0.08) / 0.44; y -= Math.sin(f * Math.PI) * 18 * k * b.hopK; rot -= Math.sin(f * Math.PI) * 0.14 * b.hopK; }
       else sq = Math.sin((a - 0.52) / 0.23 * Math.PI) * 0.14;
     }
     return { x: b.gx, y, rot, sq, k };
@@ -1374,13 +1393,91 @@ class Scene {
     const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
     return x > p.x - BOX.hw * k - pad && x < p.x + (BOX.hw + BOX.dx) * k + pad && y > p.y + (BOX.dy - BOX.hh) * k - pad && y < p.y + BOX.hh * k + pad;
   }
-  // a click or a tap: it hops (not without motion) and says so
+  // a click or a tap: it hops (not without motion) and says so, higher and louder with each knock in a row
   baa() {
-    const b = this.box, p = this.boxAt(), k = p.k;
-    if (!this.reduced) b.hop = this.t;
+    const b = this.box;
+    if (b.out != null) return this.callHome();
+    b.knocks = this.t - b.knockAt < 2.5 ? b.knocks + 1 : 1;
+    b.knockAt = this.t;
+    if (b.knocks >= 5) return this.letOut();
+    // it hops, unless it's still in the air from the knock before (a new hop there would drop it to the ground)
+    if (!this.reduced && !this.boxUp()) { b.hop = this.t; b.hopK = 1 + 0.2 * (b.knocks - 1); }
     b.peek = this.t;
-    // beside it, toward the lighthouse, where the hop doesn't cover it
-    this.doodle('baa', p.x + (BOX.hw + BOX.dx + 6) * k, p.y + (BOX.dy - BOX.hh + 1) * k, { text: 'baa!', align: 'left', life: 1.4 });
+    this.boxSays(['baa!', 'baa!', 'baa!!', 'BAA!!'][b.knocks - 1]);
+  }
+  // in the air from a hop: how long until it lands, or 0
+  boxUp() { const a = this.t - this.box.hop; return a >= 0 && a < 0.55 ? 0.55 - a : 0; }
+  // beside it, toward the lighthouse, where the hop doesn't cover it; the newest word replaces the one before
+  boxSays(text) {
+    const p = this.boxAt(), k = p.k;
+    this.doodles = this.doodles.filter(d => d.kind !== 'baa');
+    this.doodle('baa', p.x + (BOX.hw + BOX.dx + 6) * k, p.y + (BOX.dy - BOX.hh + 1) * k, { text, align: 'left', life: 1.4 });
+  }
+  // the sheep is out of the box (or on its way out once the box has landed)
+  boxEmpty() { return this.box.out != null && this.t >= this.box.burst; }
+  // the fifth knock: once the box is on the ground, the flaps burst open and the sheep jumps out onto the grass a
+  // short hop away
+  letOut() {
+    const b = this.box, g = this.g, u = g.u, p = this.boxAt(true), k = p.k, wait = this.reduced ? 0 : this.boxUp();
+    b.out = this.t; b.burst = this.t + wait; b.knocks = 0; b.peek = -9; b.wob = -9;
+    b.tw = textW(this, 'a box (empty)', b.size);
+    // it lands beside the box, in the same row, on whichever side has grass (the pasture's first)
+    const mid = p.x + BOX.dx * k * 0.5, reach = (BOX.hw + 34) * k;
+    let spot = null;
+    for (const dir of [1, -1]) for (const far of [1, 1.4, 0.8]) {
+      const x = mid + dir * reach * far;
+      if (!spot && x > 30 * u && x < g.W - 30 * u && this.ridgeY(x) != null && this.isLand(x, b.gy) && this.open(x, b.gy)) spot = { x, y: b.gy };
+    }
+    spot ||= { x: clamp(mid + reach, 30 * u, g.W - 30 * u), y: b.gy };
+    const o = this.spawn(spot.x, spot.y, 'sheep', true);
+    b.sheep = o;
+    if (!this.reduced) {
+      // from all the way down inside (the box is smaller than its sheep), up over the rim and down beside it
+      const x0 = p.x + BOX.dx * k * 0.5;
+      o.leap = { x0, y0: b.gy - 2 * BOX.hh * k + 30 * u * o.sc, x1: o.x, y1: o.ty, t0: b.burst, dur: 0.85, h: 58 * k };
+      o.state = 'leap'; o.flip = o.x < x0; o.x = x0; o.y = o.leap.y0;
+    }
+    this.boxSays('baa!');
+    this.wake();
+  }
+  // the empty box knocked on: its sheep comes home (or, gone from the hill, is simply back)
+  callHome() {
+    const b = this.box, o = b.sheep, u = this.g.u;
+    if (!o || o.dead || o.dying != null || !this.objs.includes(o)) return this.closeBox();
+    // without motion nobody walks: it's simply back in
+    if (this.reduced) { this.letGo(o); o.dead = true; this.objs = this.objs.filter(q => q !== o); return this.closeBox(); }
+    if (o.state === 'leap' || o.act === 'home') return;
+    this.letGo(o);
+    o.act = 'home'; o.until = this.t + 9;
+    this.doodle('baa', o.x + 14 * u * o.sc, o.y - 34 * u * o.sc, { text: 'baa?', align: 'left', life: 1.2 });
+    this.wake();
+  }
+  // where it goes to hop in: beside the box, on the side it comes from
+  homeSpot(o) {
+    const b = this.box, p = this.boxAt(true), k = p.k, mid = p.x + BOX.dx * k * 0.5;
+    const x = mid + (o.x < mid ? -1 : 1) * (BOX.hw + 22) * k, ry = this.ridgeY(x);
+    return ry == null || b.gx == null ? null : { x, d: b.gy - ry };
+  }
+  hopIn(o) {
+    const b = this.box, p = this.boxAt(true), k = p.k;
+    this.letGo(o);
+    if (this.reduced || b.gx == null) { o.dead = true; this.closeBox(); return; }
+    const x1 = p.x + BOX.dx * k * 0.5;
+    o.leap = { x0: o.x, y0: o.y, x1, y1: b.gy - 2 * BOX.hh * k + 30 * this.g.u * o.sc, t0: this.t, dur: 0.7, h: 52 * k, in: true };
+    o.state = 'leap'; o.act = 'idle'; o.flip = x1 < o.x; o.vx = o.vd = 0;
+  }
+  // the hop's end: on the grass, one of the flock now; or in the box, which closes over it
+  endLeap(o) {
+    const L = o.leap;
+    o.leap = null;
+    if (L.in) { o.dead = true; this.closeBox(); return; }
+    o.x = L.x1; o.y = o.ty; o.state = 'land'; o.land = this.t; o.act = null;
+  }
+  closeBox() {
+    const b = this.box;
+    b.out = null; b.sheep = null; b.peek = this.t; b.wob = this.t;
+    b.tw = textW(this, 'a sheep (in a box)', b.size);
+    this.wake();
   }
   updateBox(dt) {
     const b = this.box, rm = this.reduced, t = this.t;
@@ -1389,12 +1486,16 @@ class Scene {
     if (b.gx == null) return;
     const p = this.boxAt(), lit = this.inBeam(p.x + this.ox, p.y + this.oy);
     b.lit = rm ? lit : lerp(b.lit, lit, Math.min(1, dt * 8));
+    // the flaps: open while the sheep is out
+    const lid = this.boxEmpty() ? 1 : 0;
+    b.lid = rm ? lid : lerp(b.lid, lid, Math.min(1, dt * (lid ? 14 : 9)));
+    if (Math.abs(b.lid - lid) < 0.005) b.lid = lid;
     // the eyes come to the holes while the light is on it (and for a moment after a baa), blinking now and then
-    const want = b.lit > 0.4 || t - b.peek < 1.8;
+    const want = b.out == null && (b.lit > 0.4 || t - b.peek < 1.8);
     if (want !== b.open) { b.open = want; b.openAt = t; b.nextBlink = t + 1.4 + Math.random() * 2; }
     if (b.open && !rm && t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + 1.8 + Math.random() * 2.6; }
     // now and then the sheep inside shifts
-    if (!rm && t > b.nextWob) { b.wob = t; b.nextWob = t + 7 + Math.random() * 9; }
+    if (!rm && t > b.nextWob) { if (b.out == null) b.wob = t; b.nextWob = t + 7 + Math.random() * 9; }
     // its label, in the first screen while it's in view: looked at a few times a second, faded in and out
     if (t - b.seenAt > 0.3 || rm) { b.seenAt = t; b.side = this.pres.hero > 0.01 ? this.boxSide(this.boxAt(true)) : null; if (b.side) b.lastSide = b.side; }
     b.la = rm ? (b.side ? 1 : 0) : lerp(b.la, b.side ? 1 : 0, Math.min(1, dt * 3));
@@ -1520,8 +1621,8 @@ function drawScene(s, c) {
   drawEye(s, c);
   drawHat(s, c);
   // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
-  const items = [...s.objs.map(o => [o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
-  for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
+  const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
+  for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : it.leap ? drawLeap(s, c, it) : drawObj(s, c, it);
   // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
   drawStates(s, c);
   const lk = s.labelsK();
@@ -1657,11 +1758,20 @@ function drawBox(s, c) {
   const front = K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]);
   const top = K([[-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw, -hh]]);
   const side = K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]);
-  print(c, side, card(C.kraftDark)); print(c, top, card(C.kraftLit)); print(c, front, card(C.kraft));
-  // tape over the seam between the flaps, front to back, folded a little way down the front
-  c.globalAlpha = 0.8;
-  print(c, K([[-3.4, -hh], [-3.4 + dx, -hh + dy], [3.4 + dx, -hh + dy], [3.4, -hh], [3.6, -hh + 6.5], [0.4, -hh + 5.8], [-3.6, -hh + 6.8]]), card(C.tape));
-  c.globalAlpha = 1;
+  // with the sheep out the flaps stand open, up from the sides, over the dark inside
+  const lid = b.lid, th = lid * 1.95, flaps = [];
+  print(c, side, card(C.kraftDark)); print(c, top, lid > 0.01 ? mix(card(C.kraftDark), P.ink, 0.4) : card(C.kraftLit)); print(c, front, card(C.kraft));
+  if (lid > 0.01) for (const sd of [-1, 1]) {
+    const hx = sd * hw, wx = -sd * hw * Math.cos(th), wy = -hw * Math.sin(th);
+    const flap = K([[hx, -hh], [hx + dx, -hh + dy], [hx + dx + wx, -hh + dy + wy], [hx + wx, -hh + wy]]);
+    print(c, flap, card(sd < 0 ? C.kraftLit : C.kraft));
+    flaps.push(flap);
+  } else {
+    // tape over the seam between the flaps, front to back, folded a little way down the front
+    c.globalAlpha = 0.8;
+    print(c, K([[-3.4, -hh], [-3.4 + dx, -hh + dy], [3.4 + dx, -hh + dy], [3.4, -hh], [3.6, -hh + 6.5], [0.4, -hh + 5.8], [-3.6, -hh + 6.8]]), card(C.tape));
+    c.globalAlpha = 1;
+  }
   // the holes, dark; eyes in two of them while the light is on the box (or just after a baa)
   let open = b.open ? (rm ? 1 : smooth(0, 0.2, t - b.openAt)) : (rm ? 0 : 1 - smooth(0, 0.14, t - b.openAt));
   if (b.open && !rm && t - b.blinkAt < 0.16) open *= Math.abs(Math.cos((t - b.blinkAt) / 0.16 * Math.PI));
@@ -1683,6 +1793,7 @@ function drawBox(s, c) {
   edges(c, K([[-hw, hh], [-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), DET * 1.05, 3, true, { ov: 1.5 });
   edges(c, K([[-hw, -hh], [hw, -hh], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
   edges(c, K([[hw, -hh], [hw + dx, -hh + dy]]), TEX * 1.25, 12, false, { ov: 0.6 });
+  flaps.forEach((f, i) => edges(c, f, TEX * 1.25, 40 + i, true, { ov: 0.8 }));
   BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2 }));
   for (const ax of [hw + dx * 0.32, hw + dx * 0.7]) {
     const x = ax * k, y0 = (dy * (ax - hw) / dx + 6) * k, y1 = y0 - 7 * k;
@@ -1699,6 +1810,17 @@ function drawBox(s, c) {
     }
     c.fillStyle = rgba(P.beam, clamp(night * open * 1.3)); c.fill();
   }
+  c.restore();
+}
+
+/* a sheep hopping out of its box or back in: in front of the box, and hidden by its front while inside it */
+function drawLeap(s, c, o) {
+  if (s.t < o.leap.t0) return;
+  const L = o.leap, f = clamp((s.t - L.t0) / L.dur), p = s.boxAt(), k = p.k;
+  const inside = Math.abs(o.x - (p.x + BOX.dx * k * 0.5)) < BOX.hw * k && (L.in ? f > 0.5 : f < 0.5);
+  if (!inside) { drawObj(s, c, o); return; }
+  c.save(); c.beginPath(); c.rect(-1e4, -1e4, 2e4, 1e4 + p.y - BOX.hh * k + 1); c.clip();
+  drawObj(s, c, o);
   c.restore();
 }
 
@@ -2464,7 +2586,7 @@ function drawLabels(s, c) {
   const bx = s.box;
   if (bx.lastSide && bx.la > 0.01 && bx.gx != null) {
     const p = s.boxAt(true), q = boxLabel(p.x, p.y, p.k, u, size, bx.tw, bx.lastSide), lc = rgba(mix(P.ink, P.paper, night), s.pres.hero * bx.la);
-    label(c, 'a sheep (in a box)', q.tx, q.ty, size, lc, q.align);
+    label(c, s.boxEmpty() ? 'a box (empty)' : 'a sheep (in a box)', q.tx, q.ty, size, lc, q.align);
     c.fillStyle = lc; arrow(c, q.arrow, TEX * 1.1, 11);
     c.fillStyle = col;
   }
@@ -2567,7 +2689,7 @@ function napEye(c, x, y, r, col) {
 // pleased with a meal: a short while after it, eyes shut happily and the tail wags
 const joyAt = (o, t) => { const a = t - (o.joy ?? -99); return a >= 0 && a < 1.3 ? a : -1; };
 function drawSheep(c, u, wool, o, t) {
-  const fall = o.state === 'fall', step = Math.hypot(o.vx, o.vd || 0) > 2 ? Math.sin(t * 14 + o.seed) * 2 * u : 0;
+  const fall = o.state === 'fall' || o.state === 'leap', step = Math.hypot(o.vx, o.vd || 0) > 2 ? Math.sin(t * 14 + o.seed) * 2 * u : 0;
   c.beginPath();
   [-8, -3, 5, 10].forEach((lx, i) => ribbon(c, [[lx * u, -10 * u], [lx * u + (fall ? 3 * u : (i % 2 ? step : -step)), 0]], DET * 1.05, i, { tin: 1, tout: 1, w0: 0.9, w1: 1 }));
   c.fillStyle = INK; c.fill();
