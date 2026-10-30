@@ -222,6 +222,10 @@ const WAKE = {
   dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93], [1.14, 1.19]],
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
+// a knock at the cottage's door, in seconds from the knock: it opens over `open`, the keeper is in the doorway from
+// `keeper`[0] to [1], looking out to the left and from `right` to the right, wonders (`huh`) and goes in; it shuts over
+// `shut`, and it's over at `end` (`away`, when he's out on the ridge and nobody comes)
+const VISIT = { open: [0.55, 0.8], keeper: [0.7, 2.6], right: 1.6, huh: 2.2, shut: [2.62, 2.88], end: 2.95, away: 1.6 };
 // the grass on the hill: at most this many tufts (fewer on phones), a new one every 3 to 6 s while there are fewer
 const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
 
@@ -259,6 +263,7 @@ class Scene {
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
     this.dozing = false; this.wokeAt = -9; this.waking = false; this.nightPath = this.riseAt = null; this.popped = false; this.frozen = false;
+    this.visit = null;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -358,6 +363,13 @@ class Scene {
     if (this.boxHit(x, y)) {
       this.aim(x, y);
       this.baa();
+      this.wake();
+      return false;
+    }
+    // the cottage's door: knock knock, and the keeper comes to see who's there; nothing drops
+    if (this.doorHit(x, y)) {
+      this.aim(x, y);
+      this.knock();
       this.wake();
       return false;
     }
@@ -1020,7 +1032,7 @@ class Scene {
     this.box.hop = this.box.peek = -9;
     this.ripples = [];
     this.endBall(); this.endBore();
-    this.wakePath = this.gaze = null; this.waking = false;
+    this.wakePath = this.gaze = this.visit = null; this.waking = false;
     this.regrowAt = this.hatKick = -9;
     this.doodles = []; this.splashes = []; this.look = null;
   }
@@ -1054,7 +1066,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.visit || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1118,6 +1130,18 @@ class Scene {
     if (!rm) {
       sc.x += sc.dir * 7 * u * dt;
       if (sc.x > sc.x1) sc.dir = -1; else if (sc.x < sc.x0) sc.dir = 1;
+    }
+    // at the cottage's door: the keeper wonders who knocked (or nobody comes), and it's over
+    const v = this.visit;
+    if (v) {
+      const a = this.t - v.t0, k = g.cot, d = k.door;
+      if (!v.huh && d && a >= (v.away ? 0.9 : VISIT.huh)) {
+        // (by the cottage, where the knock was: over its roof, the pen wouldn't show)
+        v.huh = true;
+        if (v.away) this.doodle('huh', d.x + d.w / 2, d.y - 8 * u, { text: '…', life: 1.1 });
+        else this.doodle('huh', k.x + k.w * 0.66, d.y + d.h * 0.15, { text: '?', align: 'left', life: 1 });
+      }
+      if (a > (v.away ? VISIT.away : VISIT.end)) this.visit = null;
     }
     // the eye blinks now and then
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
@@ -1515,6 +1539,20 @@ class Scene {
     const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
     return x > p.x - BOX.hw * k - pad && x < p.x + (BOX.hw + BOX.dx) * k + pad && y > p.y + (BOX.dy - BOX.hh) * k - pad && y < p.y + BOX.hh * k + pad;
   }
+  // the cottage's door, with a little room round it
+  doorHit(x, y) {
+    const d = this.g.cot.door, pad = this.ptr.kind === 'touch' ? 10 : 5;
+    return !!d && x > d.x - pad && x < d.x + d.w + pad && y > d.y - pad && y < d.y + d.h + pad;
+  }
+  // knock knock: the keeper comes to the door (see VISIT and drawVisit), unless he's out on the ridge with his tile
+  // (nobody comes) or already at the open door at night
+  knock() {
+    const k = this.g.cot, d = k.door, u = this.g.u;
+    this.doodles = this.doodles.filter(o => o.kind !== 'knock');
+    this.doodle('knock', k.x + k.w * 0.62, d.y + d.h * 0.3, { text: 'knock knock', align: 'left', life: 1.3 });
+    if (this.visit || this.pres.install > 0.01) return;
+    this.visit = { t0: this.t, away: this.pres.edit > 0.01, huh: false };
+  }
   // a click or a tap: it hops (not without motion) and says so, higher and louder with each knock in a row
   baa() {
     const b = this.box;
@@ -1739,6 +1777,7 @@ function drawScene(s, c) {
   s.layer('front', { x: x0, y: y0, w: W - x0, h: y1 - y0 }, x => { drawHill(s, x); drawCottage(s, x); drawTower(s, x); });
   drawHillLight(s, c);
   drawTufts(s, c);
+  drawVisit(s, c);
   drawSmoke(s, c);
   drawEye(s, c);
   drawHat(s, c);
@@ -2530,6 +2569,47 @@ function drawEditKeeper(s, c, p) {
   c.globalAlpha = 1;
 }
 
+/* someone knocked at the cottage (see knock and VISIT): the door jumps under the knocks, then swings open; the keeper
+   looks out to the left and to the right, sees nobody, goes back in and shuts it */
+function drawVisit(s, c) {
+  const v = s.visit, g = s.g, k = g.cot, d = k.door;
+  if (!v || !d) return;
+  const u = g.u, P = s.P, a = s.t - v.t0, rm = s.reduced, V = VISIT, sc = g.portrait ? 1.05 : 1.45;
+  const open = v.away ? 0 : rm ? (a >= V.open[0] && a < V.shut[1] ? 1 : 0) : smooth(V.open[0], V.open[1], a) * (1 - smooth(V.shut[0], V.shut[1], a));
+  const jig = rm || a > 0.45 ? 0 : Math.sin(a * 55) * 0.9 * u * (1 - a / 0.45);
+  if (open < 0.005 && jig === 0) return;
+  const night = smooth(0.45, 0.75, s.d), warm = hex('#FFD45C');
+  const frame = [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]];
+  if (open < 0.005) {
+    // shut and jumping: the wall where the door was, under it
+    poly(c, [[d.x - 2 * u, k.base], [d.x - 2 * u, d.y - 2 * u], [d.x + d.w + 2 * u, d.y - 2 * u], [d.x + d.w + 2 * u, k.base]]);
+    c.fillStyle = rgba(mul(hex('#FFFFFF'), P.paper)); c.fill();
+  } else {
+    // inside, dark by day and lamp-lit at night, the light spilling onto the grass
+    if (night > 0.05) {
+      c.globalAlpha = open * night;
+      poly(c, [[d.x, k.base], [d.x + d.w, k.base], [d.x + d.w + 44 * u, k.base + 34 * u], [d.x - 34 * u, k.base + 34 * u]]);
+      c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
+      c.globalAlpha = 1;
+    }
+    poly(c, frame); c.fillStyle = rgba(mix(mul(C.roof, P.paper), warm, night)); c.fill();
+    // the keeper in the doorway, leaning out the way he looks
+    const kin = rm ? (a >= V.keeper[0] && a < V.keeper[1] ? 1 : 0) : smooth(V.keeper[0], V.keeper[0] + 0.12, a) * (1 - smooth(V.keeper[1] - 0.14, V.keeper[1], a));
+    if (kin > 0.01) {
+      const right = a >= V.right, lean = rm ? 0 : (right ? 1 : -1) * 2.5 * u * sc;
+      c.globalAlpha = kin;
+      drawKeeper(s, c, d.x + d.w / 2 + lean, k.base, sc, 'stand', !right, 0);
+      c.globalAlpha = 1;
+    }
+  }
+  // the door, swinging out on its right-hand hinge until it lies against the wall
+  const hx = d.x + d.w + jig, fx = lerp(d.x, d.x + d.w * 1.55, open) + jig;
+  const door = [[hx, k.base], [hx, d.y], [fx, d.y + 2 * u * open], [fx, k.base - 1 * u * open]];
+  print(c, door, mul(C.door, P.paper));
+  c.beginPath(); edges(c, door, DET * 0.85, 3, true, { ov: 0.6 }); c.fillStyle = INK; c.fill();
+  if (Math.abs(fx - hx) > 3 * u) dot(c, lerp(hx, fx, 0.85), k.base - d.h * 0.48, 1.3 * u + 0.4, INK);
+}
+
 /* install: night, the cottage door open with warm light, the keeper waving */
 function drawDoorway(s, c, p) {
   const g = s.g, u = g.u, P = s.P, k = g.cot, d = k.door;
@@ -2978,13 +3058,13 @@ function drawDoodles(s, c) {
     const shake = d.kind === 'hehe' && !rm ? (Math.floor(a * 9) % 2 ? -1 : 1) * 1.3 * u : 0;
     c.translate(d.x, d.y - (rm ? 0 : a * (d.kind === 'plop' ? 12 : munch ? 7 : 8) * u) + shake); c.scale(k, k);
     const text = d.text || (d.kind === 'boink' ? 'boink!' : d.kind);
-    label(c, text, 0, 0, size, col, d.align, d.kind === 'boink' ? -0.09 * dir : d.kind === 'pok' ? 0.12 * dir : munch ? -0.1 * dir : d.kind === 'baa' ? 0.1 * dir : -0.06);
+    label(c, text, 0, 0, size, col, d.align, d.kind === 'boink' ? -0.09 * dir : d.kind === 'pok' ? 0.12 * dir : munch ? -0.1 * dir : d.kind === 'baa' || d.kind === 'knock' ? 0.1 * dir : -0.06);
     c.beginPath();
     if (d.kind === 'boink') {
       // the knock, in three short strokes toward the widget
       for (const i of [0, 1, 2]) { const an = -Math.PI / 2 - dir * (0.25 + i * 0.42), r0 = size * 0.32, r1 = size * 0.72; ribbon(c, [[Math.cos(an) * r0, -size * 0.3 + Math.sin(an) * r0], [Math.cos(an) * r1, -size * 0.3 + Math.sin(an) * r1]], TEX * 1.1, i + 7, { tin: 1, tout: 2 }); }
-    } else if (d.kind === 'baa') {
-      // two short strokes, from the box toward the word
+    } else if (d.kind === 'baa' || d.kind === 'knock') {
+      // two short strokes, from the box (or the door) toward the word
       for (const i of [0, 1]) { const an = Math.PI * (i ? 0.1 : -0.12), x0 = -dir * size * 0.6, r = size * 0.42; ribbon(c, [[x0 - dir * Math.cos(an) * r * 0.2, -size * 0.1 + Math.sin(an) * r * 0.6 + i * size * 0.38 - size * 0.12], [x0 + dir * Math.cos(an) * r * 0.55, -size * 0.1 + i * size * 0.38 - size * 0.12]], TEX * 1.1, i + 5, { tin: 1, tout: 2 }); }
     } else if (d.kind === 'plop') {
       // two drops over the word
