@@ -2592,28 +2592,18 @@ function drawVisit(s, c) {
   if (open < 0.005 && jig === 0) return;
   const night = smooth(0.45, 0.75, s.d), warm = hex('#FFD45C');
   const frame = [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]];
-  // the lamp inside, through the window too by day (lit at night anyway), from the door opening until just after
-  // it shuts
-  const lamp = (rm ? (a >= V.open[0] && a < V.shut[1] + 0.2 ? 1 : 0) : smooth(V.open[0], V.open[1], a) * (1 - smooth(V.shut[1], V.shut[1] + 0.3, a))) * (1 - night);
-  if (lamp > 0.01 && !v.away) {
-    const w = k.w, h = k.h, x0 = k.x - w / 2, y0 = k.base - h, wx = x0 + w * 0.14, wy = y0 + h * 0.24, ww = w * 0.27, wh = h * 0.36;
-    const pane = [[wx, wy], [wx + ww, wy], [wx + ww, wy + wh], [wx, wy + wh]];
-    c.globalAlpha = lamp; print(c, pane, warm); c.globalAlpha = 1;
-    c.beginPath(); edges(c, pane, DET * 0.85, 11, true, { ov: 1.2 });
-    ribbon(c, [[wx + ww / 2, wy + 1], [wx + ww / 2, wy + wh - 1]], TEX, 12, { tin: 1, tout: 1, w0: 0.8, w1: 0.8 });
-    ribbon(c, [[wx + 1, wy + wh / 2], [wx + ww - 1, wy + wh / 2]], TEX, 13, { tin: 1, tout: 1, w0: 0.8, w1: 0.8 });
-    c.fillStyle = INK; c.fill();
-  }
   if (open < 0.005) {
     // shut and jumping: the wall where the door was, under it
     poly(c, [[d.x - 2 * u, k.base], [d.x - 2 * u, d.y - 2 * u], [d.x + d.w + 2 * u, d.y - 2 * u], [d.x + d.w + 2 * u, k.base]]);
     c.fillStyle = rgba(mul(hex('#FFFFFF'), P.paper)); c.fill();
   } else {
-    // inside, the lamp: the doorway warm, its light spilling onto the grass (fainter by day)
-    c.globalAlpha = open * lerp(0.55, 1, night);
-    poly(c, [[d.x, k.base], [d.x + d.w, k.base], [d.x + d.w + 44 * u, k.base + 34 * u], [d.x - 34 * u, k.base + 34 * u]]);
-    c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
-    c.globalAlpha = 1;
+    // inside, the lamp: the doorway warm, and at night its light spilling onto the grass
+    if (night > 0.05) {
+      c.globalAlpha = open * night;
+      poly(c, [[d.x, k.base], [d.x + d.w, k.base], [d.x + d.w + 44 * u, k.base + 34 * u], [d.x - 34 * u, k.base + 34 * u]]);
+      c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
+      c.globalAlpha = 1;
+    }
     poly(c, frame); c.fillStyle = rgba(warm); c.fill();
     // the keeper in the doorway, leaning out the way he looks; then his back, walking in, a little smaller and higher
     // the further in he is, into the lamplight
