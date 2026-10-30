@@ -209,13 +209,14 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
-// the opening's wake-up, in seconds after the eye starts to open (while the bar rises): it opens over `open` and looks
-// at the headline, its lamp still out, then strains to light it, squeezing its eye shut for each of `pushes` ([when,
-// how long, how hard]). The light flickers after the second (`flicks`) and comes on after the third, at `on`, on the
-// headline's first word; it reads the headline from `read` for `dur`, and at `end` goes on to sweep the bar
+// the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens over `open`, then strains to
+// light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how hard]), and from `dim` its light
+// finds the title, weak and unsteady (nearly out in each of `dips`, counted from `dim`). When the day comes (from the
+// page's rising): it blinks its light out over `out`, strains again (`again`), and its light comes on for good at
+// `on`, on the headline's first word; it reads the headline from `read` for `dur`, and at `end` it sweeps the bar
 const WAKE = {
-  open: 0.55, pushes: [[0.8, 0.24, 0.7], [1.2, 0.28, 0.85], [1.74, 0.36, 1]], flicks: [[1.52, 1.59], [1.64, 1.69]],
-  on: 2.1, read: 2.36, dur: 1.1, end: 3.61,
+  open: 0.5, pushes: [[0.7, 0.26, 0.75], [1.08, 0.32, 0.9]], dim: 1.44, dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93]],
+  out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
 // the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
 const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
@@ -253,7 +254,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
-    this.dozing = false; this.wokeAt = -9; this.waking = false; this.popped = false; this.frozen = false;
+    this.dozing = false; this.wokeAt = -9; this.waking = false; this.titleAim = this.riseAt = null; this.popped = false; this.frozen = false;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -398,12 +399,22 @@ class Scene {
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
-  // the opening's wake-up (see WAKE): as the eye opens, its light comes on at the headline, from one point to another
-  // (viewport coordinates), and reads it; then it sweeps the bar and looks at you
-  wakeRead(x0, y0, x1, y1) {
-    if (this.reduced || document.hidden) return false;
+  // the opening's wake-up (see WAKE), at night: the title its weak light finds (a point, in viewport coordinates)
+  lightTitle(x, y) {
+    if (!this.showing()) return false;
+    const L = this.g.lamp;
+    this.titleAim = Math.atan2(y - this.oy - L.y, x - this.ox - L.x);
+    this.wake();
+    return true;
+  }
+  // then the day comes: it blinks its light out and strains again, and its light comes on for good on the headline,
+  // from one point to the other, and reads it; then it sweeps the bar and looks at you (with no headline, it only
+  // lights up)
+  rising(x0, y0, x1, y1) {
+    if (!this.showing() || this.riseAt != null) return false;
     const L = this.g.lamp, at = (x, y) => Math.atan2(y - this.oy - L.y, x - this.ox - L.x);
-    this.wakePath = { t0: this.t, a0: at(x0, y0), a1: at(x1, y1) };
+    this.riseAt = this.blink.at = this.t;
+    this.wakePath = x0 == null ? null : { t0: this.t, a0: at(x0, y0), a1: at(x1, y1) };
     this.wake();
     return true;
   }
@@ -411,15 +422,15 @@ class Scene {
   readingWords() { return !!this.wakePath || this.sweepingBar(); }
   // sweeping the bar: the page lights the widgets it passes
   sweepingBar() { return !!this.sweep?.bar; }
-  // the opening: asleep, its eye shut and its lamp out, until the page wakes it, to strain to light its lamp and read
-  // the title (see WAKE), or at once (now): its light comes on as the eye opens. Woken at once while it strains, it
-  // gives up the show and its light comes on.
+  // the opening: asleep, its eye shut and its lamp out, until the page wakes it for the show (see WAKE), or at once
+  // (now), its light coming on as the eye opens. Woken at once during the show, it gives it up and its light comes on.
   doze(on, now) {
     if (on) this.dozing = true;
     else if (this.dozing) {
       this.dozing = false; this.wokeAt = this.t; this.restAt = this.t; this.waking = !now && !this.reduced;
-      this.blink.next = this.t + WAKE.end + 4; // a first blink once it's done showing off (sooner if it looks at you)
-    } else if (now && this.straining()) { this.waking = false; this.wakePath = null; }
+      this.titleAim = this.riseAt = null; this.popped = false;
+      this.blink.next = this.t + (this.waking ? 12 : 4); // its own blinks once it's done (sooner if it looks at you)
+    } else if (now && this.showing()) { this.waking = false; this.wakePath = null; this.blink.next = this.t + 2; }
     this.wake();
   }
   // 1 while asleep, easing to 0 as the eye opens
@@ -429,22 +440,30 @@ class Scene {
     const a = clamp((this.t - this.wokeAt) / WAKE.open);
     return (1 - a) * (1 - a);
   }
-  // still straining to light its lamp, in the opening's wake-up
-  straining() { return this.waking && this.t - this.wokeAt < WAKE.on; }
-  // how hard it squeezes its eye shut right now, straining (0 to 1)
+  // the opening's show is on: from waking up until its light comes on for good
+  showing() { return this.waking && !(this.riseAt != null && this.t - this.riseAt >= WAKE.on); }
+  // how hard it squeezes its eye shut right now, straining to light its lamp (0 to 1)
   squeeze() {
-    if (!this.straining() || this.reduced) return 0;
-    const a = this.t - this.wokeAt;
-    for (const [p, d, k] of WAKE.pushes) if (a >= p && a < p + d) return k * smooth(p, p + 0.06, a) * (1 - smooth(p + d - 0.07, p + d, a));
+    if (!this.showing() || this.reduced) return 0;
+    const night = this.riseAt == null, a = this.t - (night ? this.wokeAt : this.riseAt);
+    for (const [p, d, k] of night ? WAKE.pushes : WAKE.again) if (a >= p && a < p + d) return k * smooth(p, p + 0.06, a) * (1 - smooth(p + d - 0.07, p + d, a));
     return 0;
   }
-  // the lamp: out while asleep; waking up with the show, out but for its flickers until it comes on at once; else
-  // on once the eye is half open
+  // how far its light reaches (0 to 1): out while asleep; in the show, from `dim` at night until the day's `out`, then
+  // from `on`; else on once the eye is half open
   lampOn() {
     if (this.dozing) return 0;
-    const a = this.t - this.wokeAt;
-    if (this.waking) return a >= WAKE.on ? smooth(WAKE.on, WAKE.on + 0.1, a) : WAKE.flicks.some(([f0, f1]) => a >= f0 && a < f1) ? 0.22 : 0;
-    return 1 - smooth(0, 0.6, this.drowsy());
+    if (!this.waking) return 1 - smooth(0, 0.6, this.drowsy());
+    const dim = smooth(WAKE.dim, WAKE.dim + 0.15, this.t - this.wokeAt), b = this.t - this.riseAt;
+    return this.riseAt == null ? dim : b < WAKE.out ? dim : smooth(WAKE.on, WAKE.on + 0.12, b);
+  }
+  // how bright its light is (0 to 1): in the show, at night, weak and unsteady, nearly out now and then, and going out
+  // as the day comes; else full
+  lampPower() {
+    if (!this.waking || (this.riseAt != null && this.t - this.riseAt >= WAKE.on)) return 1;
+    const f = this.t - this.wokeAt - WAKE.dim;
+    const weak = WAKE.dips.some(([d0, d1]) => f >= d0 && f < d1) ? 0.1 : 0.5 + 0.1 * Math.sin(f * 31) * Math.sin(f * 13 + 1);
+    return this.riseAt == null ? weak : weak * (1 - smooth(0, WAKE.out, this.t - this.riseAt));
   }
   // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
   freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
@@ -465,7 +484,7 @@ class Scene {
     return true;
   }
   play() {
-    if (this.reduced || this.ball || document.hidden || this.straining()) return false;
+    if (this.reduced || this.ball || document.hidden || this.showing()) return false;
     const h = hatGeom(this), pr = h.pr;
     if (!this.bar.some(t => t.y + pr < h.bob[1] - pr) || !this.seen(this.g.lamp.x, this.g.lamp.y)) return false;
     this.endBore();
@@ -671,10 +690,11 @@ class Scene {
      squeeze */
   mood() {
     const L = this.g.lamp, b = this.bore;
-    if (this.straining()) {
-      // waking up: it looks at the headline, and squeezes its eye shut, straining to light its lamp
-      const k = this.squeeze(), wp = this.wakePath;
-      return { a: wp ? wp.a0 : 0, m: wp ? smooth(WAKE.open * 0.4, WAKE.open + 0.2, this.t - this.wokeAt) : 0, shut: Math.min(1, k * 1.5), strain: k };
+    if (this.showing()) {
+      // waking up: it looks at what it means to light (the title, then the headline), and squeezes its eye shut,
+      // straining to light its lamp
+      const k = this.squeeze(), aim = this.wakePath ? this.wakePath.a0 : this.titleAim;
+      return { a: aim ?? 0, m: aim == null ? 0 : smooth(WAKE.open * 0.4, WAKE.open + 0.2, this.t - this.wokeAt), shut: Math.min(1, k * 1.5), strain: k };
     }
     if (this.ball) return { a: Math.atan2(this.ball.y - L.y, this.ball.x - L.x), m: 1 };
     if (this.look && this.t < this.look.until) return { a: Math.atan2(this.look.y - L.y, this.look.x - L.x), m: 1 };
@@ -1012,7 +1032,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < (this.waking ? WAKE.on : WAKE.open) + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1079,8 +1099,8 @@ class Scene {
     }
     // the eye blinks now and then
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
-    // its lamp lit at last, after all that straining: the hat jumps
-    if (this.waking && !this.popped && this.t - this.wokeAt >= WAKE.on) { this.popped = true; this.hatKick = this.t; }
+    // its lamp lit for good, after all that straining: the hat jumps
+    if (this.waking && !this.popped && this.riseAt != null && this.t - this.riseAt >= WAKE.on) { this.popped = true; this.hatKick = this.t; }
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
     if (!this.flocked && !this.held) this.flock();
@@ -1102,11 +1122,17 @@ class Scene {
     if (this.gaze && (this.ball || this.sweep || this.wakePath || this.t > this.gaze.until)) { this.gaze = null; this.restAt = this.t; }
     // (asked first: when the sweep ends here, the look at you starts this very frame, before the pointer can pull
     // the light)
-    const lock = this.wakePath || this.gaze ? null : this.beamLock();
+    const lock = this.wakePath || this.gaze || this.showing() ? null : this.beamLock();
     if (this.wakePath) {
-      // waking up (see wakeRead): its light comes on at the headline's first word and reads across to the last
+      // the day comes (see rising): its weak light goes out on the title, and its light for good comes on at the
+      // headline's first word and reads across to the last
+      const w = this.t - wp.t0;
       b.steer = 1;
-      b.sa = wp.a0 + angDiff(wp.a1, wp.a0) * smooth(WAKE.read, WAKE.read + WAKE.dur, this.t - wp.t0);
+      if (w >= WAKE.out) b.sa = wp.a0 + angDiff(wp.a1, wp.a0) * smooth(WAKE.read, WAKE.read + WAKE.dur, w);
+    } else if (this.showing()) {
+      // at night (see lightTitle): its weak light on the title, a little unsteady
+      b.steer = 1;
+      if (this.titleAim != null) b.sa = this.titleAim + (rm ? 0 : 0.025 * Math.sin(this.t * 2.1));
     } else if (this.gaze) {
       // looking at you: the light comes round to face you and stays there a moment (the pointer can wait)
       b.phi = this.gaze.phi;
@@ -1950,31 +1976,31 @@ function drawWaves(s, c) {
   }
 }
 
-/* the light: a flat yellow fan with felt-pen edges, brighter at night */
+/* the light: a flat yellow fan with felt-pen edges, brighter at night (fainter, pen and all, while it's weak) */
 function beamPoly(s) {
   const L = s.g.lamp, B = s.beam, len = B.len * s.diag * 1.05, hw = s.g.beamHalf;
   return { L, len, a0: B.a - hw, a1: B.a + hw };
 }
 function drawBeam(s, c) {
-  const g = s.g, u = g.u, P = s.P, I = s.beamI(), { L, len, a0, a1 } = beamPoly(s);
-  if (len < 10) return;
+  const g = s.g, u = g.u, P = s.P, I = s.beamI(), pw = s.lampPower(), { L, len, a0, a1 } = beamPoly(s);
+  if (len < 10 || pw < 0.02) return;
   const night = smooth(0.3, 0.8, s.d);
   const e0 = [L.x + Math.cos(a0) * len, L.y + Math.sin(a0) * len], e1 = [L.x + Math.cos(a1) * len, L.y + Math.sin(a1) * len];
   const fan = [[L.x, L.y], e0];
   for (let i = 1; i < 12; i++) { const a = lerp(a0, a1, i / 12); fan.push([L.x + Math.cos(a) * len, L.y + Math.sin(a) * len]); }
   fan.push(e1);
   const col = mix(P.beam, hex('#FFF6C2'), night * 0.45);
-  poly(c, fan); c.fillStyle = rgba(col, 0.84 + 0.12 * night * I); c.fill();
+  poly(c, fan); c.fillStyle = rgba(col, (0.84 + 0.12 * night * I) * pw); c.fill();
   // the scallops it crosses light up
   c.save(); poly(c, fan); c.clip();
-  c.strokeStyle = rgba(mix(col, hex('#FFFFFF'), 0.5), 0.95); waveScallops(s, c, true);
+  c.strokeStyle = rgba(mix(col, hex('#FFFFFF'), 0.5), 0.95 * pw); waveScallops(s, c, true);
   c.restore();
   // the pen goes along both edges, from just outside the eye
   const r0 = g.lh.er * 2.3;
   c.beginPath();
   for (const [a, sd] of [[a0, 13], [a1, 17]]) ribbon(c, dens([[L.x + Math.cos(a) * r0, L.y + Math.sin(a) * r0], [L.x + Math.cos(a) * len, L.y + Math.sin(a) * len]], 9), DET * 0.95, sd, { tin: 20, tout: 1, w0: 0.2, w1: 1 });
   if (s.beam.len < 0.85) ribbon(c, dens(fan.slice(1), 6), DET * 0.9, 19, { tin: 3, tout: 3 });
-  c.fillStyle = INK; c.fill();
+  c.globalAlpha = 0.3 + 0.7 * pw; c.fillStyle = INK; c.fill(); c.globalAlpha = 1;
 }
 
 /* where the light lands on the hill: a flat, lighter print on the grass */
@@ -1985,14 +2011,14 @@ function drawHillLight(s, c) {
   c.save(); poly(c, s.g.hillClip); c.clip();
   c.beginPath(); c.moveTo(L.x, L.y);
   for (let i = 0; i <= 12; i++) { const a = lerp(a0, a1, i / 12); c.lineTo(L.x + Math.cos(a) * len, L.y + Math.sin(a) * len); }
-  c.closePath(); c.fillStyle = rgba(mix(s.P.hill, s.P.beam, 0.5 + 0.2 * night)); c.fill();
+  c.closePath(); c.fillStyle = rgba(mix(s.P.hill, s.P.beam, (0.5 + 0.2 * night) * s.lampPower())); c.fill();
   c.restore();
 }
 
 /* the lamp's halo at night: hand-drawn rings and short rays, no blur */
 function drawHalo(s, c) {
   const g = s.g, u = g.u, P = s.P, L = g.lamp, er = g.lh.er;
-  const night = smooth(0.35, 0.85, s.d), f = s.beam.flash, k = Math.max(night * s.beamI(), f * 0.9) * s.lampOn();
+  const night = smooth(0.35, 0.85, s.d), f = s.beam.flash, k = Math.max(night * s.beamI(), f * 0.9) * s.lampOn() * s.lampPower();
   if (k < 0.02) return;
   const r1 = er * (2.1 + f * 0.6), r2 = er * (3 + f * 1.4);
   // the lit lantern: a flat disc of light just around the eye

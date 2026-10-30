@@ -118,6 +118,11 @@ h1, h2, h3 { text-wrap: balance; }
   color: #fff; rotate: -1.5deg; -webkit-text-stroke: .045em var(--pen); paint-order: stroke fill; text-shadow: 0 .045em 0 #1111111f;
 }
 .op-mark { position: relative; isolation: isolate; }
+/* its words glow in the lighthouse's weak light at night (main.js sets --glow) */
+.op-mark > span {
+  text-shadow: 0 .045em 0 #1111111f, 0 0 10px rgb(255 224 74 / var(--glow, 0)), 0 0 24px rgb(255 224 74 / calc(var(--glow, 0) * .9)),
+    0 0 46px rgb(255 212 59 / calc(var(--glow, 0) * .65));
+}
 .op-bar {
   display: flex; align-items: center; gap: 8px; width: min(780px, 100%); padding: 7px 8px; border-radius: 22px;
   background: color-mix(in srgb, #ffffff 36%, transparent); box-shadow: inset 0 0 0 1px #ffffffb3, 0 20px 44px -20px #0b1d4a73;
