@@ -223,9 +223,9 @@ const WAKE = {
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
 // a knock at the cottage's door, in seconds from the knock: it opens over `open`, the keeper is in the doorway from
-// `keeper`[0] to [1], looking out to the left and from `right` to the right, wonders (`huh`) and goes in; it shuts over
-// `shut`, and it's over at `end` (`away`, when he's out on the ridge and nobody comes)
-const VISIT = { open: [0.55, 0.8], keeper: [0.7, 2.6], right: 1.6, huh: 2.2, shut: [2.62, 2.88], end: 2.95, away: 1.6 };
+// `keeper`[0] to [1], looking out to the left and from `right` to the right; he wonders (`huh`), turns his back at `turn`
+// and walks back in; it shuts over `shut`, and it's over at `end` (`away`, when he's out on the ridge and nobody comes)
+const VISIT = { open: [0.55, 0.8], keeper: [0.7, 2.95], right: 1.6, huh: 2.2, turn: 2.4, shut: [2.97, 3.22], end: 3.3, away: 1.6 };
 // the grass on the hill: at most this many tufts (fewer on phones), a new one every 3 to 6 s while there are fewer
 const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
 
@@ -2522,6 +2522,18 @@ function drawKeeper(s, c, x, y, sc, pose, flip, walk) {
     ribbon(c, [[5 * u, -22 * u], [6.5 * u + st * 4 * u, -14 * u]], DET * 1.1, 5, { tin: 1, tout: 1 });
   }
   c.fillStyle = INK; c.fill();
+  if (pose === 'back') {
+    // seen from behind: white hair under the cap, his ears, no face
+    const head = ellipse(0, -29 * u, 5 * u, 5.4 * u, 20);
+    for (const sx of [-1, 1]) dot(c, sx * 5 * u, -28.6 * u, 1.3 * u, skin);
+    print(c, head, white);
+    c.beginPath(); loop(c, head, DET, 6, { over: 0.04 }); c.fillStyle = INK; c.fill();
+    const back = [[-5.2 * u, -31.5 * u], [-4.8 * u, -36.2 * u], [4.8 * u, -36.2 * u], [5.2 * u, -31.5 * u]];
+    poly(c, back); c.fillStyle = rgba(navy); c.fill();
+    c.beginPath(); edges(c, back, DET * 0.9, 8, false, { ov: 0.5 }); c.fillStyle = INK; c.fill();
+    c.restore();
+    return;
+  }
   // head, white beard, cap with a peak
   const head = ellipse(0.5 * u, -29 * u, 5 * u, 5.4 * u, 20);
   print(c, head, skin);
@@ -2570,7 +2582,7 @@ function drawEditKeeper(s, c, p) {
 }
 
 /* someone knocked at the cottage (see knock and VISIT): the door jumps under the knocks, then swings open on a lamp-lit
-   room; the keeper looks out to the left and to the right, sees nobody, goes back in and shuts it */
+   room; the keeper looks out to the left and to the right, sees nobody, turns his back, walks in and shuts it */
 function drawVisit(s, c) {
   const v = s.visit, g = s.g, k = g.cot, d = k.door;
   if (!v || !d) return;
@@ -2603,12 +2615,14 @@ function drawVisit(s, c) {
     c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
     c.globalAlpha = 1;
     poly(c, frame); c.fillStyle = rgba(warm); c.fill();
-    // the keeper in the doorway, leaning out the way he looks
+    // the keeper in the doorway, leaning out the way he looks; then his back, walking in, a little smaller and higher
+    // the further in he is, into the lamplight
     const kin = rm ? (a >= V.keeper[0] && a < V.keeper[1] ? 1 : 0) : smooth(V.keeper[0], V.keeper[0] + 0.12, a) * (1 - smooth(V.keeper[1] - 0.14, V.keeper[1], a));
     if (kin > 0.01) {
-      const right = a >= V.right, lean = rm ? 0 : (right ? 1 : -1) * 2.5 * u * sc;
+      const right = a >= V.right, back = a >= V.turn, deep = rm ? 0 : smooth(V.turn + 0.1, V.keeper[1], a);
+      const lean = rm ? 0 : (right ? 1 : -1) * 2.5 * u * sc * (1 - smooth(V.turn - 0.05, V.turn + 0.15, a));
       c.globalAlpha = kin;
-      drawKeeper(s, c, d.x + d.w / 2 + lean, k.base, sc, 'stand', !right, 0);
+      drawKeeper(s, c, d.x + d.w / 2 + lean, k.base - 5 * u * sc * deep, sc * (1 - 0.15 * deep), back ? 'back' : 'stand', !right && !back, back && !rm ? s.t * 9 : 0);
       c.globalAlpha = 1;
     }
   }
