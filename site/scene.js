@@ -120,7 +120,31 @@ const C = {
   monster: hex('#FF8FC0'), chimney: hex('#E8452F'), roof: hex('#2B2B36'), door: hex('#2E58D8'), skin: hex('#F6C9A6'),
   navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'),
   huts: ['#FF4A36', '#2E58D8', '#FFC21A', '#36A852'].map(hex),
+  sprout: hex('#2E9B3B'),
 };
+// animals that live on the hill (not riding a cloud): they wander and graze
+const grazer = o => (o.kind === 'sheep' || o.kind === 'cow') && !o.ride;
+/* The sheep's box, in its own units (times boxK): the front face's half size, the depth seen past it, and
+   three air holes punched in the front, the first two with eyes behind them */
+const BOX = { hw: 21, hh: 13, dx: 9, dy: -7, holes: [[-11, -1.5], [0.5, -3.5], [11.5, -0.5]] };
+// its lid: a cloud's row of puffs sitting on the box, following its top back to the far corner (box units)
+const LID = (() => {
+  const bumps = [[-18, -12, 10], [-6, -18, 13], [8, -19.5, 13], [21, -18, 11], [30, -17, 7.5]], top = [];
+  for (let i = 0; i <= 72; i++) {
+    const x = -28.5 + 66.5 * i / 72;
+    let y = -9.5;
+    for (const [bx, by, r] of bumps) { const d = x - bx; if (Math.abs(d) < r) y = Math.min(y, by - Math.sqrt(r * r - d * d)); }
+    top.push([x, y]);
+  }
+  return top;
+})();
+const LID_TOP = Math.min(...LID.map(p => p[1])), LID_X0 = LID[0][0], LID_X1 = LID[LID.length - 1][0];
+const BOX_SP = 6.5; // its drift, in the clouds' units
+// a rect [x0, y0, x1, y1] against a rect, or a disc [x, y, r]
+const overlaps = (a, q) => q.length === 3
+  ? Math.hypot(clamp(q[0], a[0], a[2]) - q[0], clamp(q[1], a[1], a[3]) - q[1]) < q[2]
+  : a[0] < q[2] && a[2] > q[0] && a[1] < q[3] && a[3] > q[1];
+const boxK = s => Math.max(s.g.u, 0.72) * 1.12;
 const HAND = '"Shantell Sans Hand", "Shantell Sans", "Chalkboard SE", sans-serif';
 
 /* ---------- the pen ----------
@@ -196,6 +220,8 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
+// the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
+const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
 
 class Scene {
   constructor(host, opts = {}) {
@@ -226,6 +252,9 @@ class Scene {
     this.doodles = []; this.splashes = [];
     this.hatKick = -9; this.regrowAt = -9;
     this.onBar = null;
+    // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
+    this.flocked = false; this.meadow = []; this.sproutAt = 0;
+    this.box = { v: null, cl: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -250,7 +279,11 @@ class Scene {
   setDusk(d) { this.dTarget = clamp(+d || 0); if (this.reduced) this.d = this.dTarget; this.wake(); }
   setState(name) {
     if (!STATES.includes(name)) return;
-    if (name !== this.state) { this.state = name; this.since[name] = this.t; }
+    if (name !== this.state) {
+      this.state = name; this.since[name] = this.t;
+      // a new little scene may stand where an animal rests: resting ones look around again shortly
+      for (const o of this.objs) if (grazer(o) && o.act === 'idle') o.until = Math.min(o.until, this.t + 0.6 + Math.random() * 1.2);
+    }
     this.wake();
   }
   setTheme(id) {
@@ -307,6 +340,13 @@ class Scene {
     // the lighthouse plays ball instead of catching things (and winks when it can't)
     if (y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base) {
       if (!this.play()) this.blink.wink = this.t;
+      this.wake();
+      return false;
+    }
+    // the sheep in its box says baa (and the light turns to see who's there); nothing drops
+    if (this.boxHit(x, y)) {
+      this.aim(x, y);
+      this.baa();
       this.wake();
       return false;
     }
@@ -562,7 +602,7 @@ class Scene {
   bobbleK() { return this.ball || this.t < this.regrowAt ? 0 : pop((this.t - this.regrowAt) / 0.5); }
   // a word or a note drawn by the pen for a moment; light over the sea, dark over the sky by day
   doodle(kind, x, y, o = {}) {
-    this.doodles.push({ kind, x, y, t0: this.t, life: o.life ?? 0.95, align: o.align ?? 'center', sea: this.isSea(x, y + 4 * this.g.u), flip: o.flip ? -1 : 1, seed: Math.random() * 10 });
+    this.doodles.push({ kind, x, y, t0: this.t, life: o.life ?? 0.95, align: o.align ?? 'center', sea: this.isSea(x, y + 4 * this.g.u), flip: o.flip ? -1 : 1, seed: Math.random() * 10, text: o.text, calm: Boolean(o.calm) });
   }
 
   /* ----- size and layout ----- */
@@ -676,6 +716,15 @@ class Scene {
     g.key = portrait ? null : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 562) + 12, y0: H - 160, y1: H };
     this.layoutV++;
     for (const o of this.objs) this.settle(o);
+    // the grass stays on the ground at the same depth, or goes; meals and walks start over
+    for (const m of this.meadow) {
+      const ry = this.ridgeY(m.x);
+      if (ry == null || ry + m.depth > Math.min(this.shoreY(m.x) - 10 * u, H - 12 * u)) m.gone = true;
+      else m.y = ry + m.depth;
+      m.by = null;
+    }
+    this.meadow = this.meadow.filter(m => !m.gone);
+    for (const o of this.objs) if (grazer(o) && o.act) { o.tuft = null; o.act = 'idle'; o.until = this.t + 1; }
     // the bar's widgets moved with it: a game or a trick in progress ends quietly
     this.endBall(); this.endBore();
   }
@@ -756,15 +805,22 @@ class Scene {
     }
     // no land in sight (a phone, with the notes over the hill): it lands on a cloud
     if (kind === 'sheep' || kind === 'cow') {
-      const riders = cl => this.objs.filter(o => o.ride === cl && o.dying == null).length + R() * 0.5;
-      for (const cl of [...g.clouds, g.sheepCloud].sort((a, b) => riders(a) - riders(b))) {
-        const p = this.cloudXY(cl);
-        if (p.x > 40 * u && p.x < W - 40 * u && Math.hypot(p.x - g.lamp.x, p.y - g.lamp.y) > T.er * 5 && this.seen(p.x, p.y - cl.w * 0.2)) return { x: p.x, y: p.y, cloud: cl };
-      }
+      const cl = this.cloudSpot();
+      if (cl) { const p = this.cloudXY(cl); return { x: p.x, y: p.y, cloud: cl }; }
     }
     // nothing visible: drop it where it belongs anyway, falling from the sky
     const p = tries[0] || { x: W * 0.8, y: H * 0.8 };
     return { ...p, fromSky: true };
+  }
+  // a cloud that shows, the one with the fewest riders first, for a sheep or a cow with no land in sight
+  cloudSpot() {
+    const g = this.g, u = g.u, R = Math.random, T = g.lh;
+    const riders = cl => this.objs.filter(o => o.ride === cl && o.dying == null).length + R() * 0.5;
+    for (const cl of [...g.clouds, g.sheepCloud].sort((a, b) => riders(a) - riders(b))) {
+      const p = this.cloudXY(cl);
+      if (p.x > 40 * u && p.x < g.W - 40 * u && Math.hypot(p.x - g.lamp.x, p.y - g.lamp.y) > T.er * 5 && this.seen(p.x, p.y - cl.w * 0.2)) return cl;
+    }
+    return null;
   }
 
   spawn(x, y, kind, settled, fromSky) {
@@ -775,7 +831,7 @@ class Scene {
       if (land) o.kind = R() < 0.6 ? 'sheep' : 'cow';
       else if (sea) o.kind = R() < 0.55 ? 'duck' : 'monster';
       else if (y < lerp(g.top, g.horizon, 0.55) && R() < 0.45) o.kind = 'gull';
-      else o.kind = this.ridgeY(x) != null && y < this.shoreY(x) && x > (g.portrait ? 0 : this.hillLeftX(g.horizon) - 20 * u) ? (R() < 0.6 ? 'sheep' : 'cow') : (R() < 0.6 ? 'duck' : 'monster');
+      else o.kind = this.ridgeY(x) != null && y < this.shoreY(x) && x > (g.portrait ? 0 : this.hillLeftX(g.horizon) - 20 * u) ? (R() < 0.6 ? 'sheep' : 'cow') : 'duck'; // from the sky, only ducks: monsters surface where the water is clicked
     }
     const still = settled || this.reduced;
     if (o.kind === 'gull') {
@@ -793,7 +849,7 @@ class Scene {
     } else {
       o.ty = sea ? y : g.horizon + (g.H - g.horizon) * (0.16 + R() * 0.55);
       if (!sea) { const sp = this.seaSpans(o.ty); const s = sp.find(q => q[0] <= x && x <= q[1]) || sp[0]; if (s) o.x = clamp(x, s[0] + 24 * u, s[1] - 30 * u); }
-      if (o.kind === 'monster' || still || sea && !fromSky) { o.y = o.ty; o.state = o.kind === 'monster' ? 'swim' : 'float'; if (!this.reduced) this.ripples.push({ x: o.x, y: o.ty, t0: this.t, a: 0.8 }); }
+      if (o.kind === 'monster' || still || sea && !fromSky) { o.y = o.ty; o.state = o.kind === 'monster' ? 'swim' : 'float'; if (!this.reduced && !settled) this.ripples.push({ x: o.x, y: o.ty, t0: this.t, a: 0.8 }); }
       else { o.state = 'fall'; if (fromSky) o.y = Math.min(o.ty - 120 * u, g.top - 20); }
       o.sc = this.depthScale(o.ty);
     }
@@ -802,11 +858,11 @@ class Scene {
     if (live.length > MAX_OBJS) live[0].dying = this.t;
     return o;
   }
-  ride(kind, cl) {
+  ride(kind, cl, settled) {
     const g = this.g, R = Math.random, p = this.cloudXY(cl);
     const o = { kind, ride: cl, dx: (R() - 0.5) * cl.w * 0.3, x: p.x, y: 0, vx: 0, vy: 0, t0: this.t, flip: R() < 0.5, seed: (R() * 1e4) | 0, lit: 0, sc: 0.85 * (g.portrait ? 1.1 : 1) };
     o.x = p.x + o.dx; o.ty = this.rideY(o);
-    if (this.reduced) { o.state = 'ride'; o.y = o.ty; o.land = -9; } else { o.state = 'fall'; o.y = g.top - 30; }
+    if (this.reduced || settled) { o.state = 'ride'; o.y = o.ty; o.land = -9; } else { o.state = 'fall'; o.y = g.top - 30; }
     this.objs.push(o);
     const live = this.objs.filter(q => q.dying == null);
     if (live.length > MAX_OBJS) live[0].dying = this.t;
@@ -820,8 +876,14 @@ class Scene {
       else if (o.state === 'fall') { o.y = o.ty; o.vy = 0; o.state = o.ride ? 'ride' : o.kind === 'duck' ? 'float' : 'land'; }
       o.land = -9;
       if (o.dying != null) o.dead = true;
+      // no one eats: heads up, meals over
+      if (grazer(o)) { this.letGo(o); o.act = 'idle'; o.head = 0; o.vx = o.vd = 0; o.joy = null; }
     }
     this.objs = this.objs.filter(o => !o.dead);
+    // the grass stands still: grown, with whatever is left of it
+    for (const m of this.meadow) { m.t0 = -99; m.blades = m.blades.filter(b => b.cut == null); m.left = m.blades.length; }
+    this.meadow = this.meadow.filter(m => m.left > 0);
+    this.box.hop = this.box.peek = -9;
     this.ripples = [];
     this.endBall(); this.endBore();
     this.regrowAt = this.hatKick = -9;
@@ -858,7 +920,8 @@ class Scene {
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
-    if (this.ball || this.bore || this.doodles.length || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9) return true;
+    // (the grazing and its "nom"s are slow: they carry on at the idle rate)
+    if (this.ball || this.bore || this.doodles.some(d => !d.calm) || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9 || this.t - this.box.hop < 0.8) return true;
     for (const o of this.objs) if (o.state === 'fall' || (o.state === 'fly' && !this.reduced) || o.dying != null || (o.land > 0 && this.t - o.land < 0.4)) return true;
     return this.beam.steer > 0.01 && this.beam.steer < 0.99 && !this.reduced;
   }
@@ -894,7 +957,7 @@ class Scene {
     this.windTotal = this.windAmb + this.wind;
     if (!rm) this.drift += dt * (1 + this.windTotal * 2.4);
     // clouds lean away from the pointer
-    for (const cl of [...g.clouds, g.sheepCloud]) {
+    for (const cl of [...g.clouds, g.sheepCloud, ...(this.box.cl ? [this.box.cl] : [])]) {
       let tx = 0, ty = 0;
       if (this.ptr.on && !rm) {
         const p = this.cloudXY(cl, true), dx = p.x - this.ptr.x, dy = p.y - this.ptr.y, r = 170 * u, dd = Math.hypot(dx, dy);
@@ -913,7 +976,10 @@ class Scene {
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
+    if (!this.flocked) this.flock();
     this.updateObjs(dt);
+    this.updateMeadow();
+    this.updateBox(dt);
     this.updateBall(dt);
     this.updateBore();
     this.doodles = this.doodles.filter(d => this.t - d.t0 < d.life);
@@ -959,13 +1025,7 @@ class Scene {
       } else if (rm) {
         // reduced motion: everything holds still where it appeared
       } else if (o.state === 'land') {
-        const dx = o.x - this.ptr.x, dy = o.y - this.ptr.y, near = this.ptr.on && o.kind === 'sheep' && dx * dx + dy * dy < (110 * u) ** 2;
-        const stroll = Math.sin(this.t * 0.35 + o.seed) > 0.8 ? (o.flip ? -1 : 1) * (o.kind === 'cow' ? 7 : 12) * u : 0;
-        o.vx = lerp(o.vx, near ? Math.sign(dx || 1) * 70 * u : stroll, Math.min(1, dt * 3));
-        if (Math.abs(o.vx) > 3 * u) o.flip = o.vx < 0;
-        const nx = o.x + o.vx * dt, ry = this.ridgeY(nx);
-        if (ry == null || ry + o.depth > Math.min(g.H - 8 * u, this.shoreY(nx) - 12 * u) || nx > g.W - 12 * u || Math.abs(nx - g.lh.x) < g.lh.wB * 0.6) o.vx = 0;
-        else { o.x = nx; o.y = ry + o.depth; }
+        this.live(o, dt);
       } else if (o.state === 'float') {
         o.x += this.windTotal * 6 * u * dt;
         o.y = o.ty + Math.sin(this.t * 2.2 + o.seed) * 1.8 * u;
@@ -981,7 +1041,319 @@ class Scene {
       o.lit = rm ? this.inBeam(o.x + this.ox, o.y - 12 * u * o.sc + this.oy) : lerp(o.lit, this.inBeam(o.x + this.ox, o.y - 12 * u * o.sc + this.oy), Math.min(1, dt * 8));
       if (o.dying != null && (rm || this.t - o.dying > 0.7)) o.dead = true;
     }
+    for (const o of this.objs) if (o.dead || o.dying != null) this.letGo(o);
     this.objs = this.objs.filter(o => !o.dead);
+  }
+
+  /* ----- a lived-in hill -----
+     A small flock is there from the start, settled where it's seen. Tufts of grass sprout here and there on
+     the visible hill; a sheep or a cow that isn't busy walks over to the nearest free one (across the slope as
+     much as along it), lowers its head and eats it blade by blade, looks pleased, and goes back to idling and
+     wandering. Sheep still run from the pointer, mid-meal or not. All of it is slow, so it runs at the idle rate. */
+  flock() {
+    this.flocked = true;
+    const g = this.g, u = g.u, R = Math.random;
+    if (g.portrait) {
+      // phones: one or two, on whatever land or cloud shows in the first screen
+      for (const kind of ['sheep', R() < 0.4 ? 'cow' : 'sheep']) {
+        const p = this.landSpot({ gap: 50 * u });
+        if (p) this.spawn(p.x, p.y, kind, true);
+        else { const cl = this.cloudSpot(); if (cl && !this.objs.some(o => o.ride === cl)) this.ride(kind, cl, true); }
+      }
+    } else {
+      for (const kind of g.W >= 1200 ? ['sheep', 'cow', 'sheep', 'sheep'] : ['sheep', 'cow', 'sheep']) {
+        const p = this.landSpot({ gap: 64 * u, spread: true, check: 4, snug: true });
+        if (p) this.spawn(p.x, p.y, kind, true);
+      }
+      const d = this.seaSpot();
+      if (d) this.spawn(d.x, d.y, 'duck', true);
+    }
+    // grass already there: one a short walk from somebody (the first meal comes soon), the rest spread out
+    const first = this.objs.find(grazer);
+    for (let i = 0, n = 3 + (R() < 0.5 ? 1 : 0); i < n; i++) this.sprout(true, i === 0 && first && !this.reduced ? first : null);
+    this.sproutAt = this.t + 4 + R() * 4;
+    // not everyone is hungry at once: the one nearest some grass first, soon, and the others in turn
+    const near = o => Math.min(1e9, ...this.meadow.map(m => Math.hypot(m.x - o.x, (m.y - o.y) * 1.5)));
+    this.objs.filter(grazer).sort((a, b) => near(a) - near(b)).forEach((o, k) => {
+      o.hungry = this.t + (k ? 6 + k * (6 + R() * 5) : 0); o.act = 'idle'; o.until = this.t + (k ? 1 + R() * 3 : 1); o.head = 0; o.vd = 0;
+    });
+  }
+  /* A visible spot on the hill for an animal or a tuft, clear of the lighthouse, the cottage, the key and the
+     section's props, at least `gap` from the others (the farthest of a few when `spread`), or near `near`.
+     A few DOM checks at most; null when none shows. */
+  landSpot({ gap = 0, spread = false, near = null, reach = 0, min = 0, check = 3, snug = false, clear = false } = {}) {
+    const g = this.g, u = g.u, R = Math.random, W = g.W, H = g.H, out = [];
+    const others = [...this.objs.filter(o => grazer(o) && o.dying == null && o !== near), ...this.meadow];
+    for (let i = 0; i < 40; i++) {
+      const x = near ? near.x + (R() * 2 - 1) * reach : (g.portrait ? lerp(0.3, 0.97, R()) : lerp(0.5, 0.97, R())) * W;
+      const ry = this.ridgeY(x);
+      if (ry == null || x > W - 22 * u) continue;
+      const room = Math.min(this.shoreY(x) - 16 * u, H - 24 * u, ry + H * 0.36) - ry;
+      if (room < 12 * u) continue;
+      const y = near ? clamp(near.y + (R() * 2 - 1) * reach * 0.45, ry + 6 * u, ry + room) : ry + lerp(8 * u, room, R() ** 0.85);
+      if (near && Math.hypot(x - near.x, y - near.y) < min) continue;
+      // snug: well inside the hill, not on its steep edge over the sea or down at the window's bottom
+      if (snug && (y > H - 84 * u || !this.isLand(x - 46 * u, y) || !this.isLand(x - 46 * u, y + 16 * u))) continue;
+      if (!this.open(x, y)) continue;
+      // clear: not hidden behind an animal's body, nor under its feet
+      if (clear && others.some(o => !o.blades && Math.abs(o.x - x) < 32 * u * o.sc && y > o.y - 36 * u * o.sc && y < o.y + 12 * u)) continue;
+      let d = 1e9;
+      for (const o of others) d = Math.min(d, Math.hypot(o.x - x, (o.y - y) * 1.6));
+      if (d < gap) continue;
+      out.push({ x, y, d });
+    }
+    // spread out, but not into the corners: far enough from the others, then near the middle of the pasture
+    if (spread) { const mid = g.portrait ? 0.7 * W : 0.79 * W, sc = p => Math.min(p.d, 170 * u) - Math.abs(p.x - mid) * 0.3; out.sort((a, b) => sc(b) - sc(a)); }
+    // seen: its middle, and its ends too unless it's only a walk's goal
+    for (let i = 0; i < Math.min(check, out.length); i++) {
+      const p = out[i];
+      if (this.seen(p.x, p.y - 6 * u) && this.seen(p.x, p.y - 24 * u) && (near || (this.seen(p.x - 20 * u, p.y - 8 * u) && this.seen(p.x + 20 * u, p.y - 8 * u)))) return p;
+    }
+    return null;
+  }
+  // nothing of the scene's own in the way: the lighthouse, the cottage, the key, the huts, the desk
+  open(x, y) {
+    const g = this.g, u = g.u, T = g.lh, k = g.cot;
+    if (g.key && x > g.key.x0 && x < g.key.x1 && y > g.key.y0 - 30 * u) return false;
+    if (Math.abs(x - T.x) < T.wB * 0.9 + 20 * u && y < T.base + 42 * u) return false;
+    if (Math.abs(x - k.x) < k.w * 0.8 + 18 * u && y < k.base + 32 * u) return false;
+    if (this.state === 'tiling' || this.pres.tiling > 0.01) for (const q of hutSpots(this)) if (Math.abs(x - q.x) < 42 * u && y > q.y - 74 * u && y < q.y + 24 * u) return false;
+    if (this.state === 'widgets' || this.pres.widgets > 0.01) { const d = deskSpot(this); if (Math.abs(x - d.x) < 66 * u && y > d.y - 110 * u && y < d.y + 24 * u) return false; }
+    return true;
+  }
+  // a visible spot on the sea for the duck, clear of "the sea (wet)"
+  seaSpot() {
+    const u = this.g.u, lab = seaLabelSpot(this);
+    for (let i = 0; i < 4; i++) {
+      const p = this.spot('duck');
+      if (p.fromSky) return null;
+      if (!lab || !(p.x > lab.x - 46 * u && p.x < lab.x + 160 * u && p.y > lab.y - 34 * u && p.y < lab.y + 54 * u)) return p;
+    }
+    return null;
+  }
+  // a tuft of grass where it's seen (near `near` if it can); `grown` for the ones already there when the page opens
+  sprout(grown, near) {
+    const u = this.g.u, R = Math.random;
+    const p = (near && this.landSpot({ near, reach: 110 * u, min: 55 * u, gap: 44 * u, snug: true, clear: true, check: 3 }))
+      || this.landSpot({ gap: 48 * u, snug: true, clear: true, spread: grown });
+    if (!p) return null;
+    const sc = this.depthScale(p.y) * 0.85, n = 5 + ((R() * 3) | 0), blades = [];
+    for (let i = 0; i < n; i++) {
+      const f = i / (n - 1) - 0.5;
+      blades.push({
+        dx: (f * 13 + (R() - 0.5) * 1.8) * u * sc, a: f * 1.05 + (R() - 0.5) * 0.22, flex: 0.7 + R() * 0.5,
+        l: (14 + R() * 7) * (1 - Math.abs(f) * 0.5) * u * sc, d: Math.abs(f) * 1.1 + R() * 0.3, cut: null,
+      });
+    }
+    const m = { x: p.x, y: p.y, depth: p.y - this.ridgeY(p.x), sc, blades, left: n, lastCut: -9, by: null, t0: grown || this.reduced ? -99 : this.t, ph: R() * TAU };
+    this.meadow.push(m);
+    return m;
+  }
+  updateMeadow() {
+    if (!this.flocked) return;
+    const t = this.t, R = Math.random;
+    // the last blade gone: the tuft goes, and whoever ate it looks pleased
+    for (const m of this.meadow) {
+      if (m.left > 0 || t - m.lastCut < 0.45) continue;
+      m.gone = true;
+      const o = m.by;
+      if (o) { o.tuft = null; o.act = 'happy'; o.joy = t; o.until = t + 1.3; o.hungry = t + 30 + R() * 30; }
+    }
+    this.meadow = this.meadow.filter(m => !m.gone);
+    // a new one now and then, only while the page shows (the scene's time stands still while it's hidden)
+    if (this.reduced || t < this.sproutAt) return;
+    const m = this.meadow.length < MEADOW_MAX ? this.sprout(false) : null;
+    this.sproutAt = t + (m || this.meadow.length >= MEADOW_MAX ? lerp(SPROUT_MIN, SPROUT_MAX, R()) : 3);
+  }
+  letGo(o) { if (o.tuft) { if (o.tuft.by === o) o.tuft.by = null; o.tuft = null; } }
+  // one animal's day: idle, wander, walk to a tuft and eat it, look pleased; run from the pointer (sheep)
+  live(o, dt) {
+    const g = this.g, u = g.u, t = this.t, R = Math.random, cow = o.kind === 'cow';
+    if (o.act == null) { o.act = 'idle'; o.until = t + 0.5 + R() * 2.5; o.hungry ??= t + 3 + R() * 10; o.head = 0; o.vd = 0; o.bites = 0; }
+    o.vd ??= 0;
+    const dx = o.x - this.ptr.x, dy = o.y - this.ptr.y;
+    const scared = this.ptr.on && !cow && o.dying == null && dx * dx + dy * dy < (110 * u) ** 2;
+    let wx = 0, wd = 0, head = 0;
+    if (scared) {
+      this.letGo(o);
+      o.act = 'flee'; o.until = t + 0.5 + R() * 0.8;
+      wx = Math.sign(dx || 1) * 70 * u; wd = clamp(dy / (110 * u), -1, 1) * 26 * u;
+    } else {
+      if ((o.act === 'flee' || o.act === 'happy') && t > o.until) { o.act = 'idle'; o.until = t + 1.5 + R() * 3.5; }
+      if (o.act === 'idle' && t > o.until) this.decide(o);
+      if (o.act === 'walk' || o.act === 'go') {
+        const ex = o.tx - o.x, ed = o.td - o.depth, dist = Math.hypot(ex, ed);
+        if (o.act === 'go' && dist < 2.5 * u && o.tuft) { o.act = 'eat'; o.bite = t + 0.8; o.flip = o.tuft.x < o.x; }
+        else if (dist < 2.5 * u || t > o.until || (o.act === 'go' && !o.tuft)) { this.letGo(o); o.act = 'idle'; o.until = t + 2 + R() * 4; }
+        else {
+          const v = (o.act === 'go' ? 19 : 13) * u * (cow ? 0.65 : 1) * Math.min(1, dist / (6 * u));
+          wx = ex / dist * v; wd = ed / dist * v;
+        }
+      }
+      if (o.act === 'eat') {
+        const m = o.tuft;
+        if (!m) { o.act = 'idle'; o.until = t + 1 + R() * 2; }
+        else {
+          head = 1;
+          o.flip = m.x < o.x;
+          if (m.left > 0 && t > o.bite && o.head > 0.85) this.bite(o, m);
+        }
+      }
+    }
+    o.head = lerp(o.head || 0, head, Math.min(1, dt * 4));
+    // walk, in x and in depth (across the slope), as far as the hill allows
+    const k = Math.min(1, dt * 3);
+    o.vx = lerp(o.vx, wx, k); o.vd = lerp(o.vd, wd, k);
+    if (o.act !== 'eat' && Math.abs(o.vx) > 2.5 * u) o.flip = o.vx < 0;
+    const roomAt = (x, ry) => Math.min(g.H - 10 * u, this.shoreY(x) - 12 * u) - ry;
+    const nx = o.x + o.vx * dt, ny = this.ridgeY(nx);
+    if (ny == null || roomAt(nx, ny) < 3 * u || nx > g.W - 12 * u || (Math.abs(nx - g.lh.x) < g.lh.wB * 0.6 && o.depth < 30 * u)) o.vx = 0;
+    else o.x = nx;
+    const ry = this.ridgeY(o.x);
+    if (ry == null) return;
+    o.depth = clamp(o.depth + o.vd * dt, 3 * u, Math.max(3 * u, roomAt(o.x, ry)));
+    o.y = o.ty = ry + o.depth;
+    o.sc = this.depthScale(o.y);
+  }
+  // what next: grass if hungry and there's some free nearby, otherwise a short walk or a rest
+  decide(o) {
+    const t = this.t, R = Math.random, u = this.g.u;
+    // standing where one of the section's little scenes now shows: out of its way first
+    if (!this.open(o.x, o.y - 6 * u)) {
+      const p = this.landSpot({ near: o, reach: 170 * u, min: 40 * u, gap: 34 * u, check: 1 });
+      if (p) { o.act = 'walk'; o.tx = p.x; o.td = p.y - this.ridgeY(p.x); o.until = t + 14; return; }
+    }
+    if (t > o.hungry && this.feed(o)) return;
+    if (R() < 0.5) {
+      const p = this.landSpot({ near: o, reach: 100 * u, min: 30 * u, gap: 34 * u, check: 1 });
+      if (p) { o.act = 'walk'; o.tx = p.x; o.td = p.y - this.ridgeY(p.x); o.until = t + 14; return; }
+    }
+    o.act = 'idle'; o.until = t + 2.5 + R() * 4.5;
+    if (t > o.hungry) o.hungry = t + 3 + R() * 4; // nothing to eat in reach: look again in a bit
+  }
+  // the nearest free tuft in reach (grown, nobody else at it): walk over to stand with the mouth at it
+  feed(o) {
+    const g = this.g, u = g.u, reach = (o.kind === 'cow' ? 21 : 19) * u;
+    // they graze in turns: a few at the grass at once, at most, so the hill stays calm
+    const herd = this.objs.filter(q => grazer(q) && q.dying == null), busy = herd.filter(q => q.tuft).length;
+    if (busy >= Math.min(3, Math.max(1, Math.round(herd.length * 0.4)))) return false;
+    let best = null, bd = 320 * u;
+    for (const m of this.meadow) {
+      if (m.by || m.left <= 0 || this.t - m.t0 < 2.2) continue;
+      const d = Math.hypot(m.x - o.x, (m.y - o.y) * 1.5);
+      if (d < bd) { bd = d; best = m; }
+    }
+    if (!best) return false;
+    const sc = this.depthScale(best.y);
+    for (const f of best.x >= o.x ? [1, -1] : [-1, 1]) {
+      const x = best.x - f * reach * sc, ry = this.ridgeY(x);
+      if (ry == null || x > g.W - 14 * u) continue;
+      const d = best.y - ry, room = Math.min(g.H - 10 * u, this.shoreY(x) - 12 * u) - ry;
+      if (d < 3 * u || d > room || (Math.abs(x - g.lh.x) < g.lh.wB * 0.6 && d < 30 * u)) continue;
+      // not where another animal already stands
+      if (this.objs.some(q => q !== o && grazer(q) && Math.abs(q.x - x) < 30 * u * sc && Math.abs(q.y - best.y) < 14 * u * sc)) continue;
+      best.by = o; o.tuft = best; o.act = 'go'; o.tx = x; o.td = d; o.until = this.t + 45;
+      return true;
+    }
+    return false;
+  }
+  // a blade gone, the one nearest the mouth; every other bite, a "nom"
+  bite(o, m) {
+    const t = this.t, u = this.g.u, f = o.flip ? -1 : 1, mx = o.x + f * 20 * u * o.sc;
+    let pick = null;
+    for (const b of m.blades) if (b.cut == null && (!pick || Math.abs(m.x + b.dx - mx) < Math.abs(m.x + pick.dx - mx))) pick = b;
+    if (pick) { pick.cut = t; m.left--; m.lastCut = t; }
+    o.bite = t + (o.kind === 'cow' ? 1.3 : 1) + Math.random() * 0.35;
+    if ((o.bites = (o.bites || 0) + 1) % 2 === 1) {
+      const words = o.kind === 'cow' ? ['crunch', 'munch', 'crunch'] : ['nom', 'nom nom', 'munch'];
+      this.doodle('munch', o.x + f * 23 * u * o.sc, o.y - 31 * u * o.sc, { text: words[((o.bites - 1) / 2 | 0) % 3], align: f > 0 ? 'left' : 'right', life: 1.15, calm: true });
+    }
+  }
+
+  /* ----- the sheep in a box -----
+     A white box with a cloud's puffs for a lid drifts across the sky with the clouds, at a height of its own.
+     When the light finds it, two eyes look out through its air holes (glinting at night); a click or a tap
+     makes it hop and say baa. It isn't a surprise: clicking it drops nothing. Its label shows while it's in
+     clear sky. */
+  placeBox() {
+    const g = this.g, u = g.u, W = g.W, b = this.box, k = boxK(this), T = g.lh, L = g.lamp, sc = g.sheepCloud;
+    b.v = `${this.layoutV}|${this.fontsV}`;
+    const size = b.size = Math.max(13, 17 * u), cw = textW(this, 'a cloud (or a sheep)', size);
+    b.tw = textW(this, 'a sheep (in a box)', size);
+    // where the box and its label don't show (rects, and discs as [x, y, r]): the bar, the notes (a guess; the
+    // DOM has the last word), near the horizon, the lighthouse, its halo and labels, the cloud with legs and its
+    // label (the sun and the moon, while they're up, are added as they move)
+    const noteX = W < 1024 ? W * 0.05 + Math.min(W * 0.58, 620) + 16 : g.note.x1 + 4;
+    b.hard = [
+      [0, 0, W, g.top + 8], g.portrait ? [0, g.note.y0 - 10, W, g.H] : [0, 0, noteX, g.H], [-1e4, g.horizon - 26 * u, 2e4, 2e4],
+      [L.x, L.y, T.er * 4.9], [T.x - T.wB * 0.8, T.hatTop, T.x + T.wB * 0.8, T.base],
+      [sc.x0 - sc.w * 0.66, sc.y - sc.w * 0.5, sc.x1 + sc.w * 0.66, sc.y + 18 * u],
+      [sc.x0 + sc.w * 0.3, sc.y - 6 * u, sc.x1 + sc.w * 0.42 + (g.portrait ? 6 : 14 * u) + 16 * u + cw + 6, sc.y + (g.portrait ? 12 : 22 * u) + 4 * u + size * 0.8],
+      ...lighthouseLabelRects(this, textW(this, 'a lighthouse (stable)', size), size),
+    ];
+    // it drifts with the clouds, at a height of its own, as far as can be from theirs
+    const sky = g.horizon - g.top, lo = g.top + sky * (g.portrait ? 0.12 : 0.18), hi = g.top + sky * (g.portrait ? 0.34 : 0.46);
+    const others = [...g.clouds.map(cl => cl.y), sc.y];
+    let y = lo, far = -1;
+    for (let cy = lo; cy <= hi; cy += 3 * u) { const d = Math.min(...others.map(o => Math.abs(o - cy))); if (d > far) { far = d; y = cy; } }
+    // first seen in open sky between the headline and the lighthouse; after a resize, where it was
+    const frac = b.frac ?? (g.portrait ? 0.5 : 0.62);
+    b.cl = { x0: frac * W + 180 * u - this.drift * BOX_SP * u, y, w: (2 * BOX.hw + BOX.dx) * k, sp: BOX_SP, seed: 91, ox: b.cl?.ox ?? 0, oy: b.cl?.oy ?? 0 };
+    b.seenAt = -9;
+  }
+  // the box right now: where it drifts, its tilt, and (unless `still`, as for its label) the hop with its squash
+  boxAt(still) {
+    const b = this.box, u = this.g.u, k = boxK(this), rm = this.reduced, t = this.t, q = this.cloudXY(b.cl);
+    let y = q.y + (rm ? 0 : Math.sin(t * 0.7 + 1) * 3 * u), rot = rm ? 0 : Math.sin(t * 0.5) * 0.035, sq = 0;
+    const a = still ? -1 : t - b.hop;
+    if (!rm && a >= 0 && a < 0.75) {
+      if (a < 0.08) sq = Math.sin(a / 0.08 * Math.PI) * 0.1;
+      else if (a < 0.52) { const f = (a - 0.08) / 0.44; y -= Math.sin(f * Math.PI) * 18 * k; rot -= Math.sin(f * Math.PI) * 0.14; }
+      else sq = Math.sin((a - 0.52) / 0.23 * Math.PI) * 0.14;
+    }
+    return { x: q.x, y, rot, sq, k };
+  }
+  boxHit(x, y) {
+    if (this.box.v == null || !this.box.cl) return false;
+    const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
+    return x > p.x + LID_X0 * k - pad && x < p.x + LID_X1 * k + pad && y > p.y + LID_TOP * k - pad && y < p.y + BOX.hh * k + pad;
+  }
+  // a click or a tap: it hops (not without motion) and says so
+  baa() {
+    const b = this.box, p = this.boxAt(), k = p.k;
+    if (!this.reduced) b.hop = this.t;
+    b.peek = this.t;
+    // beside it, toward the lighthouse, where the hop doesn't cover it
+    this.doodle('baa', p.x + (BOX.hw + BOX.dx + 6) * k, p.y + (BOX.dy - BOX.hh + 1) * k, { text: 'baa!', align: 'left', life: 1.4 });
+  }
+  updateBox(dt) {
+    const b = this.box, rm = this.reduced, t = this.t;
+    if (b.v !== `${this.layoutV}|${this.fontsV}`) this.placeBox();
+    const p = this.boxAt(), lit = this.inBeam(p.x + this.ox, p.y + this.oy);
+    b.frac = p.x / this.g.W;
+    b.lit = rm ? lit : lerp(b.lit, lit, Math.min(1, dt * 8));
+    // the eyes come to the holes while the light is on it (and for a moment after a baa), blinking now and then
+    const want = b.lit > 0.4 || t - b.peek < 1.8;
+    if (want !== b.open) { b.open = want; b.openAt = t; b.nextBlink = t + 1.4 + Math.random() * 2; }
+    if (b.open && !rm && t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + 1.8 + Math.random() * 2.6; }
+    // its label, while it's in clear sky: looked at a few times a second, faded in and out
+    if (t - b.seenAt > 0.3 || rm) { b.seenAt = t; b.side = this.pres.hero > 0.01 ? this.boxSide(this.boxAt(true)) : null; if (b.side) b.lastSide = b.side; }
+    b.la = rm ? (b.side ? 1 : 0) : lerp(b.la, b.side ? 1 : 0, Math.min(1, dt * 3));
+  }
+  // the side of the box its label fits on right now (below, left or right), or null: the box and the label in the
+  // window, clear of what's in the way, and seen
+  boxSide(p) {
+    const g = this.g, u = g.u, W = g.W, k = p.k, sp = this.sunPos(), mp = this.moonPos(), moon = 25 * u * 1.15, z = 26 * u, hard = [...this.box.hard];
+    if (sp.a > 0.1) hard.push([sp.x, sp.y, 38 * u * 1.2]);
+    if (mp.a > 0.1) hard.push([mp.x, mp.y, moon], [mp.x + moon, mp.y - moon - z * 0.6, mp.x + moon + z, mp.y - moon * 0.2]);
+    const r = [p.x + LID_X0 * k, p.y + LID_TOP * k, p.x + LID_X1 * k, p.y + BOX.hh * k];
+    if (r[0] < 6 || r[2] > W - 6 || hard.some(q => overlaps(r, q)) || !this.seen(p.x, p.y)) return null;
+    for (const side of ['below', 'left', 'right']) {
+      const q = boxLabel(p.x, p.y, k, u, this.box.size, this.box.tw, side);
+      if (q.x0 < 6 || q.x1 > W - 6 || hard.some(h => overlaps([q.x0, q.y0, q.x1, q.y1], h))) continue;
+      if (this.seen((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2)) return side;
+    }
+    return null;
   }
   cloudXY(cl, raw) {
     const g = this.g;
@@ -1079,6 +1451,7 @@ function drawScene(s, c) {
   drawMoon(s, c);
   for (let i = 0; i < g.clouds.length; i++) drawCloud(s, c, g.clouds[i], 'cloud' + i);
   drawCloud(s, c, g.sheepCloud, 'sheepcloud', true);
+  drawBox(s, c);
   drawIsle(s, c);
   const T = g.lh, x0 = g.portrait ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
   const y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
@@ -1089,9 +1462,11 @@ function drawScene(s, c) {
   drawSmoke(s, c);
   drawEye(s, c);
   drawHat(s, c);
+  // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
+  const items = [...s.objs.map(o => [o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m])].sort((a, b) => a[0] - b[0]);
+  for (const [, it] of items) it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
+  // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
   drawStates(s, c);
-  const objs = s.objs.slice().sort((a, b) => a.y - b.y);
-  for (const o of objs) drawObj(s, c, o);
   if (s.pres.hero > 0.01) drawLabels(s, c);
   drawSplashes(s, c);
   drawBall(s, c);
@@ -1210,6 +1585,58 @@ function drawCloud(s, c, cl, name, legs) {
       x.fillStyle = INK; x.fill();
     }
   });
+}
+
+/* the sheep's box, white and soft like the clouds it drifts with: a box below, a cloud's puffs for a lid and three
+   air holes in front; while the light is on it, eyes in two of them that look at the lamp, blink, and glint at night */
+function drawBox(s, c) {
+  const b = s.box;
+  if (b.v == null || !b.cl) return;
+  const g = s.g, P = s.P, p = s.boxAt(), k = p.k, t = s.t, rm = s.reduced, { hw, hh, dx, dy } = BOX;
+  if (p.x < -(hw + dx) * k * 1.8 || p.x > g.W + hw * k * 1.8) return;
+  const night = smooth(0.5, 0.9, s.d);
+  c.save(); c.translate(p.x, p.y + hh * k); c.rotate(p.rot); c.scale(1 + p.sq * 0.6, 1 - p.sq); c.translate(0, -hh * k);
+  const K = q => q.map(([x, y]) => [x * k, y * k]);
+  const lid = K(LID);
+  print(c, K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), mix(P.cloud, P.sky, 0.2));
+  print(c, K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]), mix(P.cloud, P.sky, 0.07));
+  print(c, lid, P.cloud);
+  // the holes, dark; eyes in two of them while the light is on the box (or just after a baa)
+  let open = b.open ? (rm ? 1 : smooth(0, 0.2, t - b.openAt)) : (rm ? 0 : 1 - smooth(0, 0.14, t - b.openAt));
+  if (b.open && !rm && t - b.blinkAt < 0.16) open *= Math.abs(Math.cos((t - b.blinkAt) / 0.16 * Math.PI));
+  const L = s.g.lamp, look = Math.atan2(L.y - p.y, L.x - p.x), r = 3.4 * k;
+  BOX.holes.forEach(([hx, hy], i) => {
+    const x = hx * k, y = hy * k;
+    dot(c, x, y, r, mix(P.ink, P.sky, 0.15));
+    if (i > 1 || open < 0.04) return;
+    const ew = r * 0.8, eh = r * 0.8 * open;
+    c.beginPath(); c.ellipse(x, y + (1 - open) * r * 0.3, ew, Math.max(0.3, eh), 0, 0, TAU); c.fillStyle = rgba(mix(hex('#FFFFFF'), P.beam, 0.4 * night)); c.fill();
+    c.save(); c.clip();
+    const px = x + Math.cos(look) * r * 0.32, py = y + Math.sin(look) * r * 0.28;
+    dot(c, px, py, r * 0.44, INK);
+    dot(c, px - r * 0.16, py - r * 0.2, r * 0.15 + 0.25, '#FFFFFF');
+    c.restore();
+  });
+  // the pen: the box below the puffs, the puffs' edge, the corner where front meets side lighter, a ring round
+  // each hole, and a curl of puff on the lid as on the clouds
+  c.beginPath();
+  edges(c, K([[-hw, -9.5], [-hw, hh], [hw, hh], [hw + dx, hh + dy], [hw + dx, -9.5]]), DET * 1.05, 3, false, { ov: 1.2 });
+  ribbon(c, lid, DET, 5, { tin: 2, tout: 2 });
+  edges(c, K([[hw, -9.5], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
+  BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2 }));
+  ribbon(c, ellipse(-7 * k, -23 * k, 7.5 * k, 6 * k, 10, Math.PI * 1.05, Math.PI * 1.75), TEX, 3, { tin: 2, tout: 3 });
+  ribbon(c, ellipse(18 * k, -22 * k, 5.5 * k, 4.4 * k, 10, Math.PI * 1.1, Math.PI * 1.7), TEX, 7, { tin: 2, tout: 3 });
+  c.fillStyle = INK; c.fill();
+  // and at night the eyes glint, a little star at each
+  if (open > 0.3 && night > 0.05) {
+    c.beginPath();
+    for (let i = 0; i < 2; i++) {
+      const [hx, hy] = BOX.holes[i], x = hx * k + r * 0.95, y = hy * k - r * 1.05, l = (1.4 + 1.2 * night) * k * open;
+      for (const an of [0.2, 0.2 + Math.PI / 2]) ribbon(c, [[x - Math.cos(an) * l, y - Math.sin(an) * l], [x + Math.cos(an) * l, y + Math.sin(an) * l]], TEX * 0.9, i * 2 + an, { tin: 1, tout: 1, w0: 0.5, w1: 0.5, amp: 0.1 });
+    }
+    c.fillStyle = rgba(P.beam, clamp(night * open * 1.3)); c.fill();
+  }
+  c.restore();
 }
 
 /* the competition: a much smaller lighthouse on a far island */
@@ -1624,6 +2051,63 @@ function drawTufts(s, c) {
   c.fillStyle = INK; c.fill();
 }
 
+/* a tuft of fresh grass on the hill: blades that rise out of the ground one after another, lean with the wind
+   and away from the pointer, part for an animal walking through, and go one by one when something eats them */
+function drawMeadow(s, c, m) {
+  const g = s.g, u = g.u, P = s.P, t = s.t, rm = s.reduced, age = t - m.t0;
+  // a section's props stand in front of the grass (the huts, the desk)
+  let alpha = 1;
+  if (s.pres.tiling > 0.01) for (const q of hutSpots(s)) if (Math.abs(m.x - q.x) < 34 * u && m.y > q.y - 64 * u && m.y < q.y + 8 * u) alpha = Math.min(alpha, 1 - s.pres.tiling);
+  if (s.pres.widgets > 0.01) { const d = deskSpot(s); if (Math.abs(m.x - d.x) < 56 * u && m.y > d.y - 100 * u && m.y < d.y + 8 * u) alpha = Math.min(alpha, 1 - s.pres.widgets); }
+  if (alpha <= 0.01) return;
+  // the lean: the wind and its gusts, away from the pointer, apart for a passer-by, toward the mouth eating it
+  let a = rm ? 0.12 : Math.sin(t * 1.6 + m.ph) * 0.14 * (0.6 + s.windAmb) + s.windTotal * 0.36;
+  if (!rm) {
+    if (s.ptr.on) { const dx = m.x - s.ptr.x, dy = m.y - 6 * u - s.ptr.y, r = 95 * u, d2 = dx * dx + dy * dy; if (d2 < r * r) a += Math.sign(dx || 1) * 1.05 * (1 - Math.sqrt(d2) / r); }
+    for (const o of s.objs) {
+      if (!grazer(o) || o === m.by || o.state !== 'land') continue;
+      const dx = m.x - o.x, w = 19 * u * o.sc;
+      if (Math.abs(dx) < w && Math.abs(m.y - o.y) < 9 * u * o.sc) a += Math.sign(dx || 1) * 0.95 * (1 - Math.abs(dx) / w);
+    }
+    const e = m.by;
+    if (e && e.act === 'eat') a += (e.flip ? 1 : -1) * (0.2 + 0.16 * Math.sin(t * 9 + e.seed)) * e.head;
+  }
+  const blades = [];
+  for (const b of m.blades) {
+    const gk = rm ? 1 : pop((age - b.d) / 0.75), ck = b.cut == null ? 1 : 1 - clamp((t - b.cut) / 0.4) ** 2;
+    if (gk <= 0.02 || ck <= 0.03) continue;
+    const L = b.l * gk * ck, th = clamp(b.a + a * b.flex, -1.45, 1.45), bx = m.x + b.dx, by = m.y + 1.2 * u;
+    const mx = bx + Math.sin(th * 0.4 + b.a * 0.3) * L * 0.55, my = by - Math.cos(th * 0.4) * L * 0.55, tx = bx + Math.sin(th) * L, ty = by - Math.cos(th) * L;
+    const pts = [];
+    for (let i = 0; i <= 6; i++) { const q = i / 6, r = 1 - q; pts.push([r * r * bx + 2 * r * q * mx + q * q * tx, r * r * by + 2 * r * q * my + q * q * ty]); }
+    blades.push({ pts, w: (3.9 + 0.6 * ck) * u * m.sc, L, gk: clamp(gk) });
+  }
+  if (!blades.length) return;
+  c.save(); c.globalAlpha = alpha;
+  // the green, printed off the line
+  const night = smooth(0.4, 0.9, s.d);
+  c.beginPath();
+  for (const { pts, w } of blades) {
+    const l = [], r = [], n = pts.length - 1;
+    for (let i = 0; i <= n; i++) {
+      const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(n, i + 1)], dx = p1[0] - p0[0], dy = p1[1] - p0[1], dl = Math.hypot(dx, dy) || 1, hw = w * (1 - i / n) * 0.5 + 0.25;
+      l.push([pts[i][0] - dy / dl * hw + REGX, pts[i][1] + dx / dl * hw + REGY]); r.push([pts[i][0] + dy / dl * hw + REGX, pts[i][1] - dx / dl * hw + REGY]);
+    }
+    const ring = [...l, ...r.reverse()];
+    c.moveTo(ring[0][0], ring[0][1]);
+    for (const p of ring) c.lineTo(p[0], p[1]);
+    c.closePath();
+  }
+  c.fillStyle = rgba(mix(P.hill2, C.sprout, 0.85 * (1 - night))); c.fill();
+  // the pen: one stroke a blade, and a little ground under the tuft that grows and goes with it
+  c.beginPath();
+  blades.forEach(({ pts, L }, i) => ribbon(c, pts, TEX * (L > 6 * u ? 0.8 : 0.65), m.ph * 3 + i, { tin: 1, tout: 6, w0: 0.9, w1: 0.12, amp: 0.25 }));
+  const gw = 9 * u * m.sc * Math.min(1, Math.max(...blades.map(b => b.gk)) * 1.4) * Math.max(0.4, blades.length / m.blades.length);
+  ribbon(c, [[m.x - gw, m.y + 2.2 * u], [m.x - gw * 0.3, m.y + 1 * u], [m.x + gw * 0.4, m.y + 1.2 * u], [m.x + gw, m.y + 2.4 * u]], TEX, m.ph, { tin: 2, tout: 3, amp: 0.3 });
+  c.fillStyle = INK; c.fill();
+  c.restore();
+}
+
 function drawSmoke(s, c) {
   if (s.reduced) return;
   const g = s.g, u = g.u, k = g.cot, x0 = k.x - k.w / 2 + k.w * 0.68 + k.w * 0.075, y0 = k.base - k.h - k.h * 1.5;
@@ -1749,7 +2233,7 @@ function drawDoorway(s, c, p) {
 /* widgets: a sheep at a tiny desk with a laptop, typing */
 function drawDesk(s, c, p) {
   const g = s.g, P = s.P, sc = pop(p) * (g.portrait ? 1.75 : 2.1), u = g.u * sc;
-  const x = g.portrait ? g.W * 0.5 : g.W * 0.7, ry = s.ridgeY(x), y = g.portrait ? ry + (s.shoreY(x) - ry) * 0.66 : ry + g.H * 0.2;
+  const { x, y } = deskSpot(s);
   if (sc < 0.05) return;
   const typing = s.reduced ? 0 : s.t * 11, wool = mul(C.wool, P.paper), night = smooth(0.4, 0.8, s.d);
   c.save(); c.translate(x, y);
@@ -1912,6 +2396,14 @@ function drawLabels(s, c) {
     label(c, 'a cloud (or a sheep)', lx + 16 * u, ly + 4 * u, size, col, 'left');
     c.fillStyle = col; arrow(c, [[lx + 12 * u, ly + 3 * u], [lx, ly + 2 * u], [p.x + w * 0.36, p.y + 6 * u]], TEX * 1.1, 9);
   }
+  // the sheep in its box, where placeBox found room for the label
+  const bx = s.box;
+  if (bx.lastSide && bx.la > 0.01 && bx.cl) {
+    const p = s.boxAt(true), q = boxLabel(p.x, p.y, p.k, u, size, bx.tw, bx.lastSide), lc = rgba(mix(P.ink, P.paper, night), s.pres.hero * bx.la);
+    label(c, 'a sheep (in a box)', q.tx, q.ty, size, lc, q.align);
+    c.fillStyle = lc; arrow(c, q.arrow, TEX * 1.1, 11);
+    c.fillStyle = col;
+  }
   // the sea
   const sea = seaLabelSpot(s);
   if (sea) {
@@ -1919,6 +2411,37 @@ function drawLabels(s, c) {
     label(c, 'the sea (wet)', sea.x, sea.y, size, rgba(P.paper, s.pres.hero), 'left');
     c.fillStyle = rgba(P.paper, s.pres.hero); arrow(c, [[sea.x + wTxt * 0.62, sea.y + 11 * u], [sea.x + wTxt * 0.5, sea.y + 22 * u], [sea.x + wTxt * 0.3, sea.y + 30 * u]], TEX * 1.1, 10);
   }
+}
+function textW(s, text, size) { const c = s.ctx; c.save(); c.font = `400 ${size}px ${HAND}`; const w = c.measureText(text).width; c.restore(); return w; }
+// what "a lighthouse (stable)" and its arrow cover (as drawLabels places them), for keeping out of their way
+function lighthouseLabelRects(s, w, size) {
+  const g = s.g, u = g.u, T = g.lh, h = size * 0.75;
+  if (g.portrait) {
+    const tx = T.x - T.wB * 1.9, ty = T.top + T.h * 0.3;
+    return [[tx - w - 4, ty - h, tx + 4, ty + h], [tx, T.top + T.h * 0.2 - 6, T.x - T.wB * 0.62 + 4, ty + 4]];
+  }
+  const tipX = T.x - T.wB * 0.62, tipY = T.top + T.h * 0.6, ax = tipX - 88 * u, ay = tipY + 38 * u;
+  return [[ax - w - 4, ay - h, ax + 4, ay + h], [ax, tipY - 6, tipX + 4, ay]];
+}
+/* "a sheep (in a box)" for a box at (x, y): below it, or beside it, with an arrow back to the box;
+   the text's anchor and alignment, the arrow, and the rect the two take */
+function boxLabel(x, y, k, u, size, tw, side) {
+  const h = size * 0.75, R = (BOX.hw + BOX.dx) * k, Lx = BOX.hw * k, B = BOX.hh * k;
+  if (side === 'below') {
+    const tx = x - Lx * 0.35, ty = y + B + 12 * u + size * 0.55;
+    return { tx, ty, align: 'left', arrow: [[tx + 3 * u, ty - h * 1.05], [tx - 3 * u, ty - h * 1.6], [x - Lx * 0.5, y + B + 3 * u]], x0: Math.min(tx, x - Lx) - 4, y0: y + B + 2, x1: tx + tw + 4, y1: ty + h };
+  }
+  if (side === 'right') {
+    const tx = x + R + 22 * u, ty = y + 9 * u;
+    return { tx, ty, align: 'left', arrow: [[tx - 3 * u, ty - 1 * u], [tx - 11 * u, ty - 2 * u], [x + R + 4 * u, y + 1 * u]], x0: x + R + 2, y0: ty - h, x1: tx + tw + 4, y1: ty + h };
+  }
+  const tx = x - Lx - 20 * u, ty = y + 9 * u;
+  return { tx, ty, align: 'right', arrow: [[tx + 3 * u, ty - 1 * u], [tx + 11 * u, ty - 2 * u], [x - Lx - 4 * u, y + 1 * u]], x0: tx - tw - 4, y0: ty - h, x1: x - Lx - 2, y1: ty + h };
+}
+// where the widgets section's sheep sits at its desk
+function deskSpot(s) {
+  const g = s.g, x = g.portrait ? g.W * 0.5 : g.W * 0.7, ry = s.ridgeY(x);
+  return { x, y: g.portrait ? ry + (s.shoreY(x) - ry) * 0.66 : ry + g.H * 0.2 };
 }
 function seaLabelSpot(s) {
   const g = s.g, u = g.u, wTxt = 112 * u + 10;
@@ -1938,7 +2461,9 @@ function seaLabelSpot(s) {
 function drawObj(s, c, o) {
   const g = s.g, P = s.P, k = g.u * o.sc, lit = o.lit * s.beamI(), sq = s.squash(o), t = s.reduced ? 0 : s.t;
   if (o.dying != null) c.globalAlpha = clamp(1 - (s.t - o.dying) / 0.7);
-  c.save(); c.translate(o.x, o.y);
+  // a sheep pleased with its meal hops, twice
+  const ja = t - (o.joy ?? -99), hop = o.kind === 'sheep' && ja >= 0 && ja < 0.8 ? Math.abs(Math.sin(ja / 0.4 * Math.PI)) * 6 * k * (1 - ja / 0.8) : 0;
+  c.save(); c.translate(o.x, o.y - hop);
   if (lit > 0.15) {
     // a startled "!", in the pen
     const jy = -40 * k - Math.abs(Math.sin(t * 8)) * 3 * k;
@@ -1959,30 +2484,53 @@ function drawObj(s, c, o) {
   c.restore();
   c.globalAlpha = 1;
 }
+/* a grazer's head: up, or lowered into the grass and chewing; `px, py` is where the neck turns, `to` where it
+   goes when the head is down. Draws the head with `draw`, in the head-up coordinates. */
+function head(c, u, o, t, px, py, to, turn, draw) {
+  const hd = o.head || 0, chew = o.act === 'eat' ? Math.sin(t * 9 + o.seed) * hd : 0;
+  c.save();
+  c.translate(lerp(px, to[0], hd) * u, (lerp(py, to[1], hd) + chew * 0.55) * u);
+  c.rotate(hd * turn + chew * 0.07);
+  c.translate(-px * u, -py * u);
+  draw(chew);
+  c.restore();
+}
+// pleased with a meal: a short while after it, eyes shut happily and the tail wags
+const joyAt = (o, t) => { const a = t - (o.joy ?? -99); return a >= 0 && a < 1.3 ? a : -1; };
 function drawSheep(c, u, wool, o, t) {
-  const fall = o.state === 'fall', step = Math.abs(o.vx) > 2 ? Math.sin(t * 14 + o.seed) * 2 * u : 0;
+  const fall = o.state === 'fall', step = Math.hypot(o.vx, o.vd || 0) > 2 ? Math.sin(t * 14 + o.seed) * 2 * u : 0;
   c.beginPath();
   [-8, -3, 5, 10].forEach((lx, i) => ribbon(c, [[lx * u, -10 * u], [lx * u + (fall ? 3 * u : (i % 2 ? step : -step)), 0]], DET * 1.05, i, { tin: 1, tout: 1, w0: 0.9, w1: 1 }));
   c.fillStyle = INK; c.fill();
   const body = [];
   for (let i = 0; i < 40; i++) { const a = i / 40 * TAU, r = 1 + 0.13 * Math.abs(Math.sin(a * 5 + o.seed)); body.push([Math.cos(a) * 14 * u * r, -16 * u + Math.sin(a) * 9.5 * u * r]); }
   shape(c, body, wool, DET, o.seed % 7);
-  // tail puff, black face, an ear, an eye
-  const head = ellipse(15 * u, -19 * u, 5 * u, 6.4 * u, 18, 0, TAU, -0.35);
-  poly(c, head); c.fillStyle = INK; c.fill();
-  const ear = ellipse(11.5 * u, -23.5 * u, 3.6 * u, 1.6 * u, 10, 0, TAU, 0.5);
-  poly(c, ear); c.fill();
-  const tuft = []; for (let i = 0; i < 10; i++) { const a = Math.PI * 1.05 + i / 9 * Math.PI * 0.9; tuft.push([13.5 * u + Math.cos(a) * 5 * u, -24 * u + Math.sin(a) * 2.6 * u]); }
-  c.beginPath(); ribbon(c, tuft, TEX, 3, { tin: 1, tout: 1, color: rgba(wool) }); c.fillStyle = rgba(wool); c.fill();
-  dot(c, 16.6 * u, -20.5 * u, 1.5 * u, '#FFFFFF'); dot(c, 17.1 * u, -20.3 * u, 0.75 * u, INK);
+  // a stubby tail, wagging when pleased
+  const ja = joyAt(o, t);
+  c.save(); c.translate(-14 * u, -19 * u); c.rotate(-0.45 + (ja >= 0 ? Math.sin(ja * 24) * 0.6 * (1 - ja / 1.3) : 0));
+  shape(c, ellipse(-2.4 * u, 0, 3 * u, 2.2 * u, 12), wool, TEX * 1.15, 5, { over: 0.05 });
+  c.restore();
+  // black face, an ear, a tuft of wool on top, an eye
+  head(c, u, o, t, 15, -19, [19, -7.5], 1.05, chew => {
+    poly(c, ellipse(15 * u, -19 * u, 5 * u, 6.4 * u, 18, 0, TAU, -0.35)); c.fillStyle = INK; c.fill();
+    poly(c, ellipse(11.5 * u, -23.5 * u, 3.6 * u, 1.6 * u, 10, 0, TAU, 0.5 + chew * 0.25)); c.fill();
+    const tuft = []; for (let i = 0; i < 10; i++) { const a = Math.PI * 1.05 + i / 9 * Math.PI * 0.9; tuft.push([13.5 * u + Math.cos(a) * 5 * u, -24 * u + Math.sin(a) * 2.6 * u]); }
+    c.beginPath(); ribbon(c, tuft, TEX, 3, { tin: 1, tout: 1 }); c.fillStyle = rgba(wool); c.fill();
+    if (ja >= 0) { c.beginPath(); ribbon(c, ellipse(16.6 * u, -19.6 * u, 1.7 * u, 1.3 * u, 8, Math.PI * 1.1, Math.PI * 1.9), TEX, 4, { tin: 1, tout: 1, w0: 0.9, w1: 0.9, amp: 0.1 }); c.fillStyle = '#FFFFFF'; c.fill(); }
+    else { dot(c, 16.6 * u, -20.5 * u, 1.5 * u, '#FFFFFF'); dot(c, 17.1 * u, -20.3 * u, 0.75 * u, INK); }
+  });
 }
 function drawCow(c, u, white, P, o, t) {
-  const step = Math.abs(o.vx) > 2 ? Math.sin(t * 9 + o.seed) * 2 * u : 0;
+  const step = Math.hypot(o.vx, o.vd || 0) > 2 ? Math.sin(t * 9 + o.seed) * 2 * u : 0;
   c.beginPath();
   [-12, -7, 8, 13].forEach((lx, i) => ribbon(c, [[lx * u, -11 * u], [lx * u + (i % 2 ? step : -step), 0]], DET * 1.15, i, { tin: 1, tout: 1, w0: 0.9, w1: 1 }));
-  ribbon(c, [[-17 * u, -20 * u], [-21 * u, -14 * u], [-20 * u, -7 * u]], TEX, 5, { tin: 1, tout: 1 });
   c.fillStyle = INK; c.fill();
+  // the tail swishes now and then, and wags when pleased
+  const ja = joyAt(o, t), wag = ja >= 0 ? Math.sin(ja * 16) * 0.5 * (1 - ja / 1.3) : Math.sin(t * 1.3 + o.seed) * 0.12;
+  c.save(); c.translate(-17 * u, -20 * u); c.rotate(wag); c.translate(17 * u, 20 * u);
+  c.beginPath(); ribbon(c, [[-17 * u, -20 * u], [-21 * u, -14 * u], [-20 * u, -7 * u]], TEX, 5, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
   dot(c, -20 * u, -6 * u, 2 * u, INK);
+  c.restore();
   const body = curve([[-17 * u, -22 * u], [-6 * u, -26.5 * u], [10 * u, -25.5 * u], [17 * u, -20 * u], [15 * u, -11 * u], [0, -10 * u], [-16 * u, -11 * u], [-18.5 * u, -16 * u]], 3, true);
   print(c, body, white);
   // patches, inside the body
@@ -1991,18 +2539,21 @@ function drawCow(c, u, white, P, o, t) {
   for (let i = 0; i < 3; i++) { const px = (-11 + i * 9 + R() * 4) * u, py = (-21 + R() * 8) * u; poly(c, ellipse(px, py, (3.5 + R() * 3) * u, (2.6 + R() * 2) * u, 12, 0, TAU, R())); c.fillStyle = INK; c.fill(); }
   c.restore();
   c.beginPath(); loop(c, body, DET, 3); c.fillStyle = INK; c.fill();
-  // head, muzzle, horns, an ear
-  const head = curve([[15 * u, -29 * u], [21 * u, -31 * u], [24.5 * u, -26 * u], [24.5 * u, -20 * u], [18 * u, -19.5 * u], [15 * u, -24 * u]], 2, true);
-  shape(c, head, white, DET, 4);
-  const muzzle = ellipse(23 * u, -21 * u, 4 * u, 3 * u, 14);
-  shape(c, muzzle, mul(C.pink, P.paper), TEX * 1.2, 2);
-  dot(c, 22 * u, -21 * u, 0.7 * u, INK); dot(c, 24.6 * u, -21.2 * u, 0.7 * u, INK);
-  dot(c, 20.2 * u, -26.6 * u, 1.05 * u, INK);
-  c.beginPath();
-  ribbon(c, [[16.5 * u, -29.5 * u], [15 * u, -33.5 * u], [16.5 * u, -36 * u]], TEX * 1.3, 1, { tin: 1, tout: 2 });
-  ribbon(c, [[21 * u, -31 * u], [22.5 * u, -34.5 * u], [21.5 * u, -37 * u]], TEX * 1.3, 2, { tin: 1, tout: 2 });
-  c.fillStyle = INK; c.fill();
-  poly(c, ellipse(13.6 * u, -27.5 * u, 3 * u, 1.5 * u, 10, 0, TAU, 0.4)); c.fillStyle = INK; c.fill();
+  // head, muzzle (it chews), horns, an ear
+  head(c, u, o, t, 15, -24, [19, -13], 0.95, chew => {
+    const face = curve([[15 * u, -29 * u], [21 * u, -31 * u], [24.5 * u, -26 * u], [24.5 * u, -20 * u], [18 * u, -19.5 * u], [15 * u, -24 * u]], 2, true);
+    shape(c, face, white, DET, 4);
+    const my = (-21 + Math.max(0, chew) * 0.7) * u;
+    shape(c, ellipse(23 * u, my, 4 * u, 3 * u, 14), mul(C.pink, P.paper), TEX * 1.2, 2);
+    dot(c, 22 * u, my, 0.7 * u, INK); dot(c, 24.6 * u, my - 0.2 * u, 0.7 * u, INK);
+    if (ja >= 0) { c.beginPath(); ribbon(c, ellipse(20.2 * u, -25.8 * u, 1.5 * u, 1.1 * u, 8, Math.PI * 1.1, Math.PI * 1.9), TEX, 6, { tin: 1, tout: 1, amp: 0.1 }); c.fillStyle = INK; c.fill(); }
+    else dot(c, 20.2 * u, -26.6 * u, 1.05 * u, INK);
+    c.beginPath();
+    ribbon(c, [[16.5 * u, -29.5 * u], [15 * u, -33.5 * u], [16.5 * u, -36 * u]], TEX * 1.3, 1, { tin: 1, tout: 2 });
+    ribbon(c, [[21 * u, -31 * u], [22.5 * u, -34.5 * u], [21.5 * u, -37 * u]], TEX * 1.3, 2, { tin: 1, tout: 2 });
+    c.fillStyle = INK; c.fill();
+    poly(c, ellipse(13.6 * u, -27.5 * u, 3 * u, 1.5 * u, 10, 0, TAU, 0.4 + chew * 0.2)); c.fillStyle = INK; c.fill();
+  });
 }
 function drawGull(c, u, white, o, t) {
   const fl = o.state === 'hover' ? 2 * u : Math.sin(t * 9 + o.seed) * 6 * u;
@@ -2082,12 +2633,13 @@ function quaver(c, x, y, sz, col, flip) {
   c.fillStyle = col; c.fill();
 }
 
-/* "boink!", "pok", "plop", "hehe" and the whistled notes: they pop in, drift a little and fade */
+/* "boink!", "pok", "plop", "hehe", the whistled notes, the grazers' "nom"s and the box's "baa!": they pop in,
+   drift a little and fade (without motion they just show, and go) */
 function drawDoodles(s, c) {
   if (!s.doodles.length) return;
-  const g = s.g, u = g.u, P = s.P, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
+  const g = s.g, u = g.u, P = s.P, rm = s.reduced, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
   for (const d of s.doodles) {
-    const a = s.t - d.t0, k = pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
+    const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
     if (f <= 0 || k <= 0.01) continue;
     c.save(); c.globalAlpha = f;
     if (d.kind === 'note') {
@@ -2095,15 +2647,19 @@ function drawDoodles(s, c) {
       quaver(c, d.x + Math.sin(a * 4 + d.seed) * 5 * u, d.y - a * 36 * u, sz * k, col, d.flip);
       c.restore(); continue;
     }
-    const size = Math.max(d.kind === 'pok' ? 12 : 13.5, (d.kind === 'pok' ? 12 : d.kind === 'boink' ? 16 : 15) * u + 4), dir = d.align === 'right' ? -1 : 1;
-    const shake = d.kind === 'hehe' ? (Math.floor(a * 9) % 2 ? -1 : 1) * 1.3 * u : 0;
-    c.translate(d.x, d.y - a * (d.kind === 'plop' ? 12 : 8) * u + shake); c.scale(k, k);
-    const text = d.kind === 'boink' ? 'boink!' : d.kind;
-    label(c, text, 0, 0, size, col, d.align, d.kind === 'boink' ? -0.09 * dir : d.kind === 'pok' ? 0.12 * dir : -0.06);
+    const munch = d.kind === 'munch', dir = d.align === 'right' ? -1 : 1;
+    const size = munch ? Math.max(11, 12 * u + 2.5) : Math.max(d.kind === 'pok' ? 12 : 13.5, (d.kind === 'pok' ? 12 : d.kind === 'boink' ? 16 : 15) * u + 4);
+    const shake = d.kind === 'hehe' && !rm ? (Math.floor(a * 9) % 2 ? -1 : 1) * 1.3 * u : 0;
+    c.translate(d.x, d.y - (rm ? 0 : a * (d.kind === 'plop' ? 12 : munch ? 7 : 8) * u) + shake); c.scale(k, k);
+    const text = d.text || (d.kind === 'boink' ? 'boink!' : d.kind);
+    label(c, text, 0, 0, size, col, d.align, d.kind === 'boink' ? -0.09 * dir : d.kind === 'pok' ? 0.12 * dir : munch ? -0.1 * dir : d.kind === 'baa' ? 0.1 * dir : -0.06);
     c.beginPath();
     if (d.kind === 'boink') {
       // the knock, in three short strokes toward the widget
       for (const i of [0, 1, 2]) { const an = -Math.PI / 2 - dir * (0.25 + i * 0.42), r0 = size * 0.32, r1 = size * 0.72; ribbon(c, [[Math.cos(an) * r0, -size * 0.3 + Math.sin(an) * r0], [Math.cos(an) * r1, -size * 0.3 + Math.sin(an) * r1]], TEX * 1.1, i + 7, { tin: 1, tout: 2 }); }
+    } else if (d.kind === 'baa') {
+      // two short strokes, from the box toward the word
+      for (const i of [0, 1]) { const an = Math.PI * (i ? 0.1 : -0.12), x0 = -dir * size * 0.6, r = size * 0.42; ribbon(c, [[x0 - dir * Math.cos(an) * r * 0.2, -size * 0.1 + Math.sin(an) * r * 0.6 + i * size * 0.38 - size * 0.12], [x0 + dir * Math.cos(an) * r * 0.55, -size * 0.1 + i * size * 0.38 - size * 0.12]], TEX * 1.1, i + 5, { tin: 1, tout: 2 }); }
     } else if (d.kind === 'plop') {
       // two drops over the word
       for (const i of [0, 1]) { const x = size * (0.45 + i * 0.85), y = -size * (0.9 + i * 0.2); ribbon(c, ellipse(x, y, size * 0.13, size * 0.18, 10, -0.6, Math.PI * 1.6), TEX, i + 3, { tin: 1, tout: 1 }); }
