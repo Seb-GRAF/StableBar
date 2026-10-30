@@ -118,10 +118,6 @@ h1, h2, h3 { text-wrap: balance; }
   color: #fff; rotate: -1.5deg; -webkit-text-stroke: .045em var(--pen); paint-order: stroke fill; text-shadow: 0 .045em 0 #1111111f;
 }
 .op-mark { position: relative; isolation: isolate; }
-/* the light reading the title: a copy of it behind the letters, each letter glowing once the beam has reached it */
-.op-glow { position: absolute; inset: 0; z-index: -1; color: transparent; text-shadow: none; -webkit-text-stroke: 0; pointer-events: none; }
-.op-glow i { font-style: normal; transition: text-shadow .3s; }
-.op-glow i.lit { text-shadow: 0 0 10px #ffe04a, 0 0 24px #ffe04ae6, 0 0 46px #ffd43ba6; }
 .op-bar {
   display: flex; align-items: center; gap: 8px; width: min(780px, 100%); padding: 7px 8px; border-radius: 22px;
   background: color-mix(in srgb, #ffffff 36%, transparent); box-shadow: inset 0 0 0 1px #ffffffb3, 0 20px 44px -20px #0b1d4a73;
@@ -144,8 +140,9 @@ h1, h2, h3 { text-wrap: balance; }
 .opening .op-bar, .opening .w, .op-line {
   transition: background-color 1.6s ease-in-out, box-shadow 1.6s ease-in-out, text-shadow 1.6s ease-in-out, color .14s .73s;
 }
-/* asleep: z's rising beside the lighthouse's hat (the page puts them by its lamp) */
-.op-z { position: fixed; left: -99px; top: -99px; font: 400 var(--zs, 16px)/1 var(--hand); color: #f2eeff; transition: opacity .3s, color 1.6s ease-in-out; }
+/* asleep: z's rising beside the lighthouse's hat (the page puts them by its lamp), from the night until it wakes */
+.op-z { display: none; position: fixed; z-index: 60; left: -99px; top: -99px; font: 400 var(--zs, 16px)/1 var(--hand); color: #f2eeff; pointer-events: none; transition: opacity .3s, color 1.6s ease-in-out; }
+.asleep .op-z { display: block; }
 [data-mode="light"] .op-z { color: var(--pen); }
 .op-z i { position: absolute; left: 0; top: 0; font-style: normal; opacity: 0; animation: op-z 1.5s linear infinite; }
 .op-z i:nth-child(2) { animation-delay: .5s; }

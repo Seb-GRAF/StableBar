@@ -853,10 +853,11 @@ function measureLumens() {
 }
 function lightWords(s) {
   if (!lumRects) measureLumens();
-  const I = s.beamI();
+  // (while the lighthouse reads the headline after the opening, the words it has lit stay lit)
+  const I = s.beamI(), keep = s.readingWords();
   for (const r of lumRects) {
     const on = r.seen && s.inBeam(r.x, r.y) * (.45 + .55 * I) > .35;
-    if (on !== r.on) { r.on = on; r.el.classList.toggle("lit", on); }
+    if (on !== r.on && (on || !keep)) { r.on = on; r.el.classList.toggle("lit", on); }
   }
 }
 
@@ -901,7 +902,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { if (landed) lightWords(s); if (!woken) placeSnore(s); readGlow(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (landed) lightWords(s); if (!woken) placeSnore(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -978,19 +979,20 @@ function onBar(event, key, info = {}) {
   }
 }
 
-/* The opening: a title card over the whole drawing with the bar big in the middle of it. It starts at night, the
-   lighthouse asleep and the drawing still. After a moment the day comes while it sleeps on; then it wakes up slowly,
-   and its light reads the title; then the bar stretches up into its place at the top, the card drifts away, the
-   notes come in, and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's
-   over. On every load at the top, with motion allowed (the class and the night come from the page's head); a scroll,
-   a key, a click or a tap ends it at once. */
-let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, runTimer = 0, landTimer = 0;
+/* The opening: a title card over the whole drawing with the bar big in the middle of it, at night, the lighthouse
+   asleep and the drawing still. After a moment the day comes, and with it the page: the card's bar stretches up into
+   its place at the top, the card drifts away and the notes come in, while the lighthouse sleeps on. Then it wakes up,
+   slowly, reads the headline with its light, sweeps it along the bar and looks at you (WAKE in scene.js). On every
+   load at the top, with motion allowed (the class and the night come from the page's head); until the page has come
+   in, a scroll, a key, a click or a tap brings it in at once, the lighthouse awake. */
+let landed = !root.classList.contains("intro"), woken = landed, runTimer = 0, landTimer = 0;
 const swept = new Map();
-const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
+const opening = document.getElementById("opening"), snore = document.getElementById("snore");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 const DAWN = 1.6; // seconds from night to day
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
+// the page has come in: at the end of the sunrise, or at once with the lighthouse awake
 function land(skip) {
   if (landed) return;
   landed = true;
@@ -998,44 +1000,43 @@ function land(skip) {
   clearTimeout(landTimer);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
   removeEventListener("visibilitychange", skipHidden);
-  if (!woken) { woken = true; setMode(dayMode()); }
-  if (skip) { root.classList.add("intro-skip"); S("stopSweep"); }
-  S("freeze", false);
-  S("doze", false);
-  reading = null;
+  if (skip) { root.classList.add("intro-skip"); setMode(dayMode()); }
   root.classList.remove("intro", "op-bar-in", "op-page-in");
   opening.remove();
   measureMarks();
   lumRects = null;
   sendBar(); // the bar's widgets where they stand, for the sweep and the ball game
   S("labels", true);
-  if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
-  else if (S("sweepBar", 1.6)) sweptUntil = performance.now() + 2800;
+  if (skip) { wakeUp(true); requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip"))); }
+  else runTimer = setTimeout(wakeUp, 300);
   setTimeout(quietSpell); // the bored lighthouse's quiet spell starts now (not before the page's script has run)
 }
-// (a click or a tap that ends it doesn't also drop something on the landscape: see pressedInOpening)
+// (a click or a tap that brings it in doesn't also drop something on the landscape: see pressedInOpening)
 function skipLanding() { land(true); }
-// nobody watching: it ends rather than play on unseen
+// nobody watching: it comes in rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
-// the day comes while it sleeps on: only the sky, the sun and the moon move, and the card changes with them
-function dawn() {
+// the day comes, and with it the page: the bar rises into place while the sky, the sun and the moon turn and the
+// card changes with them; the drawing holds still and the lighthouse sleeps on
+function rise() {
   if (landed) return;
   if (document.hidden) return land(true);
-  const mode = dayMode();
-  setMode(mode, DAWN);
-  runTimer = setTimeout(wakeUp, mode === "dark" ? 0 : DAWN * 1000 - 200); // (a night owl's stays night)
+  expandOpening();
+  setMode(dayMode(), DAWN);
+  landTimer = setTimeout(() => land(false), DAWN * 1000 + 100);
 }
-// then it wakes up, slowly: the z's go, the drawing comes to life, the eye opens and the light reads the title
-// (WAKE in scene.js)
-function wakeUp() {
-  if (woken || landed) return;
-  if (document.hidden) return land(true);
+// then it wakes up, slowly: the z's go, the drawing comes to life, the eye opens, and its light reads the headline,
+// sweeps along the bar and looks at you (WAKE in scene.js); brought in at once (now), it's simply awake
+function wakeUp(now) {
+  if (woken) return;
   woken = true;
   snore.classList.add("gone");
+  setTimeout(() => { root.classList.remove("asleep"); snore.remove(); }, 400);
   S("freeze", false);
-  readTitle();
-  runTimer = setTimeout(expandOpening, 4500); // once it has read the title
-  landTimer = setTimeout(() => land(false), 4500 + 1300); // once the bar and the notes have come in
+  S("doze", false);
+  if (now === true || document.hidden) return;
+  measureLumens();
+  const seen = lumRects.filter(r => r.seen);
+  if (seen.length) S("wakeRead", seen[0].x - 10, seen[0].y, seen.at(-1).x + 10, seen.at(-1).y);
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it
 let snoreAt = "";
@@ -1045,61 +1046,33 @@ function placeSnore(s) {
   snoreAt = key;
   snore.style.cssText = `left: ${p.x + p.r * 2}px; top: ${p.y - p.r * 0.4 - size / 2}px; --zs: ${size}px`;
 }
-/* The card's bar stretches into the real one: a copy of it leaves the card and grows to the window's width as it
-   rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens. The notes come in
-   while it rises, once the title has gone; at the top the real bar fades in under it and the copy fades away */
+/* The card's bar stretches into the real one, as the day comes: a copy of it leaves the card and grows to the
+   window's width as it rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens.
+   The card's words drift away, the notes come in while it rises, and at the top the real bar fades in under it and
+   the copy fades away. The copy is made before the day comes, so its colours change with the sky's */
 function expandOpening() {
-  if (landed) return;
   const pill = opening.querySelector(".op-bar"), a = pill.getBoundingClientRect(), b = bar.getBoundingClientRect(), k = b.height / a.height;
   const fly = pill.cloneNode(true);
   fly.classList.add("op-fly");
   opening.append(fly);
+  getComputedStyle(fly).backgroundColor;
   pill.style.visibility = "hidden";
   const grow = fly.animate([
     { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, transform: "scale(1)", borderRadius: "22px" },
     { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width / k}px`, transform: `scale(${k})`, borderRadius: "0px" },
-  ], { duration: 720, easing: "cubic-bezier(.6, 0, .2, 1)", fill: "forwards" });
-  for (const el of opening.querySelectorAll(".op-mark, .op-line")) el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-28px)" }], { duration: 460, easing: "ease-in", fill: "forwards" });
-  setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 480);
+  ], { duration: 1100, easing: "cubic-bezier(.45, 0, .25, 1)", fill: "forwards" });
+  for (const el of opening.querySelectorAll(".op-mark, .op-line")) el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-28px)" }], { duration: 600, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 650);
   grow.finished.then(() => {
     if (landed) return;
     root.classList.add("op-bar-in");
     fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" });
   }, () => {});
 }
-/* The light reads the title: a glowing copy of it sits behind the letters, one element per letter, and each letter
-   lights up once the beam has reached it while reading (all of them by the end). Before that the lighthouse wakes
-   up: it blinks at you, looks out to the left and blinks again (WAKE in scene.js) */
-let reading = null;
-function readTitle() {
-  if (landed) return;
-  const mark = opening.querySelector(".op-mark"), glow = document.createElement("span");
-  glow.className = "op-glow";
-  glow.setAttribute("aria-hidden", "true");
-  for (const word of mark.children) {
-    const copy = document.createElement("span");
-    copy.className = word.className;
-    for (const ch of word.textContent) copy.append(Object.assign(document.createElement("i"), { textContent: ch }));
-    glow.append(copy);
-  }
-  mark.append(glow);
-  S("doze", false); // the lighthouse wakes up: its eye opens and its light comes on
-  const letters = [...glow.querySelectorAll("i")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
-  const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
-  const y = (Math.min(...ys) + Math.max(...ys)) / 2, now = performance.now();
-  if (!S("wakeRead", first.x - 10, y, last.x + 10, y)) return;
-  reading = { letters, from: now + 3150, until: now + 4350 };
-}
-function readGlow(s) {
-  if (!reading || performance.now() < reading.from) return;
-  const done = performance.now() > reading.until;
-  for (const l of reading.letters) if (!l.el.classList.contains("lit") && (done || s.inBeam(l.x, l.y) > .45)) l.el.classList.add("lit");
-  if (done) reading = null;
-}
 /* While the light sweeps the bar, each widget it passes glows for a moment */
 function sweepGlow(s) {
   const now = performance.now();
-  if (now < sweptUntil) for (const w of bar.querySelectorAll(".w[data-key]")) {
+  if (s.sweepingBar()) for (const w of bar.querySelectorAll(".w[data-key]")) {
     if (w.hidden || w.classList.contains("over") || !w.offsetWidth) continue;
     const r = w.getBoundingClientRect();
     if (s.inBeam(r.left + r.width / 2, r.top + r.height / 2) > .45) { w.classList.add("swept"); swept.set(w, now + 420); }
@@ -1114,9 +1087,9 @@ if (!landed) {
     S("labels", false);
     S("doze", true); // asleep, its eye shut and its lamp out,
     S("freeze", true); // and the whole drawing still,
-    runTimer = setTimeout(dawn, 800); // for a moment
+    runTimer = setTimeout(rise, 800); // for a moment
   }
-} else opening.remove();
+} else { opening.remove(); snore.remove(); }
 
 /* The lamp-lit tour, for pointers that hover: the widget under the pointer takes the lamp's glow (the beam
    already follows the pointer) and a paper tag hangs under it on a string. Keyboard focus shows it too.

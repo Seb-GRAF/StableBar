@@ -46,11 +46,11 @@ const root = document.documentElement;
 root.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
 root.classList.add("js");
 // the landing film: on every load, reloads too, with motion allowed; a link to a section goes straight there
-// (?intro plays it anyway). It starts at night, and the day comes before the lighthouse wakes (see land() in
-// main.js). A reload starts from the top, where it plays, rather than where the page was left.
+// (?intro plays it anyway). It starts at night, the lighthouse asleep; the day comes with the page, and then it
+// wakes (see land() in main.js). A reload starts from the top, where it plays, rather than where the page was left.
 try {
   if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (new URLSearchParams(location.search).has("intro") || !location.hash)) {
-    root.classList.add("intro"); root.dataset.mode = "dark"; history.scrollRestoration = "manual";
+    root.classList.add("intro", "asleep"); root.dataset.mode = "dark"; history.scrollRestoration = "manual";
   }
 } catch {}
 </script>
@@ -118,8 +118,8 @@ try {
 
 <a class="skip" href="#main">Skip to content</a>
 <div class="scene" id="scene" aria-hidden="true"></div>
+<span class="op-z" id="snore" aria-hidden="true"><i>z</i><i>z</i><i>z</i></span>
 <div class="opening" id="opening" aria-hidden="true" data-theme="built-in">
-  <span class="op-z"><i>z</i><i>z</i><i>z</i></span>
   <p class="op-mark"><span class="op-w1">Stable</span><span class="op-w2">Bar</span></p>
   <div class="op-bar">
     <span class="w"><svg style="width:13px;height:15px;fill:currentColor"><use href="#i-apple"/></svg></span>
