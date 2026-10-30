@@ -413,7 +413,7 @@ class Scene {
   doze(on) {
     if (on) this.dozing = true;
     else if (this.dozing) {
-      this.dozing = false; this.wokeAt = this.t;
+      this.dozing = false; this.wokeAt = this.t; this.restAt = this.t;
       this.blink.next = this.t + WAKE.end + 1; // its own blinks once it's done waking up
     }
     this.wake();
@@ -465,8 +465,9 @@ class Scene {
   }
   // the bored trick, now (the page calls it after a quiet spell; also a hook for testing). True if it started.
   bored() {
-    // (not while its light is busy, nor for a while after it has looked at you: it has only just performed)
-    if (this.reduced || this.ball || this.bore || this.sweep || this.wakePath || this.gaze || this.t - this.restAt < 10 || document.hidden) return false;
+    // (not while its light is busy, nor in the first 40 s after the opening, counted from the end of its look at
+    // you, or from waking up when the opening was skipped: it has only just performed)
+    if (this.reduced || this.ball || this.bore || this.sweep || this.wakePath || this.gaze || this.t - this.restAt < 40 || document.hidden) return false;
     const L = this.g.lamp, mid = t => (t.x0 + t.x1) / 2;
     const near = this.bar.filter(t => /^(clock|meeting|battery)$/.test(t.key)).sort((a, b) => Math.abs(mid(a) - L.x) - Math.abs(mid(b) - L.x))[0];
     if (!near || !this.seen(L.x, L.y)) return false;
