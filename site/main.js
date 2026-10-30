@@ -202,25 +202,44 @@ volume.addEventListener("input", () => {
   volume.style.setProperty("--v", `${volume.value}%`);
 });
 
-/* Once the page scrolls, a strip of paper slides in behind the bar. Once the headline has gone
+/* Once the page scrolls, a strip of sky slides in behind the bar. Once the headline has gone
    under it, the bar becomes the page's header. While the bar is being edited it stays the demo. */
-function dockState() {
-  dock.classList.toggle("scrolled", scrollY > 2);
-  const header = !editing && heroNote.getBoundingClientRect().bottom < restHeight() + 56;
-  if (header === dock.classList.contains("header")) return;
+let swapAt = 0;
+function wantHeader() {
+  const line = restHeight() + 56, bottom = heroNote.getBoundingClientRect().bottom;
+  // once it's the header it stays so until the headline is well back in view, so small scrolls don't flip it
+  return !editing && bottom < (dock.classList.contains("header") ? line + 120 : line);
+}
+function setHeader(header) {
   dock.classList.add("measure");
   dock.classList.toggle("header", header);
   fit();
-  dock.classList.toggle("header", !header);
   dock.offsetWidth;
   dock.classList.remove("measure");
-  dock.classList.toggle("header", header);
   if (openId) open(openId);
 }
-/* The bar measures itself again once the header's menus and Download have finished opening or closing */
-bar.addEventListener("transitionend", e => {
-  if (e.propertyName === "grid-template-columns" && e.target.matches(".site .menus, .w.dl")) fit();
-});
+/* Scrolling swaps the bar's contents in one step behind a short fade, as macOS swaps an app's menus,
+   instead of letting widgets slide over one another. Editing, resizing and loading swap at once. */
+function dockState(fade = false) {
+  dock.classList.toggle("scrolled", scrollY > 2);
+  if (swapAt && fade) return;
+  swapAt = 0;
+  bar.classList.remove("swap");
+  const header = wantHeader();
+  if (header === dock.classList.contains("header")) return;
+  if (!fade || reduce.matches) return setHeader(header);
+  // fade out, then swap on the first frame after the fade (frames, not a timer, so a busy page can't hold it)
+  bar.classList.add("swap");
+  const at = swapAt = performance.now() + 130;
+  const step = now => {
+    if (swapAt !== at) return;
+    if (now < at) return requestAnimationFrame(step);
+    swapAt = 0;
+    setHeader(wantHeader());
+    bar.classList.remove("swap");
+  };
+  requestAnimationFrame(step);
+}
 
 /* Edit Bar in Place: the bar becomes its own editor, as in the app. Each position gets a tray,
    widgets keep their look, − takes one off, + adds one where it sits, and Undo and Done wait below. */
@@ -836,8 +855,18 @@ try {
 root.classList.toggle("has-scene", Boolean(scene));
 
 if (scene) {
+  /* The strip behind the bar takes the colour of the sky it covers, so the bar reads over it as it does over the drawing */
+  let lastSky = "";
+  const lum = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(c => c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((a, c, i) => a + c * [.2126, .7152, .0722][i], 0);
+  const skyStrip = s => {
+    const sky = s.sky?.();
+    if (!sky || sky === lastSky) return;
+    lastSky = sky;
+    dock.style.setProperty("--strip", sky);
+    dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
+  };
   scene.onFrame = s => {
-    try { lightWords(s); } catch (err) {
+    try { lightWords(s); skyStrip(s); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -989,7 +1018,7 @@ addEventListener("scroll", () => {
   queued = true;
   requestAnimationFrame(() => {
     queued = false;
-    dockState();
+    dockState(true);
     updateDusk();
     lumRects = null;
   });

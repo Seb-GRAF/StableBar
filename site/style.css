@@ -40,7 +40,7 @@
   --sky: #86cbf2;
   --sea: #2e58d8;
   --screen: #86cbf2;
-  --strip: #ffffff;
+  --strip: var(--sky);
   /* the bar keeps the site's amber Download */
   --amber: #f5821f;
   --amber-ink: #1b1007;
@@ -70,7 +70,6 @@
   --sky: #232662;
   --sea: #14184a;
   --screen: #2f3374;
-  --strip: #1c1e4e;
   --win-bg: #1e1d1c;
   --win-fg: #f5f5f7;
   --win-ring: #000;
@@ -132,7 +131,7 @@ main { overflow-x: clip; }
 [data-mode="light"] [data-theme="phosphor"] { --strip-bg: #f6f1e6ee; --w-bg: transparent; --w-border: transparent; --w-shadow: transparent; --w-glow: none; --fg: #5c3a00; --muted: #87683b; --accent: #a86400; --accent-text: #f6f1e6; --ws-off: #87683b; --ws-ind: #5c3a00; --ws-on: #f6f1e6; --pop-bg: #f6f1e6ee; --pop-border: #5c3a0040; --raised: #ebe2cf; --track: #5c3a0026; }
 
 /* The dock holds the bar and its popups at the top of the window, for the whole page.
-   Once the page scrolls, a strip of paper slides in behind it so text never runs under its widgets. */
+   Once the page scrolls, a strip of sky slides in behind it so text never runs under its widgets. */
 .dock { position: fixed; top: 0; left: 0; right: 0; z-index: 50; height: var(--bar-h); }
 [data-mode="dark"] .dock { color-scheme: dark; --ring: #ffe04a; }
 .dock::before {
@@ -140,7 +139,9 @@ main { overflow-x: clip; }
   background: var(--rule) left bottom / 160px 10px repeat-x, linear-gradient(var(--strip) 0 0) top / 100% calc(100% - 5px) no-repeat;
   opacity: 0; translate: 0 -6px; transition: opacity .25s, translate .3s var(--ease);
 }
-[data-mode="dark"] .dock::before { background-image: var(--rule-night), linear-gradient(var(--strip) 0 0); }
+/* The strip is the colour of the sky behind it (set by main.js); its pen line turns light when the sky is dark */
+[data-mode="dark"] .dock::before, .dock[data-sky="dark"]::before { background-image: var(--rule-night), linear-gradient(var(--strip) 0 0); }
+.dock[data-sky="light"]::before { background-image: var(--rule), linear-gradient(var(--strip) 0 0); }
 .dock.scrolled::before { opacity: 1; translate: none; }
 
 .bar {
@@ -152,6 +153,9 @@ main { overflow-x: clip; }
   transition: background .25s, border-radius .25s, margin .25s var(--ease), height .25s var(--ease);
 }
 .bar .g { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Becoming the header: the widgets fade out, swap in one step and fade back in (see dockState in main.js) */
+.bar .g { transition: opacity .13s ease; }
+.bar.swap .g { opacity: 0; }
 .w {
   flex: none; height: var(--tile-h); display: flex; align-items: center; gap: 7px; padding: 0 10px; white-space: nowrap;
   background: var(--w-bg); box-shadow: inset 0 0 0 1px var(--w-border), 0 1px 3px var(--w-shadow); border-radius: var(--w-radius);
@@ -223,17 +227,15 @@ main { overflow-x: clip; }
 .header .w.site { display: flex; }
 .site .menus a { color: var(--fg); }
 .site .menus a:hover { color: var(--accent); }
-.header .site .menus { grid-template-columns: 1fr; transition-delay: .1s; }
-@starting-style { .header .site .menus { grid-template-columns: 0fr; } }
+.header .site .menus { grid-template-columns: 1fr; }
 .w.dl {
   padding: 0; display: grid; grid-template-columns: 0fr; margin-left: -6px; opacity: 0; visibility: hidden;
   background: var(--amber); box-shadow: none; color: var(--amber-ink); font-weight: 600;
-  transition: grid-template-columns .4s var(--ease), margin .4s var(--ease), opacity .3s, visibility 0s .4s;
 }
-.w.dl > span { overflow: hidden; display: flex; align-items: center; gap: 6px; padding: 0; transition: padding .4s var(--ease); }
+.w.dl > span { overflow: hidden; display: flex; align-items: center; gap: 6px; padding: 0; }
 .w.dl svg { width: 16px; height: 16px; }
 .w.dl:hover { background: #ff9233; }
-.header .w.dl { grid-template-columns: 1fr; margin-left: 0; opacity: 1; visibility: visible; transition-delay: 0s; }
+.header .w.dl { grid-template-columns: 1fr; margin-left: 0; opacity: 1; visibility: visible; }
 .header .w.dl > span { padding: 0 11px 0 8px; }
 .measure * { transition: none !important; }
 

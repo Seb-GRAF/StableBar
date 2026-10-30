@@ -272,6 +272,8 @@ class Scene {
   }
   beamI() { return Math.max(0.3 + 0.7 * smooth(0.22, 0.72, this.d), this.pres.install); }
   lamp() { return { x: this.g.lamp.x + this.ox, y: this.g.lamp.y + this.oy }; }
+  // the colour of the sky at the top of the drawing right now, as #rrggbb
+  sky() { const c = this.P?.sky; return c ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null; }
 
   /* ----- input, in client coordinates ----- */
   pointer(x, y, kind = 'mouse') {
