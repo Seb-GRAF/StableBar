@@ -120,7 +120,8 @@ const KINDS = ['sheep', 'cow', 'duck', 'monster', 'gull'];
 const C = {
   wool: hex('#FFFFFF'), yolk: hex('#FFC21A'), duck: hex('#FFD21F'), beak: hex('#FF7A1A'), pink: hex('#FF9CB0'),
   monster: hex('#FF8FC0'), chimney: hex('#E8452F'), roof: hex('#2B2B36'), door: hex('#2E58D8'), skin: hex('#F6C9A6'),
-  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'),
+  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), tile: hex('#1D1D24'),
+  bun: hex('#EBA348'), bake: hex('#C97A30'), crumb: hex('#FFE0A0'),
   huts: ['#FF4A36', '#2E58D8', '#FFC21A', '#36A852'].map(hex),
   kraft: hex('#CC9A5E'), kraftLit: hex('#E2B983'), kraftDark: hex('#A87442'), tape: hex('#FFE04A'), sprout: hex('#2E9B3B'),
 };
@@ -222,8 +223,8 @@ const WAKE = {
   dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93], [1.14, 1.19]],
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
-// the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
-const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
+// the grass on the hill: at most this many tufts (fewer on phones), a new one every 3 to 6 s while there are fewer
+const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
 
 class Scene {
   constructor(host, opts = {}) {
@@ -837,12 +838,12 @@ class Scene {
       const f = i / rows, y = g.horizon + (H - g.horizon) * Math.pow(f, 1.6);
       g.rows.push({ y, f, seed: i * 97 + this.o.seed, spans: this.seaSpans(y) });
     }
-    // grass tufts along the ridge, a few
+    // grass tufts along the ridge, close together
     g.tufts = [];
-    for (let x = g.ridge[0][0] + 14 * u; x < W; x += (26 + R() * 30) * u) {
+    for (let x = g.ridge[0][0] + 14 * u; x < W; x += (13 + R() * 15) * u) {
       const y = this.ridgeY(x);
       if (y == null || y > H + 4 || Math.abs(x - lx) < T.wB * 0.7 || (x > g.cot.x - g.cot.w * 0.55 && x < g.cot.x + g.cot.w * 0.5)) continue;
-      g.tufts.push({ x, y, l: (8 + R() * 7) * Math.max(u, 0.62), p: R() * TAU, n: 2 + ((R() * 2.2) | 0) });
+      g.tufts.push({ x, y, l: (8 + R() * 7) * Math.max(u, 0.62), p: R() * TAU, n: 3 + ((R() * 2.2) | 0) });
     }
     // where the page's notes sit (a guess, for placing labels and surprises)
     g.note = portrait ? { x0: 0, x1: W, y0: top + Hs * 0.24, y1: H } : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 620) + 12, y0: top, y1: H * 0.84 };
@@ -1251,7 +1252,7 @@ class Scene {
     }
     // grass already there: one a short walk from somebody (the first meal comes soon), the rest spread out
     const first = this.objs.find(grazer);
-    for (let i = 0, n = 3 + (R() < 0.5 ? 1 : 0); i < n; i++) this.sprout(true, i === 0 && first && !this.reduced ? first : null);
+    for (let i = 0, n = (g.portrait ? 5 : 9) + (R() < 0.5 ? 1 : 0); i < n; i++) this.sprout(true, i === 0 && first && !this.reduced ? first : null);
     this.sproutAt = this.t + 4 + R() * 4;
     // not everyone is hungry at once: the one nearest some grass first, soon, and the others in turn
     const near = o => Math.min(1e9, ...this.meadow.map(m => Math.hypot(m.x - o.x, (m.y - o.y) * 1.5)));
@@ -1316,14 +1317,14 @@ class Scene {
   // a tuft of grass where it's seen (near `near` if it can); `grown` for the ones already there when the page opens
   sprout(grown, near) {
     const u = this.g.u, R = Math.random;
-    const p = (near && this.landSpot({ near, reach: 110 * u, min: 55 * u, gap: 44 * u, snug: true, clear: true, check: 3 }))
-      || this.landSpot({ gap: 48 * u, snug: true, clear: true, spread: grown });
+    const p = (near && this.landSpot({ near, reach: 110 * u, min: 55 * u, gap: 30 * u, snug: true, clear: true, check: 3 }))
+      || this.landSpot({ gap: 30 * u, snug: true, clear: true, spread: grown });
     if (!p) return null;
-    const sc = this.depthScale(p.y) * 0.85, n = 5 + ((R() * 3) | 0), blades = [];
+    const sc = this.depthScale(p.y) * 0.85, n = 6 + ((R() * 4) | 0), blades = [];
     for (let i = 0; i < n; i++) {
       const f = i / (n - 1) - 0.5;
       blades.push({
-        dx: (f * 13 + (R() - 0.5) * 1.8) * u * sc, a: f * 1.05 + (R() - 0.5) * 0.22, flex: 0.7 + R() * 0.5,
+        dx: (f * 15 + (R() - 0.5) * 1.8) * u * sc, a: f * 1.05 + (R() - 0.5) * 0.22, flex: 0.7 + R() * 0.5,
         l: (14 + R() * 7) * (1 - Math.abs(f) * 0.5) * u * sc, d: Math.abs(f) * 1.1 + R() * 0.3, cut: null,
       });
     }
@@ -1344,8 +1345,8 @@ class Scene {
     this.meadow = this.meadow.filter(m => !m.gone);
     // a new one now and then, only while the page shows (the scene's time stands still while it's hidden)
     if (this.reduced || t < this.sproutAt) return;
-    const m = this.meadow.length < MEADOW_MAX ? this.sprout(false) : null;
-    this.sproutAt = t + (m || this.meadow.length >= MEADOW_MAX ? lerp(SPROUT_MIN, SPROUT_MAX, R()) : 3);
+    const max = this.g.portrait ? MEADOW_PHONE : MEADOW_MAX, m = this.meadow.length < max ? this.sprout(false) : null;
+    this.sproutAt = t + (m || this.meadow.length >= max ? lerp(SPROUT_MIN, SPROUT_MAX, R()) : 3);
   }
   letGo(o) { if (o.tuft) { if (o.tuft.by === o) o.tuft.by = null; o.tuft = null; } }
   // one animal's day: idle, wander, walk to a tuft and eat it, look pleased; run from the pointer (sheep)
@@ -1802,23 +1803,54 @@ function drawSun(s, c) {
   c.restore();
 }
 
-/* a crescent moon, asleep, with a z */
+/* the moon, a croissant (de lune), asleep, with a z: a fat crescent of dough, creased into five, its ends curling in
+   and a little more baked */
 function drawMoon(s, c) {
   const g = s.g, u = g.u, m = s.moonPos();
   if (m.a <= 0) return;
-  const r = 25 * u, sz = r * 3.4;
+  const r = 30 * u, sz = r * 3.4;
   c.save(); c.beginPath(); c.rect(0, 0, g.W, g.horizon); c.clip();
   c.globalAlpha = m.a;
   s.sprite('moon', sz, sz, m.x, m.y, x => {
-    const cres = [];
-    for (let i = 0; i <= 26; i++) { const a = -Math.PI / 2 + i / 26 * Math.PI; cres.push([Math.cos(a) * r, Math.sin(a) * r]); }
-    for (let i = 25; i >= 1; i--) { const a = -Math.PI / 2 + i / 26 * Math.PI; cres.push([Math.cos(a) * r * 0.38 + r * 0.02, Math.sin(a) * r * 0.97]); }
-    shape(x, dens(cres, 3, true), C.moon, DET, 11);
-    // a closed eye with lashes, and a small smile
+    const D = Math.PI / 180, END = 105 * D, CREASES = [25 * D, 65 * D];
+    // along the crescent's middle line (t in radians, 0 pointing right), and half its thickness there: fat in the
+    // middle, tapering to round ends that curl in, a little pinched at each crease
+    const mid = t => 0.62 - 0.12 * smooth(60 * D, END, Math.abs(t));
+    const half = t => (0.31 * Math.pow(Math.max(0, 1 - (t / END) ** 2), 0.6) + 0.07) * (1 - 0.1 * Math.max(...CREASES.map(k => Math.exp(-(((Math.abs(t) - k) / (6 * D)) ** 2)))));
+    const at = (t, off) => { const d = (mid(t) + off) * r; return [Math.cos(t) * d, Math.sin(t) * d]; };
+    // the dough between two angles, its ends rounded off where they're the crescent's ends
+    const piece = (t0, t1) => {
+      const pts = [], n = Math.max(4, Math.round((t1 - t0) / (4 * D)));
+      for (let i = 0; i <= n; i++) { const t = lerp(t0, t1, i / n); pts.push(at(t, half(t))); }
+      if (t1 >= END - 1e-6) for (let i = 1; i < 8; i++) { const a = i / 8 * Math.PI, [cx, cy] = at(END, 0), h = half(END) * r; pts.push([cx + Math.cos(END + a) * h, cy + Math.sin(END + a) * h]); }
+      for (let i = n; i >= 0; i--) { const t = lerp(t0, t1, i / n); pts.push(at(t, -half(t))); }
+      if (t0 <= -END + 1e-6) for (let i = 1; i < 8; i++) { const a = Math.PI + i / 8 * Math.PI, [cx, cy] = at(-END, 0), h = half(-END) * r; pts.push([cx + Math.cos(-END + a) * h, cy + Math.sin(-END + a) * h]); }
+      return pts;
+    };
+    shape(x, piece(-END, END), C.bun, DET, 11);
+    // the ends, more baked
+    for (const sg of [-1, 1]) print(x, sg < 0 ? piece(-END, -CREASES[1]) : piece(CREASES[1], END), C.bake);
+    // the creases, bowed toward the middle, and the pen round the whole croissant again over the baked ends
     x.beginPath();
-    ribbon(x, ellipse(r * 0.62, -r * 0.2, r * 0.17, r * 0.11, 9, 0.15 * Math.PI, 0.85 * Math.PI), TEX * 1.2, 2, { tin: 2, tout: 2 });
-    for (const k of [0.3, 0.5, 0.7]) { const a = k * Math.PI, ex = r * 0.62 + Math.cos(a) * r * 0.17, ey = -r * 0.2 + Math.sin(a) * r * 0.11; ribbon(x, [[ex, ey], [ex + Math.cos(a) * 3 * u, ey + Math.sin(a) * 3 * u]], TEX, k * 9, { tin: 1, tout: 1 }); }
-    ribbon(x, ellipse(r * 0.52, r * 0.3, r * 0.15, r * 0.1, 9, 0.2 * Math.PI, 0.8 * Math.PI), TEX * 1.1, 4, { tin: 2, tout: 2 });
+    for (const k of CREASES) for (const sg of [-1, 1]) {
+      const t = sg * k, bow = -sg * 5 * D;
+      ribbon(x, [at(t, -half(t) * 0.92), at(t + bow, 0), at(t, half(t) * 0.92)], DET * 0.85, 30 + k * 10 + sg, { tin: 2, tout: 2 });
+    }
+    loop(x, piece(-END, END), DET, 11);
+    x.fillStyle = INK; x.fill();
+    // a shine along the top of each piece
+    x.beginPath();
+    for (const [t, w] of [[0, 9], [-45, 7], [45, 7], [-86, 4], [86, 4]]) {
+      const a = t * D, pts = [];
+      for (let i = 0; i <= 4; i++) { const tt = a + (i / 4 - 0.5) * w * 2 * D; pts.push(at(tt, half(tt) * 0.55)); }
+      ribbon(x, pts, TEX * 1.2, 5 + t / 9, { tin: 2, tout: 2 });
+    }
+    x.fillStyle = rgba(C.crumb); x.fill();
+    // a closed eye with lashes, and a small smile, on the middle piece
+    x.beginPath();
+    ribbon(x, ellipse(r * 0.67, -r * 0.12, r * 0.13, r * 0.08, 9, 0.15 * Math.PI, 0.85 * Math.PI), TEX * 1.2, 2, { tin: 2, tout: 2 });
+    for (const k of [0.3, 0.5, 0.7]) { const a = k * Math.PI, ex = r * 0.67 + Math.cos(a) * r * 0.13, ey = -r * 0.12 + Math.sin(a) * r * 0.08; ribbon(x, [[ex, ey], [ex + Math.cos(a) * 2.6 * u, ey + Math.sin(a) * 2.6 * u]], TEX, k * 9, { tin: 1, tout: 1 }); }
+    ribbon(x, ellipse(r * 0.64, r * 0.1, r * 0.1, r * 0.07, 9, 0.2 * Math.PI, 0.8 * Math.PI), TEX * 1.1, 4, { tin: 2, tout: 2 });
     x.fillStyle = INK; x.fill();
   });
   c.restore();
