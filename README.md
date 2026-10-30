@@ -18,10 +18,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 <br>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.webp">
-  <img src="docs/images/hero-light.webp" alt="StableBar with workspaces, the active app, the next meeting, CPU and memory use, the battery and the time. Today's agenda is open below the meeting.">
-</picture>
+<img src="https://github.com/user-attachments/assets/8d5909cb-f107-48db-a7b3-aabbabf4e860" width="100%" alt="StableBar on the desktop: workspaces with their app icons, the active app, music, the next meeting, CPU and memory, the battery and the clock. It moves to another workspace and back.">
 
 ## Features
 
@@ -34,63 +31,35 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 - **Every display.** Notch-aware placement, widgets per kind of screen and a separate bar for each screen setup.
 - **Scriptable.** The command line queries and edits the running bar and sends events from other tools.
 
-## Themes
+## Workspaces
 
-The same bar in each theme that ships with StableBar. Choose one during setup, cycle through them on your own bar with **Try Themes…**, or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages).
+The workspaces widget shows each workspace and its apps from AeroSpace, yabai or OmniWM, and follows you as you switch. Without a window manager, it can show macOS Spaces. See [Built-in widgets](docs/widgets.md).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/themes-dark.webp">
-  <img src="docs/images/themes-light.webp" alt="One bar shown in each theme that ships with StableBar">
-</picture>
+<img src="https://github.com/user-attachments/assets/66655f52-9458-4488-9e0f-064a8529b4ab" width="100%" alt="The bar's workspaces widget switching between workspaces while the window below changes to each workspace's app">
 
 ## Popups
 
 Any widget can open a popup. Build it from rows, columns, text, graphs, lists, buttons, sliders, toggles and search fields, filled with the widget's data. See [Custom popups](docs/popups.md).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/popups-dark.webp">
-  <img src="docs/images/popups-light.webp" alt="Three popups: CPU and memory with a graph, today's agenda, and a panel with a slider, a toggle, a segmented control and a search field">
-</picture>
+<img src="https://github.com/user-attachments/assets/7c0ad0e9-efd0-4ac1-8090-7807de30222c" width="100%" alt="The pointer clicks the meeting, system and music widgets in turn, opening today's agenda, a CPU and memory graph, and the playing track with its controls">
 
-## Settings
+## Themes
 
-Change content, appearance and behavior without touching JSON. Settings saves to the same configuration file you can edit by hand, with undo and redo. See [Settings](docs/settings.md).
+Six themes ship with StableBar, alongside Built-in. Choose one during setup, cycle through them on your own bar with **Try Themes…**, or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages). **Save as Theme…** turns your own look into one. See [Themes](docs/themes.md).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/settings-dark.webp">
-  <img src="docs/images/settings-light.webp" alt="The Theme section of StableBar Settings, with a preview of the bar, the theme gallery and the theme's colors">
-</picture>
+<img src="https://github.com/user-attachments/assets/ceb102e2-3704-4198-ba9d-d58bcfc1ecd5" width="100%" alt="The bar and its open agenda popup changing through each theme that ships with StableBar, then back to Built-in">
 
-## Install
+## Edit the bar in place
 
-1. Download `StableBar.dmg` from the [latest release](https://github.com/Seb-GRAF/StableBar/releases/latest).
-2. Open it and drag StableBar to Applications.
-3. Open StableBar. Setup walks you through a preset, a theme and a placement.
+Choose **Edit Bar in Place** from the bar's right-click menu to arrange widgets on the bar itself: drag them between positions, remove them with **−** or add one with **+**. Changes save as you go, with undo. See [Settings](docs/settings.md).
 
-With [Homebrew](https://brew.sh), `brew install --cask seb-graf/tap/stablebar` replaces the first two steps.
+<img src="https://github.com/user-attachments/assets/66608625-bef8-4d29-b2db-dcf58ac26876" width="100%" alt="Editing the bar in place: the music widget is dragged from the right of the bar to its center, then Done restores the normal bar">
 
-StableBar needs macOS 14 or later on Apple silicon. Releases update themselves; choose the Beta track in **Settings → General → Updates** to get betas. See [Getting started](docs/getting-started.md). To remove StableBar, use **Settings → General → [Uninstall](docs/getting-started.md#uninstall)**, which also turns off the menu bar auto-hide that StableBar turned on.
+## Any script is a widget
 
-## Configure
+A widget can run any command that prints text or a JSON object, refresh on a timer or on events, and open a popup with graphs, lists and controls.
 
-Your bar lives in `~/.config/stablebar/config.json`. Setup and Settings save to it, and you can edit it yourself: StableBar applies the file when you save it, and keeps the last working bar if a change is invalid. The JSON schema gives editors completion and validation.
-
-```json
-{
-  "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json",
-  "theme": { "id": "catppuccin" },
-  "widgets": [
-    { "id": "spaces", "type": "workspaces", "position": "left" },
-    { "id": "app", "type": "activeApp", "position": "left" },
-    { "id": "power", "type": "battery", "position": "right" },
-    { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
-  ]
-}
-```
-
-## Write a widget
-
-A widget can run any command that prints text or a JSON object:
+<img src="https://github.com/user-attachments/assets/fcd1f43e-311b-4ddf-b225-c830be980d6e" width="100%" alt="A two-line shell script that prints the disk usage is typed, and its output appears on the bar as a new widget">
 
 ```sh
 #!/bin/sh
@@ -106,7 +75,42 @@ printf '{"text":"%s","icon":"internaldrive"}' "$used"
 }
 ```
 
-[Create a widget](docs/create-a-widget.md) covers the output format, events and layouts. Share a widget as a [package](docs/packages.md), or install others from the store in **Settings → Packages**.
+[Create a widget](docs/create-a-widget.md) covers the output format, events and layouts. Share a widget as a [package](docs/packages.md).
+
+## Widget store
+
+**Settings → Packages → Store** lists widgets and themes from the [StableBar store](https://github.com/Seb-GRAF/stablebar-packages). Before anything runs, StableBar shows the commands, hosts and permissions a package uses. See [Packages and the store](docs/packages.md#store).
+
+<img src="https://github.com/user-attachments/assets/51f51f6c-fd6c-4900-83c7-71fe2b4dc6f7" width="100%" alt="The Store in Settings lists widget packages; getting the Weather package marks it installed">
+
+## Settings or JSON
+
+Change content, appearance and behavior in Settings, with undo and redo, or edit the file it saves to. Your bar lives in `~/.config/stablebar/config.json`: StableBar applies the file when you save it, and keeps the last working bar if a change is invalid. The JSON schema gives editors completion and validation. See [Settings](docs/settings.md) and [Configuration](docs/configuration.md).
+
+<img src="https://github.com/user-attachments/assets/47b1b70a-531d-457a-bb83-11d57038acba" width="100%" alt="In config.json the theme is changed from catppuccin to nord and saved, and the bar above switches to Nord; then it is changed back">
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json",
+  "theme": { "id": "catppuccin" },
+  "widgets": [
+    { "id": "spaces", "type": "workspaces", "position": "left" },
+    { "id": "app", "type": "activeApp", "position": "left" },
+    { "id": "power", "type": "battery", "position": "right" },
+    { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
+  ]
+}
+```
+
+## Install
+
+1. Download `StableBar.dmg` from the [latest release](https://github.com/Seb-GRAF/StableBar/releases/latest).
+2. Open it and drag StableBar to Applications.
+3. Open StableBar. Setup walks you through a preset, a theme and a placement.
+
+With [Homebrew](https://brew.sh), `brew install --cask seb-graf/tap/stablebar` replaces the first two steps.
+
+StableBar needs macOS 14 or later on Apple silicon. Releases update themselves; choose the Beta track in **Settings → General → Updates** to get betas. See [Getting started](docs/getting-started.md). To remove StableBar, use **Settings → General → [Uninstall](docs/getting-started.md#uninstall)**, which also turns off the menu bar auto-hide that StableBar turned on.
 
 ## Documentation
 
