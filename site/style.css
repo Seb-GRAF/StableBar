@@ -118,17 +118,19 @@ h1, h2, h3 { text-wrap: balance; }
   color: #fff; rotate: -1.5deg; -webkit-text-stroke: .045em var(--pen); paint-order: stroke fill; text-shadow: 0 .045em 0 #1111111f;
 }
 .op-mark { position: relative; isolation: isolate; }
-/* its words glow in the lighthouse's weak light at night (main.js sets --glow) */
-.op-mark > span {
-  text-shadow: 0 .045em 0 #1111111f, 0 0 10px rgb(255 224 74 / var(--glow, 0)), 0 0 24px rgb(255 224 74 / calc(var(--glow, 0) * .9)),
-    0 0 46px rgb(255 212 59 / calc(var(--glow, 0) * .65));
-}
 .op-bar {
   display: flex; align-items: center; gap: 8px; width: min(780px, 100%); padding: 7px 8px; border-radius: 22px;
   background: color-mix(in srgb, #ffffff 36%, transparent); box-shadow: inset 0 0 0 1px #ffffffb3, 0 20px 44px -20px #0b1d4a73;
   -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
 }
 .op-bar .w { gap: 8px; padding: 0 13px; }
+/* its widgets glow in the lighthouse's weak light at night (main.js sets --glow; none of these is in the card's
+   transitions, so the light's flicker stays sharp) */
+.opening .op-bar:not(.op-fly) .w {
+  background-image: linear-gradient(0deg, rgb(255 224 74 / calc(var(--glow, 0) * .55)), rgb(255 224 74 / 0) 82%);
+  outline: 1.5px solid rgb(255 212 59 / calc(var(--glow, 0) * .8)); outline-offset: 0;
+  filter: drop-shadow(0 5px 10px rgb(255 212 59 / calc(var(--glow, 0) * .9)));
+}
 .op-bar svg { width: 18px; height: 18px; }
 .op-app { gap: 15px !important; }
 .op-app b { font-weight: 700; }

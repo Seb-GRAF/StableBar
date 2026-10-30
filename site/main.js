@@ -903,7 +903,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { if (woken) lightWords(s); else placeSnore(s); if (woken && !landed) glowTitle(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (woken) lightWords(s); else placeSnore(s); if (woken && !rose) glowBar(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -981,18 +981,19 @@ function onBar(event, key, info = {}) {
 }
 
 /* The opening: a title card over the whole drawing with the bar big in the middle of it, at night, the lighthouse
-   asleep and the drawing still. After a moment it wakes up and strains to light its lamp, and its light finds the
-   title, weak and unsteady. Then the day comes, and with it the page: the card's bar stretches up into its place at
-   the top, the card drifts away and the notes come in, while the lighthouse blinks its light out and strains again.
+   asleep and the drawing still. After a while it wakes up and strains to light its lamp, and its light finds the
+   card's bar, weak and unsteady, and crosses it. Then the day comes, and with it the page: the card's bar stretches up
+   into its place at the top, the card drifts away and the notes come in, while the lighthouse blinks its light out
+   and strains again.
    Its light comes on for good as the headline comes in: it reads it, sweeps along the bar and looks at you (WAKE in
    scene.js). On every load at the top, with motion allowed (the class and the night come from the page's head); until
    the page has come in, a scroll, a key, a click or a tap brings it in at once, the lighthouse awake. */
-let landed = !root.classList.contains("intro"), woken = landed, runTimer = 0, landTimer = 0;
+let landed = !root.classList.contains("intro"), woken = landed, rose = landed, runTimer = 0, landTimer = 0;
 const swept = new Map();
-const opening = document.getElementById("opening"), snore = document.getElementById("snore"), mark = opening.querySelector(".op-mark");
+const opening = document.getElementById("opening"), snore = document.getElementById("snore");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 const DAWN = 1.6; // seconds from night to day
-const WAKE_AT = 450, RISE_AFTER = 2450; // ms: asleep for a moment, then awake at night, until the day comes
+const WAKE_AT = 1100, RISE_AFTER = 2750; // ms: asleep for a while, then awake at night, until the day comes
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
 // the page has come in: at the end of the sunrise, or at once with the lighthouse awake
@@ -1017,8 +1018,9 @@ function land(skip) {
 function skipLanding() { land(true); }
 // nobody watching: it comes in rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
-// it wakes up: the z's go, the drawing comes to life, the eye opens and it strains to light its lamp on the title,
-// until the day comes (WAKE in scene.js); brought in at once (now), it's simply awake, even halfway through the show
+// it wakes up: the z's go, the drawing comes to life, the eye opens and it strains to light its lamp on the card's
+// bar, until the day comes (WAKE in scene.js); brought in at once (now), it's simply awake, even halfway through the
+// show
 function wakeUp(now) {
   if (woken) { if (now === true) S("doze", false, true); return; }
   woken = true;
@@ -1027,8 +1029,8 @@ function wakeUp(now) {
   S("freeze", false);
   S("doze", false, now === true);
   if (now === true) return;
-  const r = mark.getBoundingClientRect();
-  S("lightTitle", r.left + r.width / 2, r.top + r.height / 2);
+  const tiles = [...opening.querySelectorAll(".op-bar .w")].map(el => el.getBoundingClientRect()).filter(r => r.width), a = tiles[0], b = tiles.at(-1);
+  if (a) S("lightBar", a.left + a.width / 2, a.top + a.height / 2, b.left + b.width / 2, b.top + b.height / 2);
   runTimer = setTimeout(rise, RISE_AFTER);
 }
 // then the day comes, and with it the page: the bar rises into place while the sky, the sun and the moon turn and the
@@ -1037,6 +1039,8 @@ function rise() {
   if (landed) return;
   if (document.hidden) return land(true);
   const ends = headlineEnds();
+  rose = true;
+  for (const t of glowTiles || []) t.el.style.removeProperty("--glow"); // (its weak light goes out: see glowBar)
   expandOpening();
   setMode(dayMode(), DAWN);
   S("rising", ...(ends || []));
@@ -1051,18 +1055,19 @@ function headlineEnds() {
   const a = seen[0], b = seen.at(-1);
   return [a.left + a.width / 2 - 10, a.top + a.height / 2 - dy, b.left + b.width / 2 + 10, b.top + b.height / 2 - dy];
 }
-/* The title's glow at night: each of its words glows as brightly as the lighthouse's weak light on it (--glow, in
-   style.css; on the words themselves, so the glow is no new paint for the browser to count as the page's largest) */
-let glowWords = null;
-function glowTitle(s) {
+/* The card's bar at night: each of its widgets glows as brightly as the lighthouse's weak light on it, fading just
+   after the light has passed (--glow, in style.css) */
+let glowTiles = null;
+function glowBar(s) {
   const p = s.lampOn() * s.lampPower();
-  if (!glowWords) {
+  if (!glowTiles) {
     if (p <= 0) return;
-    glowWords = [...mark.children].map(el => { const r = el.getBoundingClientRect(); return { el, xs: [.2, .5, .8].map(f => r.left + r.width * f), y: r.top + r.height / 2, k: 0 }; });
+    glowTiles = [...opening.querySelectorAll(".op-bar .w")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2, trail: 0, k: 0 }; });
   }
-  for (const w of glowWords) {
-    const k = Math.round(Math.min(1, Math.max(...w.xs.map(x => s.inBeam(x, w.y))) * p * 1.6) * 50) / 50;
-    if (k !== w.k) { w.k = k; w.el.style.setProperty("--glow", k); }
+  for (const t of glowTiles) {
+    t.trail = Math.max(s.inBeam(t.x, t.y), t.trail * .9);
+    const k = Math.round(Math.min(1, t.trail * p * 1.6) * 50) / 50;
+    if (k !== t.k) { t.k = k; t.el.style.setProperty("--glow", k); }
   }
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it

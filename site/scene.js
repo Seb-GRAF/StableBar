@@ -211,11 +211,13 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
 // the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens over `open`, then strains to
 // light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how hard]), and from `dim` its light
-// finds the title, weak and unsteady (nearly out in each of `dips`, counted from `dim`). When the day comes (from the
-// page's rising): it blinks its light out over `out`, strains again (`again`), and its light comes on for good at
-// `on`, on the headline's first word; it reads the headline from `read` for `dur`, and at `end` it sweeps the bar
+// finds the card's bar, weak and unsteady (nearly out in each of `dips`), and crosses it (`scan`: [when, how long]; both
+// counted from `dim`). When the day comes (from the page's rising): it blinks its light out over `out`, strains again
+// (`again`), and its light comes on for good at `on`, on the headline's first word; it reads the headline from `read`
+// for `dur`, and at `end` it sweeps the bar
 const WAKE = {
-  open: 0.5, pushes: [[0.7, 0.26, 0.75], [1.08, 0.32, 0.9]], dim: 1.44, dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93]],
+  open: 0.5, pushes: [[0.7, 0.26, 0.75], [1.08, 0.32, 0.9]], dim: 1.44, scan: [0.25, 0.9],
+  dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93], [1.14, 1.19]],
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
 // the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
@@ -254,7 +256,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
-    this.dozing = false; this.wokeAt = -9; this.waking = false; this.titleAim = this.riseAt = null; this.popped = false; this.frozen = false;
+    this.dozing = false; this.wokeAt = -9; this.waking = false; this.nightPath = this.riseAt = null; this.popped = false; this.frozen = false;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -399,13 +401,26 @@ class Scene {
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
-  // the opening's wake-up (see WAKE), at night: the title its weak light finds (a point, in viewport coordinates)
-  lightTitle(x, y) {
+  // the opening's wake-up (see WAKE), at night: the card's bar its weak light finds and crosses, from one end to the
+  // other (viewport coordinates)
+  lightBar(x0, y0, x1, y1) {
     if (!this.showing()) return false;
-    const L = this.g.lamp;
-    this.titleAim = Math.atan2(y - this.oy - L.y, x - this.ox - L.x);
+    const L = this.g.lamp, at = (x, y) => Math.atan2(y - this.oy - L.y, x - this.ox - L.x);
+    this.nightPath = { a0: at(x0, y0), a1: at(x1, y1), p0: [x0 - this.ox, y0 - this.oy], p1: [x1 - this.ox, y1 - this.oy] };
     this.wake();
     return true;
+  }
+  // how far across the card's bar its weak light has come (0 to 1)
+  scanK() { const s0 = WAKE.dim + WAKE.scan[0]; return smooth(s0, s0 + WAKE.scan[1], this.t - this.wokeAt); }
+  // how far its light reaches, as part of its full length: at night, in the show, only just past the card's bar,
+  // as if the bar caught it; else all the way
+  reach() {
+    const np = this.nightPath;
+    if (!np || !this.showing() || (this.riseAt != null && this.t - this.riseAt >= WAKE.out)) return 1;
+    // where the light meets the bar's line, along where it points now
+    const L = this.g.lamp, [x0, y0] = np.p0, vx = np.p1[0] - x0, vy = np.p1[1] - y0, ux = Math.cos(this.beam.a), uy = Math.sin(this.beam.a);
+    const den = ux * vy - uy * vx, d = Math.abs(den) < 1e-6 ? Math.hypot(x0 - L.x, y0 - L.y) : ((x0 - L.x) * vy - (y0 - L.y) * vx) / den;
+    return clamp((Math.max(0, d) + 50 * this.g.u) / (this.diag * 1.05));
   }
   // then the day comes: it blinks its light out and strains again, and its light comes on for good on the headline,
   // from one point to the other, and reads it; then it sweeps the bar and looks at you (with no headline, it only
@@ -428,7 +443,7 @@ class Scene {
     if (on) this.dozing = true;
     else if (this.dozing) {
       this.dozing = false; this.wokeAt = this.t; this.restAt = this.t; this.waking = !now && !this.reduced;
-      this.titleAim = this.riseAt = null; this.popped = false;
+      this.nightPath = this.riseAt = null; this.popped = false;
       this.blink.next = this.t + (this.waking ? 12 : 4); // its own blinks once it's done (sooner if it looks at you)
     } else if (now && this.showing()) { this.waking = false; this.wakePath = null; this.blink.next = this.t + 2; }
     this.wake();
@@ -691,10 +706,11 @@ class Scene {
   mood() {
     const L = this.g.lamp, b = this.bore;
     if (this.showing()) {
-      // waking up: it looks at what it means to light (the title, then the headline), and squeezes its eye shut,
-      // straining to light its lamp
-      const k = this.squeeze(), aim = this.wakePath ? this.wakePath.a0 : this.titleAim;
-      return { a: aim ?? 0, m: aim == null ? 0 : smooth(WAKE.open * 0.4, WAKE.open + 0.2, this.t - this.wokeAt), shut: Math.min(1, k * 1.5), strain: k };
+      // waking up: it squeezes its eye shut, straining to light its lamp, and looks where the light is to go (the
+      // card's bar, then the headline), or along it once it's on
+      const k = this.squeeze(), aim = this.wakePath ? this.wakePath.a0 : this.nightPath?.a0, md = { shut: Math.min(1, k * 1.5), strain: k };
+      if (this.lampOn() > 0.05) return { ...md, a: this.beam.a, m: 1 };
+      return aim == null ? md : { ...md, a: aim, m: smooth(WAKE.open * 0.4, WAKE.open + 0.2, this.t - this.wokeAt) };
     }
     if (this.ball) return { a: Math.atan2(this.ball.y - L.y, this.ball.x - L.x), m: 1 };
     if (this.look && this.t < this.look.until) return { a: Math.atan2(this.look.y - L.y, this.look.x - L.x), m: 1 };
@@ -1130,9 +1146,10 @@ class Scene {
       b.steer = 1;
       if (w >= WAKE.out) b.sa = wp.a0 + angDiff(wp.a1, wp.a0) * smooth(WAKE.read, WAKE.read + WAKE.dur, w);
     } else if (this.showing()) {
-      // at night (see lightTitle): its weak light on the title, a little unsteady
+      // at night (see lightBar): its weak light comes on at one end of the card's bar and crosses it, a little unsteady
+      const np = this.nightPath;
       b.steer = 1;
-      if (this.titleAim != null) b.sa = this.titleAim + (rm ? 0 : 0.025 * Math.sin(this.t * 2.1));
+      if (np) b.sa = np.a0 + angDiff(np.a1, np.a0) * this.scanK() + (rm ? 0 : 0.02 * Math.sin(this.t * 2.1));
     } else if (this.gaze) {
       // looking at you: the light comes round to face you and stays there a moment (the pointer can wait)
       b.phi = this.gaze.phi;
@@ -1151,7 +1168,7 @@ class Scene {
     const c = Math.cos(b.phi), sn = Math.sin(b.phi);
     const vx = lerp(c, Math.cos(b.sa), b.steer), vy = lerp(0.03 * Math.abs(c), Math.sin(b.sa), b.steer);
     b.a = Math.atan2(vy, vx);
-    b.len = clamp(Math.hypot(vx, vy)) * this.lampOn();
+    b.len = clamp(Math.hypot(vx, vy)) * this.lampOn() * this.reach();
     b.flash = Math.pow(Math.max(0, sn), 14) * (1 - b.steer) * this.lampOn();
   }
   updateObjs(dt) {
