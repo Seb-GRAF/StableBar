@@ -209,9 +209,10 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
-// the opening's wake-up, in seconds after the eye starts to open: it opens, blinks twice, looks out to the left from
-// `left`, blinks, turns to the title from `turn` and reads it from `read` for `dur`; it's over at `end`
-const WAKE = { open: 0.85, blinks: [[0.95, 0.26], [1.3, 0.26], [2.35, 0.22]], left: 1.55, turn: 2.55, read: 3.15, dur: 1.1, end: 4.5 };
+// the opening's wake-up, in seconds after the eye starts to open: it opens slowly (over `open`), blinks twice, looks
+// out to the left from `left`, blinks, turns to the title from `turn` and reads it from `read` for `dur`; it's over
+// at `end`
+const WAKE = { open: 1.3, blinks: [[1.4, 0.26], [1.7, 0.26], [2.6, 0.22]], left: 1.95, turn: 2.75, read: 3.25, dur: 1, end: 4.45 };
 // the grass on the hill: at most this many tufts, a new one every 6 to 12 s while there are fewer
 const MEADOW_MAX = 6, SPROUT_MIN = 6, SPROUT_MAX = 12;
 
@@ -274,7 +275,7 @@ class Scene {
   // with a duration (the opening's sunrise), an even change over that time instead of the usual quick ease
   setDusk(d, dur = 0) {
     d = clamp(+d || 0);
-    if (dur > 0 && !this.reduced) this.dTween = { from: this.d, t0: this.t, dur };
+    if (dur > 0 && !this.reduced) this.dTween = { from: this.d, a: 0, dur };
     else if (d !== this.dTarget) this.dTween = null;
     this.dTarget = d; if (this.reduced) this.d = d; this.wake();
   }
@@ -414,7 +415,12 @@ class Scene {
     this.wake();
   }
   // 1 while asleep, easing to 0 as the eye slowly opens; the light comes on once the eye is half open
-  drowsy() { return this.dozing ? 1 : 1 - smooth(0, WAKE.open, this.t - this.wokeAt); }
+  drowsy() {
+    if (this.dozing) return 1;
+    // slowly, still sleepy: half open, a little heavier for a moment, then all the way
+    const a = this.t - this.wokeAt;
+    return a < 0.55 ? lerp(1, 0.5, smooth(0, 0.55, a)) : a < 0.8 ? lerp(0.5, 0.58, smooth(0.55, 0.8, a)) : lerp(0.58, 0, smooth(0.8, WAKE.open, a));
+  }
   lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
   // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
   freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
@@ -966,15 +972,15 @@ class Scene {
   sleep() { cancelAnimationFrame(this.raf); clearTimeout(this.timer); this.raf = this.timer = 0; }
   schedule() {
     if (this.raf || this.timer || this.dead || document.hidden) return;
-    // frozen: a frame only when one is asked for (a resize, a new theme), none in between
-    if (this.frozen) { if (this.kick > 0) this.raf = requestAnimationFrame(this.frame); return; }
+    // frozen: a frame only when one is asked for (a resize, a new theme) or while the hour changes, none in between
+    if (this.frozen) { if (this.kick > 0 || this.d !== (this.dEff ?? this.dTarget)) this.raf = requestAnimationFrame(this.frame); return; }
     const active = this.kick > 0 || performance.now() < this.awake || this.busy();
     if (active) this.raf = requestAnimationFrame(this.frame);
     else if (!this.reduced) this.timer = setTimeout(() => { this.timer = 0; this.raf = requestAnimationFrame(this.frame); }, 1000 / IDLE_FPS - 6);
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < 1.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.sweep || this.wakePath || this.gaze || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -990,14 +996,24 @@ class Scene {
     this.kick--;
     const dt = this.last == null ? 1 / 60 : Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
-    // frozen, only the very first frame moves anything: it puts everyone in their place
+    // frozen, only the very first frame moves anything (it puts everyone in their place); after it only the hour does
     if (!this.frozen || this.t === 0) this.update(dt);
+    else this.stepDusk(dt);
     const t0 = performance.now();
     this.render();
     this.times.push(performance.now() - t0);
     if (this.times.length > 240) this.times.shift();
     this.onFrame?.(this);
     this.schedule();
+  }
+  // the hour: toward the one asked for, quickly, or evenly over the time given (see setDusk)
+  stepDusk(dt) {
+    const rm = this.reduced, tw = this.dTween;
+    // the install state brings the night with it
+    const dTarget = this.dEff = Math.max(this.dTarget, this.pres.install > 0 ? lerp(this.dTarget, 1, this.pres.install) : 0);
+    if (tw && !rm) { tw.a += dt; const k = smooth(0, 1, tw.a / tw.dur); this.d = lerp(tw.from, dTarget, k); if (k >= 1) this.dTween = null; }
+    else this.d = rm ? dTarget : this.d + (dTarget - this.d) * Math.min(1, dt * 2.4);
+    if (Math.abs(dTarget - this.d) < 0.0005) this.d = dTarget;
   }
   update(dt) {
     const g = this.g, u = g.u, rm = this.reduced;
@@ -1006,12 +1022,7 @@ class Scene {
       const want = k === this.state ? 1 : 0;
       this.pres[k] = rm ? want : clamp(this.pres[k] + Math.sign(want - this.pres[k]) * dt * 1.8);
     }
-    // the install state brings the night with it
-    const dTarget = this.dEff = Math.max(this.dTarget, this.pres.install > 0 ? lerp(this.dTarget, 1, this.pres.install) : 0);
-    const tw = this.dTween;
-    if (tw && !rm) { const k = smooth(0, 1, (this.t - tw.t0) / tw.dur); this.d = lerp(tw.from, dTarget, k); if (k >= 1) this.dTween = null; }
-    else this.d = rm ? dTarget : this.d + (dTarget - this.d) * Math.min(1, dt * 2.4);
-    if (Math.abs(dTarget - this.d) < 0.0005) this.d = dTarget;
+    this.stepDusk(dt);
     this.boil = rm ? 0 : Math.floor(this.t * BOIL_FPS) % 3;
     this.vel.x *= Math.exp(-dt * 2.5); this.vel.y *= Math.exp(-dt * 2.5);
     this.windAmb = rm ? 0.2 : 0.28 + 0.22 * noise(this.t * 0.13 + 3);
@@ -1057,7 +1068,7 @@ class Scene {
       // the title and across it
       const w = this.t - wp.t0;
       b.phi = wp.phi;
-      b.steer = smooth(WAKE.left, WAKE.left + 0.6, w);
+      b.steer = smooth(WAKE.left, WAKE.left + 0.5, w);
       b.sa = w < WAKE.turn ? wp.aL : w < WAKE.read ? wp.aL + angDiff(wp.a0, wp.aL) * smooth(WAKE.turn, WAKE.read, w)
         : wp.a0 + angDiff(wp.a1, wp.a0) * smooth(WAKE.read, WAKE.read + WAKE.dur, w);
     } else if (this.gaze) {
@@ -1572,7 +1583,7 @@ class Scene {
     const step = Math.round(this.d * STEPS);
     this.P = palAt(PAL, step / STEPS);
     this.pstep = step;
-    BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw; NAP = this.drowsy() > 0.5;
+    BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw; NAP = this.drowsy() > 0.75;
     c.setTransform(k, 0, 0, k, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     drawScene(this, c);

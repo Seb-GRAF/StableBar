@@ -979,16 +979,16 @@ function onBar(event, key, info = {}) {
 }
 
 /* The opening: a title card over the whole drawing with the bar big in the middle of it. It starts at night, the
-   lighthouse asleep and the drawing still. After a moment the lighthouse wakes up, the day comes, and its light
-   reads the title; then the bar stretches up into its place at the top, the card drifts away, the notes come in,
-   and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's over. Once a
-   session, opening at the top, with motion allowed (the class and the night come from the page's head; ?intro plays
-   it again); a scroll, a key, a click or a tap ends it at once. */
+   lighthouse asleep and the drawing still. After a moment the day comes while it sleeps on; then it wakes up slowly,
+   and its light reads the title; then the bar stretches up into its place at the top, the card drifts away, the
+   notes come in, and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's
+   over. Once a session, opening at the top, with motion allowed (the class and the night come from the page's head;
+   ?intro plays it again); a scroll, a key, a click or a tap ends it at once. */
 let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
-const DAWN = 1.8; // seconds from night to day
+const DAWN = 1.6; // seconds from night to day
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
 function land(skip) {
@@ -1016,17 +1016,25 @@ function land(skip) {
 function skipLanding() { land(true); }
 // nobody watching: it ends rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
-// waking up: the eye opens, the z's go, the day comes over a couple of seconds, and the light reads the title
+// the day comes while it sleeps on: only the sky, the sun and the moon move, and the card changes with them
+function dawn() {
+  if (landed) return;
+  if (document.hidden) return land(true);
+  const mode = dayMode();
+  setMode(mode, DAWN);
+  runTimer = setTimeout(wakeUp, mode === "dark" ? 0 : DAWN * 1000 - 200); // (a night owl's stays night)
+}
+// then it wakes up, slowly: the z's go, the drawing comes to life, the eye opens and the light reads the title
+// (WAKE in scene.js)
 function wakeUp() {
   if (woken || landed) return;
   if (document.hidden) return land(true);
   woken = true;
   snore.classList.add("gone");
-  setMode(dayMode(), DAWN);
   S("freeze", false);
   readTitle();
-  runTimer = setTimeout(expandOpening, 4550); // once it has read the title (WAKE in scene.js)
-  landTimer = setTimeout(() => land(false), 4550 + 1300); // once the bar and the notes have come in
+  runTimer = setTimeout(expandOpening, 4500); // once it has read the title
+  landTimer = setTimeout(() => land(false), 4500 + 1300); // once the bar and the notes have come in
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it
 let snoreAt = "";
@@ -1079,7 +1087,7 @@ function readTitle() {
   const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
   const y = (Math.min(...ys) + Math.max(...ys)) / 2, now = performance.now();
   if (!S("wakeRead", first.x - 10, y, last.x + 10, y)) return;
-  reading = { letters, from: now + 3050, until: now + 4350 };
+  reading = { letters, from: now + 3150, until: now + 4350 };
 }
 function readGlow(s) {
   if (!reading || performance.now() < reading.from) return;
@@ -1106,7 +1114,7 @@ if (!landed) {
     S("labels", false);
     S("doze", true); // asleep, its eye shut and its lamp out,
     S("freeze", true); // and the whole drawing still,
-    runTimer = setTimeout(wakeUp, 1200); // for a moment
+    runTimer = setTimeout(dawn, 800); // for a moment
   }
 } else opening.remove();
 

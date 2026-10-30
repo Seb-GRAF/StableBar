@@ -134,7 +134,7 @@ h1, h2, h3 { text-wrap: balance; }
 .op-gap { flex: 1; }
 /* the card's sun and moon, one over the other: they cross over halfway through the sunrise */
 .op-sun { position: relative; }
-.op-sun svg { transition: opacity .5s .65s; }
+.op-sun svg { transition: opacity .45s .55s; }
 .op-sun .on { position: absolute; left: 13px; opacity: 0; }
 [data-mode="dark"] .op-sun .on { opacity: 1; }
 [data-mode="dark"] .op-sun .off { opacity: 0; }
@@ -142,10 +142,11 @@ h1, h2, h3 { text-wrap: balance; }
 /* the day comes: the card's bar and line change with the sky; their words turn from light to dark quickly, halfway,
    where either reads (fading slowly, they would go grey on grey) */
 .opening .op-bar, .opening .w, .op-line {
-  transition: background-color 1.8s ease-in-out, box-shadow 1.8s ease-in-out, text-shadow 1.8s ease-in-out, color .16s .82s;
+  transition: background-color 1.6s ease-in-out, box-shadow 1.6s ease-in-out, text-shadow 1.6s ease-in-out, color .14s .73s;
 }
 /* asleep: z's rising beside the lighthouse's hat (the page puts them by its lamp) */
-.op-z { position: fixed; left: -99px; top: -99px; font: 400 var(--zs, 16px)/1 var(--hand); color: #f2eeff; transition: opacity .3s; }
+.op-z { position: fixed; left: -99px; top: -99px; font: 400 var(--zs, 16px)/1 var(--hand); color: #f2eeff; transition: opacity .3s, color 1.6s ease-in-out; }
+[data-mode="light"] .op-z { color: var(--pen); }
 .op-z i { position: absolute; left: 0; top: 0; font-style: normal; opacity: 0; animation: op-z 1.5s linear infinite; }
 .op-z i:nth-child(2) { animation-delay: .5s; }
 .op-z i:nth-child(3) { animation-delay: 1s; }
