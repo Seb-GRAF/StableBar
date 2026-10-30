@@ -993,7 +993,7 @@ const swept = new Map();
 const opening = document.getElementById("opening"), snore = document.getElementById("snore");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 const DAWN = 1.6; // seconds from night to day
-const WAKE_AT = 1100, RISE_AFTER = 2750; // ms: asleep for a while, then awake at night, until the day comes
+const WAKE_AT = 1100, RISE_AFTER = 3350; // ms: asleep for a while, then awake at night, until the day comes
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
 // the page has come in: at the end of the sunrise, or at once with the lighthouse awake

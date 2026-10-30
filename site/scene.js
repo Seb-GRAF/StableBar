@@ -209,14 +209,14 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
-// the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens over `open`, then strains to
-// light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how hard]), and from `dim` its light
+// the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens slowly over `open`, easing
+// out, then strains to light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how hard]), and from `dim` its light
 // finds the card's bar, weak and unsteady (nearly out in each of `dips`), and crosses it (`scan`: [when, how long]; both
 // counted from `dim`). When the day comes (from the page's rising): it blinks its light out over `out`, strains again
 // (`again`), and its light comes on for good at `on`, on the headline's first word; it reads the headline from `read`
 // for `dur`, and at `end` it sweeps the bar
 const WAKE = {
-  open: 0.5, pushes: [[0.7, 0.26, 0.75], [1.08, 0.32, 0.9]], dim: 1.44, scan: [0.25, 0.9],
+  open: 1.2, pushes: [[1.3, 0.26, 0.75], [1.68, 0.32, 0.9]], dim: 2.04, scan: [0.25, 0.9],
   dips: [[0.22, 0.27], [0.52, 0.58], [0.63, 0.67], [0.88, 0.93], [1.14, 1.19]],
   out: 0.14, again: [[0.24, 0.28, 0.85], [0.62, 0.36, 1]], on: 0.98, read: 1.22, dur: 1.1, end: 2.45,
 };
@@ -448,12 +448,12 @@ class Scene {
     } else if (now && this.showing()) { this.waking = false; this.wakePath = null; this.blink.next = this.t + 2; }
     this.wake();
   }
-  // 1 while asleep, easing to 0 as the eye opens
+  // 1 while asleep, easing to 0 as the eye opens: slowly in the show, quickly when woken at once
   drowsy() {
     if (this.dozing) return 1;
-    // quick at first, settling as it opens all the way
-    const a = clamp((this.t - this.wokeAt) / WAKE.open);
-    return (1 - a) * (1 - a);
+    // easing out: on its way at once, settling gently as it opens all the way
+    const a = clamp((this.t - this.wokeAt) / (this.waking ? WAKE.open : 0.45));
+    return 1 - Math.sin(a * Math.PI / 2);
   }
   // the opening's show is on: from waking up until its light comes on for good
   showing() { return this.waking && !(this.riseAt != null && this.t - this.riseAt >= WAKE.on); }
