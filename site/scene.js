@@ -221,6 +221,11 @@ class Scene {
     this.sprites = new Map();
     this.fontsV = 0; this.layoutV = 0; this.sparkle = -9; this.rebuilds = 0;
     this.onFrame = null;
+    // the ball game and the bored trick (see "the lighthouse plays with the bar")
+    this.bar = []; this.ball = null; this.bore = null; this.look = null;
+    this.doodles = []; this.splashes = [];
+    this.hatKick = -9; this.regrowAt = -9;
+    this.onBar = null;
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -231,7 +236,7 @@ class Scene {
     this.measure(true);
     this.ro = new ResizeObserver(() => { if (this.measure()) this.wake(); });
     this.ro.observe(host);
-    this.onVis = () => { if (document.hidden) this.sleep(); else { this.last = null; this.wake(); } };
+    this.onVis = () => { if (document.hidden) { this.endBall(); this.endBore(); this.sleep(); } else { this.last = null; this.wake(); } };
     document.addEventListener('visibilitychange', this.onVis);
     const fontsIn = () => { this.fontsV++; this.wake(); };
     if (document.fonts) {
@@ -291,17 +296,23 @@ class Scene {
       this.ripples.push({ x, y, t0: this.t, a: Math.min(1, sp / 2400) * 0.9 });
     }
     if (this.reduced) this.aim(x, y);
+    this.poke();
     this.wake();
   }
   release() { this.ptr.on = false; this.wake(); }
   tap(x, y) {
     x -= this.ox; y -= this.oy;
+    const T = this.g.lh;
+    this.poke();
+    // the lighthouse plays ball instead of catching things (and winks when it can't)
+    if (y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base) {
+      if (!this.play()) this.blink.wink = this.t;
+      this.wake();
+      return false;
+    }
     this.aim(x, y);
     this.wake();
-    const g = this.g, T = g.lh;
     if (y < this.top) return false;
-    // the lighthouse winks instead of catching things
-    if (Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop && y < T.base) { this.blink.wink = this.t; return false; }
     this.spawn(x, y);
     return true;
   }
@@ -324,6 +335,234 @@ class Scene {
     if (a > down - lim && a <= down) return down - lim;
     if (a > down && a < down + lim) return down + lim;
     return a;
+  }
+
+  /* ----- the lighthouse plays with the bar -----
+     Keepy-uppy: the pom-pom leaves the hat, bounces off the line under a widget, comes back and is
+     headed up again, three to six times, then misses and drops into the sea. The bored trick: once,
+     when nobody has done anything for a while (the page decides), the beam shoves a widget aside.
+     The page sends the bar's widgets, animates them on onBar(event, key, info) and reads s.playing. */
+  get playing() { return Boolean(this.ball); }
+  // the bar's visible widgets, in client coordinates: { key, x0, x1, y }, y the line the ball bounces on
+  setBar(list) {
+    this.bar = (Array.isArray(list) ? list : []).filter(t => t && t.x1 > t.x0)
+      .map(t => ({ key: String(t.key), x0: t.x0 - this.ox, x1: t.x1 - this.ox, y: t.y - this.oy }));
+    if (!this.bar.length) { this.endBall(); this.endBore(); }
+    this.wake();
+  }
+  play() {
+    if (this.reduced || this.ball || document.hidden) return false;
+    const h = hatGeom(this), pr = h.pr;
+    if (!this.bar.some(t => t.y + pr < h.bob[1] - pr) || !this.seen(this.g.lamp.x, this.g.lamp.y)) return false;
+    this.endBore();
+    this.ball = { x: h.bob[0], y: h.bob[1], vx: 0, vy: 0, n: 0, max: 3 + Math.floor(Math.random() * 4), key: null, last: null, spin: 0, sq: -9 };
+    this.regrowAt = -9;
+    this.serve();
+    this.wake();
+    return !!this.ball;
+  }
+  // any input: catches the bored trick in the act
+  poke() {
+    const b = this.bore;
+    if (!b || (b.phase !== 'look' && b.phase !== 'push')) return;
+    if (b.phase === 'push') this.emit('release', b.key, { caught: true });
+    b.phase = 'caught'; b.at = this.t; b.notes = 0;
+    this.wake();
+  }
+  // the bored trick, now (the page calls it after a quiet spell; also a hook for testing). True if it started.
+  bored() {
+    if (this.reduced || this.ball || this.bore || document.hidden) return false;
+    const L = this.g.lamp, mid = t => (t.x0 + t.x1) / 2;
+    const near = this.bar.filter(t => /^(clock|meeting|battery)$/.test(t.key)).sort((a, b) => Math.abs(mid(a) - L.x) - Math.abs(mid(b) - L.x))[0];
+    if (!near || !this.seen(L.x, L.y)) return false;
+    const x = mid(near);
+    this.bore = { key: near.key, x, y: Math.max(4, this.top * 0.5), side: x < L.x ? -1 : 1, phase: 'look', at: this.t, notes: 0 };
+    this.wake();
+    return true;
+  }
+  emit(event, key, info = {}) {
+    try { this.onBar?.(event, key, info); } catch (err) { if (!this.onBarFailed) { this.onBarFailed = true; console.warn('onBar failed:', err); } }
+  }
+  // the next widget: the one nearest the pointer when it's up near the bar, otherwise another one, never the same twice
+  pick() {
+    const b = this.ball, g = this.g, h = hatGeom(this), L = g.lamp, mid = t => (t.x0 + t.x1) / 2;
+    const reach = this.bar.filter(t => t.y + h.pr < h.bob[1] - h.pr && t.x1 > 0 && t.x0 < g.W);
+    if (!reach.length) return null;
+    if (this.ptr.on && this.ptr.y < Math.max(g.top + 60 * g.u, g.H * 0.34)) {
+      const px = this.ptr.x, gap = t => px < t.x0 ? t.x0 - px : px > t.x1 ? px - t.x1 : 0;
+      return reach.slice().sort((p, q) => gap(p) - gap(q) || Math.abs(mid(p) - px) - Math.abs(mid(q) - px))[0];
+    }
+    const other = reach.filter(t => t.key !== b.last);
+    const list = other.length ? other : reach, w = list.map(t => 1 / (1 + Math.abs(mid(t) - L.x) / (500 * g.u + 200)));
+    let r = Math.random() * w.reduce((a, v) => a + v, 0);
+    for (let i = 0; i < list.length; i++) if ((r -= w[i]) <= 0) return list[i];
+    return list[list.length - 1];
+  }
+  // up from the hat to the next widget
+  serve() {
+    const b = this.ball, tg = this.pick();
+    if (!tg) return this.endBall();
+    const pr = this.g.lh.er * 0.66, span = tg.x1 - tg.x0;
+    b.key = tg.key;
+    this.leg('up', clamp((tg.x0 + tg.x1) / 2 + (Math.random() - 0.5) * span * 0.36, pr, this.g.W - pr), tg.y + pr);
+  }
+  /* One flight, along a parabola: 'up' slows down and still rises when it arrives (the bounce),
+     'down' and 'miss' speed up as they fall back, 'fall' drops freely into the sea */
+  leg(kind, bx, by, v0) {
+    const b = this.ball, R = by - b.y, T = clamp(0.4 + Math.abs(bx - b.x) / 1600, 0.42, 1);
+    const L = { kind, t0: this.t, ax: b.x, ay: b.y, bx, by, T };
+    if (kind === 'up') { const k = 0.3; L.v0 = 2 * R / (T * (1 + k)); L.g = (k - 1) * L.v0 / T; }
+    else if (kind === 'fall') {
+      const g = 1300 * this.g.u, v = Math.max(0, v0 || 0);
+      L.v0 = v; L.g = g; L.T = (-v + Math.sqrt(v * v + 2 * g * Math.max(1, R))) / g;
+    } else { L.v0 = 0.3 * R / T; L.g = 2 * (R - L.v0 * T) / (T * T); }
+    b.leg = L;
+  }
+  legAt(L, k) { return [L.ax + (L.bx - L.ax) * k / L.T, L.ay + L.v0 * k + 0.5 * L.g * k * k]; }
+  updateBall(dt) {
+    const b = this.ball;
+    if (!b) return;
+    const L = b.leg, k = Math.min(this.t - L.t0, L.T);
+    [b.x, b.y] = this.legAt(L, k);
+    b.vx = (L.bx - L.ax) / L.T; b.vy = L.v0 + L.g * k;
+    b.spin += dt * b.vx / (this.g.lh.er * 0.66) * 0.5;
+    if (this.t - L.t0 < L.T) return;
+    if (L.kind === 'up') this.hit();
+    else if (L.kind === 'down') this.header();
+    else if (L.kind === 'miss') this.fall();
+    else this.splash();
+  }
+  // the ball meets the line under a widget: the widget hops, "boink!"
+  hit() {
+    const b = this.ball, g = this.g, u = g.u, pr = g.lh.er * 0.66;
+    const tg = this.bar.find(t => t.key === b.key && b.x > t.x0 - pr && b.x < t.x1 + pr) || this.bar.find(t => b.x > t.x0 - 2 && b.x < t.x1 + 2);
+    b.sq = this.t; b.n++;
+    if (tg) {
+      b.last = tg.key;
+      this.emit('bump', tg.key);
+      // "boink!" beside it on the far side from the lighthouse, out of the way of the ball coming back;
+      // against the window's edge, under it instead
+      const side = b.x < g.lamp.x ? -1 : 1;
+      if (side < 0 ? b.x < 90 * u + 20 : b.x > g.W - 90 * u - 20) this.doodle('boink', clamp(b.x, 34 * u + 12, g.W - 34 * u - 12), b.y + pr + 14 * u + 4);
+      else this.doodle('boink', b.x + side * (pr + 4 * u), b.y + pr * 0.15, { align: side < 0 ? 'right' : 'left' });
+    }
+    const h = hatGeom(this);
+    // the last one comes back just wide of the hat, on the sea side, clear of the gallery, and keeps going
+    if (b.n >= b.max) this.leg('miss', Math.min(h.bob[0] - h.pr * 2.7, g.lamp.x - g.lh.er * 1.7 - h.pr), h.bob[1] + h.pr * 0.9);
+    else this.leg('down', h.bob[0], h.bob[1]);
+  }
+  // back on the hat: a header, "pok", and up again
+  header() {
+    const b = this.ball, u = this.g.u, pr = this.g.lh.er * 0.66, from = b.vx > 0 ? -1 : 1;
+    if (!this.seen(this.g.lamp.x, this.g.lamp.y)) return this.endBall();
+    this.hatKick = this.t; b.sq = this.t;
+    this.doodle('pok', b.x + from * (pr + 3 * u), b.y + pr * 0.3, { align: from < 0 ? 'right' : 'left', life: 0.7 });
+    this.serve();
+  }
+  // missed: the hat lunges too late, and the ball falls past the lighthouse into the sea
+  fall() {
+    const b = this.ball;
+    this.hatKick = this.t;
+    const S = b.splash = this.splashSpot();
+    this.leg('fall', S.x, S.y, b.vy);
+    // when the sea there is under the page, "plop" where the ball was last seen
+    if (!S.seen) {
+      let last = null;
+      for (let i = 1; i <= 14; i++) { const p = this.legAt(b.leg, b.leg.T * i / 14); if (!this.seen(p[0], p[1])) break; last = p; }
+      S.edge = last;
+    }
+  }
+  splash() {
+    const b = this.ball, S = b.splash, u = this.g.u;
+    if (S.seen) {
+      this.ripples.push({ x: S.x, y: S.y, t0: this.t, a: 1 });
+      this.splashes.push({ x: S.x, y: S.y, t0: this.t });
+      this.doodle('plop', S.x + 12 * u, S.y - 26 * u, { life: 1.1 });
+    } else if (S.edge) this.doodle('plop', S.edge[0] + 8 * u, S.edge[1] - 6 * u, { life: 1.1 });
+    this.look = { x: S.edge ? S.edge[0] : S.x, y: S.edge ? S.edge[1] : S.y, until: this.t + 1.2 };
+    this.ball = null;
+    this.regrowAt = this.t + 0.6;
+  }
+  // a spot in the sea near the lighthouse, on its sea side, that can be seen (a few DOM checks, once a game)
+  splashSpot() {
+    const g = this.g, u = g.u, L = g.lamp, near = g.horizon + (g.H - g.horizon) * 0.24, out = [];
+    // and clear of "the sea (wet)" while the hero's labels show
+    const lab = this.pres.hero > 0.01 && seaLabelSpot(this);
+    const onLabel = (x, y) => lab && x > lab.x - 40 * u && x < lab.x + 170 * u && y > lab.y - 50 * u && y < lab.y + 45 * u;
+    // not right on the horizon, where a splash is too small to read: a little way out, close to the hill
+    for (const fy of [0.12, 0.2, 0.3, 0.42, 0.55, 0.72, 0.88]) {
+      const y = g.horizon + (g.H - g.horizon) * fy;
+      for (const [a, z] of this.seaSpans(y))
+        for (let x = Math.min(z, g.W) - 30 * u; x > Math.max(a, 0) + 18 * u; x -= 34 * u)
+          if (x < L.x - g.lh.wB * 1.6 && !onLabel(x, y)) out.push({ x, y, d: Math.hypot(x - g.lh.x, (y - near) * 0.8) });
+    }
+    out.sort((p, q) => p.d - q.d);
+    let tries = 0;
+    for (const p of out) {
+      if (tries++ > 14) break;
+      if (this.seen(p.x, p.y) && this.seen(p.x, p.y - 30 * u)) return { x: p.x, y: p.y, seen: true };
+    }
+    const p = out[0] || { x: L.x - 160 * u, y: g.H - 12 };
+    return { x: p.x, y: p.y, seen: false };
+  }
+  // the game ends quietly (editing, the page hidden, the lighthouse covered): the pom-pom is simply back
+  endBall() {
+    if (!this.ball) return;
+    this.ball = null;
+    this.regrowAt = this.reduced || document.hidden ? -9 : this.t;
+  }
+  endBore() {
+    const b = this.bore;
+    if (!b) return;
+    if (b.phase === 'push') this.emit('release', b.key, { caught: true });
+    this.bore = null;
+  }
+  updateBore() {
+    const b = this.bore;
+    if (!b) return;
+    const a = this.t - b.at, g = this.g, u = g.u, L = g.lamp, er = g.lh.er;
+    if (b.phase === 'look' && a > 1.3) {
+      b.phase = 'push'; b.at = this.t;
+      this.emit('nudge', b.key, { dx: b.side * 14 });
+      this.doodle('hehe', L.x - b.side * (er * 1.32 + 12 * u + 3), L.y + er * 0.25, { align: b.side > 0 ? 'right' : 'left', life: 2.4 });
+    } else if (b.phase === 'push' && a > 6) {
+      b.phase = 'back'; b.at = this.t;
+      this.emit('release', b.key, { caught: false });
+    } else if (b.phase === 'caught') {
+      // whistling innocently, the notes rising on the side it looks away to
+      if (b.notes < 3 && a > 0.45 + b.notes * 0.48) {
+        this.doodle('note', L.x - b.side * (er * 1.5 + (4 + b.notes * 3) * u), L.y - er * (0.9 + b.notes * 0.15), { life: 1.5, flip: b.notes % 2 });
+        b.notes++;
+      }
+      if (a > 2.5) this.bore = null;
+    } else if (b.phase === 'back' && a > 1.6) this.bore = null;
+  }
+  // the bored trick holds the light on its widget
+  beamLock() {
+    const b = this.bore;
+    if (!b || !((b.phase === 'look' && this.t - b.at > 0.35) || b.phase === 'push')) return null;
+    return Math.atan2(b.y - this.g.lamp.y, b.x - this.g.lamp.x);
+  }
+  /* What the eye is up to: where it looks (a, m), and squint, wide, a heavier lid or a happy shut eye */
+  mood() {
+    const L = this.g.lamp, b = this.bore;
+    if (this.ball) return { a: Math.atan2(this.ball.y - L.y, this.ball.x - L.x), m: 1 };
+    if (this.look && this.t < this.look.until) return { a: Math.atan2(this.look.y - L.y, this.look.x - L.x), m: 1 };
+    if (!b) return null;
+    const a = this.t - b.at, up = Math.atan2(b.y - L.y, b.x - L.x);
+    if (b.phase === 'look') return { a: up, m: smooth(0, 0.45, a), squint: smooth(0.3, 0.85, a) };
+    if (b.phase === 'push') return { a: up, m: 1, squint: 1 };
+    if (b.phase === 'caught') {
+      if (a < 0.4) return { a: up, m: 1, wide: smooth(0, 0.07, a) };
+      return { a: -Math.PI / 2 - b.side * 0.9, m: 0.85, shut: 0.36 * smooth(0.4, 0.7, a), wide: 1 - smooth(0.4, 0.62, a) };
+    }
+    return { a: up, m: 1 - smooth(0, 0.5, a), squint: 1 - smooth(0, 0.3, a), happy: a > 0.25 && a < 1.05 ? 1 : 0 };
+  }
+  // 0 while the pom-pom is in play, growing back after it
+  bobbleK() { return this.ball || this.t < this.regrowAt ? 0 : pop((this.t - this.regrowAt) / 0.5); }
+  // a word or a note drawn by the pen for a moment; light over the sea, dark over the sky by day
+  doodle(kind, x, y, o = {}) {
+    this.doodles.push({ kind, x, y, t0: this.t, life: o.life ?? 0.95, align: o.align ?? 'center', sea: this.isSea(x, y + 4 * this.g.u), flip: o.flip ? -1 : 1, seed: Math.random() * 10 });
   }
 
   /* ----- size and layout ----- */
@@ -434,9 +673,11 @@ class Scene {
     }
     // where the page's notes sit (a guess, for placing labels and surprises)
     g.note = portrait ? { x0: 0, x1: W, y0: top + Hs * 0.24, y1: H } : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 620) + 12, y0: top, y1: H * 0.84 };
-    g.key = portrait ? null : { x0: 0, x1: W * 0.05 + 440, y0: H - 160, y1: H };
+    g.key = portrait ? null : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 562) + 12, y0: H - 160, y1: H };
     this.layoutV++;
     for (const o of this.objs) this.settle(o);
+    // the bar's widgets moved with it: a game or a trick in progress ends quietly
+    this.endBall(); this.endBore();
   }
   seaSpans(y) {
     const spans = [], W = this.W;
@@ -582,6 +823,9 @@ class Scene {
     }
     this.objs = this.objs.filter(o => !o.dead);
     this.ripples = [];
+    this.endBall(); this.endBore();
+    this.regrowAt = this.hatKick = -9;
+    this.doodles = []; this.splashes = []; this.look = null;
   }
   settle(o) {
     // after a resize, put land animals back on the ground and sea animals back in the water
@@ -614,6 +858,7 @@ class Scene {
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
+    if (this.ball || this.bore || this.doodles.length || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9) return true;
     for (const o of this.objs) if (o.state === 'fall' || (o.state === 'fly' && !this.reduced) || o.dying != null || (o.land > 0 && this.t - o.land < 0.4)) return true;
     return this.beam.steer > 0.01 && this.beam.steer < 0.99 && !this.reduced;
   }
@@ -669,15 +914,20 @@ class Scene {
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
     this.updateObjs(dt);
+    this.updateBall(dt);
+    this.updateBore();
+    this.doodles = this.doodles.filter(d => this.t - d.t0 < d.life);
+    this.splashes = this.splashes.filter(p => this.t - p.t0 < 0.7);
   }
   updateBeam(dt) {
     const b = this.beam, L = this.g.lamp, now = performance.now() / 1000, rm = this.reduced;
-    const quiet = this.ptr.kind === 'touch' ? 3.2 : 5;
-    const steering = this.ptr.on && now - this.ptr.last < quiet;
+    const quiet = this.ptr.kind === 'touch' ? 3.2 : 5, lock = this.beamLock();
+    const steering = lock != null || (this.ptr.on && now - this.ptr.last < quiet);
     b.steer = rm ? (steering || b.steer > 0.5 ? 1 : 0) : lerp(b.steer, steering ? 1 : 0, Math.min(1, dt * (steering ? 4 : 0.7)));
     if (!rm) b.phi += dt * TAU / 15;
     const c = Math.cos(b.phi), sn = Math.sin(b.phi);
-    if (this.ptr.on && steering) {
+    if (lock != null) b.sa += angDiff(lock, b.sa) * Math.min(1, dt * 3.2);
+    else if (this.ptr.on && steering) {
       const want = this.clampAim(Math.atan2(this.ptr.y - L.y, this.ptr.x - L.x));
       b.sa = rm ? want : b.sa + angDiff(want, b.sa) * Math.min(1, dt * 5);
     }
@@ -843,6 +1093,9 @@ function drawScene(s, c) {
   const objs = s.objs.slice().sort((a, b) => a.y - b.y);
   for (const o of objs) drawObj(s, c, o);
   if (s.pres.hero > 0.01) drawLabels(s, c);
+  drawSplashes(s, c);
+  drawBall(s, c);
+  drawDoodles(s, c);
 }
 
 /* the lower sky, a lighter band with a soft wave at its top, and the horizon */
@@ -1211,17 +1464,19 @@ function drawTower(s, c) {
   poly(c, deck); c.fillStyle = INK; c.fill();
 }
 
-/* the eye in the lantern: an iris the colour of the light, a pupil that follows the beam, a lid */
+/* the eye in the lantern: an iris the colour of the light, a pupil that follows the beam (or the ball), a lid.
+   It also squints when up to something, goes wide when caught, and shuts happily when it got away with it. */
 function drawEye(s, c) {
   const g = s.g, u = g.u, P = s.P, T = g.lh, L = g.lamp, er = T.er, B = s.beam;
-  const night = smooth(0.35, 0.8, s.d);
-  const rx = er * 1.32, ry = er * 1.08;
+  const night = smooth(0.35, 0.8, s.d), md = s.mood() || {}, wide = md.wide || 0, sq = md.squint || 0;
+  const rx = er * 1.32 * (1 + 0.13 * wide), ry = er * 1.08 * (1 + 0.16 * wide);
   const eye = ellipse(L.x, L.y, rx, ry, 40);
   print(c, eye, mix(mul(hex('#FFFFFF'), P.paper), P.beam, night * 0.25));
-  // where it looks: along the beam, or straight at you when the light faces you
-  const look = clamp(B.len * 1.3) * (1 - B.flash), pa = B.a;
+  // where it looks: along the beam, or straight at you when the light faces you, or wherever it's busy
+  let look = clamp(B.len * 1.3) * (1 - B.flash), pa = B.a;
+  if (md.a != null) { pa = md.a; look = md.m; }
   const px = L.x + Math.cos(pa) * rx * 0.42 * look, py = L.y + Math.sin(pa) * ry * 0.36 * look;
-  const ir = er * (0.62 + 0.12 * B.flash), pr = er * (0.3 - 0.08 * night + 0.1 * B.flash);
+  const ir = er * (0.62 + 0.12 * B.flash) * (1 - 0.2 * wide), pr = er * (0.3 - 0.08 * night + 0.1 * B.flash) * (1 - 0.42 * wide);
   c.save(); poly(c, eye, true, REGX, REGY); c.clip();
   dot(c, px + REGX, py + REGY, ir, mix(P.beam, hex('#FFB52E'), 0.35 - 0.2 * night));
   c.restore();
@@ -1231,12 +1486,18 @@ function drawEye(s, c) {
   c.beginPath(); ribbon(c, ellipse(px, py, ir, ir, 22), TEX, 3, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.3 }); c.fillStyle = INK; c.fill();
   // the lid: a little heavy by day, wide awake at night, shut when it blinks or winks
   const bl = s.t - s.blink.at, wk = s.t - s.blink.wink;
-  let shut = lerp(0.2, 0.02, night);
-  if (bl < 0.18) shut = Math.max(shut, Math.sin(bl / 0.18 * Math.PI));
+  let shut = lerp(lerp(0.2, 0.02, night), 0, wide);
+  if (md.shut) shut = Math.max(shut, md.shut);
+  shut = Math.max(shut, 0.5 * sq);
+  if (bl < 0.18 && !s.bore) shut = Math.max(shut, Math.sin(bl / 0.18 * Math.PI));
   if (wk < 0.6) shut = Math.max(shut, wk < 0.1 ? wk / 0.1 : wk < 0.45 ? 1 : 1 - (wk - 0.45) / 0.15);
   if (s.reduced && wk >= 0.6) shut = lerp(0.2, 0.02, night);
   const lidCol = rgba(mul(hex('#FFFFFF'), P.paper));
-  if (shut > 0.86) {
+  if (md.happy) {
+    // shut, and pleased with itself: the lid line curves up
+    poly(c, eye); c.fillStyle = lidCol; c.fill();
+    c.beginPath(); ribbon(c, ellipse(L.x, L.y + ry * 0.38, rx * 0.72, ry * 0.62, 16, 1.18 * Math.PI, 1.82 * Math.PI), DET, 5, { tin: 3, tout: 3 }); c.fillStyle = INK; c.fill();
+  } else if (shut > 0.86) {
     poly(c, eye); c.fillStyle = lidCol; c.fill();
     c.beginPath();
     ribbon(c, ellipse(L.x, L.y - ry * 0.35, rx * 0.78, ry * 0.55, 16, 0.2 * Math.PI, 0.8 * Math.PI), DET, 5, { tin: 3, tout: 3 });
@@ -1249,8 +1510,25 @@ function drawEye(s, c) {
     poly(c, lid); c.fillStyle = lidCol; c.fill();
     c.beginPath(); ribbon(c, lid.slice(25), DET, 5, { tin: 3, tout: 3 }); c.fillStyle = INK; c.fill();
   }
+  if (sq > 0.01 && !md.happy) {
+    // squinting: the lower lid comes up too
+    const ly = L.y + ry - sq * ry * 0.62, lid = [];
+    for (let i = 0; i <= 24; i++) { const a = i / 24 * Math.PI; lid.push([L.x + Math.cos(a) * (rx + 2), L.y + Math.sin(a) * (ry + 2)]); }
+    for (let i = 0; i <= 16; i++) { const x = L.x - rx + i / 16 * 2 * rx; lid.push([x, ly - (1 - ((x - L.x) / rx) ** 2) * ry * 0.16 * sq]); }
+    poly(c, lid); c.fillStyle = lidCol; c.fill();
+    c.beginPath(); ribbon(c, lid.slice(25), TEX * 1.2, 6, { tin: 3, tout: 3 }); c.fillStyle = INK; c.fill();
+  }
   c.restore();
   c.beginPath(); loop(c, eye, SIL * 0.85, 8); c.fillStyle = INK; c.fill();
+  // caught: a start, in a few short strokes either side
+  if (wide > 0.05) {
+    c.beginPath();
+    for (const sx of [-1, 1]) for (const k of [-0.42, 0, 0.42]) {
+      const a = (sx < 0 ? Math.PI : 0) + sx * k, r0 = rx * 1.22, r1 = r0 + er * 0.55 * wide;
+      ribbon(c, [[L.x + Math.cos(a) * r0, L.y + Math.sin(a) * r0 * 0.9], [L.x + Math.cos(a) * r1, L.y + Math.sin(a) * r1 * 0.9]], TEX * 1.1, 20 + k * 7 + sx, { tin: 1, tout: 2 });
+    }
+    c.fillStyle = INK; c.fill();
+  }
   // the gallery's railing passes in front of the eye
   const gw = T.wT * 0.95, top = T.top - T.gal * 0.42, rail = top - T.gal * 0.62;
   c.beginPath();
@@ -1259,13 +1537,30 @@ function drawEye(s, c) {
   c.fillStyle = INK; c.fill();
 }
 
+/* The hat right now: where its brim sits and where the cone's tip and the bobble are. It lifts and
+   flops when it heads the ball (the ball game reads the bobble's place from here too). */
+function hatGeom(s) {
+  const g = s.g, L = g.lamp, er = g.lh.er, ry = er * 1.08, ka = s.t - s.hatKick, kicked = !s.reduced && ka >= 0 && ka < 0.7;
+  const lift = kicked && ka < 0.3 ? Math.sin(ka / 0.3 * Math.PI) * er * 0.34 : 0;
+  const flop = kicked ? Math.sin(ka * 19) * Math.exp(-ka * 6) * 0.34 : 0;
+  const sway = s.reduced ? 0.15 : 0.15 + s.windTotal * 0.25 + Math.sin(s.t * 1.3) * 0.05 + flop;
+  const by = L.y - ry * 0.62 - lift, pr = er * 0.66;
+  const tip = [L.x + er * (0.5 + sway * 2.2), by - er * 3.1 + Math.abs(sway) * er * 0.6];
+  return { by, bw: er * 1.5, bh: er * 0.62, sway, tip, pr, bob: [tip[0], tip[1] - pr * 0.6] };
+}
+/* a pom-pom: a scribbled ball of wool, turning with `spin` */
+function bobble(c, x, y, pr, col, spin = 0) {
+  const pb = [];
+  for (let i = 0; i < 40; i++) { const a = i / 40 * TAU, r = pr * (1 + 0.09 * Math.abs(Math.sin((a - spin) * 5.5 + 1))); pb.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+  shape(c, pb, col, DET * 0.95, 16);
+  const cs = Math.cos(spin), sn = Math.sin(spin), ox = pr * 0.1, oy = pr * 0.1;
+  c.beginPath(); ribbon(c, ellipse(x + ox * cs - oy * sn, y + ox * sn + oy * cs, pr * 0.42, pr * 0.36, 8, 0.2 + spin, 1.9 + spin), TEX * 0.8, 90, { tin: 1, tout: 2 }); c.fillStyle = INK; c.fill();
+}
+
 /* a knitted pom-pom hat: a ribbed brim, a long floppy cone in the theme's colour, a white bobble */
 function drawHat(s, c) {
   const g = s.g, u = g.u, P = s.P, T = g.lh, L = g.lamp, er = T.er, th = THEMES[s.theme];
-  const col = mul(hex(th.hat), P.paper), ry = er * 1.08;
-  const sway = s.reduced ? 0.15 : 0.15 + s.windTotal * 0.25 + Math.sin(s.t * 1.3) * 0.05;
-  const by = L.y - ry * 0.62, bw = er * 1.5, bh = er * 0.62;
-  const tip = [L.x + er * (0.5 + sway * 2.2), by - er * 3.1 + Math.abs(sway) * er * 0.6];
+  const col = mul(hex(th.hat), P.paper), h = hatGeom(s), { by, bw, bh, sway, tip, pr } = h;
   const cone = curve([[L.x - bw * 0.92, by - bh * 0.6], [L.x - bw * 0.5, by - er * 1.9], [L.x + er * 0.1 + sway * er, by - er * 2.85], tip, [L.x + er * 0.65 + sway * er * 1.4, by - er * 2.2], [L.x + bw * 0.9, by - bh * 0.6]], 3);
   print(c, cone, col);
   // a white knitted stripe across the cone
@@ -1281,11 +1576,21 @@ function drawHat(s, c) {
   edges(c, brim, DET, 15, true, { ov: 1.2 });
   for (let i = 1; i < 7; i++) { const x = L.x - bw + i / 7 * bw * 2; ribbon(c, [[x, by - bh * 0.4], [x + 0.4 * u, by + bh * 0.32]], TEX * 0.8, 80 + i, { tin: 1, tout: 1, amp: 0.2 }); }
   c.fillStyle = INK; c.fill();
-  // the bobble: a scribbled ball of wool
-  const pr = er * 0.66, pb = [];
-  for (let i = 0; i < 40; i++) { const a = i / 40 * TAU, r = pr * (1 + 0.09 * Math.abs(Math.sin(a * 5.5 + 1))); pb.push([tip[0] + Math.cos(a) * r, tip[1] - pr * 0.6 + Math.sin(a) * r]); }
-  shape(c, pb, mul(hex('#FFFFFF'), P.paper), DET * 0.95, 16);
-  c.beginPath(); ribbon(c, ellipse(tip[0] + pr * 0.1, tip[1] - pr * 0.5, pr * 0.42, pr * 0.36, 8, 0.2, 1.9), TEX * 0.8, 90, { tin: 1, tout: 2 }); c.fillStyle = INK; c.fill();
+  // the bobble, unless it's in play; then a few loose ends of wool, until a new one grows back with a pop
+  const k = s.bobbleK();
+  if (k < 0.999) {
+    c.beginPath();
+    for (const a of [-2.3, -1.6, -0.9]) ribbon(c, [[tip[0], tip[1]], [tip[0] + Math.cos(a) * pr * 0.55, tip[1] + Math.sin(a) * pr * 0.55]], TEX, a * 3, { tin: 1, tout: 2 });
+    c.fillStyle = INK; c.fill();
+  }
+  if (k > 0.02) bobble(c, tip[0], tip[1] - pr * 0.6 * k, pr * k, mul(hex('#FFFFFF'), P.paper));
+  const ra = s.t - s.regrowAt;
+  if (ra > 0.18 && ra < 0.75 && !s.reduced) {
+    const f = (ra - 0.18) / 0.57, cx = tip[0], cy = tip[1] - pr * 0.6;
+    c.beginPath();
+    for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + (i - 2.5) * 0.62, r0 = pr * (1.35 + f * 0.9), r1 = r0 + pr * 0.55 * (1 - f * 0.6); ribbon(c, [[cx + Math.cos(a) * r0, cy + Math.sin(a) * r0], [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1]], TEX, i, { tin: 1, tout: 1 }); }
+    c.fillStyle = rgba(P.ink, 1 - f); c.fill();
+  }
   // a sparkle or two after changing into new pyjamas
   const sp = s.t - s.sparkle;
   if (sp < 1.2 && !s.reduced) {
@@ -1744,6 +2049,93 @@ function drawMonster(c, u, pink, P, o, t) {
   poly(c, hat); c.fillStyle = INK; c.fill();
   c.fillStyle = rgba(mul(C.chimney, P.paper)); c.fillRect(36.6 * u, -29.5 * u, 8.6 * u, 2 * u);
   c.beginPath(); ribbon(c, [[33 * u, -25.8 * u], [49 * u, -26.4 * u]], DET * 1.2, 2, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill();
+}
+
+/* ---------- the lighthouse plays with the bar: the ball, its doodles and the splash ---------- */
+function drawBall(s, c) {
+  const b = s.ball;
+  if (!b) return;
+  const g = s.g, u = g.u, pr = g.lh.er * 0.66, v = Math.hypot(b.vx, b.vy);
+  // a couple of speed lines behind it when it's going
+  if (v > 240 * u && !s.reduced) {
+    const ax = -b.vx / v, ay = -b.vy / v, nx = -ay, ny = ax, l = pr * clamp(v / (700 * u), 0.6, 1.4);
+    c.beginPath();
+    for (const k of [-0.5, 0.42]) {
+      const x0 = b.x + ax * pr * 1.4 + nx * pr * k, y0 = b.y + ay * pr * 1.4 + ny * pr * k;
+      ribbon(c, [[x0, y0], [x0 + ax * l * (1 - k * 0.3), y0 + ay * l * (1 - k * 0.3)]], TEX, 30 + k * 5, { tin: 1, tout: 4 });
+    }
+    c.fillStyle = INK; c.fill();
+  }
+  // squashed for a moment by a hit or a header
+  const q = s.t - b.sq, sq = q < 0.16 ? Math.sin(q / 0.16 * Math.PI) * 0.24 : 0;
+  c.save(); c.translate(b.x, b.y); c.scale(1 + sq, 1 - sq);
+  bobble(c, 0, 0, pr, mul(hex('#FFFFFF'), s.P.paper), b.spin);
+  c.restore();
+}
+
+/* a quaver, drawn: a tilted head, a stem and a flag */
+function quaver(c, x, y, sz, col, flip) {
+  c.beginPath(); c.ellipse(x, y, sz * 0.62, sz * 0.44, -0.45, 0, TAU); c.fillStyle = col; c.fill();
+  c.beginPath();
+  ribbon(c, [[x + sz * 0.52, y - sz * 0.1], [x + sz * 0.56, y - sz * 2.1]], TEX * 1.2, 3, { tin: 1, tout: 1, w0: 0.9, w1: 0.9 });
+  ribbon(c, [[x + sz * 0.56, y - sz * 2.1], [x + sz * (0.56 + 0.6 * flip), y - sz * 1.62], [x + sz * (0.56 + 0.45 * flip), y - sz * 1.0]], TEX * 1.1, 4, { tin: 1, tout: 3 });
+  c.fillStyle = col; c.fill();
+}
+
+/* "boink!", "pok", "plop", "hehe" and the whistled notes: they pop in, drift a little and fade */
+function drawDoodles(s, c) {
+  if (!s.doodles.length) return;
+  const g = s.g, u = g.u, P = s.P, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
+  for (const d of s.doodles) {
+    const a = s.t - d.t0, k = pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
+    if (f <= 0 || k <= 0.01) continue;
+    c.save(); c.globalAlpha = f;
+    if (d.kind === 'note') {
+      const sz = 4.2 * u + 1.6;
+      quaver(c, d.x + Math.sin(a * 4 + d.seed) * 5 * u, d.y - a * 36 * u, sz * k, col, d.flip);
+      c.restore(); continue;
+    }
+    const size = Math.max(d.kind === 'pok' ? 12 : 13.5, (d.kind === 'pok' ? 12 : d.kind === 'boink' ? 16 : 15) * u + 4), dir = d.align === 'right' ? -1 : 1;
+    const shake = d.kind === 'hehe' ? (Math.floor(a * 9) % 2 ? -1 : 1) * 1.3 * u : 0;
+    c.translate(d.x, d.y - a * (d.kind === 'plop' ? 12 : 8) * u + shake); c.scale(k, k);
+    const text = d.kind === 'boink' ? 'boink!' : d.kind;
+    label(c, text, 0, 0, size, col, d.align, d.kind === 'boink' ? -0.09 * dir : d.kind === 'pok' ? 0.12 * dir : -0.06);
+    c.beginPath();
+    if (d.kind === 'boink') {
+      // the knock, in three short strokes toward the widget
+      for (const i of [0, 1, 2]) { const an = -Math.PI / 2 - dir * (0.25 + i * 0.42), r0 = size * 0.32, r1 = size * 0.72; ribbon(c, [[Math.cos(an) * r0, -size * 0.3 + Math.sin(an) * r0], [Math.cos(an) * r1, -size * 0.3 + Math.sin(an) * r1]], TEX * 1.1, i + 7, { tin: 1, tout: 2 }); }
+    } else if (d.kind === 'plop') {
+      // two drops over the word
+      for (const i of [0, 1]) { const x = size * (0.45 + i * 0.85), y = -size * (0.9 + i * 0.2); ribbon(c, ellipse(x, y, size * 0.13, size * 0.18, 10, -0.6, Math.PI * 1.6), TEX, i + 3, { tin: 1, tout: 1 }); }
+    }
+    c.fillStyle = col; c.fill();
+    c.restore();
+  }
+}
+
+/* where the ball lands: a crown of water and a few drops thrown up and out, in foam with the pen round them */
+function drawSplashes(s, c) {
+  if (!s.splashes.length) return;
+  const g = s.g, u = g.u, P = s.P, foam = rgba(P.foam);
+  for (const p of s.splashes) {
+    const a = s.t - p.t0, k = clamp(a / 0.7), e = easeOut(k);
+    c.globalAlpha = 1 - smooth(0.6, 1, k);
+    for (const [w, col] of [[DET * 2.5, INK], [DET * 1.25, foam]]) {
+      c.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const an = -Math.PI / 2 + (i - 2) * 0.46, r0 = 6 * u, r1 = r0 + (8 + 20 * e) * u * (1 - k * 0.55);
+        ribbon(c, [[p.x + Math.cos(an) * r0 * 1.5, p.y + Math.sin(an) * r0 * 0.5], [p.x + Math.cos(an) * r1 * 1.5, p.y + Math.sin(an) * r1]], w, i, { tin: 2, tout: 3, amp: 0.4 });
+      }
+      c.fillStyle = col; c.fill();
+    }
+    for (let i = 0; i < 4; i++) {
+      const dx = (i - 1.5) * (10 + 22 * e) * u, dy = -(30 + i % 2 * 10) * u * e + 70 * u * k * k, x = p.x + dx, y = p.y + dy, r = (2.8 - 1.4 * k) * u + 0.8;
+      if (y > p.y + 2) continue;
+      dot(c, x, y, r, foam);
+      c.beginPath(); ribbon(c, ellipse(x, y, r + 0.6, r + 0.6, 10), TEX * 0.8, i, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill();
+    }
+    c.globalAlpha = 1;
+  }
 }
 
 window.Hill = { Scene, themes: Object.keys(THEMES), states: STATES };

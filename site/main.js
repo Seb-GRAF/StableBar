@@ -89,7 +89,7 @@ function fit() {
   const widgets = [...bar.querySelectorAll("[data-pri]")].filter(w => w.dataset.pri !== "never");
   widgets.forEach(w => w.classList.remove("over"));
   more.hidden = true;
-  if (editing) { fades(); return; }
+  if (editing) { fades(); sendBar(); return; }
   const order = widgets.map((w, i) => ({ w, p: Number(w.dataset.pri), i })).sort((a, b) => a.p - b.p || b.i - a.i).map(o => o.w);
   const shown = order.filter(w => w.offsetWidth > 0);
   for (const w of shown) {
@@ -108,7 +108,31 @@ function fit() {
   }
   place();
   slide();
+  sendBar();
 }
+
+/* The bar's visible widgets, for the lighthouse's ball game (scene.setBar): each workspace number is
+   its own target, and the ball bounces on the line under them: the widgets' bottom edge, the bar's
+   when it has a strip, or the strip's pen line once the page has scrolled. Measured when the bar
+   changes (fit, the header swap, resizing, themes, scrolling past the top), never every frame. */
+function barTargets() {
+  if (editing) return [];
+  // from the theme's tokens rather than the bar's box, which may still be easing into a new theme
+  const cs = getComputedStyle(bar), strip = cs.getPropertyValue("--strip-bg").trim() !== "transparent";
+  const line = dock.classList.contains("scrolled") ? restHeight() + 3.5 : strip ? restHeight() - (parseFloat(cs.getPropertyValue("--strip-m")) || 0) : null;
+  const out = [];
+  const add = (key, el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width > 3 && r.right > 0 && r.left < innerWidth) out.push({ key, x0: r.left, x1: r.right, y: line ?? r.bottom });
+  };
+  for (const w of bar.querySelectorAll(":scope > .g > .w[data-key]")) {
+    if (w.hidden || w.classList.contains("over") || getComputedStyle(w).visibility === "hidden") continue;
+    if (w.dataset.key === "ws") for (const b of w.querySelectorAll(".wsi")) add(`ws:${b.dataset.ws}`, b);
+    else add(w.dataset.key, w);
+  }
+  return out;
+}
+function sendBar() { if (scene) S("setBar", barTargets()); }
 
 /* Popups open below their widget, or from More widgets when the widget is hidden */
 function anchorFor(id) {
@@ -133,6 +157,7 @@ const popButton = w => w.matches("button") ? w : w.querySelector(":scope > butto
 /* Opening another widget's popup morphs the open one into it, as the app does */
 function open(id) {
   if (id !== openId && anchorFor(id).hidden) return;
+  hideTour();
   const from = openId;
   openId = openId === id ? null : id;
   pop.classList.toggle("morph", Boolean(from && openId));
@@ -201,6 +226,8 @@ volume.addEventListener("input", () => {
   sound.querySelector(".pct").textContent = `${volume.value}%`;
   volume.style.setProperty("--v", `${volume.value}%`);
 });
+/* Those two change the widgets' widths, and a new theme the bar's height: the ball game measures the bar again once they settle */
+bar.addEventListener("transitionend", e => { if ((e.propertyName === "grid-template-columns" || e.target === bar && e.propertyName === "height") && !editing) sendBar(); });
 
 /* Once the page scrolls, a strip of sky slides in behind the bar. Once the headline has gone
    under it, the bar becomes the page's header. While the bar is being edited it stays the demo. */
@@ -211,6 +238,7 @@ function wantHeader() {
   return !editing && bottom < (dock.classList.contains("header") ? line + 120 : line);
 }
 function setHeader(header) {
+  hideTour();
   dock.classList.add("measure");
   dock.classList.toggle("header", header);
   fit();
@@ -221,7 +249,10 @@ function setHeader(header) {
 /* Scrolling swaps the bar's contents in one step behind a short fade, as macOS swaps an app's menus,
    instead of letting widgets slide over one another. Editing, resizing and loading swap at once. */
 function dockState(fade = false) {
-  dock.classList.toggle("scrolled", scrollY > 2);
+  if (dock.classList.contains("scrolled") !== scrollY > 2) {
+    dock.classList.toggle("scrolled", scrollY > 2);
+    sendBar();
+  }
   if (swapAt && fade) return;
   swapAt = 0;
   bar.classList.remove("swap");
@@ -287,6 +318,7 @@ function beginEditing(from) {
   if (openId) open(openId);
   closeMenu();
   opener = from || (bar.contains(document.activeElement) ? document.activeElement : null);
+  hideTour();
   editing = true;
   dockState();
   past = [];
@@ -866,7 +898,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { lightWords(s); skyStrip(s); } catch (err) {
+    try { lightWords(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -901,14 +933,136 @@ if (scene) {
     S("tap", e.clientX, e.clientY);
   });
 
-  /* The key's buttons drop the same surprises, for keyboards and screen readers too */
+  /* The key's buttons drop the same surprises, for keyboards and screen readers too; Play ball starts the game */
   for (const b of document.querySelectorAll("[data-drop]")) b.addEventListener("click", () => S("surprise", b.dataset.drop));
+  for (const b of document.querySelectorAll("[data-play]")) b.addEventListener("click", () => { hideTour(); S("play"); });
+  scene.onBar = onBar;
+}
+
+/* ---------- The lighthouse plays with the bar ----------
+   The ball hits a widget and it hops; a workspace number also takes the focus, as a click would, which lights
+   its beach hut. The bored lighthouse shoves one widget aside and puts it back. Nothing else changes:
+   Download never navigates, the night switch never toggles, and every hop is gone in half a second. */
+const widgetFor = key => key.startsWith("ws:") ? bar.querySelector(`#gl .wsi[data-ws="${key.slice(3)}"]`) : bar.querySelector(`:scope > .g > .w[data-key="${CSS.escape(key)}"]`);
+let shove = null;
+function unshove(quick) {
+  const s = shove;
+  if (!s) return;
+  shove = null;
+  if (!reduce.matches && s.el.isConnected) s.el.animate([{ transform: s.to }, { transform: "none" }], { duration: quick ? 240 : 760, easing: quick ? "cubic-bezier(.3, 0, .2, 1)" : "cubic-bezier(.45, 0, .25, 1)" }).finished.then(() => { if (shove?.el !== s.el) s.el.style.zIndex = ""; }, () => {});
+  else s.el.style.zIndex = "";
+  s.a.cancel();
+}
+function onBar(event, key, info = {}) {
+  if (event === "release") return unshove(info.caught);
+  const el = !editing && widgetFor(key);
+  if (!el) return;
+  if (event === "bump") {
+    if (key.startsWith("ws:")) focusWorkspace(Number(key.slice(3)));
+    if (!reduce.matches) el.animate([
+      { transform: "none" },
+      { transform: "translateY(-6px) rotate(-3deg)", offset: .26, easing: "ease-in" },
+      { transform: "translateY(1px) scale(1.04, .94)", offset: .52 },
+      { transform: "translateY(-1.5px) rotate(.6deg)", offset: .74 },
+      { transform: "none" },
+    ], { duration: 520, easing: "ease-out" });
+  } else if (event === "nudge" && !reduce.matches) {
+    unshove(true);
+    const dx = info.dx || 14, to = `translateX(${dx}px) rotate(${Math.sign(dx) * 3}deg)`;
+    el.style.zIndex = "3";
+    shove = { el, to, a: el.animate([{ transform: "none" }, { transform: to }], { duration: 620, easing: "cubic-bezier(.3, 1.5, .5, 1)", fill: "forwards" }) };
+  }
+}
+
+/* The lamp-lit tour, for pointers that hover: the widget under the pointer takes the lamp's glow (the beam
+   already follows the pointer) and a paper tag hangs under it on a string. Keyboard focus shows it too.
+   It waits while the ball is in play, and never shows while editing, dragging or a popup is open. */
+const tag = document.getElementById("lamp-tag");
+const tagPaper = tag.querySelector(".lt-p"), tagText = tag.querySelector(".lt-t"), tagString = [...tag.querySelectorAll(".lt-s path")];
+const TAGS = {
+  ws: "four little rooms", apple: "still there", app: "Finder’s, for now", site: "this website, dressed as an app",
+  np: "the lighthouse hums along", meeting: "the keeper is late", system: "all calm", sound: "shh, the sheep are asleep",
+  battery: "the lamp runs on oil", clock: "always on time, unlike the keeper", dl: "the only serious button",
+  moon: "the lamp’s favourite", more: "the ones that didn’t fit",
+};
+const canHover = matchMedia("(hover: hover)");
+let lit = null, tourShow = 0, tourHide = 0;
+const tourWidget = el => { const w = el?.closest?.(".w[data-key]"); return w && bar.contains(w) && !w.closest(".lane") && TAGS[w.dataset.key] ? w : null; };
+const tourOK = () => scene && !editing && !openId && !drag && !adding && ctx.hidden && !scene.playing && !bar.classList.contains("swap");
+function showTour(w) {
+  clearTimeout(tourShow);
+  clearTimeout(tourHide);
+  if (!tourOK()) return;
+  const again = Boolean(lit);
+  lit?.classList.remove("lamp");
+  lit = w;
+  w.classList.add("lamp");
+  tagText.textContent = TAGS[w.dataset.key];
+  tagPaper.style.setProperty("--r", `${(w.dataset.key.length * 7 % 5 - 2) * .7}deg`);
+  tag.hidden = false;
+  placeTag();
+  if (!reduce.matches) tag.animate(again
+    ? [{ transform: "rotate(7deg)" }, { transform: "rotate(-3deg)", offset: .45 }, { transform: "none" }]
+    : [{ transform: "rotate(-16deg)", opacity: 0 }, { transform: "rotate(10deg)", opacity: 1, offset: .28 }, { transform: "rotate(-5deg)", offset: .52 }, { transform: "rotate(2deg)", offset: .76 }, { transform: "none" }],
+  { duration: again ? 420 : 850, easing: "ease-out" });
+}
+/* The tag hangs from the middle of the widget's bottom edge; the paper keeps inside the window and the
+   string goes through a hole above the widget, wherever the paper ends up */
+function placeTag() {
+  const r = lit.getBoundingClientRect(), cx = r.left + r.width / 2, len = 13, pw = tagPaper.offsetWidth;
+  const left = clamp(cx - pw / 2, 8, innerWidth - pw - 8) - cx, hole = clamp(-left, 14, pw - 14);
+  tag.style.left = `${cx}px`;
+  tag.style.top = `${r.bottom - 1}px`;
+  tagPaper.style.left = `${left}px`;
+  tagPaper.style.top = `${len}px`;
+  tagPaper.style.setProperty("--hole", `${hole}px`);
+  const hx = left + hole, hy = len + 7.5;
+  for (const p of tagString) p.setAttribute("d", `M0 -1C${hx * .2 + 1.8} ${hy * .4} ${hx * .75 - 1.4} ${hy * .62} ${hx} ${hy}`);
+}
+function hideTour() {
+  clearTimeout(tourShow);
+  clearTimeout(tourHide);
+  if (!lit) return;
+  lit.classList.remove("lamp");
+  lit = null;
+  tag.hidden = true;
+}
+bar.addEventListener("pointerover", e => {
+  if (e.pointerType === "touch" || !canHover.matches) return;
+  const w = tourWidget(e.target);
+  if (!w) return;
+  clearTimeout(tourHide);
+  if (w === lit) return;
+  clearTimeout(tourShow);
+  if (lit) showTour(w);
+  else tourShow = setTimeout(() => showTour(w), 240);
+});
+bar.addEventListener("pointerout", e => {
+  const w = tourWidget(e.target);
+  if (!w || w.contains(e.relatedTarget)) return;
+  clearTimeout(tourShow);
+  if (w === lit) tourHide = setTimeout(hideTour, 140);
+});
+bar.addEventListener("focusin", e => { const w = tourWidget(e.target); if (w && e.target.matches(":focus-visible")) showTour(w); });
+bar.addEventListener("focusout", e => { if (lit && !lit.contains(e.relatedTarget) && !lit.matches(":hover")) hideTour(); });
+
+/* The bored lighthouse: once a visit, after a quiet spell with no pointer, scroll or key, and nothing open.
+   The scene checks the rest (motion allowed, the lamp in view, no game on); any input catches it. */
+let boredTimer = 0, boredDone = false;
+function quietSpell() {
+  clearTimeout(boredTimer);
+  if (!scene || boredDone) return;
+  boredTimer = setTimeout(function check() {
+    const calm = !editing && !openId && !adding && ctx.hidden && !reviewing && !lit && !document.hidden && !reduce.matches;
+    if (calm && S("bored")) boredDone = true;
+    else boredTimer = setTimeout(check, 4000);
+  }, 12000);
 }
 
 /* ---------- The pen: every note, Download button, tag and key button gets a felt-pen outline,
    drawn at its size in three slightly different states that the CSS steps through (the boil).
    Inline SVG paths rather than images, so an outline never counts as the page's largest paint. ---------- */
-const INK = ".note, .cta, .tag, .keys button, .w.dl";
+const INK = ".note, .cta, .tag, .keys button, .w.dl, .lt-p";
 const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
 const noise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1; };
 const r1 = v => Math.round(v * 10) / 10;
@@ -980,7 +1134,7 @@ function ink(el, seed) {
   const cs = getComputedStyle(el);
   const radii = shape === "pill" ? [H / 2, H / 2, H / 2, H / 2]
     : [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(v => parseFloat(v) || 0);
-  const weight = el.matches(".note") ? 2.9 : el.matches(".w.dl") ? 2.1 : 2.5;
+  const weight = el.matches(".note") ? 2.9 : el.matches(".w.dl, .lt-p") ? 2.1 : 2.5;
   let svg = el.querySelector(":scope > .pen");
   if (!svg) {
     svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -999,7 +1153,7 @@ const pen = new ResizeObserver(entries => { for (const e of entries) ink(e.targe
 for (const el of inked) pen.observe(el);
 
 /* The boil rests after a few quiet seconds, like the drawing */
-let idleTimer = 0, lastWake = 0;
+let idleTimer = 0, lastWake = -1e9;
 function wake() {
   const now = performance.now();
   if (now - lastWake < 250) return;
@@ -1007,6 +1161,8 @@ function wake() {
   root.classList.remove("idle");
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => root.classList.add("idle"), 6000);
+  S("poke");
+  quietSpell();
 }
 for (const type of ["pointermove", "pointerdown", "keydown", "scroll", "wheel", "touchstart"]) addEventListener(type, wake, { passive: true });
 wake();
@@ -1024,6 +1180,7 @@ addEventListener("scroll", () => {
   });
 }, { passive: true });
 addEventListener("resize", () => {
+  hideTour();
   fit();
   dockState();
   measureMarks();
