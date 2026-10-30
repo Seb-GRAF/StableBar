@@ -902,7 +902,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { if (landed) lightWords(s); if (!woken) placeSnore(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (woken) lightWords(s); else placeSnore(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -981,10 +981,10 @@ function onBar(event, key, info = {}) {
 
 /* The opening: a title card over the whole drawing with the bar big in the middle of it, at night, the lighthouse
    asleep and the drawing still. After a moment the day comes, and with it the page: the card's bar stretches up into
-   its place at the top, the card drifts away and the notes come in, while the lighthouse sleeps on. Then it wakes up,
-   slowly, reads the headline with its light, sweeps it along the bar and looks at you (WAKE in scene.js). On every
-   load at the top, with motion allowed (the class and the night come from the page's head); until the page has come
-   in, a scroll, a key, a click or a tap brings it in at once, the lighthouse awake. */
+   its place at the top, the card drifts away and the notes come in, while the lighthouse sleeps on. As the bar reaches
+   the top it wakes up, its light coming on at the headline: it reads it, sweeps along the bar and looks at you (WAKE in
+   scene.js). On every load at the top, with motion allowed (the class and the night come from the page's head); until
+   the page has come in, a scroll, a key, a click or a tap brings it in at once, the lighthouse awake. */
 let landed = !root.classList.contains("intro"), woken = landed, runTimer = 0, landTimer = 0;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = document.getElementById("snore");
@@ -1008,7 +1008,7 @@ function land(skip) {
   sendBar(); // the bar's widgets where they stand, for the sweep and the ball game
   S("labels", true);
   if (skip) { wakeUp(true); requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip"))); }
-  else runTimer = setTimeout(wakeUp, 300);
+  else wakeUp(); // (if the bar's arrival hasn't woken it already)
   setTimeout(quietSpell); // the bored lighthouse's quiet spell starts now (not before the page's script has run)
 }
 // (a click or a tap that brings it in doesn't also drop something on the landscape: see pressedInOpening)
@@ -1016,7 +1016,7 @@ function skipLanding() { land(true); }
 // nobody watching: it comes in rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
 // the day comes, and with it the page: the bar rises into place while the sky, the sun and the moon turn and the
-// card changes with them; the drawing holds still and the lighthouse sleeps on
+// card changes with them; the drawing holds still and the lighthouse sleeps until the bar is up
 function rise() {
   if (landed) return;
   if (document.hidden) return land(true);
@@ -1024,8 +1024,9 @@ function rise() {
   setMode(dayMode(), DAWN);
   landTimer = setTimeout(() => land(false), DAWN * 1000 + 100);
 }
-// then it wakes up, slowly: the z's go, the drawing comes to life, the eye opens, and its light reads the headline,
-// sweeps along the bar and looks at you (WAKE in scene.js); brought in at once (now), it's simply awake
+// then it wakes up at once: the z's go, the drawing comes to life, the eye opens, and its light comes on at the
+// headline, reads it, sweeps along the bar and looks at you (WAKE in scene.js); brought in at once (now), it's simply
+// awake
 function wakeUp(now) {
   if (woken) return;
   woken = true;
@@ -1048,8 +1049,9 @@ function placeSnore(s) {
 }
 /* The card's bar stretches into the real one, as the day comes: a copy of it leaves the card and grows to the
    window's width as it rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens.
-   The card's words drift away, the notes come in while it rises, and at the top the real bar fades in under it and
-   the copy fades away. The copy is made before the day comes, so its colours change with the sky's */
+   The card's words drift away, the notes come in while it rises, and at the top the real bar fades in under it, the
+   copy fades away and the lighthouse wakes. The copy is made before the day comes, so its colours change with the
+   sky's */
 function expandOpening() {
   const pill = opening.querySelector(".op-bar"), a = pill.getBoundingClientRect(), b = bar.getBoundingClientRect(), k = b.height / a.height;
   const fly = pill.cloneNode(true);
@@ -1067,6 +1069,7 @@ function expandOpening() {
     if (landed) return;
     root.classList.add("op-bar-in");
     fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" });
+    wakeUp();
   }, () => {});
 }
 /* While the light sweeps the bar, each widget it passes glows for a moment */
