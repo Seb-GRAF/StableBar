@@ -220,7 +220,7 @@ class Scene {
     host.appendChild(cv);
     this.ctx = cv.getContext('2d');
     this.top = Math.max(0, +this.o.topInset || 0);
-    this.t = 0; this.d = this.dTarget = clamp(+this.o.dusk || 0);
+    this.t = 0; this.d = this.dTarget = clamp(+this.o.dusk || 0); this.dTween = null; this.labelsAt = -9;
     this.state = 'hero'; this.theme = 'built-in'; this.ws = 1;
     this.pres = Object.fromEntries(STATES.map(k => [k, k === 'hero' ? 1 : 0]));
     this.since = Object.fromEntries(STATES.map(k => [k, 0]));
@@ -265,7 +265,13 @@ class Scene {
   }
 
   /* ----- page state ----- */
-  setDusk(d) { this.dTarget = clamp(+d || 0); if (this.reduced) this.d = this.dTarget; this.wake(); }
+  // with a duration (the opening's sunrise), an even change over that time instead of the usual quick ease
+  setDusk(d, dur = 0) {
+    d = clamp(+d || 0);
+    if (dur > 0 && !this.reduced) this.dTween = { from: this.d, t0: this.t, dur };
+    else if (d !== this.dTarget) this.dTween = null;
+    this.dTarget = d; if (this.reduced) this.d = d; this.wake();
+  }
   setState(name) {
     if (!STATES.includes(name)) return;
     if (name !== this.state) {
@@ -407,7 +413,9 @@ class Scene {
   // where the lamp is in the window, and the eye's size: the page puts the z's there
   lampAt() { const L = this.g.lamp; return { x: this.ox + L.x, y: this.oy + L.y, r: this.g.lh.er }; }
   // the drawing's own labels ("a lighthouse (stable)" and the others), off while the page's title card is up
-  labels(on) { this.noLabels = !on; this.wake(); }
+  labels(on) { if (on && this.noLabels) this.labelsAt = this.t; this.noLabels = !on; this.wake(); }
+  // how far the labels have come back in (they fade in)
+  labelsK() { return this.noLabels ? 0 : this.reduced ? 1 : smooth(0, 0.6, this.t - this.labelsAt); }
   // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
   sweepBar(dur = 1) {
     const L = this.g.lamp, ts = this.bar;
@@ -953,7 +961,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.t - this.wokeAt < 0.7) return true;
+    if (this.sweep || this.t - this.wokeAt < 0.7 || this.t - this.labelsAt < 0.6) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
@@ -986,7 +994,9 @@ class Scene {
     }
     // the install state brings the night with it
     const dTarget = this.dEff = Math.max(this.dTarget, this.pres.install > 0 ? lerp(this.dTarget, 1, this.pres.install) : 0);
-    this.d = rm ? dTarget : this.d + (dTarget - this.d) * Math.min(1, dt * 2.4);
+    const tw = this.dTween;
+    if (tw && !rm) { const k = smooth(0, 1, (this.t - tw.t0) / tw.dur); this.d = lerp(tw.from, dTarget, k); if (k >= 1) this.dTween = null; }
+    else this.d = rm ? dTarget : this.d + (dTarget - this.d) * Math.min(1, dt * 2.4);
     if (Math.abs(dTarget - this.d) < 0.0005) this.d = dTarget;
     this.boil = rm ? 0 : Math.floor(this.t * BOIL_FPS) % 3;
     this.vel.x *= Math.exp(-dt * 2.5); this.vel.y *= Math.exp(-dt * 2.5);
@@ -1511,7 +1521,8 @@ function drawScene(s, c) {
   for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
   // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
   drawStates(s, c);
-  if (s.pres.hero > 0.01 && !s.noLabels) drawLabels(s, c);
+  const lk = s.labelsK();
+  if (s.pres.hero > 0.01 && lk > 0.01) { c.globalAlpha = lk; drawLabels(s, c); c.globalAlpha = 1; }
   drawSplashes(s, c);
   drawBall(s, c);
   drawDoodles(s, c);

@@ -834,11 +834,11 @@ function hour() {
   return { d, name };
 }
 let lastDusk = -1, lastState = "";
-function updateDusk() {
+function updateDusk(dur) {
   if (!marks.length) return;
   const { d, name } = hour();
   const dusk = root.dataset.mode === "dark" ? 1 : d;
-  if (Math.abs(dusk - lastDusk) > .001) { lastDusk = dusk; S("setDusk", dusk); }
+  if (Math.abs(dusk - lastDusk) > .001) { lastDusk = dusk; S("setDusk", dusk, dur); }
   if (name !== lastState) { lastState = name; S("setState", name); }
 }
 
@@ -864,11 +864,14 @@ function lightWords(s) {
    remembers the visitor's choice, shared with the privacy and terms pages. */
 const themeColor = document.querySelector('meta[name="theme-color"]');
 const nightSwitches = [document.getElementById("night"), document.querySelector(".key .night")];
-function setMode(mode) {
+// (over a few seconds for the opening's sunrise: the drawing follows, and the browser's colour changes halfway)
+function setMode(mode, dur) {
   root.dataset.mode = mode;
-  themeColor.content = mode === "light" ? "#86cbf2" : "#232662";
+  const color = mode === "light" ? "#86cbf2" : "#232662";
+  if (dur) setTimeout(() => { themeColor.content = color; }, dur * 500);
+  else themeColor.content = color;
   for (const b of nightSwitches) b.setAttribute("aria-pressed", mode === "dark");
-  updateDusk();
+  updateDusk(dur);
 }
 for (const b of nightSwitches) b.addEventListener("click", e => {
   e.stopPropagation();
@@ -903,10 +906,10 @@ if (scene) {
     }
   };
 
-  /* The pointer and a finger steer the light and stir the grass, clouds and water.
+  /* The pointer and a finger steer the light and stir the grass, clouds and water, once the opening is over.
      On touch only a sideways drag steers; the page keeps its vertical scrolling (touch-action: pan-y). */
-  addEventListener("pointermove", e => S("pointer", e.clientX, e.clientY, e.pointerType), { passive: true });
-  addEventListener("pointerdown", e => S("pointer", e.clientX, e.clientY, e.pointerType), { passive: true });
+  addEventListener("pointermove", e => { if (landed) S("pointer", e.clientX, e.clientY, e.pointerType); }, { passive: true });
+  addEventListener("pointerdown", e => { if (landed) S("pointer", e.clientX, e.clientY, e.pointerType); }, { passive: true });
   addEventListener("pointerup", e => { if (e.pointerType !== "mouse") S("release"); }, { passive: true });
   addEventListener("pointercancel", () => S("release"), { passive: true });
   let swipe = null;
@@ -915,7 +918,7 @@ if (scene) {
     const t = e.touches[0];
     if (!t || !swipe) return;
     if (swipe.side === null && Math.hypot(t.clientX - swipe.x, t.clientY - swipe.y) > 8) swipe.side = Math.abs(t.clientX - swipe.x) > Math.abs(t.clientY - swipe.y);
-    if (swipe.side) S("pointer", t.clientX, t.clientY, "touch");
+    if (swipe.side && landed) S("pointer", t.clientX, t.clientY, "touch");
   }, { passive: true });
   addEventListener("touchend", () => { swipe = null; S("release"); }, { passive: true });
   addEventListener("touchcancel", () => { swipe = null; S("release"); }, { passive: true });
@@ -923,11 +926,11 @@ if (scene) {
   addEventListener("blur", () => S("release"));
 
   /* A click or tap on the landscape, not on the page, drops something there.
-     A click that only closes a popup or a menu doesn't, nor one that wakes the opening up. */
+     A click that only closes a popup or a menu doesn't, nor one that ends the opening. */
   let overlay = false;
   document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
   document.addEventListener("click", e => {
-    if (overlay || editing || e.detail === 0 || !landed) return;
+    if (overlay || editing || e.detail === 0 || !landed || performance.now() < quietUntil) return;
     if (e.target.closest("a, button, input, label, pre, .note, .dock, .site-foot, [role='dialog']")) return;
     if (String(getSelection?.() || "")) return;
     S("tap", e.clientX, e.clientY);
@@ -974,17 +977,17 @@ function onBar(event, key, info = {}) {
   }
 }
 
-/* The opening: a title card over the whole drawing with the bar big in the middle of it, at night. Everything
-   sleeps and nothing moves until the visitor does: then the lighthouse wakes up, the day comes, and its light reads
-   the title; the bar stretches up into its place at the top, the card drifts away, the notes come in, and the
-   lighthouse sweeps its light along the bar. Once a session, opening at the top, with motion allowed (the class and
-   the night come from the page's head; ?intro plays it again). A scroll or a key ends it at once, and so does a
-   click or a tap once it's awake. */
-let landed = !root.classList.contains("intro"), woken = landed, wokeAt = 0, sweptUntil = 0, runTimer = 0, landTimer = 0;
+/* The opening: a title card over the whole drawing with the bar big in the middle of it. It starts at night, the
+   lighthouse asleep and the drawing still. After a moment the lighthouse wakes up, the day comes, and its light
+   reads the title; then the bar stretches up into its place at the top, the card drifts away, the notes come in,
+   and the lighthouse sweeps its light along the bar. The pointer leaves the drawing alone until it's over. Once a
+   session, opening at the top, with motion allowed (the class and the night come from the page's head; ?intro plays
+   it again); a scroll, a key, a click or a tap ends it at once. */
+let landed = !root.classList.contains("intro"), woken = landed, sweptUntil = 0, quietUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
-const WAKE_ON = ["pointermove", "pointerdown", "touchstart"];
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
+const DAWN = 1.8; // seconds from night to day
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
 function land(skip) {
@@ -992,8 +995,8 @@ function land(skip) {
   landed = true;
   clearTimeout(runTimer);
   clearTimeout(landTimer);
-  for (const type of WAKE_ON) removeEventListener(type, stirs, true);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
+  removeEventListener("visibilitychange", skipHidden);
   if (!woken) { woken = true; setMode(dayMode()); }
   if (skip) { root.classList.add("intro-skip"); S("stopSweep"); }
   S("freeze", false);
@@ -1008,33 +1011,24 @@ function land(skip) {
   if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
   else if (S("sweepBar", 1.1)) sweptUntil = performance.now() + 1800;
 }
-// a click or a tap wakes it up, and only ends the opening once it's awake (not the one that woke it)
+// (a click or a tap that ends it doesn't also drop something on the landscape)
 function skipLanding(e) {
-  if ((e.type === "pointerdown" || e.type === "touchstart") && (!woken || performance.now() - wokeAt < 400)) return;
+  if (e.type === "pointerdown" || e.type === "touchstart") quietUntil = performance.now() + 1000;
   land(true);
 }
-/* Waking up: the first move of a mouse or a pen (one that really moves: a browser may report a still pointer as the
-   page appears under it), or the first click or tap */
-let stirred = 0, stirAt = null;
-function stirs(e) {
-  if (e.type === "pointermove" && e.pointerType !== "touch") {
-    if (stirAt) stirred += Math.hypot(e.clientX - stirAt[0], e.clientY - stirAt[1]);
-    stirAt = [e.clientX, e.clientY];
-    if (stirred < 6) return;
-  }
-  wakeUp();
-}
+// nobody watching: it ends rather than play on unseen
+function skipHidden() { if (document.hidden) land(true); }
+// waking up: the eye opens, the z's go, the day comes over a couple of seconds, and the light reads the title
 function wakeUp() {
   if (woken || landed) return;
+  if (document.hidden) return land(true);
   woken = true;
-  wokeAt = performance.now();
-  for (const type of WAKE_ON) removeEventListener(type, stirs, true);
   snore.classList.add("gone");
-  setMode(dayMode());
+  setMode(dayMode(), DAWN);
   S("freeze", false);
   readTitle();
-  runTimer = setTimeout(expandOpening, 1900);
-  landTimer = setTimeout(() => land(false), 1900 + 1250);
+  runTimer = setTimeout(expandOpening, 2000);
+  landTimer = setTimeout(() => land(false), 2000 + 1300); // once the bar and the notes have come in
 }
 // the sleeper's z's, by its lamp wherever the drawing has put it
 let snoreAt = "";
@@ -1045,8 +1039,8 @@ function placeSnore(s) {
   snore.style.cssText = `left: ${p.x + p.r * 2}px; top: ${p.y - p.r * 0.4 - size / 2}px; --zs: ${size}px`;
 }
 /* The card's bar stretches into the real one: a copy of it leaves the card and grows to the window's width as it
-   rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens; the real bar fades
-   in under it, the copy fades away and the notes come in */
+   rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens. The notes come in
+   while it rises, once the title has gone; at the top the real bar fades in under it and the copy fades away */
 function expandOpening() {
   if (landed) return;
   const pill = opening.querySelector(".op-bar"), a = pill.getBoundingClientRect(), b = bar.getBoundingClientRect(), k = b.height / a.height;
@@ -1059,11 +1053,11 @@ function expandOpening() {
     { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width / k}px`, transform: `scale(${k})`, borderRadius: "0px" },
   ], { duration: 720, easing: "cubic-bezier(.6, 0, .2, 1)", fill: "forwards" });
   for (const el of opening.querySelectorAll(".op-mark, .op-line")) el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-28px)" }], { duration: 460, easing: "ease-in", fill: "forwards" });
+  setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 480);
   grow.finished.then(() => {
     if (landed) return;
     root.classList.add("op-bar-in");
     fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" });
-    setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 120);
   }, () => {});
 }
 /* The light reads the title: a glowing copy of it sits behind the letters, one element per letter, and each letter
@@ -1108,10 +1102,11 @@ if (!landed) {
   if (scrollY > 0 || document.hidden) land(true);
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
-    for (const type of WAKE_ON) addEventListener(type, stirs, { capture: true, passive: true });
+    addEventListener("visibilitychange", skipHidden);
     S("labels", false);
     S("doze", true); // asleep, its eye shut and its lamp out,
-    S("freeze", true); // and the whole drawing still, until the visitor moves
+    S("freeze", true); // and the whole drawing still,
+    runTimer = setTimeout(wakeUp, 1200); // for a moment
   }
 } else opening.remove();
 
