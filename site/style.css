@@ -41,9 +41,8 @@
   --sea: #2e58d8;
   --screen: #86cbf2;
   --strip: var(--sky);
-  /* the bar keeps the site's amber Download */
+  /* the ring around the widget a script makes */
   --amber: #f5821f;
-  --amber-ink: #1b1007;
   /* the app's windows: Add here, the right-click menu, the Store */
   --win-bg: #f4f2ef;
   --win-fg: #1d1d1f;
@@ -228,15 +227,20 @@ main { overflow-x: clip; }
 .site .menus a { color: var(--fg); }
 .site .menus a:hover { color: var(--accent); }
 .header .site .menus { grid-template-columns: 1fr; }
+/* The header's Download is the page's own button at bar size: the highlighter yellow, the display hand
+   and a felt-pen outline printed a little off it (drawn by main.js, as on the page's other buttons) */
 .w.dl {
-  padding: 0; display: grid; grid-template-columns: 0fr; margin-left: -6px; opacity: 0; visibility: hidden;
-  background: var(--amber); box-shadow: none; color: var(--amber-ink); font-weight: 600;
+  --ox: -2px; --oy: -2px;
+  position: relative; isolation: isolate; padding: 0; display: grid; grid-template-columns: 0fr; margin-left: -6px; opacity: 0; visibility: hidden;
+  border-radius: 999px; background: var(--hi); box-shadow: none; filter: none; color: #111;
+  font: 800 13.5px/1 var(--display); font-variation-settings: "INFM" 70, "BNCE" 25; letter-spacing: .01em;
+  transition: rotate .2s var(--ease), background-color .2s;
 }
 .w.dl > span { overflow: hidden; display: flex; align-items: center; gap: 6px; padding: 0; }
-.w.dl svg { width: 16px; height: 16px; }
-.w.dl:hover { background: #ff9233; }
-.header .w.dl { grid-template-columns: 1fr; margin-left: 0; opacity: 1; visibility: visible; }
-.header .w.dl > span { padding: 0 11px 0 8px; }
+.w.dl svg:not(.pen) { width: 16px; height: 16px; }
+.w.dl:hover { background: #ffb547; rotate: -2deg; }
+.header .w.dl { grid-template-columns: 1fr; margin-left: 2px; opacity: 1; visibility: visible; }
+.header .w.dl > span { padding: 0 12px 0 8px; }
 .measure * { transition: none !important; }
 
 /* The center position shows only when a widget sits there */

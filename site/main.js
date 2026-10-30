@@ -908,7 +908,7 @@ if (scene) {
 /* ---------- The pen: every note, Download button, tag and key button gets a felt-pen outline,
    drawn at its size in three slightly different states that the CSS steps through (the boil).
    Inline SVG paths rather than images, so an outline never counts as the page's largest paint. ---------- */
-const INK = ".note, .cta, .tag, .keys button";
+const INK = ".note, .cta, .tag, .keys button, .w.dl";
 const hash = n => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
 const noise = x => { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return (hash(i) + (hash(i + 1) - hash(i)) * u) * 2 - 1; };
 const r1 = v => Math.round(v * 10) / 10;
@@ -976,11 +976,11 @@ function ink(el, seed) {
   const W = el.offsetWidth, H = el.offsetHeight;
   if (!W || !H || el.dataset.inkSize === `${W}x${H}`) return;
   el.dataset.inkSize = `${W}x${H}`;
-  const shape = el.dataset.ink === "torn" ? "torn" : el.matches(".cta, .keys button") ? "pill" : "rect";
+  const shape = el.dataset.ink === "torn" ? "torn" : el.matches(".cta, .keys button, .w.dl") ? "pill" : "rect";
   const cs = getComputedStyle(el);
   const radii = shape === "pill" ? [H / 2, H / 2, H / 2, H / 2]
     : [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius].map(v => parseFloat(v) || 0);
-  const weight = el.matches(".note") ? 2.9 : 2.5;
+  const weight = el.matches(".note") ? 2.9 : el.matches(".w.dl") ? 2.1 : 2.5;
   let svg = el.querySelector(":scope > .pen");
   if (!svg) {
     svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
