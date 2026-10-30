@@ -1011,6 +1011,7 @@ function land(skip) {
   S("labels", true);
   if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
   else if (S("sweepBar", 1.6)) sweptUntil = performance.now() + 2800;
+  setTimeout(quietSpell); // the bored lighthouse's quiet spell starts now (not before the page's script has run)
 }
 // (a click or a tap that ends it doesn't also drop something on the landscape: see pressedInOpening)
 function skipLanding() { land(true); }
@@ -1189,12 +1190,13 @@ bar.addEventListener("pointerout", e => {
 bar.addEventListener("focusin", e => { const w = tourWidget(e.target); if (w && e.target.matches(":focus-visible")) showTour(w); });
 bar.addEventListener("focusout", e => { if (lit && !lit.contains(e.relatedTarget) && !lit.matches(":hover")) hideTour(); });
 
-/* The bored lighthouse: once a visit, after a quiet spell with no pointer, scroll or key, and nothing open.
-   The scene checks the rest (motion allowed, the lamp in view, no game on); any input catches it. */
+/* The bored lighthouse: once a visit, after a quiet spell with no pointer, scroll or key, and nothing open,
+   counted from the end of the opening. The scene checks the rest (motion allowed, the lamp in view, no game on,
+   its light not busy); any input catches it. */
 let boredTimer = 0, boredDone = false;
 function quietSpell() {
   clearTimeout(boredTimer);
-  if (!scene || boredDone) return;
+  if (!scene || boredDone || !landed) return;
   boredTimer = setTimeout(function check() {
     const calm = !editing && !openId && !adding && ctx.hidden && !reviewing && !lit && !document.hidden && !reduce.matches;
     if (calm && S("bored")) boredDone = true;

@@ -461,7 +461,7 @@ class Scene {
   }
   // the bored trick, now (the page calls it after a quiet spell; also a hook for testing). True if it started.
   bored() {
-    if (this.reduced || this.ball || this.bore || document.hidden) return false;
+    if (this.reduced || this.ball || this.bore || this.sweep || this.wakePath || this.gaze || document.hidden) return false;
     const L = this.g.lamp, mid = t => (t.x0 + t.x1) / 2;
     const near = this.bar.filter(t => /^(clock|meeting|battery)$/.test(t.key)).sort((a, b) => Math.abs(mid(a) - L.x) - Math.abs(mid(b) - L.x))[0];
     if (!near || !this.seen(L.x, L.y)) return false;
