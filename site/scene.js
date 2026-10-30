@@ -120,14 +120,13 @@ const C = {
   monster: hex('#FF8FC0'), chimney: hex('#E8452F'), roof: hex('#2B2B36'), door: hex('#2E58D8'), skin: hex('#F6C9A6'),
   navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'),
   huts: ['#FF4A36', '#2E58D8', '#FFC21A', '#36A852'].map(hex),
-  sprout: hex('#2E9B3B'),
+  kraft: hex('#CC9A5E'), kraftLit: hex('#E2B983'), kraftDark: hex('#A87442'), tape: hex('#FFE04A'), sprout: hex('#2E9B3B'),
 };
 // animals that live on the hill (not riding a cloud): they wander and graze
 const grazer = o => (o.kind === 'sheep' || o.kind === 'cow') && !o.ride;
 /* The sheep's box, in its own units (times boxK): the front face's half size, the depth seen past it, and
    three air holes punched in the front, the first two with eyes behind them */
 const BOX = { hw: 21, hh: 13, dx: 9, dy: -7, holes: [[-11, -1.5], [0.5, -3.5], [11.5, -0.5]] };
-const BOX_SP = 6.5; // its drift, in the clouds' units
 // a rect [x0, y0, x1, y1] against a rect, or a disc [x, y, r]
 const overlaps = (a, q) => q.length === 3
   ? Math.hypot(clamp(q[0], a[0], a[2]) - q[0], clamp(q[1], a[1], a[3]) - q[1]) < q[2]
@@ -243,7 +242,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
-    this.box = { v: null, cl: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
+    this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -928,7 +927,7 @@ class Scene {
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
     // (the grazing and its "nom"s are slow: they carry on at the idle rate)
-    if (this.ball || this.bore || this.doodles.some(d => !d.calm) || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9 || this.t - this.box.hop < 0.8) return true;
+    if (this.ball || this.bore || this.doodles.some(d => !d.calm) || this.splashes.length || this.t - this.hatKick < 0.7 || this.t - this.regrowAt < 0.9 || this.t - this.box.hop < 0.8 || this.t - this.box.wob < 0.5) return true;
     for (const o of this.objs) if (o.state === 'fall' || (o.state === 'fly' && !this.reduced) || o.dying != null || (o.land > 0 && this.t - o.land < 0.4)) return true;
     return this.beam.steer > 0.01 && this.beam.steer < 0.99 && !this.reduced;
   }
@@ -964,7 +963,7 @@ class Scene {
     this.windTotal = this.windAmb + this.wind;
     if (!rm) this.drift += dt * (1 + this.windTotal * 2.4);
     // clouds lean away from the pointer
-    for (const cl of [...g.clouds, g.sheepCloud, ...(this.box.cl ? [this.box.cl] : [])]) {
+    for (const cl of [...g.clouds, g.sheepCloud]) {
       let tx = 0, ty = 0;
       if (this.ptr.on && !rm) {
         const p = this.cloudXY(cl, true), dx = p.x - this.ptr.x, dy = p.y - this.ptr.y, r = 170 * u, dd = Math.hypot(dx, dy);
@@ -1120,7 +1119,8 @@ class Scene {
   }
   // nothing of the scene's own in the way: the lighthouse, the cottage, the key, the huts, the desk
   open(x, y) {
-    const g = this.g, u = g.u, T = g.lh, k = g.cot;
+    const g = this.g, u = g.u, T = g.lh, k = g.cot, bx = this.box;
+    if (bx.gx != null && Math.abs(x - bx.gx) < 44 * u && y > bx.gy - 46 * u && y < bx.gy + 18 * u) return false;
     if (g.key && x > g.key.x0 && x < g.key.x1 && y > g.key.y0 - 30 * u) return false;
     if (Math.abs(x - T.x) < T.wB * 0.9 + 20 * u && y < T.base + 42 * u) return false;
     if (Math.abs(x - k.x) < k.w * 0.8 + 18 * u && y < k.base + 32 * u) return false;
@@ -1278,50 +1278,54 @@ class Scene {
   }
 
   /* ----- the sheep in a box -----
-     A box in the clouds' colours drifts across the sky with them, at a height of its own.
-     When the light finds it, two eyes look out through its air holes (glinting at night); a click or a tap
-     makes it hop and say baa. It isn't a surprise: clicking it drops nothing. Its label shows while it's in
-     clear sky. */
+     A cardboard box with three air holes sits on the grass where it's seen, clear of the lighthouse, the cottage,
+     the little scenes and the animals. Now and then the sheep inside shifts and the box wobbles. When the light
+     finds it, two eyes look out through the holes (glinting at night); a click or a tap makes it hop and say baa.
+     It isn't a surprise: clicking it drops nothing. Its label shows in the first screen while it's in view. */
   placeBox() {
-    const g = this.g, u = g.u, W = g.W, b = this.box, k = boxK(this), T = g.lh, L = g.lamp, sc = g.sheepCloud;
+    const g = this.g, u = g.u, W = g.W, b = this.box, T = g.lh, ck = g.cot;
     b.v = `${this.layoutV}|${this.fontsV}`;
-    const size = b.size = Math.max(13, 17 * u), cw = textW(this, 'a cloud (or a sheep)', size);
-    b.tw = textW(this, 'a sheep (in a box)', size);
-    // where the box and its label don't show (rects, and discs as [x, y, r]): the bar, the notes (a guess; the
-    // DOM has the last word), near the horizon, the lighthouse, its halo and labels, the cloud with legs and its
-    // label (the sun and the moon, while they're up, are added as they move)
+    b.size = Math.max(13, 17 * u); b.tw = textW(this, 'a sheep (in a box)', b.size);
+    // where its label mustn't go: the bar, the notes (a guess; the DOM has the last word), the key, the
+    // lighthouse and its label, the cottage
     const noteX = W < 1024 ? W * 0.05 + Math.min(W * 0.58, 620) + 16 : g.note.x1 + 4;
     b.hard = [
-      [0, 0, W, g.top + 8], g.portrait ? [0, g.note.y0 - 10, W, g.H] : [0, 0, noteX, g.H], [-1e4, g.horizon - 26 * u, 2e4, 2e4],
-      [L.x, L.y, T.er * 4.9], [T.x - T.wB * 0.8, T.hatTop, T.x + T.wB * 0.8, T.base],
-      [sc.x0 - sc.w * 0.66, sc.y - sc.w * 0.5, sc.x1 + sc.w * 0.66, sc.y + 18 * u],
-      [sc.x0 + sc.w * 0.3, sc.y - 6 * u, sc.x1 + sc.w * 0.42 + (g.portrait ? 6 : 14 * u) + 16 * u + cw + 6, sc.y + (g.portrait ? 12 : 22 * u) + 4 * u + size * 0.8],
-      ...lighthouseLabelRects(this, textW(this, 'a lighthouse (stable)', size), size),
+      [0, 0, W, g.top + 8], g.portrait ? [0, g.note.y0 - 10, W, g.H] : [0, 0, noteX, g.H],
+      [T.x - T.wB * 0.9, T.hatTop, T.x + T.wB * 0.9, T.base + 4 * u], [ck.x - ck.w * 0.7, ck.base - ck.h * 3, ck.x + ck.w * 0.7, ck.base + 4 * u],
+      ...lighthouseLabelRects(this, textW(this, 'a lighthouse (stable)', b.size), b.size),
+      ...(g.key ? [[g.key.x0, g.key.y0, g.key.x1, g.key.y1]] : []),
     ];
-    // it drifts with the clouds, at a height of its own, as far as can be from theirs
-    const sky = g.horizon - g.top, lo = g.top + sky * (g.portrait ? 0.12 : 0.18), hi = g.top + sky * (g.portrait ? 0.34 : 0.46);
-    const others = [...g.clouds.map(cl => cl.y), sc.y];
-    let y = lo, far = -1;
-    for (let cy = lo; cy <= hi; cy += 3 * u) { const d = Math.min(...others.map(o => Math.abs(o - cy))); if (d > far) { far = d; y = cy; } }
-    // it sets off from the far left of the sky; after a resize, it carries on from where it was
-    const frac = b.frac ?? (BOX.hw * k + 8) / W;
-    b.cl = { x0: frac * W + 180 * u - this.drift * BOX_SP * u, y, w: (2 * BOX.hw + BOX.dx) * k, sp: BOX_SP, seed: 91, ox: b.cl?.ox ?? 0, oy: b.cl?.oy ?? 0 };
-    b.seenAt = -9;
+    // a spot on the grass where it's seen, away from the animals, the tufts and the window's edges, with room
+    // for its label on the grass beside it
+    b.gx = b.gy = null;
+    const k = boxK(this);
+    let first = null, pick = null;
+    for (let i = 0; i < 14 && !pick; i++) {
+      const p = this.landSpot({ gap: 56 * u, spread: i < 7, check: 3, snug: true, clear: true });
+      if (!p) break;
+      first ||= p;
+      if (!g.portrait && (p.x < noteX + 60 * u || p.x > W * 0.9)) continue;
+      if (this.boxSide({ x: p.x, y: p.y - BOX.hh * k, k })) pick = p;
+    }
+    if (pick ||= first) { b.gx = pick.x; b.gy = pick.y; }
+    b.seenAt = -9; b.nextWob = this.t + 4 + Math.random() * 6;
   }
-  // the box right now: where it drifts, its tilt, and (unless `still`, as for its label) the hop with its squash
+  // the box right now: standing on the grass, its wobble, and (unless `still`, as for its label) the hop with its squash
   boxAt(still) {
-    const b = this.box, u = this.g.u, k = boxK(this), rm = this.reduced, t = this.t, q = this.cloudXY(b.cl);
-    let y = q.y + (rm ? 0 : Math.sin(t * 0.7 + 1) * 3 * u), rot = rm ? 0 : Math.sin(t * 0.5) * 0.035, sq = 0;
+    const b = this.box, k = boxK(this), rm = this.reduced, t = this.t;
+    let y = b.gy - BOX.hh * k, rot = 0, sq = 0;
+    const w = t - b.wob;
+    if (!rm && w >= 0 && w < 0.5) rot = Math.sin(w / 0.5 * Math.PI * 3) * 0.05 * (1 - w / 0.5);
     const a = still ? -1 : t - b.hop;
     if (!rm && a >= 0 && a < 0.75) {
       if (a < 0.08) sq = Math.sin(a / 0.08 * Math.PI) * 0.1;
       else if (a < 0.52) { const f = (a - 0.08) / 0.44; y -= Math.sin(f * Math.PI) * 18 * k; rot -= Math.sin(f * Math.PI) * 0.14; }
       else sq = Math.sin((a - 0.52) / 0.23 * Math.PI) * 0.14;
     }
-    return { x: q.x, y, rot, sq, k };
+    return { x: b.gx, y, rot, sq, k };
   }
   boxHit(x, y) {
-    if (this.box.v == null || !this.box.cl) return false;
+    if (this.box.gx == null) return false;
     const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
     return x > p.x - BOX.hw * k - pad && x < p.x + (BOX.hw + BOX.dx) * k + pad && y > p.y + (BOX.dy - BOX.hh) * k - pad && y < p.y + BOX.hh * k + pad;
   }
@@ -1335,29 +1339,31 @@ class Scene {
   }
   updateBox(dt) {
     const b = this.box, rm = this.reduced, t = this.t;
+    if (this.held) return;
     if (b.v !== `${this.layoutV}|${this.fontsV}`) this.placeBox();
+    if (b.gx == null) return;
     const p = this.boxAt(), lit = this.inBeam(p.x + this.ox, p.y + this.oy);
-    b.frac = p.x / this.g.W;
     b.lit = rm ? lit : lerp(b.lit, lit, Math.min(1, dt * 8));
     // the eyes come to the holes while the light is on it (and for a moment after a baa), blinking now and then
     const want = b.lit > 0.4 || t - b.peek < 1.8;
     if (want !== b.open) { b.open = want; b.openAt = t; b.nextBlink = t + 1.4 + Math.random() * 2; }
     if (b.open && !rm && t > b.nextBlink) { b.blinkAt = t; b.nextBlink = t + 1.8 + Math.random() * 2.6; }
-    // its label, while it's in clear sky: looked at a few times a second, faded in and out
+    // now and then the sheep inside shifts
+    if (!rm && t > b.nextWob) { b.wob = t; b.nextWob = t + 7 + Math.random() * 9; }
+    // its label, in the first screen while it's in view: looked at a few times a second, faded in and out
     if (t - b.seenAt > 0.3 || rm) { b.seenAt = t; b.side = this.pres.hero > 0.01 ? this.boxSide(this.boxAt(true)) : null; if (b.side) b.lastSide = b.side; }
     b.la = rm ? (b.side ? 1 : 0) : lerp(b.la, b.side ? 1 : 0, Math.min(1, dt * 3));
   }
-  // the side of the box its label fits on right now (below, left or right), or null: the box and the label in the
-  // window, clear of what's in the way, and seen
+  // the side of the box its label fits on right now (right, into the pasture, first; then left or below), or null:
+  // the box and the label in the window, on the grass, clear of what's in the way, and seen
   boxSide(p) {
-    const g = this.g, u = g.u, W = g.W, k = p.k, sp = this.sunPos(), mp = this.moonPos(), moon = 25 * u * 1.15, z = 26 * u, hard = [...this.box.hard];
-    if (sp.a > 0.1) hard.push([sp.x, sp.y, 38 * u * 1.2]);
-    if (mp.a > 0.1) hard.push([mp.x, mp.y, moon], [mp.x + moon, mp.y - moon - z * 0.6, mp.x + moon + z, mp.y - moon * 0.2]);
+    const g = this.g, u = g.u, W = g.W, k = p.k, hard = this.box.hard;
     const r = [p.x - BOX.hw * k - 3, p.y + (BOX.dy - BOX.hh) * k - 3, p.x + (BOX.hw + BOX.dx) * k + 3, p.y + BOX.hh * k + 3];
     if (r[0] < 6 || r[2] > W - 6 || hard.some(q => overlaps(r, q)) || !this.seen(p.x, p.y)) return null;
-    for (const side of ['below', 'left', 'right']) {
+    for (const side of ['right', 'left', 'below']) {
       const q = boxLabel(p.x, p.y, k, u, this.box.size, this.box.tw, side);
-      if (q.x0 < 6 || q.x1 > W - 6 || hard.some(h => overlaps([q.x0, q.y0, q.x1, q.y1], h))) continue;
+      if (q.x0 < 6 || q.x1 > W - 6 || q.y1 > g.H - 6 || hard.some(h => overlaps([q.x0, q.y0, q.x1, q.y1], h))) continue;
+      if (!this.isLand(q.x0 + 4, (q.y0 + q.y1) / 2) || !this.isLand(q.x1 - 4, (q.y0 + q.y1) / 2)) continue;
       if (this.seen((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2)) return side;
     }
     return null;
@@ -1458,7 +1464,6 @@ function drawScene(s, c) {
   drawMoon(s, c);
   for (let i = 0; i < g.clouds.length; i++) drawCloud(s, c, g.clouds[i], 'cloud' + i);
   drawCloud(s, c, g.sheepCloud, 'sheepcloud', true);
-  drawBox(s, c);
   drawIsle(s, c);
   const T = g.lh, x0 = g.portrait ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
   const y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
@@ -1470,8 +1475,8 @@ function drawScene(s, c) {
   drawEye(s, c);
   drawHat(s, c);
   // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
-  const items = [...s.objs.map(o => [o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m])].sort((a, b) => a[0] - b[0]);
-  for (const [, it] of items) it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
+  const items = [...s.objs.map(o => [o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
+  for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : drawObj(s, c, it);
   // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
   drawStates(s, c);
   if (s.pres.hero > 0.01) drawLabels(s, c);
@@ -1594,27 +1599,30 @@ function drawCloud(s, c, cl, name, legs) {
   });
 }
 
-/* the sheep's box, in the colours of the clouds it drifts with: three faces and three air holes in front; while
-   the light is on it, eyes in two of them that look at the lamp, blink, and glint at night */
+/* the sheep's box: kraft cardboard, a strip of tape over the flaps, three air holes; while the light is on
+   it, eyes in two of them that look at the lamp, blink, and glint at night */
 function drawBox(s, c) {
   const b = s.box;
-  if (b.v == null || !b.cl) return;
+  if (b.gx == null) return;
   const g = s.g, P = s.P, p = s.boxAt(), k = p.k, t = s.t, rm = s.reduced, { hw, hh, dx, dy } = BOX;
-  if (p.x < -(hw + dx) * k * 1.8 || p.x > g.W + hw * k * 1.8) return;
-  const night = smooth(0.5, 0.9, s.d);
+  const night = smooth(0.5, 0.9, s.d), card = col => mix(mul(col, P.paper), P.sky, 0.2 * night);
   c.save(); c.translate(p.x, p.y + hh * k); c.rotate(p.rot); c.scale(1 + p.sq * 0.6, 1 - p.sq); c.translate(0, -hh * k);
   const K = q => q.map(([x, y]) => [x * k, y * k]);
-  // lit from above like the clouds: the top as white as they are, the front a touch of sky, the side in their shade
-  print(c, K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), mix(P.cloud, P.sky, 0.24));
-  print(c, K([[-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw, -hh]]), P.cloud);
-  print(c, K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]), mix(P.cloud, P.sky, 0.08));
+  const front = K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]);
+  const top = K([[-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw, -hh]]);
+  const side = K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]);
+  print(c, side, card(C.kraftDark)); print(c, top, card(C.kraftLit)); print(c, front, card(C.kraft));
+  // tape over the seam between the flaps, front to back, folded a little way down the front
+  c.globalAlpha = 0.8;
+  print(c, K([[-3.4, -hh], [-3.4 + dx, -hh + dy], [3.4 + dx, -hh + dy], [3.4, -hh], [3.6, -hh + 6.5], [0.4, -hh + 5.8], [-3.6, -hh + 6.8]]), card(C.tape));
+  c.globalAlpha = 1;
   // the holes, dark; eyes in two of them while the light is on the box (or just after a baa)
   let open = b.open ? (rm ? 1 : smooth(0, 0.2, t - b.openAt)) : (rm ? 0 : 1 - smooth(0, 0.14, t - b.openAt));
   if (b.open && !rm && t - b.blinkAt < 0.16) open *= Math.abs(Math.cos((t - b.blinkAt) / 0.16 * Math.PI));
   const L = s.g.lamp, look = Math.atan2(L.y - p.y, L.x - p.x), r = 3.4 * k;
   BOX.holes.forEach(([hx, hy], i) => {
     const x = hx * k, y = hy * k;
-    dot(c, x, y, r, mix(P.ink, P.sky, 0.15));
+    dot(c, x, y, r, mix(P.ink, C.kraftDark, 0.18));
     if (i > 1 || open < 0.04) return;
     const ew = r * 0.8, eh = r * 0.8 * open;
     c.beginPath(); c.ellipse(x, y + (1 - open) * r * 0.3, ew, Math.max(0.3, eh), 0, 0, TAU); c.fillStyle = rgba(mix(hex('#FFFFFF'), P.beam, 0.4 * night)); c.fill();
@@ -1624,12 +1632,17 @@ function drawBox(s, c) {
     dot(c, px - r * 0.16, py - r * 0.2, r * 0.15 + 0.25, '#FFFFFF');
     c.restore();
   });
-  // the pen: the outline in one weight, the edges inside lighter, and a ring round each hole
+  // the pen: the outline in one weight, the edges inside lighter, a ring round each hole, and this side up
   c.beginPath();
   edges(c, K([[-hw, hh], [-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), DET * 1.05, 3, true, { ov: 1.5 });
   edges(c, K([[-hw, -hh], [hw, -hh], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
   edges(c, K([[hw, -hh], [hw + dx, -hh + dy]]), TEX * 1.25, 12, false, { ov: 0.6 });
   BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2 }));
+  for (const ax of [hw + dx * 0.32, hw + dx * 0.7]) {
+    const x = ax * k, y0 = (dy * (ax - hw) / dx + 6) * k, y1 = y0 - 7 * k;
+    ribbon(c, [[x, y0], [x, y1]], TEX * 0.9, ax, { tin: 1, tout: 1, w0: 0.8, w1: 0.8, amp: 0.1 });
+    ribbon(c, [[x - 1.7 * k, y1 + 2.4 * k], [x, y1], [x + 1.7 * k, y1 + 2.4 * k]], TEX * 0.9, ax + 1, { tin: 1, tout: 1, w0: 0.8, w1: 0.8, amp: 0.1 });
+  }
   c.fillStyle = INK; c.fill();
   // and at night the eyes glint, a little star at each
   if (open > 0.3 && night > 0.05) {
@@ -2402,7 +2415,7 @@ function drawLabels(s, c) {
   }
   // the sheep in its box, where placeBox found room for the label
   const bx = s.box;
-  if (bx.lastSide && bx.la > 0.01 && bx.cl) {
+  if (bx.lastSide && bx.la > 0.01 && bx.gx != null) {
     const p = s.boxAt(true), q = boxLabel(p.x, p.y, p.k, u, size, bx.tw, bx.lastSide), lc = rgba(mix(P.ink, P.paper, night), s.pres.hero * bx.la);
     label(c, 'a sheep (in a box)', q.tx, q.ty, size, lc, q.align);
     c.fillStyle = lc; arrow(c, q.arrow, TEX * 1.1, 11);
