@@ -47,7 +47,7 @@ Any widget can open a popup. Build it from rows, columns, text, graphs, lists, b
 
 Six themes ship with StableBar, alongside Built-in. Choose one during setup, cycle through them on your own bar with **Try Themes…**, or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages). **Save as Theme…** turns your own look into one. See [Themes](docs/themes.md).
 
-<img src="https://github.com/user-attachments/assets/1062d6dd-5bbe-4ea5-b13c-02e5f7eb1f04" width="100%" alt="The bar and its open agenda popup changing through each theme that ships with StableBar, then back to Built-in">
+<img src="https://github.com/user-attachments/assets/ceb102e2-3704-4198-ba9d-d58bcfc1ecd5" width="100%" alt="The bar and its open agenda popup changing through each theme that ships with StableBar, then back to Built-in">
 
 ## Edit the bar in place
 
