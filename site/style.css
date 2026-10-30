@@ -117,7 +117,11 @@ h1, h2, h3 { text-wrap: balance; }
   font: 800 clamp(76px, 10vw, 136px)/.92 var(--display); font-variation-settings: "INFM" 70, "BNCE" 25; letter-spacing: -.012em;
   color: var(--pen); rotate: -1.5deg; text-shadow: 0 0 22px var(--halo), 0 0 6px var(--halo);
 }
-.op-mark .op-b { background: linear-gradient(transparent 16%, var(--hi) 16% 88%, transparent 88%); padding: 0 .03em; margin: 0 -.03em; }
+.op-mark { position: relative; isolation: isolate; }
+/* the light reading the title: a copy of it behind the letters, each letter glowing once the beam has reached it */
+.op-glow { position: absolute; inset: 0; z-index: -1; color: transparent; text-shadow: none; pointer-events: none; }
+.op-glow i { font-style: normal; transition: text-shadow .3s; }
+.op-glow i.lit { text-shadow: 0 0 10px #ffe04a, 0 0 24px #ffe04ae6, 0 0 46px #ffd43ba6; }
 .op-bar {
   display: flex; align-items: center; gap: 8px; width: min(780px, 100%); padding: 7px 8px; border-radius: 22px;
   background: color-mix(in srgb, #ffffff 36%, transparent); box-shadow: inset 0 0 0 1px #ffffffb3, 0 20px 44px -20px #0b1d4a73;

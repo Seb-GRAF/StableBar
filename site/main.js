@@ -898,7 +898,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { if (landed) lightWords(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (landed) lightWords(s); readGlow(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -988,7 +988,8 @@ function land(skip) {
   clearTimeout(runTimer);
   clearTimeout(landTimer);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
-  if (skip) root.classList.add("intro-skip");
+  if (skip) { root.classList.add("intro-skip"); S("stopSweep"); }
+  reading = null;
   root.classList.remove("intro", "op-bar-in", "op-page-in");
   opening.remove();
   measureMarks();
@@ -1021,6 +1022,32 @@ function expandOpening() {
     setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 120);
   }, () => {});
 }
+/* The light reads the title: a glowing copy of it sits behind the letters, one element per letter, and each letter
+   lights up once the beam has reached it (all of them by the end of the sweep) */
+let reading = null;
+function readTitle() {
+  if (landed) return;
+  const mark = opening.querySelector(".op-mark"), glow = document.createElement("span");
+  glow.className = "op-glow";
+  glow.setAttribute("aria-hidden", "true");
+  for (const word of mark.children) {
+    const copy = document.createElement("span");
+    copy.className = word.className;
+    for (const ch of word.textContent) copy.append(Object.assign(document.createElement("i"), { textContent: ch }));
+    glow.append(copy);
+  }
+  mark.append(glow);
+  const letters = [...glow.querySelectorAll("i")].map(el => { const r = el.getBoundingClientRect(); return { el, x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const ys = letters.map(l => l.y), first = letters[0], last = letters.at(-1);
+  if (!S("sweepAlong", first.x - 10, (Math.min(...ys) + Math.max(...ys)) / 2, last.x + 10, (Math.min(...ys) + Math.max(...ys)) / 2, 1.1)) return;
+  reading = { letters, until: performance.now() + 1900 };
+}
+function readGlow(s) {
+  if (!reading) return;
+  const done = performance.now() > reading.until;
+  for (const l of reading.letters) if (!l.el.classList.contains("lit") && (done || s.inBeam(l.x, l.y) > .45)) l.el.classList.add("lit");
+  if (done) reading = null;
+}
 /* While the light sweeps the bar, each widget it passes glows for a moment */
 function sweepGlow(s) {
   const now = performance.now();
@@ -1037,8 +1064,9 @@ if (!landed) {
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
     S("labels", false);
-    runTimer = setTimeout(expandOpening, 1150);
-    landTimer = setTimeout(() => land(false), 1150 + 1250);
+    setTimeout(readTitle, 250);
+    runTimer = setTimeout(expandOpening, 2150);
+    landTimer = setTimeout(() => land(false), 2150 + 1250);
   }
 } else opening.remove();
 

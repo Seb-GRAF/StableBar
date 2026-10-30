@@ -380,6 +380,15 @@ class Scene {
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
   hold(on) { this.held = !!on; if (!on) this.measure(); this.wake(); }
+  // the opening: the light swings to one point and sweeps along to another, once (viewport coordinates)
+  sweepAlong(x0, y0, x1, y1, dur = 1) {
+    if (this.reduced || document.hidden) return false;
+    const L = this.g.lamp;
+    this.sweep = { t0: this.t, lead: 0.35, dur, tail: 0.3, a0: Math.atan2(y0 - this.oy - L.y, x0 - this.ox - L.x), a1: Math.atan2(y1 - this.oy - L.y, x1 - this.ox - L.x) };
+    this.wake();
+    return true;
+  }
+  stopSweep() { this.sweep = null; this.wake(); }
   // the drawing's own labels ("a lighthouse (stable)" and the others), off while the page's title card is up
   labels(on) { this.noLabels = !on; this.wake(); }
   // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
@@ -583,7 +592,7 @@ class Scene {
     const w = this.sweep;
     if (w) {
       const a = this.t - w.t0;
-      if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.a0 : lerp(w.a0, w.a1, smooth(0, 1, (a - w.lead) / w.dur));
+      if (a < w.lead + w.dur + w.tail) return a < w.lead ? w.a0 : w.a0 + angDiff(w.a1, w.a0) * smooth(0, 1, (a - w.lead) / w.dur);
       this.sweep = null;
     }
     const b = this.bore;
