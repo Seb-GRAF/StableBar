@@ -18,7 +18,7 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 <br>
 
-<img src="https://github.com/user-attachments/assets/3c362e7e-4740-4e58-b337-3e6f11b6704c" width="100%" alt="The macOS menu bar's items fade away and StableBar takes its place: workspaces with their app icons, the active app, music, the next meeting, CPU and memory, the battery and the clock.">
+<img src="https://github.com/user-attachments/assets/8d5909cb-f107-48db-a7b3-aabbabf4e860" width="100%" alt="StableBar on the desktop: workspaces with their app icons, the active app, music, the next meeting, CPU and memory, the battery and the clock. It moves to another workspace and back.">
 
 ## Features
 
@@ -35,31 +35,31 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 The workspaces widget shows each workspace and its apps from AeroSpace, yabai or OmniWM, and follows you as you switch. Without a window manager, it can show macOS Spaces. See [Built-in widgets](docs/widgets.md).
 
-<img src="https://github.com/user-attachments/assets/09270bfc-76e4-4413-8761-ebe398adb052" width="100%" alt="The bar's workspaces widget switching between workspaces while the window below changes to each workspace's app">
+<img src="https://github.com/user-attachments/assets/66655f52-9458-4488-9e0f-064a8529b4ab" width="100%" alt="The bar's workspaces widget switching between workspaces while the window below changes to each workspace's app">
 
 ## Popups
 
 Any widget can open a popup. Build it from rows, columns, text, graphs, lists, buttons, sliders, toggles and search fields, filled with the widget's data. See [Custom popups](docs/popups.md).
 
-<img src="https://github.com/user-attachments/assets/9b844ab4-16ea-4f50-a4d6-a3e23b0555b2" width="100%" alt="Clicking the meeting, system and music widgets opens today's agenda, a CPU and memory graph, and the playing track with its controls">
+<img src="https://github.com/user-attachments/assets/7c0ad0e9-efd0-4ac1-8090-7807de30222c" width="100%" alt="The pointer clicks the meeting, system and music widgets in turn, opening today's agenda, a CPU and memory graph, and the playing track with its controls">
 
 ## Themes
 
 Six themes ship with StableBar, alongside Built-in. Choose one during setup, cycle through them on your own bar with **Try Themes…**, or get more from the [store](https://github.com/Seb-GRAF/stablebar-packages). **Save as Theme…** turns your own look into one. See [Themes](docs/themes.md).
 
-<img src="https://github.com/user-attachments/assets/93791e12-cd5b-455e-88ce-22fa34b01360" width="100%" alt="One bar, with its agenda popup open, changing through each theme that ships with StableBar">
+<img src="https://github.com/user-attachments/assets/1062d6dd-5bbe-4ea5-b13c-02e5f7eb1f04" width="100%" alt="The bar and its open agenda popup changing through each theme that ships with StableBar, then back to Built-in">
 
 ## Edit the bar in place
 
 Choose **Edit Bar in Place** from the bar's right-click menu to arrange widgets on the bar itself: drag them between positions, remove them with **−** or add one with **+**. Changes save as you go, with undo. See [Settings](docs/settings.md).
 
-<img src="https://github.com/user-attachments/assets/32de2698-46d8-4b6d-bec7-08d79e4ef236" width="100%" alt="Editing the bar in place: the music widget is dragged from the right of the bar to its center, then Done restores the normal bar">
+<img src="https://github.com/user-attachments/assets/66608625-bef8-4d29-b2db-dcf58ac26876" width="100%" alt="Editing the bar in place: the music widget is dragged from the right of the bar to its center, then Done restores the normal bar">
 
 ## Any script is a widget
 
 A widget can run any command that prints text or a JSON object, refresh on a timer or on events, and open a popup with graphs, lists and controls.
 
-<img src="https://github.com/user-attachments/assets/021b2703-122b-4032-9971-5616060f6eeb" width="100%" alt="A two-line shell script prints the disk usage, and its output appears on the bar as a new widget">
+<img src="https://github.com/user-attachments/assets/fcd1f43e-311b-4ddf-b225-c830be980d6e" width="100%" alt="A two-line shell script that prints the disk usage is typed, and its output appears on the bar as a new widget">
 
 ```sh
 #!/bin/sh
@@ -81,13 +81,13 @@ printf '{"text":"%s","icon":"internaldrive"}' "$used"
 
 **Settings → Packages → Store** lists widgets and themes from the [StableBar store](https://github.com/Seb-GRAF/stablebar-packages). Before anything runs, StableBar shows the commands, hosts and permissions a package uses. See [Packages and the store](docs/packages.md#store).
 
-<img src="https://github.com/user-attachments/assets/fccf0e9f-633f-4a36-a40d-b00b5ee4e7ec" width="100%" alt="The Store in Settings lists widget packages; getting the Weather package marks it installed">
+<img src="https://github.com/user-attachments/assets/51f51f6c-fd6c-4900-83c7-71fe2b4dc6f7" width="100%" alt="The Store in Settings lists widget packages; getting the Weather package marks it installed">
 
 ## Settings or JSON
 
 Change content, appearance and behavior in Settings, with undo and redo, or edit the file it saves to. Your bar lives in `~/.config/stablebar/config.json`: StableBar applies the file when you save it, and keeps the last working bar if a change is invalid. The JSON schema gives editors completion and validation. See [Settings](docs/settings.md) and [Configuration](docs/configuration.md).
 
-<img src="https://github.com/user-attachments/assets/fc6a8340-dcf2-4816-90ac-413e1ec93a1c" width="100%" alt="The Theme section of StableBar Settings next to the configuration file it saves to">
+<img src="https://github.com/user-attachments/assets/47b1b70a-531d-457a-bb83-11d57038acba" width="100%" alt="In config.json the theme is changed from catppuccin to nord and saved, and the bar above switches to Nord; then it is changed back">
 
 ```json
 {
