@@ -127,18 +127,6 @@ const grazer = o => (o.kind === 'sheep' || o.kind === 'cow') && !o.ride;
 /* The sheep's box, in its own units (times boxK): the front face's half size, the depth seen past it, and
    three air holes punched in the front, the first two with eyes behind them */
 const BOX = { hw: 21, hh: 13, dx: 9, dy: -7, holes: [[-11, -1.5], [0.5, -3.5], [11.5, -0.5]] };
-// its lid: a cloud's row of puffs sitting on the box, following its top back to the far corner (box units)
-const LID = (() => {
-  const bumps = [[-18, -12, 10], [-6, -18, 13], [8, -19.5, 13], [21, -18, 11], [30, -17, 7.5]], top = [];
-  for (let i = 0; i <= 72; i++) {
-    const x = -28.5 + 66.5 * i / 72;
-    let y = -9.5;
-    for (const [bx, by, r] of bumps) { const d = x - bx; if (Math.abs(d) < r) y = Math.min(y, by - Math.sqrt(r * r - d * d)); }
-    top.push([x, y]);
-  }
-  return top;
-})();
-const LID_TOP = Math.min(...LID.map(p => p[1])), LID_X0 = LID[0][0], LID_X1 = LID[LID.length - 1][0];
 const BOX_SP = 6.5; // its drift, in the clouds' units
 // a rect [x0, y0, x1, y1] against a rect, or a disc [x, y, r]
 const overlaps = (a, q) => q.length === 3
@@ -1271,7 +1259,7 @@ class Scene {
   }
 
   /* ----- the sheep in a box -----
-     A white box with a cloud's puffs for a lid drifts across the sky with the clouds, at a height of its own.
+     A box in the clouds' colours drifts across the sky with them, at a height of its own.
      When the light finds it, two eyes look out through its air holes (glinting at night); a click or a tap
      makes it hop and say baa. It isn't a surprise: clicking it drops nothing. Its label shows while it's in
      clear sky. */
@@ -1316,7 +1304,7 @@ class Scene {
   boxHit(x, y) {
     if (this.box.v == null || !this.box.cl) return false;
     const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
-    return x > p.x + LID_X0 * k - pad && x < p.x + LID_X1 * k + pad && y > p.y + LID_TOP * k - pad && y < p.y + BOX.hh * k + pad;
+    return x > p.x - BOX.hw * k - pad && x < p.x + (BOX.hw + BOX.dx) * k + pad && y > p.y + (BOX.dy - BOX.hh) * k - pad && y < p.y + BOX.hh * k + pad;
   }
   // a click or a tap: it hops (not without motion) and says so
   baa() {
@@ -1346,7 +1334,7 @@ class Scene {
     const g = this.g, u = g.u, W = g.W, k = p.k, sp = this.sunPos(), mp = this.moonPos(), moon = 25 * u * 1.15, z = 26 * u, hard = [...this.box.hard];
     if (sp.a > 0.1) hard.push([sp.x, sp.y, 38 * u * 1.2]);
     if (mp.a > 0.1) hard.push([mp.x, mp.y, moon], [mp.x + moon, mp.y - moon - z * 0.6, mp.x + moon + z, mp.y - moon * 0.2]);
-    const r = [p.x + LID_X0 * k, p.y + LID_TOP * k, p.x + LID_X1 * k, p.y + BOX.hh * k];
+    const r = [p.x - BOX.hw * k - 3, p.y + (BOX.dy - BOX.hh) * k - 3, p.x + (BOX.hw + BOX.dx) * k + 3, p.y + BOX.hh * k + 3];
     if (r[0] < 6 || r[2] > W - 6 || hard.some(q => overlaps(r, q)) || !this.seen(p.x, p.y)) return null;
     for (const side of ['below', 'left', 'right']) {
       const q = boxLabel(p.x, p.y, k, u, this.box.size, this.box.tw, side);
@@ -1587,8 +1575,8 @@ function drawCloud(s, c, cl, name, legs) {
   });
 }
 
-/* the sheep's box, white and soft like the clouds it drifts with: a box below, a cloud's puffs for a lid and three
-   air holes in front; while the light is on it, eyes in two of them that look at the lamp, blink, and glint at night */
+/* the sheep's box, in the colours of the clouds it drifts with: three faces and three air holes in front; while
+   the light is on it, eyes in two of them that look at the lamp, blink, and glint at night */
 function drawBox(s, c) {
   const b = s.box;
   if (b.v == null || !b.cl) return;
@@ -1597,10 +1585,10 @@ function drawBox(s, c) {
   const night = smooth(0.5, 0.9, s.d);
   c.save(); c.translate(p.x, p.y + hh * k); c.rotate(p.rot); c.scale(1 + p.sq * 0.6, 1 - p.sq); c.translate(0, -hh * k);
   const K = q => q.map(([x, y]) => [x * k, y * k]);
-  const lid = K(LID);
-  print(c, K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), mix(P.cloud, P.sky, 0.2));
-  print(c, K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]), mix(P.cloud, P.sky, 0.07));
-  print(c, lid, P.cloud);
+  // lit from above like the clouds: the top as white as they are, the front a touch of sky, the side in their shade
+  print(c, K([[hw, -hh], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), mix(P.cloud, P.sky, 0.24));
+  print(c, K([[-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw, -hh]]), P.cloud);
+  print(c, K([[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]]), mix(P.cloud, P.sky, 0.08));
   // the holes, dark; eyes in two of them while the light is on the box (or just after a baa)
   let open = b.open ? (rm ? 1 : smooth(0, 0.2, t - b.openAt)) : (rm ? 0 : 1 - smooth(0, 0.14, t - b.openAt));
   if (b.open && !rm && t - b.blinkAt < 0.16) open *= Math.abs(Math.cos((t - b.blinkAt) / 0.16 * Math.PI));
@@ -1617,15 +1605,12 @@ function drawBox(s, c) {
     dot(c, px - r * 0.16, py - r * 0.2, r * 0.15 + 0.25, '#FFFFFF');
     c.restore();
   });
-  // the pen: the box below the puffs, the puffs' edge, the corner where front meets side lighter, a ring round
-  // each hole, and a curl of puff on the lid as on the clouds
+  // the pen: the outline in one weight, the edges inside lighter, and a ring round each hole
   c.beginPath();
-  edges(c, K([[-hw, -9.5], [-hw, hh], [hw, hh], [hw + dx, hh + dy], [hw + dx, -9.5]]), DET * 1.05, 3, false, { ov: 1.2 });
-  ribbon(c, lid, DET, 5, { tin: 2, tout: 2 });
-  edges(c, K([[hw, -9.5], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
+  edges(c, K([[-hw, hh], [-hw, -hh], [-hw + dx, -hh + dy], [hw + dx, -hh + dy], [hw + dx, hh + dy], [hw, hh]]), DET * 1.05, 3, true, { ov: 1.5 });
+  edges(c, K([[-hw, -hh], [hw, -hh], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
+  edges(c, K([[hw, -hh], [hw + dx, -hh + dy]]), TEX * 1.25, 12, false, { ov: 0.6 });
   BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2 }));
-  ribbon(c, ellipse(-7 * k, -23 * k, 7.5 * k, 6 * k, 10, Math.PI * 1.05, Math.PI * 1.75), TEX, 3, { tin: 2, tout: 3 });
-  ribbon(c, ellipse(18 * k, -22 * k, 5.5 * k, 4.4 * k, 10, Math.PI * 1.1, Math.PI * 1.7), TEX, 7, { tin: 2, tout: 3 });
   c.fillStyle = INK; c.fill();
   // and at night the eyes glint, a little star at each
   if (open > 0.3 && night > 0.05) {
