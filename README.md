@@ -18,6 +18,8 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 <br>
 
+https://github.com/user-attachments/assets/9d252229-8e9a-4cf0-a6e5-a65e57331ab3
+
 <img src="https://github.com/user-attachments/assets/8d5909cb-f107-48db-a7b3-aabbabf4e860" width="100%" alt="StableBar on the desktop: workspaces with their app icons, the active app, music, the next meeting, CPU and memory, the battery and the clock. It moves to another workspace and back.">
 
 ## Features
