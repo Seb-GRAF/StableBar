@@ -45,9 +45,9 @@
 const root = document.documentElement;
 root.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
 root.classList.add("js");
-// the landing film: once a session, opening at the top of the page, with motion allowed; ?intro plays it again
-// (see land() in main.js)
-try { if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (new URLSearchParams(location.search).has("intro") || (!sessionStorage.getItem("landed") && !location.hash))) root.classList.add("intro"); } catch {}
+// the landing film: once a session, opening at the top of the page, with motion allowed; ?intro plays it again.
+// It starts at night, and wakes into the day when the visitor moves (see land() in main.js)
+try { if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (new URLSearchParams(location.search).has("intro") || (!sessionStorage.getItem("landed") && !location.hash))) { root.classList.add("intro"); root.dataset.mode = "dark"; } } catch {}
 </script>
 <script src="scene.js" defer></script>
 <script src="main.js" defer></script>
@@ -114,6 +114,7 @@ try { if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (new URLSea
 <a class="skip" href="#main">Skip to content</a>
 <div class="scene" id="scene" aria-hidden="true"></div>
 <div class="opening" id="opening" aria-hidden="true" data-theme="built-in">
+  <span class="op-z"><i>z</i><i>z</i><i>z</i></span>
   <p class="op-mark"><span class="op-w1">Stable</span><span class="op-w2">Bar</span></p>
   <div class="op-bar">
     <span class="w"><svg style="width:13px;height:15px;fill:currentColor"><use href="#i-apple"/></svg></span>

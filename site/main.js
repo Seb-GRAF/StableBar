@@ -898,7 +898,7 @@ if (scene) {
     dock.dataset.sky = lum(sky) < .18 ? "dark" : "light";
   };
   scene.onFrame = s => {
-    try { if (landed) lightWords(s); readGlow(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
+    try { if (landed) lightWords(s); if (!woken) placeSnore(s); readGlow(s); sweepGlow(s); skyStrip(s); if (lit && s.playing) hideTour(); } catch (err) {
       if (!sceneFailed) { sceneFailed = true; console.warn("The drawing failed:", err); }
     }
   };
@@ -923,11 +923,11 @@ if (scene) {
   addEventListener("blur", () => S("release"));
 
   /* A click or tap on the landscape, not on the page, drops something there.
-     A click that only closes a popup or a menu doesn't. */
+     A click that only closes a popup or a menu doesn't, nor one that wakes the opening up. */
   let overlay = false;
   document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
   document.addEventListener("click", e => {
-    if (overlay || editing || e.detail === 0) return;
+    if (overlay || editing || e.detail === 0 || !landed) return;
     if (e.target.closest("a, button, input, label, pre, .note, .dock, .site-foot, [role='dialog']")) return;
     if (String(getSelection?.() || "")) return;
     S("tap", e.clientX, e.clientY);
@@ -974,21 +974,29 @@ function onBar(event, key, info = {}) {
   }
 }
 
-/* The opening: a title card over the whole drawing with the bar big in the middle of it, and the lighthouse asleep.
-   It wakes up and reads the title with its light; then the bar stretches up into its place at the top, the card
-   drifts away, the notes come in, and the lighthouse sweeps its light along the bar. Once a session, opening at the top, with motion allowed (the class comes from the page's
-   head; ?intro plays it again); any scroll, key, click or tap ends it at once. */
-let landed = !root.classList.contains("intro"), sweptUntil = 0, runTimer = 0, landTimer = 0;
+/* The opening: a title card over the whole drawing with the bar big in the middle of it, at night. Everything
+   sleeps and nothing moves until the visitor does: then the lighthouse wakes up, the day comes, and its light reads
+   the title; the bar stretches up into its place at the top, the card drifts away, the notes come in, and the
+   lighthouse sweeps its light along the bar. Once a session, opening at the top, with motion allowed (the class and
+   the night come from the page's head; ?intro plays it again). A scroll or a key ends it at once, and so does a
+   click or a tap once it's awake. */
+let landed = !root.classList.contains("intro"), woken = landed, wokeAt = 0, sweptUntil = 0, runTimer = 0, landTimer = 0;
 const swept = new Map();
-const opening = document.getElementById("opening");
+const opening = document.getElementById("opening"), snore = opening.querySelector(".op-z");
+const WAKE_ON = ["pointermove", "pointerdown", "touchstart"];
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
+// it wakes into the day, or into the night when that's the visitor's choice on the night switch
+const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
 function land(skip) {
   if (landed) return;
   landed = true;
   clearTimeout(runTimer);
   clearTimeout(landTimer);
+  for (const type of WAKE_ON) removeEventListener(type, stirs, true);
   for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
+  if (!woken) { woken = true; setMode(dayMode()); }
   if (skip) { root.classList.add("intro-skip"); S("stopSweep"); }
+  S("freeze", false);
   S("doze", false);
   reading = null;
   root.classList.remove("intro", "op-bar-in", "op-page-in");
@@ -1000,7 +1008,42 @@ function land(skip) {
   if (skip) requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip")));
   else if (S("sweepBar", 1.1)) sweptUntil = performance.now() + 1800;
 }
-function skipLanding() { land(true); }
+// a click or a tap wakes it up, and only ends the opening once it's awake (not the one that woke it)
+function skipLanding(e) {
+  if ((e.type === "pointerdown" || e.type === "touchstart") && (!woken || performance.now() - wokeAt < 400)) return;
+  land(true);
+}
+/* Waking up: the first move of a mouse or a pen (one that really moves: a browser may report a still pointer as the
+   page appears under it), or the first click or tap */
+let stirred = 0, stirAt = null;
+function stirs(e) {
+  if (e.type === "pointermove" && e.pointerType !== "touch") {
+    if (stirAt) stirred += Math.hypot(e.clientX - stirAt[0], e.clientY - stirAt[1]);
+    stirAt = [e.clientX, e.clientY];
+    if (stirred < 6) return;
+  }
+  wakeUp();
+}
+function wakeUp() {
+  if (woken || landed) return;
+  woken = true;
+  wokeAt = performance.now();
+  for (const type of WAKE_ON) removeEventListener(type, stirs, true);
+  snore.classList.add("gone");
+  setMode(dayMode());
+  S("freeze", false);
+  readTitle();
+  runTimer = setTimeout(expandOpening, 1900);
+  landTimer = setTimeout(() => land(false), 1900 + 1250);
+}
+// the sleeper's z's, by its lamp wherever the drawing has put it
+let snoreAt = "";
+function placeSnore(s) {
+  const p = s.lampAt(), size = Math.max(12, p.r * 1.1), key = `${Math.round(p.x)} ${Math.round(p.y)} ${Math.round(size)}`;
+  if (key === snoreAt) return;
+  snoreAt = key;
+  snore.style.cssText = `left: ${p.x + p.r * 2}px; top: ${p.y - p.r * 0.4 - size / 2}px; --zs: ${size}px`;
+}
 /* The card's bar stretches into the real one: a copy of it leaves the card and grows to the window's width as it
    rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens; the real bar fades
    in under it, the copy fades away and the notes come in */
@@ -1065,11 +1108,10 @@ if (!landed) {
   if (scrollY > 0 || document.hidden) land(true);
   else {
     for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
+    for (const type of WAKE_ON) addEventListener(type, stirs, { capture: true, passive: true });
     S("labels", false);
-    S("doze", true); // it starts asleep, and wakes to read the title
-    setTimeout(readTitle, 750);
-    runTimer = setTimeout(expandOpening, 2650);
-    landTimer = setTimeout(() => land(false), 2650 + 1250);
+    S("doze", true); // asleep, its eye shut and its lamp out,
+    S("freeze", true); // and the whole drawing still, until the visitor moves
   }
 } else opening.remove();
 

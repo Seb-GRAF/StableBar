@@ -138,7 +138,7 @@ const HAND = '"Shantell Sans Hand", "Shantell Sans", "Chalkboard SE", sans-serif
    One felt pen in three weights. Every stroke is a filled ribbon whose width follows the pen's
    pressure: thin where it lands and lifts, a little uneven along the way. The line boils between
    three states; the printed fills don't boil and sit one constant vector off the line. */
-let BOIL = 0, PW = 1, INK = '#111', REGX = 2.6, REGY = 1.9;
+let BOIL = 0, PW = 1, INK = '#111', REGX = 2.6, REGY = 1.9, NAP = false;
 const SIL = 3.2, DET = 2.1, TEX = 1.35;
 
 function ribbon(c, pts, w, sd = 0, o = {}) {
@@ -242,7 +242,7 @@ class Scene {
     // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
     this.flocked = false; this.meadow = []; this.sproutAt = 0;
     this.held = !!this.o.held; this.sweep = null;
-    this.dozing = false; this.wokeAt = -9; this.zAt = 0;
+    this.dozing = false; this.wokeAt = -9; this.frozen = false;
     this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0 };
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
@@ -395,7 +395,6 @@ class Scene {
     if (on) this.dozing = true;
     else if (this.dozing) {
       this.dozing = false; this.wokeAt = this.t;
-      for (const d of this.doodles) if (d.kind === 'z') d.life = Math.min(d.life, this.t - d.t0 + 0.3);
       this.blink.next = this.t + 0.6;
     }
     this.wake();
@@ -403,6 +402,10 @@ class Scene {
   // 1 while asleep, easing to 0 as the eye opens; the light comes on once the eye is half open
   drowsy() { return this.dozing ? 1 : 1 - smooth(0, 0.4, this.t - this.wokeAt); }
   lampOn() { return 1 - smooth(0, 0.6, this.drowsy()); }
+  // the opening's still night: nothing moves until the visitor does (the page draws the sleeper's z's)
+  freeze(on) { this.frozen = !!on; if (!on) this.last = null; this.wake(); }
+  // where the lamp is in the window, and the eye's size: the page puts the z's there
+  lampAt() { const L = this.g.lamp; return { x: this.ox + L.x, y: this.oy + L.y, r: this.g.lh.er }; }
   // the drawing's own labels ("a lighthouse (stable)" and the others), off while the page's title card is up
   labels(on) { this.noLabels = !on; this.wake(); }
   // the landing's last beat: the light swings to the bar's left end and sweeps along it to the right, once
@@ -725,7 +728,8 @@ class Scene {
     // the far island and its smaller lighthouse
     g.isle = portrait ? { x0: 0.03 * W, x1: 0.24 * W, h: 20 * u + 8 } : { x0: 0.49 * W, x1: 0.585 * W, h: 22 * u };
     g.sun = portrait ? { x: 0.3 * W, y0: top + H * 0.115 } : { x: 0.57 * W, y0: top + sky * 0.3 };
-    g.moon = portrait ? { x: 0.08 * W + 6, y1: top + H * 0.15 } : { x: 0.6 * W, y1: top + sky * 0.44 };
+    // (as high as the sun: lower, it would sit on the opening's title)
+    g.moon = portrait ? { x: 0.08 * W + 6, y1: top + H * 0.15 } : { x: 0.6 * W, y1: top + sky * 0.3 };
 
     // the sea: rows of scallops, sparse and small near the horizon
     const rows = portrait ? Math.round(clamp((H - g.horizon) / 11, 26, 60)) : Math.round(18 + 14 * Math.min(1, u));
@@ -941,6 +945,8 @@ class Scene {
   sleep() { cancelAnimationFrame(this.raf); clearTimeout(this.timer); this.raf = this.timer = 0; }
   schedule() {
     if (this.raf || this.timer || this.dead || document.hidden) return;
+    // frozen: a frame only when one is asked for (a resize, a new theme), none in between
+    if (this.frozen) { if (this.kick > 0) this.raf = requestAnimationFrame(this.frame); return; }
     const active = this.kick > 0 || performance.now() < this.awake || this.busy();
     if (active) this.raf = requestAnimationFrame(this.frame);
     else if (!this.reduced) this.timer = setTimeout(() => { this.timer = 0; this.raf = requestAnimationFrame(this.frame); }, 1000 / IDLE_FPS - 6);
@@ -962,7 +968,8 @@ class Scene {
     this.kick--;
     const dt = this.last == null ? 1 / 60 : Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
-    this.update(dt);
+    // frozen, only the very first frame moves anything: it puts everyone in their place
+    if (!this.frozen || this.t === 0) this.update(dt);
     const t0 = performance.now();
     this.render();
     this.times.push(performance.now() - t0);
@@ -1003,8 +1010,6 @@ class Scene {
       sc.x += sc.dir * 7 * u * dt;
       if (sc.x > sc.x1) sc.dir = -1; else if (sc.x < sc.x0) sc.dir = 1;
     }
-    // asleep: a z now and then
-    if (this.dozing && !rm && this.t > this.zAt) { const L = g.lamp, er = g.lh.er; this.zAt = this.t + 0.38; this.doodle('z', L.x + er * 2, L.y - er * 0.4, { life: 1.5 }); }
     // the eye blinks now and then
     if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
     this.updateBeam(dt);
@@ -1427,7 +1432,7 @@ class Scene {
     const step = Math.round(this.d * STEPS);
     this.P = palAt(PAL, step / STEPS);
     this.pstep = step;
-    BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw;
+    BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw; NAP = this.drowsy() > 0.5;
     c.setTransform(k, 0, 0, k, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     drawScene(this, c);
@@ -2540,6 +2545,11 @@ function head(c, u, o, t, px, py, to, turn, draw) {
   draw(chew);
   c.restore();
 }
+// asleep: the eye shut, a short curve
+function napEye(c, x, y, r, col) {
+  c.beginPath(); ribbon(c, ellipse(x, y - r * 0.5, r * 1.2, r * 0.9, 8, Math.PI * 0.1, Math.PI * 0.9), TEX, 4, { tin: 1, tout: 1, w0: 0.9, w1: 0.9, amp: 0.1 });
+  c.fillStyle = col; c.fill();
+}
 // pleased with a meal: a short while after it, eyes shut happily and the tail wags
 const joyAt = (o, t) => { const a = t - (o.joy ?? -99); return a >= 0 && a < 1.3 ? a : -1; };
 function drawSheep(c, u, wool, o, t) {
@@ -2562,6 +2572,7 @@ function drawSheep(c, u, wool, o, t) {
     const tuft = []; for (let i = 0; i < 10; i++) { const a = Math.PI * 1.05 + i / 9 * Math.PI * 0.9; tuft.push([13.5 * u + Math.cos(a) * 5 * u, -24 * u + Math.sin(a) * 2.6 * u]); }
     c.beginPath(); ribbon(c, tuft, TEX, 3, { tin: 1, tout: 1 }); c.fillStyle = rgba(wool); c.fill();
     if (ja >= 0) { c.beginPath(); ribbon(c, ellipse(16.6 * u, -19.6 * u, 1.7 * u, 1.3 * u, 8, Math.PI * 1.1, Math.PI * 1.9), TEX, 4, { tin: 1, tout: 1, w0: 0.9, w1: 0.9, amp: 0.1 }); c.fillStyle = '#FFFFFF'; c.fill(); }
+    else if (NAP) napEye(c, 16.6 * u, -20.5 * u, 1.5 * u, '#FFFFFF');
     else { dot(c, 16.6 * u, -20.5 * u, 1.5 * u, '#FFFFFF'); dot(c, 17.1 * u, -20.3 * u, 0.75 * u, INK); }
   });
 }
@@ -2592,6 +2603,7 @@ function drawCow(c, u, white, P, o, t) {
     shape(c, ellipse(23 * u, my, 4 * u, 3 * u, 14), mul(C.pink, P.paper), TEX * 1.2, 2);
     dot(c, 22 * u, my, 0.7 * u, INK); dot(c, 24.6 * u, my - 0.2 * u, 0.7 * u, INK);
     if (ja >= 0) { c.beginPath(); ribbon(c, ellipse(20.2 * u, -25.8 * u, 1.5 * u, 1.1 * u, 8, Math.PI * 1.1, Math.PI * 1.9), TEX, 6, { tin: 1, tout: 1, amp: 0.1 }); c.fillStyle = INK; c.fill(); }
+    else if (NAP) napEye(c, 20.2 * u, -26.6 * u, 1.3 * u, INK);
     else dot(c, 20.2 * u, -26.6 * u, 1.05 * u, INK);
     c.beginPath();
     ribbon(c, [[16.5 * u, -29.5 * u], [15 * u, -33.5 * u], [16.5 * u, -36 * u]], TEX * 1.3, 1, { tin: 1, tout: 2 });
@@ -2619,7 +2631,8 @@ function drawDuck(c, u, yellow, P, o, t) {
   const beak = [[11.5 * u, -15.5 * u], [17.5 * u, -14 * u], [16 * u, -12 * u], [11.5 * u, -12.2 * u]];
   print(c, beak, C.beak);
   c.beginPath(); loop(c, dens(beak, 2, true), TEX * 1.2, 5); ribbon(c, ellipse(-1 * u, -6 * u, 6 * u, 3 * u, 10, 0.2, 2.2), TEX, 6, { tin: 1, tout: 2 }); c.fillStyle = INK; c.fill();
-  dot(c, 8 * u, -16.5 * u, 1.35 * u, INK); dot(c, 7.6 * u, -17 * u, 0.45 * u, '#FFFFFF');
+  if (NAP) napEye(c, 8 * u, -16.5 * u, 1.4 * u, INK);
+  else { dot(c, 8 * u, -16.5 * u, 1.35 * u, INK); dot(c, 7.6 * u, -17 * u, 0.45 * u, '#FFFFFF'); }
   // a little water at the waterline
   c.beginPath(); ribbon(c, [[-13 * u, 0.5 * u], [-4 * u, -1.2 * u], [5 * u, 0.6 * u], [13 * u, -0.6 * u]], TEX, 7, { tin: 2, tout: 2 }); c.fillStyle = rgba(P.foam); c.fill();
 }
@@ -2678,8 +2691,8 @@ function quaver(c, x, y, sz, col, flip) {
   c.fillStyle = col; c.fill();
 }
 
-/* "boink!", "pok", "plop", "hehe", the whistled notes, the grazers' "nom"s, the box's "baa!" and the sleeper's
-   z's: they pop in, drift a little and fade (without motion they just show, and go) */
+/* "boink!", "pok", "plop", "hehe", the whistled notes, the grazers' "nom"s and the box's "baa!": they pop in,
+   drift a little and fade (without motion they just show, and go) */
 function drawDoodles(s, c) {
   if (!s.doodles.length) return;
   const g = s.g, u = g.u, P = s.P, rm = s.reduced, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
@@ -2687,12 +2700,6 @@ function drawDoodles(s, c) {
     const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
     if (f <= 0 || k <= 0.01) continue;
     c.save(); c.globalAlpha = f;
-    if (d.kind === 'z') {
-      // asleep: each z drifts up and away from the shut eye, growing as it goes
-      const er = g.lh.er, sz = Math.max(12, er * 1.1) * (0.8 + 0.7 * clamp(a / d.life));
-      label(c, 'z', d.x + (rm ? 0 : a * er * 1.3 + Math.sin(a * 4 + d.seed) * er * 0.15), d.y - (rm ? 0 : a * er * 2.2), sz * k, col, 'left', -0.15);
-      c.restore(); continue;
-    }
     if (d.kind === 'note') {
       const sz = 4.2 * u + 1.6;
       quaver(c, d.x + Math.sin(a * 4 + d.seed) * 5 * u, d.y - a * 36 * u, sz * k, col, d.flip);
