@@ -120,8 +120,7 @@ const KINDS = ['sheep', 'cow', 'duck', 'monster', 'gull'];
 const C = {
   wool: hex('#FFFFFF'), yolk: hex('#FFC21A'), duck: hex('#FFD21F'), beak: hex('#FF7A1A'), pink: hex('#FF9CB0'),
   monster: hex('#FF8FC0'), chimney: hex('#E8452F'), roof: hex('#2B2B36'), door: hex('#2E58D8'), skin: hex('#F6C9A6'),
-  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), tile: hex('#1D1D24'),
-  bun: hex('#F2B65A'), bake: hex('#E29A45'), crumb: hex('#FFE6B0'),
+  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'),
   huts: ['#FF4A36', '#2E58D8', '#FFC21A', '#36A852'].map(hex),
   kraft: hex('#CC9A5E'), kraftLit: hex('#E2B983'), kraftDark: hex('#A87442'), tape: hex('#FFE04A'), sprout: hex('#2E9B3B'),
 };
@@ -1803,45 +1802,19 @@ function drawSun(s, c) {
   c.restore();
 }
 
-/* the moon, a croissant (de lune), asleep, with a z: the moon's thin crescent in golden dough, creased into five, its
-   horns a little more baked */
+/* a crescent moon, asleep, with a z */
 function drawMoon(s, c) {
   const g = s.g, u = g.u, m = s.moonPos();
   if (m.a <= 0) return;
-  const r = 30 * u, sz = r * 3.4;
+  const r = 25 * u, sz = r * 3.4;
   c.save(); c.beginPath(); c.rect(0, 0, g.W, g.horizon); c.clip();
   c.globalAlpha = m.a;
   s.sprite('moon', sz, sz, m.x, m.y, x => {
-    const D = Math.PI / 180, H = Math.PI / 2, CREASES = [36 * D, 66 * D];
-    // the crescent (t from -90°, the top horn, to 90°): its outer edge half a circle, its inner one a narrower half
-    // ellipse, the two nearly meeting at the horns
-    const outer = t => [Math.cos(t) * r, Math.sin(t) * r], inner = t => [(Math.cos(t) * 0.38 + 0.02) * r, Math.sin(t) * 0.97 * r];
-    const piece = (t0, t1) => {
-      const pts = [], n = Math.max(3, Math.round((t1 - t0) / (4 * D)));
-      for (let i = 0; i <= n; i++) pts.push(outer(lerp(t0, t1, i / n)));
-      for (let i = n; i >= 0; i--) pts.push(inner(lerp(t0, t1, i / n)));
-      return pts;
-    };
-    shape(x, piece(-H, H), C.bun, DET, 11);
-    // the horns, more baked
-    for (const sg of [-1, 1]) print(x, sg < 0 ? piece(-H, -CREASES[1]) : piece(CREASES[1], H), C.bake);
-    // the creases, bowed toward the middle, then the pen round it all again over the baked horns
-    x.beginPath();
-    for (const k of CREASES) for (const sg of [-1, 1]) {
-      const [ox, oy] = outer(sg * k), [ix, iy] = inner(sg * k);
-      ribbon(x, [[lerp(ix, ox, 0.08), lerp(iy, oy, 0.08)], [(ix + ox) / 2, (iy + oy) / 2 - sg * 0.035 * r], [lerp(ix, ox, 0.92), lerp(iy, oy, 0.92)]], DET * 0.8, 30 + k * 10 + sg, { tin: 2, tout: 2 });
-    }
-    loop(x, piece(-H, H), DET, 11);
-    x.fillStyle = INK; x.fill();
-    // a shine along each piece, near its outer edge
-    x.beginPath();
-    for (const [t, w] of [[0, 12], [-51, 8], [51, 8], [-78, 5], [78, 5]]) {
-      const pts = [];
-      for (let i = 0; i <= 4; i++) { const tt = (t + (i / 4 - 0.5) * w * 2) * D; pts.push([Math.cos(tt) * 0.86 * r, Math.sin(tt) * 0.86 * r]); }
-      ribbon(x, pts, TEX * 1.2, 5 + t / 9, { tin: 2, tout: 2 });
-    }
-    x.fillStyle = rgba(C.crumb); x.fill();
-    // a closed eye with lashes, and a small smile, along the inner edge of the middle piece
+    const cres = [];
+    for (let i = 0; i <= 26; i++) { const a = -Math.PI / 2 + i / 26 * Math.PI; cres.push([Math.cos(a) * r, Math.sin(a) * r]); }
+    for (let i = 25; i >= 1; i--) { const a = -Math.PI / 2 + i / 26 * Math.PI; cres.push([Math.cos(a) * r * 0.38 + r * 0.02, Math.sin(a) * r * 0.97]); }
+    shape(x, dens(cres, 3, true), C.moon, DET, 11);
+    // a closed eye with lashes, and a small smile
     x.beginPath();
     ribbon(x, ellipse(r * 0.62, -r * 0.2, r * 0.17, r * 0.11, 9, 0.15 * Math.PI, 0.85 * Math.PI), TEX * 1.2, 2, { tin: 2, tout: 2 });
     for (const k of [0.3, 0.5, 0.7]) { const a = k * Math.PI, ex = r * 0.62 + Math.cos(a) * r * 0.17, ey = -r * 0.2 + Math.sin(a) * r * 0.11; ribbon(x, [[ex, ey], [ex + Math.cos(a) * 3 * u, ey + Math.sin(a) * 3 * u]], TEX, k * 9, { tin: 1, tout: 1 }); }
