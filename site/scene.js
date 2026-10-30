@@ -1284,8 +1284,8 @@ class Scene {
     const others = [...g.clouds.map(cl => cl.y), sc.y];
     let y = lo, far = -1;
     for (let cy = lo; cy <= hi; cy += 3 * u) { const d = Math.min(...others.map(o => Math.abs(o - cy))); if (d > far) { far = d; y = cy; } }
-    // first seen in open sky between the headline and the lighthouse; after a resize, where it was
-    const frac = b.frac ?? (g.portrait ? 0.5 : 0.62);
+    // it sets off from the far left of the sky; after a resize, it carries on from where it was
+    const frac = b.frac ?? (BOX.hw * k + 8) / W;
     b.cl = { x0: frac * W + 180 * u - this.drift * BOX_SP * u, y, w: (2 * BOX.hw + BOX.dx) * k, sp: BOX_SP, seed: 91, ox: b.cl?.ox ?? 0, oy: b.cl?.oy ?? 0 };
     b.seenAt = -9;
   }
