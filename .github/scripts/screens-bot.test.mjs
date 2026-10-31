@@ -64,7 +64,7 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
         return { data: { ...state.pr, labels: state.labels.map((name) => ({ name })) }, headers: { date: state.now.toUTCString() } };
       },
       list: async ({ head: filter, state: wanted }) =>
-        ({ data: [state.pr, ...state.others].filter((pr) => pr.state === wanted && `${pr.head.repo.owner.login}:${pr.head.ref}` === filter) }),
+        ({ data: [state.pr, ...state.others].filter((pr) => (wanted === "all" || pr.state === wanted) && `${pr.head.repo.owner.login}:${pr.head.ref}` === filter) }),
       listFiles: async () => ({ data: state.files.map((filename) => ({ filename })) }),
     },
     issues: {
@@ -302,18 +302,23 @@ test("only the pull request's own head repository and branch publish screens", a
   assert.deepEqual(await plan({ github, context: runEvent() }), { action: "review", number: 7 });
 });
 
-test("a branch with several open pull requests compares none, and says why", async () => {
-  const { github, state } = fakeGitHub();
+test("another pull request at the same branch and commit, open or closed, stops the comparison until a new commit", async () => {
+  const { github, state, run } = fakeGitHub();
   // The same branch, opened again against another base: its CI runs look like this pull request's.
   state.others.push({ ...state.pr, number: 8, base: { sha: "d".repeat(40), ref: "develop" } });
   const { review } = await reconcile(github, runEvent(), { app: artifact() });
-  const reason = "Several open pull requests come from this branch, and the bot can't tell their CI runs apart.";
+  const reason = "Another pull request is at this branch's commit: close it if it's open, then push a commit.";
   assert.deepEqual(review, { state: "failure", description: `Drawing the screens failed: ${reason}`, removeLabel: false });
-  assert.ok(comment(state).body.includes(reason));
+  assert.ok(comment(state).body.includes("can't tell their CI runs apart"));
   assert.equal(state.uploads.length, 0);
-  // Once the other one closes, the screens are compared again.
+  // Closed, it still has runs at this commit.
   state.others[0].state = "closed";
-  assert.equal((await reconcile(github, prEvent("labeled"), { app: artifact() })).action, "publish");
+  assert.equal((await reconcile(github, runEvent(), { app: artifact() })).action, "ambiguous");
+  // A new commit is this pull request's alone.
+  const pushed = "e".repeat(40);
+  state.pr.head = { ...state.pr.head, sha: pushed };
+  run({ sha: pushed });
+  assert.equal((await reconcile(github, runEvent({ head_sha: pushed }), { app: artifact() })).action, "publish");
   assert.equal(state.uploads.length, 3);
 });
 

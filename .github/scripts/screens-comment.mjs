@@ -224,7 +224,7 @@ function section(screen, imageURL) {
 /** The review line, which shows no untrusted text, and the data. */
 function reviewSection(review, data) {
   const lines = [`${reviewHeading} ${review.state === "failure" ? "Drawing the screens failed, see above." : review.description}`];
-  if (review.removeLabel) lines.push("", "`visual-ok` was taken off: it approved other screens than these.");
+  if (review.removeLabel) lines.push("", "`visual-ok` was taken off: it was added before these screens appeared.");
   lines.push("", `<!-- stablebar-screens-data ${encodeData(data)} -->`);
   return lines.join("\n");
 }

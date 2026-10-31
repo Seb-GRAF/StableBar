@@ -217,7 +217,7 @@ test("withReview replaces only the review line and the data", () => {
   const taken = { state: "pending", description: "1 screen changed: a maintainer adds visual-ok after looking.", removeLabel: true };
   const approved = { state: "success", description: "1 changed screen approved.", removeLabel: false };
   const body = make(taken);
-  assert.match(body, /`visual-ok` was taken off/);
+  assert.match(body, /`visual-ok` was taken off: it was added before these screens appeared\./);
   const updated = withReview(body, approved, data({ shownAt: "2026-10-31T11:00:00.000Z" }));
   assert.equal(updated, make(approved, { shownAt: "2026-10-31T11:00:00.000Z" }));
   assert.doesNotMatch(updated, /taken off/);

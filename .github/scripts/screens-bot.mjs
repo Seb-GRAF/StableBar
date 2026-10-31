@@ -58,7 +58,7 @@ async function latestRun({ github, owner, repo, pr }) {
 /**
  * What a reconcile of the event's pull request does, decided before the workflow downloads anything:
  * "none" for a run that isn't CI's for an open pull request, "close" for a closed pull request,
- * "ambiguous" when another open pull request comes from the same branch, "publish" with the newest
+ * "ambiguous" when another pull request from its branch is at its commit, "publish" with the newest
  * finished CI run for its head when the comment doesn't show that run yet, and "review" otherwise. A publication carries what the run's jobs did, which artifacts it uploaded
  * and which screens the pull request's files call for. A job the run doesn't have is "missing".
  */
@@ -68,10 +68,11 @@ export async function plan({ github, context }) {
   if (!number) return { action: "none" };
   const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
   if (pr.state !== "open") return { action: "close", number };
-  // Pull requests from one branch share its CI runs' head, branch and commit, so their runs can't be told apart.
+  // Another pull request from this branch at this commit, open or closed, has CI runs with the same head, branch and
+  // commit, and GitHub lists every pull request of a branch on each run, so their runs can't be told apart.
   const siblings = pr.head.repo ? await github.paginate(github.rest.pulls.list,
-    { owner, repo, state: "open", head: `${pr.head.repo.owner.login}:${pr.head.ref}`, per_page: 100 }) : [];
-  if (siblings.some((other) => other.number !== number)) return { action: "ambiguous", number };
+    { owner, repo, state: "all", head: `${pr.head.repo.owner.login}:${pr.head.ref}`, per_page: 100 }) : [];
+  if (siblings.some((other) => other.number !== number && other.head.sha === pr.head.sha)) return { action: "ambiguous", number };
   const run = await latestRun({ github, owner, repo, pr });
   const existing = findScreensComment(await comments(github, owner, repo, number));
   const data = existing ? readData(existing.body) : null;
@@ -339,14 +340,15 @@ async function review({ github, owner, repo, pr, existing, data: stored, labels,
   return result;
 }
 
-const sharedBranch = "Several open pull requests come from this branch, and the bot can't tell their CI runs apart.";
+const sharedCommit = "Another pull request is at this branch's commit: close it if it's open, then push a commit.";
 
-/** Fails the review of a pull request whose branch another open pull request shares, and says why in its comment. */
+/** Fails the review of a pull request that another pull request from its branch shares a commit with, and says why. */
 async function ambiguous({ github, owner, repo, pr, existing }) {
   const data = { head: pr.head.sha, base: pr.base.sha, baseRef: pr.base.ref, runId: null, runAttempt: null, runCreatedAt: null,
-    ranScreens: true, fingerprint: null, shownAt: null, total: 0, changed: 0, failed: 1, failure: sharedBranch };
+    ranScreens: true, fingerprint: null, shownAt: null, total: 0, changed: 0, failed: 1, failure: sharedCommit };
   const result = reviewState(data);
-  const body = noScreensBody({ reason: sharedBranch, review: result, data });
+  const body = noScreensBody({ review: result, data, reason: "Another pull request from this branch is at this commit, open or closed, so the bot "
+    + "can't tell their CI runs apart and compares no screens. Close it if it's open, then push a commit." });
   const comment = existing
     ? (await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body })).data
     : (await github.rest.issues.createComment({ owner, repo, issue_number: pr.number, body })).data;
