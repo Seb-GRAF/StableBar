@@ -5,6 +5,9 @@
     "version": "1.1.0"
   },
   "workspaceSource": "aerospace",
+  "workspaceDefaults": {
+    "groupDivider": true
+  },
   "modeAliases": {
     "tailing": "command"
   },

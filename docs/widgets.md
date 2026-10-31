@@ -18,6 +18,8 @@
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
+Set `workspace.groupDivider: true` to draw a vertical divider between adjacent numeric and alphabetic workspace names, such as `1 2 3 │ A B C`. It uses the original names, independent of custom labels, and leaves workspace order unchanged. Enable it in the workspace appearance controls, or set `workspaceDefaults.groupDivider` for all workspace widgets. It is off by default.
+
 Window dragging is enabled only for the AeroSpace and yabai workspace sources. Drag an app icon onto another workspace to move that app's windows from the original workspace. With `workspace.windows: true`, dragging an item moves only that window; the [presentation example](../examples/presentation/config.json) uses this mode. Empty workspaces appear while dragging, and the destination is outlined; you can also drop onto a workspace on another display. Moving does not switch to the destination. Escape or dropping outside a workspace cancels the move. Clicks keep their usual behavior. OmniWM and macOS Spaces do not support dragging windows from the widget.
 
 ## Essentials details and settings
