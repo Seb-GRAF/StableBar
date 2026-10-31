@@ -17,7 +17,7 @@ const rng = seed => { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B7
 const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const mul = (a, b) => [a[0] * b[0] / 255, a[1] * b[1] / 255, a[2] * b[2] / 255];
-const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const rgba = (c, a = 1) => { if (TINT) c = TINT(c); return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; };
 const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 // the light's turn that faces you (its rotation at a quarter turn), nearest to where it is
 const facing = phi => Math.PI / 2 + TAU * Math.round((phi - Math.PI / 2) / TAU);
@@ -117,10 +117,10 @@ const THEMES = {
 };
 const STATES = ['hero', 'edit', 'themes', 'widgets', 'tiling', 'install'];
 const KINDS = ['sheep', 'cow', 'duck', 'monster', 'gull'];
-const C = {
+let C = {
   wool: hex('#FFFFFF'), yolk: hex('#FFC21A'), duck: hex('#FFD21F'), beak: hex('#FF7A1A'), pink: hex('#FF9CB0'),
   monster: hex('#FF8FC0'), chimney: hex('#E8452F'), roof: hex('#2B2B36'), door: hex('#2E58D8'), skin: hex('#F6C9A6'),
-  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'),
+  navy: hex('#25305E'), wood: hex('#C98B4A'), steel: hex('#D8DCE6'), moon: hex('#FFE89A'), tile: hex('#1D1D24'), iris: hex('#FFB52E'), lamp: hex('#FFD45C'),
   huts: ['#FF4A36', '#2E58D8', '#FFC21A', '#36A852'].map(hex),
   kraft: hex('#CC9A5E'), kraftLit: hex('#E2B983'), kraftDark: hex('#A87442'), tape: hex('#FFE04A'), sprout: hex('#2E9B3B'),
 };
@@ -134,16 +134,17 @@ const overlaps = (a, q) => q.length === 3
   ? Math.hypot(clamp(q[0], a[0], a[2]) - q[0], clamp(q[1], a[1], a[3]) - q[1]) < q[2]
   : a[0] < q[2] && a[2] > q[0] && a[1] < q[3] && a[3] > q[1];
 const boxK = s => Math.max(s.g.u, 0.72) * 1.12;
-const HAND = '"Shantell Sans Hand", "Shantell Sans", "Chalkboard SE", sans-serif';
+let HAND = '"Shantell Sans Hand", "Shantell Sans", "Chalkboard SE", sans-serif', WEIGHT = 400, CAPS = false;
 
 /* ---------- the pen ----------
    One felt pen in three weights. Every stroke is a filled ribbon whose width follows the pen's
    pressure: thin where it lands and lifts, a little uneven along the way. The line boils between
-   three states; the printed fills don't boil and sit one constant vector off the line. */
-let BOIL = 0, PW = 1, INK = '#111', REGX = 2.6, REGY = 1.9, NAP = false;
+   three states; the printed fills don't boil and sit one constant vector off the line. These are the felt pen's;
+   the pen, the fills, the colours and the font in use are the style's being drawn (see STYLES). */
+let BOIL = 0, PW = 1, INK = '#111', REGX = 2.6, REGY = 1.9, NAP = false, TINT = null, ribbon = feltRibbon, print = feltPrint;
 const SIL = 3.2, DET = 2.1, TEX = 1.35;
 
-function ribbon(c, pts, w, sd = 0, o = {}) {
+function feltRibbon(c, pts, w, sd = 0, o = {}) {
   const n = pts.length;
   if (n < 2) return;
   const len = new Float64Array(n);
@@ -186,7 +187,7 @@ function loop(c, pts, w, sd = 0, o = {}) {
     if (i <= n) out.push(p);
     else { const f = (i - n) / over * 1.6 * PW, dx = p[0] - cx, dy = p[1] - cy, dl = Math.hypot(dx, dy) || 1; out.push([p[0] + dx / dl * f, p[1] + dy / dl * f]); }
   }
-  ribbon(c, out, w, sd, { tin: 5, tout: 12, w0: 0.55, w1: 0.12, ...o });
+  ribbon(c, out, w, sd, { tin: 5, tout: 12, w0: 0.55, w1: 0.12, ...o, outline: true });
 }
 /* Straight edges, each its own stroke running a little past the corners */
 function edges(c, corners, w, sd = 0, closed = true, o = {}) {
@@ -194,21 +195,25 @@ function edges(c, corners, w, sd = 0, closed = true, o = {}) {
   for (let i = 0; i < (closed ? m : m - 1); i++) {
     const [x0, y0] = corners[i], [x1, y1] = corners[(i + 1) % m], l = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / l, uy = (y1 - y0) / l;
     const a = hash(sd * 3.1 + i) * ov, b = hash(sd * 5.7 + i + 0.5) * ov;
-    ribbon(c, dens([[x0 - ux * a, y0 - uy * a], [x1 + ux * b, y1 + uy * b]], 5), w, sd + i * 1.7, { tin: 4, tout: 6, w0: 0.6, w1: 0.45, ...o });
+    ribbon(c, dens([[x0 - ux * a, y0 - uy * a], [x1 + ux * b, y1 + uy * b]], 5), w, sd + i * 1.7, { tin: 4, tout: 6, w0: 0.6, w1: 0.45, ...o, outline: true });
   }
 }
 /* A printed fill, off the line by the register vector */
-function print(c, pts, col) { poly(c, pts, true, REGX, REGY); c.fillStyle = typeof col === 'string' ? col : rgba(col); c.fill(); }
+function feltPrint(c, pts, col) { poly(c, pts, true, REGX, REGY); c.fillStyle = typeof col === 'string' ? col : rgba(col); c.fill(); }
 function shape(c, pts, col, w = DET, sd = 0, o) { print(c, pts, col); c.beginPath(); loop(c, pts, w, sd, o); c.fillStyle = INK; c.fill(); }
 function dot(c, x, y, r, col) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = typeof col === 'string' ? col : rgba(col); c.fill(); }
 function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
   c.save(); c.translate(x, y); c.rotate(rot);
-  c.font = `400 ${size}px ${HAND}`; c.textAlign = align; c.textBaseline = 'middle'; c.fillStyle = col;
-  c.fillText(text, 0, 0); c.restore();
+  c.font = `${WEIGHT} ${size}px ${HAND}`; c.textAlign = align; c.textBaseline = 'middle'; c.fillStyle = col;
+  c.fillText(CAPS ? text.toUpperCase() : text, 0, 0); c.restore();
 }
 
 /* ---------- the scene: geometry, state, input and time ---------- */
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
+// a new style comes in as the light turns once round, in this many seconds (see setTheme)
+const SWAP = 1.2;
+// out at sea, the page's theme follows the islands, each coming in over this many seconds (see update)
+const WIPE = 0.9;
 // the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens halfway (to `lids.mid` shut)
 // by `lids.half`, stays a moment, droops a little (to `lids.heavy`) by `lids.sag`, then opens all the way by `open`,
 // easing out. Then it strains to light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how
@@ -282,11 +287,86 @@ const ISLAND = ['g', ...Object.keys(islandState())];
 // the islands are drawn between these sizes: from far off, where they come out of the haze (by then the next island is
 // all there is to see, the one after it comes as you go), to going past, off the screen
 const FAR = 0.07, PAST = 30;
+// the far island seen from the page is in the page's style; it changes into its own theme's over this much of the
+// dive's first lap (see drawScene)
+const OWN = 0.1;
 // the lighthouse standing on `base` at x, h tall to its gallery, the eye in its lamp er across: its lamp and hat
 function tower(g, x, base, h, er) {
   const T = g.lh = { x, base, h, er, gal: er * 0.62, top: base - h, wT: er * 1.62, wB: er * 2.6 };
   g.lamp = { x, y: T.top - T.gal - er * 1.02 };
   T.hatTop = g.lamp.y - er * 3.6;
+}
+
+/* ---------- styles ----------
+   Each theme draws the whole scene in its own medium: the same hill, animals, gags and hours, another hand. The felt
+   pen is the built-in theme's. Each of the others has a file in styles/ that registers its style, after this file and
+   before the page makes the scene:
+
+     Hill.style('nord', { pal, C, tint, ribbon, pen, boil, print, reg, hand, weight, caps, fps, before, after, cached, draw });
+
+   Every lever is optional; what a style leaves out is the felt pen's (Hill.felt).
+     pal     the hours: stops like PAL's, made with Hill.stops, with the same keys. `ink` is the line's colour. The
+             islands' ground darkens with the hour as `hill` and `hill2` do from the first stop, so neither may
+             have a channel at 0 there.
+     C       the colour constants it changes, made with Hill.hex; the others stay.
+     tint    a colour [r, g, b] in, a colour out, wherever a colour is written out (rgba): every fill and stroke,
+             cached ones too, but not the few glints written as '#FFFFFF'. For greys, or all in one colour.
+     ribbon  the line: (c, pts, w, sd, o) adds a stroke along the points, w wide (times PW), to the path, and the
+             caller fills it, mostly in INK. ink, loop, edges, shape and most drawings go through it. sd seeds its
+             wobble; o holds the felt pen's taper and wobble (tin, tout, w0, w1, amp), which another line may
+             ignore, and says what the stroke is: o.outline goes round a shape the caller fills (loop's and edges',
+             so shape's too, and a few drawn on their own), o.hatch is shading. An empty one draws no lines at all.
+     pen     the line's weight, times the felt pen's (1).
+     boil    how many times a second the line moves on, between three states (7); 0 holds it still. The cached
+             layers are drawn once for each state.
+     print   the fill: (c, pts, col) fills the polygon REGX, REGY off the line, col a colour or a CSS string.
+     reg     that offset, [x, y] in pen units ([2.6, 1.9]); [0, 0] prints the fills on the line.
+     hand    the font of the labels and doodles, a CSS font family list. For a web font, add its FontFace to
+             document.fonts: the first text drawn in it fetches it, and when it's in, the scene draws again and
+             redraws its cached layers (they're keyed on fontsV).
+     weight  the labels' and doodles' font weight (400).
+     caps    true sets the labels and doodles in capitals, and measures them so where they're placed.
+     fps     draws at this many frames a second: the drawing's time (s.t) is stepped, the world's isn't (s.clock),
+             so things still go where they go between the steps.
+     before  (s, c) at the start of each frame, after the levers are on; after (s, c) at its end, over everything
+             (grain, scanlines, fibre). Both in the scene's CSS pixels.
+     cached  (s, c) once a cached layer or sprite is drawn, on its own canvas, before it's kept: what it adds there
+             costs nothing per frame (a glow).
+     draw    { name(base, ...args) }: any of the drawings named in Hill.felt.draw, in place of the felt pen's, which comes
+             as base to call or not. The drawings call each other through DRAW, so an override is used wherever
+             its drawing is, by the felt ones too.
+   A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, and obj gets s): s.g the
+   geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh the tower, lamp, cot the cottage,
+   clouds, sheepCloud, stars, tufts), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
+   style on, s.theme the visitor's theme, s.beam, s.pres how far in each section's scene is, s.reduced. Lengths are CSS
+   pixels of the scene; sizes go in u (g.u, 1 on a window of about 1138 by 1138) and pens in pw. The islands of the
+   dive use the same drawings in their own s.g, on a canvas scaled by view, each in its own theme's style (but the
+   far one seen from the page, in the visitor's), while the sky, the sea and the clouds are in the page's: the
+   visitor's, and out at sea the theme of the island you're heading to (s.shows). That one comes in as a circle
+   opening out from the middle of the horizon (s.wipe): meanwhile the sky, the sea, the clouds, before and after are
+   drawn in both styles, the old one's outside the circle and the new one's inside it. The band behind the horizon
+   (one for each theme the page is in) and the hill with its cottage and tower are cached layers, the sun, the moon
+   and the clouds sprites: those drawings run only when the hour's step, the boil state, the style, the size or the
+   fonts change, so they can't move on their own. Drawings leave the scene as they found it, save the cottage, which
+   puts its door in g.cot.door for the visit and the doorway: one drawn without base must too. Every style keeps the
+   lighthouse's pyjamas: THEMES[g.theme || s.theme]. */
+const FELT = {
+  id: 'built-in', pal: PAL, C, ribbon: feltRibbon, print: feltPrint, pen: 1, boil: BOIL_FPS, reg: [2.6, 1.9], hand: HAND, weight: 400, caps: false,
+  draw: {
+    scene: drawScene, sky: drawSky, band: drawBand, stars: drawStars, waves: drawWaves, ripples: drawRipples, sun: drawSun,
+    moon: drawMoon, halo: drawHalo, beam: drawBeam, cloud: drawCloud, land: drawLand, front: drawFront, hill: drawHill,
+    cottage: drawCottage, tower: drawTower, hillLight: drawHillLight, tufts: drawTufts, visit: drawVisit, smoke: drawSmoke,
+    eye: drawEye, hat: drawHat, box: drawBox, leap: drawLeap, meadow: drawMeadow, obj: drawObj, sheep: drawSheep,
+    cow: drawCow, gull: drawGull, duck: drawDuck, monster: drawMonster, states: drawStates, washing: drawWashing,
+    huts: drawHuts, desk: drawDesk, doorway: drawDoorway, editKeeper: drawEditKeeper, keeper: drawKeeper, tile: drawTile,
+    labels: drawLabels, splashes: drawSplashes, ball: drawBall, doodles: drawDoodles,
+  },
+};
+const STYLES = { 'built-in': FELT };
+let DRAW = FELT.draw;
+function style(id, st) {
+  const own = st.draw || {};
+  STYLES[id] = { ...FELT, ...st, id, C: { ...FELT.C, ...st.C }, draw: Object.fromEntries(Object.entries(FELT.draw).map(([k, f]) => [k, own[k] ? (...a) => own[k](f, ...a) : f])) };
 }
 
 class Scene {
@@ -301,7 +381,8 @@ class Scene {
     this.fade = document.createElement('canvas').getContext('2d');
     this.top = Math.max(0, +this.o.topInset || 0);
     this.t = 0; this.d = this.dTarget = clamp(+this.o.dusk || 0); this.dTween = null; this.labelsAt = -9;
-    this.state = 'hero'; this.theme = 'built-in'; this.ws = 1;
+    // the visitor's theme, and the one the page's sky, sea and clouds are in: out at sea, the next island's (see update)
+    this.state = 'hero'; this.theme = this.shows = 'built-in'; this.ws = 1;
     this.pres = Object.fromEntries(STATES.map(k => [k, k === 'hero' ? 1 : 0]));
     this.since = Object.fromEntries(STATES.map(k => [k, 0]));
     // the pointer in client coordinates less the scene's offset; each island sees it as this.ptr, in its own (see enter)
@@ -311,7 +392,7 @@ class Scene {
     this.blink = { next: 2.5, at: -9, wink: -9 };
     this.layers = {};
     this.sprites = new Map();
-    this.fontsV = 0; this.layoutV = 0; this.sparkle = -9; this.rebuilds = 0;
+    this.fontsV = 0; this.layoutV = 0; this.rebuilds = 0;
     this.onFrame = null;
     this.onBar = null;
     this.held = !!this.o.held;
@@ -358,11 +439,22 @@ class Scene {
     }
     this.wake();
   }
+  // once the scene is up, the new style comes in with the light: the last frame, in the old one, stays where the light
+  // hasn't been yet (see swap); without motion, at once; out at sea, the page has it when you're back (see update)
   setTheme(id) {
     if (!THEMES[id]) return;
-    if (id !== this.theme) { this.theme = id; if (this.t > 0.5) this.sparkle = this.t; }
+    if (id !== this.theme && this.t > 0.5 && !this.reduced && !this.dive) {
+      const x = this.was ||= document.createElement('canvas').getContext('2d');
+      x.canvas.width = this.canvas.width; x.canvas.height = this.canvas.height;
+      x.drawImage(this.canvas, 0, 0);
+      this.swap = { t0: this.t, a0: this.beam.a, a: this.beam.a, L: this.g.lamp };
+    }
+    this.theme = id;
+    if (!this.dive && id !== this.shows) this.show(id);
     this.wake();
   }
+  // the page's sky, sea and clouds in another theme from now on; the band cached in the one before goes
+  show(id) { delete this.layers['back' + this.shows]; this.shows = id; }
   setWorkspace(n) { this.ws = clamp(Math.round(+n || 1), 1, 4); this.wake(); }
   setTopInset(px) { const v = Math.max(0, +px || 0); if (v !== this.top) { this.top = v; this.layout(); } this.wake(); }
   // how far past the end of the page, in laps, one island a lap.
@@ -456,7 +548,7 @@ class Scene {
   beamI() { return Math.max(0.3 + 0.7 * smooth(0.22, 0.72, this.d), this.pres.install); }
   lamp() { return { x: this.g.lamp.x + this.ox, y: this.g.lamp.y + this.oy }; }
   // the colour of the sky at the top of the drawing right now, as #rrggbb
-  sky() { const c = this.P?.sky; return c ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null; }
+  sky() { const c = this.P && (TINT ? TINT(this.P.sky) : this.P.sky); return c ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null; }
 
   /* ----- input, in client coordinates ----- */
   pointer(x, y, kind = 'mouse') {
@@ -1204,7 +1296,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.swap || this.wipe || this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1247,7 +1339,23 @@ class Scene {
       this.pres[k] = rm ? want : clamp(this.pres[k] + Math.sign(want - this.pres[k]) * dt * 1.8);
     }
     this.stepDusk(dt);
-    this.boil = rm ? 0 : Math.floor(this.t * BOIL_FPS) % 3;
+    if (this.swap && this.t - this.swap.t0 > SWAP) this.swap = null;
+    // out at sea, the page goes over to the theme of the island you're heading to as the one before it goes past (the
+    // far island's as soon as the dive begins), and back on the page to the visitor's: the new theme opens out in a
+    // circle from the middle of the horizon, and the bar goes over as the circle reaches it. When that changes again
+    // before the circle covers the screen, it's over at once and the next one starts
+    const to = this.dive ? this.world(Math.max(1, Math.floor(this.dive + 0.95))).g.theme : this.theme, wp = this.wipe;
+    if (wp && (to !== wp.to || this.t - wp.t0 > WIPE)) {
+      if (!wp.bar) this.emit('theme', wp.to);
+      this.show(wp.to);
+      this.wipe = null;
+    }
+    if (!this.wipe && to !== this.shows) this.wipe = { to, t0: this.t };
+    if (this.wipe) {
+      const w = this.wipe, B = this.back, y = B.horizon;
+      w.r = Math.hypot(B.W / 2, Math.max(y, B.H - y)) * smooth(0, WIPE, this.t - w.t0);
+      if (!w.bar && w.r > y - B.top / 2) { w.bar = true; this.emit('theme', w.to); }
+    }
     this.vel.x *= Math.exp(-dt * 2.5); this.vel.y *= Math.exp(-dt * 2.5);
     this.windAmb = rm ? 0.2 : 0.28 + 0.22 * noise(this.t * 0.13 + 3);
     this.wind = lerp(this.wind, clamp(this.vel.x / 1300, -1.5, 1.5), Math.min(1, dt * 1.8));
@@ -1303,7 +1411,12 @@ class Scene {
     this.splashes = this.splashes.filter(p => this.t - p.t0 < 0.7);
   }
   updateBeam(dt) {
-    const b = this.beam, L = this.g.lamp, now = performance.now() / 1000, rm = this.reduced, wp = this.wakePath;
+    const b = this.beam, L = this.g.lamp, now = performance.now() / 1000, rm = this.reduced, wp = this.wakePath, sw = this.swap;
+    if (sw && this.cur === this.w0) {
+      // a new style coming in: the page's light turns once round from where it was, all the way out (see setTheme)
+      b.a = sw.a = sw.a0 + TAU * smooth(0, SWAP, this.t - sw.t0); b.len = 1; b.flash = 0;
+      return;
+    }
     if (wp && (this.ball || this.t - wp.t0 > WAKE.end)) {
       this.wakePath = null;
       // done reading: on to the bar
@@ -1852,19 +1965,57 @@ class Scene {
 
   /* ----- drawing ----- */
   render() {
-    const c = this.ctx, g = this.g, k = this.dpr;
-    const step = Math.round(this.d * STEPS);
-    this.P = palAt(PAL, step / STEPS);
-    this.pstep = step;
-    BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw; NAP = this.drowsy() > 0.9;
+    const c = this.ctx, k = this.dpr, sw = this.swap;
+    this.pstep = Math.round(this.d * STEPS);
+    this.clock = this.t;
+    NAP = this.drowsy() > 0.9;
+    this.dress(this.shows);
     c.setTransform(k, 0, 0, k, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingQuality = 'high';
-    drawScene(this, c);
+    this.page(() => this.style.before?.(this, c));
+    DRAW.scene(this, c);
+    c.setTransform(k, 0, 0, k, 0, 0);
+    this.page(() => this.style.after?.(this, c));
+    // a new style coming in: the old one where the light hasn't been yet (where it was to begin with, it has)
+    const hw = this.g.beamHalf;
+    if (sw && sw.a + hw < sw.a0 + TAU - hw) {
+      const { x, y } = sw.L;
+      c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+      c.beginPath(); c.moveTo(x * k, y * k); c.arc(x * k, y * k, this.diag * 2 * k, sw.a + hw, sw.a0 + TAU - hw); c.closePath(); c.clip();
+      c.drawImage(this.was.canvas, 0, 0);
+      c.restore();
+    }
+    this.t = this.clock;
+  }
+  // draws in the page's theme; in a wipe (see update), in the old one outside its circle and in the new one inside it
+  page(draw) {
+    const w = this.wipe, c = this.ctx, B = this.back;
+    if (!w) return draw();
+    for (const out of [true, false]) {
+      c.save(); c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      c.beginPath(); c.arc(B.W / 2, B.horizon, w.r, 0, TAU);
+      if (out) c.rect(0, 0, B.W, B.H);
+      c.clip('evenodd');
+      if (!out) this.dress(w.to);
+      draw();
+      c.restore();
+    }
+    this.dress(this.shows);
+  }
+  /* Draws from here on in a theme's style (see STYLES): its levers in the pen's place, its palette at this hour, and
+     its time */
+  dress(id) {
+    const st = this.style = STYLES[id], pw = this.g.pw;
+    this.t = st.fps ? Math.floor(this.clock * st.fps) / st.fps : this.clock;
+    this.boil = this.reduced || !st.boil ? 0 : Math.floor(this.t * st.boil) % 3;
+    TINT = st.tint; C = st.C; HAND = st.hand; WEIGHT = st.weight; CAPS = st.caps; ribbon = st.ribbon; print = st.print; DRAW = st.draw;
+    this.P = palAt(st.pal, this.pstep / STEPS);
+    BOIL = this.boil; PW = pw * st.pen; INK = rgba(this.P.ink); REGX = st.reg[0] * pw; REGY = st.reg[1] * pw;
   }
   /* A cached layer: one per boil state, redrawn when the hour, the theme or the layout changes, or when it's
      wanted at another resolution (`res` times the screen's: islands far off are drawn small) */
   layer(c, name, rect, draw, res = 1) {
-    const key = `${this.layoutV}|${this.pstep}|${this.theme}|${this.fontsV}|${res}`;
+    const key = `${this.layoutV}|${this.pstep}|${this.style.id}|${this.fontsV}|${res}`;
     const L = (this.layers[name] ||= [])[this.boil] ||= { cv: document.createElement('canvas'), key: '' };
     const k = this.dpr * res, x0 = Math.floor(rect.x * k), y0 = Math.floor(rect.y * k), w = Math.ceil(rect.w * k), h = Math.ceil(rect.h * k);
     if (L.key !== key) {
@@ -1873,6 +2024,7 @@ class Scene {
       x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);
       x.setTransform(k, 0, 0, k, -x0, -y0);
       draw(x);
+      this.style.cached?.(this, x);
       L.key = key;
       this.rebuilds++;
     }
@@ -1881,7 +2033,7 @@ class Scene {
   }
   /* A small cached drawing (a cloud, the sun), drawn around its own origin */
   sprite(name, w, h, x, y, draw) {
-    const key = `${name}|${this.layoutV}|${this.boil}|${this.pstep}|${this.fontsV}`, k = this.dpr;
+    const key = `${name}|${this.style.id}|${this.layoutV}|${this.boil}|${this.pstep}|${this.fontsV}`, k = this.dpr;
     let s = this.sprites.get(key);
     if (!s) {
       const cv = document.createElement('canvas');
@@ -1889,6 +2041,7 @@ class Scene {
       const c = cv.getContext('2d');
       c.setTransform(k, 0, 0, k, w * k / 2, h * k / 2);
       draw(c);
+      this.style.cached?.(this, c);
       s = { cv, w, h };
       this.sprites.set(key, s);
       if (this.sprites.size > 60) this.sprites.delete(this.sprites.keys().next().value);
@@ -1912,40 +2065,59 @@ class Scene {
    Diving, you go on over the sea toward the horizon, past the islands.
    ===================================================================== */
 function drawScene(s, c) {
-  const g = s.g, { W, H, u } = g, P = s.P, shown = s.shown();
+  const g = s.g, { W, u } = g, shown = s.shown();
   c.lineCap = 'round'; c.lineJoin = 'round';
-  c.fillStyle = rgba(P.sky); c.fillRect(0, 0, W, g.horizon + 2);
-  c.fillStyle = rgba(P.sea); c.fillRect(0, g.horizon, W, H - g.horizon);
-  const bandTop = g.horizon - (g.horizon - g.top) * (g.portrait ? 0.42 : 0.36) - 20 * u;
-  s.layer(c, 'back', { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => drawBand(s, x, bandTop));
-  drawStars(s, c);
-  drawWaves(s, c);
-  for (const w of shown) { s.enter(w); drawRipples(s, c); }
-  c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  drawSun(s, c);
-  drawMoon(s, c);
-  // an island's ground in its theme's colours, as much darker than by day as the page's green is now
-  const day = PAL[0][1], ground = g => g.ground ? { ...P, hill: g.ground[0].map((v, i) => v * P.hill[i] / day.hill[i]), hill2: g.ground[1].map((v, i) => v * P.hill2[i] / day.hill2[i]) } : P;
-  const land = w => {
-    // an island comes out of the haze far off: then it's drawn whole on the side and laid over
-    const a = smooth(FAR, FAR * 1.6, w.view.s), x = a < 0.99 ? s.fade : c;
+  // the page's sky and sea, the band cached in each theme it's in (see page)
+  s.page(() => {
+    DRAW.sky(s, c);
+    const bandTop = g.horizon - (g.horizon - g.top) * (g.portrait ? 0.42 : 0.36) - 20 * u;
+    s.layer(c, 'back' + s.style.id, { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => DRAW.band(s, x, bandTop));
+    DRAW.stars(s, c);
+    DRAW.waves(s, c);
+    for (const w of shown) { s.enter(w); DRAW.ripples(s, c); }
+    c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
+    DRAW.sun(s, c);
+    DRAW.moon(s, c);
+  });
+  // an island in a style, its theme's or the page's, and its ground in its theme's colours, as much darker than by day
+  // as that style's green is now; the page's hill in the visitor's. Then the style it was drawing in again
+  const wear = (w, id, draw) => {
+    const was = s.style.id;
+    s.dress(w.g.isle ? id : s.theme);
+    if (w.g.isle) {
+      const P = s.P, day = s.style.pal[0][1], [lit, shady] = w.g.ground;
+      P.hill = lit.map((v, i) => v * P.hill[i] / day.hill[i]); P.hill2 = shady.map((v, i) => v * P.hill2[i] / day.hill2[i]);
+    }
+    draw();
+    s.dress(was);
+  };
+  // an island in a style, laid over at `a`: when that's less than all of it, it's drawn whole on the side first
+  const lay = (w, id, a) => {
+    const x = a < 0.99 ? s.fade : c;
     if (x !== c) { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, x.canvas.width, x.canvas.height); x.lineCap = 'round'; x.lineJoin = 'round'; }
     s.enter(w); view(s, x, w.view);
-    s.P = ground(w.g);
-    drawLand(s, x, w);
-    s.P = P;
+    wear(w, id, () => DRAW.land(s, x, w));
     if (x !== c) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = a; c.drawImage(x.canvas, 0, 0); c.restore(); }
+  };
+  // an island comes out of the haze far off. Seen from the page it's in the page's style, and as the dive begins its
+  // own comes in over it (see OWN)
+  const land = w => {
+    const a = smooth(FAR, FAR * 1.6, w.view.s), k = w.g.isle ? smooth(0, OWN, s.dive) : 1;
+    if (k < 1) lay(w, s.theme, a);
+    if (k > 0) lay(w, w.g.theme, a * k);
   };
   // the islands far off, the light over them, the clouds, then the nearest island
   const near = shown.at(-1);
   for (const w of shown) if (w !== near) land(w);
   for (const w of shown) {
     const a = lightK(w.view.s);
-    if (a > 0) { s.enter(w); view(s, c, w.view); c.globalAlpha = a; drawHalo(s, c); c.globalAlpha = a; drawBeam(s, c); c.globalAlpha = 1; }
+    if (a > 0) { s.enter(w); view(s, c, w.view); wear(w, w.g.theme, () => { c.globalAlpha = a; DRAW.halo(s, c); c.globalAlpha = a; DRAW.beam(s, c); c.globalAlpha = 1; }); }
   }
   c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  for (let i = 0; i < g.clouds.length; i++) drawCloud(s, c, g.clouds[i], 'cloud' + i);
-  drawCloud(s, c, g.sheepCloud, 'sheepcloud', true);
+  s.page(() => {
+    for (let i = 0; i < g.clouds.length; i++) DRAW.cloud(s, c, g.clouds[i], 'cloud' + i);
+    DRAW.cloud(s, c, g.sheepCloud, 'sheepcloud', true);
+  });
   land(near);
   s.enter(s.focus());
 }
@@ -1956,39 +2128,40 @@ const lightK = sc => smooth(0.45, 0.9, sc) * (1 - smooth(1, 2.2, sc));
 
 /* an island's land and what's on it, back to front */
 function drawLand(s, c, w) {
-  drawFront(s, c, w.view.s);
-  c.globalAlpha = lightK(w.view.s); drawHillLight(s, c); c.globalAlpha = 1;
-  drawTufts(s, c);
-  drawVisit(s, c);
-  drawSmoke(s, c);
-  drawEye(s, c);
-  drawHat(s, c);
+  DRAW.front(s, c, w.view.s);
+  c.globalAlpha = lightK(w.view.s); DRAW.hillLight(s, c); c.globalAlpha = 1;
+  DRAW.tufts(s, c);
+  DRAW.visit(s, c);
+  DRAW.smoke(s, c);
+  DRAW.eye(s, c);
+  DRAW.hat(s, c);
   // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
   const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
   const wet = o => o.state === 'float' || o.state === 'swim' || (o.state === 'fall' && s.isSea(o.x, o.ty));
   for (const [, it] of items) {
-    if (wet(it)) { c.save(); if (afloat(s, c, it.state === 'fall' ? it.ty : it.y)) drawObj(s, c, it); c.restore(); }
-    else it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : it.leap ? drawLeap(s, c, it) : drawObj(s, c, it);
+    if (wet(it)) { c.save(); if (afloat(s, c, it.state === 'fall' ? it.ty : it.y)) DRAW.obj(s, c, it); c.restore(); }
+    else it === s.box ? DRAW.box(s, c) : it.blades ? DRAW.meadow(s, c, it) : it.leap ? DRAW.leap(s, c, it) : DRAW.obj(s, c, it);
   }
   // the section's little scenes over them, on the page's hill: animals pass behind the desk, the huts and the keeper
   if (w === s.w0) {
-    drawStates(s, c);
+    DRAW.states(s, c);
     const lk = s.labelsK();
-    if (s.pres.hero > 0.01 && lk > 0.01 && !s.dive) { c.globalAlpha = lk; drawLabels(s, c); c.globalAlpha = 1; }
+    if (s.pres.hero > 0.01 && lk > 0.01 && !s.dive) { c.globalAlpha = lk; DRAW.labels(s, c); c.globalAlpha = 1; }
   }
-  drawSplashes(s, c);
-  drawBall(s, c);
-  drawDoodles(s, c);
+  DRAW.splashes(s, c);
+  DRAW.ball(s, c);
+  DRAW.doodles(s, c);
 }
 
-/* the hill with its cottage and tower: cached at about the size it's drawn, or drawn as it is when larger than life */
+/* the hill with its cottage and tower: cached at about the size it's drawn (an island's in each style it's drawn in),
+   or drawn as it is when larger than life */
 function drawFront(s, c, sc) {
   const g = s.g, { W, H, u } = g, T = g.lh, x0 = g.shore ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
   const x1 = Math.min(W, g.ridge.at(-1)[0] + 8), y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
   const y1 = g.shore ? Math.max(...g.shore.map(p => p[1])) + 26 * u : H;
-  const draw = x => { drawHill(s, x); drawCottage(s, x); drawTower(s, x); };
+  const draw = x => { DRAW.hill(s, x); DRAW.cottage(s, x); DRAW.tower(s, x); };
   if (sc > 1) draw(c);
-  else s.layer(c, 'front' + (g.theme || ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
+  else s.layer(c, 'front' + (g.theme ? g.theme + s.style.id : ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
 }
 
 /* draws from here on in an island's coordinates: screen = s * point + (x, y) */
@@ -2005,6 +2178,13 @@ function afloat(s, c, y) {
   const m = at / d;
   view(s, c, { s: m, x: g.W / 2 * (1 - m), y: g.horizon * (1 - m) });
   return true;
+}
+
+/* the sky and the sea, flat */
+function drawSky(s, c) {
+  const g = s.g, P = s.P;
+  c.fillStyle = rgba(P.sky); c.fillRect(0, 0, g.W, g.horizon + 2);
+  c.fillStyle = rgba(P.sea); c.fillRect(0, g.horizon, g.W, g.H - g.horizon);
 }
 
 /* the lower sky, a lighter band with a soft wave at its top, and the horizon */
@@ -2169,7 +2349,7 @@ function drawBox(s, c) {
   edges(c, K([[-hw, -hh], [hw, -hh], [hw, hh]]), TEX * 1.25, 9, false, { ov: 0.8 });
   edges(c, K([[hw, -hh], [hw + dx, -hh + dy]]), TEX * 1.25, 12, false, { ov: 0.6 });
   flaps.forEach((f, i) => edges(c, f, TEX * 1.25, 40 + i, true, { ov: 0.8 }));
-  BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2 }));
+  BOX.holes.forEach(([hx, hy], i) => ribbon(c, ellipse(hx * k, hy * k, r, r, 12, i), TEX, 30 + i, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.2, outline: true }));
   for (const ax of [hw + dx * 0.32, hw + dx * 0.7]) {
     const x = ax * k, y0 = (dy * (ax - hw) / dx + 6) * k, y1 = y0 - 7 * k;
     ribbon(c, [[x, y0], [x, y1]], TEX * 0.9, ax, { tin: 1, tout: 1, w0: 0.8, w1: 0.8, amp: 0.1 });
@@ -2193,9 +2373,9 @@ function drawLeap(s, c, o) {
   if (s.t < o.leap.t0) return;
   const L = o.leap, f = clamp((s.t - L.t0) / L.dur), p = s.boxAt(), k = p.k;
   const inside = Math.abs(o.x - (p.x + BOX.dx * k * 0.5)) < BOX.hw * k && (L.in ? f > 0.5 : f < 0.5);
-  if (!inside) { drawObj(s, c, o); return; }
+  if (!inside) { DRAW.obj(s, c, o); return; }
   c.save(); c.beginPath(); c.rect(-1e4, -1e4, 2e4, 1e4 + p.y - BOX.hh * k + 1); c.clip();
-  drawObj(s, c, o);
+  DRAW.obj(s, c, o);
   c.restore();
 }
 
@@ -2348,7 +2528,7 @@ function drawHill(s, c) {
     const n = 3 + ((R() * 3) | 0), l = (13 + R() * 10) * u;
     for (let k = 0; k < n; k++) {
       const hx = x + k * 5 * u, hy = y + k * 1.6 * u, lk = l * (1 - Math.abs(k - (n - 1) / 2) * 0.16);
-      ribbon(c, [[hx, hy], [hx + lk * 0.42, hy + lk]], TEX, i * 5 + k, { tin: 3, tout: 5, w0: 0.45, w1: 0.2, amp: 0.4 });
+      ribbon(c, [[hx, hy], [hx + lk * 0.42, hy + lk]], TEX, i * 5 + k, { tin: 3, tout: 5, w0: 0.45, w1: 0.2, amp: 0.4, hatch: true });
     }
   }
   c.fillStyle = INK; c.fill();
@@ -2364,8 +2544,8 @@ function drawHill(s, c) {
   c.fillStyle = rgba(P.foam); c.fill();
   // the ridge, and the shore under it if it has one
   c.beginPath();
-  ribbon(c, rd.filter(p => p[0] > -20 && p[0] < W + 20), SIL, 21, { tin: 4, tout: 4, w0: 0.8, w1: 0.8 });
-  if (g.shore) ribbon(c, g.shore.filter(p => p[0] < W + 20), SIL * 0.9, 23, { tin: 30, tout: 4, w0: 0.3, w1: 0.8 });
+  ribbon(c, rd.filter(p => p[0] > -20 && p[0] < W + 20), SIL, 21, { tin: 4, tout: 4, w0: 0.8, w1: 0.8, outline: true });
+  if (g.shore) ribbon(c, g.shore.filter(p => p[0] < W + 20), SIL * 0.9, 23, { tin: 30, tout: 4, w0: 0.3, w1: 0.8, outline: true });
   c.fillStyle = INK; c.fill();
   // daisies near the cottage and the tower, where the eye goes
   const D = rng(9);
@@ -2447,18 +2627,18 @@ function drawTower(s, c) {
   poly(c, dpts); c.fillStyle = rgba(C.roof); c.fill();
   // the outline: two sides and the base, then a few stripe edges and hatches on the shady side
   c.beginPath();
-  ribbon(c, dens([[T.x - T.wB / 2 - 1 * u, T.base + 3 * u], [T.x - T.wT / 2, T.top - 1 * u]], 6), SIL, 31, { tin: 6, tout: 4, w0: 0.7, w1: 0.6 });
-  ribbon(c, dens([[T.x + T.wB / 2 + 0.5 * u, T.base + 2 * u], [T.x + T.wT / 2, T.top - 1 * u]], 6), SIL, 33, { tin: 6, tout: 4, w0: 0.7, w1: 0.6 });
+  ribbon(c, dens([[T.x - T.wB / 2 - 1 * u, T.base + 3 * u], [T.x - T.wT / 2, T.top - 1 * u]], 6), SIL, 31, { tin: 6, tout: 4, w0: 0.7, w1: 0.6, outline: true });
+  ribbon(c, dens([[T.x + T.wB / 2 + 0.5 * u, T.base + 2 * u], [T.x + T.wT / 2, T.top - 1 * u]], 6), SIL, 33, { tin: 6, tout: 4, w0: 0.7, w1: 0.6, outline: true });
   for (let j = 1; j < bands; j++) {
     const e = edge(j / bands), cut = Math.round(e.length * (0.55 + hash(j) * 0.35));
     ribbon(c, j % 2 ? e.slice(0, cut) : e.slice(e.length - cut), TEX, 40 + j, { tin: 2, tout: 8, w0: 0.6, w1: 0.1 });
   }
   for (let j = 0; j < bands; j++) {
     const k = (j + 0.5) / bands, x = T.x + half(k) - 2.6 * u, y = yAt(k);
-    for (let i = 0; i < 3; i++) ribbon(c, [[x - i * 3 * u, y - T.h / bands * 0.32], [x - i * 3 * u - 0.6 * u, y + T.h / bands * 0.3 - i * 2 * u]], TEX * 0.85, j * 3 + i, { tin: 2, tout: 2, amp: 0.3 });
+    for (let i = 0; i < 3; i++) ribbon(c, [[x - i * 3 * u, y - T.h / bands * 0.32], [x - i * 3 * u - 0.6 * u, y + T.h / bands * 0.3 - i * 2 * u]], TEX * 0.85, j * 3 + i, { tin: 2, tout: 2, amp: 0.3, hatch: true });
   }
   for (const k of [0.25, 0.58]) edges(c, win(k, T.wB * 0.22, T.er * 0.75), TEX, 50 + k * 10, true, { ov: 0.6 });
-  ribbon(c, dpts, DET * 0.9, 61, { tin: 2, tout: 2 });
+  ribbon(c, dpts, DET * 0.9, 61, { tin: 2, tout: 2, outline: true });
   c.fillStyle = INK; c.fill();
   // the gallery: a dark deck the eye sits on
   const gw = T.wT * 0.95, gy = T.top;
@@ -2482,12 +2662,12 @@ function drawEye(s, c) {
   const px = L.x + Math.cos(pa) * rx * 0.42 * look, py = L.y + Math.sin(pa) * ry * 0.36 * look;
   const ir = er * (0.62 + 0.12 * B.flash) * (1 - 0.2 * wide), pr = er * (0.3 - 0.08 * night + 0.1 * B.flash) * (1 - 0.42 * wide);
   c.save(); poly(c, eye, true, REGX, REGY); c.clip();
-  dot(c, px + REGX, py + REGY, ir, mix(P.beam, hex('#FFB52E'), 0.35 - 0.2 * night));
+  dot(c, px + REGX, py + REGY, ir, mix(P.beam, C.iris, 0.35 - 0.2 * night));
   c.restore();
   c.save(); poly(c, eye); c.clip();
   dot(c, px, py, pr, INK);
   dot(c, px - pr * 0.45, py - pr * 0.5, pr * 0.38 + 0.4, '#FFFFFF');
-  c.beginPath(); ribbon(c, ellipse(px, py, ir, ir, 22), TEX, 3, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.3 }); c.fillStyle = INK; c.fill();
+  c.beginPath(); ribbon(c, ellipse(px, py, ir, ir, 22), TEX, 3, { tin: 1, tout: 1, w0: 1, w1: 1, amp: 0.3, outline: true }); c.fillStyle = INK; c.fill();
   // the lid: a little heavy by day, wide awake at night, shut when it blinks or winks
   const bl = s.t - s.blink.at, wk = s.t - s.blink.wink;
   let shut = lerp(lerp(0.2, 0.02, night), 0, wide);
@@ -2604,17 +2784,6 @@ function drawHat(s, c) {
     for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + (i - 2.5) * 0.62, r0 = pr * (1.35 + f * 0.9), r1 = r0 + pr * 0.55 * (1 - f * 0.6); ribbon(c, [[cx + Math.cos(a) * r0, cy + Math.sin(a) * r0], [cx + Math.cos(a) * r1, cy + Math.sin(a) * r1]], TEX, i, { tin: 1, tout: 1 }); }
     c.fillStyle = rgba(P.ink, 1 - f); c.fill();
   }
-  // a sparkle or two after changing into new pyjamas
-  const sp = s.t - s.sparkle;
-  if (sp < 1.2 && !s.reduced) {
-    c.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = -Math.PI / 2 + (i - 2.5) * 0.55, r1 = T.wB * (0.9 + sp * 1.4), r2 = r1 + 7 * u;
-      const cx = T.x, cy = T.top + T.h * 0.3;
-      ribbon(c, [[cx + Math.cos(a) * r1 * 1.4, cy + Math.sin(a) * r1 * 2], [cx + Math.cos(a) * r2 * 1.4, cy + Math.sin(a) * r2 * 2]], DET, i, { tin: 1, tout: 1 });
-    }
-    c.fillStyle = rgba(P.ink, 1 - sp / 1.2); c.fill();
-  }
 }
 
 /* grass along the ridge, leaning with the wind and away from the pointer */
@@ -2710,11 +2879,11 @@ function drawSmoke(s, c) {
 /* ---------- scene states: one dry gag per section, drawn where it's seen ---------- */
 function drawStates(s, c) {
   const p = s.pres;
-  if (p.themes > 0.01) drawWashing(s, c, p.themes);
-  if (p.tiling > 0.01) drawHuts(s, c, p.tiling);
-  if (p.widgets > 0.01) drawDesk(s, c, p.widgets);
-  if (p.install > 0.01) drawDoorway(s, c, p.install);
-  if (p.edit > 0.01) drawEditKeeper(s, c, p.edit);
+  if (p.themes > 0.01) DRAW.washing(s, c, p.themes);
+  if (p.tiling > 0.01) DRAW.huts(s, c, p.tiling);
+  if (p.widgets > 0.01) DRAW.desk(s, c, p.widgets);
+  if (p.install > 0.01) DRAW.doorway(s, c, p.install);
+  if (p.edit > 0.01) DRAW.editKeeper(s, c, p.edit);
 }
 /* pops a prop in from the ground: scale with a little overshoot */
 const pop = p => { const t = clamp(p); return t < 1 ? 1 - Math.pow(1 - t, 3) * Math.cos(t * 4.2) : 1; };
@@ -2768,7 +2937,7 @@ function drawKeeper(s, c, x, y, sc, pose, flip, walk) {
   print(c, head, skin);
   const beard = [[-4.4 * u, -29 * u], [-3 * u, -23.5 * u], [1 * u, -22.4 * u], [5.2 * u, -24.5 * u], [5.6 * u, -28.5 * u]];
   print(c, curve(beard, 2), white);
-  c.beginPath(); loop(c, head, DET, 6, { over: 0.04 }); ribbon(c, curve(beard, 2), TEX, 7, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+  c.beginPath(); loop(c, head, DET, 6, { over: 0.04 }); ribbon(c, curve(beard, 2), TEX, 7, { tin: 1, tout: 1, outline: true }); c.fillStyle = INK; c.fill();
   dot(c, 2.6 * u, -30 * u, 0.9 * u + 0.3, INK);
   dot(c, 5.6 * u, -28.6 * u, 1.3 * u, mix(skin, hex('#E0786A'), 0.5));
   const cap = [[-5 * u, -31.5 * u], [-4.6 * u, -36 * u], [3 * u, -36.4 * u], [5.4 * u, -32 * u]];
@@ -2805,8 +2974,8 @@ function drawEditKeeper(s, c, p) {
   }
   const ry = s.ridgeY(x) ?? k.base, walking = !s.reduced && t > 0;
   c.globalAlpha = clamp(p * 1.5);
-  drawKeeper(s, c, x, ry + 2 * u, sc, 'carry', flip, walking ? s.t * 9 : 0);
-  drawTile(s, c, x + (flip ? -1 : 1) * 0.5 * u, ry + 2 * u - 42 * u * sc + Math.sin(s.reduced ? 0 : s.t * 9) * 0.6 * u, u * sc);
+  DRAW.keeper(s, c, x, ry + 2 * u, sc, 'carry', flip, walking ? s.t * 9 : 0);
+  DRAW.tile(s, c, x + (flip ? -1 : 1) * 0.5 * u, ry + 2 * u - 42 * u * sc + Math.sin(s.reduced ? 0 : s.t * 9) * 0.6 * u, u * sc);
   c.globalAlpha = 1;
 }
 
@@ -2820,7 +2989,7 @@ function drawVisit(s, c) {
   // each knock jolts it
   const jig = rm || ka > 0.45 ? 0 : Math.sin(ka * 55) * 0.9 * u * (1 - ka / 0.45);
   if (open < 0.005 && jig === 0) return;
-  const night = smooth(0.45, 0.75, s.d), warm = hex('#FFD45C');
+  const night = smooth(0.45, 0.75, s.d);
   const frame = [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]];
   if (open < 0.005) {
     // shut and jumping: the wall where the door was, under it
@@ -2831,10 +3000,10 @@ function drawVisit(s, c) {
     if (night > 0.05) {
       c.globalAlpha = open * night;
       poly(c, [[d.x, k.base], [d.x + d.w, k.base], [d.x + d.w + 44 * u, k.base + 34 * u], [d.x - 34 * u, k.base + 34 * u]]);
-      c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
+      c.fillStyle = rgba(mix(P.hill, C.lamp, 0.62)); c.fill();
       c.globalAlpha = 1;
     }
-    poly(c, frame); c.fillStyle = rgba(warm); c.fill();
+    poly(c, frame); c.fillStyle = rgba(C.lamp); c.fill();
     // the keeper in the doorway, leaning out the way he looks; then his back, walking in, a little smaller and higher
     // the further in he is, into the lamplight
     const kin = rm ? (a >= V.keeper[0] && a < V.keeper[1] ? 1 : 0) : smooth(V.keeper[0], V.keeper[0] + 0.12, a) * (1 - smooth(V.keeper[1] - 0.14, V.keeper[1], a));
@@ -2842,7 +3011,7 @@ function drawVisit(s, c) {
       const right = a >= V.right, back = a >= V.turn, deep = rm ? 0 : smooth(V.turn + 0.1, V.keeper[1], a);
       const lean = rm ? 0 : (right ? 1 : -1) * 2.5 * u * sc * (1 - smooth(V.turn - 0.05, V.turn + 0.15, a));
       c.globalAlpha = kin;
-      drawKeeper(s, c, d.x + d.w / 2 + lean, k.base - 5 * u * sc * deep, sc * (1 - 0.15 * deep), back ? 'back' : 'stand', !right && !back, back && !rm ? s.t * 9 : 0);
+      DRAW.keeper(s, c, d.x + d.w / 2 + lean, k.base - 5 * u * sc * deep, sc * (1 - 0.15 * deep), back ? 'back' : 'stand', !right && !back, back && !rm ? s.t * 9 : 0);
       c.globalAlpha = 1;
     }
   }
@@ -2854,17 +3023,16 @@ function drawVisit(s, c) {
 function drawDoorway(s, c, p) {
   const g = s.g, u = g.u, P = s.P, k = g.cot, d = k.door;
   if (!d) return;
-  const warm = hex('#FFD45C');
   c.globalAlpha = clamp(p * 1.4);
   // light spilling onto the grass
   const spill = [[d.x, k.base], [d.x + d.w, k.base], [d.x + d.w + 44 * u, k.base + 34 * u], [d.x - 34 * u, k.base + 34 * u]];
-  poly(c, spill); c.fillStyle = rgba(mix(P.hill, warm, 0.62)); c.fill();
-  poly(c, [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]]); c.fillStyle = rgba(warm); c.fill();
+  poly(c, spill); c.fillStyle = rgba(mix(P.hill, C.lamp, 0.62)); c.fill();
+  poly(c, [[d.x, k.base], [d.x, d.y], [d.x + d.w, d.y], [d.x + d.w, k.base]]); c.fillStyle = rgba(C.lamp); c.fill();
   // the door swung open against the wall
   const door = [[d.x + d.w, k.base], [d.x + d.w, d.y], [d.x + d.w * 1.55, d.y + 2 * u], [d.x + d.w * 1.55, k.base - 1 * u]];
   print(c, door, mul(C.door, P.paper));
   c.beginPath(); edges(c, door, DET * 0.85, 3, true, { ov: 0.6 }); c.fillStyle = INK; c.fill();
-  drawKeeper(s, c, d.x + d.w * 0.5, k.base, g.portrait ? 1.05 : 1.45, 'wave', false, 0);
+  DRAW.keeper(s, c, d.x + d.w * 0.5, k.base, g.portrait ? 1.05 : 1.45, 'wave', false, 0);
   c.globalAlpha = 1;
 }
 
@@ -2965,7 +3133,7 @@ function drawHuts(s, c, p) {
     c.beginPath();
     edges(c, roof, DET, i * 7, true, { ov: 1 }); edges(c, body, DET, i * 7 + 2, false, { ov: 0.8 });
     edges(c, door, TEX * 1.2, i * 7 + 4, false, { ov: 0.4 });
-    ribbon(c, ellipse(q.x, y0 - 5 * u, 3.4 * u, 3.4 * u, 12), TEX, i, { tin: 1, tout: 1, w0: 1, w1: 1 });
+    ribbon(c, ellipse(q.x, y0 - 5 * u, 3.4 * u, 3.4 * u, 12), TEX, i, { tin: 1, tout: 1, w0: 1, w1: 1, outline: true });
     c.fillStyle = INK; c.fill();
     label(c, String(i + 1), num[0] + 0.5 * u, num[1], 11 * u * num[2] + 2, rgba(white), 'center', 0);
   });
@@ -3029,8 +3197,7 @@ function drawLabels(s, c) {
   // the cloud with legs
   const sc = g.sheepCloud, p = s.cloudXY(sc), w = sc.w;
   const lx = p.x + w * 0.42 + (g.portrait ? 6 : 14 * u), ly = p.y + (g.portrait ? 12 : 22 * u);
-  c.font = `400 ${size}px ${HAND}`;
-  if (lx + 16 * u + c.measureText('a cloud (or a sheep)').width < (g.portrait ? g.lamp.x - T.er * 1.7 : T.x - T.er * 3)) {
+  if (lx + 16 * u + textW(s, 'a cloud (or a sheep)', size) < (g.portrait ? g.lamp.x - T.er * 1.7 : T.x - T.er * 3)) {
     label(c, 'a cloud (or a sheep)', lx + 16 * u, ly + 4 * u, size, col, 'left');
     c.fillStyle = col; arrow(c, [[lx + 12 * u, ly + 3 * u], [lx, ly + 2 * u], [p.x + w * 0.36, p.y + 6 * u]], TEX * 1.1, 9);
   }
@@ -3045,12 +3212,12 @@ function drawLabels(s, c) {
   // the sea
   const sea = seaLabelSpot(s);
   if (sea) {
-    const wTxt = c.measureText ? (c.font = `400 ${size}px ${HAND}`, c.measureText('the sea (wet)').width) : 100;
+    const wTxt = textW(s, 'the sea (wet)', size);
     label(c, 'the sea (wet)', sea.x, sea.y, size, rgba(P.paper, s.pres.hero), 'left');
     c.fillStyle = rgba(P.paper, s.pres.hero); arrow(c, [[sea.x + wTxt * 0.62, sea.y + 11 * u], [sea.x + wTxt * 0.5, sea.y + 22 * u], [sea.x + wTxt * 0.3, sea.y + 30 * u]], TEX * 1.1, 10);
   }
 }
-function textW(s, text, size) { const c = s.ctx; c.save(); c.font = `400 ${size}px ${HAND}`; const w = c.measureText(text).width; c.restore(); return w; }
+function textW(s, text, size) { const c = s.ctx; c.save(); c.font = `${WEIGHT} ${size}px ${HAND}`; const w = c.measureText(CAPS ? text.toUpperCase() : text).width; c.restore(); return w; }
 // what "a lighthouse (stable)" and its arrow cover (as drawLabels places them), for keeping out of their way
 function lighthouseLabelRects(s, w, size) {
   const g = s.g, u = g.u, T = g.lh, h = size * 0.75;
@@ -3113,11 +3280,11 @@ function drawObj(s, c, o) {
   c.scale((o.flip ? -1 : 1) * (1 + sq * 0.6), 1 - sq);
   const tint = base => mix(mul(base, P.paper), P.beam, clamp(lit) * 0.75);
   switch (o.kind) {
-    case 'sheep': drawSheep(c, k, tint(C.wool), o, t); break;
-    case 'cow': drawCow(c, k, tint(hex('#FFFFFF')), P, o, t); break;
-    case 'gull': drawGull(c, k, tint(hex('#FFFFFF')), o, t); break;
-    case 'duck': drawDuck(c, k, tint(C.duck), P, o, t); break;
-    case 'monster': drawMonster(c, k, tint(C.monster), P, o, t); break;
+    case 'sheep': DRAW.sheep(c, k, tint(C.wool), o, t); break;
+    case 'cow': DRAW.cow(c, k, tint(hex('#FFFFFF')), P, o, t); break;
+    case 'gull': DRAW.gull(c, k, tint(hex('#FFFFFF')), o, t); break;
+    case 'duck': DRAW.duck(c, k, tint(C.duck), P, o, t); break;
+    case 'monster': DRAW.monster(c, k, tint(C.monster), P, o, t); break;
   }
   c.restore();
   c.globalAlpha = 1;
@@ -3230,15 +3397,15 @@ function drawMonster(c, u, pink, P, o, t) {
     const hx = (-30 + i * 19) * u, hh = (8 + 2.5 * Math.sin(t * 2 + i * 1.3)) * u * (0.85 + 0.15 * sw);
     const hump = ellipse(hx, 1 * u, 8.5 * u, hh, 14, Math.PI, TAU);
     print(c, [...hump, [hx + 8.5 * u, 1 * u]], pink);
-    c.beginPath(); ribbon(c, hump, DET, i, { tin: 2, tout: 2 }); c.fillStyle = INK; c.fill();
+    c.beginPath(); ribbon(c, hump, DET, i, { tin: 2, tout: 2, outline: true }); c.fillStyle = INK; c.fill();
     c.beginPath(); ribbon(c, [[hx - 11 * u, 1.5 * u], [hx, 0], [hx + 11 * u, 1.5 * u]], TEX, i + 4, { tin: 2, tout: 2 }); c.fillStyle = rgba(P.foam); c.fill();
   }
   const neck = curve([[20 * u, 1 * u], [22 * u, -10 * u], [27 * u, -20 * u], [34 * u, -25 * u], [42 * u, -26 * u], [48 * u, -21 * u], [46 * u, -16 * u], [38 * u, -16 * u], [33 * u, -11 * u], [31 * u, 1 * u]], 2);
   print(c, neck, pink);
-  c.beginPath(); ribbon(c, neck, DET, 7, { tin: 2, tout: 2 }); c.fillStyle = INK; c.fill();
+  c.beginPath(); ribbon(c, neck, DET, 7, { tin: 2, tout: 2, outline: true }); c.fillStyle = INK; c.fill();
   c.beginPath(); ribbon(c, [[16 * u, 1.5 * u], [26 * u, 0], [36 * u, 1.5 * u]], TEX, 8, { tin: 2, tout: 2 }); c.fillStyle = rgba(P.foam); c.fill();
   dot(c, 41 * u, -21.5 * u, 2.6 * u, '#FFFFFF');
-  c.beginPath(); ribbon(c, ellipse(41 * u, -21.5 * u, 2.6 * u, 2.6 * u, 10), TEX, 9, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill();
+  c.beginPath(); ribbon(c, ellipse(41 * u, -21.5 * u, 2.6 * u, 2.6 * u, 10), TEX, 9, { tin: 1, tout: 1, w0: 1, w1: 1, outline: true }); c.fillStyle = INK; c.fill();
   dot(c, 41.8 * u, -21.3 * u, 1.1 * u, INK);
   c.beginPath(); ribbon(c, [[45 * u, -18 * u], [47 * u, -17.6 * u]], TEX, 10, { tin: 1, tout: 1 }); c.fill();
   // its little top hat, with a red band
@@ -3334,11 +3501,22 @@ function drawSplashes(s, c) {
       const dx = (i - 1.5) * (10 + 22 * e) * u, dy = -(30 + i % 2 * 10) * u * e + 70 * u * k * k, x = p.x + dx, y = p.y + dy, r = (2.8 - 1.4 * k) * u + 0.8;
       if (y > p.y + 2) continue;
       dot(c, x, y, r, foam);
-      c.beginPath(); ribbon(c, ellipse(x, y, r + 0.6, r + 0.6, 10), TEX * 0.8, i, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill();
+      c.beginPath(); ribbon(c, ellipse(x, y, r + 0.6, r + 0.6, 10), TEX * 0.8, i, { tin: 1, tout: 1, w0: 1, w1: 1, outline: true }); c.fillStyle = INK; c.fill();
     }
     c.globalAlpha = 1;
   }
 }
 
-window.Hill = { Scene, themes: Object.keys(THEMES), states: STATES, islands: ISLANDS.length };
+window.Hill = {
+  Scene, themes: Object.keys(THEMES), states: STATES, islands: ISLANDS.length,
+  // for the styles (see STYLES): style registers one, felt is the felt pen's with every lever
+  style, felt: FELT, PAL, THEMES, BOX, STEPS, SIL, DET, TEX, DIVE_GAP, SHORE, FAR,
+
+  TAU, clamp, lerp, smooth, easeOut, hash, noise, rng, hex, mix, mul, rgba, angDiff, stops, palAt,
+  curve, dens, ellipse, poly, inPoly, cloudPts, ink, loop, edges, shape, dot, label, arrow, quaver, bobble, pop,
+  hatGeom, head, napEye, joyAt, beamPoly, waveScallops, rank, lightK, view, afloat, hutSpots, deskSpot, seaLabelSpot, textW,
+  // what the style being drawn has on
+  get C() { return C; }, get INK() { return INK; }, get PW() { return PW; }, get BOIL() { return BOIL; }, get NAP() { return NAP; },
+  get REGX() { return REGX; }, get REGY() { return REGY; }, get HAND() { return HAND; }, get ribbon() { return ribbon; }, get print() { return print; },
+};
 })();
