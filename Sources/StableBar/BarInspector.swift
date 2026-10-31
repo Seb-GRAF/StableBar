@@ -44,6 +44,7 @@ private extension WidgetTransition {
 struct BarInspector: View {
     @Bindable var editor: ConfigurationEditor
     let screen: ScreenKind
+    @Environment(\.fixedDate) private var fixedDate
     let kinds: [ScreenKind]
     let names: [String: String]
     let source: (WidgetConfiguration) -> PackageOrigin
@@ -401,7 +402,7 @@ struct BarInspector: View {
             case let .clock(format):
                 SettingsGroup("Clock & date") {
                     TimelineView(.periodic(from: .now, by: format.contains("s") ? 1 : 60)) { context in
-                        Text(widget.label(output: nil, activeApp: nil, date: context.date).text)
+                        Text(widget.label(output: nil, activeApp: nil, date: fixedDate ?? context.date).text)
                             .font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
                             .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
                     }
@@ -516,7 +517,7 @@ struct BarInspector: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(choice.title).font(.system(size: 10)).opacity(0.65)
-                            Text(choice.sample).font(.system(size: 12, weight: .medium)).monospacedDigit()
+                            Text(choice.sample(at: fixedDate ?? .now)).font(.system(size: 12, weight: .medium)).monospacedDigit()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading).padding(9)
                         .background(!custom && format == choice.value ? Color.accentColor.opacity(0.16) : SettingsPalette.control,

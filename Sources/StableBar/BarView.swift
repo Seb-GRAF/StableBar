@@ -227,6 +227,8 @@ extension EnvironmentValues {
     }
     @Entry var moreWidgetsAnchor: NSView?
     @Entry var barExpansion: BarExpansion?
+    /// A date to draw instead of the current time, so a render shows the same clock on every run.
+    @Entry var fixedDate: Date?
 }
 
 enum BarExpansion {
@@ -329,6 +331,7 @@ struct WidgetView: View {
     @Environment(\.screenKind) private var screenKind
     @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
     @Environment(\.barExpansion) private var barExpansion
+    @Environment(\.fixedDate) private var fixedDate
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.style]))
@@ -618,10 +621,13 @@ struct WidgetView: View {
         }
     }
 
-    /// `content` drawn for the time the widget shows: a clock's, redrawn on its schedule, otherwise now.
+    /// `content` drawn for the time the widget shows: the render's fixed date when it has one, a clock's
+    /// redrawn on its schedule, otherwise now.
     @ViewBuilder
     private func timed<Content: View>(@ViewBuilder _ content: @escaping (Date) -> Content) -> some View {
-        if case let .clock(format) = widget.content {
+        if let fixedDate {
+            content(fixedDate)
+        } else if case let .clock(format) = widget.content {
             TimelineView(clockSchedule(format)) { context in content(context.date) }
         } else {
             content(.now)
