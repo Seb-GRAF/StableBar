@@ -47,11 +47,16 @@ enum OffscreenSnapshot {
         }
         prepare()
         try await Task.sleep(for: settle)
-        let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
-                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+        guard let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+                                           bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                           colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else {
+            throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): no image of \(Int(size.width)) × \(Int(size.height)) points.")
+        }
         image.size = size
         view.cacheDisplay(in: view.bounds, to: image)
-        try image.representation(using: .png, properties: [:])!.write(to: url)
+        guard let png = image.representation(using: .png, properties: [:]) else {
+            throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): the image couldn't be encoded as PNG.")
+        }
+        try png.write(to: url)
     }
 }

@@ -106,3 +106,10 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
         }
     }
 }
+
+@Test(arguments: [#""width": 0"#, #""height": 0"#, #""width": 1e30"#, #""height": 99999"#])
+func sceneRejectsImpossibleSizes(size: String) throws {
+    let error = #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", \#(size)}"#) }
+    let message = errorMessage(try #require(error))
+    #expect(message.contains("width") || message.contains("height"))
+}

@@ -624,7 +624,8 @@ final class BarStore: NSObject {
         return (next, loader)
     }
 
-    private func display(_ next: Configuration, loader: ConfigurationLoader) {
+    /// Takes what `loader` read besides the configuration itself: profiles, packages and contributions.
+    private func adopt(_ loader: ConfigurationLoader) {
         profiles = loader.profiles
         pinnedProfile = loader.pinnedProfile
         widgetPackageNames = loader.widgetPackageNames
@@ -632,6 +633,25 @@ final class BarStore: NSObject {
         builtInWidgetIDs = loader.builtInWidgetIDs
         contributions = loader.contributions
         configurationWarning = loader.newerVersionWarning
+    }
+
+    /// Shows `next` as `loader` read it for `context`, in `setup`, without starting its scripts,
+    /// providers, window managers or app reading: what a render draws. Its scripts are the caller's.
+    func showWithoutRunning(_ next: Configuration, loader: ConfigurationLoader, context: ConfigurationContext, setup: ScreenSetup) {
+        configurationLoader = loader
+        self.context = context
+        screenSetup = setup
+        adopt(loader)
+        configuration = next
+        effectiveDocument = loader.document
+        origins = loader.origins
+        activeProfiles = loader.activeProfiles
+        screenDocuments = loader.screenDocuments
+        preparePresentations()
+    }
+
+    private func display(_ next: Configuration, loader: ConfigurationLoader) {
+        adopt(loader)
         if effectiveDocument == loader.document {
             origins = loader.origins
             activeProfiles = loader.activeProfiles

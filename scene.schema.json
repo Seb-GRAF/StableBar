@@ -46,7 +46,7 @@
       "minItems": 1,
       "uniqueItems": true
     },
-    "width": { "description": "The image's width in points.", "type": "number", "minimum": 100 },
-    "height": { "description": "The image's height in points.", "type": "number", "minimum": 20 }
+    "width": { "description": "The image's width in points.", "type": "number", "minimum": 100, "maximum": 4000 },
+    "height": { "description": "The image's height in points.", "type": "number", "minimum": 20, "maximum": 4000 }
   }
 }

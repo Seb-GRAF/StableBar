@@ -7,27 +7,30 @@ import SwiftUI
 /// window manager or network request runs, and nothing asks for a permission.
 @MainActor
 enum SceneRenderer {
-    /// A store showing `scene`, which runs nothing. `directory` holds the files the store needs: an
-    /// inline configuration and the local Store index. A configuration path is relative to `sceneURL`.
-    static func store(for scene: SceneFile, at sceneURL: URL, in directory: URL, themes: URL?) throws -> BarStore {
+    /// A store showing `scene` in `appearance`, which runs nothing. `directory` holds the local Store
+    /// index. A configuration path is relative to `sceneURL`, and an inline configuration reads as if it
+    /// were `<scene>.configuration.json` beside it, so its includes resolve there and Settings shows the
+    /// same path on every run.
+    static func store(for scene: SceneFile, at sceneURL: URL, in directory: URL, themes: URL?,
+                      appearance: SceneFile.Appearance = .light) throws -> BarStore {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let folder = sceneURL.deletingLastPathComponent()
         let configurationURL: URL
+        let data: Data?
         switch scene.configuration {
         case let .inline(document):
-            configurationURL = directory.appending(path: "config.json")
-            try JSONEncoder().encode(document).write(to: configurationURL)
+            configurationURL = folder.appending(path: "\(sceneURL.deletingPathExtension().lastPathComponent).configuration.json")
+            data = try JSONEncoder().encode(document)
         case let .file(path):
-            configurationURL = URL(filePath: path, relativeTo: sceneURL.deletingLastPathComponent()).standardizedFileURL
+            configurationURL = URL(filePath: path, relativeTo: folder).standardizedFileURL
+            data = nil
         }
         let store = BarStore(configurationURL: configurationURL, themesDirectory: themes)
         var loader = ConfigurationLoader()
         loader.themesDirectory = themes
-        let configuration = try loader.load(configurationURL)
-        store.configuration = configuration
-        store.effectiveDocument = loader.document
-        store.origins = loader.origins
-        store.widgetPackageNames = loader.widgetPackageNames
-        store.activeProfiles = loader.activeProfiles
+        let context = ConfigurationContext(appearance: appearance.rawValue)
+        let configuration = try loader.load(configurationURL, data: data, context: context)
+        store.showWithoutRunning(configuration, loader: loader, context: context, setup: ScreenSetup([display]))
 
         var providers: [String: ScriptWidget] = [:]
         for widget in configuration.widgets where widget.enabled {
@@ -46,7 +49,7 @@ enum SceneRenderer {
             store.workspaceStore.workspaces = try workspaceSnapshot(workspaces: JSONEncoder().encode(workspaces),
                                                                     windows: JSONEncoder().encode(scene.windows ?? []))
         }
-        store.activeApp = NSRunningApplication.runningApplications(withBundleIdentifier: scene.activeApp ?? "com.apple.finder").first
+        store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
         try DocsImages.offline(store, in: directory)
         store.preparePresentations()
         return store
@@ -81,10 +84,11 @@ enum SceneRenderer {
             }
             do {
                 let scene = try SceneFile.read(file)
-                let store = try store(for: scene, at: file, in: work.appending(path: name), themes: bundledThemesDirectory)
-                defer { store.stop() }
                 var images: [ConfigurationValue] = []
                 for appearance in scene.appearances {
+                    let store = try store(for: scene, at: file, in: work.appending(path: "\(name)-\(appearance.rawValue)"),
+                                          themes: bundledThemesDirectory, appearance: appearance)
+                    defer { store.stop() }
                     let image = "\(name)-\(appearance.rawValue).png"
                     try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image), settle: settle)
                     images.append(.string(image))
@@ -97,7 +101,12 @@ enum SceneRenderer {
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try? encoder.encode(["scenes": ConfigurationValue.object(entries)]).write(to: output.appending(path: "scenes.json"))
+        do {
+            try encoder.encode(["scenes": ConfigurationValue.object(entries)]).write(to: output.appending(path: "scenes.json"))
+        } catch {
+            report.failures += 1
+            FileHandle.standardError.write(Data("scenes.json: \(errorMessage(error))\n".utf8))
+        }
         return report
     }
 
@@ -154,7 +163,6 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(content, size: NSSize(width: popupWidth + 48, height: CGFloat(scene.height ?? 600)),
                                               dark: dark, settle: settle, to: url)
         case .settings:
-            store.showScreenSetup(ScreenSetup([display]))
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
                 guard configuration.widgets.contains(where: { $0.id == id }) else {

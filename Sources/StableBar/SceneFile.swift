@@ -58,6 +58,12 @@ struct SceneFile: Decodable {
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         width = try values.decodeIfPresent(Double.self, forKey: .width)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
+        if let width, !(100...4000).contains(width) {
+            throw DecodingError.dataCorruptedError(forKey: .width, in: values, debugDescription: "A width is 100 to 4000 points.")
+        }
+        if let height, !(20...4000).contains(height) {
+            throw DecodingError.dataCorruptedError(forKey: .height, in: values, debugDescription: "A height is 20 to 4000 points.")
+        }
         if draw == .popup, widget == nil {
             throw DecodingError.dataCorruptedError(forKey: .widget, in: values, debugDescription: "A popup scene names its widget.")
         }

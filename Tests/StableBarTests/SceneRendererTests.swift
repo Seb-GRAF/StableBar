@@ -257,3 +257,126 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
     #expect(errors.count == 1)
     #expect(errors.first?.contains("clock") == true)
 }
+
+// MARK: - Review fixes
+
+/// Records requests to `scene-image.invalid` and fails them, so a test can tell whether a render asked the network for an image.
+private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requests: [URL] = []
+    override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "scene-image.invalid" }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        if let url = request.url { Self.requests.append(url) }
+        client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
+    }
+    override func stopLoading() {}
+}
+
+@Test @MainActor func settingsSceneLoadsNoOtherBar() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let ran = directory.appending(path: "ran")
+    try Data(#"{"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}"#.utf8)
+        .write(to: directory.appending(path: "config.json"))
+    try Data(#"{"widgets": [{"id": "probe", "type": "script", "position": "left", "command": "touch '\#(ran.path)'", "interval": 1}]}"#.utf8)
+        .write(to: directory.appending(path: ScreenSetup([display]).fileName))
+    let scene = try scene(#"{"configuration": "config.json", "draw": "settings", "section": "general"}"#)
+    let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
+                                        themes: themes)
+    defer { store.stop() }
+    try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"), settle: .milliseconds(300))
+    try await Task.sleep(for: .seconds(1))
+    #expect(store.configuration?.widgets.map(\.id) == ["hello"])
+    #expect(store.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
+    #expect(!FileManager.default.fileExists(atPath: ran.path))
+}
+
+@Test @MainActor func sceneRenderMakesNoImageRequest() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    URLProtocol.registerClass(RecordingURLProtocol.self)
+    defer { URLProtocol.unregisterClass(RecordingURLProtocol.self) }
+    RecordingURLProtocol.requests = []
+    let (_, store) = try await drawn(#"""
+    {"configuration": {"widgets": [{"id": "pic", "type": "text", "position": "left", "text": "Pic",
+      "popup": {"style": {"width": 200}, "layout": {"type": "column", "children": [{"type": "image", "path": "https://scene-image.invalid/icon.png"}]}}}]},
+     "draw": "popup", "widget": "pic"}
+    """#, in: directory)
+    defer { store.stop() }
+    try await Task.sleep(for: .milliseconds(500))
+    #expect(RecordingURLProtocol.requests.isEmpty)
+}
+
+@Test @MainActor func sceneActiveAppComesFromItsBundle() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try store(#"{"configuration": {"widgets": []}, "activeApp": "com.apple.calculator", "draw": "bar"}"#, in: directory)
+    defer { store.stop() }
+    #expect(store.activeApp?.localizedName == "Calculator")
+    #expect(store.activeApp?.icon != nil)
+}
+
+@Test @MainActor func sceneStoreShowsAStablePath() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scene = try scene(#"{"configuration": {"widgets": []}, "draw": "settings", "section": "general"}"#)
+    let sceneURL = directory.appending(path: "general.json")
+    let first = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "one"), themes: themes)
+    let second = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "two"), themes: themes)
+    defer { first.stop(); second.stop() }
+    #expect(first.configurationURL == second.configurationURL)
+    #expect(first.configurationURL.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
+}
+
+@Test @MainActor func sceneStoreKeepsProfiles() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try store(#"""
+    {"configuration": {"widgets": [], "profiles": [{"name": "Work", "configuration": {"bar": {"height": 40}}}]}, "draw": "settings", "section": "profiles"}
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(store.profiles.map(\.name) == ["Work"])
+}
+
+@Test @MainActor func sceneStoreResolvesProfilesForItsAppearance() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scene = try scene(#"""
+    {"configuration": {
+      "bar": {"height": 30},
+      "widgets": [{"id": "label", "type": "text", "position": "left", "text": "Label"}],
+      "profiles": [{"name": "Night", "when": {"appearance": "dark"}, "configuration": {"bar": {"height": 44}}}]
+    }, "draw": "bar"}
+    """#)
+    func height(_ appearance: SceneFile.Appearance) throws -> (Double?, String) {
+        let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"),
+                                            in: directory.appending(path: appearance.rawValue), themes: themes, appearance: appearance)
+        defer { store.stop() }
+        return (store.configuration?.bar.height,
+                "context=\(store.context.appearance) active=\(store.activeProfiles) error=\(String(describing: store.configurationError)) whens=\(store.profiles.map { String(describing: $0.when) })")
+    }
+    let light = try height(.light), dark = try height(.dark)
+    #expect(light.0 == 30, "\(light.1)")
+    #expect(dark.0 == 44, "\(dark.1)")
+}
+
+@Test @MainActor func inlineSceneResolvesIncludesBesideTheScene() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try Data(#"{"widgets": [{"id": "included", "type": "text", "position": "left", "text": "Included"}]}"#.utf8)
+        .write(to: directory.appending(path: "included.json"))
+    let store = try store(#"{"configuration": {"includes": ["included.json"]}, "draw": "bar"}"#, in: directory)
+    defer { store.stop() }
+    #expect(store.configuration?.widgets.map(\.id) == ["included"])
+}
+
+@Test @MainActor func renderAllFailsWhenItCannotWriteItsReport() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: output.appending(path: "scenes.json"), withIntermediateDirectories: true)
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
+    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    #expect(summary.failures >= 1)
+}
