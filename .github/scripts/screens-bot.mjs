@@ -356,12 +356,16 @@ async function ambiguous({ github, owner, repo, pr, existing }) {
   return result;
 }
 
-/** Deletes an unmerged, closed pull request's images from every month, says so in its comment, and counts them. */
+/**
+ * Deletes an unmerged, closed pull request's images from every month, says so in its comment, and counts
+ * them. The comment forgets which run it showed, so a reopened pull request shows its screens again.
+ */
 async function closeUnmerged({ github, owner, repo, number }) {
   const deleted = await deleteAssets({ github, owner, repo, pick: (assets) => pullRequestAssets(assets, number) });
   const existing = findScreensComment(await comments(github, owner, repo, number));
-  const data = existing ? readData(existing.body) : null;
-  if (data) {
+  const stored = existing ? readData(existing.body) : null;
+  if (stored) {
+    const data = { ...stored, runId: null, runAttempt: null };
     const review = { state: "success", description: "Nothing to review: the pull request closed.", removeLabel: false };
     const body = noScreensBody({ reason: "This pull request closed without merging, so the images of its screens were deleted.", review, data });
     if (body !== existing.body) await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });

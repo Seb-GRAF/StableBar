@@ -456,6 +456,11 @@ test("closing unmerged deletes the images from every month; merging keeps them; 
   assert.match(comment(state).body, /closed without merging, so the images of its screens were deleted/);
   assert.deepEqual(await reconcile(github, runEvent(), { app: artifact() }), { action: "none" });
   assert.equal(state.uploads.length, 3);
+  // Reopened, it shows its last run's screens again at once.
+  state.pr.state = "open";
+  assert.equal((await reconcile(github, prEvent("reopened"), { app: artifact() })).action, "publish");
+  assert.equal(state.uploads.length, 6);
+  assert.doesNotMatch(comment(state).body, /closed without merging/);
   const merged = fakeGitHub();
   await reconcile(merged.github, runEvent(), { app: artifact() });
   Object.assign(merged.state.pr, { state: "closed", merged: true });
