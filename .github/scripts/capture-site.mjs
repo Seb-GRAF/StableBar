@@ -5,7 +5,7 @@
 // 22 October 2026, 09:41 UTC, so two captures of one commit match. Playwright is resolved from the
 // working folder; STABLEBAR_CAPTURE_CHANNEL=chrome uses the installed Chrome instead of its Chromium.
 import { createRequire } from "node:module";
-import { mkdirSync, statSync } from "node:fs";
+import { mkdirSync, realpathSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -20,20 +20,18 @@ const sizes = {
 };
 const fixedTime = new Date("2026-10-22T09:41:00Z");
 
-/** The file in the `root` folder that `url` asks for, or null when it asks for none. */
+/**
+ * The real path of the file in the `root` folder that `url` asks for, or null when it asks for none.
+ * Symbolic links count only when they lead to a file inside the folder.
+ */
 export function fileFor(root, url) {
   const { origin: asked, pathname } = new URL(url);
   if (asked !== origin) return null;
-  let path;
   try {
-    path = resolve(root, `.${decodeURIComponent(pathname)}`);
-  } catch {
-    return null;
-  }
-  const file = pathname.endsWith("/") ? join(path, "index.html") : path;
-  if (!file.startsWith(resolve(root) + sep)) return null;
-  try {
-    return statSync(file).isFile() ? file : null;
+    const folder = realpathSync(root);
+    const path = resolve(folder, `.${decodeURIComponent(pathname)}`);
+    const file = realpathSync(pathname.endsWith("/") ? join(path, "index.html") : path);
+    return file.startsWith(folder + sep) && statSync(file).isFile() ? file : null;
   } catch {
     return null;
   }
