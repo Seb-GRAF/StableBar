@@ -101,10 +101,9 @@ enum DocsImages {
     }
 
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
-    private static let darkBackdrop = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
 
     private static func backdrop(dark: Bool) -> some View {
-        Image(nsImage: dark ? darkBackdrop : Wallpaper.image!).resizable().scaledToFill()
+        OffscreenSnapshot.backdrop(dark: dark)
     }
 
     private static func bar(_ store: BarStore) -> some View {
@@ -224,36 +223,17 @@ enum DocsImages {
     /// in an offscreen window below the desktop icons.
     private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], ready: () -> Bool,
                                  to url: URL) async throws {
-        let view = NSHostingView(rootView: content
-            .environment(\.fixedDate, date)
-            .environment(\.offline, true)
-            .frame(width: size.width, height: size.height)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14))))
-        view.frame = NSRect(origin: .zero, size: size)
-        let window = NSWindow(contentRect: NSRect(x: -9000, y: -6000, width: size.width, height: size.height),
-                              styleMask: [.borderless], backing: .buffered, defer: false)
-        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
-        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.contentView = view
-        window.orderFrontRegardless()
-        while !ready() || stores.contains(where: { ($0.configuration!.widgets.contains { $0.content == .workspaces } && $0.workspaceStore.workspaces.isEmpty) || $0.scripts.values.contains { $0.outputNumber == 0 } }) {
-            try await Task.sleep(for: .milliseconds(100))
-        }
-        for store in stores {
-            store.scripts["system-monitor"]?.samples = cpuHistory
-            store.scripts["system"]?.samples = cpuHistory
-        }
-        try await Task.sleep(for: .seconds(3))
-        let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
-                                     bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                     colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
-        image.size = size
-        view.cacheDisplay(in: view.bounds, to: image)
-        try image.representation(using: .png, properties: [:])!.write(to: url)
-        window.orderOut(nil)
+        try await OffscreenSnapshot.write(content, size: size, dark: dark, settle: .seconds(3), ready: {
+            ready() && !stores.contains { store in
+                (store.configuration!.widgets.contains { $0.content == .workspaces } && store.workspaceStore.workspaces.isEmpty)
+                    || store.scripts.values.contains { $0.outputNumber == 0 }
+            }
+        }, prepare: {
+            for store in stores {
+                store.scripts["system-monitor"]?.samples = cpuHistory
+                store.scripts["system"]?.samples = cpuHistory
+            }
+        }, to: url)
     }
 
     private static let cpuHistory: [Double] = (0..<60).map { index in

@@ -7,6 +7,8 @@
 /.github/                @M4n0x @Seb-GRAF
 /.agents/                @M4n0x @Seb-GRAF
 /.claude/                @M4n0x @Seb-GRAF
+/scenes/                 @M4n0x @Seb-GRAF
+/scene.schema.json       @M4n0x @Seb-GRAF
 /.releaserc.json         @M4n0x @Seb-GRAF
 /commitlint.config.mjs   @M4n0x @Seb-GRAF
 /package.json            @M4n0x @Seb-GRAF

@@ -1,0 +1,197 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../examples/essentials.json",
+  "outputs": {
+    "system": {
+      "text": "18%",
+      "icon": "cpu",
+      "value": 0.18,
+      "fields": {
+        "cpu": "18",
+        "cpuUser": "12",
+        "cpuSystem": "6",
+        "memory": "54",
+        "memoryUsed": "17.3 GB",
+        "memoryCompressed": "1.2 GB",
+        "swap": "256 MB",
+        "pressure": "normal",
+        "thermal": "nominal",
+        "load": "1.62 1.80 1.74",
+        "uptime": "2d 4h"
+      },
+      "values": {
+        "cpu": 0.18,
+        "memory": 0.54
+      },
+      "lists": {
+        "apps": [
+          {
+            "name": "Xcode",
+            "pid": "100",
+            "path": "/Applications/Xcode.app",
+            "memory": "2.1 GB",
+            "cpu": "12"
+          },
+          {
+            "name": "Safari",
+            "pid": "101",
+            "path": "/Applications/Safari.app",
+            "memory": "840 MB",
+            "cpu": "4"
+          },
+          {
+            "name": "Finder",
+            "pid": "102",
+            "path": "/System/Library/CoreServices/Finder.app",
+            "memory": "120 MB",
+            "cpu": "1"
+          }
+        ]
+      }
+    },
+    "network": {
+      "text": "↓1.2 MiB/s ↑240 KiB/s",
+      "icon": "network",
+      "fields": {
+        "interface": "en0",
+        "downloadRate": "1.2 MiB/s",
+        "uploadRate": "240 KiB/s"
+      },
+      "lists": {
+        "interfaces": [
+          {
+            "name": "en0",
+            "downloadRate": "1.2 MiB/s",
+            "uploadRate": "240 KiB/s"
+          }
+        ]
+      },
+      "values": {
+        "download": 1258291,
+        "upload": 245760
+      }
+    },
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    },
+    "calendar": {
+      "text": "Design review",
+      "icon": "calendar",
+      "fields": {
+        "access": "granted",
+        "phase": "soon",
+        "title": "Design review",
+        "start": "10:30",
+        "end": "11:15",
+        "minutes": "12"
+      },
+      "lists": {
+        "today": [
+          {
+            "title": "Standup",
+            "start": "09:15",
+            "end": "09:30"
+          },
+          {
+            "title": "Design review",
+            "start": "10:30",
+            "end": "11:15"
+          },
+          {
+            "title": "Lunch with Ana",
+            "start": "12:30",
+            "end": "13:30"
+          },
+          {
+            "title": "1:1 with Sam",
+            "start": "15:00",
+            "end": "15:30"
+          },
+          {
+            "title": "Release planning",
+            "start": "16:30",
+            "end": "17:15"
+          }
+        ]
+      }
+    }
+  },
+  "history": {
+    "system": [
+      0.2,
+      0.273,
+      0.318,
+      0.32,
+      0.289,
+      0.25,
+      0.23,
+      0.244,
+      0.282,
+      0.32,
+      0.329,
+      0.296,
+      0.228,
+      0.151,
+      0.097,
+      0.083,
+      0.106,
+      0.145,
+      0.169,
+      0.162,
+      0.126,
+      0.084,
+      0.064,
+      0.085,
+      0.146,
+      0.223,
+      0.285,
+      0.311,
+      0.296,
+      0.261,
+      0.232,
+      0.232,
+      0.264,
+      0.31,
+      0.34,
+      0.331,
+      0.28,
+      0.204,
+      0.135,
+      0.099,
+      0.103,
+      0.385,
+      0.417,
+      0.423,
+      0.396,
+      0.349,
+      0.311,
+      0.057,
+      0.097,
+      0.168,
+      0.242,
+      0.288,
+      0.294,
+      0.268,
+      0.235,
+      0.223,
+      0.244,
+      0.29,
+      0.335,
+      0.351
+    ]
+  },
+  "draw": "popup",
+  "widget": "clock",
+  "height": 460
+}

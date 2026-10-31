@@ -129,6 +129,18 @@ Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their st
 
 `scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data, a fixed date (Thursday 22 October 2026, 09:41 UTC) and a local, empty Store index, and writes them as WebP. Two runs of one commit on one Mac draw the same pixels. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main` and on pull requests that change the app, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/DocsImages.swift).
 
+## Scenes
+
+A scene file in [scenes](scenes) describes one screen to draw: a configuration, inline or as a path such as `../Resources/config.json`, the sample outputs, graph history and AeroSpace workspaces its widgets show, and what to draw: the `bar`, the bar in edit mode (`editBar`), a widget's `popup`, or a `settings` page. [scene.schema.json](scene.schema.json) lists every key. Draw them with:
+
+```sh
+StableBar --render-scenes /tmp/scenes scenes
+```
+
+It writes `<name>-dark.png` and `<name>-light.png` for each scene, and `scenes.json` with each scene's images or the error that stopped it. It runs nothing (no command, provider, window manager or network request), and every clock shows Thursday 22 October 2026, 09:41 UTC, so two runs of one commit on one Mac draw the same pixels. Text about the Mac itself, such as a display's name or the window managers installed, still comes from the Mac that draws.
+
+A change you can see extends the scene that shows its area, or adds one when none does. Scenes can be edited, merged or deleted. Keep the format additive: a build reports a scene it can't read as an error and draws the others.
+
 ## Agent skills
 
 Skills for coding agents live in [.agents/skills](.agents/skills), one folder per skill with a `SKILL.md`. Codex reads that directory, and `.claude/skills` links to it for Claude Code. Invoke a skill by name (`/triage` in Claude Code, `$triage` in Codex) or describe the task and let the agent choose it.
