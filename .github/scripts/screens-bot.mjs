@@ -119,34 +119,51 @@ async function setStatus({ github, owner, repo, sha, review, url }) {
     ...(url ? { target_url: url } : {}) });
 }
 
-/** This month's pre-release for the images, created when missing, never as the latest release. */
-async function previewRelease({ github, owner, repo, target }) {
-  const tag = releaseTag(new Date());
-  const find = async () => (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
-  try {
-    return await find();
-  } catch (error) {
-    if (error.status !== 404) throw error;
+/** A release holds at most this many assets. */
+const capacity = 1000;
+
+/**
+ * The first of this month's pre-releases for the images with room for `needed` more, `pr-previews-YYYY-MM`,
+ * then `-2`, `-3` and on, created when missing, never as the latest release.
+ */
+async function previewRelease({ github, owner, repo, target, needed }) {
+  const month = releaseTag(new Date());
+  const find = async (tag) => {
+    try {
+      return (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+    } catch (error) {
+      if (error.status === 404) return null;
+      throw error;
+    }
+  };
+  for (let shard = 1; shard <= 50; shard++) {
+    const tag = shard === 1 ? month : `${month}-${shard}`;
+    let release = await find(tag);
+    if (!release) {
+      try {
+        release = (await github.rest.repos.createRelease({ owner, repo, tag_name: tag, target_commitish: target, name: `Pull request screens, ${tag.slice(12)}`,
+          prerelease: true, make_latest: "false",
+          body: "Images for the before and after screens the bot posts on pull requests. An unmerged pull request's images are deleted when it closes." })).data;
+      } catch (error) {
+        if (error.status !== 422) throw error;
+        release = await find(tag);
+      }
+    }
+    const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id: release.id, per_page: 100 });
+    if (assets.length + needed <= capacity) return release;
   }
-  try {
-    return (await github.rest.repos.createRelease({ owner, repo, tag_name: tag, target_commitish: target, name: `Pull request screens, ${tag.slice(12)}`,
-      prerelease: true, make_latest: "false",
-      body: "Images for the before and after screens the bot posts on pull requests. An unmerged pull request's images are deleted when it closes." })).data;
-  } catch (error) {
-    if (error.status === 422) return find();
-    throw error;
-  }
+  throw new Error(`No pull request screens release of ${month} has room for ${needed} images.`);
 }
 
-/** Uploads `images`, [file, PNG data] pairs, and returns each file's URL as GitHub answers it. A rerun of a head replaces its images. */
+/**
+ * Uploads `images`, [file, PNG data] pairs, and returns each file's URL as GitHub answers it. The head's
+ * images from an earlier run of it are deleted first, wherever they are.
+ */
 async function upload({ github, owner, repo, number, head, target, images }) {
   const urls = new Map();
   if (images.length === 0) return urls;
-  const release = await previewRelease({ github, owner, repo, target });
-  const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id: release.id, per_page: 100 });
-  for (const asset of pullRequestAssets(assets, number).filter((entry) => entry.name.startsWith(assetName(number, head, "")))) {
-    await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
-  }
+  await deleteAssets({ github, owner, repo, pick: (assets) => pullRequestAssets(assets, number).filter((asset) => asset.name.startsWith(assetName(number, head, ""))) });
+  const release = await previewRelease({ github, owner, repo, target, needed: images.length });
   for (const [file, data] of images) {
     const { data: asset } = await github.rest.repos.uploadReleaseAsset({ owner, repo, release_id: release.id, name: assetName(number, head, file), data,
       headers: { "content-type": "image/png", "content-length": data.length } });

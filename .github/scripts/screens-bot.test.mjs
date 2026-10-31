@@ -319,6 +319,16 @@ test("publishRun fails an artifact without the screens it always has", async () 
   assert.match(state.comments[0].body, /It holds no docs images\./);
 });
 
+test("publishRun moves on to the month's next release when one is full", async () => {
+  const month = releaseTag(new Date());
+  const full = { id: 3, tag_name: month, assets: Array.from({ length: 999 }, (_, index) => ({ id: 10000 + index, name: `pr1-1234567-${index}.png` })) };
+  const { github, state } = fakeGitHub({ pulls: [pr()], releases: [full] });
+  await publishRun({ github, context: runContext(), run: ran(), folders: { app: artifact() } });
+  const next = state.releases.find((release) => release.tag_name === `${month}-2`);
+  assert.deepEqual([full.assets.length, next?.assets.length, next?.prerelease], [999, 3, true]);
+  assert.match(state.comments[0].body, /download\/pr7-aaaaaaa-docs\.hero-dark-after\.png/);
+});
+
 test("failRun marks the head when the bot itself fails", async () => {
   const { github, state } = fakeGitHub();
   await failRun({ github, context: runContext(), run: ran() });
@@ -333,8 +343,8 @@ test("deleteScreens deletes an unmerged pull request's images from every month",
     { id: 3, tag_name: "v1.0.0", assets: [{ id: 31, name: "pr7-ccccccc-StableBar.dmg" }] }] });
   await publishRun({ github, context: runContext(), run: ran(), folders: { app: artifact() } });
   const close = { repo, payload: { action: "closed", pull_request: pr({ state: "closed", merged: false }) } };
-  // Publishing already dropped the other head's image; closing takes this head's three and the stray one.
-  assert.equal(await deleteScreens({ github, context: close }), 4);
+  // Publishing replaced this head's earlier image and dropped the other head's; closing takes the three it uploaded.
+  assert.equal(await deleteScreens({ github, context: close }), 3);
   assert.deepEqual(state.releases.map((release) => [release.tag_name, release.assets.map((asset) => asset.name)]).slice(0, 3),
     [["pr-previews-2026-09", ["pr8-aaaaaaa-a.png"]], ["pr-previews-2026-10", []], ["v1.0.0", ["pr7-ccccccc-StableBar.dmg"]]]);
   assert.match(state.comments[0].body, /closed without merging, so the images of its screens were deleted/);
