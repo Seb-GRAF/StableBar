@@ -305,6 +305,20 @@ test("publishRun refuses an image it can't decode", async () => {
   assert.equal(state.uploads.length, 0);
 });
 
+test("publishRun fails an artifact without the screens it always has", async () => {
+  const { github, state } = fakeGitHub({ pulls: [pr()] });
+  const empty = mkdtempSync(join(tmpdir(), "artifact-"));
+  writeFileSync(join(empty, "manifest.json"), JSON.stringify({ screens: [], failed: [] }));
+  assert.equal((await publishRun({ github, context: runContext(), run: ran(), folders: { app: empty } })).state, "failure");
+  assert.match(state.comments[0].body, /The screens-app artifact can't be used: It holds no screens\./);
+  // Draw screens always draws the docs images.
+  const scenes = mkdtempSync(join(tmpdir(), "artifact-"));
+  writeFileSync(join(scenes, "manifest.json"), JSON.stringify({ screens: [{ id: "scenes/bar-dark", status: "unchanged", changedPixels: 0,
+    region: null, images: {} }], failed: [] }));
+  assert.equal((await publishRun({ github, context: runContext(), run: ran(), folders: { app: scenes } })).state, "failure");
+  assert.match(state.comments[0].body, /It holds no docs images\./);
+});
+
 test("failRun marks the head when the bot itself fails", async () => {
   const { github, state } = fakeGitHub();
   await failRun({ github, context: runContext(), run: ran() });

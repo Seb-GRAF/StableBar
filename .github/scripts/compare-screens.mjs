@@ -214,12 +214,23 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
   return { screens, failed };
 }
 
-/** Scene name to error, from a scenes.json report `--render-scenes` wrote. */
-function errors(report) {
+/** The scenes of a scenes.json report `--render-scenes` wrote, by name: `{images}` or `{error}`. */
+function scenesOf(report) {
   if (!report || !existsSync(report)) return {};
-  const scenes = JSON.parse(readFileSync(report, "utf8")).scenes ?? {};
-  return Object.fromEntries(Object.entries(scenes).filter(([, entry]) => typeof entry?.error === "string" && entry.error)
+  return JSON.parse(readFileSync(report, "utf8")).scenes ?? {};
+}
+
+/** Scene name to error, from a scenes.json report. */
+function errors(report) {
+  return Object.fromEntries(Object.entries(scenesOf(report)).filter(([, entry]) => typeof entry?.error === "string" && entry.error)
     .map(([name, entry]) => [name, entry.error]));
+}
+
+/** The images a scenes.json report lists that aren't in `folder`, as failures. */
+function undrawn(report, folder, prefix) {
+  return Object.entries(scenesOf(report)).flatMap(([name, entry]) => (Array.isArray(entry?.images) ? entry.images : [])
+    .filter((image) => typeof image !== "string" || !existsSync(join(folder, basename(image))))
+    .map((image) => ({ id: cut(`${prefix}/${name}`, 200), error: cut(`scenes.json lists ${image}, but it wasn't drawn.`, maximumMessage) })));
 }
 
 export function main(argv) {
@@ -235,8 +246,9 @@ export function main(argv) {
   const beforeReport = option("--before-report");
   const beforeError = beforeReport && !existsSync(beforeReport) ? "The base build wrote no scenes.json, so it may not draw scenes yet." : undefined;
   const { screens, failed: unnamed } = compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors: errors(beforeReport), beforeError });
-  const failed = [...unnamed, ...Object.entries(errors(option("--after-report")))
-    .map(([name, error]) => ({ id: cut(`${prefix}/${name}`, 200), error: cut(error, maximumMessage) }))];
+  const afterReport = option("--after-report");
+  const failed = [...unnamed, ...Object.entries(errors(afterReport))
+    .map(([name, error]) => ({ id: cut(`${prefix}/${name}`, 200), error: cut(error, maximumMessage) })), ...undrawn(afterReport, afterDir, prefix)];
   const manifestPath = join(outDir, "manifest.json");
   const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")) : { screens: [], failed: [] };
   manifest.screens.push(...screens);

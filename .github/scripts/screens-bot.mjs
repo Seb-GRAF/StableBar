@@ -13,9 +13,10 @@ const statusContext = "Visual review";
 const approval = "visual-ok";
 /** The CI jobs the screens depend on, by the names they show. */
 const jobNames = { current: "Check revision", build: "Build release", app: "Draw screens", site: "Draw website screens" };
+/** Each kind of screens: its artifact, the ids it may hold, the screens it always has, and the jobs it needs. */
 const kinds = {
-  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], needs: ["current", "build"] },
-  site: { artifact: "screens-site", prefixes: ["site"], needs: ["current"] },
+  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], always: { prefix: "docs", name: "docs images" }, needs: ["current", "build"] },
+  site: { artifact: "screens-site", prefixes: ["site"], always: { prefix: "site", name: "website screens" }, needs: ["current"] },
 };
 const broken = ["failure", "cancelled", "timed_out", "missing"];
 /**
@@ -70,7 +71,7 @@ const pixelDigest = ({ width, height, rgba }) => createHash("sha256").update(`${
  * image its screens name is decoded within limits and encoded again, so only the bot's own PNGs are
  * uploaded: `files` maps each name to `{data, digest}`, the digest being of the pixels.
  */
-export function readArtifact(folder, prefixes) {
+export function readArtifact(folder, prefixes, always) {
   if (!existsSync(folder)) return { ok: false, problems: ["It couldn't be downloaded."] };
   const files = readdirSync(folder).map((name) => {
     const path = join(folder, name);
@@ -92,6 +93,9 @@ export function readArtifact(folder, prefixes) {
   if (!manifest) return { ok: false, problems: ["It has no manifest.json."] };
   const read = readManifest(readFileSync(manifest.path, "utf8"), files.map((file) => file.name), prefixes);
   if (!read.ok) return read;
+  // A job that drew nothing, or not what it always draws, failed even if it says it didn't.
+  if (read.screens.length === 0 && read.failed.length === 0) return { ok: false, problems: ["It holds no screens."] };
+  if (always && !read.screens.some((screen) => screen.id.startsWith(`${always.prefix}/`))) return { ok: false, problems: [`It holds no ${always.name}.`] };
   const images = new Map();
   for (const name of new Set(read.screens.flatMap((screen) => Object.values(screen.images)))) {
     let image;
@@ -170,7 +174,7 @@ async function deleteAssets({ github, owner, repo, pick }) {
 function gather(run, folders) {
   const screens = [], failed = [], files = new Map();
   let ranScreens = false;
-  for (const [kind, { artifact, prefixes, needs }] of Object.entries(kinds)) {
+  for (const [kind, { artifact, prefixes, always, needs }] of Object.entries(kinds)) {
     const conclusion = run.jobs[kind];
     if (conclusion === "missing") {
       ranScreens = true;
@@ -193,7 +197,7 @@ function gather(run, folders) {
       failed.push({ id: kind, error: `${jobNames[kind]} ended with ${conclusion}.` });
       continue;
     }
-    const read = run.artifacts[kind] ? readArtifact(folders[kind] ?? "", prefixes) : { ok: false, problems: ["The job uploaded none."] };
+    const read = run.artifacts[kind] ? readArtifact(folders[kind] ?? "", prefixes, always) : { ok: false, problems: ["The job uploaded none."] };
     if (!read.ok) {
       failed.push({ id: kind, error: `The ${artifact} artifact can't be used: ${read.problems.join(" ")}` });
       continue;

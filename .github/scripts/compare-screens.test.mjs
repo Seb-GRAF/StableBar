@@ -164,3 +164,17 @@ test("changed and resized screens carry a digest of their whole after image", ()
   assert.match(runs[0].screen.afterDigest, /^[0-9a-f]{64}$/);
   assert.notEqual(runs[0].screen.afterDigest, runs[1].screen.afterDigest);
 });
+
+test("main reports images a scenes report lists that weren't drawn", () => {
+  const root = mkdtempSync(join(tmpdir(), "screens-"));
+  const before = join(root, "before"), after = join(root, "after"), out = join(root, "out");
+  for (const folder of [before, after]) mkdirSync(folder, { recursive: true });
+  writeFileSync(join(before, "bar-dark.png"), encodePNG(image(8, 8)));
+  writeFileSync(join(after, "bar-dark.png"), encodePNG(image(8, 8)));
+  const report = { scenes: { bar: { images: ["bar-dark.png", "bar-light.png"] } } };
+  writeFileSync(join(before, "scenes.json"), JSON.stringify(report));
+  writeFileSync(join(after, "scenes.json"), JSON.stringify(report));
+  main([before, after, out, "--prefix", "scenes", "--before-report", join(before, "scenes.json"), "--after-report", join(after, "scenes.json")]);
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.failed, [{ id: "scenes/bar", error: "scenes.json lists bar-light.png, but it wasn't drawn." }]);
+});
