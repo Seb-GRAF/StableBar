@@ -70,8 +70,7 @@ setInterval(tick, 1000);
 /* Themes: the tags on the washing line restyle the bar, and the drawing: each theme draws the scene in its own style
    (styles/), which the lighthouse's light brings in as it turns once round, the lighthouse in the theme's pyjamas */
 function setTheme(id) {
-  dock.dataset.theme = id;
-  bar.className = `bar ${THEMES.find(t => t[0] === id)[2]}`;
+  barTheme(id);
   for (const b of document.querySelectorAll("[data-theme-pick]")) {
     b.classList.toggle("on", b.dataset.themePick === id);
     b.setAttribute("aria-pressed", b.dataset.themePick === id);
@@ -81,6 +80,11 @@ function setTheme(id) {
     fit();
     S("setTopInset", restHeight());
   });
+}
+// the bar alone; out at sea it takes the theme of the island ahead (see onBar)
+function barTheme(id) {
+  dock.dataset.theme = id;
+  bar.className = `bar ${THEMES.find(t => t[0] === id)[2]}`;
 }
 for (const b of document.querySelectorAll("[data-theme-pick]")) b.addEventListener("click", () => setTheme(b.dataset.themePick));
 
@@ -952,7 +956,8 @@ if (scene) {
   /* Past the last note the page goes on: once it has gone, scrolling takes you on over the sea, past the far island
      and the ones beyond it (see ISLANDS in scene.js), through day and night (see hour). Well into the second round
      of islands the page steps back a round, which looks the same, so it never ends; and as soon as you turn back, it
-     steps back to have its own hill just behind you, so the page is never more than an island away. */
+     steps back to have its own hill just behind you, so the page is never more than an island away. The drawing and
+     the bar take the theme of the island you're heading to (onBar), and the visitor's again back on the page. */
   if (!reduce.matches) {
     const round = window.Hill.islands;
     let was = scrollY;
@@ -984,6 +989,8 @@ function unshove(quick) {
 }
 function onBar(event, key, info = {}) {
   if (event === "release") return unshove(info.caught);
+  // out at sea, the bar goes over to the next island's theme as the drawing's does, the visitor's pick left alone
+  if (event === "theme") { barTheme(key); return fit(); }
   const el = !editing && widgetFor(key);
   if (!el) return;
   if (event === "bump") {

@@ -156,22 +156,27 @@ Hill.style('notch', {
       }
       c.fillStyle = rgba(s.P.beam, st); c.fill();
     },
-    // the sea: a few strokes of the pen across the water, longer and further apart as they come closer
+    // the sea: a few strokes of the pen across the water, longer and further apart as they come closer, each the
+    // brush's sliver: pointed, thin where it lands, thinnest where it lifts. Far off, where they're a hair thick, a
+    // plain dash, all of them in one path of rectangles
     waves(base, s, c) {
-      const g = s.g, { W, H, u } = g, hz = g.horizon, sea = H - hz, mid = W / 2, go = s.dive * Hill.DIVE_GAP / Hill.SHORE, ROW = 0.11, span = 150 * u;
-
-      c.beginPath();
+      const g = s.g, { W, H, u } = g, hz = g.horizon, sea = H - hz, mid = W / 2, go = s.dive * Hill.DIVE_GAP / Hill.SHORE, ROW = 0.11, span = 150 * u, PW = Hill.PW;
+      const near = new Path2D(), far = new Path2D();
       for (let k = Math.ceil((1 + go) / ROW); ; k++) {
         const rel = 1 / (k * ROW - go);
         if (rel < 0.035) break;
-        const y = hz + sea * rel, keep = 0.75 * rel ** 1.5;
+        const y = hz + sea * rel, keep = 0.75 * rel ** 1.5, q = k % 128, w = Hill.DET * Math.max(0.5, rel), hw = w * PW * (w <= TEX * 1.2 ? 0.28 : 0.46), dy = 0.6 * u * rel;
         for (let j = Math.floor(-mid / rel / span) - 1; j * span * rel < mid; j++) {
-          if (hash(k * 31.7 + j * 7.3) > keep) continue;
-          const x = mid + (j + hash(j * 3.1 + k)) * span * rel, l = Math.max(4, (30 + 60 * hash(k + j * 1.7)) * u * rel);
-          brush(c, dens([[x, y], [x + l, y + 0.6 * u * rel]], 6), Hill.DET * Math.max(0.5, rel), k + j, { tin: 6, tout: 12, w0: 0.6, w1: 0.2 });
+          if (hash(q * 31.7 + j * 7.3) > keep) continue;
+          const x = mid + (j + hash(j * 3.1 + q)) * span * rel, l = Math.max(4, (30 + 60 * hash(q + j * 1.7)) * u * rel);
+          if (rel < 0.25) { far.rect(x, y + dy / 2 - hw * 0.7, l, hw * 1.4); continue; }
+          const a = Math.min(l * 0.45, 9.6 * PW), b = l - Math.min(l * 0.5, 19.2 * PW), ya = y + dy * a / l, yb = y + dy * b / l;
+          near.moveTo(x - hw * 0.3, y); near.lineTo(x, y - hw * 0.3); near.lineTo(x + a, ya - hw); near.lineTo(x + b, yb - hw); near.lineTo(x + l, y + dy - hw * 0.1);
+          near.lineTo(x + l + hw * 0.1, y + dy); near.lineTo(x + l, y + dy + hw * 0.1); near.lineTo(x + b, yb + hw); near.lineTo(x + a, ya + hw); near.lineTo(x, y + hw * 0.3);
+          near.closePath();
         }
       }
-      c.fillStyle = Hill.INK; c.fill();
+      c.fillStyle = Hill.INK; c.fill(near); c.fill(far);
       // and none of it where the caption goes, while there is one
       const out = 1 - smooth(0, 0.15, s.dive);
       if (out > 0) lift(c, s.back, out);

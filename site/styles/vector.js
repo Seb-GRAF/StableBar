@@ -3,7 +3,7 @@
    and the light a radar's sweep; by day the same lines on a pen plotter, brown and amber ink on cream, hatched for
    shade. The screen comes on with the hour. */
 (() => {
-const { lerp, smooth, hash, hex, rgba, angDiff, poly, ellipse, curve, dens, edges, beamPoly, waveScallops, hatGeom, head, joyAt, napEye, dot, shape, THEMES, TAU, DET, TEX } = Hill;
+const { lerp, smooth, hex, rgba, angDiff, poly, ellipse, curve, dens, edges, beamPoly, waveScallops, hatGeom, head, joyAt, napEye, dot, shape, THEMES, TAU, DET, TEX } = Hill;
 
 // what hides what's behind a shape: the screen, or the paper, at this hour (each frame, and for each island)
 let screen = '#0A0703';
@@ -47,7 +47,10 @@ function fan(s, c, alpha) {
   const g = s.g, P = s.P, { L, len, a0, a1 } = beamPoly(s), glow = glowAt(s.d), r0 = g.lh.er * 2.3, tr = trails.get(s.beam) || [];
   const lead = tr.length > 1 && angDiff(s.beam.a, tr[0].a) < 0 ? 0 : 1;
   const ray = a => { c.moveTo(L.x + Math.cos(a) * r0, L.y + Math.sin(a) * r0); c.lineTo(L.x + Math.cos(a) * len, L.y + Math.sin(a) * len); };
-  c.lineWidth = 1.1 * Hill.PW; c.strokeStyle = rgba(P.beam);
+  // at night the lines glow: the same lines under them, wide and faint
+  c.strokeStyle = rgba(P.beam); c.lineWidth = 6 * Hill.PW; c.globalAlpha = alpha * glow * 0.12;
+  c.beginPath(); for (let i = 0; i <= 8; i++) ray(lerp(a0, a1, i / 8)); c.stroke();
+  c.lineWidth = 1.1 * Hill.PW;
   for (const p of tr) {
     const k = 1 - (s.t - p.t) / 0.7;
     if (k <= 0 || p.a === s.beam.a) continue;
@@ -71,8 +74,7 @@ const pal = Hill.stops([
   [1,    { sky: '#080603', sky2: '#4A3206', sea: '#080603', sea2: '#9A6A08', foam: '#FFB000', hill: '#080603', hill2: '#080603', ink: '#FFB000', paper: '#FFB000', beam: '#FFC24A', cloud: '#080603', far: '#4A3206', glass: '#080603' }],
 ]);
 
-// the glow: the screen drawn small and blurred, laid back over it in light; and the scanlines
-const bloom = document.createElement('canvas').getContext('2d');
+// the scanlines
 let rows = null;
 
 Hill.style('phosphor', {
@@ -83,25 +85,25 @@ Hill.style('phosphor', {
   // labels and doodles in capitals, as the vector games lettered them
   hand: '"Monaco", "Menlo", ui-monospace, monospace', caps: true,
   before(s) { screen = rgba(s.P.sky); },
+  // the glow, baked into the cached layers and sprites: each blurred and laid back over itself in light
+  cached(s, c) {
+    const k = glowAt(s.d);
+    if (k < 0.01) return;
+    const b = 6 * c.getTransform().a;
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    c.filter = `blur(${b}px)`; c.globalCompositeOperation = 'lighter'; c.globalAlpha = k;
+    c.drawImage(c.canvas, 0, 0);
+    c.restore();
+  },
   after(s, c) {
     const k = glowAt(s.d);
     if (k < 0.01) return;
-    const cv = c.canvas, w = Math.ceil(cv.width / 4), h = Math.ceil(cv.height / 4), b = bloom.canvas;
-    if (b.width !== w || b.height !== h) { b.width = w; b.height = h; }
-    bloom.filter = `blur(${1.5 * s.dpr}px)`;
-    bloom.clearRect(0, 0, w, h); bloom.drawImage(cv, 0, 0, w, h);
     if (!rows) {
       const x = document.createElement('canvas').getContext('2d');
       x.canvas.width = 1; x.canvas.height = 3; x.fillStyle = '#000'; x.fillRect(0, 2, 1, 1);
       rows = x.createPattern(x.canvas, 'repeat');
     }
-    const flick = s.reduced ? 1 : 0.9 + 0.1 * hash(Math.floor(s.t * 30));
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
-    c.globalCompositeOperation = 'lighter'; c.globalAlpha = k * flick;
-    c.drawImage(b, 0, 0, cv.width, cv.height);
-    c.globalCompositeOperation = 'source-over'; c.globalAlpha = k * 0.35;
-    c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0); c.fillStyle = rows; c.fillRect(0, 0, s.g.W, s.g.H);
-    c.restore();
+    c.globalAlpha = k * 0.35; c.fillStyle = rows; c.fillRect(0, 0, s.g.W, s.g.H); c.globalAlpha = 1;
   },
   draw: {
     land(base, s, c, w) { screen = rgba(s.P.sky); base(s, c, w); },

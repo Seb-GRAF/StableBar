@@ -212,6 +212,8 @@ function label(c, text, x, y, size, col, align = 'left', rot = -0.035) {
 const IDLE_AFTER = 4000, IDLE_FPS = 14, BOIL_FPS = 7, MAX_OBJS = 36;
 // a new style comes in as the light turns once round, in this many seconds (see setTheme)
 const SWAP = 1.2;
+// out at sea, the page's theme follows the islands, each coming in over this many seconds (see update)
+const WIPE = 0.9;
 // the opening's wake-up, in seconds. At night, from when its eye starts to open: it opens halfway (to `lids.mid` shut)
 // by `lids.half`, stays a moment, droops a little (to `lids.heavy`) by `lids.sag`, then opens all the way by `open`,
 // easing out. Then it strains to light its lamp, squeezing its eye shut for each of `pushes` ([when, how long, how
@@ -300,7 +302,7 @@ function tower(g, x, base, h, er) {
    pen is the built-in theme's. Each of the others has a file in styles/ that registers its style, after this file and
    before the page makes the scene:
 
-     Hill.style('nord', { pal, C, tint, ribbon, pen, boil, print, reg, hand, weight, caps, fps, before, after, draw });
+     Hill.style('nord', { pal, C, tint, ribbon, pen, boil, print, reg, hand, weight, caps, fps, before, after, cached, draw });
 
    Every lever is optional; what a style leaves out is the felt pen's (Hill.felt).
      pal     the hours: stops like PAL's, made with Hill.stops, with the same keys. `ink` is the line's colour. The
@@ -328,21 +330,26 @@ function tower(g, x, base, h, er) {
              so things still go where they go between the steps.
      before  (s, c) at the start of each frame, after the levers are on; after (s, c) at its end, over everything
              (grain, scanlines, fibre). Both in the scene's CSS pixels.
+     cached  (s, c) once a cached layer or sprite is drawn, on its own canvas, before it's kept: what it adds there
+             costs nothing per frame (a glow).
      draw    { name(base, ...args) }: any of the drawings named in Hill.felt.draw, in place of the felt pen's, which comes
              as base to call or not. The drawings call each other through DRAW, so an override is used wherever
              its drawing is, by the felt ones too.
    A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, and obj gets s): s.g the
    geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh the tower, lamp, cot the cottage,
    clouds, sheepCloud, stars, tufts), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
-   style on, s.theme the page's theme, s.beam, s.pres how far in each section's scene is, s.reduced. Lengths are CSS
+   style on, s.theme the visitor's theme, s.beam, s.pres how far in each section's scene is, s.reduced. Lengths are CSS
    pixels of the scene; sizes go in u (g.u, 1 on a window of about 1138 by 1138) and pens in pw. The islands of the
    dive use the same drawings in their own s.g, on a canvas scaled by view, each in its own theme's style (but the
-   far one seen from the page, in the page's), while the sky and the sea are in the page's. The band behind the
-   horizon and the hill with its cottage and tower are cached layers, the sun, the moon and the clouds sprites: those
-   drawings run only when the hour's step, the boil state, the style, the size or the fonts change, so they can't
-   move on their own. Drawings leave the scene as they found it, save the cottage, which puts its door in g.cot.door
-   for the visit and the doorway: one drawn without base must too. Every style keeps the lighthouse's pyjamas:
-   THEMES[g.theme || s.theme]. */
+   far one seen from the page, in the visitor's), while the sky, the sea and the clouds are in the page's: the
+   visitor's, and out at sea the theme of the island you're heading to (s.shows). That one comes in as a circle
+   opening out from the middle of the horizon (s.wipe): meanwhile the sky, the sea, the clouds, before and after are
+   drawn in both styles, the old one's outside the circle and the new one's inside it. The band behind the horizon
+   (one for each theme the page is in) and the hill with its cottage and tower are cached layers, the sun, the moon
+   and the clouds sprites: those drawings run only when the hour's step, the boil state, the style, the size or the
+   fonts change, so they can't move on their own. Drawings leave the scene as they found it, save the cottage, which
+   puts its door in g.cot.door for the visit and the doorway: one drawn without base must too. Every style keeps the
+   lighthouse's pyjamas: THEMES[g.theme || s.theme]. */
 const FELT = {
   id: 'built-in', pal: PAL, C, ribbon: feltRibbon, print: feltPrint, pen: 1, boil: BOIL_FPS, reg: [2.6, 1.9], hand: HAND, weight: 400, caps: false,
   draw: {
@@ -374,7 +381,8 @@ class Scene {
     this.fade = document.createElement('canvas').getContext('2d');
     this.top = Math.max(0, +this.o.topInset || 0);
     this.t = 0; this.d = this.dTarget = clamp(+this.o.dusk || 0); this.dTween = null; this.labelsAt = -9;
-    this.state = 'hero'; this.theme = 'built-in'; this.ws = 1;
+    // the visitor's theme, and the one the page's sky, sea and clouds are in: out at sea, the next island's (see update)
+    this.state = 'hero'; this.theme = this.shows = 'built-in'; this.ws = 1;
     this.pres = Object.fromEntries(STATES.map(k => [k, k === 'hero' ? 1 : 0]));
     this.since = Object.fromEntries(STATES.map(k => [k, 0]));
     // the pointer in client coordinates less the scene's offset; each island sees it as this.ptr, in its own (see enter)
@@ -432,7 +440,7 @@ class Scene {
     this.wake();
   }
   // once the scene is up, the new style comes in with the light: the last frame, in the old one, stays where the light
-  // hasn't been yet (see swap); without motion or out at sea, at once
+  // hasn't been yet (see swap); without motion, at once; out at sea, the page has it when you're back (see update)
   setTheme(id) {
     if (!THEMES[id]) return;
     if (id !== this.theme && this.t > 0.5 && !this.reduced && !this.dive) {
@@ -442,8 +450,11 @@ class Scene {
       this.swap = { t0: this.t, a0: this.beam.a, a: this.beam.a, L: this.g.lamp };
     }
     this.theme = id;
+    if (!this.dive && id !== this.shows) this.show(id);
     this.wake();
   }
+  // the page's sky, sea and clouds in another theme from now on; the band cached in the one before goes
+  show(id) { delete this.layers['back' + this.shows]; this.shows = id; }
   setWorkspace(n) { this.ws = clamp(Math.round(+n || 1), 1, 4); this.wake(); }
   setTopInset(px) { const v = Math.max(0, +px || 0); if (v !== this.top) { this.top = v; this.layout(); } this.wake(); }
   // how far past the end of the page, in laps, one island a lap.
@@ -1285,7 +1296,7 @@ class Scene {
     // reduced motion and nothing moving: the scene sleeps until the next call or input
   }
   busy() {
-    if (this.swap || this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
+    if (this.swap || this.wipe || this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
     if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
@@ -1329,6 +1340,22 @@ class Scene {
     }
     this.stepDusk(dt);
     if (this.swap && this.t - this.swap.t0 > SWAP) this.swap = null;
+    // out at sea, the page goes over to the theme of the island you're heading to as the one before it goes past (the
+    // far island's as soon as the dive begins), and back on the page to the visitor's: the new theme opens out in a
+    // circle from the middle of the horizon, and the bar goes over as the circle reaches it. When that changes again
+    // before the circle covers the screen, it's over at once and the next one starts
+    const to = this.dive ? this.world(Math.max(1, Math.floor(this.dive + 0.95))).g.theme : this.theme, wp = this.wipe;
+    if (wp && (to !== wp.to || this.t - wp.t0 > WIPE)) {
+      if (!wp.bar) this.emit('theme', wp.to);
+      this.show(wp.to);
+      this.wipe = null;
+    }
+    if (!this.wipe && to !== this.shows) this.wipe = { to, t0: this.t };
+    if (this.wipe) {
+      const w = this.wipe, B = this.back, y = B.horizon;
+      w.r = Math.hypot(B.W / 2, Math.max(y, B.H - y)) * smooth(0, WIPE, this.t - w.t0);
+      if (!w.bar && w.r > y - B.top / 2) { w.bar = true; this.emit('theme', w.to); }
+    }
     this.vel.x *= Math.exp(-dt * 2.5); this.vel.y *= Math.exp(-dt * 2.5);
     this.windAmb = rm ? 0.2 : 0.28 + 0.22 * noise(this.t * 0.13 + 3);
     this.wind = lerp(this.wind, clamp(this.vel.x / 1300, -1.5, 1.5), Math.min(1, dt * 1.8));
@@ -1942,13 +1969,13 @@ class Scene {
     this.pstep = Math.round(this.d * STEPS);
     this.clock = this.t;
     NAP = this.drowsy() > 0.9;
-    this.dress(this.theme);
+    this.dress(this.shows);
     c.setTransform(k, 0, 0, k, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingQuality = 'high';
-    this.style.before?.(this, c);
+    this.page(() => this.style.before?.(this, c));
     DRAW.scene(this, c);
     c.setTransform(k, 0, 0, k, 0, 0);
-    this.style.after?.(this, c);
+    this.page(() => this.style.after?.(this, c));
     // a new style coming in: the old one where the light hasn't been yet (where it was to begin with, it has)
     const hw = this.g.beamHalf;
     if (sw && sw.a + hw < sw.a0 + TAU - hw) {
@@ -1959,6 +1986,21 @@ class Scene {
       c.restore();
     }
     this.t = this.clock;
+  }
+  // draws in the page's theme; in a wipe (see update), in the old one outside its circle and in the new one inside it
+  page(draw) {
+    const w = this.wipe, c = this.ctx, B = this.back;
+    if (!w) return draw();
+    for (const out of [true, false]) {
+      c.save(); c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      c.beginPath(); c.arc(B.W / 2, B.horizon, w.r, 0, TAU);
+      if (out) c.rect(0, 0, B.W, B.H);
+      c.clip('evenodd');
+      if (!out) this.dress(w.to);
+      draw();
+      c.restore();
+    }
+    this.dress(this.shows);
   }
   /* Draws from here on in a theme's style (see STYLES): its levers in the pen's place, its palette at this hour, and
      its time */
@@ -1982,6 +2024,7 @@ class Scene {
       x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);
       x.setTransform(k, 0, 0, k, -x0, -y0);
       draw(x);
+      this.style.cached?.(this, x);
       L.key = key;
       this.rebuilds++;
     }
@@ -1998,6 +2041,7 @@ class Scene {
       const c = cv.getContext('2d');
       c.setTransform(k, 0, 0, k, w * k / 2, h * k / 2);
       draw(c);
+      this.style.cached?.(this, c);
       s = { cv, w, h };
       this.sprites.set(key, s);
       if (this.sprites.size > 60) this.sprites.delete(this.sprites.keys().next().value);
@@ -2023,24 +2067,29 @@ class Scene {
 function drawScene(s, c) {
   const g = s.g, { W, u } = g, shown = s.shown();
   c.lineCap = 'round'; c.lineJoin = 'round';
-  DRAW.sky(s, c);
-  const bandTop = g.horizon - (g.horizon - g.top) * (g.portrait ? 0.42 : 0.36) - 20 * u;
-  s.layer(c, 'back', { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => DRAW.band(s, x, bandTop));
-  DRAW.stars(s, c);
-  DRAW.waves(s, c);
-  for (const w of shown) { s.enter(w); DRAW.ripples(s, c); }
-  c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  DRAW.sun(s, c);
-  DRAW.moon(s, c);
+  // the page's sky and sea, the band cached in each theme it's in (see page)
+  s.page(() => {
+    DRAW.sky(s, c);
+    const bandTop = g.horizon - (g.horizon - g.top) * (g.portrait ? 0.42 : 0.36) - 20 * u;
+    s.layer(c, 'back' + s.style.id, { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => DRAW.band(s, x, bandTop));
+    DRAW.stars(s, c);
+    DRAW.waves(s, c);
+    for (const w of shown) { s.enter(w); DRAW.ripples(s, c); }
+    c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
+    DRAW.sun(s, c);
+    DRAW.moon(s, c);
+  });
   // an island in a style, its theme's or the page's, and its ground in its theme's colours, as much darker than by day
-  // as that style's green is now; then the page's style again (the page's hill is in it already)
+  // as that style's green is now; the page's hill in the visitor's. Then the style it was drawing in again
   const wear = (w, id, draw) => {
-    if (!w.g.isle) return draw();
-    s.dress(id);
-    const P = s.P, day = s.style.pal[0][1], [lit, shady] = w.g.ground;
-    P.hill = lit.map((v, i) => v * P.hill[i] / day.hill[i]); P.hill2 = shady.map((v, i) => v * P.hill2[i] / day.hill2[i]);
+    const was = s.style.id;
+    s.dress(w.g.isle ? id : s.theme);
+    if (w.g.isle) {
+      const P = s.P, day = s.style.pal[0][1], [lit, shady] = w.g.ground;
+      P.hill = lit.map((v, i) => v * P.hill[i] / day.hill[i]); P.hill2 = shady.map((v, i) => v * P.hill2[i] / day.hill2[i]);
+    }
     draw();
-    s.dress(s.theme);
+    s.dress(was);
   };
   // an island in a style, laid over at `a`: when that's less than all of it, it's drawn whole on the side first
   const lay = (w, id, a) => {
@@ -2065,8 +2114,10 @@ function drawScene(s, c) {
     if (a > 0) { s.enter(w); view(s, c, w.view); wear(w, w.g.theme, () => { c.globalAlpha = a; DRAW.halo(s, c); c.globalAlpha = a; DRAW.beam(s, c); c.globalAlpha = 1; }); }
   }
   c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-  for (let i = 0; i < g.clouds.length; i++) DRAW.cloud(s, c, g.clouds[i], 'cloud' + i);
-  DRAW.cloud(s, c, g.sheepCloud, 'sheepcloud', true);
+  s.page(() => {
+    for (let i = 0; i < g.clouds.length; i++) DRAW.cloud(s, c, g.clouds[i], 'cloud' + i);
+    DRAW.cloud(s, c, g.sheepCloud, 'sheepcloud', true);
+  });
   land(near);
   s.enter(s.focus());
 }
@@ -2102,14 +2153,15 @@ function drawLand(s, c, w) {
   DRAW.doodles(s, c);
 }
 
-/* the hill with its cottage and tower: cached at about the size it's drawn, or drawn as it is when larger than life */
+/* the hill with its cottage and tower: cached at about the size it's drawn (an island's in each style it's drawn in),
+   or drawn as it is when larger than life */
 function drawFront(s, c, sc) {
   const g = s.g, { W, H, u } = g, T = g.lh, x0 = g.shore ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
   const x1 = Math.min(W, g.ridge.at(-1)[0] + 8), y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
   const y1 = g.shore ? Math.max(...g.shore.map(p => p[1])) + 26 * u : H;
   const draw = x => { DRAW.hill(s, x); DRAW.cottage(s, x); DRAW.tower(s, x); };
   if (sc > 1) draw(c);
-  else s.layer(c, 'front' + (g.theme || ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
+  else s.layer(c, 'front' + (g.theme ? g.theme + s.style.id : ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
 }
 
 /* draws from here on in an island's coordinates: screen = s * point + (x, y) */
