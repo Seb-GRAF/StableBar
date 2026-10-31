@@ -10,6 +10,7 @@ enum LaunchCommand {
     case installFromStore(URL, String, String?)
     case buildSource(packages: URL, output: URL, previous: URL?, url: URL?, name: String?)
     case renderDocsImages(URL)
+    case renderScenes(output: URL, scenes: [URL])
     case triage(URL, agent: TriageAgent?, model: String?)
     case triageContext(URL)
     case report(URL)
@@ -117,6 +118,9 @@ enum LaunchCommand {
             self = targeted ? .control(url, RuntimeRequest(action: .reload)) : .reload
         case "--render-docs-images" where arguments.count == 2:
             self = .renderDocsImages(URL(filePath: (arguments[1] as NSString).expandingTildeInPath))
+        case "--render-scenes" where arguments.count >= 3:
+            let paths = arguments.dropFirst().map { URL(filePath: ($0 as NSString).expandingTildeInPath) }
+            self = .renderScenes(output: paths[0], scenes: Array(paths.dropFirst()))
         case "triage":
             self = try Self.triage(url, Array(arguments.dropFirst()))
         case "--triage-context" where arguments.count == 1:

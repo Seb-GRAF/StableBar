@@ -201,3 +201,59 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     }
     #expect(errorMessage(try #require(error)).contains("hello"))
 }
+
+@Test func renderScenesCommandParses() throws {
+    guard case let .renderScenes(output, scenes) = try LaunchCommand(arguments: ["--render-scenes", "/tmp/out", "a.json", "scenes"]) else {
+        Issue.record("Expected renderScenes")
+        return
+    }
+    #expect(output.path == "/tmp/out")
+    #expect(scenes.map(\.lastPathComponent) == ["a.json", "scenes"])
+    #expect(throws: CommandFailure.self) { try LaunchCommand(arguments: ["--render-scenes", "/tmp/out"]) }
+    #expect(!LaunchCommand.usage.contains("--render-scenes"))
+}
+
+/// The scenes object of the report `renderAll` wrote to `output`.
+private func report(in output: URL) throws -> [String: ConfigurationValue] {
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: output.appending(path: "scenes.json")))
+    guard case let .object(scenes)? = document["scenes"] else { throw CommandFailure(message: "scenes.json has no scenes") }
+    return scenes
+}
+
+private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}, "draw": "bar", "appearances": ["dark"]}"#
+
+@Test @MainActor func renderAllReportsEachScene() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
+    try Data(#"{"configuration": {}, "draw": "bar", "colour": 1}"#.utf8).write(to: scenes.appending(path: "bad.json"))
+    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    #expect(summary.failures == 1)
+    let entries = try report(in: output)
+    #expect(entries["good"] == .object(["images": .array([.string("good-dark.png")])]))
+    guard case let .object(bad)? = entries["bad"], case let .string(message)? = bad["error"] else {
+        Issue.record("Expected an error for bad.json")
+        return
+    }
+    #expect(message.contains("colour"))
+    #expect(FileManager.default.fileExists(atPath: output.appending(path: "good-dark.png").path))
+}
+
+@Test @MainActor func renderAllRejectsDuplicateNames() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    for folder in ["a", "b"] {
+        try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
+        try Data(darkBar.utf8).write(to: scenes.appending(path: "\(folder)/clock.json"))
+    }
+    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    #expect(summary.failures == 1)
+    let errors = try report(in: output).values.compactMap { entry -> String? in
+        if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
+    }
+    #expect(errors.count == 1)
+    #expect(errors.first?.contains("clock") == true)
+}

@@ -75,6 +75,16 @@ struct StableBarApp {
                     exit(0)
                 }
                 NSApplication.shared.run()
+            case let .renderScenes(output, scenes):
+                NSApplication.shared.setActivationPolicy(.accessory)
+                Task {
+                    let report = await SceneRenderer.renderAll(scenes, to: output)
+                    if report.failures > 0 {
+                        FileHandle.standardError.write(Data("\(report.failures) scene(s) failed; see \(output.appending(path: "scenes.json").path)\n".utf8))
+                    }
+                    exit(report.failures > 0 ? 1 : 0)
+                }
+                NSApplication.shared.run()
             case let .triage(url, agent, model):
                 try Triage.run(configuration: url, agent: agent, model: model)
             case let .triageContext(url):

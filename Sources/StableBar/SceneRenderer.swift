@@ -52,6 +52,66 @@ enum SceneRenderer {
         return store
     }
 
+    struct Report {
+        var failures = 0
+    }
+
+    /// Draws every scene file in `inputs`, a folder standing for its `*.json` files at any depth, to
+    /// `<name>-<appearance>.png` in `output`, and writes `scenes.json` there: each scene's images, or
+    /// the error that stopped it. A scene's name is its file name; a second scene with the same name
+    /// is an error. Times are drawn in UTC.
+    static func renderAll(_ inputs: [URL], to output: URL, settle: Duration = settle) async -> Report {
+        DocsImages.useUTC()
+        var report = Report()
+        var entries: [String: ConfigurationValue] = [:]
+        let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: work) }
+        do {
+            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        } catch {
+            FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
+            return Report(failures: 1)
+        }
+        for file in sceneFiles(in: inputs) {
+            let name = file.deletingPathExtension().lastPathComponent
+            if entries[name] != nil {
+                report.failures += 1
+                entries[file.path] = .object(["error": .string("Another scene is also named \(name).")])
+                continue
+            }
+            do {
+                let scene = try SceneFile.read(file)
+                let store = try store(for: scene, at: file, in: work.appending(path: name), themes: bundledThemesDirectory)
+                defer { store.stop() }
+                var images: [ConfigurationValue] = []
+                for appearance in scene.appearances {
+                    let image = "\(name)-\(appearance.rawValue).png"
+                    try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image), settle: settle)
+                    images.append(.string(image))
+                }
+                entries[name] = .object(["images": .array(images)])
+            } catch {
+                report.failures += 1
+                entries[name] = .object(["error": .string(errorMessage(error))])
+            }
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try? encoder.encode(["scenes": ConfigurationValue.object(entries)]).write(to: output.appending(path: "scenes.json"))
+        return report
+    }
+
+    /// The scene files `inputs` name, sorted: files as given, and the `*.json` files at any depth in folders.
+    private static func sceneFiles(in inputs: [URL]) -> [URL] {
+        inputs.flatMap { input -> [URL] in
+            var isFolder: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: input.path, isDirectory: &isFolder), isFolder.boolValue else { return [input] }
+            let files = FileManager.default.enumerator(at: input, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)?
+                .compactMap { $0 as? URL }.filter { $0.pathExtension == "json" } ?? []
+            return files.sorted { $0.path < $1.path }
+        }
+    }
+
     /// How long a scene's views settle before they're drawn.
     static var settle: Duration = .seconds(2)
 
