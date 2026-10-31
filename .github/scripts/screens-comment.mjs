@@ -21,8 +21,11 @@ const maximumComment = 60000;
 const maximumRows = 100;
 const maximumListed = 20;
 const statuses = ["unchanged", "changed", "resized", "added", "removed"];
-/** The images a screen of each status comes with. */
-const imagesOf = { unchanged: [], changed: ["after", "before", "diff"], resized: ["after", "before"], added: ["after"], removed: ["before"] };
+/** The images a screen comes with: a resized screen lined up from the top has a region and a difference too. */
+const imagesOf = (status, region) => ({ unchanged: [], changed: ["after", "before", "diff"], added: ["after"], removed: ["before"],
+  resized: region ? ["after", "before", "diff"] : ["after", "before"] })[status];
+const isRegion = (region) => hasOnly(region, ["x", "y", "width", "height"]) && isCount(region.x) && isCount(region.y)
+  && isCount(region.width, 1) && isCount(region.height, 1);
 
 const isObject = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 const hasOnly = (value, keys) => isObject(value) && Object.keys(value).every((key) => keys.includes(key));
@@ -85,11 +88,9 @@ function readScreen(screen, where, files, ids, prefixes, problems) {
   }
   if (!isCount(screen.changedPixels)) problems.push(`${where}: changedPixels isn't a count.`);
   const { region } = screen;
-  const regionFits = screen.status === "changed"
-    ? hasOnly(region, ["x", "y", "width", "height"]) && isCount(region.x) && isCount(region.y) && isCount(region.width, 1) && isCount(region.height, 1)
-    : region === null;
+  const regionFits = screen.status === "changed" ? isRegion(region) : screen.status === "resized" ? region === null || isRegion(region) : region === null;
   if (!regionFits) problems.push(`${where}: its region doesn't fit its status.`);
-  const kinds = imagesOf[screen.status];
+  const kinds = imagesOf(screen.status, regionFits && region !== null);
   if (!hasOnly(screen.images, kinds) || Object.keys(screen.images).length !== kinds.length) {
     problems.push(`${where}: a screen that is ${screen.status} comes with ${kinds.length ? kinds.join(", ") : "no images"}.`);
   } else {
@@ -182,7 +183,11 @@ function describe(screen) {
     }
     case "added": return ["new", "the whole screen"];
     case "removed": return ["removed", "the whole screen"];
-    case "resized": return ["new size", "the whole screen"];
+    case "resized": {
+      if (!screen.region) return ["new size", "the whole screen"];
+      const { x, y, width, height } = screen.region;
+      return [`${screen.changedPixels.toLocaleString("en-US")} pixels, new size`, `${x},${y} · ${width}×${height}`];
+    }
     default: return ["", ""];
   }
 }
@@ -224,7 +229,7 @@ export function commentBody({ baseRef = "main", base, head, screens, failed = []
     const lines = [marker, "### Before and after", "", `${code(baseRef, 100)} at ${base.slice(0, 7)} → this pull request at ${head.slice(0, 7)}`
       + ` · ${plural(screens.length, "screen")} drawn in one CI job · ${changed.length} changed`, ""];
     if (changed.length > 0) {
-      lines.push("| Screen | Change | Where (pixels at 2×) |", "| --- | --- | --- |");
+      lines.push("| Screen | Change | Where (image pixels) |", "| --- | --- | --- |");
       for (const screen of changed.slice(0, maximumRows)) lines.push(`| ${code(screen.id)} | ${describe(screen).join(" | ")} |`);
       if (changed.length > maximumRows) lines.push("", `${changed.length - maximumRows} more changed screens aren't in the table.`);
       lines.push("", ...sections.slice(0, shown));

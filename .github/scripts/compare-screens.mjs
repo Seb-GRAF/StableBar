@@ -10,8 +10,12 @@ import { decodePNG, encodePNG } from "./png.mjs";
 
 /** A pixel changes when one of its channels differs by more than this. */
 const noise = 1;
-/** Points of context around a changed region, at the renders' 2× scale. */
-const padding = 24;
+/** Context around a changed region, in image pixels: 24 points at 2×, 16 at 3×. */
+const padding = 48;
+/** The smallest crop, so a small change still shows what's around it. */
+const smallest = { width: 480, height: 160 };
+/** A crop's most rows: a long change shows its start. */
+const tallest = 1600;
 /** The longest message the trusted half takes. */
 const maximumMessage = 1000;
 
@@ -19,13 +23,17 @@ const cut = (text, limit) => (text.length <= limit ? text : `${text.slice(0, lim
 /** Image names the bot can show, since they become file and asset names. */
 const isPlainName = (name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && !name.includes("..") && name.length <= 80;
 
-function changedMask(before, after) {
-  const mask = new Uint8Array(before.width * before.height);
-  for (let index = 0; index < mask.length; index++) {
-    for (let channel = 0; channel < 4; channel++) {
-      if (Math.abs(before.rgba[index * 4 + channel] - after.rgba[index * 4 + channel]) > noise) {
-        mask[index] = 1;
-        break;
+/** Which pixels of the top-left `width` by `height` of both images differ. */
+function changedMask(before, after, width, height) {
+  const mask = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const a = (y * before.width + x) * 4, b = (y * after.width + x) * 4;
+      for (let channel = 0; channel < 4; channel++) {
+        if (Math.abs(before.rgba[a + channel] - after.rgba[b + channel]) > noise) {
+          mask[y * width + x] = 1;
+          break;
+        }
       }
     }
   }
@@ -34,14 +42,25 @@ function changedMask(before, after) {
 
 /**
  * How `after` differs from `before`, either of which may be null. A changed pixel with no changed
- * neighbour is noise: it neither makes a screen changed nor widens its region.
+ * neighbour is noise: it neither makes a screen changed nor widens its region. Screens of one width
+ * but new heights are compared from the top: their region runs from the first change, or from where
+ * the shorter one ends, to the longer one's end, across the full width. A new width can't be lined up.
  */
 export function comparePair(before, after) {
   if (!before) return { status: "added", changedPixels: 0, region: null };
   if (!after) return { status: "removed", changedPixels: 0, region: null };
-  if (before.width !== after.width || before.height !== after.height) return { status: "resized", changedPixels: 0, region: null };
-  const { width, height } = before;
-  const mask = changedMask(before, after);
+  if (before.width !== after.width) return { status: "resized", changedPixels: 0, region: null };
+  const width = before.width, height = Math.min(before.height, after.height);
+  const { changedPixels, region } = significant(changedMask(before, after, width, height), width, height);
+  if (before.height === after.height) {
+    return changedPixels ? { status: "changed", changedPixels, region } : { status: "unchanged", changedPixels: 0, region: null };
+  }
+  const longer = Math.max(before.height, after.height), top = region ? region.y : height;
+  return { status: "resized", changedPixels: changedPixels + (longer - height) * width, region: { x: 0, y: top, width, height: longer - top } };
+}
+
+/** The changed pixels of `mask` that have a changed neighbour, and the region around them. */
+function significant(mask, width, height) {
   let changedPixels = 0, minX = width, minY = height, maxX = -1, maxY = -1;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -64,17 +83,38 @@ export function comparePair(before, after) {
       maxY = Math.max(maxY, y);
     }
   }
-  if (!changedPixels) return { status: "unchanged", changedPixels: 0, region: null };
-  return { status: "changed", changedPixels, region: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } };
+  if (!changedPixels) return { changedPixels: 0, region: null };
+  return { changedPixels, region: { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 } };
 }
 
+/** `region` with `padding` around it, grown to the smallest crop, moved inside `image` and cut to it and to `tallest`. */
 function padded(region, image) {
-  const x = Math.max(0, region.x - padding), y = Math.max(0, region.y - padding);
-  return {
-    x, y,
-    width: Math.min(image.width, region.x + region.width + padding) - x,
-    height: Math.min(image.height, region.y + region.height + padding) - y,
+  const span = (start, length, size, minimum) => {
+    let from = start - padding, to = start + length + padding;
+    if (to - from < minimum) {
+      const grow = minimum - (to - from);
+      from -= Math.floor(grow / 2);
+      to += Math.ceil(grow / 2);
+    }
+    if (from < 0) {
+      to -= from;
+      from = 0;
+    }
+    if (to > size) {
+      from = Math.max(0, from - (to - size));
+      to = size;
+    }
+    return [from, to];
   };
+  const [x0, x1] = span(region.x, region.width, image.width, smallest.width);
+  const [y0, y1] = span(region.y, region.height, image.height, smallest.height);
+  return { x: x0, y: y0, width: x1 - x0, height: Math.min(y1, y0 + tallest) - y0 };
+}
+
+/** The crop of `image` for a screen of a new height: full width, from `padding` above the first change, at most `tallest` rows. */
+function resizedCrop(region, image) {
+  const y = Math.max(0, region.y - padding);
+  return { x: 0, y, width: image.width, height: Math.min(image.height, y + tallest) - y };
 }
 
 /** The part of `image` inside `region`. */
@@ -87,18 +127,23 @@ export function crop(image, region) {
   return { width: region.width, height: region.height, rgba };
 }
 
-/** `after` at 30% brightness with every changed pixel red, inside `region`. */
+/** `after` inside `region`, at 30% brightness, with every changed pixel, and every row `before` doesn't have, red. */
 export function differenceImage(before, after, region) {
-  const mask = changedMask(before, after);
-  const rgba = new Uint8Array(after.rgba.length);
-  for (let index = 0; index < mask.length; index++) {
-    if (mask[index]) {
-      rgba.set([255, 59, 48, 255], index * 4);
-    } else {
-      rgba.set([after.rgba[index * 4] * 0.3, after.rgba[index * 4 + 1] * 0.3, after.rgba[index * 4 + 2] * 0.3, 255], index * 4);
+  const overlap = Math.min(before.height, after.height);
+  const mask = changedMask(before, after, after.width, overlap);
+  const rgba = new Uint8Array(region.width * region.height * 4);
+  for (let row = 0; row < region.height; row++) {
+    const y = region.y + row;
+    for (let column = 0; column < region.width; column++) {
+      const x = region.x + column, source = (y * after.width + x) * 4, target = (row * region.width + column) * 4;
+      if (y >= overlap || mask[y * after.width + x]) {
+        rgba.set([255, 59, 48, 255], target);
+      } else {
+        rgba.set([after.rgba[source] * 0.3, after.rgba[source + 1] * 0.3, after.rgba[source + 2] * 0.3, 255], target);
+      }
     }
   }
-  return crop({ width: after.width, height: after.height, rgba }, region);
+  return { width: region.width, height: region.height, rgba };
 }
 
 function read(folder, name) {
@@ -139,6 +184,10 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
       save("before", crop(before, region));
       save("after", crop(after, region));
       save("diff", differenceImage(before, after, region));
+    } else if (result.status === "resized" && result.region) {
+      save("before", crop(before, resizedCrop(result.region, before)));
+      save("after", crop(after, resizedCrop(result.region, after)));
+      save("diff", differenceImage(before, after, resizedCrop(result.region, after)));
     } else if (result.status === "resized") {
       save("before", before);
       save("after", after);

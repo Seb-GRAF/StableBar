@@ -70,6 +70,15 @@ test("readManifest rejects what compare-screens doesn't write", () => {
   assert.deepEqual([missing.ok, missing.problems], [false, ["Screen 1: its diff image isn't in the artifact."]]);
 });
 
+test("readManifest takes resized screens with or without a region", () => {
+  const names = ["site~a-after.png", "site~a-before.png", "site~a-diff.png"];
+  const lined = { ...screen("site/a", "resized", { after: names[0], before: names[1], diff: names[2] }), region: { x: 0, y: 2, width: 20, height: 12 } };
+  const whole = screen("site/a", "resized", { after: names[0], before: names[1] });
+  for (const entry of [lined, whole]) assert.equal(readManifest(JSON.stringify({ screens: [entry], failed: [] }), names).ok, true);
+  const missing = { ...lined, images: { after: names[0], before: names[1] } };
+  assert.equal(readManifest(JSON.stringify({ screens: [missing], failed: [] }), names).ok, false);
+});
+
 test("readManifest takes only the ids an artifact may hold", () => {
   const names = ["docs~a-after.png"];
   const text = JSON.stringify({ screens: [screen("docs/a", "added", { after: names[0] })], failed: [{ id: "docs", error: "x" }] });
@@ -148,6 +157,7 @@ test("commentBody shows changed screens, folds the rest and keeps its data", () 
   const body = commentBody({ baseRef: "main", base: sha("1"), head: sha("a"), screens, failed: [], imageURL: urls, review, data: data() });
   assert.match(body, /^<!-- stablebar-screens -->/);
   assert.match(body, /`main` at 1111111 → this pull request at aaaaaaa/);
+  assert.match(body, /\| Screen \| Change \| Where \(image pixels\) \|/);
   assert.match(body, /https:\/\/example\.test\/b\.png/);
   assert.match(body, /https:\/\/example\.test\/d\.png/);
   assert.match(body, /The base couldn't draw this scene: `draw: Unknown value`/);
