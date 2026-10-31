@@ -1015,7 +1015,7 @@ const swept = new Map();
 const opening = document.getElementById("opening"), snore = document.getElementById("snore");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 const DAWN = 1.6; // seconds from night to day
-const HURRY = 3; // times as fast as the show plays once hurried
+const HURRY = 2; // times as fast as the show plays once hurried
 const WAKE_AT = 1100, RISE_AFTER = 3600; // ms: asleep for a while, then awake at night, until the day comes
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";

@@ -164,7 +164,9 @@ h1, h2, h3 { text-wrap: balance; }
 [data-mode="dark"] .op-bar { background: color-mix(in srgb, #0d1030 42%, transparent); box-shadow: inset 0 0 0 1px #ffffff2e, 0 20px 44px -20px #000000a6; }
 /* the card's bar on its way up: a copy of it, out of the card, that stretches and shrinks into the real bar */
 .op-fly { position: fixed; margin: 0; transform-origin: 0 0; }
-/* behind the card the page waits: the bar and the notes come in once the bar has reached the top */
+/* behind the card the page waits, and doesn't scroll: the bar and the notes come in once the bar has reached the top */
+.intro { scrollbar-gutter: stable; }
+.intro body { overflow: hidden; }
 .intro .dock { opacity: 0; pointer-events: none; }
 .intro .hero > * { opacity: 0; translate: 0 14px; pointer-events: none; }
 .intro.op-bar-in .dock { opacity: 1; transition: opacity .3s; }
