@@ -1,0 +1,26 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2.fill",
+      "value": 0.45,
+      "fields": {
+        "volumeAvailable": "true",
+        "muted": "false"
+      },
+      "values": {
+        "volume": 0.45
+      },
+      "lists": {
+        "devices": [
+          {
+            "name": "MacBook Pro Speakers"
+          }
+        ]
+      }
+    }
+  },
+  "draw": "bar"
+}

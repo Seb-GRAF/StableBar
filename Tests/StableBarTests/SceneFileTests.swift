@@ -90,3 +90,19 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(choices(properties["tab"]) == Set(SceneFile.Tab.allCases.map(\.rawValue)))
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
 }
+
+@Test @MainActor func everySceneInTheRepositoryLoads() throws {
+    let folder = repository.appending(path: "scenes")
+    let files = (FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)?
+        .compactMap { $0 as? URL }.filter { $0.pathExtension == "json" } ?? []).sorted { $0.path < $1.path }
+    #expect(files.count >= 4)
+    let work = FileManager.default.temporaryDirectory.appending(path: "scenes-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: work) }
+    for file in files {
+        #expect(throws: Never.self, "\(file.lastPathComponent)") {
+            let store = try SceneRenderer.store(for: SceneFile.read(file), at: file, in: work.appending(path: file.lastPathComponent),
+                                                themes: repository.appending(path: "Resources/themes"))
+            store.stop()
+        }
+    }
+}
