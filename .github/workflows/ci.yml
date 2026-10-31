@@ -31,6 +31,8 @@ jobs:
       build: ${{ steps.revision.outputs.build }}
       app: ${{ steps.changes.outputs.app }}
       packaging: ${{ steps.changes.outputs.packaging }}
+      screens: ${{ steps.changes.outputs.screens }}
+      site: ${{ steps.changes.outputs.site }}
     steps:
       - name: Skip superseded pushes
         id: revision
@@ -51,7 +53,9 @@ jobs:
           persist-credentials: false
       # A pull request compiles the release and draws the docs images only when it changes what they
       # build from: the files scripts/unchanged-app.sh compares, or this workflow. Packaging reads
-      # only the scripts and resources. HEAD merges the pull request into its base, HEAD^.
+      # only the scripts and resources. The before/after screens are drawn when the app, the scenes
+      # or the comparison change, and the website's when the website or its capture change.
+      # HEAD merges the pull request into its base, HEAD^.
       - name: Find what the pull request changes
         id: changes
         if: github.event_name == 'pull_request'
@@ -62,6 +66,12 @@ jobs:
           fi
           if grep -qE '^(Resources/|scripts/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "packaging=true" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(Sources/|Resources/|Package\.(swift|resolved)$|scripts/|scenes/|\.github/workflows/ci\.yml$|\.github/scripts/(png|compare-screens)\.mjs$)' <<< "$changed"; then
+            echo "screens=true" >> "$GITHUB_OUTPUT"
+          fi
+          if grep -qE '^(site/|\.github/workflows/ci\.yml$|\.github/scripts/(png|compare-screens|capture-site)\.mjs$)' <<< "$changed"; then
+            echo "site=true" >> "$GITHUB_OUTPUT"
           fi
 
   test:
@@ -99,11 +109,11 @@ jobs:
         run: swift test --skip-build
 
   # Runs on main, and on pull requests that change the app, so a release-only failure shows up
-  # before it merges and leaves main without a beta.
+  # before it merges and leaves main without a beta. Pull requests that draw screens use it too.
   build:
     name: Build release
     needs: current
-    if: needs.current.outputs.build == 'true' && (github.ref == 'refs/heads/main' || needs.current.outputs.app == 'true')
+    if: needs.current.outputs.build == 'true' && (github.ref == 'refs/heads/main' || needs.current.outputs.app == 'true' || needs.current.outputs.screens == 'true')
     runs-on: macos-26
     timeout-minutes: 20
     steps:
@@ -144,7 +154,8 @@ jobs:
     name: Docs images
     env:
       STABLEBAR_PREBUILT_DIR: release-build
-    needs: build
+    needs: [current, build]
+    if: github.ref == 'refs/heads/main' || needs.current.outputs.app == 'true'
     runs-on: macos-26
     timeout-minutes: 15
     steps:
@@ -234,8 +245,9 @@ jobs:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE" | npx commitlint --verbose
 
-  # Tests the logic of the Linked issue and Description checks. Those checks run from the default
-  # branch (pull-request-checks.yml), so a change to them is tested here before it merges.
+  # Tests the scripts in .github/scripts: the Linked issue and Description checks, and the
+  # before/after screens. The checks and the screens comment run from the default branch
+  # (pull-request-checks.yml, screens.yml), so a change to them is tested here before it merges.
   pull-request-checks:
     name: Test pull request checks
     if: github.event_name == 'pull_request'
@@ -249,6 +261,130 @@ jobs:
         with:
           node-version: 24
       - run: node --test .github/scripts/*.test.mjs
+
+  # Draws the docs images and the scenes with the pull request's app and with its base's, and
+  # compares them into the screens-app artifact. Both draw the pull request's scenes, each beside
+  # its own resources and examples. This job runs the pull request's code with a read-only token:
+  # screens.yml, which runs from the default branch, posts the comparison and the Visual review
+  # status.
+  screens:
+    name: Draw screens
+    env:
+      STABLEBAR_PREBUILT_DIR: release-build
+    needs: [current, build]
+    if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-build
+      # The scenes and the comparison scripts are kept aside before the checkout moves to the base.
+      # A scene that fails to draw is reported in scenes.json, and later in the comparison.
+      - name: Draw the pull request's screens
+        timeout-minutes: 10
+        run: |
+          mkdir release-build
+          tar -xf release-build.tar -C release-build
+          ./scripts/build.sh "$RUNNER_TEMP/head.app"
+          app="$RUNNER_TEMP/head.app/Contents/MacOS/StableBar"
+          "$app" --render-docs-images "$RUNNER_TEMP/after/docs"
+          "$app" --render-scenes "$RUNNER_TEMP/after/scenes" scenes || [[ -f "$RUNNER_TEMP/after/scenes/scenes.json" ]]
+          cp -R scenes "$RUNNER_TEMP/scenes"
+          cp -R .github/scripts "$RUNNER_TEMP/scripts"
+      - name: Check out the base
+        run: |
+          git checkout --quiet --detach HEAD^
+          rm -rf scenes
+          cp -R "$RUNNER_TEMP/scenes" scenes
+      - name: Identify Swift toolchain
+        if: needs.current.outputs.app == 'true'
+        id: swift
+        run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        if: needs.current.outputs.app == 'true'
+        with:
+          path: .build
+          key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
+      # When the app didn't change, the pull request's app draws the base too, and the docs images
+      # are the same. A base that can't draw scenes leaves no scenes.json; the comparison says so.
+      - name: Draw the base's screens
+        timeout-minutes: 15
+        env:
+          APP: ${{ needs.current.outputs.app }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/before"
+          if [[ "$APP" == true ]]; then
+            STABLEBAR_PREBUILT_DIR= ./scripts/build.sh "$RUNNER_TEMP/base.app"
+            app="$RUNNER_TEMP/base.app/Contents/MacOS/StableBar"
+            "$app" --render-docs-images "$RUNNER_TEMP/before/docs"
+          else
+            app="$RUNNER_TEMP/head.app/Contents/MacOS/StableBar"
+            cp -R "$RUNNER_TEMP/after/docs" "$RUNNER_TEMP/before/docs"
+          fi
+          "$app" --render-scenes "$RUNNER_TEMP/before/scenes" scenes || true
+      - name: Compare
+        run: |
+          compare="$RUNNER_TEMP/scripts/compare-screens.mjs"
+          node "$compare" "$RUNNER_TEMP/before/docs" "$RUNNER_TEMP/after/docs" "$RUNNER_TEMP/out" --prefix docs
+          node "$compare" "$RUNNER_TEMP/before/scenes" "$RUNNER_TEMP/after/scenes" "$RUNNER_TEMP/out" --prefix scenes \
+            --before-report "$RUNNER_TEMP/before/scenes/scenes.json" --after-report "$RUNNER_TEMP/after/scenes/scenes.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screens-app
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
+          if-no-files-found: error
+
+  # Captures the website's pages from the pull request and from its base, and compares them into
+  # the screens-site artifact, for screens.yml as above.
+  site-screens:
+    name: Draw website screens
+    needs: current
+    if: github.event_name == 'pull_request' && needs.current.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir playwright
+          cd playwright
+          npm init --yes > /dev/null
+          npm install --no-audit --no-fund playwright@1
+          npx playwright install --with-deps chromium
+      - name: Capture the website
+        run: |
+          mkdir "$RUNNER_TEMP/base"
+          git archive HEAD^ site | tar -x -C "$RUNNER_TEMP/base"
+          capture="$GITHUB_WORKSPACE/.github/scripts/capture-site.mjs"
+          cd "$RUNNER_TEMP/playwright"
+          node "$capture" "$RUNNER_TEMP/base/site" "$RUNNER_TEMP/before"
+          node "$capture" "$GITHUB_WORKSPACE/site" "$RUNNER_TEMP/after"
+      - name: Compare
+        run: node .github/scripts/compare-screens.mjs "$RUNNER_TEMP/before" "$RUNNER_TEMP/after" "$RUNNER_TEMP/out" --prefix site
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screens-site
+          path: ${{ runner.temp }}/out/
+          retention-days: 7
+          if-no-files-found: error
 
   # Every push to main with releasable commits publishes the next version as a beta prerelease,
   # unless it would ship the same app as the beta before it. It commits nothing. Both jobs build

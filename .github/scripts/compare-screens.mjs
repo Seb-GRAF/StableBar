@@ -114,9 +114,10 @@ function sceneName(image) {
 /**
  * Compares every PNG in `beforeDir` and `afterDir`, writes the images of changed, added, removed and
  * resized screens to `outDir`, and returns the screens, and as failures the images whose names the
- * bot can't show. `beforeErrors` holds, by scene name, why the base couldn't draw a scene.
+ * bot can't show. `beforeErrors` holds, by scene name, why the base couldn't draw a scene, and
+ * `beforeError` why it drew none.
  */
-export function compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors = {} }) {
+export function compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors = {}, beforeError }) {
   const list = (folder) => (existsSync(folder) ? readdirSync(folder).filter((name) => name.endsWith(".png")) : []);
   const all = [...new Set([...list(beforeDir), ...list(afterDir)])].sort();
   const names = all.filter((name) => isPlainName(basename(name, ".png")));
@@ -147,7 +148,7 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
       save("before", before);
     }
     const screen = { id, ...result, images };
-    const error = beforeErrors[sceneName(name)];
+    const error = beforeErrors[sceneName(name)] ?? beforeError;
     if (result.status === "added" && error) screen.baseError = cut(error, maximumMessage);
     return screen;
   });
@@ -172,7 +173,9 @@ export function main(argv) {
   if (!beforeDir || !afterDir || !outDir || !prefix) {
     throw new Error("usage: compare-screens.mjs BEFORE AFTER OUT --prefix NAME [--before-report FILE] [--after-report FILE]");
   }
-  const { screens, failed: unnamed } = compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors: errors(option("--before-report")) });
+  const beforeReport = option("--before-report");
+  const beforeError = beforeReport && !existsSync(beforeReport) ? "The base build wrote no scenes.json, so it may not draw scenes yet." : undefined;
+  const { screens, failed: unnamed } = compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors: errors(beforeReport), beforeError });
   const failed = [...unnamed, ...Object.entries(errors(option("--after-report")))
     .map(([name, error]) => ({ id: cut(`${prefix}/${name}`, 200), error: cut(error, maximumMessage) }))];
   const manifestPath = join(outDir, "manifest.json");

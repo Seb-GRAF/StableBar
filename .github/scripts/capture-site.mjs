@@ -50,7 +50,10 @@ export function fileFor(root, url) {
   }
 }
 
-/** Waits for the fonts and for every image to load and decode; a broken image fails the capture. */
+/**
+ * Waits for the fonts and for every image to load and decode. A broken image is the same in every
+ * capture, so it only gets a warning, and shows in the comparison.
+ */
 async function settle(tab) {
   await tab.waitForLoadState("networkidle");
   const broken = await tab.evaluate(async () => {
@@ -60,7 +63,7 @@ async function settle(tab) {
     const results = await Promise.all(images.map((image) => image.decode().then(() => null, () => image.getAttribute("src"))));
     return results.filter(Boolean);
   });
-  if (broken.length > 0) throw new Error(`${tab.url()}: these images didn't load: ${broken.join(", ")}`);
+  if (broken.length > 0) console.log(`::warning::${new URL(tab.url()).pathname}: these images don't load: ${broken.join(", ")}`);
 }
 
 export async function capture(site, out, { channel } = {}) {

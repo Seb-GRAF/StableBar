@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { comparePair, compareDirectories } from "./compare-screens.mjs";
+import { comparePair, compareDirectories, main } from "./compare-screens.mjs";
 import { decodePNG, encodePNG } from "./png.mjs";
 
 function image(width, height, rgba = [40, 40, 40, 255]) {
@@ -59,4 +59,17 @@ test("compareDirectories writes images for changed screens only, and notes what 
   assert.equal(screens[1].baseError.length, 1000);
   assert.equal(screens[2].images.after, undefined);
   assert.deepEqual(failed, [{ id: "scenes/odd name-dark", error: "Its name may use only letters, digits, dots, dashes and underscores." }]);
+});
+
+test("main notes every new scene when the base wrote no scenes report", () => {
+  const root = mkdtempSync(join(tmpdir(), "screens-"));
+  const before = join(root, "before"), after = join(root, "after"), out = join(root, "out");
+  for (const folder of [before, after]) mkdirSync(folder, { recursive: true });
+  writeFileSync(join(after, "bar-dark.png"), encodePNG(image(8, 8)));
+  writeFileSync(join(after, "scenes.json"), JSON.stringify({ scenes: { bar: { images: ["bar-dark.png"] }, broken: { error: "draw: Unknown value" } } }));
+  main([before, after, out, "--prefix", "scenes", "--before-report", join(before, "scenes.json"), "--after-report", join(after, "scenes.json")]);
+  const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
+  assert.deepEqual(manifest.screens.map((screen) => [screen.id, screen.status, screen.baseError]),
+    [["scenes/bar-dark", "added", "The base build wrote no scenes.json, so it may not draw scenes yet."]]);
+  assert.deepEqual(manifest.failed, [{ id: "scenes/broken", error: "draw: Unknown value" }]);
 });
