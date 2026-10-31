@@ -167,7 +167,7 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 
 `visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens against the same base keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
 
-Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. **Screens** reads the pull request's changed files from GitHub, so screens they call for that weren't drawn fail the review, but review such a change itself before you trust its screens.
+Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. Two open pull requests from one branch share its CI runs, which the bot can't tell apart, so it compares neither and fails their review until one closes. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. **Screens** reads the pull request's changed files from GitHub, so screens they call for that weren't drawn fail the review, but review such a change itself before you trust its screens.
 
 ## Agent skills
 

@@ -53,7 +53,7 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
       base: { sha: base, ref: "main" }, ...pull },
     runs: [{ id: 99, run_number: 50, run_attempt: 1, head_sha: head, path: ".github/workflows/ci.yml", pull_requests: [], created_at: "2026-10-31T09:50:00Z",
       head_branch: "feat/x", head_repository: { full_name: "someone/StableBar" } }],
-    duringUpload: null,
+    duringUpload: null, others: [],
     jobs: { 99: jobsOf(conclusions) }, artifacts: { 99: [{ name: "screens-app" }] },
   };
   const at = () => state.now.toISOString();
@@ -63,7 +63,8 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
         if (pull_number !== state.pr.number) throw notFound();
         return { data: { ...state.pr, labels: state.labels.map((name) => ({ name })) }, headers: { date: state.now.toUTCString() } };
       },
-      list: async ({ head: filter, state: wanted }) => ({ data: [state.pr].filter((pr) => pr.state === wanted && `${pr.head.repo.owner.login}:${pr.head.ref}` === filter) }),
+      list: async ({ head: filter, state: wanted }) =>
+        ({ data: [state.pr, ...state.others].filter((pr) => pr.state === wanted && `${pr.head.repo.owner.login}:${pr.head.ref}` === filter) }),
       listFiles: async () => ({ data: state.files.map((filename) => ({ filename })) }),
     },
     issues: {
@@ -299,6 +300,21 @@ test("only the pull request's own head repository and branch publish screens", a
   assert.equal(chosen.run.id, 99);
   state.runs = state.runs.filter((entry) => entry.id !== 99);
   assert.deepEqual(await plan({ github, context: runEvent() }), { action: "review", number: 7 });
+});
+
+test("a branch with several open pull requests compares none, and says why", async () => {
+  const { github, state } = fakeGitHub();
+  // The same branch, opened again against another base: its CI runs look like this pull request's.
+  state.others.push({ ...state.pr, number: 8, base: { sha: "d".repeat(40), ref: "develop" } });
+  const { review } = await reconcile(github, runEvent(), { app: artifact() });
+  const reason = "Several open pull requests come from this branch, and the bot can't tell their CI runs apart.";
+  assert.deepEqual(review, { state: "failure", description: `Drawing the screens failed: ${reason}`, removeLabel: false });
+  assert.ok(comment(state).body.includes(reason));
+  assert.equal(state.uploads.length, 0);
+  // Once the other one closes, the screens are compared again.
+  state.others[0].state = "closed";
+  assert.equal((await reconcile(github, prEvent("labeled"), { app: artifact() })).action, "publish");
+  assert.equal(state.uploads.length, 3);
 });
 
 test("a label added while the screens upload doesn't approve them", async () => {
