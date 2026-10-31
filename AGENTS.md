@@ -24,7 +24,7 @@ The developer's own StableBar is usually running while you work.
 - Run the tests for what you changed with `swift test --filter <name>`. CI runs the whole suite on macOS for every pull request.
 - `node --test .github/scripts/*.test.mjs` tests the pull request checks in `.github/scripts`.
 - `StableBar --validate PATH` checks a configuration without starting its scripts.
-- Visible changes (the bar, popups, setup, Settings) need before/after screenshots in the pull request. Ask before launching the app or taking screenshots: a second bar appears on the developer's screen. `StableBar --render-docs-images DIR` draws the bar, popups and Settings in offscreen windows instead, so nothing appears on screen. For a before/after of your change, add or extend a scene in `scenes/` and draw it with `StableBar --render-scenes DIR scenes`, from a build of `main` and of your branch: it runs nothing and draws offscreen (see [Scenes](CONTRIBUTING.md#scenes)).
+- Visible changes (the bar, popups, setup, Settings, the website) need before/after images in the pull request, and CI draws them: the screens bot comments with the docs images, the scenes in `scenes/` and the website's pages, drawn from `main` and from your branch (see [Before and after screens](CONTRIBUTING.md#before-and-after-screens)). When no screen shows your change, add or extend a scene so the bot draws it, instead of uploading screenshots. To look before pushing, `StableBar --render-scenes DIR scenes` draws the scenes offscreen from a build, running nothing. Ask before launching the app or taking screenshots of it: a second bar appears on the developer's screen. Add a recording when motion matters.
 
 ## Hit every surface
 

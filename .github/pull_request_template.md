@@ -14,8 +14,8 @@ CONTRIBUTING.md explains how commit types decide releases.
 ## Testing
 
 <!-- The tests and manual checks you ran, and what you saw. Say what you could not check.
-For visible changes (the bar, popups, setup, Settings), add before/after screenshots, and a short
-recording when motion matters. Upload them here; don't commit them. -->
+For visible changes, the screens bot comments with before/after images; when none shows your change,
+extend a scene in scenes/. Add a short recording when motion matters: upload it here, don't commit it. -->
 
 ## Merging
 

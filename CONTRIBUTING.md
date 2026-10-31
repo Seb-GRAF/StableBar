@@ -77,9 +77,9 @@ There is no web view, custom drawing loop or private window-server API. Styling 
 ## How we work
 
 1. **Start from an issue** for every `fix`, `feat` or `perf` change, using the issue forms, and link it from the pull request. The [triage skill](#agent-skills) checks whether a report is already tracked, fixed or supported. Other changes, such as CI, tests or docs, can go straight to a pull request.
-2. **Branch from `main` and open a pull request.** Nobody pushes to `main` directly. Fill in the template: the problem, the changes, how you tested them and how to merge, and end with the model and harness that did the work, or with "No agent". Upload screenshots of visible changes to the pull request instead of committing them.
+2. **Branch from `main` and open a pull request.** Nobody pushes to `main` directly. Fill in the template: the problem, the changes, how you tested them and how to merge, and end with the model and harness that did the work, or with "No agent". For visible changes, the screens bot posts before and after images ([Before and after screens](#before-and-after-screens)); upload a recording when motion matters, instead of committing it.
 3. **Keep one problem per pull request.** Unrelated fixes and cleanups get their own.
-4. **Wait for CI.** `Test` and `Commit messages` must pass. `Linked issue` and `Description` check the pull request itself and rerun when you edit its description: a `fix`, `feat` or `perf` pull request closes an issue ("Fixes #N" in the description), and Problem, Changes and Testing are filled in. Depending on what a pull request changes, `Build release`, `Docs images` and `Package` run too ([Commits and releases](#commits-and-releases) lists when). Fix them before merging: the same failure on `main` stops the next beta.
+4. **Wait for CI.** `Test` and `Commit messages` must pass. `Linked issue` and `Description` check the pull request itself and rerun when you edit its description: a `fix`, `feat` or `perf` pull request closes an issue ("Fixes #N" in the description), and Problem, Changes and Testing are filled in. Depending on what a pull request changes, `Build release`, `Docs images`, `Package`, `Draw screens` and `Draw website screens` run too ([Commits and releases](#commits-and-releases) lists when). Fix them before merging: the same failure on `main` stops the next beta. When screens changed, `Visual review` waits until a maintainer has looked at them and added the `visual-ok` label.
 5. **Merge** with a merge commit or a rebase merge, so semantic-release sees each commit. Squash only when the title alone should reach the changelog.
 
 Reviews are requested automatically from the people listed in [CODEOWNERS](.github/CODEOWNERS), but they are not required. Ask for one when a change is risky or outside your usual area.
@@ -88,9 +88,9 @@ Reviews are requested automatically from the people listed in [CODEOWNERS](.gith
 
 ## Commits and releases
 
-Pull requests run `swift test` on macOS and check that every commit message, and the pull request title, follows [Conventional Commits](https://www.conventionalcommits.org). Squash merges use the title as the commit message. The tests load every configuration, module and package in `examples`, and the **Test** job parses each script in `scripts` and `examples` with the shell its first line names. The **Test pull request checks** job runs `node --test` on the logic of `Linked issue` and `Description`, in `.github/scripts`.
+Pull requests run `swift test` on macOS and check that every commit message, and the pull request title, follows [Conventional Commits](https://www.conventionalcommits.org). Squash merges use the title as the commit message. The tests load every configuration, module and package in `examples`, and the **Test** job parses each script in `scripts` and `examples` with the shell its first line names. The **Test pull request checks** job runs `node --test` on the scripts in `.github/scripts`: the logic of `Linked issue`, `Description` and the [before and after screens](#before-and-after-screens).
 
-A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.resolved`, `scripts` or the CI workflow also compiles the release and draws the [docs images](#docs-images), as `main` does. If it changes `Resources`, `scripts` or the workflow, the **Package** job builds the DMG as a beta would, ad-hoc signed because pull requests get no Developer ID, and checks its signature, version and starter configuration.
+A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.resolved`, `scripts` or the CI workflow also compiles the release and draws the [docs images](#docs-images), as `main` does. If it changes `Resources`, `scripts` or the workflow, the **Package** job builds the DMG as a beta would, ad-hoc signed because pull requests get no Developer ID, and checks its signature, version and starter configuration. **Draw screens** runs when the app, `scenes` or the comparison scripts change, and **Draw website screens** when `site` changes.
 
 [semantic-release](https://github.com/semantic-release/semantic-release) reads the commits since the last stable release and decides the next version:
 
@@ -139,7 +139,34 @@ StableBar --render-scenes /tmp/scenes scenes
 
 It writes `<name>-dark.png` and `<name>-light.png` for each scene, and `scenes.json` with each scene's images or the error that stopped it. It runs nothing (no command, provider, window manager or network request), and every clock shows Thursday 22 October 2026, 09:41 UTC, so two runs of one commit on one Mac draw the same pixels. Text about the Mac itself, such as a display's name or the window managers installed, still comes from the Mac that draws.
 
-A change you can see extends the scene that shows its area, or adds one when none does. Scenes can be edited, merged or deleted. Keep the format additive: a build reports a scene it can't read as an error and draws the others.
+A change you can see extends the scene that shows its area, or adds one when none does. Scenes can be edited, merged or deleted. Keep the format additive: a build reports a scene it can't read as an error and draws the others. Name scene files with letters, digits, dots, dashes and underscores, so the screens bot can show them.
+
+## Before and after screens
+
+On a pull request, CI draws the screens twice, from the pull request and from its base, and a bot posts what changed.
+
+- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
+- **Draw website screens** captures the four pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
+
+Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too.
+
+These jobs run the pull request's code with a read-only token. The **Screens** workflow runs from `main` when CI finishes, reads what they uploaded only as data, and:
+
+- comments once on the pull request and rewrites that comment on every push: a table of the changed screens, their before, after and difference images cropped to the change, the unchanged screens folded, and what couldn't be drawn;
+- keeps the images as assets of a monthly prerelease, `pr-previews-YYYY-MM`, and deletes a head's images once a newer head replaces them. Closing a pull request without merging deletes all of its images; a merged one keeps its last;
+- sets the **Visual review** status on the pull request's head.
+
+| Visual review | When |
+| --- | --- |
+| Success: "No screens to compare." | The pull request changes neither the app nor the website. |
+| Success: "N screens, none changed." | Nothing looks different. |
+| Pending | Screens changed. A maintainer looks at them, then adds the `visual-ok` label. |
+| Success: "M changed screens approved." | `visual-ok` approved exactly these screens. |
+| Failure | Drawing failed; the comment says what. A `visual-ok` added while it showed the failure still approves it. |
+
+`visual-ok` approves the screens the comment showed when it was added. Any maintainer can add it, the author too. A later push that changes those screens, or what fails to draw, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
+
+Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. Review such a change itself before you trust its screens.
 
 ## Agent skills
 
