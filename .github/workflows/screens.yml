@@ -1,0 +1,99 @@
+name: Screens
+
+# Posts the before/after screens of a pull request and sets its Visual review status. CI's Draw
+# screens and Draw website screens jobs run the pull request's code and upload what they drew. This
+# workflow runs the default branch's copy of itself and of .github/scripts, reads those artifacts
+# only as data, and holds the write token. Each event reconciles its pull request, one at a time:
+# it publishes the newest finished CI run's screens to a monthly pre-release and the comment, sets
+# the status from the visual-ok label's history, and deletes an unmerged pull request's images when
+# it closes. Running it again for a pull request only brings everything up to date. The logic and
+# its tests are in .github/scripts/screens-bot.mjs and screens-comment.mjs.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  pull_request_target:
+    types: [labeled, unlabeled, edited, closed, reopened]
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  reconcile:
+    name: Reconcile screens
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
+      || (github.event_name == 'pull_request_target' && (
+        github.event.action == 'closed' || github.event.action == 'reopened'
+        || (github.event.action == 'edited' && github.event.changes.base)
+        || github.event.label.name == 'visual-ok'))
+    # One reconcile of a pull request at a time. GitHub keeps only the newest event waiting, but
+    # each reconcile reads everything afresh, so a dropped one loses nothing.
+    concurrency:
+      group: screens-${{ github.event.workflow_run.head_repository.full_name || github.event.pull_request.head.repo.full_name }}-${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Plan
+        id: plan
+        uses: actions/github-script@v8
+        with:
+          # A plan that fails marks the head errored, as Apply does, so a required Visual review doesn't wait forever.
+          script: |
+            const bot = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
+            let chosen;
+            try {
+              chosen = await bot.plan({ github, context });
+            } catch (error) {
+              const number = await bot.pullRequestNumber({ github, context }).catch(() => null);
+              await bot.failRun({ github, context, number }).catch((failure) => core.warning(failure.message));
+              throw error;
+            }
+            core.info(`Plan: ${chosen.action}${chosen.number ? ` for #${chosen.number}` : ""}${chosen.run ? ` from run ${chosen.run.id}` : ""}`);
+            core.setOutput("plan", JSON.stringify(chosen));
+            core.setOutput("run-id", chosen.run?.id ?? "");
+            core.setOutput("app", chosen.run?.artifacts.app ? "true" : "");
+            core.setOutput("site", chosen.run?.artifacts.site ? "true" : "");
+      # A download that fails leaves its folder missing, which Apply reports.
+      - uses: actions/download-artifact@v8
+        if: steps.plan.outputs.app
+        continue-on-error: true
+        with:
+          name: screens-app
+          path: ${{ runner.temp }}/screens-app
+          run-id: ${{ steps.plan.outputs.run-id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        if: steps.plan.outputs.site
+        continue-on-error: true
+        with:
+          name: screens-site
+          path: ${{ runner.temp }}/screens-site
+          run-id: ${{ steps.plan.outputs.run-id }}
+          github-token: ${{ github.token }}
+      - name: Apply
+        uses: actions/github-script@v8
+        env:
+          PLAN: ${{ steps.plan.outputs.plan }}
+        with:
+          script: |
+            const bot = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
+            const chosen = JSON.parse(process.env.PLAN);
+            const folders = { app: `${process.env.RUNNER_TEMP}/screens-app`, site: `${process.env.RUNNER_TEMP}/screens-site` };
+            try {
+              const result = await bot.apply({ github, context, plan: chosen, folders });
+              core.info(result.review ? `Visual review: ${result.review.state}, ${result.review.description}` : JSON.stringify(result));
+            } catch (error) {
+              await bot.failRun({ github, context, number: chosen.number }).catch((failure) => core.warning(failure.message));
+              throw error;
+            }
