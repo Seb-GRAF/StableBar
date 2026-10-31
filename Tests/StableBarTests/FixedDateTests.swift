@@ -56,3 +56,13 @@ private func difference(_ first: [UInt8], _ second: [UInt8]) -> Int {
     #expect(format.value == "EEE d MMM  HH:mm")
     #expect(format.sample(at: fixed) != format.sample(at: fixed.addingTimeInterval(86_400)))
 }
+
+@Test @MainActor func shimmerDrawsTheFixedDate() async throws {
+    func shimmer() throws -> [UInt8] {
+        try pixels(Text("Loading the answer").font(.system(size: 20)).modifier(Shimmer(active: true))
+            .frame(width: 240, height: 40).background(Color.black).environment(\.fixedDate, fixed))
+    }
+    let first = try shimmer()
+    try await Task.sleep(for: .milliseconds(600))
+    #expect(try difference(shimmer(), first) <= 1)
+}

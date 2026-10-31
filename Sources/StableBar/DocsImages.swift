@@ -215,7 +215,7 @@ enum DocsImages {
         try offline(store, in: directory)
         store.workspaceStore.executablePath = { aerospace.path }
         store.reloadConfiguration()
-        store.activeApp = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
+        store.activeApp = SampleApp(bundleIdentifier: "com.apple.finder")
         return store
     }
 
@@ -226,6 +226,7 @@ enum DocsImages {
                                  to url: URL) async throws {
         let view = NSHostingView(rootView: content
             .environment(\.fixedDate, date)
+            .environment(\.offline, true)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14))))

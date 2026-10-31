@@ -229,6 +229,8 @@ extension EnvironmentValues {
     @Entry var barExpansion: BarExpansion?
     /// A date to draw instead of the current time, so a render shows the same clock on every run.
     @Entry var fixedDate: Date?
+    /// Draws without the network, as a render does: remote images stay empty.
+    @Entry var offline = false
 }
 
 enum BarExpansion {
