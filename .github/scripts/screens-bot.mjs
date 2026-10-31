@@ -23,7 +23,7 @@ const broken = ["failure", "cancelled", "timed_out", "missing"];
  * files from GitHub, so a run whose job graph skips or drops a screens job can't pass as having none.
  */
 export const changePatterns = {
-  app: /^(Sources\/|Resources\/|Package\.(swift|resolved)$|scripts\/|scenes\/|\.github\/workflows\/ci\.yml$|\.github\/scripts\/(png|compare-screens)\.mjs$)/,
+  app: /^(Sources\/|Resources\/|Package\.(swift|resolved)$|scripts\/|scenes\/|examples\/|\.github\/workflows\/ci\.yml$|\.github\/scripts\/(png|compare-screens)\.mjs$)/,
   site: /^(site\/|\.github\/workflows\/ci\.yml$|\.github\/scripts\/(png|compare-screens|capture-site)\.mjs$)/,
 };
 

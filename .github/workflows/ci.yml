@@ -53,8 +53,9 @@ jobs:
           persist-credentials: false
       # A pull request compiles the release and draws the docs images only when it changes what they
       # build from: the files scripts/unchanged-app.sh compares, or this workflow. Packaging reads
-      # only the scripts and resources. The before/after screens are drawn when the app, the scenes
-      # or the comparison change, and the website's when the website or its capture change.
+      # only the scripts and resources. The before/after screens are drawn when the app, the scenes,
+      # the examples they read or the comparison change, and the website's when the website or its
+      # capture change.
       # HEAD merges the pull request into its base, HEAD^.
       - name: Find what the pull request changes
         id: changes
@@ -67,7 +68,7 @@ jobs:
           if grep -qE '^(Resources/|scripts/|\.github/workflows/ci\.yml$)' <<< "$changed"; then
             echo "packaging=true" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qE '^(Sources/|Resources/|Package\.(swift|resolved)$|scripts/|scenes/|\.github/workflows/ci\.yml$|\.github/scripts/(png|compare-screens)\.mjs$)' <<< "$changed"; then
+          if grep -qE '^(Sources/|Resources/|Package\.(swift|resolved)$|scripts/|scenes/|examples/|\.github/workflows/ci\.yml$|\.github/scripts/(png|compare-screens)\.mjs$)' <<< "$changed"; then
             echo "screens=true" >> "$GITHUB_OUTPUT"
           fi
           if grep -qE '^(site/|\.github/workflows/ci\.yml$|\.github/scripts/(png|compare-screens|capture-site)\.mjs$)' <<< "$changed"; then

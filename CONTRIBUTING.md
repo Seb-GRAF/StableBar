@@ -90,7 +90,7 @@ Reviews are requested automatically from the people listed in [CODEOWNERS](.gith
 
 Pull requests run `swift test` on macOS and check that every commit message, and the pull request title, follows [Conventional Commits](https://www.conventionalcommits.org). Squash merges use the title as the commit message. The tests load every configuration, module and package in `examples`, and the **Test** job parses each script in `scripts` and `examples` with the shell its first line names. The **Test pull request checks** job runs `node --test` on the scripts in `.github/scripts`: the logic of `Linked issue`, `Description` and the [before and after screens](#before-and-after-screens).
 
-A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.resolved`, `scripts` or the CI workflow also compiles the release and draws the [docs images](#docs-images), as `main` does. If it changes `Resources`, `scripts` or the workflow, the **Package** job builds the DMG as a beta would, ad-hoc signed because pull requests get no Developer ID, and checks its signature, version and starter configuration. **Draw screens** runs when the app, `scenes` or the comparison scripts change, and **Draw website screens** when `site` changes.
+A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.resolved`, `scripts` or the CI workflow also compiles the release and draws the [docs images](#docs-images), as `main` does. If it changes `Resources`, `scripts` or the workflow, the **Package** job builds the DMG as a beta would, ad-hoc signed because pull requests get no Developer ID, and checks its signature, version and starter configuration. **Draw screens** runs when the app, `scenes`, the `examples` scenes read or the comparison scripts change, and **Draw website screens** when `site` changes.
 
 [semantic-release](https://github.com/semantic-release/semantic-release) reads the commits since the last stable release and decides the next version:
 
@@ -145,7 +145,7 @@ A change you can see extends the scene that shows its area, or adds one when non
 
 On a pull request, CI draws the screens twice, from the pull request and from its base, and a bot posts what changed.
 
-- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
+- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
 - **Draw website screens** captures the four pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
 
 Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too.

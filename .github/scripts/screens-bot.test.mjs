@@ -141,6 +141,14 @@ test("findRun takes only runs of the CI workflow file", async () => {
   assert.equal(await findRun({ github, context: runContext({ path: ".github/workflows/other.yml" }) }), null);
 });
 
+test("changePatterns call for screens when the files the scenes read change", () => {
+  for (const file of ["Sources/StableBar/BarView.swift", "Resources/config.json", "scenes/starter-bar.json", "examples/essentials.json"]) {
+    assert.equal(changePatterns.app.test(file), true, file);
+  }
+  assert.equal(changePatterns.app.test("docs/README.md"), false);
+  assert.equal(changePatterns.site.test("site/index.html"), true);
+});
+
 test("changePatterns match the files CI's Check revision job draws screens for", () => {
   const workflow = readFileSync(new URL("../workflows/ci.yml", import.meta.url), "utf8");
   const found = Object.fromEntries([...workflow.matchAll(/grep -qE '([^']+)' <<< "\$changed"; then\n\s+echo "(\w+)=true"/g)]
