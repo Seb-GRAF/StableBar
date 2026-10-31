@@ -3204,7 +3204,7 @@ function drawSign(s, c) {
 }
 
 /* One of the two who made StableBar (MAKERS), drawn as the keeper is, at o.x, o.y facing right unless o.flip, mid-stride
-   by o.walk: Seb's curls and ginger beard over a sage tee, Steve's swept-up dark hair and short beard over a slate
+   by o.walk: Seb's curls and ginger beard over a sage tee, Steve's swept-up dark hair and short even beard over a slate
    shirt with a collar. o.pose: 'talk' (a hand going) or 'wave' */
 function drawWalker(s, c, o) {
   const M = o.M, P = s.P, u = s.g.u * WALK_SC, t = s.reduced ? 0 : s.t, col = h => mul(hex(h), P.paper);
@@ -3250,11 +3250,10 @@ function drawWalker(s, c, o) {
     print(c, bd, beard);
     c.beginPath(); ribbon(c, bd, TEX, 7, { tin: 1, tout: 1, outline: true }); c.fillStyle = INK; c.fill();
   } else {
-    // a short full beard, from the ear round the chin, a little darker at the moustache
+    // a short full beard, from the ear round the chin and over the lip, all one shade
     const bd = curve([[-4.3 * u, -29.6 * u], [-3.3 * u, -24.8 * u], [0.6 * u, -22.8 * u], [4.4 * u, -23.7 * u], [5.8 * u, -26.4 * u], [5.5 * u, -28.4 * u], [3 * u, -27.4 * u], [-0.6 * u, -28.2 * u]], 2, true);
     print(c, bd, mix(skin, beard, 0.62));
     c.beginPath(); ribbon(c, curve([[-4.3 * u, -29.6 * u], [-3.3 * u, -24.8 * u], [0.6 * u, -22.8 * u], [4.4 * u, -23.7 * u], [5.8 * u, -26.4 * u]], 2), TEX * 0.8, 7, { tin: 1, tout: 2, outline: true }); c.fillStyle = INK; c.fill();
-    c.beginPath(); ribbon(c, [[2.6 * u, -27.8 * u], [4.4 * u, -28.3 * u], [6 * u, -27.6 * u]], DET * 1.1, 7, { tin: 1, tout: 1 }); c.fillStyle = rgba(beard); c.fill();
   }
   dot(c, 2.8 * u, -30.9 * u, 0.9 * u + 0.3, INK);
   dot(c, 5.7 * u, -29.4 * u, 1.3 * u, mix(skin, hex('#E0786A'), 0.45));
