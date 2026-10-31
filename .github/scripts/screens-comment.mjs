@@ -30,7 +30,10 @@ const isCount = (value, minimum = 0) => Number.isSafeInteger(value) && value >= 
 const isMessage = (value, limit = maximumMessage) => typeof value === "string" && value.length > 0 && value.length <= limit;
 const isHex = (value, length) => typeof value === "string" && value.length === length && /^[0-9a-f]+$/.test(value);
 const isImageName = (name) => /^[A-Za-z0-9][A-Za-z0-9._~-]*\.png$/.test(name) && !name.includes("..") && name.length <= 200;
-const isScreenId = (id) => /^(docs|scenes|site)\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && !id.includes("..") && id.length <= 100;
+const isScreenId = (id, prefixes) => typeof id === "string" && prefixes.includes(id.split("/")[0])
+  && /^[a-z]+\/[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id) && !id.includes("..") && id.length <= 100;
+/** The name compare-screens.mjs gives a screen's image of one kind. */
+const imageOf = (id, kind) => `${id.replaceAll("/", "~")}-${kind}.png`;
 
 /** `text` on one line and at most `limit` characters long. */
 function cut(text, limit) {
@@ -68,12 +71,12 @@ export function validateArtifact(files) {
   return { ok: problems.length === 0, problems: problems.slice(0, maximumProblems) };
 }
 
-function readScreen(screen, where, files, ids, problems) {
+function readScreen(screen, where, files, ids, prefixes, problems) {
   if (!hasOnly(screen, ["id", "status", "changedPixels", "region", "images", "baseError"])) {
     problems.push(`${where} isn't a screen as compare-screens.mjs writes it.`);
     return null;
   }
-  if (!isScreenId(screen.id)) problems.push(`${where}: its id isn't docs/, scenes/ or site/ followed by a plain name.`);
+  if (!isScreenId(screen.id, prefixes)) problems.push(`${where}: its id isn't ${prefixes.map((prefix) => `${prefix}/`).join(" or ")} followed by a plain name.`);
   else if (ids.has(screen.id)) problems.push(`${where}: ${code(screen.id)} is listed twice.`);
   ids.add(screen.id);
   if (!statuses.includes(screen.status)) {
@@ -91,7 +94,9 @@ function readScreen(screen, where, files, ids, problems) {
     problems.push(`${where}: a screen that is ${screen.status} comes with ${kinds.length ? kinds.join(", ") : "no images"}.`);
   } else {
     for (const kind of kinds) {
-      if (!isImageName(screen.images[kind]) || !files.has(screen.images[kind])) problems.push(`${where}: its ${kind} image isn't in the artifact.`);
+      const file = screen.images[kind];
+      if (typeof screen.id !== "string" || file !== imageOf(screen.id, kind)) problems.push(`${where}: its ${kind} image isn't named after it.`);
+      else if (!isImageName(file) || !files.has(file)) problems.push(`${where}: its ${kind} image isn't in the artifact.`);
     }
   }
   if (screen.baseError !== undefined && !isMessage(screen.baseError)) problems.push(`${where}: baseError isn't a message of at most ${maximumMessage} characters.`);
@@ -105,9 +110,10 @@ function readScreen(screen, where, files, ids, problems) {
 
 /**
  * The screens and failures of an artifact's manifest.json, or why it can't be used. `names` are the
- * artifact's files. Only known fields come back, and every image a screen names is one of those files.
+ * artifact's files, and `prefixes` the kinds of screens it may hold. Only known fields come back, and
+ * every image a screen names is one of those files, named after the screen.
  */
-export function readManifest(text, names) {
+export function readManifest(text, names, prefixes = ["docs", "scenes", "site"]) {
   const invalid = (problems) => ({ ok: false, problems: problems.slice(0, maximumProblems), screens: [], failed: [] });
   let manifest = null;
   try {
@@ -121,7 +127,7 @@ export function readManifest(text, names) {
   if (manifest.screens.length > maximumScreens) return invalid([`manifest.json lists more than ${maximumScreens} screens.`]);
   if (manifest.failed.length > maximumFailures) return invalid([`manifest.json lists more than ${maximumFailures} failures.`]);
   const problems = [], files = new Set(names), ids = new Set();
-  const screens = manifest.screens.map((screen, index) => readScreen(screen, `Screen ${index + 1}`, files, ids, problems));
+  const screens = manifest.screens.map((screen, index) => readScreen(screen, `Screen ${index + 1}`, files, ids, prefixes, problems));
   const failed = manifest.failed.map((entry, index) => {
     if (hasOnly(entry, ["id", "error"]) && isMessage(entry.id, 300) && isMessage(entry.error)) return { id: entry.id, error: entry.error };
     problems.push(`Failure ${index + 1} isn't an id and a message of at most ${maximumMessage} characters.`);
@@ -244,6 +250,11 @@ export function commentBody({ baseRef = "main", base, head, screens, failed = []
   return body;
 }
 
+/** A comment without screens: why there are none, which is the bot's own text, the review line and the data. */
+export function noScreensBody({ reason, review, data }) {
+  return [marker, "### Before and after", "", reason, "", reviewSection(review, data)].join("\n");
+}
+
 /** `body` with a new review line and data, for label events, which don't draw anything. */
 export function withReview(body, review, data) {
   const start = body.lastIndexOf(`\n${reviewHeading} `);
@@ -282,3 +293,9 @@ export const assetName = (pr, sha, file) => `pr${pr}-${sha.slice(0, 7)}-${file}`
 
 /** The pre-release that holds a month's images. */
 export const releaseTag = (date) => `pr-previews-${date.toISOString().slice(0, 7)}`;
+
+/** A pull request's images. GitHub may rename the rest of an asset's name, but not this prefix. */
+export const pullRequestAssets = (assets, pr) => assets.filter((asset) => asset.name.startsWith(`pr${pr}-`));
+
+/** A pull request's images of other heads than `sha`. */
+export const staleAssets = (assets, pr, sha) => pullRequestAssets(assets, pr).filter((asset) => !asset.name.startsWith(assetName(pr, sha, "")));

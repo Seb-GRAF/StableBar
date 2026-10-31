@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateArtifact, readManifest, fingerprint, summary, reviewState, commentBody, withReview, readData, findScreensComment,
-  assetName, releaseTag } from "./screens-comment.mjs";
+import { validateArtifact, readManifest, fingerprint, summary, reviewState, commentBody, withReview, noScreensBody, readData,
+  findScreensComment, assetName, releaseTag, staleAssets, pullRequestAssets } from "./screens-comment.mjs";
 
 const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const sha = (character) => character.repeat(40);
@@ -58,6 +58,7 @@ test("readManifest rejects what compare-screens doesn't write", () => {
     "failure without message": manifest([], [{ id: "scenes/x" }]),
     "too many screens": manifest(Array.from({ length: 301 }, (_, index) => screen(`docs/s${index}`, "unchanged"))),
     "too many failures": manifest([], Array.from({ length: 51 }, (_, index) => ({ id: `scenes/s${index}`, error: "x" }))),
+    "image of another screen": manifest([{ ...good, id: "docs/b" }]),
   };
   for (const [name, text] of Object.entries(cases)) {
     const read = readManifest(text, names);
@@ -65,6 +66,17 @@ test("readManifest rejects what compare-screens doesn't write", () => {
     assert.deepEqual([read.screens, read.failed], [[], []], name);
     assert.ok(read.problems.length > 0 && read.problems.length <= 20, name);
   }
+  const missing = readManifest(manifest([good]), names.filter((name) => name !== "docs~a-diff.png"));
+  assert.deepEqual([missing.ok, missing.problems], [false, ["Screen 1: its diff image isn't in the artifact."]]);
+});
+
+test("readManifest takes only the ids an artifact may hold", () => {
+  const names = ["docs~a-after.png"];
+  const text = JSON.stringify({ screens: [screen("docs/a", "added", { after: names[0] })], failed: [{ id: "docs", error: "x" }] });
+  assert.equal(readManifest(text, names, ["docs", "scenes"]).ok, true);
+  const site = readManifest(text, names, ["site"]);
+  assert.equal(site.ok, false);
+  assert.match(site.problems[0], /site\//);
 });
 
 test("fingerprint covers each changed screen's image and every failure, in any order", () => {
@@ -190,6 +202,15 @@ test("withReview replaces only the review line and the data", () => {
   assert.doesNotMatch(updated, /taken off/);
 });
 
+test("noScreensBody says why there are no screens and keeps the data", () => {
+  const review = { state: "success", description: "No screens to compare.", removeLabel: false };
+  const body = noScreensBody({ reason: "This pull request changes neither the app nor the website.", review, data: data({ ranScreens: false }) });
+  assert.match(body, /^<!-- stablebar-screens -->\n### Before and after\n\nThis pull request changes neither/);
+  assert.match(body, /\*\*Visual review:\*\* No screens to compare\./);
+  assert.deepEqual(readData(body), data({ ranScreens: false }));
+  assert.equal(withReview(body, review, data()), noScreensBody({ reason: "This pull request changes neither the app nor the website.", review, data: data() }));
+});
+
 test("readData reads only the data on the comment's last line", () => {
   const line = (value) => `<!-- stablebar-screens-data ${JSON.stringify(value)} -->`;
   assert.deepEqual(readData(`<!-- stablebar-screens -->\ntext\n${line(data())}`), data());
@@ -213,4 +234,11 @@ test("findScreensComment trusts only the bot's comment", () => {
 test("assetName and releaseTag name the uploaded images", () => {
   assert.equal(assetName(412, "abcdef1234", "docs~hero-dark-after.png"), "pr412-abcdef1-docs~hero-dark-after.png");
   assert.equal(releaseTag(new Date("2026-11-03T10:00:00Z")), "pr-previews-2026-11");
+});
+
+test("staleAssets and pullRequestAssets pick a pull request's images by name", () => {
+  const assets = ["pr7-abcdef1-docs.a-after.png", "pr7-1234567-docs.a-after.png", "pr70-1234567-docs.a-after.png", "pr8-abcdef1-x.png", "other.png"]
+    .map((name, id) => ({ id, name }));
+  assert.deepEqual(staleAssets(assets, 7, "abcdef1234").map((asset) => asset.name), ["pr7-1234567-docs.a-after.png"]);
+  assert.deepEqual(pullRequestAssets(assets, 7).map((asset) => asset.name), ["pr7-abcdef1-docs.a-after.png", "pr7-1234567-docs.a-after.png"]);
 });
