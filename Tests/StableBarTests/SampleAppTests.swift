@@ -1,15 +1,19 @@
 import AppKit
+import os
 import SwiftUI
 import Testing
 @testable import StableBar
 
 /// Records requests to `offline-image.invalid` and fails them, so a test can tell which images asked the network.
+/// The URL loading system records from its own threads while the test reads on the main actor, so a lock guards the list.
 private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var requests: [URL] = []
+    private static let recorded = OSAllocatedUnfairLock<[URL]>(initialState: [])
+    static var requests: [URL] { recorded.withLock { $0 } }
+    static func reset() { recorded.withLock { $0 = [] } }
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "offline-image.invalid" }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        if let url = request.url { Self.requests.append(url) }
+        if let url = request.url { Self.recorded.withLock { $0.append(url) } }
         client?.urlProtocol(self, didFailWithError: URLError(.notConnectedToInternet))
     }
     override func stopLoading() {}
@@ -25,7 +29,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
 @Test @MainActor func offlineImagesMakeNoRequest() async throws {
     URLProtocol.registerClass(RecordingURLProtocol.self)
     defer { URLProtocol.unregisterClass(RecordingURLProtocol.self) }
-    RecordingURLProtocol.requests = []
+    RecordingURLProtocol.reset()
     func show(_ path: String, offline: Bool) -> NSWindow {
         let window = NSWindow(contentRect: CGRect(x: -9000, y: -6000, width: 120, height: 120), styleMask: [.borderless],
                               backing: .buffered, defer: false)

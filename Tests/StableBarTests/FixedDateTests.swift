@@ -57,6 +57,40 @@ private func difference(_ first: [UInt8], _ second: [UInt8]) -> Int {
     #expect(format.sample(at: fixed) != format.sample(at: fixed.addingTimeInterval(86_400)))
 }
 
+/// `content` drawn in an offscreen window, where a scroll view lays out its lazy grids, as the bitmap's bytes.
+@MainActor private func windowPixels(_ content: some View, size: NSSize) throws -> [UInt8] {
+    let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: -9000, y: -6000), size: size), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    let view = NSHostingView(rootView: content)
+    view.frame = CGRect(origin: .zero, size: size)
+    window.contentView = view
+    window.orderFrontRegardless()
+    view.layoutSubtreeIfNeeded()
+    let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+    view.cacheDisplay(in: view.bounds, to: bitmap)
+    let data = try #require(bitmap.bitmapData)
+    return Array(UnsafeBufferPointer(start: data, count: bitmap.bytesPerRow * bitmap.pixelsHigh))
+}
+
+@Test @MainActor func clockSettingsSamplesDrawTheFixedDate() throws {
+    // The clock shows only the time, so its own row draws the same a day later: only the format samples, which show
+    // dates, can tell the two days apart, and they do only if they draw the date the render gives them.
+    let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right","format":"HH:mm"}]}"#)
+    defer { fixture.close() }
+    let editor = ConfigurationEditor(store: try fixture.store())
+    editor.selectedID = "clock"
+    func settings(_ date: Date) throws -> [UInt8] {
+        try windowPixels(BarInspector(editor: editor, screen: .laptop, kinds: [.laptop], names: [:], source: { _ in .builtIn },
+                                      useSharedBar: { _ in }, remove: { _ in }, scrollPositions: .constant([:]))
+            .environment(\.fixedDate, date), size: NSSize(width: 560, height: 1000))
+    }
+    let first = try settings(fixed)
+    #expect(try difference(settings(fixed.addingTimeInterval(86_400)), first) > 1)
+    #expect(try difference(settings(fixed), first) <= 1)
+}
+
 @Test @MainActor func shimmerDrawsTheFixedDate() async throws {
     func shimmer() throws -> [UInt8] {
         try pixels(Text("Loading the answer").font(.system(size: 20)).modifier(Shimmer(active: true))
