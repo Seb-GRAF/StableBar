@@ -3,7 +3,7 @@
 // It writes cropped before, after and difference images of each changed screen to OUT, and adds the
 // screens to OUT/manifest.json: {screens: [{id, status, changedPixels, region, images, baseError?}], failed: [{id, error}]}.
 // The trusted half of the bot checks that manifest strictly: see readManifest in screens-comment.mjs.
-import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, basename } from "node:path";
 import { pathToFileURL } from "node:url";
 import { decodePNG, encodePNG } from "./png.mjs";
@@ -187,4 +187,5 @@ export function main(argv) {
   console.log(`${prefix}: ${screens.length} screens, ${changed} changed, ${failed.length} failed`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main(process.argv.slice(2));
+// Node names a module by its real path, so the path it was called by is resolved first.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) main(process.argv.slice(2));

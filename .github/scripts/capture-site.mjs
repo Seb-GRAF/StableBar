@@ -101,7 +101,8 @@ export async function capture(site, out, { channel } = {}) {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+// Node names a module by its real path, so the path it was called by is resolved first.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [site, out] = process.argv.slice(2);
   if (!site || !out) {
     console.error("usage: capture-site.mjs SITE OUT");

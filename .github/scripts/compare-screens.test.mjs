@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { comparePair, compareDirectories, main } from "./compare-screens.mjs";
@@ -72,4 +75,15 @@ test("main notes every new scene when the base wrote no scenes report", () => {
   assert.deepEqual(manifest.screens.map((screen) => [screen.id, screen.status, screen.baseError]),
     [["scenes/bar-dark", "added", "The base build wrote no scenes.json, so it may not draw scenes yet."]]);
   assert.deepEqual(manifest.failed, [{ id: "scenes/broken", error: "draw: Unknown value" }]);
+});
+
+test("the command lines run when called through a symbolic link", () => {
+  // /tmp on macOS is a link to /private/tmp, and Node names a module by its real path.
+  const link = join(mkdtempSync(join(tmpdir(), "scripts-")), "scripts");
+  symlinkSync(dirname(fileURLToPath(import.meta.url)), link);
+  for (const [script, status] of [["compare-screens.mjs", 1], ["capture-site.mjs", 64]]) {
+    const run = spawnSync(process.execPath, [join(link, script)], { encoding: "utf8" });
+    assert.equal(run.status, status, script);
+    assert.match(run.stderr, /usage: /, script);
+  }
 });
