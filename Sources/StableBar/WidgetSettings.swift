@@ -131,10 +131,10 @@ struct WidgetClockFormat {
         Self(title: "Date + seconds", value: "EEE d MMM  HH:mm:ss")
     ]
 
-    var sample: String {
+    func sample(at date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = value
-        return formatter.string(from: .now)
+        return formatter.string(from: date)
     }
 }
 

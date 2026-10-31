@@ -25,16 +25,18 @@ struct ClockCalendar: View {
     let openCalendar: () -> Void
     @State private var offset = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.fixedDate) private var fixedDate
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
+            let now = fixedDate ?? context.date
             let zone = timeZone.flatMap(TimeZone.init(identifier:)) ?? .autoupdatingCurrent
-            let month = ClockMonth(date: context.date, offset: offset, timeZone: zone)
+            let month = ClockMonth(date: now, offset: offset, timeZone: zone)
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(formatted(context.date, in: zone, pattern: nil))
+                    Text(formatted(now, in: zone, pattern: nil))
                         .font(.system(size: 34, weight: .medium, design: .rounded)).monospacedDigit()
-                    Text(formatted(context.date, in: zone, pattern: "EEEE, d MMMM yyyy"))
+                    Text(formatted(now, in: zone, pattern: "EEEE, d MMMM yyyy"))
                         .font(.system(size: 12)).opacity(0.6)
                     if timeZone != nil {
                         Text(zone.identifier.replacingOccurrences(of: "_", with: " "))
@@ -61,7 +63,7 @@ struct ClockCalendar: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 3) {
                         ForEach(0..<42) { index in
                             if let date = month.days[index] {
-                                let today = month.calendar.isDate(date, inSameDayAs: context.date)
+                                let today = month.calendar.isDate(date, inSameDayAs: now)
                                 Text(String(month.calendar.component(.day, from: date)))
                                     .font(.system(size: 12, weight: today ? .semibold : .regular)).monospacedDigit()
                                     .foregroundStyle(today ? appearance.accentText : appearance.foreground)

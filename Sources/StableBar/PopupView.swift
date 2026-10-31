@@ -838,12 +838,13 @@ struct Shimmer: ViewModifier {
     let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.measuringBarWidths) private var measuring
+    @Environment(\.fixedDate) private var fixedDate
 
     func body(content: Content) -> some View {
         if active && !reduceMotion && !measuring {
             content.overlay {
                 TimelineView(.animation) { timeline in
-                    let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8
+                    let phase = (fixedDate ?? timeline.date).timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.8) / 1.8
                     GeometryReader { proxy in
                         LinearGradient(colors: [.clear, .white.opacity(0.85), .clear], startPoint: .leading, endPoint: .trailing)
                             .frame(width: proxy.size.width * 0.4)
@@ -934,6 +935,7 @@ struct WidgetImage: View {
     let fit: ImageFit
     @State private var image: NSImage?
     @State private var error = ""
+    @Environment(\.offline) private var offline
 
     var body: some View {
         Group {
@@ -956,6 +958,7 @@ struct WidgetImage: View {
                 } else {
                     url = URL(filePath: NSString(string: path).expandingTildeInPath)
                 }
+                if offline, !url.isFileURL { return }
                 if url.isFileURL {
                     let file = try url.resourceValues(forKeys: [.isApplicationKey, .isExecutableKey, .isRegularFileKey, .contentTypeKey])
                     if file.isApplication == true || file.isExecutable == true && file.isRegularFile == true && file.contentType?.conforms(to: .image) != true {
