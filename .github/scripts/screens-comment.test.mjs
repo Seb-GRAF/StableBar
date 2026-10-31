@@ -7,7 +7,8 @@ const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const sha = (character) => character.repeat(40);
 const digest = (character) => character.repeat(64);
 const screen = (id, status, images = {}, extra = {}) => ({ id, status, changedPixels: status === "changed" ? 120 : 0,
-  region: status === "changed" ? { x: 10, y: 20, width: 30, height: 40 } : null, images, ...extra });
+  region: status === "changed" ? { x: 10, y: 20, width: 30, height: 40 } : null, images,
+  ...(status === "changed" || status === "resized" ? { afterDigest: "e".repeat(64) } : {}), ...extra });
 const data = (extra = {}) => ({ head: sha("a"), base: sha("b"), ranScreens: true, fingerprint: digest("f"), approved: null,
   total: 2, changed: 1, failed: 0, failure: null, ...extra });
 const urls = (file) => `https://example.test/${file}`;
@@ -55,6 +56,9 @@ test("readManifest rejects what compare-screens doesn't write", () => {
     "no region": manifest([{ ...good, region: null }]),
     "negative count": manifest([{ ...good, changedPixels: -1 }]),
     "long base error": manifest([screen("docs/a", "added", { after: names[0] }, { baseError: "x".repeat(1001) })]),
+    "changed without its digest": manifest([{ ...good, afterDigest: undefined }]),
+    "digest not hex": manifest([{ ...good, afterDigest: "x".repeat(64) }]),
+    "truncated not a flag": manifest([{ ...good, truncated: "yes" }]),
     "failure without message": manifest([], [{ id: "scenes/x" }]),
     "too many screens": manifest(Array.from({ length: 301 }, (_, index) => screen(`docs/s${index}`, "unchanged"))),
     "too many failures": manifest([], Array.from({ length: 51 }, (_, index) => ({ id: `scenes/s${index}`, error: "x" }))),
@@ -104,10 +108,13 @@ test("fingerprint covers each changed screen's image and every failure, in any o
   }
   const resized = screens.map((entry) => (entry.id === "docs/b" ? { ...entry, status: "resized", images: { before: "x.png", after: "b-after.png" } } : entry));
   assert.notEqual(fingerprint({ screens: resized, failed: [] }, hash), first);
+  // The whole after image counts, not only the crop shown.
+  const further = screens.map((entry) => (entry.id === "docs/a" ? { ...entry, afterDigest: "f".repeat(64) } : entry));
+  assert.notEqual(fingerprint({ screens: further, failed: [] }, hash), first);
   assert.notEqual(fingerprint({ screens, failed: [{ id: "scenes/x", error: "draw: Unknown value" }] }, hash), first);
   // A message can't pass for another entry.
   const real = fingerprint({ screens: [screens[0]], failed: [{ id: "scenes/x", error: "y" }] }, hash);
-  const forged = fingerprint({ screens: [], failed: [{ id: "scenes/x", error: "y\nscreen docs/a changed 11" }] }, hash);
+  const forged = fingerprint({ screens: [], failed: [{ id: "scenes/x", error: `y\nscreen docs/a changed 11 ${"e".repeat(64)}` }] }, hash);
   assert.notEqual(real, forged);
 });
 
@@ -158,6 +165,10 @@ test("commentBody shows changed screens, folds the rest and keeps its data", () 
   assert.match(body, /^<!-- stablebar-screens -->/);
   assert.match(body, /`main` at 1111111 → this pull request at aaaaaaa/);
   assert.match(body, /\| Screen \| Change \| Where \(image pixels\) \|/);
+  assert.doesNotMatch(body, /first 1,600 rows/);
+  const long = commentBody({ base: sha("1"), head: sha("a"), failed: [], imageURL: urls, review, data: data(),
+    screens: [screen("site/page-dark", "changed", { before: "b.png", after: "a.png", diff: "d.png" }, { truncated: true })] });
+  assert.match(long, /The images show the first 1,600 rows of this change\./);
   assert.match(body, /https:\/\/example\.test\/b\.png/);
   assert.match(body, /https:\/\/example\.test\/d\.png/);
   assert.match(body, /The base couldn't draw this scene: `draw: Unknown value`/);

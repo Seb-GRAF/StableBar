@@ -1,8 +1,10 @@
 // Compares the screens drawn from a pull request (after) with those drawn from its base (before):
 //   node compare-screens.mjs BEFORE AFTER OUT --prefix docs [--before-report scenes.json] [--after-report scenes.json]
 // It writes cropped before, after and difference images of each changed screen to OUT, and adds the
-// screens to OUT/manifest.json: {screens: [{id, status, changedPixels, region, images, baseError?}], failed: [{id, error}]}.
+// screens to OUT/manifest.json: {screens: [{id, status, changedPixels, region, images, afterDigest?,
+// truncated?, baseError?}], failed: [{id, error}]}.
 // The trusted half of the bot checks that manifest strictly: see readManifest in screens-comment.mjs.
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, basename } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -20,6 +22,8 @@ const tallest = 1600;
 const maximumMessage = 1000;
 
 const cut = (text, limit) => (text.length <= limit ? text : `${text.slice(0, limit - 1)}…`);
+/** A digest of an image's pixels: a changed or resized screen carries its whole after image's, since its crop may show only part. */
+const digestOf = ({ width, height, rgba }) => createHash("sha256").update(`${width}x${height}\n`).update(rgba).digest("hex");
 /** Image names the bot can show, since they become file and asset names. */
 const isPlainName = (name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && !name.includes("..") && name.length <= 80;
 
@@ -108,13 +112,13 @@ function padded(region, image) {
   };
   const [x0, x1] = span(region.x, region.width, image.width, smallest.width);
   const [y0, y1] = span(region.y, region.height, image.height, smallest.height);
-  return { x: x0, y: y0, width: x1 - x0, height: Math.min(y1, y0 + tallest) - y0 };
+  return { x: x0, y: y0, width: x1 - x0, height: Math.min(y1, y0 + tallest) - y0, cut: y1 > y0 + tallest };
 }
 
 /** The crop of `image` for a screen of a new height: full width, from `padding` above the first change, at most `tallest` rows. */
 function resizedCrop(region, image) {
   const y = Math.max(0, region.y - padding);
-  return { x: 0, y, width: image.width, height: Math.min(image.height, y + tallest) - y };
+  return { x: 0, y, width: image.width, height: Math.min(image.height, y + tallest) - y, cut: image.height > y + tallest };
 }
 
 /** The part of `image` inside `region`. */
@@ -175,6 +179,7 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
     const result = comparePair(before, after);
     const file = (kind) => `${id.replaceAll("/", "~")}-${kind}.png`;
     const images = {};
+    let truncated = false;
     const save = (kind, image) => {
       writeFileSync(join(outDir, file(kind)), encodePNG(image));
       images[kind] = file(kind);
@@ -184,10 +189,13 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
       save("before", crop(before, region));
       save("after", crop(after, region));
       save("diff", differenceImage(before, after, region));
+      truncated = region.cut;
     } else if (result.status === "resized" && result.region) {
-      save("before", crop(before, resizedCrop(result.region, before)));
-      save("after", crop(after, resizedCrop(result.region, after)));
-      save("diff", differenceImage(before, after, resizedCrop(result.region, after)));
+      const beforeCrop = resizedCrop(result.region, before), afterCrop = resizedCrop(result.region, after);
+      save("before", crop(before, beforeCrop));
+      save("after", crop(after, afterCrop));
+      save("diff", differenceImage(before, after, afterCrop));
+      truncated = beforeCrop.cut || afterCrop.cut;
     } else if (result.status === "resized") {
       save("before", before);
       save("after", after);
@@ -197,6 +205,8 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
       save("before", before);
     }
     const screen = { id, ...result, images };
+    if (result.status === "changed" || result.status === "resized") screen.afterDigest = digestOf(after);
+    if (truncated) screen.truncated = true;
     const error = beforeErrors[sceneName(name)] ?? beforeError;
     if (result.status === "added" && error) screen.baseError = cut(error, maximumMessage);
     return screen;

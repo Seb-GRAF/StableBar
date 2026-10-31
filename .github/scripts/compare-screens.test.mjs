@@ -136,8 +136,31 @@ test("a screen of a new height is cropped from its first change, full width", ()
   const diff = decodePNG(readFileSync(join(out, page.images.diff)));
   assert.deepEqual([...diff.rgba.subarray(0, 4)], [12, 12, 12, 255]);
   assert.deepEqual([...diff.rgba.subarray((60 * 100) * 4, (60 * 100) * 4 + 4)], [255, 59, 48, 255]);
-  // A long change shows its first 1,600 rows.
-  assert.deepEqual([size(tall.images.before), size(tall.images.after)], [[10, 1600], [10, 1600]]);
+  // A long change shows its first 1,600 rows, and says so.
+  assert.deepEqual([size(tall.images.before), size(tall.images.after), tall.truncated], [[10, 1600], [10, 1600], true]);
+  assert.equal(page.truncated, undefined);
   // A new width can't be lined up: both images are shown whole.
   assert.deepEqual([wide.region, Object.keys(wide.images).sort(), size(wide.images.after)], [null, ["after", "before"], [120, 50]]);
+});
+
+test("changed and resized screens carry a digest of their whole after image", () => {
+  const root = mkdtempSync(join(tmpdir(), "screens-"));
+  const before = join(root, "before");
+  mkdirSync(before);
+  const page = image(10, 2000);
+  writeFileSync(join(before, "page-dark.png"), encodePNG(page));
+  // Both changes span rows 100 to 1901, and the crop shows rows 52 to 1651.
+  const tall = paint(paint(page, 0, 100, 10, 2, [255, 255, 255, 255]), 0, 1900, 10, 2, [255, 255, 255, 255]);
+  const runs = [tall, paint(tall, 0, 1800, 10, 2, [255, 255, 255, 255])].map((after) => {
+    const folder = join(root, `after-${Math.random()}`), out = join(root, `out-${Math.random()}`);
+    mkdirSync(folder);
+    writeFileSync(join(folder, "page-dark.png"), encodePNG(after));
+    const [screen] = compareDirectories(before, folder, out, { prefix: "site" }).screens;
+    return { screen, crop: readFileSync(join(out, screen.images.after)) };
+  });
+  // A change inside the region but past the crop leaves the crop as it was, but not the digest.
+  assert.deepEqual(runs[0].crop, runs[1].crop);
+  assert.equal(runs[0].screen.truncated, true);
+  assert.match(runs[0].screen.afterDigest, /^[0-9a-f]{64}$/);
+  assert.notEqual(runs[0].screen.afterDigest, runs[1].screen.afterDigest);
 });

@@ -75,7 +75,7 @@ export function validateArtifact(files) {
 }
 
 function readScreen(screen, where, files, ids, prefixes, problems) {
-  if (!hasOnly(screen, ["id", "status", "changedPixels", "region", "images", "baseError"])) {
+  if (!hasOnly(screen, ["id", "status", "changedPixels", "region", "images", "afterDigest", "truncated", "baseError"])) {
     problems.push(`${where} isn't a screen as compare-screens.mjs writes it.`);
     return null;
   }
@@ -101,10 +101,15 @@ function readScreen(screen, where, files, ids, prefixes, problems) {
     }
   }
   if (screen.baseError !== undefined && !isMessage(screen.baseError)) problems.push(`${where}: baseError isn't a message of at most ${maximumMessage} characters.`);
+  const cropped = screen.status === "changed" || screen.status === "resized";
+  if (cropped ? !isHex(screen.afterDigest, 64) : screen.afterDigest !== undefined) problems.push(`${where}: afterDigest doesn't fit its status.`);
+  if (screen.truncated !== undefined && typeof screen.truncated !== "boolean") problems.push(`${where}: truncated isn't true or false.`);
   return {
     id: screen.id, status: screen.status, changedPixels: screen.changedPixels,
     region: regionFits && region !== null ? { x: region.x, y: region.y, width: region.width, height: region.height } : null,
     images: Object.fromEntries(kinds.map((kind) => [kind, screen.images?.[kind]])),
+    ...(cropped ? { afterDigest: screen.afterDigest } : {}),
+    ...(screen.truncated === true ? { truncated: true } : {}),
     ...(screen.baseError === undefined ? {} : { baseError: screen.baseError }),
   };
 }
@@ -138,14 +143,16 @@ export function readManifest(text, names, prefixes = ["docs", "scenes", "site"])
 }
 
 /**
- * What a maintainer approves with visual-ok: each changed screen with its status and the image the
- * comment shows of it, its after image or, once removed, its before image, and every failure.
- * `digest(file)` is the SHA-256 of an image the bot uploads. Order doesn't matter.
+ * What a maintainer approves with visual-ok: each changed screen with its status, the image the
+ * comment shows of it, its after image or, once removed, its before image, the digest of its whole
+ * after image, since a crop may show only part of a change, and every failure. `digest(file)` is the
+ * bot's own digest of an image it uploads; the whole image's digest comes from the pull request's CI,
+ * which decides its screens anyway. Order doesn't matter.
  */
 export function fingerprint({ screens = [], failed = [] }, digest) {
   const entries = [
     ...screens.filter((screen) => screen.status !== "unchanged")
-      .map((screen) => ["screen", screen.id, screen.status, digest(screen.images.after ?? screen.images.before)]),
+      .map((screen) => ["screen", screen.id, screen.status, digest(screen.images.after ?? screen.images.before), screen.afterDigest ?? null]),
     ...failed.map((entry) => ["failed", entry.id, entry.error]),
   ].map((entry) => JSON.stringify(entry)).sort();
   return createHash("sha256").update(JSON.stringify(entries)).digest("hex");
@@ -196,6 +203,7 @@ function section(screen, imageURL) {
   const image = (file, label) => `<img src="${attribute(imageURL(file))}" alt="${label}">`;
   const lines = [`#### ${code(screen.id)}`];
   if (screen.baseError) lines.push("", `The base couldn't draw this scene: ${code(screen.baseError, 300)}`);
+  if (screen.truncated) lines.push("", "The images show the first 1,600 rows of this change.");
   const { before, after, diff } = screen.images;
   if (before && after) {
     lines.push("", "| Before | After |", "| --- | --- |", `| ${image(before, "Before")} | ${image(after, "After")} |`);
