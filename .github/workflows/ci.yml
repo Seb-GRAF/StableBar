@@ -368,7 +368,9 @@ jobs:
           mkdir playwright
           cd playwright
           npm init --yes > /dev/null
-          npm install --no-audit --no-fund playwright@1
+          # One exact version: a newer Chromium can draw text a pixel differently, which a rerun would
+          # report as a change. Raise it on purpose.
+          npm install --no-audit --no-fund playwright@1.64.1
           npx playwright install --with-deps chromium
       - name: Capture the website
         run: |

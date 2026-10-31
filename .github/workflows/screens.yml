@@ -48,9 +48,17 @@ jobs:
         id: plan
         uses: actions/github-script@v8
         with:
+          # A plan that fails marks the head errored, as Apply does, so a required Visual review doesn't wait forever.
           script: |
-            const { plan } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
-            const chosen = await plan({ github, context });
+            const bot = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
+            let chosen;
+            try {
+              chosen = await bot.plan({ github, context });
+            } catch (error) {
+              const number = await bot.pullRequestNumber({ github, context }).catch(() => null);
+              await bot.failRun({ github, context, number }).catch((failure) => core.warning(failure.message));
+              throw error;
+            }
             core.info(`Plan: ${chosen.action}${chosen.number ? ` for #${chosen.number}` : ""}${chosen.run ? ` from run ${chosen.run.id}` : ""}`);
             core.setOutput("plan", JSON.stringify(chosen));
             core.setOutput("run-id", chosen.run?.id ?? "");

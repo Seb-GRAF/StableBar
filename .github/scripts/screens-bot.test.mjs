@@ -7,7 +7,7 @@ import zlib from "node:zlib";
 import { decodePNG, encodePNG } from "./png.mjs";
 import { main as compare } from "./compare-screens.mjs";
 import { readData, releaseTag } from "./screens-comment.mjs";
-import { apply, changePatterns, failRun, plan } from "./screens-bot.mjs";
+import { apply, changePatterns, failRun, plan, pullRequestNumber } from "./screens-bot.mjs";
 
 const head = "a".repeat(40), oldHead = "c".repeat(40), base = "b".repeat(40);
 const repo = { owner: "Seb-GRAF", repo: "StableBar" };
@@ -466,6 +466,20 @@ test("closing unmerged deletes the images from every month; merging keeps them; 
   Object.assign(merged.state.pr, { state: "closed", merged: true });
   assert.deepEqual(await reconcile(merged.github, prEvent("closed")), { action: "close", deleted: 0 });
   assert.equal(merged.state.deleted.length, 0);
+});
+
+test("a reconcile that can't plan still finds its pull request, so its head is marked errored", async () => {
+  const { github, state } = fakeGitHub();
+  github.rest.actions.listWorkflowRuns = async () => {
+    throw Object.assign(new Error("Server Error"), { status: 502 });
+  };
+  // As the Plan step does: a fork's CI run lists no pull request, so the number comes from its branch.
+  await assert.rejects(plan({ github, context: runEvent() }), /Server Error/);
+  const number = await pullRequestNumber({ github, context: runEvent() });
+  assert.equal(number, 7);
+  await failRun({ github, context: runEvent(), number });
+  assert.deepEqual(state.statuses.map((status) => [status.sha, status.state]), [[head, "error"]]);
+  assert.equal(await pullRequestNumber({ github, context: prEvent("labeled") }), 7);
 });
 
 test("failRun marks an open pull request's head when the bot itself fails", async () => {

@@ -44,6 +44,15 @@ async function pullRequestOfRun({ github, owner, repo, run }) {
 }
 
 /**
+ * The pull request an event is about: in a label, edit or close event's payload, or for a CI run, the
+ * open one it was for. The workflow also asks for it when plan() fails, to mark that head errored.
+ */
+export async function pullRequestNumber({ github, context }) {
+  const { owner, repo } = context.repo;
+  return context.payload.pull_request?.number ?? await pullRequestOfRun({ github, owner, repo, run: context.payload.workflow_run });
+}
+
+/**
  * The newest finished CI run for the pull request's head, from its own head repository and branch: a
  * pull request from another fork at the same commit has runs of its own, and they don't count.
  */
@@ -64,7 +73,7 @@ async function latestRun({ github, owner, repo, pr }) {
  */
 export async function plan({ github, context }) {
   const { owner, repo } = context.repo;
-  const number = context.payload.pull_request?.number ?? await pullRequestOfRun({ github, owner, repo, run: context.payload.workflow_run });
+  const number = await pullRequestNumber({ github, context });
   if (!number) return { action: "none" };
   const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
   if (pr.state !== "open") return { action: "close", number };
