@@ -19,9 +19,11 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 }
 
-@Test @MainActor func sampleAppComesFromItsBundle() {
+@Test @MainActor func sampleAppComesFromItsBundle() throws {
     let app = SampleApp(bundleIdentifier: "com.apple.calculator")
-    #expect(app.localizedName == "Calculator")
+    // The name in the system's language, as Finder shows it: "Calculator" in English, "Calculette" in French.
+    let url = try #require(NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.calculator"))
+    #expect(app.localizedName == (FileManager.default.displayName(atPath: url.path) as NSString).deletingPathExtension)
     #expect(app.icon != nil)
     #expect(app.bundleIdentifier == "com.apple.calculator")
 }
