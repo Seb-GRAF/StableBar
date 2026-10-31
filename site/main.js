@@ -1009,12 +1009,13 @@ function onBar(event, key, info = {}) {
    and strains again.
    Its light comes on for good as the headline comes in: it reads it, sweeps along the bar and looks at you (WAKE in
    scene.js). On every load at the top, with motion allowed (the class and the night come from the page's head); until
-   the page has come in, a scroll, a key, a click or a tap brings it in at once, the lighthouse awake. */
-let landed = !root.classList.contains("intro"), woken = landed, rose = landed, runTimer = 0, landTimer = 0;
+   the page has come in, a scroll, a key, a click or a tap hurries it in, the lighthouse awake. */
+let landed = !root.classList.contains("intro"), woken = landed, rose = landed, runTimer = 0, landTimer = 0, barIn = null;
 const swept = new Map();
 const opening = document.getElementById("opening"), snore = document.getElementById("snore");
 const LAND_SKIP = ["wheel", "keydown", "pointerdown", "touchstart", "scroll"];
 const DAWN = 1.6; // seconds from night to day
+const HURRY = 3; // times as fast as the show plays once hurried
 const WAKE_AT = 1100, RISE_AFTER = 3600; // ms: asleep for a while, then awake at night, until the day comes
 // it wakes into the day, or into the night when that's the visitor's choice on the night switch
 const dayMode = () => localStorage.getItem("mode") === "dark" ? "dark" : "light";
@@ -1024,7 +1025,7 @@ function land(skip) {
   landed = true;
   clearTimeout(runTimer);
   clearTimeout(landTimer);
-  for (const type of LAND_SKIP) removeEventListener(type, skipLanding, true);
+  for (const type of LAND_SKIP) removeEventListener(type, hurry, true);
   removeEventListener("visibilitychange", skipHidden);
   if (skip) { root.classList.add("intro-skip"); setMode(dayMode()); }
   root.classList.remove("intro", "op-bar-in", "op-page-in");
@@ -1036,8 +1037,19 @@ function land(skip) {
   if (skip) { wakeUp(true); requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("intro-skip"))); }
   setTimeout(quietSpell); // the bored lighthouse's quiet spell starts now (not before the page's script has run)
 }
-// (a click or a tap that brings it in doesn't also drop something on the landscape: see pressedInOpening)
-function skipLanding() { land(true); }
+// hurried: the lighthouse is awake at once and the rest of the show plays HURRY times as fast, the bar easing out at
+// once if it hasn't left yet; once it's at the top, only its fade into the real bar is left, which keeps its pace
+// (a click or a tap that hurries it doesn't also drop something on the landscape: see pressedInOpening)
+function hurry() {
+  for (const type of LAND_SKIP) removeEventListener(type, hurry, true);
+  clearTimeout(runTimer);
+  wakeUp(true);
+  if (!rose) rise(true);
+  clearTimeout(landTimer);
+  if (!root.classList.contains("op-bar-in")) for (const a of opening.getAnimations({ subtree: true })) a.updatePlaybackRate(HURRY);
+  root.classList.add("op-page-in");
+  barIn.then(() => land(false));
+}
 // nobody watching: it comes in rather than play on unseen
 function skipHidden() { if (document.hidden) land(true); }
 // it wakes up: the z's go, the drawing comes to life, the eye opens and it strains to light its lamp on the card's
@@ -1057,14 +1069,14 @@ function wakeUp(now) {
 }
 // then the day comes, and with it the page: the bar rises into place while the sky, the sun and the moon turn and the
 // card changes with them; the lighthouse puts its weak light out, and its light comes on for good on the headline
-function rise() {
+function rise(fast) {
   if (landed) return;
   if (document.hidden) return land(true);
   const ends = headlineEnds();
   rose = true;
   for (const t of glowTiles || []) t.el.style.removeProperty("--glow"); // (its weak light goes out: see glowBar)
-  expandOpening();
-  setMode(dayMode(), DAWN);
+  expandOpening(fast);
+  setMode(dayMode(), fast ? DAWN / HURRY : DAWN);
   S("rising", ...(ends || []));
   landTimer = setTimeout(() => land(false), DAWN * 1000 + 100);
 }
@@ -1104,7 +1116,7 @@ function placeSnore(s) {
    window's width as it rises to the top, shrinking to the real bar's height, its widgets sliding apart as it widens.
    The card's words drift away, the notes come in while it rises, and at the top the real bar fades in under it and
    the copy fades away. The copy is made before the day comes, so its colours change with the sky's */
-function expandOpening() {
+function expandOpening(fast) {
   const pill = opening.querySelector(".op-bar"), a = pill.getBoundingClientRect(), b = bar.getBoundingClientRect(), k = b.height / a.height;
   const fly = pill.cloneNode(true);
   fly.classList.add("op-fly");
@@ -1114,13 +1126,13 @@ function expandOpening() {
   const grow = fly.animate([
     { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, transform: "scale(1)", borderRadius: "22px" },
     { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width / k}px`, transform: `scale(${k})`, borderRadius: "0px" },
-  ], { duration: 1100, easing: "cubic-bezier(.45, 0, .25, 1)", fill: "forwards" });
+  ], { duration: 1100, easing: fast ? ease : "cubic-bezier(.45, 0, .25, 1)", fill: "forwards" });
   for (const el of opening.querySelectorAll(".op-mark, .op-line")) el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-28px)" }], { duration: 600, easing: "ease-in", fill: "forwards" });
   setTimeout(() => { if (!landed) root.classList.add("op-page-in"); }, 650);
-  grow.finished.then(() => {
+  barIn = grow.finished.then(() => {
     if (landed) return;
     root.classList.add("op-bar-in");
-    fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" });
+    return fly.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, fill: "forwards" }).finished;
   }, () => {});
 }
 /* While the light sweeps the bar, each widget it passes glows for a moment */
@@ -1136,7 +1148,7 @@ function sweepGlow(s) {
 if (!landed) {
   if (scrollY > 0 || document.hidden) land(true);
   else {
-    for (const type of LAND_SKIP) addEventListener(type, skipLanding, { capture: true, passive: true });
+    for (const type of LAND_SKIP) addEventListener(type, hurry, { capture: true, passive: true });
     addEventListener("visibilitychange", skipHidden);
     S("labels", false);
     S("doze", true); // asleep, its eye shut and its lamp out,
