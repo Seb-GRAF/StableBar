@@ -407,11 +407,21 @@ export async function apply({ github, context, plan: chosen, folders = {} }) {
   return { action: "review", review: await review(state) };
 }
 
-/** Marks an open pull request's head as errored when the bot itself fails, so a required Visual review doesn't wait forever. */
+/**
+ * Marks an open pull request's head as errored when the bot itself fails, so a required Visual review doesn't
+ * wait forever. When GitHub can't say where the pull request stands, a label, edit or close event's own pull
+ * request does: a base change whose reconcile failed must not keep the old comparison's status.
+ */
 export async function failRun({ github, context, number }) {
   if (!number) return;
   const { owner, repo } = context.repo;
-  const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+  let pr;
+  try {
+    pr = (await github.rest.pulls.get({ owner, repo, pull_number: number })).data;
+  } catch (error) {
+    if (context.payload.pull_request?.number !== number) throw error;
+    pr = context.payload.pull_request;
+  }
   if (pr.state !== "open") return;
   await github.rest.repos.createCommitStatus({ owner, repo, sha: pr.head.sha, state: "error", context: statusContext,
     description: "The screens bot failed: see the Screens workflow run.", target_url: `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}` });

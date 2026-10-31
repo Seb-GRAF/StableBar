@@ -482,6 +482,19 @@ test("a reconcile that can't plan still finds its pull request, so its head is m
   assert.equal(await pullRequestNumber({ github, context: prEvent("labeled") }), 7);
 });
 
+test("failRun falls back on the event's own pull request when GitHub can't answer", async () => {
+  const { github, state } = fakeGitHub();
+  github.rest.pulls.get = async () => {
+    throw Object.assign(new Error("Server Error"), { status: 502 });
+  };
+  // A base change whose plan failed on reading the pull request: the event carries its head.
+  const edited = prEvent("edited", { pull_request: { number: 7, state: "open", head: { sha: head } } });
+  await failRun({ github, context: edited, number: 7 });
+  assert.deepEqual(state.statuses.map((status) => [status.sha, status.state]), [[head, "error"]]);
+  // A CI run carries no pull request to fall back on.
+  await assert.rejects(failRun({ github, context: runEvent(), number: 7 }), /Server Error/);
+});
+
 test("failRun marks an open pull request's head when the bot itself fails", async () => {
   const { github, state } = fakeGitHub();
   await failRun({ github, context: runEvent(), number: 7 });
