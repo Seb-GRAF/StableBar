@@ -618,6 +618,15 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
 .widgets { --left: 6vw; }
 .tiling { --left: 7.5vw; }
 .install { --left: 5vw; }
+/* The footer. Out at sea its links are on the islands' signposts (see setSigns in scene.js), so there it's for
+   keyboards and screen readers, and shows when one of its links has the focus; without the dive it ends the page */
+.foot { position: relative; z-index: 1; padding: 0 0 14vh 5vw; }
+.foot .note { --rot: .4deg; --tape-x: 82%; --tape-r: 4deg; width: min(44vw, 620px); font-size: 16px; line-height: 1.5; }
+.foot .note > * + * { margin-top: 10px; }
+.foot .links span { display: contents; }
+/* (over a signpost's board, the pointer says it's a link: see main.js) */
+.on-board { cursor: pointer; }
+.has-dive .foot:not(:focus-within) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Narrow landscape screens: wider notes so the Download button stays on its paper, still clear of the lighthouse at 0.775 × width */
 @media (min-width: 700px) and (max-width: 1023.98px) {
   .hero-note, .sec .note { width: min(58vw, 620px); }
@@ -804,6 +813,8 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
   .key { width: auto; max-width: 680px; margin-top: 28px; }
   .sec { display: block; min-height: 0; padding-top: 34vh; padding-bottom: 6vh; }
   .install { padding-bottom: 12vh; }
+  .foot { padding: 0 var(--m) 10vh; }
+  .foot .note { width: auto; max-width: 680px; }
   h1 { font-size: clamp(34px, 9.4vw, 58px); }
 }
 @media (max-width: 719.98px) {

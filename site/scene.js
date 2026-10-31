@@ -238,35 +238,50 @@ const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
    round in this order (the first one is the page's far island); each is a ridge and a shore, as fractions of the width
    and, up from the horizon, of the sky or, down from it, of the sea it stands on (see layout). `lx` is the lighthouse,
    `cx` the cottage. Each wears one of the other themes: its lighthouse's pyjamas, and its ground by day (lit and
-   shady), darker with the hour like the page's green. */
+   shady), darker with the hour like the page's green. `sign` is where its signpost stands, on the tip toward the
+   middle, and which way its boards point (see setSigns); on the first, `walk` is the stretch of slope its two
+   strollers go to and fro on, from x0 to x1 at one depth (see stroll), and `cx2` a second cottage, one each. */
 // (an island seen at its own size stands this far down its sea, as a part of it: it's as far off as the sea there)
 const DIVE_GAP = 7, SHORE = 0.27;
 const ISLANDS = [
   // on the right, a snowy peak: the lighthouse on its shoulder, the cottage on a ledge above it
   { theme: 'nord', ground: ['#E8EDF4', '#BFCBDB'],
     ridge: [[0.52, 0.12], [0.56, 0.02], [0.6, -0.08], [0.65, -0.1], [0.69, -0.13], [0.74, -0.24], [0.79, -0.38], [0.82, -0.42], [0.85, -0.37], [0.9, -0.24], [0.95, -0.1], [0.99, 0.12]],
-    shore: [[0.52, 0.12], [0.6, 0.21], [0.72, 0.26], [0.86, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.63, cx: 0.71 },
+    shore: [[0.52, 0.12], [0.6, 0.21], [0.72, 0.26], [0.86, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.63, cx: 0.71, cx2: 0.915,
+    sign: [0.565, 0.13, -1], walk: [0.62, 0.93, 0.155] },
   // on the left, a table mountain: steep all round, flat on top
   { theme: 'gruvbox', ground: ['#B8BB26', '#98971A'],
     ridge: [[0.02, 0.12], [0.04, 0], [0.06, -0.12], [0.08, -0.17], [0.13, -0.18], [0.2, -0.18], [0.27, -0.17], [0.33, -0.16], [0.36, -0.11], [0.38, -0.02], [0.4, 0.12]],
-    shore: [[0.02, 0.12], [0.08, 0.22], [0.2, 0.26], [0.32, 0.23], [0.4, 0.12]], lx: 0.3, cx: 0.17 },
+    shore: [[0.02, 0.12], [0.08, 0.22], [0.2, 0.26], [0.32, 0.23], [0.4, 0.12]], lx: 0.3, cx: 0.17,
+    sign: [0.37, 0.11, 1] },
   // on the right, two round hills: the cottage in the dip between them, the lighthouse on the far one
   { theme: 'catppuccin', ground: ['#F5C2E7', '#DDA3CF'],
     ridge: [[0.53, 0.12], [0.56, 0], [0.6, -0.1], [0.64, -0.15], [0.68, -0.13], [0.72, -0.07], [0.76, -0.06], [0.8, -0.11], [0.85, -0.19], [0.9, -0.2], [0.95, -0.12], [0.99, 0.12]],
-    shore: [[0.53, 0.12], [0.6, 0.22], [0.72, 0.26], [0.85, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.88, cx: 0.74 },
+    shore: [[0.53, 0.12], [0.6, 0.22], [0.72, 0.26], [0.85, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.88, cx: 0.74, sign: [0.575, 0.13, -1] },
   // on the left, a long slope up from a beach to a cliff over the middle, the lighthouse on its edge
   { theme: 'leman', ground: ['#7CCDB4', '#5AB198'],
     ridge: [[0, 0.12], [0.04, 0.06], [0.1, 0], [0.17, -0.05], [0.24, -0.1], [0.3, -0.15], [0.35, -0.19], [0.38, -0.2], [0.4, -0.14], [0.41, -0.02], [0.42, 0.12]],
-    shore: [[0, 0.12], [0.08, 0.2], [0.2, 0.24], [0.33, 0.24], [0.42, 0.12]], lx: 0.355, cx: 0.18 },
+    shore: [[0, 0.12], [0.08, 0.2], [0.2, 0.24], [0.33, 0.24], [0.42, 0.12]], lx: 0.355, cx: 0.18, sign: [0.395, 0.12, 1] },
   // on the right, a small dark crag: the lighthouse on top, the cottage at its foot
   { theme: 'notch', ground: ['#4A4B55', '#36373F'],
     ridge: [[0.6, 0.12], [0.62, 0.04], [0.66, 0], [0.7, -0.02], [0.73, -0.12], [0.75, -0.26], [0.78, -0.32], [0.82, -0.31], [0.85, -0.22], [0.88, -0.08], [0.91, 0.12]],
-    shore: [[0.6, 0.12], [0.66, 0.2], [0.76, 0.24], [0.86, 0.22], [0.91, 0.12]], lx: 0.8, cx: 0.67 },
+    shore: [[0.6, 0.12], [0.66, 0.2], [0.76, 0.24], [0.86, 0.22], [0.91, 0.12]], lx: 0.8, cx: 0.67, sign: [0.615, 0.12, -1] },
   // on the left, wide and low, sand dunes
   { theme: 'phosphor', ground: ['#F2C46A', '#D9A548'],
     ridge: [[0, 0.12], [0.03, 0.02], [0.08, -0.05], [0.13, -0.07], [0.18, -0.04], [0.23, -0.06], [0.28, -0.11], [0.33, -0.12], [0.38, -0.08], [0.43, -0.02], [0.46, 0.04], [0.48, 0.12]],
-    shore: [[0, 0.12], [0.07, 0.22], [0.2, 0.27], [0.36, 0.25], [0.45, 0.19], [0.48, 0.12]], lx: 0.31, cx: 0.13 },
+    shore: [[0, 0.12], [0.07, 0.22], [0.2, 0.27], [0.36, 0.25], [0.45, 0.19], [0.48, 0.12]], lx: 0.31, cx: 0.13, sign: [0.44, 0.13, 1] },
 ];
+/* The two who made StableBar, as they stroll on the first island: their colours (hair, beard, shirt, trousers) and
+   where each walks, `side` to the left of the other and `near` a step nearer, and which of the island's cottages is
+   his (see stroll and drawWalker) */
+const MAKERS = {
+  seb: { hair: '#A06A42', beard: '#C9753A', shirt: '#A4B89C', legs: '#4A5D82', skin: '#F4CFB2', curls: true, side: -1, near: 0, home: 'cot' },
+  steve: { hair: '#2A221E', beard: '#3A2E28', shirt: '#3F5B78', legs: '#34363E', skin: '#EDC4A2', collar: true, side: 1, near: 1, home: 'cot2' },
+};
+// their size, times the keeper's
+const WALK_SC = 1.35;
+// what they say to each other on a stop, a line each
+const CHATS = [['ship it?', 'ship it.'], ['is it stable?', 'it’s in the name'], ['one more widget', '…fine'], ['who wrote this one?', 'a sheep']];
 /* What each island has of its own: its light, its animals, grass and box, its games with the bar (the page's
    only). One island's state at a time lives on the scene (see enter); the others wait in their world objects. */
 const islandState = () => ({
@@ -281,6 +296,9 @@ const islandState = () => ({
   visit: null, knocks: { n: 0, at: -9 },
   // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
   flocked: false, meadow: [], sproutAt: 0,
+  // its signpost: the board under the pointer and since when, and each board's outline as last drawn (see drawSign);
+  // and the two strolling on it, if it's theirs (see stroll)
+  boards: { hot: -1, at: -9, hits: [] }, pair: null,
   box: { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null },
 });
 const ISLAND = ['g', ...Object.keys(islandState())];
@@ -335,9 +353,10 @@ function tower(g, x, base, h, er) {
      draw    { name(base, ...args) }: any of the drawings named in Hill.felt.draw, in place of the felt pen's, which comes
              as base to call or not. The drawings call each other through DRAW, so an override is used wherever
              its drawing is, by the felt ones too.
-   A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, and obj gets s): s.g the
-   geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh the tower, lamp, cot the cottage,
-   clouds, sheepCloud, stars, tufts), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
+   A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, obj gets s, and walker
+   gets s and one of s.walkers()): s.g the geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh
+   the tower, lamp, cot the cottage, clouds, sheepCloud, stars, tufts; on an island, sign its signpost and walk its
+   strollers' line), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
    style on, s.theme the visitor's theme, s.beam, s.pres how far in each section's scene is, s.reduced. Lengths are CSS
    pixels of the scene; sizes go in u (g.u, 1 on a window of about 1138 by 1138) and pens in pw. The islands of the
    dive use the same drawings in their own s.g, on a canvas scaled by view, each in its own theme's style (but the
@@ -359,7 +378,7 @@ const FELT = {
     eye: drawEye, hat: drawHat, box: drawBox, leap: drawLeap, meadow: drawMeadow, obj: drawObj, sheep: drawSheep,
     cow: drawCow, gull: drawGull, duck: drawDuck, monster: drawMonster, states: drawStates, washing: drawWashing,
     huts: drawHuts, desk: drawDesk, doorway: drawDoorway, editKeeper: drawEditKeeper, keeper: drawKeeper, tile: drawTile,
-    labels: drawLabels, splashes: drawSplashes, ball: drawBall, doodles: drawDoodles,
+    labels: drawLabels, splashes: drawSplashes, ball: drawBall, doodles: drawDoodles, sign: drawSign, walker: drawWalker,
   },
 };
 const STYLES = { 'built-in': FELT };
@@ -516,8 +535,8 @@ class Scene {
     const at = ([fx, fy]) => [fx * W, hz + fy * (fy < 0 ? sky : sea)];
     const g = this.g = { ...b, isle: true, theme: I.theme, ground: I.ground.map(hex), ridge: curve(I.ridge.map(at), 6), shore: curve(I.shore.map(at), 6), note: { x0: 0, x1: 0, y0: 0, y1: 0 }, key: null };
     const lx = I.lx * W, h = sky * 0.5, er = clamp(h * 0.062, b.portrait ? 0 : 11.5, 22), cx = I.cx * W, cw = Math.min(h * 0.3, W * 0.13);
-    // the lighthouse and the cottage stand on level ground, cut into the slope
-    for (const [x, w] of [[lx, er * 2.6], [cx, cw]]) {
+    // the lighthouse and the cottage (and a second one, if it has one) stand on level ground, cut into the slope
+    for (const [x, w] of [[lx, er * 2.6], [cx, cw], ...(I.cx2 ? [[I.cx2 * W, cw]] : [])]) {
       const y = this.ridgeY(x);
       g.ridge = g.ridge.map(([px, py]) => [px, lerp(y, py, smooth(w * 0.55, w * 1.2, Math.abs(px - x)))]);
     }
@@ -527,10 +546,24 @@ class Scene {
     g.land = [g.ridge[0][0] + 20 * u, g.ridge.at(-1)[0] - 20 * u, (I.lx + I.cx) / 2 * W];
     tower(g, lx, this.ridgeY(lx) + 2 * u, h, er);
     g.cot ={ x: cx, base: this.ridgeY(cx) + 3 * u, w: cw, h: cw * 0.62 };
+    if (I.cx2) g.cot2 = { x: I.cx2 * W, base: this.ridgeY(I.cx2 * W) + 3 * u, w: cw, h: cw * 0.62 };
     g.tufts = this.tufts(rng(this.o.seed + cx));
+    // its signpost, planted in the grass, and the line its strollers walk
+    const [sx, sy, dir] = I.sign;
+    g.sign = { x: sx * W, y: hz + sy * sea, dir, i: ISLANDS.indexOf(I) };
+    if (I.walk) {
+      g.walk = { x0: I.walk[0] * W, x1: I.walk[1] * W, y: hz + I.walk[2] * sea };
+      for (const [who, M] of Object.entries(MAKERS)) if (g[M.home]) g[M.home].who = who;
+    }
     this.g = was;
     return g;
   }
+  /* The footer's links, for the signposts out at sea: one sign an island, in the order the islands come (see ISLANDS),
+     each { title, boards: [{ text, href }] }: a plank for the title, if there is one, and a board pointing on for
+     each link (see drawSign). The page follows a board that's clicked (see atSea). */
+  setSigns(list) { this.signs = Array.isArray(list) ? list : []; this.wake(); }
+  // the sign on the island being drawn, or null
+  signOf(g = this.g) { return g.sign && this.signs?.[g.sign.i]?.boards?.length ? this.signs[g.sign.i] : null; }
   destroy() {
     this.dead = true; this.sleep(); this.ro.disconnect();
     this.mq.removeEventListener?.('change', this.onMQ);
@@ -552,7 +585,30 @@ class Scene {
   sky() { const c = this.P && (TINT ? TINT(this.P.sky) : this.P.sky); return c ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null; }
 
   /* ----- input, in client coordinates ----- */
+  /* What's at a point out at sea: a board of a signpost ({ href }) or one of the two strolling ({ who }), on the
+     nearest island close enough to read, or null. `mark`: the board found is the one under the pointer from now on,
+     and the others aren't (it swings as the pointer comes onto it: see drawSign) */
+  atSea(x, y, mark = false) {
+    if (!this.dive) return null;
+    const p = this.cursor, was = { x: p.x, y: p.y };
+    p.x = x - this.ox; p.y = y - this.oy;
+    let out = null;
+    for (const w of this.shown().reverse()) {
+      this.enter(w);
+      const q = this.ptr, b = out || w.view.s < 0.45 ? null : this.boards.hits.find(h => inPoly(h.pts, q.x, q.y));
+      if (b) out = { href: b.href, i: b.i };
+      else if (!out) { const who = this.whoAt(q.x, q.y); if (who) out = { who }; }
+      if (mark) {
+        const i = b ? b.i : -1;
+        if (i !== this.boards.hot) { this.boards.hot = i; if (i >= 0) this.boards.at = this.t; }
+      }
+    }
+    Object.assign(p, was);
+    this.enter(this.focus());
+    return out;
+  }
   pointer(x, y, kind = 'mouse') {
+    const hot = this.atSea(x, y, true);
     x -= this.ox; y -= this.oy;
     const now = performance.now() / 1000, p = this.cursor;
     if (p.on && now - p.last < 0.25) {
@@ -571,8 +627,15 @@ class Scene {
     if (this.reduced) this.aim(x, y);
     this.poke();
     this.wake();
+    // (the page points at a board or a stroller: see atSea)
+    return hot;
   }
-  release() { this.cursor.on = this.ptr.on = false; this.wake(); }
+  release() {
+    this.cursor.on = this.ptr.on = false;
+    for (const w of this.shown()) { this.enter(w); this.boards.hot = -1; }
+    this.enter(this.focus());
+    this.wake();
+  }
   // to the island under it, the nearest first, or else to the one being looked at
   tap(x, y) {
     Object.assign(this.cursor, { x: x - this.ox, y: y - this.oy });
@@ -585,6 +648,13 @@ class Scene {
   onTower(x, y) { const T = this.g.lh; return y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base; }
   tapAt(x, y) {
     this.poke();
+    // one of the two strolling: he stops, waves and says hi; nothing drops
+    const who = this.whoAt(x, y);
+    if (who) {
+      this.hello(who);
+      this.wake();
+      return false;
+    }
     // the lighthouse plays ball instead of catching things (and winks when it can't)
     if (this.onTower(x, y)) {
       if (!this.play()) this.blink.wink = this.t;
@@ -598,10 +668,11 @@ class Scene {
       this.wake();
       return false;
     }
-    // the cottage's door: knock knock, and the keeper comes to see who's there; nothing drops
-    if (this.doorHit(x, y)) {
+    // a cottage's door: knock knock, and the keeper (or whoever lives there) comes to see who's there; nothing drops
+    const door = this.doorHit(x, y);
+    if (door) {
       this.aim(x, y);
-      this.knock();
+      this.knock(door);
       this.wake();
       return false;
     }
@@ -1100,7 +1171,7 @@ class Scene {
     const g = this.g, { W, H, u } = g, T = g.lh, out = [];
     for (let x = g.ridge[0][0] + 14 * u; x < W; x += (13 + R() * 15) * u) {
       const y = this.ridgeY(x);
-      if (y == null || y > H + 4 || Math.abs(x - T.x) < T.wB * 0.7 || (x > g.cot.x - g.cot.w * 0.55 && x < g.cot.x + g.cot.w * 0.5)) continue;
+      if (y == null || y > H + 4 || Math.abs(x - T.x) < T.wB * 0.7 || [g.cot, g.cot2].some(k => k && x > k.x - k.w * 0.55 && x < k.x + k.w * 0.5)) continue;
       out.push({ x, y, l: (8 + R() * 7) * Math.max(u, 0.62), p: R() * TAU, n: 3 + ((R() * 2.2) | 0) });
     }
     return out;
@@ -1301,7 +1372,7 @@ class Scene {
   }
   busy() {
     if (this.swap || this.wipe || this.sweep || this.wakePath || this.gaze || this.visit || this.t - this.knocks.at < 0.5 || this.showing() || this.t - this.wokeAt < WAKE.open + 0.2 || this.t - this.labelsAt < 0.6) return true;
-    if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01) return true;
+    if (Math.abs(this.box.lid - (this.boxEmpty() ? 1 : 0)) > 0.01 || this.pair?.check) return true;
     if (this.d !== (this.dEff ?? this.dTarget) || (this.state === 'install') !== (this.pres.install > 0.999)) return true;
     for (const k of STATES) { const p = this.pres[k]; if (p > 0.001 && p < 0.999) return true; }
     if (this.ripples.length) return true;
@@ -1411,6 +1482,7 @@ class Scene {
     this.updateBox(dt);
     this.updateBall(dt);
     this.updateBore();
+    if (g.walk) this.stroll(dt);
     this.doodles = this.doodles.filter(d => this.t - d.t0 < d.life);
     this.splashes = this.splashes.filter(p => this.t - p.t0 < 0.7);
   }
@@ -1583,7 +1655,9 @@ class Scene {
     if (bx.gx != null && Math.abs(x - bx.gx) < 44 * u && y > bx.gy - 46 * u && y < bx.gy + 18 * u) return false;
     if (g.key && x > g.key.x0 && x < g.key.x1 && y > g.key.y0 - 30 * u) return false;
     if (Math.abs(x - T.x) < T.wB * 0.9 + 20 * u && y < T.base + 42 * u) return false;
-    if (Math.abs(x - k.x) < k.w * 0.8 + 18 * u && y < k.base + 32 * u) return false;
+    for (const c of [k, g.cot2]) if (c && Math.abs(x - c.x) < c.w * 0.8 + 18 * u && y < c.base + 32 * u) return false;
+    const sg = g.sign;
+    if (sg && Math.abs(x - sg.x) < 36 * u && y > sg.y - 44 * u && y < sg.y + 18 * u) return false;
     if (this.state === 'tiling' || this.pres.tiling > 0.01) for (const q of hutSpots(this)) if (Math.abs(x - q.x) < 42 * u && y > q.y - 74 * u && y < q.y + 24 * u) return false;
     if (this.state === 'widgets' || this.pres.widgets > 0.01) { const d = deskSpot(this); if (Math.abs(x - d.x) < 66 * u && y > d.y - 110 * u && y < d.y + 24 * u) return false; }
     return true;
@@ -1800,23 +1874,26 @@ class Scene {
     const p = this.boxAt(), k = p.k, pad = this.ptr.kind === 'touch' ? 14 : 7;
     return x > p.x - BOX.hw * k - pad && x < p.x + (BOX.hw + BOX.dx) * k + pad && y > p.y + (BOX.dy - BOX.hh) * k - pad && y < p.y + BOX.hh * k + pad;
   }
-  // the cottage's door, with a little room round it
+  // the cottage whose door is there, with a little room round it (an island may have two: see ISLANDS), or null
   doorHit(x, y) {
-    const d = this.g.cot.door, pad = this.ptr.kind === 'touch' ? 10 : 5;
-    return !!d && x > d.x - pad && x < d.x + d.w + pad && y > d.y - pad && y < d.y + d.h + pad;
+    const pad = this.ptr.kind === 'touch' ? 10 : 5;
+    return [this.g.cot, this.g.cot2].find(k => { const d = k?.door; return d && x > d.x - pad && x < d.x + d.w + pad && y > d.y - pad && y < d.y + d.h + pad; }) || null;
   }
   // a knock: the door jumps and says so, a little more with each knock in a row; at the third the keeper comes to the
   // door (see VISIT and drawVisit), unless he's out on the ridge with his tile (nobody comes) or already at the open
-  // door at night
-  knock() {
-    const k = this.g.cot, d = k.door, kn = this.knocks;
-    if (this.visit) return;
-    kn.n = this.t - kn.at < 2.5 ? kn.n + 1 : 1;
-    kn.at = this.t;
+  // door at night. A cottage one of the strollers lives in (k.who): he goes over to see who's there (see answer)
+  knock(k = this.g.cot) {
+    const d = k.door, kn = this.knocks;
+    if (this.visit || this.pair?.check) return;
+    kn.n = this.t - kn.at < 2.5 && kn.k === k ? kn.n + 1 : 1;
+    kn.at = this.t; kn.k = k;
     this.doodles = this.doodles.filter(o => o.kind !== 'knock');
-    this.doodle('knock', k.x + k.w * 0.62, d.y + d.h * 0.3, { text: ['knock', 'knock knock', 'knock knock knock'][Math.min(kn.n, 3) - 1], align: 'left', life: 1.3 });
+    // (the second cottage's, to the left of its door: it stands near the island's right edge)
+    const left = k === this.g.cot2;
+    this.doodle('knock', left ? d.x - 4 * this.g.u : k.x + k.w * 0.62, d.y + d.h * 0.3, { text: ['knock', 'knock knock', 'knock knock knock'][Math.min(kn.n, 3) - 1], align: left ? 'right' : 'left', life: 1.3 });
     if (kn.n < 3 || this.pres.install > 0.01) return;
     kn.n = 0;
+    if (k.who && this.pair) return this.answer(k);
     this.visit = { t0: this.t, away: this.pres.edit > 0.01, huh: false };
   }
   // a click or a tap: it hops (not without motion) and says so, higher and louder with each knock in a row
@@ -1940,6 +2017,100 @@ class Scene {
       if (this.seen((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2)) return side;
     }
     return null;
+  }
+
+  /* ----- the two who made it -----
+     On the snowy peak, the first island out at sea, Seb and Steve stroll side by side along the slope (g.walk): to
+     one end, a stop, and back, now and then stopping on the way for a line each (CHATS). Point at them and they stop
+     and look at you; tap one and he waves and says hi. Without motion they stand and talk. Each lives in one of the
+     island's two cottages (MAKERS' home): knock three times on his door and he hurries over to see who's there,
+     looks one way and the other, and comes back (see answer); the other waits for him. */
+  stroll(dt) {
+    const g = this.g, u = g.u, t = this.t, W = g.walk, R = Math.random, rm = this.reduced;
+    const p = this.pair ||= { x: lerp(W.x0, W.x1, 0.3 + R() * 0.4), dir: R() < 0.5 ? -1 : 1, act: 'go', until: t + 3 + R() * 4, ph: 0, next: (R() * CHATS.length) | 0, say: null, hi: null, look: null, check: null };
+    if (p.hi && t - p.hi.t0 > 2) p.hi = null;
+    // a line, and the other's answer a moment later
+    const sy = p.say;
+    if (sy && !sy.answered && t - sy.t0 > 1.5) { sy.answered = true; this.say(sy.who === 'seb' ? 'steve' : 'seb', sy.lines[1]); }
+    if (p.check) return this.atDoor(dt);
+    // watched: the pointer close by
+    const q = this.ptr, mid = W.y - 18 * u * WALK_SC;
+    p.look = q.on && q.kind === 'mouse' && Math.abs(q.x - p.x) < 80 * u && Math.abs(q.y - mid) < 60 * u ? q.x : null;
+    if (rm) { p.x = (W.x0 + W.x1) / 2; p.act = 'chat'; return; }
+    if (p.hi || p.look != null) return;
+    if (p.act === 'go') {
+      p.x += p.dir * 19 * u * dt; p.ph += dt * 8.5;
+      if (p.x > W.x1 || p.x < W.x0) { p.x = clamp(p.x, W.x0, W.x1); p.act = 'turn'; p.until = t + 1.2 + R() * 1.6; }
+      else if (t > p.until) {
+        p.act = 'chat'; p.until = t + 4;
+        const first = R() < 0.5 ? 'seb' : 'steve', lines = CHATS[p.next++ % CHATS.length];
+        p.say = { who: first, lines, t0: t, answered: false };
+        this.say(first, lines[0]);
+      }
+    } else if (t > p.until) {
+      if (p.act === 'turn') p.dir = -p.dir;
+      p.act = 'go'; p.until = t + 8 + R() * 8;
+    }
+  }
+  // someone knocked three times at his cottage k: he goes to his door
+  answer(k) {
+    const o = this.walkers().find(w => w.who === k.who);
+    if (!o || !k.door) return;
+    this.pair.check = { who: k.who, k, stage: 'go', x: o.x, y: o.y, ph: 0, face: 1, t0: this.t, said: false };
+    this.wake();
+  }
+  // over to the door, quickly; there he says hello, looks one way and the other, and comes back to his place
+  atDoor(dt) {
+    const g = this.g, u = g.u, t = this.t, p = this.pair, ck = p.check, d = ck.k.door, M = MAKERS[ck.who];
+    const to = ck.stage === 'go' ? [d.x + d.w / 2, ck.k.base + 1.5 * u] : ck.stage === 'back' ? [p.x + M.side * 13 * u, g.walk.y + M.near * 6 * u] : null;
+    if (to) {
+      const dx = to[0] - ck.x, dy = to[1] - ck.y, dist = Math.hypot(dx, dy), step = 58 * u * dt;
+      if (this.reduced || dist <= step) {
+        ck.x = to[0]; ck.y = to[1];
+        if (ck.stage === 'go') { ck.stage = 'look'; ck.t0 = t; } else p.check = null;
+      } else { ck.x += dx / dist * step; ck.y += dy / dist * step; ck.ph += dt * 13; ck.face = Math.sign(dx) || ck.face; }
+      return;
+    }
+    const a = t - ck.t0;
+    if (!ck.said) { ck.said = true; this.say(ck.who, 'hello?', 1.6); }
+    ck.face = a < 1 ? -1 : 1;
+    if (a > 2.3) ck.stage = 'back';
+  }
+  // the two of them as they're drawn: where each stands, which way he faces, his stride and his pose
+  walkers() {
+    const p = this.pair, W = this.g.walk;
+    if (!p || !W) return [];
+    const u = this.g.u, t = this.t, ck = p.check, going = p.act === 'go' && !p.hi && p.look == null && !ck && !this.reduced;
+    return Object.entries(MAKERS).map(([who, M]) => {
+      const hi = p.hi?.who === who;
+      // at his door, or on his way there or back
+      if (ck?.who === who) return { who, M, x: ck.x, y: ck.y, flip: ck.face < 0, walk: ck.stage === 'look' ? 0 : ck.ph, pose: hi ? 'wave' : null };
+      const x = p.x + M.side * 13 * u, y = W.y + M.near * 6 * u;
+      // walking, the way they go; stopped, toward each other; watched, toward the pointer; waiting, toward the one away
+      let face = going ? p.dir : -M.side;
+      if (p.look != null) face = p.look < x ? -1 : 1;
+      if (ck) face = ck.x < x ? -1 : 1;
+      const talk = p.say && (p.say.answered ? who !== p.say.who : who === p.say.who) && t - p.say.t0 < 3.2;
+      return { who, M, x, y, flip: face < 0, walk: going ? p.ph + (M.side > 0 ? 2.2 : 0) : 0, pose: hi ? 'wave' : talk ? 'talk' : null };
+    });
+  }
+  whoAt(x, y) {
+    const k = this.g.u * WALK_SC;
+    return this.walkers().find(o => Math.abs(x - o.x) < 9 * k && y > o.y - 40 * k && y < o.y + 3 * k)?.who || null;
+  }
+  // a line over his head, away from the other's
+  say(who, text, life = 1.9) {
+    const o = this.walkers().find(w => w.who === who);
+    if (!o) return;
+    const k = this.g.u * WALK_SC, left = o.M.side < 0;
+    this.doodle('chat', o.x + (left ? 3 : -3) * k, o.y - 47 * k, { text, align: left ? 'right' : 'left', life, calm: true });
+  }
+  hello(who) {
+    const p = this.pair;
+    if (!p) return;
+    p.hi = { who, t0: this.t };
+    this.doodles = this.doodles.filter(d => d.kind !== 'chat');
+    this.say(who, `hi, I’m ${who === 'seb' ? 'Seb' : 'Steve'}!`, 1.8);
   }
   cloudXY(cl, raw) {
     const g = this.g;
@@ -2135,16 +2306,21 @@ function drawLand(s, c, w) {
   DRAW.front(s, c, w.view.s);
   c.globalAlpha = lightK(w.view.s); DRAW.hillLight(s, c); c.globalAlpha = 1;
   DRAW.tufts(s, c);
-  DRAW.visit(s, c);
+  // (the knocks jolt the door they're on: the second cottage's, if that's where they were)
+  asCot(s.g, s.g.cot2 && s.knocks.k === s.g.cot2 ? s.g.cot2 : null, () => DRAW.visit(s, c));
   DRAW.smoke(s, c);
+  if (s.g.cot2) asCot(s.g, s.g.cot2, () => DRAW.smoke(s, c));
   DRAW.eye(s, c);
   DRAW.hat(s, c);
-  // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
-  const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
+  // animals and the grass on the hill, back to front (a tuft in front of the one eating it), and out at sea the
+  // signpost and whoever strolls there among them
+  const sign = s.signOf() && s.g.sign;
+  const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : []),
+    ...(sign ? [[sign.y, sign]] : []), ...s.walkers().map(o => [o.y, o])].sort((a, b) => a[0] - b[0]);
   const wet = o => o.state === 'float' || o.state === 'swim' || (o.state === 'fall' && s.isSea(o.x, o.ty));
   for (const [, it] of items) {
     if (wet(it)) { c.save(); if (afloat(s, c, it.state === 'fall' ? it.ty : it.y)) DRAW.obj(s, c, it); c.restore(); }
-    else it === s.box ? DRAW.box(s, c) : it.blades ? DRAW.meadow(s, c, it) : it.leap ? DRAW.leap(s, c, it) : DRAW.obj(s, c, it);
+    else it === s.box ? DRAW.box(s, c) : it === sign ? DRAW.sign(s, c) : it.who ? DRAW.walker(s, c, it) : it.blades ? DRAW.meadow(s, c, it) : it.leap ? DRAW.leap(s, c, it) : DRAW.obj(s, c, it);
   }
   // the section's little scenes over them, on the page's hill: animals pass behind the desk, the huts and the keeper
   if (w === s.w0) {
@@ -2157,13 +2333,21 @@ function drawLand(s, c, w) {
   DRAW.doodles(s, c);
 }
 
+/* draws with another of the island's cottages in g.cot's place (its second: see ISLANDS), then puts the first back:
+   the drawings of a cottage, its door and its smoke read g.cot */
+function asCot(g, k, draw) {
+  const was = g.cot;
+  if (k) g.cot = k;
+  try { draw(); } finally { g.cot = was; }
+}
+
 /* the hill with its cottage and tower: cached at about the size it's drawn (an island's in each style it's drawn in),
    or drawn as it is when larger than life */
 function drawFront(s, c, sc) {
   const g = s.g, { W, H, u } = g, T = g.lh, x0 = g.shore ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
-  const x1 = Math.min(W, g.ridge.at(-1)[0] + 8), y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
+  const x1 = Math.min(W, g.ridge.at(-1)[0] + 8), y0 = Math.min(T.top - T.gal * 1.2, ...[g.cot, g.cot2].filter(Boolean).map(k => k.base - k.h * 4.2)) - 10 * u;
   const y1 = g.shore ? Math.max(...g.shore.map(p => p[1])) + 26 * u : H;
-  const draw = x => { DRAW.hill(s, x); DRAW.cottage(s, x); DRAW.tower(s, x); };
+  const draw = x => { DRAW.hill(s, x); DRAW.cottage(s, x); if (g.cot2) asCot(g, g.cot2, () => DRAW.cottage(s, x)); DRAW.tower(s, x); };
   if (sc > 1) draw(c);
   else s.layer(c, 'front' + (g.theme ? g.theme + s.style.id : ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
 }
@@ -2951,6 +3135,152 @@ function drawKeeper(s, c, x, y, sc, pose, flip, walk) {
   c.restore();
 }
 
+/* ---------- out at sea: the signposts, and the two who made it ---------- */
+/* A signpost planted in the grass on an island's tip (see ISLANDS and setSigns): a post leaning a little, the title
+   on a dark plank across it and a pale board for each link, pointing on, each nailed on a little askew; a text of
+   three words or more goes on two lines. The board under the pointer swings on its nail and is underlined. Each
+   board's outline goes in s.boards.hits (see atSea). */
+function drawSign(s, c) {
+  const g = s.g, S = s.signOf(), B = s.boards;
+  B.hits = [];
+  if (!S) return;
+  const u = g.u, P = s.P, { x, y, dir, i: seed } = g.sign, rm = s.reduced;
+  const size = Math.max(9, 11 * u), pad = size * 0.55, bh = size * 1.6, lh = size * 1.15, gap = 3.6 * u, half = 2.1 * u;
+  const wood = mul(C.wood, P.paper), board = mul(mix(C.wood, hex('#FFFFFF'), 0.62), P.paper), light = rgba(mul(hex('#FFFFFF'), P.paper));
+  // each row's lines (split where the two come out most even), their widths and its height
+  const lay = text => {
+    const words = text.split(' ');
+    let lines = [text];
+    if (words.length > 2) {
+      let best = 1e9;
+      for (let k = 1; k < words.length; k++) {
+        const two = [words.slice(0, k).join(' '), words.slice(k).join(' ')], w = Math.max(...two.map(t => textW(s, t, size)));
+        if (w < best) { best = w; lines = two; }
+      }
+    }
+    const ws = lines.map(t => textW(s, t, size));
+    return { lines, ws, tw: Math.max(...ws), h: bh + (lines.length - 1) * lh };
+  };
+  const rows = [...(S.title ? [{ text: S.title, title: true }] : []), ...S.boards.map((b, i) => ({ ...b, i }))].map(r => ({ ...r, ...lay(r.text) }));
+  const H = 22 * u + rows.reduce((a, r) => a + r.h + gap, 0) + 4 * u;
+  // the post's frame (its foot at 0, 0, up the post toward -y) in the island's
+  const lean = (hash(seed + 0.31) - 0.5) * 0.07, cl = Math.cos(lean), sl = Math.sin(lean);
+  const at = (px, py) => [x + px * cl - py * sl, y + px * sl + py * cl];
+  // the post, cut at a slant, in a few blades of grass
+  const post = [[-half, 2 * u], [-half * 0.9, -H + 1.4 * u], [half * 0.9, -H - 1.4 * u], [half, 2 * u]].map(p => at(...p));
+  print(c, post, wood);
+  c.beginPath(); edges(c, post, DET, seed + 1, true, { ov: 0.8 });
+  for (let k = -2; k <= 2; k++) if (k) ribbon(c, [at(k * 2.4 * u, 2.5 * u), at(k * 4.2 * u, -(4 + hash(seed + k) * 4) * u)], TEX, seed + k * 1.3, { tin: 1, tout: 3, w1: 0.1 });
+  c.fillStyle = INK; c.fill();
+  let top = -H + 5 * u;
+  rows.forEach((r, n) => {
+    const { tw, h } = r, mid = top + h / 2, tip = Math.min(h * 0.42, bh * 0.6);
+    const hot = !r.title && B.hot === r.i, age = s.t - B.at;
+    const rot = (hash(seed * 7.3 + n) - 0.5) * 0.09 + (hot && !rm ? Math.sin(age * 13) * Math.exp(-age * 3.2) * 0.16 : 0);
+    // a plank across the post, or a board out to one side pointing on; turned on its nail, then into the island
+    let pts, cx, nails = [[0, mid]];
+    if (r.title) {
+      const w = tw / 2 + pad;
+      pts = [[-w, top], [w, top], [w, top + h], [-w, top + h]]; cx = 0;
+      nails = [[-w + pad * 0.45, mid], [w - pad * 0.45, mid]];
+    } else {
+      const L = half + pad * 2 + tw;
+      pts = [[-3 * u, top], [L, top], [L + tip, mid], [L, top + h], [-3 * u, top + h]].map(([px, py]) => [px * dir, py]);
+      cx = dir * (half + pad + tw / 2);
+    }
+    const cr = Math.cos(rot), sr = Math.sin(rot), on = ([px, py]) => at(px * cr - (py - mid) * sr, mid + px * sr + (py - mid) * cr);
+    const outline = pts.map(on);
+    print(c, outline, r.title ? wood : board);
+    c.beginPath(); edges(c, outline, DET, seed + n * 3.1, true, { ov: 0.9 }); c.fillStyle = INK; c.fill();
+    r.lines.forEach((text, k) => {
+      const ly = mid + (k - (r.lines.length - 1) / 2) * lh, [tx, ty] = on([cx, ly]), w = r.ws[k];
+      label(c, text, tx, ty, size, r.title ? light : INK, 'center', lean + rot);
+      if (hot) { c.beginPath(); ribbon(c, dens([on([cx - w / 2, ly + size * 0.56]), on([cx + w / 2, ly + size * 0.6])], 4), TEX * 1.1, seed + 9 + k, { tin: 2, tout: 3 }); c.fillStyle = INK; c.fill(); }
+    });
+    for (const p of nails) { const [nx, ny] = on(p); dot(c, nx, ny, 1.2 * u + 0.4, INK); }
+    if (!r.title) B.hits.push({ pts: outline, href: r.href, i: r.i });
+    top += h + gap;
+  });
+}
+
+/* One of the two who made StableBar (MAKERS), drawn as the keeper is, at o.x, o.y facing right unless o.flip, mid-stride
+   by o.walk: Seb's curls and ginger beard over a sage tee, Steve's swept-up dark hair and short beard over a slate
+   shirt with a collar. o.pose: 'talk' (a hand going) or 'wave' */
+function drawWalker(s, c, o) {
+  const M = o.M, P = s.P, u = s.g.u * WALK_SC, t = s.reduced ? 0 : s.t, col = h => mul(hex(h), P.paper);
+  const skin = col(M.skin), shirt = col(M.shirt), hair = col(M.hair), beard = col(M.beard);
+  c.save(); c.translate(o.x, o.y); c.scale(o.flip ? -1 : 1, 1);
+  // legs and shoes
+  const st = Math.sin(o.walk) * 0.45, feet = [-2 * u + Math.sin(st) * 9 * u, 2 * u - Math.sin(st) * 9 * u];
+  c.beginPath();
+  ribbon(c, [[-2 * u, -12 * u], [feet[0], 0]], DET * 1.6, 1, { tin: 1, tout: 1, w0: 1, w1: 1 });
+  ribbon(c, [[2 * u, -12 * u], [feet[1], 0]], DET * 1.6, 2, { tin: 1, tout: 1, w0: 1, w1: 1 });
+  c.fillStyle = rgba(col(M.legs)); c.fill();
+  for (const fx of feet) dot(c, fx + 1.5 * u, -0.5 * u, 2.2 * u, INK);
+  // arms: Seb's bare (the pen), Steve's in his sleeves; each with a hand
+  const arm = (pts, sd) => {
+    if (M.collar) { c.beginPath(); ribbon(c, pts, DET * 2.5, sd, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill(); }
+    c.beginPath(); ribbon(c, pts, M.collar ? DET * 1.3 : DET * 1.1, sd, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = M.collar ? rgba(shirt) : INK; c.fill();
+    const [hx, hy] = pts.at(-1);
+    dot(c, hx, hy, 1.5 * u, skin);
+  };
+  arm([[-4.6 * u, -22 * u], [-6.5 * u - st * 4 * u, -14 * u]], 4);
+  // the shirt
+  const tee = [[-5.5 * u, -11 * u], [-6 * u, -20.6 * u], [-8.2 * u, -21.2 * u], [-7 * u, -24.6 * u], [7 * u, -24.6 * u], [8.2 * u, -21.2 * u], [6 * u, -20.6 * u], [5.5 * u, -11 * u]];
+  const body = M.curls ? tee : [[-5.5 * u, -11 * u], [-6 * u, -24.4 * u], [6 * u, -24.4 * u], [5.5 * u, -11 * u]];
+  print(c, body, shirt);
+  c.beginPath(); edges(c, body, DET, 3, true, { ov: 0.6 });
+  if (M.collar) {
+    // the collar's two points and the buttons' line
+    ribbon(c, [[-0.6 * u, -24.4 * u], [2.2 * u, -21.6 * u], [3.4 * u, -24.4 * u]], TEX, 11, { tin: 1, tout: 1 });
+    ribbon(c, [[2.2 * u, -21.6 * u], [2 * u, -12.5 * u]], TEX * 0.8, 12, { tin: 1, tout: 2 });
+  }
+  c.fillStyle = INK; c.fill();
+  const wv = Math.sin(t * 7) * 0.5, chat = Math.sin(t * 5.3) * 1.2 * u;
+  if (o.pose === 'wave') arm([[4.6 * u, -22 * u], [10 * u, -28 * u], [10 * u + Math.sin(wv) * 7 * u, -36 * u]], 5);
+  else if (o.pose === 'talk') arm([[4.6 * u, -22 * u], [9 * u, -16.5 * u], [13 * u, -20 * u + chat]], 5);
+  else arm([[4.6 * u, -22 * u], [6.5 * u + st * 4 * u, -14 * u]], 5);
+  // the head
+  const head = ellipse(0.5 * u, -30 * u, 5 * u, 5.6 * u, 20);
+  print(c, head, skin);
+  c.beginPath(); loop(c, head, DET, 6, { over: 0.04 }); c.fillStyle = INK; c.fill();
+  if (M.curls) {
+    // a full ginger beard
+    const bd = curve([[-4.6 * u, -29.8 * u], [-3.4 * u, -24.4 * u], [0.6 * u, -22.2 * u], [4.6 * u, -23.4 * u], [5.9 * u, -26.4 * u], [5.6 * u, -28.6 * u]], 2);
+    print(c, bd, beard);
+    c.beginPath(); ribbon(c, bd, TEX, 7, { tin: 1, tout: 1, outline: true }); c.fillStyle = INK; c.fill();
+  } else {
+    // a short full beard, from the ear round the chin, a little darker at the moustache
+    const bd = curve([[-4.3 * u, -29.6 * u], [-3.3 * u, -24.8 * u], [0.6 * u, -22.8 * u], [4.4 * u, -23.7 * u], [5.8 * u, -26.4 * u], [5.5 * u, -28.4 * u], [3 * u, -27.4 * u], [-0.6 * u, -28.2 * u]], 2, true);
+    print(c, bd, mix(skin, beard, 0.62));
+    c.beginPath(); ribbon(c, curve([[-4.3 * u, -29.6 * u], [-3.3 * u, -24.8 * u], [0.6 * u, -22.8 * u], [4.4 * u, -23.7 * u], [5.8 * u, -26.4 * u]], 2), TEX * 0.8, 7, { tin: 1, tout: 2, outline: true }); c.fillStyle = INK; c.fill();
+    c.beginPath(); ribbon(c, [[2.6 * u, -27.8 * u], [4.4 * u, -28.3 * u], [6 * u, -27.6 * u]], DET * 1.1, 7, { tin: 1, tout: 1 }); c.fillStyle = rgba(beard); c.fill();
+  }
+  dot(c, 2.8 * u, -30.9 * u, 0.9 * u + 0.3, INK);
+  dot(c, 5.7 * u, -29.4 * u, 1.3 * u, mix(skin, hex('#E0786A'), 0.45));
+  // the hair: Seb's a mop of curls, Steve's swept up and forward
+  if (M.curls) {
+    const mop = [];
+    for (let i = 0; i <= 16; i++) {
+      const a = lerp(Math.PI * 0.8, Math.PI * 1.95, i / 16), r = 1 + 0.15 * Math.abs(Math.sin(i * 1.7 + 0.4));
+      mop.push([0.3 * u + Math.cos(a) * 6.5 * u * r, -32.2 * u + Math.sin(a) * 5.4 * u * r]);
+    }
+    mop.push([3.4 * u, -32.6 * u], [-1 * u, -31.4 * u]);
+    print(c, mop, hair);
+    c.beginPath(); loop(c, mop, DET, 8, { over: 0.04 }); c.fillStyle = INK; c.fill();
+    // its curls, in a darker brown so a heavy pen doesn't blot them
+    c.beginPath();
+    for (const [cx, cy, k] of [[-2.6, -35, 0], [0.8, -36.4, 1], [3.6, -35.2, 2], [-4.2, -31.8, 3]]) ribbon(c, ellipse(cx * u, cy * u, 1.2 * u, 1.1 * u, 8, 0.3, Math.PI * 1.5), TEX * 0.7, 20 + k, { tin: 1, tout: 1 });
+    c.fillStyle = rgba(mix(hair, hex('#2A1A10'), 0.55)); c.fill();
+  } else {
+    const quiff = curve([[-5.4 * u, -28.8 * u], [-6 * u, -32.6 * u], [-4.4 * u, -36 * u], [-1 * u, -37.6 * u], [2.6 * u, -38.8 * u], [5.6 * u, -38.6 * u], [7.4 * u, -36.8 * u], [6.6 * u, -35 * u], [4.6 * u, -34.6 * u], [2 * u, -33.8 * u], [-1.4 * u, -33.2 * u], [-3.4 * u, -31 * u]], 3, true);
+    print(c, quiff, hair);
+    c.beginPath(); loop(c, quiff, DET, 8, { over: 0.04 }); c.fillStyle = INK; c.fill();
+    c.beginPath(); ribbon(c, [[-2.4 * u, -35.4 * u], [1.4 * u, -37.2 * u], [5 * u, -37.4 * u]], TEX * 0.8, 21, { tin: 1, tout: 2 }); c.fillStyle = rgba(mix(hair, hex('#FFFFFF'), 0.4)); c.fill();
+  }
+  c.restore();
+}
+
 function drawTile(s, c, x, y, u) {
   const w = 34 * u, h = 15 * u, r = 5 * u, P = s.P;
   const box = [];
@@ -3456,8 +3786,10 @@ function quaver(c, x, y, sz, col, flip) {
 function drawDoodles(s, c) {
   if (!s.doodles.length) return;
   const g = s.g, u = g.u, P = s.P, rm = s.reduced, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
+  // (what the strollers say stays in ink over ground that stays light at night, such as snow)
+  const light = (0.2126 * P.hill[0] + 0.7152 * P.hill[1] + 0.0722 * P.hill[2]) / 255 > 0.42;
   for (const d of s.doodles) {
-    const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : ink;
+    const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : d.kind === 'chat' && light ? INK : ink;
     if (f <= 0 || k <= 0.01) continue;
     c.save(); c.globalAlpha = f;
     if (d.kind === 'note') {
