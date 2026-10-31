@@ -180,8 +180,9 @@ h1, h2, h3 { text-wrap: balance; }
   .op-bar { width: auto; min-width: min(330px, 92vw); }
 }
 .scene canvas { display: block; }
-main, .site-foot { position: relative; z-index: 1; }
-main { overflow-x: clip; }
+main { position: relative; z-index: 1; overflow-x: clip; }
+/* past the last note, room to scroll into the drawing (see the dive in main.js) */
+.dive { height: 1800vh; }
 
 /* ---------- The bar, drawn as the app draws it ---------- */
 
@@ -792,13 +793,6 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
 .brew { font-size: 15.5px; color: var(--text-2); }
 .brew code { display: inline-block; margin-top: 4px; padding: 3px 8px; border-radius: 6px; background: #fbfaf6; box-shadow: 0 0 0 1.6px var(--pen); font: 400 14px/1.4 var(--mono); color: #1d1d1f; white-space: nowrap; }
 
-/* ---------- Footer: a strip of paper with a pen line along its top ---------- */
-.site-foot { display: grid; gap: 12px; margin-top: 8vh; padding: 30px 5vw 44px; background: var(--paper); color: var(--text); font-size: 15.5px; line-height: 1.5; }
-.site-foot::before { content: ""; position: absolute; left: 0; right: 0; top: -5px; height: 10px; background: var(--rule) 0 0 / 160px 10px repeat-x; }
-.site-foot p { max-width: 70ch; }
-.site-foot nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
-.site-foot a { color: var(--link); text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); }
-
 /* ---------- Portrait: phones and portrait tablets. The scene's rule: narrower than 700 px, or taller than 1.1 × wide ---------- */
 @media (max-width: 699.98px), (max-aspect-ratio: 10/11) {
   .hero, .sec { --left: var(--m); padding-left: var(--m); padding-right: var(--m); align-items: stretch; }
@@ -809,7 +803,6 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
   .sec { display: block; min-height: 0; padding-top: 34vh; padding-bottom: 6vh; }
   .install { padding-bottom: 12vh; }
   h1 { font-size: clamp(34px, 9.4vw, 58px); }
-  .site-foot { padding-left: var(--m); padding-right: var(--m); }
 }
 @media (max-width: 719.98px) {
   body { font-size: 17px; }

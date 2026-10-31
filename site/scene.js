@@ -228,6 +228,66 @@ const WAKE = {
 const VISIT = { open: [0.55, 0.8], keeper: [0.7, 2.95], right: 1.6, huh: 2.2, turn: 2.4, shut: [2.97, 3.22], end: 3.3, away: 1.6 };
 // the grass on the hill: at most this many tufts (fewer on phones), a new one every 3 to 6 s while there are fewer
 const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
+/* The dive past the end of the page: you go straight on toward the middle of the horizon, past islands that stand
+   one after another, DIVE_GAP times the nearest one's distance apart, off to one side and then the other. They come
+   round in this order (the first one is the page's far island); each is a ridge and a shore, as fractions of the width
+   and, up from the horizon, of the sky or, down from it, of the sea. `lx` is the lighthouse, `cx` the cottage. Each
+   wears one of the other themes: its lighthouse's pyjamas, and its ground by day (lit and shady), darker with the hour
+   like the page's green. */
+// (an island seen at its own size stands this far down the sea, as a part of it: it's as far off as the sea there)
+const DIVE_GAP = 7, SHORE = 0.27;
+const ISLANDS = [
+  // on the right, a snowy peak: the lighthouse on its shoulder, the cottage on a ledge above it
+  { theme: 'nord', ground: ['#E8EDF4', '#BFCBDB'],
+    ridge: [[0.52, 0.12], [0.56, 0.02], [0.6, -0.08], [0.65, -0.1], [0.69, -0.13], [0.74, -0.24], [0.79, -0.38], [0.82, -0.42], [0.85, -0.37], [0.9, -0.24], [0.95, -0.1], [0.99, 0.12]],
+    shore: [[0.52, 0.12], [0.6, 0.21], [0.72, 0.26], [0.86, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.63, cx: 0.71 },
+  // on the left, a table mountain: steep all round, flat on top
+  { theme: 'gruvbox', ground: ['#B8BB26', '#98971A'],
+    ridge: [[0.02, 0.12], [0.04, 0], [0.06, -0.12], [0.08, -0.17], [0.13, -0.18], [0.2, -0.18], [0.27, -0.17], [0.33, -0.16], [0.36, -0.11], [0.38, -0.02], [0.4, 0.12]],
+    shore: [[0.02, 0.12], [0.08, 0.22], [0.2, 0.26], [0.32, 0.23], [0.4, 0.12]], lx: 0.3, cx: 0.17 },
+  // on the right, two round hills: the cottage in the dip between them, the lighthouse on the far one
+  { theme: 'catppuccin', ground: ['#F5C2E7', '#DDA3CF'],
+    ridge: [[0.53, 0.12], [0.56, 0], [0.6, -0.1], [0.64, -0.15], [0.68, -0.13], [0.72, -0.07], [0.76, -0.06], [0.8, -0.11], [0.85, -0.19], [0.9, -0.2], [0.95, -0.12], [0.99, 0.12]],
+    shore: [[0.53, 0.12], [0.6, 0.22], [0.72, 0.26], [0.85, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.88, cx: 0.74 },
+  // on the left, a long slope up from a beach to a cliff over the middle, the lighthouse on its edge
+  { theme: 'leman', ground: ['#7CCDB4', '#5AB198'],
+    ridge: [[0, 0.12], [0.04, 0.06], [0.1, 0], [0.17, -0.05], [0.24, -0.1], [0.3, -0.15], [0.35, -0.19], [0.38, -0.2], [0.4, -0.14], [0.41, -0.02], [0.42, 0.12]],
+    shore: [[0, 0.12], [0.08, 0.2], [0.2, 0.24], [0.33, 0.24], [0.42, 0.12]], lx: 0.355, cx: 0.18 },
+  // on the right, a small dark crag: the lighthouse on top, the cottage at its foot
+  { theme: 'notch', ground: ['#4A4B55', '#36373F'],
+    ridge: [[0.6, 0.12], [0.62, 0.04], [0.66, 0], [0.7, -0.02], [0.73, -0.12], [0.75, -0.26], [0.78, -0.32], [0.82, -0.31], [0.85, -0.22], [0.88, -0.08], [0.91, 0.12]],
+    shore: [[0.6, 0.12], [0.66, 0.2], [0.76, 0.24], [0.86, 0.22], [0.91, 0.12]], lx: 0.8, cx: 0.67 },
+  // on the left, wide and low, sand dunes
+  { theme: 'phosphor', ground: ['#F2C46A', '#D9A548'],
+    ridge: [[0, 0.12], [0.03, 0.02], [0.08, -0.05], [0.13, -0.07], [0.18, -0.04], [0.23, -0.06], [0.28, -0.11], [0.33, -0.12], [0.38, -0.08], [0.43, -0.02], [0.46, 0.04], [0.48, 0.12]],
+    shore: [[0, 0.12], [0.07, 0.22], [0.2, 0.27], [0.36, 0.25], [0.45, 0.19], [0.48, 0.12]], lx: 0.31, cx: 0.13 },
+];
+/* What each island has of its own: its light, its animals, grass and box, its games with the bar (the page's
+   only). One island's state at a time lives on the scene (see enter); the others wait in their world objects. */
+const islandState = () => ({
+  beam: { a: Math.PI * 0.96, len: 1, flash: 0, phi: Math.PI * 0.96, steer: 0, sa: Math.PI * 0.96 },
+  wakePath: null, gaze: null, restAt: -99,
+  ripples: [], objs: [],
+  // the ball game and the bored trick (see "the lighthouse plays with the bar")
+  bar: [], ball: null, bore: null, look: null, sweep: null,
+  doodles: [], splashes: [],
+  hatKick: -9, regrowAt: -9,
+  // someone at the cottage's door (see knock)
+  visit: null, knocks: { n: 0, at: -9 },
+  // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
+  flocked: false, meadow: [], sproutAt: 0,
+  box: { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null },
+});
+const ISLAND = ['g', ...Object.keys(islandState())];
+// the islands are drawn between these sizes: from far off, where they come out of the haze (by then the next island is
+// all there is to see, the one after it comes as you go), to going past, off the screen
+const FAR = 0.07, PAST = 30;
+// the lighthouse standing on `base` at x, h tall to its gallery, the eye in its lamp er across: its lamp and hat
+function tower(g, x, base, h, er) {
+  const T = g.lh = { x, base, h, er, gal: er * 0.62, top: base - h, wT: er * 1.62, wB: er * 2.6 };
+  g.lamp = { x, y: T.top - T.gal - er * 1.02 };
+  T.hatTop = g.lamp.y - er * 3.6;
+}
 
 class Scene {
   constructor(host, opts = {}) {
@@ -238,33 +298,29 @@ class Scene {
     cv.style.cssText = 'position:absolute;left:0;top:0;display:block;pointer-events:none';
     host.appendChild(cv);
     this.ctx = cv.getContext('2d');
+    this.fade = document.createElement('canvas').getContext('2d');
     this.top = Math.max(0, +this.o.topInset || 0);
     this.t = 0; this.d = this.dTarget = clamp(+this.o.dusk || 0); this.dTween = null; this.labelsAt = -9;
     this.state = 'hero'; this.theme = 'built-in'; this.ws = 1;
     this.pres = Object.fromEntries(STATES.map(k => [k, k === 'hero' ? 1 : 0]));
     this.since = Object.fromEntries(STATES.map(k => [k, 0]));
-    this.ptr = { x: 0, y: 0, on: false, last: -1e9, kind: 'mouse' };
+    // the pointer in client coordinates less the scene's offset; each island sees it as this.ptr, in its own (see enter)
+    this.cursor = { x: 0, y: 0, on: false, last: -1e9, kind: 'mouse' };
     this.vel = { x: 0, y: 0 };
     this.wind = 0; this.windAmb = 0.3; this.windTotal = 0.3; this.drift = 0;
-    this.beam = { a: Math.PI * 0.96, len: 1, flash: 0, phi: Math.PI * 0.96, steer: 0, sa: Math.PI * 0.96 };
     this.blink = { next: 2.5, at: -9, wink: -9 };
-    this.wakePath = null; this.gaze = null; this.restAt = -99;
-    this.ripples = []; this.objs = [];
-    this.layers = { back: [], front: [] };
+    this.layers = {};
     this.sprites = new Map();
     this.fontsV = 0; this.layoutV = 0; this.sparkle = -9; this.rebuilds = 0;
     this.onFrame = null;
-    // the ball game and the bored trick (see "the lighthouse plays with the bar")
-    this.bar = []; this.ball = null; this.bore = null; this.look = null;
-    this.doodles = []; this.splashes = [];
-    this.hatKick = -9; this.regrowAt = -9;
     this.onBar = null;
-    // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
-    this.flocked = false; this.meadow = []; this.sproutAt = 0;
-    this.held = !!this.o.held; this.sweep = null;
+    this.held = !!this.o.held;
     this.dozing = false; this.wokeAt = -9; this.waking = false; this.nightPath = this.riseAt = null; this.popped = false; this.frozen = false;
-    this.visit = null; this.knocks = { n: 0, at: -9 };
-    this.box = { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null };
+    // the islands, by how far into the dive they are: 0 is the page's hill, whose state is on the scene to begin with
+    Object.assign(this, islandState());
+    this.dive = 0; this.turn = 0;
+    this.cur = this.w0 = { view: { s: 1, x: 0, y: 0 } };
+    this.worlds = new Map([[0, this.w0]]);
     this.times = [];
     this.awake = 0; this.kick = 0; this.raf = 0; this.timer = 0; this.last = null;
     this.mq = matchMedia('(prefers-reduced-motion: reduce)');
@@ -309,6 +365,79 @@ class Scene {
   }
   setWorkspace(n) { this.ws = clamp(Math.round(+n || 1), 1, 4); this.wake(); }
   setTopInset(px) { const v = Math.max(0, +px || 0); if (v !== this.top) { this.top = v; this.layout(); } this.wake(); }
+  // how far past the end of the page, in laps, one island a lap.
+  // `back`: the page stepped back that many laps (a round of ISLANDS, or, going back up, to put its own hill just
+  // behind you), and the islands ahead are renumbered to match, the round going on as it was (see turn)
+  setDive(laps, back = 0) {
+    if (back) {
+      const was = this.worlds;
+      this.worlds = new Map([[0, this.w0]]);
+      for (const [n, w] of was) if (n > back) this.worlds.set(n - back, w);
+      this.turn = (this.turn + back) % ISLANDS.length;
+    }
+    if (laps === this.dive) return;
+    this.dive = laps;
+    this.wake();
+  }
+
+  /* ----- the islands of the dive ----- */
+  world(n) {
+    let w = this.worlds.get(n);
+    if (!w) {
+      const g = this.island(ISLANDS[(n - 1 + this.turn) % ISLANDS.length]);
+      w = { g, ...islandState() };
+      this.worlds.set(n, w);
+    }
+    return w;
+  }
+  // the islands in sight, the farthest first, each with where it is on the screen (screen = s * point + (x, y)): seen
+  // from its distance, around the middle of the horizon, from the one going past to the ones far off
+  shown() {
+    const m = Math.floor(this.dive), x = this.back.W / 2, y = this.back.horizon, out = [];
+    for (let n = m + 6; n >= m; n--) {
+      const s = 1 / (1 + (n - this.dive) * DIVE_GAP);
+      if (s > FAR && s < PAST) out.push(Object.assign(this.world(n), { view: { s, x: x * (1 - s), y: y * (1 - s) } }));
+    }
+    return out;
+  }
+  // how many laps the page can step back to have its own hill as the island just behind you: all of them but the
+  // one still going past, if there is one
+  behind() {
+    const m = Math.floor(this.dive), s = 1 / (1 - (this.dive - m) * DIVE_GAP);
+    return Math.max(0, s > 0 && s < PAST ? m - 1 : m);
+  }
+  // the island being looked at, the nearest that isn't going past: input goes to it
+  focus() { return this.shown().findLast(w => w.view.s <= 1.6); }
+  // puts an island's state on the scene, and the pointer in its coordinates (an island far off doesn't see it yet)
+  enter(w) {
+    if (w !== this.cur) {
+      for (const k of ISLAND) { this.cur[k] = this[k]; this[k] = w[k]; }
+      this.cur = w;
+    }
+    const v = w.view, p = this.cursor;
+    this.ptr = { ...p, x: (p.x - v.x) / v.s, y: (p.y - v.y) / v.s, on: p.on && v.s > 0.45 };
+  }
+  // an island of the dive, on the page's sky and sea (see ISLANDS)
+  island(I) {
+    const b = this.back, { W, u, top, horizon: hz } = b, sky = hz - top, sea = b.H - hz, was = this.g;
+    const at = ([fx, fy]) => [fx * W, hz + fy * (fy < 0 ? sky : sea)];
+    const g = this.g = { ...b, isle: true, theme: I.theme, ground: I.ground.map(hex), ridge: curve(I.ridge.map(at), 6), shore: curve(I.shore.map(at), 6), note: { x0: 0, x1: 0, y0: 0, y1: 0 }, key: null };
+    const lx = I.lx * W, h = sky * 0.5, er = clamp(h * 0.062, 11.5, 22), cx = I.cx * W, cw = Math.min(h * 0.3, W * 0.13);
+    // the lighthouse and the cottage stand on level ground, cut into the slope
+    for (const [x, w] of [[lx, er * 2.6], [cx, cw]]) {
+      const y = this.ridgeY(x);
+      g.ridge = g.ridge.map(([px, py]) => [px, lerp(y, py, smooth(w * 0.55, w * 1.2, Math.abs(px - x)))]);
+    }
+    const ins = 2.6 * g.pw;
+    g.hillPoly = [...g.ridge, ...[...g.shore].reverse()];
+    g.hillClip = [...g.ridge.map(([x, y]) => [x, y + ins]), ...g.shore.slice().reverse().map(([x, y]) => [x, y - ins])];
+    g.land = [g.ridge[0][0] + 20 * u, g.ridge.at(-1)[0] - 20 * u, (I.lx + I.cx) / 2 * W];
+    tower(g, lx, this.ridgeY(lx) + 2 * u, h, er);
+    g.cot ={ x: cx, base: this.ridgeY(cx) + 3 * u, w: cw, h: cw * 0.62 };
+    g.tufts = this.tufts(rng(this.o.seed + cx));
+    this.g = was;
+    return g;
+  }
   destroy() {
     this.dead = true; this.sleep(); this.ro.disconnect();
     this.mq.removeEventListener?.('change', this.onMQ);
@@ -332,13 +461,15 @@ class Scene {
   /* ----- input, in client coordinates ----- */
   pointer(x, y, kind = 'mouse') {
     x -= this.ox; y -= this.oy;
-    const now = performance.now() / 1000;
-    if (this.ptr.on && now - this.ptr.last < 0.25) {
-      const dt = Math.max(0.008, now - this.ptr.last);
-      this.vel.x = lerp(this.vel.x, (x - this.ptr.x) / dt, 0.35);
-      this.vel.y = lerp(this.vel.y, (y - this.ptr.y) / dt, 0.35);
+    const now = performance.now() / 1000, p = this.cursor;
+    if (p.on && now - p.last < 0.25) {
+      const dt = Math.max(0.008, now - p.last);
+      this.vel.x = lerp(this.vel.x, (x - p.x) / dt, 0.35);
+      this.vel.y = lerp(this.vel.y, (y - p.y) / dt, 0.35);
     }
-    Object.assign(this.ptr, { x, y, on: true, last: now, kind: kind || 'mouse' });
+    Object.assign(p, { x, y, on: true, last: now, kind: kind || 'mouse' });
+    this.enter(this.cur);
+    ({ x, y } = this.ptr);
     const sp = Math.hypot(this.vel.x, this.vel.y);
     if (!this.reduced && sp > 650 && this.isSea(x, y) && now - (this.lastRip || 0) > 0.11) {
       this.lastRip = now;
@@ -348,13 +479,21 @@ class Scene {
     this.poke();
     this.wake();
   }
-  release() { this.ptr.on = false; this.wake(); }
+  release() { this.cursor.on = this.ptr.on = false; this.wake(); }
+  // to the island under it, the nearest first, or else to the one being looked at
   tap(x, y) {
-    x -= this.ox; y -= this.oy;
-    const T = this.g.lh;
+    Object.assign(this.cursor, { x: x - this.ox, y: y - this.oy });
+    const w = this.shown().reverse().find(w => { this.enter(w); const p = this.ptr; return this.isLand(p.x, p.y) || this.onTower(p.x, p.y) || this.boxHit(p.x, p.y); }) || this.focus();
+    this.enter(w);
+    const hit = this.tapAt(this.ptr.x, this.ptr.y);
+    this.enter(this.focus());
+    return hit;
+  }
+  onTower(x, y) { const T = this.g.lh; return y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base; }
+  tapAt(x, y) {
     this.poke();
     // the lighthouse plays ball instead of catching things (and winks when it can't)
-    if (y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base) {
+    if (this.onTower(x, y)) {
       if (!this.play()) this.blink.wink = this.t;
       this.wake();
       return false;
@@ -406,11 +545,15 @@ class Scene {
      when nobody has done anything for a while (the page decides), the beam shoves a widget aside.
      The page sends the bar's widgets, animates them on onBar(event, key, info) and reads s.playing. */
   get playing() { return Boolean(this.ball); }
-  // the bar's visible widgets, in client coordinates: { key, x0, x1, y }, y the line the ball bounces on
+  // the bar's visible widgets, in client coordinates: { key, x0, x1, y }, y the line the ball bounces on.
+  // Only the page's lighthouse plays with them: the islands of the dive have no bar.
   setBar(list) {
+    const was = this.cur;
+    this.enter(this.w0);
     this.bar = (Array.isArray(list) ? list : []).filter(t => t && t.x1 > t.x0)
       .map(t => ({ key: String(t.key), x0: t.x0 - this.ox, x1: t.x1 - this.ox, y: t.y - this.oy }));
     if (!this.bar.length) { this.endBall(); this.endBore(); }
+    this.enter(was);
     this.wake();
   }
   // the landing: until the camera has come down, the flock and the grass wait (they're placed where they're seen)
@@ -760,13 +903,14 @@ class Scene {
     this.W = W; this.H = H; this.diag = Math.hypot(W, H);
     const budget = 9.4e6; // device pixels for one full canvas
     this.dpr = Math.min(2, window.devicePixelRatio || 1, Math.sqrt(budget / (W * H)));
-    this.canvas.width = Math.round(W * this.dpr); this.canvas.height = Math.round(H * this.dpr);
+    this.canvas.width = this.fade.canvas.width = Math.round(W * this.dpr); this.canvas.height = this.fade.canvas.height = Math.round(H * this.dpr);
     this.canvas.style.width = W + 'px'; this.canvas.style.height = H + 'px';
     this.layout();
     return true;
   }
 
   layout() {
+    this.enter(this.w0);
     const { W, H } = this, top = this.top, Hs = H - top;
     const portrait = W < 700 || H > W * 1.1;
     const u = clamp(Math.sqrt(W * H) / 1138, 0.42, 1.35);
@@ -794,24 +938,14 @@ class Scene {
 
     // the lighthouse: lamp, eye, gallery, tower and hat
     const lx = W * (portrait ? 0.72 : 0.775);
-    const T = g.lh = { x: lx };
     if (portrait) {
-      T.base = top + Hs * 0.31 + 2 * u;
-      T.er = clamp(W * 0.036, 11.5, 22);
-      const lampY = top + H * 0.1;
-      T.gal = T.er * 0.62;
-      T.top = lampY + T.er * 1.02 + T.gal;
-      T.h = T.base - T.top;
+      const base = top + Hs * 0.31 + 2 * u, er = clamp(W * 0.036, 11.5, 22), lampY = top + H * 0.1;
+      tower(g, lx, base, base - (lampY + er * 1.02 + er * 0.62), er);
     } else {
-      T.base = this.ridgeY(lx) + 2 * u;
-      T.h = Math.min(Hs * 0.27 * 1.32, W * 0.3);
-      T.er = T.h * 0.062;
-      T.gal = T.er * 0.62;
-      T.top = T.base - T.h;
+      const h = Math.min(Hs * 0.27 * 1.32, W * 0.3);
+      tower(g, lx, this.ridgeY(lx) + 2 * u, h, h * 0.062);
     }
-    T.wT = T.er * 1.62; T.wB = T.er * 2.6;
-    g.lamp = { x: lx, y: T.top - T.gal - T.er * 1.02 };
-    T.hatTop = g.lamp.y - T.er * 3.6;
+    const T = g.lh;
     // the keeper's cottage, to the right of the lighthouse
     const cx = portrait ? lx + T.wB * 0.5 + T.h * 0.4 : lx + T.wB * 0.5 + T.h * 0.3;
     const cw = portrait ? Math.min(T.h * 0.34, W * 0.13) : T.h * 0.3;
@@ -836,29 +970,21 @@ class Scene {
     const n = clamp(Math.round(W * sky / 6500), 26, 180);
     g.stars = Array.from({ length: n }, () => ({ x: R() * W, y: top + 8 + R() * (sky - 24), s: 0.55 + R() * R() * 1.6, p: R() * TAU }))
       .filter(s => Math.hypot(s.x - g.lamp.x, s.y - g.lamp.y) > T.er * 4);
-    // the far island and its smaller lighthouse
-    g.isle = portrait ? { x0: 0.03 * W, x1: 0.24 * W, h: 20 * u + 8 } : { x0: 0.49 * W, x1: 0.585 * W, h: 22 * u };
+    // where animals and grass go on the hill, and the middle of the pasture
+    g.land = portrait ? [0.3 * W, 0.97 * W, 0.7 * W] : [0.5 * W, 0.97 * W, 0.79 * W];
     g.sun = portrait ? { x: 0.3 * W, y0: top + H * 0.115 } : { x: 0.57 * W, y0: top + sky * 0.3 };
     // (as high as the sun: lower, it would sit on the opening's title)
     g.moon = portrait ? { x: 0.08 * W + 6, y1: top + H * 0.15 } : { x: 0.6 * W, y1: top + sky * 0.3 };
 
-    // the sea: rows of scallops, sparse and small near the horizon
-    const rows = portrait ? Math.round(clamp((H - g.horizon) / 11, 26, 60)) : Math.round(18 + 14 * Math.min(1, u));
-    g.rows = [];
-    for (let i = 1; i <= rows; i++) {
-      const f = i / rows, y = g.horizon + (H - g.horizon) * Math.pow(f, 1.6);
-      g.rows.push({ y, f, seed: i * 97 + this.o.seed, spans: this.seaSpans(y) });
-    }
-    // grass tufts along the ridge, close together
-    g.tufts = [];
-    for (let x = g.ridge[0][0] + 14 * u; x < W; x += (13 + R() * 15) * u) {
-      const y = this.ridgeY(x);
-      if (y == null || y > H + 4 || Math.abs(x - lx) < T.wB * 0.7 || (x > g.cot.x - g.cot.w * 0.55 && x < g.cot.x + g.cot.w * 0.5)) continue;
-      g.tufts.push({ x, y, l: (8 + R() * 7) * Math.max(u, 0.62), p: R() * TAU, n: 3 + ((R() * 2.2) | 0) });
-    }
+    // the sea: how many rows of scallops down to the bottom on the page (see waveScallops)
+    g.rows = portrait ? Math.round(clamp((H - g.horizon) / 11, 26, 60)) : Math.round(18 + 14 * Math.min(1, u));
+    g.tufts = this.tufts(R);
     // where the page's notes sit (a guess, for placing labels and surprises)
     g.note = portrait ? { x0: 0, x1: W, y0: top + Hs * 0.24, y1: H } : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 620) + 12, y0: top, y1: H * 0.84 };
     g.key = portrait ? null : { x0: 0, x1: W * 0.05 + Math.min(W * 0.46, 562) + 12, y0: H - 160, y1: H };
+    // the islands of the dive stand on this sky and sea; they're made again for the new size
+    this.back = g;
+    this.worlds = new Map([[0, this.w0]]);
     this.layoutV++;
     for (const o of this.objs) this.settle(o);
     // the grass stays on the ground at the same depth, or goes; meals and walks start over
@@ -872,6 +998,16 @@ class Scene {
     for (const o of this.objs) if (grazer(o) && o.act) { o.tuft = null; o.act = 'idle'; o.until = this.t + 1; }
     // the bar's widgets moved with it: a game or a trick in progress ends quietly
     this.endBall(); this.endBore();
+  }
+  // grass tufts along the ridge, close together
+  tufts(R) {
+    const g = this.g, { W, H, u } = g, T = g.lh, out = [];
+    for (let x = g.ridge[0][0] + 14 * u; x < W; x += (13 + R() * 15) * u) {
+      const y = this.ridgeY(x);
+      if (y == null || y > H + 4 || Math.abs(x - T.x) < T.wB * 0.7 || (x > g.cot.x - g.cot.w * 0.55 && x < g.cot.x + g.cot.w * 0.5)) continue;
+      out.push({ x, y, l: (8 + R() * 7) * Math.max(u, 0.62), p: R() * TAU, n: 3 + ((R() * 2.2) | 0) });
+    }
+    return out;
   }
   seaSpans(y) {
     const spans = [], W = this.W;
@@ -906,6 +1042,8 @@ class Scene {
   /* ----- where things go ----- */
   // Is a point of the scene visible, or covered by page content? A guess from the DOM.
   seen(x, y) {
+    // (the islands of the dive are placed for when they come close, whatever covers them now)
+    if (this.cur !== this.w0) return true;
     const els = document.elementsFromPoint?.(x + this.ox, y + this.oy);
     if (!els) return true;
     for (const el of els) {
@@ -937,7 +1075,7 @@ class Scene {
         x = lerp(Math.max(span[0], 0) + 22 + 20 * u, Math.min(span[1], W) - 10 - (kind === 'monster' ? 60 : 24) * u, R());
         if (!g.portrait && i < 30) x = lerp(Math.max(g.note.x1 + 30 * u, span[0] + 30 * u), span[1] - (kind === 'monster' ? 60 : 24) * u, R());
       } else {
-        x = g.portrait ? lerp(0.36, 0.95, R()) * W : lerp(0.56, 0.97, R()) * W;
+        x = lerp(g.land[0], g.land[1], R());
         const ry = this.ridgeY(x);
         if (ry == null) continue;
         y = ry + lerp(8 * u, Math.min(this.shoreY(x) - ry - 20 * u, H * 0.32), R());
@@ -976,7 +1114,7 @@ class Scene {
       if (land) o.kind = R() < 0.6 ? 'sheep' : 'cow';
       else if (sea) o.kind = R() < 0.55 ? 'duck' : 'monster';
       else if (y < lerp(g.top, g.horizon, 0.55) && R() < 0.45) o.kind = 'gull';
-      else o.kind = this.ridgeY(x) != null && y < this.shoreY(x) && x > (g.portrait ? 0 : this.hillLeftX(g.horizon) - 20 * u) ? (R() < 0.6 ? 'sheep' : 'cow') : 'duck'; // from the sky, only ducks: monsters surface where the water is clicked
+      else o.kind = this.ridgeY(x) != null && y < this.shoreY(x) && x > (g.shore ? 0 : this.hillLeftX(g.horizon) - 20 * u) ? (R() < 0.6 ? 'sheep' : 'cow') : 'duck'; // from the sky, only ducks: monsters surface where the water is clicked
     }
     const still = settled || this.reduced;
     if (o.kind === 'gull') {
@@ -984,7 +1122,7 @@ class Scene {
       if (this.reduced) { o.vx = 0; o.vy = 0; o.state = 'hover'; }
     } else if (o.kind === 'sheep' || o.kind === 'cow') {
       let ry = this.ridgeY(x);
-      if (ry == null) { o.x = x = clamp(x, g.ridge[0][0] + 20 * u, g.W - 14 * u); ry = this.ridgeY(x); }
+      if (ry == null) { o.x = x = clamp(x, g.ridge[0][0] + 20 * u, Math.min(g.W, g.ridge.at(-1)[0]) - 14 * u); ry = this.ridgeY(x); }
       const room = this.shoreY(x) - ry - 14 * u;
       o.depth = land ? clamp(y - ry, 3 * u, Math.min(room, g.H - ry - 24 * u)) : clamp((6 + R() * 40) * u, 3 * u, room);
       o.ty = ry + o.depth;
@@ -1118,8 +1256,8 @@ class Scene {
     // clouds lean away from the pointer
     for (const cl of [...g.clouds, g.sheepCloud]) {
       let tx = 0, ty = 0;
-      if (this.ptr.on && !rm) {
-        const p = this.cloudXY(cl, true), dx = p.x - this.ptr.x, dy = p.y - this.ptr.y, r = 170 * u, dd = Math.hypot(dx, dy);
+      if (this.cursor.on && !rm) {
+        const p = this.cloudXY(cl, true), dx = p.x - this.cursor.x, dy = p.y - this.cursor.y, r = 170 * u, dd = Math.hypot(dx, dy);
         if (dd < r) { const k = (1 - dd / r) ** 2 * 48 * u / (dd || 1); tx = dx * k; ty = dy * k; }
       }
       const k = rm ? 1 : Math.min(1, dt * 3);
@@ -1131,6 +1269,16 @@ class Scene {
       sc.x += sc.dir * 7 * u * dt;
       if (sc.x > sc.x1) sc.dir = -1; else if (sc.x < sc.x0) sc.dir = 1;
     }
+    // the eye blinks now and then
+    if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
+    // its lamp lit for good, after all that straining: the hat jumps
+    if (this.waking && !this.popped && this.riseAt != null && this.t - this.riseAt >= WAKE.on) { this.popped = true; this.hatKick = this.t; }
+    for (const w of this.shown()) { this.enter(w); this.updateIsland(dt); }
+    this.enter(this.focus());
+  }
+  // what moves on an island: its light, the ripples round it, its animals, grass and box, its games with the bar
+  updateIsland(dt) {
+    const g = this.g, u = g.u;
     // at the cottage's door: the keeper wonders who knocked (or nobody comes), and it's over
     const v = this.visit;
     if (v) {
@@ -1143,10 +1291,6 @@ class Scene {
       }
       if (a > (v.away ? VISIT.away : VISIT.end)) this.visit = null;
     }
-    // the eye blinks now and then
-    if (!rm && this.t > this.blink.next) { this.blink.at = this.t; this.blink.next = this.t + 3 + Math.random() * 5; }
-    // its lamp lit for good, after all that straining: the hat jumps
-    if (this.waking && !this.popped && this.riseAt != null && this.t - this.riseAt >= WAKE.on) { this.popped = true; this.hatKick = this.t; }
     this.updateBeam(dt);
     this.ripples = this.ripples.filter(r => this.t - r.t0 < 2.2);
     if (!this.flocked && !this.held) this.flock();
@@ -1290,7 +1434,7 @@ class Scene {
     const g = this.g, u = g.u, R = Math.random, W = g.W, H = g.H, out = [];
     const others = [...this.objs.filter(o => grazer(o) && o.dying == null && o !== near), ...this.meadow];
     for (let i = 0; i < 40; i++) {
-      const x = near ? near.x + (R() * 2 - 1) * reach : (g.portrait ? lerp(0.3, 0.97, R()) : lerp(0.5, 0.97, R())) * W;
+      const x = near ? near.x + (R() * 2 - 1) * reach : lerp(g.land[0], g.land[1], R());
       const ry = this.ridgeY(x);
       if (ry == null || x > W - 22 * u) continue;
       const room = Math.min(this.shoreY(x) - 16 * u, H - 24 * u, ry + H * 0.36) - ry;
@@ -1308,7 +1452,7 @@ class Scene {
       out.push({ x, y, d });
     }
     // spread out, but not into the corners: far enough from the others, then near the middle of the pasture
-    if (spread) { const mid = g.portrait ? 0.7 * W : 0.79 * W, sc = p => Math.min(p.d, 170 * u) - Math.abs(p.x - mid) * 0.3; out.sort((a, b) => sc(b) - sc(a)); }
+    if (spread) { const mid = g.land[2], sc = p => Math.min(p.d, 170 * u) - Math.abs(p.x - mid) * 0.3; out.sort((a, b) => sc(b) - sc(a)); }
     // seen: its middle, and its ends too unless it's only a walk's goal
     for (let i = 0; i < Math.min(check, out.length); i++) {
       const p = out[i];
@@ -1646,7 +1790,8 @@ class Scene {
   }
   updateBox(dt) {
     const b = this.box, rm = this.reduced, t = this.t;
-    if (this.held) return;
+    // (the sheep's box is on the page's hill only)
+    if (this.held || this.cur !== this.w0) return;
     if (b.v !== `${this.layoutV}|${this.fontsV}`) this.placeBox();
     if (b.gx == null) return;
     const p = this.boxAt(), lit = this.inBeam(p.x + this.ox, p.y + this.oy);
@@ -1713,25 +1858,26 @@ class Scene {
     this.pstep = step;
     BOIL = this.boil; PW = g.pw; INK = rgba(this.P.ink); REGX = 2.6 * g.pw; REGY = 1.9 * g.pw; NAP = this.drowsy() > 0.9;
     c.setTransform(k, 0, 0, k, 0, 0);
-    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingQuality = 'high';
     drawScene(this, c);
   }
-  /* A cached layer: one per boil state, redrawn when the hour, the theme or the layout changes */
-  layer(name, rect, draw) {
-    const key = `${this.layoutV}|${this.pstep}|${this.theme}|${this.fontsV}`;
-    const L = this.layers[name][this.boil] ||= { cv: document.createElement('canvas'), key: '' };
-    const k = this.dpr, x0 = Math.floor(rect.x * k), y0 = Math.floor(rect.y * k), w = Math.ceil(rect.w * k), h = Math.ceil(rect.h * k);
+  /* A cached layer: one per boil state, redrawn when the hour, the theme or the layout changes, or when it's
+     wanted at another resolution (`res` times the screen's: islands far off are drawn small) */
+  layer(c, name, rect, draw, res = 1) {
+    const key = `${this.layoutV}|${this.pstep}|${this.theme}|${this.fontsV}|${res}`;
+    const L = (this.layers[name] ||= [])[this.boil] ||= { cv: document.createElement('canvas'), key: '' };
+    const k = this.dpr * res, x0 = Math.floor(rect.x * k), y0 = Math.floor(rect.y * k), w = Math.ceil(rect.w * k), h = Math.ceil(rect.h * k);
     if (L.key !== key) {
       if (L.cv.width !== w || L.cv.height !== h) { L.cv.width = w; L.cv.height = h; }
-      const c = L.cv.getContext('2d');
-      c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, w, h);
-      c.setTransform(k, 0, 0, k, -x0, -y0);
-      draw(c);
+      const x = L.cv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);
+      x.setTransform(k, 0, 0, k, -x0, -y0);
+      draw(x);
       L.key = key;
       this.rebuilds++;
     }
-    const c = this.ctx;
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(L.cv, x0, y0); c.restore();
+    const m = c.getTransform();
+    c.save(); c.setTransform(m.a / k, 0, 0, m.d / k, m.e, m.f); c.drawImage(L.cv, x0, y0); c.restore();
   }
   /* A small cached drawing (a cloud, the sun), drawn around its own origin */
   sprite(name, w, h, x, y, draw) {
@@ -1748,7 +1894,8 @@ class Scene {
       if (this.sprites.size > 60) this.sprites.delete(this.sprites.keys().next().value);
     }
     const c = this.ctx;
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0);
+    const m = c.getTransform();
+    c.save(); c.setTransform(m.a / k, 0, 0, m.d / k, m.e, m.f);
     c.drawImage(s.cv, Math.round((x - w / 2) * k), Math.round((y - h / 2) * k));
     c.restore();
   }
@@ -1759,28 +1906,58 @@ class Scene {
    Back to front: sky and sea, the cached band, stars, the scallops, the
    beam, then the sun, moon, clouds and far island in front of it, the
    cached hill with its cottage and tower, then everything that moves.
+   The far island is the first island of the dive, a whole one with its
+   own far island, and so on: each island draws in two passes, its light
+   behind the clouds and its land in front of them, the farthest first.
+   Diving, you go on over the sea toward the horizon, past the islands.
    ===================================================================== */
 function drawScene(s, c) {
-  const g = s.g, { W, H, u } = g, P = s.P;
+  const g = s.g, { W, H, u } = g, P = s.P, shown = s.shown();
   c.lineCap = 'round'; c.lineJoin = 'round';
   c.fillStyle = rgba(P.sky); c.fillRect(0, 0, W, g.horizon + 2);
   c.fillStyle = rgba(P.sea); c.fillRect(0, g.horizon, W, H - g.horizon);
   const bandTop = g.horizon - (g.horizon - g.top) * (g.portrait ? 0.42 : 0.36) - 20 * u;
-  s.layer('back', { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => drawBand(s, x, bandTop));
+  s.layer(c, 'back', { x: 0, y: bandTop, w: W, h: g.horizon - bandTop + 6 * u }, x => drawBand(s, x, bandTop));
   drawStars(s, c);
   drawWaves(s, c);
-  drawHalo(s, c);
-  drawBeam(s, c);
+  for (const w of shown) { s.enter(w); drawRipples(s, c); }
+  c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
   drawSun(s, c);
   drawMoon(s, c);
+  // an island's ground in its theme's colours, as much darker than by day as the page's green is now
+  const day = PAL[0][1], ground = g => g.ground ? { ...P, hill: g.ground[0].map((v, i) => v * P.hill[i] / day.hill[i]), hill2: g.ground[1].map((v, i) => v * P.hill2[i] / day.hill2[i]) } : P;
+  const land = w => {
+    // an island comes out of the haze far off: then it's drawn whole on the side and laid over
+    const a = smooth(FAR, FAR * 1.6, w.view.s), x = a < 0.99 ? s.fade : c;
+    if (x !== c) { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, x.canvas.width, x.canvas.height); x.lineCap = 'round'; x.lineJoin = 'round'; }
+    s.enter(w); view(s, x, w.view);
+    s.P = ground(w.g);
+    drawLand(s, x, w);
+    s.P = P;
+    if (x !== c) { c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = a; c.drawImage(x.canvas, 0, 0); c.restore(); }
+  };
+  // the islands far off, the light over them, the clouds, then the nearest island
+  const near = shown.at(-1);
+  for (const w of shown) if (w !== near) land(w);
+  for (const w of shown) {
+    const a = lightK(w.view.s);
+    if (a > 0) { s.enter(w); view(s, c, w.view); c.globalAlpha = a; drawHalo(s, c); c.globalAlpha = a; drawBeam(s, c); c.globalAlpha = 1; }
+  }
+  c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
   for (let i = 0; i < g.clouds.length; i++) drawCloud(s, c, g.clouds[i], 'cloud' + i);
   drawCloud(s, c, g.sheepCloud, 'sheepcloud', true);
-  drawIsle(s, c);
-  const T = g.lh, x0 = g.portrait ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
-  const y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
-  const y1 = g.portrait ? Math.max(...g.shore.map(p => p[1])) + 14 * u : H;
-  s.layer('front', { x: x0, y: y0, w: W - x0, h: y1 - y0 }, x => { drawHill(s, x); drawCottage(s, x); drawTower(s, x); });
-  drawHillLight(s, c);
+  land(near);
+  s.enter(s.focus());
+}
+
+/* Only the island being looked at has its light on: it comes on as the island comes close, and goes out as the
+   island is passed, before it gets too much */
+const lightK = sc => smooth(0.45, 0.9, sc) * (1 - smooth(1, 2.2, sc));
+
+/* an island's land and what's on it, back to front */
+function drawLand(s, c, w) {
+  drawFront(s, c, w.view.s);
+  c.globalAlpha = lightK(w.view.s); drawHillLight(s, c); c.globalAlpha = 1;
   drawTufts(s, c);
   drawVisit(s, c);
   drawSmoke(s, c);
@@ -1788,14 +1965,46 @@ function drawScene(s, c) {
   drawHat(s, c);
   // animals and the grass on the hill, back to front (a tuft in front of the one eating it)
   const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : [])].sort((a, b) => a[0] - b[0]);
-  for (const [, it] of items) it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : it.leap ? drawLeap(s, c, it) : drawObj(s, c, it);
-  // the section's little scenes over them: animals pass behind the desk, the huts and the keeper
-  drawStates(s, c);
-  const lk = s.labelsK();
-  if (s.pres.hero > 0.01 && lk > 0.01) { c.globalAlpha = lk; drawLabels(s, c); c.globalAlpha = 1; }
+  const wet = o => o.state === 'float' || o.state === 'swim' || (o.state === 'fall' && s.isSea(o.x, o.ty));
+  for (const [, it] of items) {
+    if (wet(it)) { c.save(); if (afloat(s, c, it.state === 'fall' ? it.ty : it.y)) drawObj(s, c, it); c.restore(); }
+    else it === s.box ? drawBox(s, c) : it.blades ? drawMeadow(s, c, it) : it.leap ? drawLeap(s, c, it) : drawObj(s, c, it);
+  }
+  // the section's little scenes over them, on the page's hill: animals pass behind the desk, the huts and the keeper
+  if (w === s.w0) {
+    drawStates(s, c);
+    const lk = s.labelsK();
+    if (s.pres.hero > 0.01 && lk > 0.01 && !s.dive) { c.globalAlpha = lk; drawLabels(s, c); c.globalAlpha = 1; }
+  }
   drawSplashes(s, c);
   drawBall(s, c);
   drawDoodles(s, c);
+}
+
+/* the hill with its cottage and tower: cached at about the size it's drawn, or drawn as it is when larger than life */
+function drawFront(s, c, sc) {
+  const g = s.g, { W, H, u } = g, T = g.lh, x0 = g.shore ? g.ridge[0][0] - 8 : Math.max(0, g.ridge[0][0] - 10);
+  const x1 = Math.min(W, g.ridge.at(-1)[0] + 8), y0 = Math.min(T.top - T.gal * 1.2, g.cot.base - g.cot.h * 4.2) - 10 * u;
+  const y1 = g.shore ? Math.max(...g.shore.map(p => p[1])) + 26 * u : H;
+  const draw = x => { drawHill(s, x); drawCottage(s, x); drawTower(s, x); };
+  if (sc > 1) draw(c);
+  else s.layer(c, 'front' + (g.theme || ''), { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, draw, 2 ** Math.ceil(Math.log2(sc)));
+}
+
+/* draws from here on in an island's coordinates: screen = s * point + (x, y) */
+function view(s, c, v) {
+  const k = s.dpr;
+  c.setTransform(k * v.s, 0, 0, k * v.s, k * v.x, k * v.y);
+}
+/* Something on the sea at y by the island being drawn isn't as far off as the island: it's as deep into the sea as on
+   the page (see waveScallops), and as much further as the island is, so it comes on faster. Draws from here on where
+   it is, unless it has gone past. */
+function afloat(s, c, y) {
+  const g = s.g, at = (g.H - g.horizon) / (y - g.horizon), d = at + (1 / s.cur.view.s - 1) / SHORE;
+  if (d < 0.2) return false;
+  const m = at / d;
+  view(s, c, { s: m, x: g.W / 2 * (1 - m), y: g.horizon * (1 - m) });
+  return true;
 }
 
 /* the lower sky, a lighter band with a soft wave at its top, and the horizon */
@@ -1990,53 +2199,49 @@ function drawLeap(s, c, o) {
   c.restore();
 }
 
-/* the competition: a much smaller lighthouse on a far island */
-function drawIsle(s, c) {
-  const g = s.g, u = g.u, P = s.P, I = g.isle, hz = g.horizon;
-  const w = I.x1 - I.x0, h = I.h, cx = (I.x0 + I.x1) / 2, lx = I.x0 + w * 0.4, ltop = hz - h * 0.86 - 24 * u;
-  s.sprite('isle', w + 30 * u, (h + 44 * u) * 2, cx, hz, x => {
-    const hump = curve([[-w / 2, 0.5], [-w * 0.32, -h * 0.5], [-w * 0.08, -h * 0.86], [w * 0.16, -h * 0.8], [w * 0.38, -h * 0.4], [w / 2, 0.5]], 4);
-    print(x, [...hump, [w / 2, 3], [-w / 2, 3]], P.far);
-    x.beginPath(); ribbon(x, hump, DET * 0.9, 21, { tin: 3, tout: 3 }); x.fillStyle = INK; x.fill();
-    // the little tower: white, two stripes, a lamp
-    const tx = lx - cx, by = -h * 0.84, th = 24 * u, bw = 5.5 * u, tw = 3.6 * u;
-    const body = [[tx - bw / 2, by], [tx - tw / 2, by - th], [tx + tw / 2, by - th], [tx + bw / 2, by]];
-    print(x, body, mul(hex('#FFFFFF'), P.paper));
-    for (const k of [0.3, 0.68]) {
-      const y0 = by - th * k, y1 = by - th * (k + 0.16), w0 = lerp(bw, tw, k) / 2, w1 = lerp(bw, tw, k + 0.16) / 2;
-      print(x, [[tx - w0, y0], [tx - w1, y1], [tx + w1, y1], [tx + w0, y0]], hex('#FF4A36'));
-    }
-    x.beginPath(); edges(x, body, TEX * 1.1, 4, false, { ov: 1 }); x.fillStyle = INK; x.fill();
-  });
-  // its lamp, which blinks at night in a hurry
-  const night = smooth(0.4, 0.75, s.d), on = s.reduced ? 1 : (Math.sin(s.t * 3.1) > 0.2 ? 1 : 0.35);
-  const ly = ltop - 3 * u;
-  if (night > 0.05) { c.beginPath(); c.arc(lx, ly, (5 + 5 * on) * u, 0, TAU); c.fillStyle = rgba(P.beam, 0.35 * night * on); c.fill(); }
-  dot(c, lx, ly, 2.9 * u, rgba(mix(mul(hex('#FFFFFF'), P.paper), P.beam, Math.max(0.5, night * on))));
-  c.beginPath(); ribbon(c, ellipse(lx, ly, 3.2 * u, 3.2 * u, 12), TEX, 5, { tin: 1, tout: 1, w0: 1, w1: 1 }); c.fillStyle = INK; c.fill();
-}
-
-/* the sea: rows of scallops, thinning toward the horizon; ripples where things land */
+/* the sea: scallops on the water as it goes off to the horizon, in rows, closer together and sparser the farther off;
+   ripples where things land. Diving, you go over it toward the horizon, as fast as past the islands (an island's shore
+   is about a quarter of the way down the sea), and rows and scallops come in between the others as they come close and spread. */
+const rank = n => n ? 31 - Math.clz32(n & -n) : 32;
 function waveScallops(s, c, lit) {
-  const g = s.g, u = g.u;
-  for (let i = 0; i < g.rows.length; i += 2) {
-    const row = g.rows[i], step = (16 + 34 * row.f) * Math.max(u, 0.66), w = (0.75 + 1.3 * row.f) * g.pw * (lit ? 1.15 : 1);
-    if (row.f < 0.08 && !lit) continue;
-    c.beginPath();
-    for (const [a, b] of row.spans) {
-      for (let x = a + hash(i) * step; x < b - step; x += step * (1.3 + hash(x * 0.1 + i) * 0.8)) {
-        if (hash(x * 0.37 + i * 3.1) < 0.18 - row.f * 0.2) continue;
-        const y = s.waveY(x, row), y2 = s.waveY(x + step, row);
-        c.moveTo(x, y); c.quadraticCurveTo(x + step / 2, (y + y2) / 2 - step * 0.34, x + step, y2);
+  const g = s.g, { W, H, u } = g, hz = g.horizon, sea = H - hz, mid = W / 2;
+  // depths in rows ROW apart from where you are, 1 at the bottom of the screen; across, scallops ACROSS apart there
+  const ROW = 0.02, ACROSS = 4, go = s.dive * DIVE_GAP / SHORE, far = lit ? 0.004 : 0.0175, alpha = c.globalAlpha;
+  for (let k = Math.ceil((1 + go) / ROW); ;) {
+    const rel = 1 / (k * ROW - go);
+    if (rel < far) break;
+    // the gap between rows here on the page, and the rows that keep it: the ones `step` apart, those of the finest
+    // of them fading in
+    const f = rel ** (1 / 1.6), gap = 3.2 * sea * rel ** 0.375 / g.rows, dy = sea * ROW * rel * rel;
+    const step = 2 ** Math.max(0, Math.ceil(Math.log2(gap / dy)));
+    if (k % step) { k += step - k % step; continue; }
+    const a = rank(k) > Math.log2(step) ? 1 : clamp(dy * step / gap - 1);
+    k += step;
+    if (a <= 0) continue;
+    const row = { y: hz + sea * rel, f, seed: (k - step) * 97 + s.o.seed }, q0 = k - step;
+    const size = (16 + 34 * f) * Math.max(u, 0.66), across = ACROSS * rel, room = size * 1.7;
+    const qs = 2 ** Math.max(0, Math.ceil(Math.log2(room / across))), qa = clamp(across * qs / room - 1);
+    const off = hash(q0 * 0.13) * 64 * across;
+    c.lineWidth = (0.75 + 1.3 * f) * g.pw * (lit ? 1.15 : 1);
+    for (const fading of [false, true]) {
+      c.beginPath();
+      for (let q = Math.floor((-8 - mid - off) / across / qs) * qs; mid + off + q * across < W + 8 + size; q += qs) {
+        if ((rank(Math.abs(q)) === Math.log2(qs)) !== fading || hash(q * 0.37 + q0 * 3.1) < 0.3 - f * 0.12) continue;
+        const x = mid + off + q * across - size / 2, y = s.waveY(x, row), y2 = s.waveY(x + size, row);
+        c.moveTo(x, y); c.quadraticCurveTo(x + size / 2, (y + y2) / 2 - size * 0.34, x + size, y2);
       }
+      c.globalAlpha = alpha * a * (fading ? qa : 1); c.stroke();
     }
-    c.lineWidth = w; c.stroke();
   }
+  c.globalAlpha = alpha;
 }
 function drawWaves(s, c) {
-  const g = s.g, u = g.u, P = s.P;
-  c.strokeStyle = rgba(P.sea2); waveScallops(s, c, false);
+  c.strokeStyle = rgba(s.P.sea2); waveScallops(s, c, false);
+}
+function drawRipples(s, c) {
+  const u = s.g.u, P = s.P;
   for (const r of s.ripples) {
+    if (!afloat(s, c, r.y)) continue;
     const age = s.t - r.t0, rx = 8 * u + age * 70 * u;
     c.beginPath(); ribbon(c, ellipse(r.x, r.y, rx, rx * 0.3, 40), DET * 0.8, 4, { tin: 1, tout: 1, w0: 1, w1: 1 });
     c.fillStyle = rgba(P.foam, clamp(1 - age / 2.2) * r.a); c.fill();
@@ -2058,8 +2263,8 @@ function drawBeam(s, c) {
   fan.push(e1);
   const col = mix(P.beam, hex('#FFF6C2'), night * 0.45);
   poly(c, fan); c.fillStyle = rgba(col, (0.84 + 0.12 * night * I) * pw); c.fill();
-  // the scallops it crosses light up
-  c.save(); poly(c, fan); c.clip();
+  // the scallops it crosses light up (the sea's, on the screen)
+  c.save(); poly(c, fan); c.clip(); c.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
   c.strokeStyle = rgba(mix(col, hex('#FFFFFF'), 0.5), 0.95 * pw); waveScallops(s, c, true);
   c.restore();
   // the pen goes along both edges, from just outside the eye
@@ -2106,11 +2311,22 @@ function drawHalo(s, c) {
 /* the hill: printed green, a shaded flank, the ridge in the heaviest line, a few hatches and flowers */
 function drawHill(s, c) {
   const g = s.g, { W, H, u } = g, P = s.P, T = g.lh, rd = g.ridge;
+  // an island sits in the water: under its shore, the hill's darker reflection, a few strokes of water across it
+  if (g.isle) {
+    const sl = g.shore, x0 = sl[0][0], x1 = sl.at(-1)[0], deep = x => Math.sin(Math.PI * (x - x0) / (x1 - x0)) * 18 * u, R = rng(3);
+    print(c, [...sl, ...sl.slice().reverse().map(([x, y]) => [x, y + deep(x)])], mix(P.sea, P.hill2, 0.45));
+    c.beginPath();
+    for (let j = 0; j < 4; j++) for (let x = x0 + R() * 30 * u; x < x1 - 20 * u; x += (24 + R() * 30) * u) {
+      const y = s.shoreY(x) + deep(x) * (0.25 + j * 0.27) + 2 * u;
+      c.moveTo(x, y); c.lineTo(x + (6 + R() * 12) * u * (1 - j * 0.15), y);
+    }
+    c.strokeStyle = rgba(P.sea2); c.lineWidth = 1.3 * g.pw; c.stroke();
+  }
   print(c, g.hillPoly, P.hill);
   // the shady flank, a second flat green
   const sh = [];
   for (const [x, y] of rd) if (x < T.x - T.wB * 2) sh.push([x, y]);
-  if (g.portrait) {
+  if (g.shore) {
     // under the headland, a darker band of cliff above the shore
     const sl = g.shore, x0 = sl[0][0];
     print(c, [...sl, ...sl.slice().reverse().map(([x, y]) => [x + 4 * u, y - (8 + (x - x0) / W * 26) * u])], P.hill2);
@@ -2128,7 +2344,7 @@ function drawHill(s, c) {
     const ry = s.ridgeY(x);
     if (ry == null) continue;
     const y = ry + (14 + R() * (g.portrait ? 26 : 70)) * u;
-    if (g.portrait && y > s.shoreY(x) - 12 * u) continue;
+    if (g.shore && y > s.shoreY(x) - 12 * u) continue;
     const n = 3 + ((R() * 3) | 0), l = (13 + R() * 10) * u;
     for (let k = 0; k < n; k++) {
       const hx = x + k * 5 * u, hy = y + k * 1.6 * u, lk = l * (1 - Math.abs(k - (n - 1) / 2) * 0.16);
@@ -2138,18 +2354,18 @@ function drawHill(s, c) {
   c.fillStyle = INK; c.fill();
   // foam where the hill meets the sea
   c.beginPath();
-  const foam = g.portrait ? g.shore : rd.filter(p => p[1] > g.horizon + 3 && p[0] < T.x);
+  const foam = g.shore || rd.filter(p => p[1] > g.horizon + 3 && p[0] < T.x);
   for (let i = 2; i < foam.length - 2; i += 3) {
-    const [x, y] = foam[i], [x2, y2] = foam[i + 2], nx = g.portrait ? 0 : -1, ny = g.portrait ? 1 : 0;
+    const [x, y] = foam[i], [x2, y2] = foam[i + 2], nx = g.shore ? 0 : -1, ny = g.shore ? 1 : 0;
     const ox = nx * 5 * u, oy = ny * 5 * u, mx = (x + x2) / 2 + ox, my = (y + y2) / 2 + oy;
     if (mx < -10 || mx > W + 10 || my > H + 10 || hash(i * 0.7) < 0.3) continue;
-    ribbon(c, [[x + ox, y + oy], [mx + nx * 2 * u - (g.portrait ? 0 : 1) * u, my + (g.portrait ? 3 : -2) * u], [x2 + ox, y2 + oy]], TEX * 1.1, i, { tin: 1, tout: 1, amp: 0.3 });
+    ribbon(c, [[x + ox, y + oy], [mx + nx * 2 * u - (g.shore ? 0 : 1) * u, my + (g.shore ? 3 : -2) * u], [x2 + ox, y2 + oy]], TEX * 1.1, i, { tin: 1, tout: 1, amp: 0.3 });
   }
   c.fillStyle = rgba(P.foam); c.fill();
-  // the ridge, and in portrait the shore under it
+  // the ridge, and the shore under it if it has one
   c.beginPath();
   ribbon(c, rd.filter(p => p[0] > -20 && p[0] < W + 20), SIL, 21, { tin: 4, tout: 4, w0: 0.8, w1: 0.8 });
-  if (g.portrait) ribbon(c, g.shore.filter(p => p[0] < W + 20), SIL * 0.9, 23, { tin: 30, tout: 4, w0: 0.3, w1: 0.8 });
+  if (g.shore) ribbon(c, g.shore.filter(p => p[0] < W + 20), SIL * 0.9, 23, { tin: 30, tout: 4, w0: 0.3, w1: 0.8 });
   c.fillStyle = INK; c.fill();
   // daisies near the cottage and the tower, where the eye goes
   const D = rng(9);
@@ -2197,7 +2413,7 @@ function drawCottage(s, c) {
 
 /* the tower: white with curved stripes in the theme's colours, a door, two windows and a gallery */
 function drawTower(s, c) {
-  const g = s.g, u = g.u, P = s.P, T = g.lh, th = THEMES[s.theme];
+  const g = s.g, u = g.u, P = s.P, T = g.lh, th = THEMES[g.theme || s.theme];
   const paper = mul(hex('#FFFFFF'), P.paper);
   const half = k => lerp(T.wB, T.wT, k) / 2, yAt = k => T.base - T.h * k;
   const Lp = [], Rp = [];
@@ -2348,7 +2564,7 @@ function bobble(c, x, y, pr, col, spin = 0) {
 
 /* a knitted pom-pom hat: a ribbed brim, a long floppy cone in the theme's colour, a white bobble */
 function drawHat(s, c) {
-  const g = s.g, u = g.u, P = s.P, T = g.lh, L = g.lamp, er = T.er, th = THEMES[s.theme];
+  const g = s.g, u = g.u, P = s.P, T = g.lh, L = g.lamp, er = T.er, th = THEMES[g.theme || s.theme];
   const col = mul(hex(th.hat), P.paper), h = hatGeom(s), { by, bw, bh, sway, tip, pr } = h;
   const cone = curve([[L.x - bw * 0.92, by - bh * 0.6], [L.x - bw * 0.5, by - er * 1.9], [L.x + er * 0.1 + sway * er, by - er * 2.85], tip, [L.x + er * 0.65 + sway * er * 1.4, by - er * 2.2], [L.x + bw * 0.9, by - bh * 0.6]], 3);
   print(c, cone, col);
@@ -3120,5 +3336,5 @@ function drawSplashes(s, c) {
   }
 }
 
-window.Hill = { Scene, themes: Object.keys(THEMES), states: STATES };
+window.Hill = { Scene, themes: Object.keys(THEMES), states: STATES, islands: ISLANDS.length };
 })();

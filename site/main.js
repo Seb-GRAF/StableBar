@@ -822,7 +822,11 @@ function measureMarks() {
   });
 }
 const smooth = t => t * t * (3 - 2 * t);
+// past the last note, the dive (see below), in laps of one island each: there is room for twelve
+const dive = document.getElementById("dive"), lap = () => dive.offsetHeight / 12, laps = () => (scrollY - dive.offsetTop) / lap();
 function hour() {
+  // out at sea: from the night the page ends on, round to day and back to night once a round of islands
+  if (!dive.hidden && laps() > 0) return { d: (1 + Math.cos(2 * Math.PI * laps() / window.Hill.islands)) / 2, name: "hero" };
   const y = scrollY + innerHeight / 2;
   let d = marks[0].d, name = marks[0].name;
   for (let i = 0; i < marks.length; i++) {
@@ -934,7 +938,7 @@ if (scene) {
   document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
   document.addEventListener("click", e => {
     if (overlay || editing || e.detail === 0 || !landed || pressedInOpening) return;
-    if (e.target.closest("a, button, input, label, pre, .note, .dock, .site-foot, [role='dialog']")) return;
+    if (e.target.closest("a, button, input, label, pre, .note, .dock, [role='dialog']")) return;
     if (String(getSelection?.() || "")) return;
     S("tap", e.clientX, e.clientY);
   });
@@ -943,6 +947,24 @@ if (scene) {
   for (const b of document.querySelectorAll("[data-drop]")) b.addEventListener("click", () => S("surprise", b.dataset.drop));
   for (const b of document.querySelectorAll("[data-play]")) b.addEventListener("click", () => { hideTour(); S("play"); });
   scene.onBar = onBar;
+
+  /* Past the last note the page goes on: once it has gone, scrolling takes you on over the sea, past the far island
+     and the ones beyond it (see ISLANDS in scene.js), through day and night (see hour). Well into the second round
+     of islands the page steps back a round, which looks the same, so it never ends; and as soon as you turn back, it
+     steps back to have its own hill just behind you, so the page is never more than an island away. */
+  if (!reduce.matches) {
+    const round = window.Hill.islands;
+    let was = scrollY;
+    const diving = () => {
+      const n = laps(), back = n >= round + 2 ? round : scrollY < was ? S("behind") : 0;
+      if (back) scrollTo(0, scrollY - back * lap());
+      was = scrollY;
+      S("setDive", Math.max(0, n - back), back);
+    };
+    dive.hidden = false;
+    addEventListener("scroll", diving, { passive: true });
+    diving();
+  }
 }
 
 /* ---------- The lighthouse plays with the bar ----------
