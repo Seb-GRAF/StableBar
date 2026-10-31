@@ -20,8 +20,6 @@ Themes, widgets and popups, set up in the app or in plain JSON.
 
 <img src="https://github.com/user-attachments/assets/b40eed6e-70ea-4831-b98e-546a477eed37" width="100%" alt="StableBar on a MacBook: the pointer opens the agenda, system and music popups from the bar, then the bar changes to the Catppuccin, Gruvbox and Notch themes and back">
 
-<img src="https://github.com/user-attachments/assets/8d5909cb-f107-48db-a7b3-aabbabf4e860" width="100%" alt="StableBar on the desktop: workspaces with their app icons, the active app, music, the next meeting, CPU and memory, the battery and the clock. It moves to another workspace and back.">
-
 ## Features
 
 - **Native.** Swift, AppKit and SwiftUI, with no web view or private window-server API, except in the opt-in [macOS Spaces](docs/widgets.md#macos-spaces-workspaces) workspace source. One panel per display; workspace changes update the widgets in place instead of recreating windows.
