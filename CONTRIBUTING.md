@@ -148,12 +148,12 @@ On a pull request, CI draws the screens twice, from the pull request and from it
 - **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
 - **Draw website screens** captures the four pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
 
-Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too.
+Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too. A screen whose height changed, such as a website page that grew, is compared from the top: its crop starts at the first change and runs across the full width. A crop shows at most 1,600 rows of a change, and the comment says so when it stops short; the approval still covers the whole image.
 
-These jobs run the pull request's code with a read-only token. The **Screens** workflow runs from `main` when CI finishes, reads what they uploaded only as data, and:
+These jobs run the pull request's code with a read-only token. The **Screens** workflow runs from `main` when CI finishes, and when a pull request gets or loses `visual-ok`, changes its base, closes or reopens. Each time it reads where the pull request stands, one pull request at a time, so running it again only brings everything up to date. It reads what the jobs uploaded only as data, and:
 
-- comments once on the pull request and rewrites that comment on every push: a table of the changed screens, their before, after and difference images cropped to the change, the unchanged screens folded, and what couldn't be drawn;
-- keeps the images as assets of a monthly prerelease, `pr-previews-YYYY-MM`, and deletes a head's images once a newer head replaces them. Closing a pull request without merging deletes all of its images; a merged one keeps its last;
+- comments once on the pull request and rewrites that comment for each new CI run: a table of the changed screens, their before, after and difference images cropped to the change, the unchanged screens folded, and what couldn't be drawn;
+- keeps the images as assets of a monthly prerelease, `pr-previews-YYYY-MM`, then `-2` and on when one is full, and deletes a head's images once a newer head replaces them. Closing a pull request without merging deletes all of its images; a merged one keeps its last;
 - sets the **Visual review** status on the pull request's head.
 
 | Visual review | When |
@@ -161,10 +161,11 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 | Success: "No screens to compare." | The pull request changes neither the app nor the website. |
 | Success: "N screens, none changed." | Nothing looks different. |
 | Pending | Screens changed. A maintainer looks at them, then adds the `visual-ok` label. |
-| Success: "M changed screens approved." | `visual-ok` approved exactly these screens. |
+| Success: "M changed screens approved." | `visual-ok` was added after the comment began showing these screens. |
+| Pending: "The base changed…" | The pull request's base changed since its screens were drawn. Push a commit to draw them again. |
 | Failure | Drawing failed; the comment says what. A `visual-ok` added while it showed the failure still approves it. |
 
-`visual-ok` approves the screens the comment shows when it's added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later push that changes those screens, or what fails to draw, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
+`visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
 
 Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. **Screens** reads the pull request's changed files from GitHub, so screens they call for that weren't drawn fail the review, but review such a change itself before you trust its screens.
 
