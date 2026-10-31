@@ -56,6 +56,10 @@ struct SceneFile: Decodable {
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
+        if appearances.isEmpty || Set(appearances).count != appearances.count {
+            throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,
+                                                   debugDescription: "Appearances name dark, light or both, each once.")
+        }
         width = try values.decodeIfPresent(Double.self, forKey: .width)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         if let width, !(100...4000).contains(width) {

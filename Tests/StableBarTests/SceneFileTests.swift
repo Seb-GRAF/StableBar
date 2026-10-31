@@ -113,3 +113,11 @@ func sceneRejectsImpossibleSizes(size: String) throws {
     let message = errorMessage(try #require(error))
     #expect(message.contains("width") || message.contains("height"))
 }
+
+// As scene.schema.json says: at least one appearance, each once. An empty list would draw nothing and report success.
+@Test(arguments: [#"[]"#, #"["dark", "dark"]"#])
+func sceneRejectsEmptyOrRepeatedAppearances(appearances: String) throws {
+    let error = #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", "appearances": \#(appearances)}"#) }
+    #expect(errorMessage(try #require(error)).contains("ppearance"))
+    #expect(try scene(#"{"configuration": {}, "draw": "bar", "appearances": ["light"]}"#).appearances == [.light])
+}
