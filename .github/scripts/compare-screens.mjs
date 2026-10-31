@@ -1,7 +1,8 @@
 // Compares the screens drawn from a pull request (after) with those drawn from its base (before):
 //   node compare-screens.mjs BEFORE AFTER OUT --prefix docs [--before-report scenes.json] [--after-report scenes.json]
 // It writes cropped before, after and difference images of each changed screen to OUT, and adds the
-// screens to OUT/manifest.json: {screens: [{id, status, changedPixels, region, images, note}], failed: [{id, error}]}.
+// screens to OUT/manifest.json: {screens: [{id, status, changedPixels, region, images, baseError?}], failed: [{id, error}]}.
+// The trusted half of the bot checks that manifest strictly: see readManifest in screens-comment.mjs.
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, basename } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,6 +12,12 @@ import { decodePNG, encodePNG } from "./png.mjs";
 const noise = 1;
 /** Points of context around a changed region, at the renders' 2× scale. */
 const padding = 24;
+/** The longest message the trusted half takes. */
+const maximumMessage = 1000;
+
+const cut = (text, limit) => (text.length <= limit ? text : `${text.slice(0, limit - 1)}…`);
+/** Image names the bot can show, since they become file and asset names. */
+const isPlainName = (name) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && !name.includes("..") && name.length <= 80;
 
 function changedMask(before, after) {
   const mask = new Uint8Array(before.width * before.height);
@@ -106,14 +113,17 @@ function sceneName(image) {
 
 /**
  * Compares every PNG in `beforeDir` and `afterDir`, writes the images of changed, added, removed and
- * resized screens to `outDir`, and returns the screens. `beforeErrors` holds, by scene name, why
- * the base couldn't draw a scene.
+ * resized screens to `outDir`, and returns the screens, and as failures the images whose names the
+ * bot can't show. `beforeErrors` holds, by scene name, why the base couldn't draw a scene.
  */
 export function compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors = {} }) {
   const list = (folder) => (existsSync(folder) ? readdirSync(folder).filter((name) => name.endsWith(".png")) : []);
-  const names = [...new Set([...list(beforeDir), ...list(afterDir)])].sort();
+  const all = [...new Set([...list(beforeDir), ...list(afterDir)])].sort();
+  const names = all.filter((name) => isPlainName(basename(name, ".png")));
+  const failed = all.filter((name) => !names.includes(name)).map((name) => ({ id: cut(`${prefix}/${basename(name, ".png")}`, 200),
+    error: "Its name may use only letters, digits, dots, dashes and underscores." }));
   mkdirSync(outDir, { recursive: true });
-  return names.map((name) => {
+  const screens = names.map((name) => {
     const before = read(beforeDir, name), after = read(afterDir, name);
     const id = `${prefix}/${basename(name, ".png")}`;
     const result = comparePair(before, after);
@@ -138,16 +148,18 @@ export function compareDirectories(beforeDir, afterDir, outDir, { prefix, before
     }
     const screen = { id, ...result, images };
     const error = beforeErrors[sceneName(name)];
-    if (result.status === "added" && error) screen.note = `The base couldn't draw this scene: ${error}`;
+    if (result.status === "added" && error) screen.baseError = cut(error, maximumMessage);
     return screen;
   });
+  return { screens, failed };
 }
 
 /** Scene name to error, from a scenes.json report `--render-scenes` wrote. */
 function errors(report) {
   if (!report || !existsSync(report)) return {};
   const scenes = JSON.parse(readFileSync(report, "utf8")).scenes ?? {};
-  return Object.fromEntries(Object.entries(scenes).filter(([, entry]) => entry.error).map(([name, entry]) => [name, entry.error]));
+  return Object.fromEntries(Object.entries(scenes).filter(([, entry]) => typeof entry?.error === "string" && entry.error)
+    .map(([name, entry]) => [name, entry.error]));
 }
 
 export function main(argv) {
@@ -160,8 +172,9 @@ export function main(argv) {
   if (!beforeDir || !afterDir || !outDir || !prefix) {
     throw new Error("usage: compare-screens.mjs BEFORE AFTER OUT --prefix NAME [--before-report FILE] [--after-report FILE]");
   }
-  const screens = compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors: errors(option("--before-report")) });
-  const failed = Object.entries(errors(option("--after-report"))).map(([name, error]) => ({ id: `${prefix}/${name}`, error }));
+  const { screens, failed: unnamed } = compareDirectories(beforeDir, afterDir, outDir, { prefix, beforeErrors: errors(option("--before-report")) });
+  const failed = [...unnamed, ...Object.entries(errors(option("--after-report")))
+    .map(([name, error]) => ({ id: cut(`${prefix}/${name}`, 200), error: cut(error, maximumMessage) }))];
   const manifestPath = join(outDir, "manifest.json");
   const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, "utf8")) : { screens: [], failed: [] };
   manifest.screens.push(...screens);

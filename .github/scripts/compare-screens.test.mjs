@@ -42,7 +42,9 @@ test("compareDirectories writes images for changed screens only, and notes what 
   writeFileSync(join(before, "moved-dark.png"), encodePNG(base));
   writeFileSync(join(after, "moved-dark.png"), encodePNG(paint(base, 10, 10, 4, 4, [255, 255, 255, 255])));
   writeFileSync(join(after, "new-dark.png"), encodePNG(base));
-  const screens = compareDirectories(before, after, out, { prefix: "scenes", beforeErrors: { new: "draw: Unknown value" } });
+  writeFileSync(join(after, "odd name-dark.png"), encodePNG(base));
+  const { screens, failed } = compareDirectories(before, after, out,
+    { prefix: "scenes", beforeErrors: { new: `draw: Unknown value ${"y".repeat(1200)}` } });
   assert.deepEqual(screens.map((screen) => [screen.id, screen.status]),
     [["scenes/moved-dark", "changed"], ["scenes/new-dark", "added"], ["scenes/same-dark", "unchanged"]]);
   const moved = screens[0];
@@ -52,6 +54,9 @@ test("compareDirectories writes images for changed screens only, and notes what 
   const crop = decodePNG(readFileSync(join(out, moved.images.after)));
   // The 4-pixel square at x = 10 gets 24 pixels of padding, cut at the left edge: from 0 to 10 + 4 + 24.
   assert.equal(crop.width, 38);
-  assert.match(screens[1].note, /Unknown value/);
+  // The trusted half takes messages of at most 1,000 characters.
+  assert.match(screens[1].baseError, /^draw: Unknown value y+…$/);
+  assert.equal(screens[1].baseError.length, 1000);
   assert.equal(screens[2].images.after, undefined);
+  assert.deepEqual(failed, [{ id: "scenes/odd name-dark", error: "Its name may use only letters, digits, dots, dashes and underscores." }]);
 });
