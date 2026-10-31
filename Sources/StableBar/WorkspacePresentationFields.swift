@@ -17,6 +17,7 @@ struct WorkspacePresentationFields: View {
         let cell = fields("style")
         let app = fields("appStyle")
         root.choice("Indicator", "indicator", choices: ["background", "underline", "none"], default: "background")
+        root.toggle("Divide numeric and alphabetic workspaces", "groupDivider", default: false)
         indicator.choice("Underline placement", "placement", choices: IndicatorPlacement.allCases.map(\.rawValue), default: "cell")
         indicator.color("Underline", "background")
         indicator.number("Underline thickness", "height", default: 2)

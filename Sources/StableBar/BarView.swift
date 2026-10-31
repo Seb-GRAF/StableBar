@@ -730,7 +730,15 @@ struct WorkspaceView: View {
                 || (workspaceStore.source.supportsWindowMoves && workspaceStore.windowDrag.active != nil))
         let indicator = configuration?.indicator ?? .background
         HStack(spacing: appearance.spacing) {
-            ForEach(workspaces) { workspace in
+            ForEach(Array(workspaces.enumerated()), id: \.element.id) { index, workspace in
+                if configuration?.groupDivider == true, index > 0,
+                   Workspace.needsGroupDivider(between: workspaces[index - 1].name, and: workspace.name) {
+                    Rectangle()
+                        .fill(appearance.foreground.opacity(0.25))
+                        .frame(width: 1 / displayScale, height: 16)
+                        .accessibilityHidden(true)
+                        .allowsHitTesting(false)
+                }
                 let mode = configuration?.usesModeStates == true
                     ? ModePresentation(mode: workspaceStore.mode, aliases: modeAliases) : ModePresentation()
                 let styles = configuration?.cellStyle(WorkspaceState(workspace), mode: mode) ?? WorkspaceCellStyle()

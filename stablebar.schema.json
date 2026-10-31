@@ -318,6 +318,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "groupDivider": {
+          "anyOf": [
+            { "type": "boolean" },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ]
+        },
         "indicator": {
           "anyOf": [
             {
@@ -1157,6 +1164,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "groupDivider": {
+          "anyOf": [
+            { "type": "boolean" },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ]
+        },
         "indicator": {
           "anyOf": [
             {

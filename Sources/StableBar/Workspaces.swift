@@ -14,6 +14,12 @@ struct Workspace: Decodable, Identifiable, Sendable, Equatable {
     var id: String { name }
     var label: String { displayName ?? name }
 
+    static func needsGroupDivider(between previous: String, and next: String) -> Bool {
+        let numeric = { (name: String) in !name.isEmpty && name.allSatisfy(\.isNumber) }
+        let alphabetic = { (name: String) in !name.isEmpty && name.allSatisfy(\.isLetter) }
+        return (numeric(previous) && alphabetic(next)) || (alphabetic(previous) && numeric(next))
+    }
+
     enum CodingKeys: String, CodingKey {
         case name = "workspace"
         case isFocused = "workspace-is-focused"
