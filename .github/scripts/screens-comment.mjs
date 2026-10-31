@@ -165,14 +165,18 @@ export function summary(screens, failed) {
 }
 
 /**
- * The Visual review status, from a run's summary: success when nothing needs a look or a maintainer
- * approved this exact fingerprint with visual-ok, pending while changed screens wait for one, failure
- * when drawing failed. `removeLabel` asks to take visual-ok off when it approved something else.
+ * The Visual review status, from a run's summary: success when nothing needs a look or visual-ok was
+ * added after the comment began showing these screens (`labeledAt` after `shownAt`, both ISO times
+ * from GitHub), pending while changed screens wait for it, failure when drawing failed. Screens
+ * compared with a base the pull request no longer has wait for a new run. `removeLabel` asks to take
+ * visual-ok off when it came before these screens.
  */
-export function reviewState({ ranScreens, total = 0, changed = 0, failed = 0, failure = null, labels = [], approved = null, fingerprint: current = null }) {
+export function reviewState({ ranScreens, total = 0, changed = 0, failed = 0, failure = null, labels = [], labeledAt = null, shownAt = null,
+  baseChanged = false }) {
   if (!ranScreens) return { state: "success", description: "No screens to compare.", removeLabel: false };
+  if (baseChanged) return { state: "pending", description: "The base changed: push a commit to compare the screens with it.", removeLabel: false };
   const labelled = labels.includes("visual-ok");
-  const valid = labelled && approved !== null && approved === current;
+  const valid = labelled && labeledAt !== null && shownAt !== null && Date.parse(labeledAt) > Date.parse(shownAt);
   if (failed > 0) {
     if (valid) return { state: "success", description: `Approved with visual-ok although ${plural(failed, "screen")} failed to draw.`, removeLabel: false };
     return { state: "failure", description: cut(`Drawing the screens failed: ${failure ?? "see the comment."}`, 140), removeLabel: labelled };
@@ -274,10 +278,16 @@ export function withReview(body, review, data) {
   return `${start >= 0 ? body.slice(0, start + 1) : `${body.trimEnd()}\n\n`}${reviewSection(review, data)}`;
 }
 
+const isTime = (value) => typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value));
+
+/** The comment's data: what was drawn for which head and CI run, against which base, and since when it's shown. */
 function isData(data) {
-  return hasOnly(data, ["head", "base", "ranScreens", "fingerprint", "approved", "total", "changed", "failed", "failure"])
-    && isHex(data.head, 40) && (data.base === null || isHex(data.base, 40)) && typeof data.ranScreens === "boolean"
-    && (data.fingerprint === null || isHex(data.fingerprint, 64)) && (data.approved === null || isHex(data.approved, 64))
+  return hasOnly(data, ["head", "base", "baseRef", "runId", "runAttempt", "ranScreens", "fingerprint", "shownAt", "total", "changed", "failed", "failure"])
+    && isHex(data.head, 40) && (data.base === null || isHex(data.base, 40))
+    && (data.baseRef === null || (typeof data.baseRef === "string" && data.baseRef.length > 0 && data.baseRef.length <= 255))
+    && (data.runId === null || isCount(data.runId, 1)) && (data.runAttempt === null || isCount(data.runAttempt, 1))
+    && typeof data.ranScreens === "boolean"
+    && (data.fingerprint === null || isHex(data.fingerprint, 64)) && (data.shownAt === null || isTime(data.shownAt))
     && isCount(data.total) && isCount(data.changed) && isCount(data.failed)
     && (data.failure === null || (typeof data.failure === "string" && data.failure.length <= 300));
 }

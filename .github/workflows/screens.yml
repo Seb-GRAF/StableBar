@@ -3,15 +3,17 @@ name: Screens
 # Posts the before/after screens of a pull request and sets its Visual review status. CI's Draw
 # screens and Draw website screens jobs run the pull request's code and upload what they drew. This
 # workflow runs the default branch's copy of itself and of .github/scripts, reads those artifacts
-# only as data, and holds the write token: it uploads the images to a monthly pre-release, writes
-# the comment, follows the visual-ok label, and deletes an unmerged pull request's images when it
-# closes. The logic and its tests are in .github/scripts/screens-bot.mjs and screens-comment.mjs.
+# only as data, and holds the write token. Each event reconciles its pull request, one at a time:
+# it publishes the newest finished CI run's screens to a monthly pre-release and the comment, sets
+# the status from the visual-ok label's history, and deletes an unmerged pull request's images when
+# it closes. Running it again for a pull request only brings everything up to date. The logic and
+# its tests are in .github/scripts/screens-bot.mjs and screens-comment.mjs.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
   pull_request_target:
-    types: [labeled, unlabeled, closed]
+    types: [labeled, unlabeled, edited, closed, reopened]
 
 permissions:
   actions: read
@@ -20,16 +22,20 @@ permissions:
   pull-requests: write
   statuses: write
 
-# One queue per pull request for CI runs and one for its label and close events: GitHub keeps only
-# the newest pending run in a queue, so a label event never replaces a run's pending publication.
-concurrency:
-  group: screens-${{ github.event_name }}-${{ github.event.workflow_run.head_repository.full_name || github.event.pull_request.head.repo.full_name }}-${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
-  cancel-in-progress: false
-
 jobs:
-  publish:
-    name: Publish screens
-    if: github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request'
+  reconcile:
+    name: Reconcile screens
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request')
+      || (github.event_name == 'pull_request_target' && (
+        github.event.action == 'closed' || github.event.action == 'reopened'
+        || (github.event.action == 'edited' && github.event.changes.base)
+        || github.event.label.name == 'visual-ok'))
+    # One reconcile of a pull request at a time. GitHub keeps only the newest event waiting, but
+    # each reconcile reads everything afresh, so a dropped one loses nothing.
+    concurrency:
+      group: screens-${{ github.event.workflow_run.head_repository.full_name || github.event.pull_request.head.repo.full_name }}-${{ github.event.workflow_run.head_branch || github.event.pull_request.head.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -38,83 +44,48 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - name: Find the pull request
-        id: run
+      - name: Plan
+        id: plan
         uses: actions/github-script@v8
         with:
           script: |
-            const { findRun } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
-            const run = await findRun({ github, context });
-            if (!run) return core.info("This run isn't for an open pull request's current head.");
-            core.setOutput("run", JSON.stringify(run));
-            core.setOutput("app", run.artifacts.app ? "true" : "");
-            core.setOutput("site", run.artifacts.site ? "true" : "");
-      # A download that fails leaves its folder missing, which the next step reports.
+            const { plan } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
+            const chosen = await plan({ github, context });
+            core.info(`Plan: ${chosen.action}${chosen.number ? ` for #${chosen.number}` : ""}${chosen.run ? ` from run ${chosen.run.id}` : ""}`);
+            core.setOutput("plan", JSON.stringify(chosen));
+            core.setOutput("run-id", chosen.run?.id ?? "");
+            core.setOutput("app", chosen.run?.artifacts.app ? "true" : "");
+            core.setOutput("site", chosen.run?.artifacts.site ? "true" : "");
+      # A download that fails leaves its folder missing, which Apply reports.
       - uses: actions/download-artifact@v8
-        if: steps.run.outputs.app
+        if: steps.plan.outputs.app
         continue-on-error: true
         with:
           name: screens-app
           path: ${{ runner.temp }}/screens-app
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.plan.outputs.run-id }}
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
-        if: steps.run.outputs.site
+        if: steps.plan.outputs.site
         continue-on-error: true
         with:
           name: screens-site
           path: ${{ runner.temp }}/screens-site
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.plan.outputs.run-id }}
           github-token: ${{ github.token }}
-      - name: Publish
-        if: steps.run.outputs.run
+      - name: Apply
         uses: actions/github-script@v8
         env:
-          RUN: ${{ steps.run.outputs.run }}
+          PLAN: ${{ steps.plan.outputs.plan }}
         with:
           script: |
             const bot = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
-            const run = JSON.parse(process.env.RUN);
+            const chosen = JSON.parse(process.env.PLAN);
             const folders = { app: `${process.env.RUNNER_TEMP}/screens-app`, site: `${process.env.RUNNER_TEMP}/screens-site` };
             try {
-              const review = await bot.publishRun({ github, context, run, folders });
-              core.info(`Visual review: ${review.state}, ${review.description}`);
+              const result = await bot.apply({ github, context, plan: chosen, folders });
+              core.info(result.review ? `Visual review: ${result.review.state}, ${result.review.description}` : JSON.stringify(result));
             } catch (error) {
-              await bot.failRun({ github, context, run });
+              await bot.failRun({ github, context, number: chosen.number }).catch((failure) => core.warning(failure.message));
               throw error;
             }
-
-  review:
-    name: Follow visual-ok
-    if: github.event_name == 'pull_request_target' && github.event.action != 'closed' && github.event.label.name == 'visual-ok'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/scripts
-          persist-credentials: false
-      - uses: actions/github-script@v8
-        with:
-          script: |
-            const { updateReview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
-            const review = await updateReview({ github, context });
-            core.info(review ? `Visual review: ${review.state}, ${review.description}` : "There's no screens comment yet.");
-
-  clean-up:
-    name: Delete unmerged screens
-    if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && !github.event.pull_request.merged
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-          sparse-checkout: .github/scripts
-          persist-credentials: false
-      - uses: actions/github-script@v8
-        with:
-          script: |
-            const { deleteScreens } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/screens-bot.mjs`);
-            core.info(`Deleted ${await deleteScreens({ github, context })} images.`);

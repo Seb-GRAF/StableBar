@@ -9,7 +9,8 @@ const digest = (character) => character.repeat(64);
 const screen = (id, status, images = {}, extra = {}) => ({ id, status, changedPixels: status === "changed" ? 120 : 0,
   region: status === "changed" ? { x: 10, y: 20, width: 30, height: 40 } : null, images,
   ...(status === "changed" || status === "resized" ? { afterDigest: "e".repeat(64) } : {}), ...extra });
-const data = (extra = {}) => ({ head: sha("a"), base: sha("b"), ranScreens: true, fingerprint: digest("f"), approved: null,
+const data = (extra = {}) => ({ head: sha("a"), base: sha("b"), baseRef: "main", runId: 41, runAttempt: 1, ranScreens: true,
+  fingerprint: digest("f"), shownAt: "2026-10-31T10:00:00.000Z",
   total: 2, changed: 1, failed: 0, failure: null, ...extra });
 const urls = (file) => `https://example.test/${file}`;
 // What a pull request's CI job could put in a name or a message.
@@ -128,33 +129,32 @@ test("summary counts the screens and keeps the first failure short", () => {
 });
 
 test("reviewState follows the visual review rules", () => {
-  const run = { ranScreens: true, total: 2, changed: 1, failed: 0, failure: null };
+  const shownAt = "2026-10-31T10:00:00.000Z", later = "2026-10-31T10:05:00Z", earlier = "2026-10-31T09:55:00Z";
+  const run = { ranScreens: true, total: 2, changed: 1, failed: 0, failure: null, shownAt };
   assert.deepEqual(reviewState({ ranScreens: false }), { state: "success", description: "No screens to compare.", removeLabel: false });
   assert.deepEqual(reviewState({ ...run, changed: 0, labels: [] }), { state: "success", description: "2 screens, none changed.", removeLabel: false });
-  assert.deepEqual(reviewState({ ...run, labels: [], fingerprint: digest("1") }),
+  assert.deepEqual(reviewState({ ...run, labels: [] }),
     { state: "pending", description: "1 screen changed: a maintainer adds visual-ok after looking.", removeLabel: false });
-  assert.deepEqual(reviewState({ ...run, labels: ["visual-ok"], approved: digest("1"), fingerprint: digest("1") }),
+  // visual-ok approves the screens shown before it was added.
+  assert.deepEqual(reviewState({ ...run, labels: ["visual-ok"], labeledAt: later }),
     { state: "success", description: "1 changed screen approved.", removeLabel: false });
-  const stale = reviewState({ ...run, labels: ["visual-ok"], approved: digest("0"), fingerprint: digest("1") });
-  assert.deepEqual([stale.state, stale.removeLabel], ["pending", true]);
-  const early = reviewState({ ...run, labels: ["visual-ok"], approved: null, fingerprint: digest("1") });
-  assert.deepEqual([early.state, early.removeLabel], ["pending", true]);
+  for (const labeledAt of [earlier, "2026-10-31T10:00:00Z", null]) {
+    const stale = reviewState({ ...run, labels: ["visual-ok"], labeledAt });
+    assert.deepEqual([stale.state, stale.removeLabel], ["pending", true], String(labeledAt));
+  }
   const failing = { ...run, failed: 1, failure: `scenes/x: draw: Unknown value ${"y".repeat(200)}` };
-  const broken = reviewState({ ...failing, labels: [], fingerprint: digest("1") });
+  const broken = reviewState({ ...failing, labels: [] });
   assert.equal(broken.state, "failure");
   assert.match(broken.description, /^Drawing the screens failed: scenes\/x/);
   assert.ok(Array.from(broken.description).length <= 140);
-  assert.deepEqual(reviewState({ ...failing, labels: ["visual-ok"], approved: digest("1"), fingerprint: digest("1") }),
+  assert.deepEqual(reviewState({ ...failing, labels: ["visual-ok"], labeledAt: later }),
     { state: "success", description: "Approved with visual-ok although 1 screen failed to draw.", removeLabel: false });
-});
-
-test("an approval doesn't cover a failure that came after it", () => {
-  const screens = [screen("docs/a", "changed", { before: "b.png", after: "a.png", diff: "d.png" })];
-  const failed = [{ id: "scenes/x", error: "draw: Unknown value" }];
-  const approved = fingerprint({ screens, failed: [] }, () => "11");
-  const review = reviewState({ ranScreens: true, ...summary(screens, failed), labels: ["visual-ok"], approved,
-    fingerprint: fingerprint({ screens, failed }, () => "11") });
-  assert.deepEqual([review.state, review.removeLabel], ["failure", true]);
+  assert.deepEqual([reviewState({ ...failing, labels: ["visual-ok"], labeledAt: earlier }).state, reviewState({ ...failing, labels: ["visual-ok"], labeledAt: earlier }).removeLabel],
+    ["failure", true]);
+  // Screens compared with another base wait for a new run, approved or not.
+  assert.deepEqual(reviewState({ ...run, labels: ["visual-ok"], labeledAt: later, baseChanged: true }),
+    { state: "pending", description: "The base changed: push a commit to compare the screens with it.", removeLabel: false });
+  assert.equal(reviewState({ ranScreens: false, baseChanged: true }).state, "success");
 });
 
 test("commentBody shows changed screens, folds the rest and keeps its data", () => {
@@ -218,8 +218,8 @@ test("withReview replaces only the review line and the data", () => {
   const approved = { state: "success", description: "1 changed screen approved.", removeLabel: false };
   const body = make(taken);
   assert.match(body, /`visual-ok` was taken off/);
-  const updated = withReview(body, approved, data({ approved: digest("f") }));
-  assert.equal(updated, make(approved, { approved: digest("f") }));
+  const updated = withReview(body, approved, data({ shownAt: "2026-10-31T11:00:00.000Z" }));
+  assert.equal(updated, make(approved, { shownAt: "2026-10-31T11:00:00.000Z" }));
   assert.doesNotMatch(updated, /taken off/);
 });
 
@@ -236,9 +236,12 @@ test("readData reads only the data on the comment's last line", () => {
   const line = (value) => `<!-- stablebar-screens-data ${JSON.stringify(value)} -->`;
   assert.deepEqual(readData(`<!-- stablebar-screens -->\ntext\n${line(data())}`), data());
   assert.deepEqual(readData(`<!-- stablebar-screens -->\r\ntext\r\n${line(data())}\r\n`), data());
-  assert.deepEqual(readData(`<!-- stablebar-screens -->\n${line(data({ approved: digest("e") }))}\n${line(data())}`), data());
+  assert.deepEqual(readData(`<!-- stablebar-screens -->\n${line(data({ runId: 42 }))}\n${line(data())}`), data());
   assert.equal(readData(`<!-- stablebar-screens -->\n${line(data())}\nmore text`), null);
-  assert.equal(readData(`x\n${line({ ...data(), approved: "yes" })}`), null);
+  assert.equal(readData(`x\n${line({ ...data(), shownAt: "yesterday" })}`), null);
+  assert.equal(readData(`x\n${line({ ...data(), approved: null })}`), null);
+  assert.deepEqual(readData(`x\n${line(data({ ranScreens: false, fingerprint: null, shownAt: null, runId: null, runAttempt: null }))}`),
+    data({ ranScreens: false, fingerprint: null, shownAt: null, runId: null, runAttempt: null }));
   assert.equal(readData(`x\n${line({ ...data(), extra: 1 })}`), null);
   assert.equal(readData("no data here"), null);
 });
