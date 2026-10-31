@@ -67,7 +67,8 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 
-/* Themes: the tags on the washing line restyle the bar, and dress the lighthouse to match */
+/* Themes: the tags on the washing line restyle the bar, and the drawing: each theme draws the scene in its own style
+   (styles/), which the lighthouse's light brings in as it turns once round, the lighthouse in the theme's pyjamas */
 function setTheme(id) {
   dock.dataset.theme = id;
   bar.className = `bar ${THEMES.find(t => t[0] === id)[2]}`;
