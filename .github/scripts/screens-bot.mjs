@@ -16,17 +16,27 @@ const kinds = {
   app: { artifact: "screens-app", prefixes: ["docs", "scenes"], needs: ["current", "build"] },
   site: { artifact: "screens-site", prefixes: ["site"], needs: ["current"] },
 };
-const broken = ["failure", "cancelled", "timed_out"];
+const broken = ["failure", "cancelled", "timed_out", "missing"];
+/**
+ * The files whose changes call for each kind of screens: the patterns CI's Check revision job greps
+ * for its screens and site outputs. A test keeps them the same. The bot reads the pull request's
+ * files from GitHub, so a run whose job graph skips or drops a screens job can't pass as having none.
+ */
+export const changePatterns = {
+  app: /^(Sources\/|Resources\/|Package\.(swift|resolved)$|scripts\/|scenes\/|\.github\/workflows\/ci\.yml$|\.github\/scripts\/(png|compare-screens)\.mjs$)/,
+  site: /^(site\/|\.github\/workflows\/ci\.yml$|\.github\/scripts\/(png|compare-screens|capture-site)\.mjs$)/,
+};
 
 /**
- * The pull request a completed CI run drew screens for, with what its jobs did and which artifacts it
- * uploaded, or null when the run isn't for an open pull request's current head. A fork's run lists no
- * pull requests, so it is found by its head branch and commit.
+ * The pull request a completed CI run drew screens for, with what its jobs did, which artifacts it
+ * uploaded and which screens its changed files call for, or null when the run isn't CI's for an open
+ * pull request's current head. A fork's run lists no pull requests, so it is found by its head branch
+ * and commit. A job the run doesn't have is "missing".
  */
 export async function findRun({ github, context }) {
   const { owner, repo } = context.repo;
   const run = context.payload.workflow_run;
-  if (run.event !== "pull_request" || !run.head_repository) return null;
+  if (run.event !== "pull_request" || run.path !== ".github/workflows/ci.yml" || !run.head_repository) return null;
   let numbers = run.pull_requests.map((pr) => pr.number);
   if (numbers.length === 0) {
     const pulls = await github.paginate(github.rest.pulls.list,
@@ -39,10 +49,13 @@ export async function findRun({ github, context }) {
     const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { owner, repo, run_id: run.id, filter: "latest", per_page: 100 });
     const uploaded = (await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { owner, repo, run_id: run.id, per_page: 100 }))
       .map((artifact) => artifact.name);
+    const files = (await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 }))
+      .flatMap((file) => [file.filename, file.previous_filename].filter(Boolean));
     return {
       number, head: run.head_sha, runId: run.id,
-      jobs: Object.fromEntries(Object.entries(jobNames).map(([key, name]) => [key, jobs.find((job) => job.name === name)?.conclusion ?? "skipped"])),
+      jobs: Object.fromEntries(Object.entries(jobNames).map(([key, name]) => [key, jobs.find((job) => job.name === name)?.conclusion ?? "missing"])),
       artifacts: Object.fromEntries(Object.entries(kinds).map(([kind, { artifact }]) => [kind, uploaded.includes(artifact)])),
+      expected: Object.fromEntries(Object.keys(kinds).map((kind) => [kind, files.some((file) => changePatterns[kind].test(file))])),
     };
   }
   return null;
@@ -141,11 +154,19 @@ function gather(run, folders) {
   let ranScreens = false;
   for (const [kind, { artifact, prefixes, needs }] of Object.entries(kinds)) {
     const conclusion = run.jobs[kind];
+    if (conclusion === "missing") {
+      ranScreens = true;
+      failed.push({ id: kind, error: `${jobNames[kind]} is missing from this CI run.` });
+      continue;
+    }
     if (conclusion === "skipped") {
       const blocker = needs.find((job) => broken.includes(run.jobs[job]));
       if (blocker) {
         ranScreens = true;
-        failed.push({ id: kind, error: `${jobNames[blocker]} ended with ${run.jobs[blocker]}, so ${jobNames[kind]} didn't run.` });
+        failed.push({ id: kind, error: `${jobNames[blocker]} ${run.jobs[blocker] === "missing" ? "is missing" : `ended with ${run.jobs[blocker]}`}, so ${jobNames[kind]} didn't run.` });
+      } else if (run.expected[kind]) {
+        ranScreens = true;
+        failed.push({ id: kind, error: `${jobNames[kind]} was skipped, but this pull request changes what it draws.` });
       }
       continue;
     }

@@ -1,12 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { encodePNG } from "./png.mjs";
 import { main as compare } from "./compare-screens.mjs";
 import { readData, releaseTag } from "./screens-comment.mjs";
-import { deleteScreens, failRun, findRun, publishRun, updateReview } from "./screens-bot.mjs";
+import { changePatterns, deleteScreens, failRun, findRun, publishRun, updateReview } from "./screens-bot.mjs";
 
 const head = "a".repeat(40), oldHead = "c".repeat(40), base = "b".repeat(40);
 const repo = { owner: "Seb-GRAF", repo: "StableBar" };
@@ -40,7 +40,7 @@ function artifact(color = [255, 255, 255, 255]) {
 }
 
 /** The parts of Octokit the bot uses, over a little state. Uploads get GitHub's renaming of special characters. */
-function fakeGitHub({ pulls = [], comments = [], labels = [], releases = [], jobs = [], artifacts = [] } = {}) {
+function fakeGitHub({ pulls = [], comments = [], labels = [], releases = [], jobs = [], artifacts = [], files = [] } = {}) {
   const state = { comments, labels, releases, statuses: [], uploads: [], deleted: [], next: 1000 };
   const rest = {
     pulls: {
@@ -51,6 +51,7 @@ function fakeGitHub({ pulls = [], comments = [], labels = [], releases = [], job
       },
       list: async ({ head: filter, state: wanted }) =>
         ({ data: pulls.filter((pr) => pr.state === wanted && `${pr.head.repo.owner.login}:${pr.head.ref}` === filter) }),
+      listFiles: async () => ({ data: files.map((filename) => ({ filename })) }),
     },
     issues: {
       listComments: async () => ({ data: state.comments }),
@@ -118,18 +119,35 @@ const pr = (extra = {}) => ({ number: 7, state: "open", head: { sha: head, ref: 
   base: { sha: base, ref: "main" }, ...extra });
 const runContext = (extra = {}) => ({ ...repo, repo, serverUrl: "https://github.com", runId: 5, payload: {
   repository: { default_branch: "main" },
-  workflow_run: { id: 99, event: "pull_request", head_sha: head, head_branch: "feat/x",
+  workflow_run: { id: 99, event: "pull_request", path: ".github/workflows/ci.yml", head_sha: head, head_branch: "feat/x",
     head_repository: { owner: { login: "someone" } }, pull_requests: [], ...extra } } });
 const labelContext = (action, sha = head) => ({ repo, payload: { action, label: { name: "visual-ok" }, pull_request: pr({ head: { ...pr().head, sha } }) } });
 const ran = (extra = {}) => ({ number: 7, head, runId: 99, jobs: { current: "success", build: "success", app: "success", site: "skipped" },
-  artifacts: { app: true, site: false }, ...extra });
+  artifacts: { app: true, site: false }, expected: { app: true, site: false }, ...extra });
 const jobsOf = (conclusions) => Object.entries(conclusions).map(([name, conclusion]) => ({ name, conclusion }));
 
-test("findRun finds a fork's pull request by its branch and head, with what its jobs did", async () => {
-  const { github } = fakeGitHub({ pulls: [pr()], artifacts: [{ name: "screens-app" }, { name: "release-build" }],
-    jobs: jobsOf({ "Check revision": "success", "Build release": "success", "Draw screens": "success", "Test": "success" }) });
-  assert.deepEqual(await findRun({ github, context: runContext() }),
-    { number: 7, head, runId: 99, jobs: { current: "success", build: "success", app: "success", site: "skipped" }, artifacts: { app: true, site: false } });
+test("findRun finds a fork's pull request by its branch and head, with what its jobs did and should have done", async () => {
+  const { github } = fakeGitHub({ pulls: [pr()], artifacts: [{ name: "screens-app" }, { name: "release-build" }], files: ["Sources/StableBar/BarView.swift", "README.md"],
+    jobs: jobsOf({ "Check revision": "success", "Build release": "success", "Draw screens": "success", "Draw website screens": "skipped", "Test": "success" }) });
+  assert.deepEqual(await findRun({ github, context: runContext() }), { number: 7, head, runId: 99,
+    jobs: { current: "success", build: "success", app: "success", site: "skipped" }, artifacts: { app: true, site: false }, expected: { app: true, site: false } });
+  // A job the run doesn't have is missing, not skipped.
+  const { github: renamed } = fakeGitHub({ pulls: [pr()], jobs: jobsOf({ "Check revision": "success" }) });
+  assert.deepEqual((await findRun({ github: renamed, context: runContext() })).jobs, { current: "success", build: "missing", app: "missing", site: "missing" });
+});
+
+test("findRun takes only runs of the CI workflow file", async () => {
+  const { github } = fakeGitHub({ pulls: [pr()] });
+  assert.equal(await findRun({ github, context: runContext({ path: ".github/workflows/other.yml" }) }), null);
+});
+
+test("changePatterns match the files CI's Check revision job draws screens for", () => {
+  const workflow = readFileSync(new URL("../workflows/ci.yml", import.meta.url), "utf8");
+  const found = Object.fromEntries([...workflow.matchAll(/grep -qE '([^']+)' <<< "\$changed"; then\n\s+echo "(\w+)=true"/g)]
+    .map(([, pattern, output]) => [output, pattern]));
+  // A JavaScript pattern's source writes "/" as "\/".
+  const grep = (pattern) => pattern.source.replaceAll("\\/", "/");
+  assert.deepEqual({ app: grep(changePatterns.app), site: grep(changePatterns.site) }, { app: found.screens, site: found.site });
 });
 
 test("findRun skips runs that aren't for an open pull request's current head", async () => {
@@ -203,7 +221,8 @@ test("updateReview ignores lookalike comments, and leaves a newer head's status 
 });
 
 test("publishRun answers a run that drew no screens", async () => {
-  const skipped = ran({ jobs: { current: "success", build: "skipped", app: "skipped", site: "skipped" }, artifacts: { app: false, site: false } });
+  const skipped = ran({ jobs: { current: "success", build: "skipped", app: "skipped", site: "skipped" }, artifacts: { app: false, site: false },
+    expected: { app: false, site: false } });
   const { github, state } = fakeGitHub({ pulls: [pr()] });
   assert.deepEqual(await publishRun({ github, context: runContext(), run: skipped, folders: {} }),
     { state: "success", description: "No screens to compare.", removeLabel: false });
@@ -226,9 +245,19 @@ test("publishRun reports failed jobs and refuses unusable artifacts", async () =
   assert.equal(refused.state, "failure");
   assert.match(state.comments[0].body, /The screens-app artifact can't be used: 'hosts\.png': not a regular file\./);
   const site = await publishRun({ github, context: runContext(), folders: { site: artifact() },
-    run: ran({ jobs: { current: "success", build: "skipped", app: "skipped", site: "success" }, artifacts: { app: false, site: true } }) });
+    run: ran({ jobs: { current: "success", build: "skipped", app: "skipped", site: "success" }, artifacts: { app: false, site: true },
+      expected: { app: false, site: true } }) });
   assert.equal(site.state, "failure");
   assert.match(state.comments[0].body, /its id isn't site\/ followed by a plain name/);
+  // Screens the changed files call for, skipped or missing from the run, fail rather than pass as none.
+  const missing = await publishRun({ github, context: runContext(), folders: {},
+    run: ran({ jobs: { current: "success", build: "success", app: "missing", site: "skipped" }, artifacts: { app: false, site: false } }) });
+  assert.equal(missing.state, "failure");
+  assert.match(state.comments[0].body, /- `app`: `Draw screens is missing from this CI run\.`/);
+  const skipped = await publishRun({ github, context: runContext(), folders: {},
+    run: ran({ jobs: { current: "success", build: "success", app: "skipped", site: "skipped" }, artifacts: { app: false, site: false } }) });
+  assert.equal(skipped.state, "failure");
+  assert.match(state.comments[0].body, /- `app`: `Draw screens was skipped, but this pull request changes what it draws\.`/);
   assert.equal(state.uploads.length, 0);
 });
 
