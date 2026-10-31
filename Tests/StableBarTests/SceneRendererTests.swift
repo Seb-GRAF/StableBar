@@ -113,3 +113,91 @@ private func scene(_ json: String) throws -> SceneFile {
     defer { store.stop() }
     #expect(store.configuration?.widgets.map(\.id) == ["hello"])
 }
+
+private let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+
+/// Draws `json` in the dark appearance, with a short settle, and returns its image and the store that drew it.
+@MainActor private func drawn(_ json: String, in directory: URL) async throws -> (image: NSBitmapImageRep, store: BarStore) {
+    let scene = try scene(json)
+    let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
+                                        themes: themes)
+    let url = directory.appending(path: "out.png")
+    try await SceneRenderer.draw(scene, store: store, appearance: .dark, to: url, settle: .milliseconds(300))
+    return (try #require(NSBitmapImageRep(data: Data(contentsOf: url))), store)
+}
+
+/// How many different colors a grid of samples across `image` finds: 1 for a flat image.
+private func colors(_ image: NSBitmapImageRep) -> Int {
+    var found = Set<String>()
+    for x in stride(from: 0, to: image.pixelsWide, by: max(1, image.pixelsWide / 40)) {
+        for y in stride(from: 0, to: image.pixelsHigh, by: max(1, image.pixelsHigh / 40)) {
+            found.insert(image.colorAt(x: x, y: y).map { "\($0)" } ?? "none")
+        }
+    }
+    return found.count
+}
+
+@Test @MainActor func barSceneDrawsAtTwiceItsSize() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"""
+    {"configuration": {"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}, "draw": "bar"}
+    """#, in: directory)
+    defer { store.stop() }
+    let height = try #require(store.configuration).barGeometry(for: display).panelHeight
+    #expect(image.pixelsWide == 2200)
+    #expect(image.pixelsHigh == Int((2 * height).rounded()))
+    #expect(colors(image) > 1)
+}
+
+@Test @MainActor func popupSceneDrawsTheClockCalendar() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"""
+    {"configuration": {"widgets": [{"id": "clock", "type": "clock", "position": "right", "details": true}]}, "draw": "popup", "widget": "clock"}
+    """#, in: directory)
+    defer { store.stop() }
+    let widget = try #require(store.configuration?.widgets.first)
+    let popup = try #require(widgetPopup(widget, store: store))
+    #expect(image.pixelsWide == Int((2 * ((popup.style.width ?? 360) + 48)).rounded()))
+    #expect(image.pixelsHigh == 1200)
+    #expect(colors(image) > 10)
+}
+
+@Test @MainActor func editBarSceneFitsItsLayoutHeight() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"""
+    {"configuration": {"widgets": [
+      {"id": "one", "type": "text", "position": "left", "text": "One"},
+      {"id": "two", "type": "text", "position": "center", "text": "Two"},
+      {"id": "three", "type": "text", "position": "right", "text": "Three"}
+    ]}, "draw": "editBar"}
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(store.barEditing.isActive)
+    let height = try #require(store.barEditing.geometry(for: display)).layoutHeight
+    #expect(image.pixelsHigh == Int((2 * height).rounded()))
+    #expect(height >= (try #require(store.configuration).barGeometry(for: display).panelHeight))
+}
+
+@Test @MainActor func settingsSceneDrawsTheThemeSection() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"{"configuration": {"widgets": []}, "draw": "settings", "section": "theme"}"#, in: directory)
+    defer { store.stop() }
+    #expect(image.pixelsWide == 2160)
+    #expect(image.pixelsHigh == 1520)
+    #expect(colors(image) > 10)
+}
+
+@Test @MainActor func popupSceneWithoutAPopupFails() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let error = await #expect(throws: (any Error).self) {
+        _ = try await drawn(#"""
+        {"configuration": {"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}, "draw": "popup", "widget": "hello"}
+        """#, in: directory)
+    }
+    #expect(errorMessage(try #require(error)).contains("hello"))
+}
