@@ -9,7 +9,7 @@ const digest = (character) => character.repeat(64);
 const screen = (id, status, images = {}, extra = {}) => ({ id, status, changedPixels: status === "changed" ? 120 : 0,
   region: status === "changed" ? { x: 10, y: 20, width: 30, height: 40 } : null, images,
   ...(status === "changed" || status === "resized" ? { afterDigest: "e".repeat(64) } : {}), ...extra });
-const data = (extra = {}) => ({ head: sha("a"), base: sha("b"), baseRef: "main", runId: 41, runAttempt: 1, ranScreens: true,
+const data = (extra = {}) => ({ head: sha("a"), base: sha("b"), baseRef: "main", runId: 41, runAttempt: 1, runCreatedAt: "2026-10-31T09:50:00Z", ranScreens: true,
   fingerprint: digest("f"), shownAt: "2026-10-31T10:00:00.000Z",
   total: 2, changed: 1, failed: 0, failure: null, ...extra });
 const urls = (file) => `https://example.test/${file}`;
@@ -242,6 +242,7 @@ test("readData reads only the data on the comment's last line", () => {
   assert.equal(readData(`x\n${line({ ...data(), approved: null })}`), null);
   assert.deepEqual(readData(`x\n${line(data({ ranScreens: false, fingerprint: null, shownAt: null, runId: null, runAttempt: null }))}`),
     data({ ranScreens: false, fingerprint: null, shownAt: null, runId: null, runAttempt: null }));
+  assert.equal(readData(`x\n${line({ ...data(), runCreatedAt: "soon" })}`), null);
   assert.equal(readData(`x\n${line({ ...data(), extra: 1 })}`), null);
   assert.equal(readData("no data here"), null);
 });

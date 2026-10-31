@@ -49,8 +49,11 @@ function artifact(color = [255, 255, 255, 255]) {
 function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], files = ["Sources/StableBar/BarView.swift"] } = {}) {
   const state = {
     now: new Date("2026-10-31T10:00:00Z"), comments, labels, releases, files, events: [], statuses: [], uploads: [], deleted: [], next: 1000,
-    pr: { number: 7, state: "open", merged: false, head: { sha: head, ref: "feat/x", repo: { owner: { login: "someone" } } }, base: { sha: base, ref: "main" }, ...pull },
-    runs: [{ id: 99, run_number: 50, run_attempt: 1, head_sha: head, path: ".github/workflows/ci.yml", pull_requests: [] }],
+    pr: { number: 7, state: "open", merged: false, head: { sha: head, ref: "feat/x", repo: { owner: { login: "someone" }, full_name: "someone/StableBar" } },
+      base: { sha: base, ref: "main" }, ...pull },
+    runs: [{ id: 99, run_number: 50, run_attempt: 1, head_sha: head, path: ".github/workflows/ci.yml", pull_requests: [], created_at: "2026-10-31T09:50:00Z",
+      head_branch: "feat/x", head_repository: { full_name: "someone/StableBar" } }],
+    duringUpload: null,
     jobs: { 99: jobsOf(conclusions) }, artifacts: { 99: [{ name: "screens-app" }] },
   };
   const at = () => state.now.toISOString();
@@ -66,13 +69,14 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
     issues: {
       listComments: async () => ({ data: state.comments }),
       createComment: async ({ body }) => {
-        const comment = { id: state.next++, user: bot, body, html_url: `https://example.test/comment/${state.next}` };
+        const comment = { id: state.next++, user: bot, body, html_url: `https://example.test/comment/${state.next}`, updated_at: at() };
         state.comments.push(comment);
         return { data: comment };
       },
       updateComment: async ({ comment_id, body }) => {
         const comment = state.comments.find((entry) => entry.id === comment_id);
         comment.body = body;
+        comment.updated_at = at();
         return { data: comment };
       },
       listEvents: async () => ({ data: state.events }),
@@ -101,6 +105,13 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
       listReleases: async () => ({ data: state.releases }),
       listReleaseAssets: async ({ release_id }) => ({ data: state.releases.find((release) => release.id === release_id).assets }),
       uploadReleaseAsset: async ({ release_id, name, data, headers }) => {
+        // Uploads take a while: time passes, and a maintainer may act meanwhile.
+        state.now = new Date(state.now.getTime() + 10_000);
+        if (state.duringUpload) {
+          const act = state.duringUpload;
+          state.duringUpload = null;
+          act();
+        }
         const renamed = name.replaceAll("~", ".");
         const asset = { id: state.next++, name: renamed, browser_download_url: `https://example.test/download/${renamed}` };
         state.releases.find((release) => release.id === release_id).assets.push(asset);
@@ -130,16 +141,23 @@ function fakeGitHub({ pull = {}, comments = [], labels = [], releases = [], file
     state.labels.push(name);
     state.events.push({ event: "labeled", label: { name }, created_at: at() });
   };
-  /** A push or a rerun: a new finished CI run for `sha`, with these jobs and artifacts. */
-  const run = ({ sha = head, jobs = conclusions, artifacts = ["screens-app"] } = {}) => {
+  /** A push or a rerun: a new finished CI run for `sha`, with these jobs and artifacts, from the pull request's own fork unless `from` says otherwise. */
+  const run = ({ sha = head, jobs = conclusions, artifacts = ["screens-app"], from = "someone/StableBar", created = null } = {}) => {
     state.now = new Date(state.now.getTime() + 60_000);
     const id = state.next++;
-    state.runs.push({ id, run_number: id, run_attempt: 1, head_sha: sha, path: ".github/workflows/ci.yml", pull_requests: [] });
+    state.runs.push({ id, run_number: id, run_attempt: 1, head_sha: sha, path: ".github/workflows/ci.yml", pull_requests: [],
+      created_at: created ?? at(), head_branch: "feat/x", head_repository: { full_name: from } });
     state.jobs[id] = jobsOf(jobs);
     state.artifacts[id] = artifacts.map((name) => ({ name }));
     return id;
   };
-  return { github: { rest, paginate }, state, label, run };
+  /** Time passes; then the pull request's base changes. */
+  const retarget = (ref = "develop") => {
+    state.now = new Date(state.now.getTime() + 60_000);
+    state.pr.base = { sha: "d".repeat(40), ref };
+    state.events.push({ event: "base_ref_changed", created_at: at() });
+  };
+  return { github: { rest, paginate }, state, label, run, retarget };
 }
 
 const runEvent = (extra = {}) => ({ repo, serverUrl: "https://github.com", runId: 5, payload: {
@@ -154,7 +172,7 @@ const comment = (state) => state.comments.find((entry) => entry.user.login === b
 
 test("plan finds a fork's pull request, and the newest finished CI run for its head", async () => {
   const { github, state, run } = fakeGitHub({ files: ["Sources/StableBar/BarView.swift", "README.md"] });
-  assert.deepEqual(await plan({ github, context: runEvent() }), { action: "publish", number: 7, run: { id: 99, attempt: 1, head,
+  assert.deepEqual(await plan({ github, context: runEvent() }), { action: "publish", number: 7, run: { id: 99, attempt: 1, head, createdAt: "2026-10-31T09:50:00Z",
     jobs: { current: "success", build: "success", app: "success", site: "skipped" }, artifacts: { app: true, site: false }, expected: { app: true, site: false } } });
   // A newer run for the head, a rerun or a run another event started, is the one to publish.
   const newer = run({ jobs: { "Check revision": "success" }, artifacts: [] });
@@ -182,8 +200,9 @@ test("a publication uploads the changed screens, comments, sets the status and d
     ["after", "before", "diff"].map((kind) => [`pr7-aaaaaaa-docs~hero-dark-${kind}.png`, "image/png"]));
   assert.match(comment(state).body, /src="https:\/\/example\.test\/download\/pr7-aaaaaaa-docs\.hero-dark-after\.png"/);
   const data = readData(comment(state).body);
-  assert.deepEqual([data.head, data.base, data.baseRef, data.runId, data.runAttempt, data.total, data.changed, data.shownAt],
-    [head, base, "main", 99, 1, 2, 1, "2026-10-31T10:00:00.000Z"]);
+  // The screens appeared when the comment was written, after the uploads.
+  assert.deepEqual([data.head, data.base, data.baseRef, data.runId, data.runAttempt, data.runCreatedAt, data.total, data.changed, data.shownAt],
+    [head, base, "main", 99, 1, "2026-10-31T09:50:00Z", 2, 1, "2026-10-31T10:00:30.000Z"]);
   assert.deepEqual(state.statuses, [{ ...repo, sha: head, state: "pending", context: "Visual review", description: review.description,
     target_url: comment(state).html_url }]);
   assert.deepEqual(state.deleted, [old.name]);
@@ -239,20 +258,63 @@ test("a label added while a newer head is drawn leaves the status to that head's
   assert.equal(state.statuses.length, statuses);
 });
 
-test("a changed base sends the review back to pending until a new run", async () => {
-  const { github, state, label } = fakeGitHub();
+test("a changed base sends the review back to pending until a run started after it", async () => {
+  const { github, state, label, run, retarget } = fakeGitHub();
   await reconcile(github, runEvent(), { app: artifact() });
   label();
   await reconcile(github, prEvent("labeled"));
-  state.pr.base = { sha: "d".repeat(40), ref: "develop" };
-  const { review } = await reconcile(github, prEvent("edited", { changes: { base: { ref: { from: "main" } } } }));
-  assert.deepEqual(review, { state: "pending", description: "The base changed: push a commit to compare the screens with it.", removeLabel: false });
+  const before = state.now.toISOString();
+  retarget();
+  const pending = { state: "pending", description: "The base changed: push a commit to compare the screens with it.", removeLabel: false };
+  const edited = await reconcile(github, prEvent("edited", { changes: { base: { ref: { from: "main" } } } }));
+  assert.deepEqual([edited.action, edited.review], ["review", pending]);
   assert.match(comment(state).body, /\*\*Visual review:\*\* The base changed/);
+  // A run that started before the change, and finished after it, compared the old base: still pending.
+  const early = run({ created: before });
+  const stale = await reconcile(github, runEvent(), { app: artifact() });
+  assert.deepEqual([stale.action, readData(comment(state).body).runId, stale.review], ["publish", early, pending]);
+  // A run started after the change publishes, and the approval from before it doesn't count.
+  run();
+  assert.deepEqual([(await reconcile(github, runEvent(), { app: artifact() })).review.state, state.labels], ["pending", []]);
+});
+
+test("a publication cut short before it recorded when its screens appeared is repaired by the next reconcile", async () => {
+  const { github, state, label } = fakeGitHub();
+  const update = github.rest.issues.updateComment;
+  github.rest.issues.updateComment = async () => {
+    throw Object.assign(new Error("Server Error"), { status: 502 });
+  };
+  await assert.rejects(reconcile(github, runEvent(), { app: artifact() }), /Server Error/);
+  github.rest.issues.updateComment = update;
+  assert.equal(readData(comment(state).body).shownAt, null);
+  label();
+  assert.equal((await reconcile(github, prEvent("labeled"))).review.state, "success");
+});
+
+test("only the pull request's own head repository and branch publish screens", async () => {
+  const { github, state, run } = fakeGitHub();
+  // Someone else's fork, at the same commit, with a newer run.
+  run({ from: "somebody-else/StableBar" });
+  const chosen = await plan({ github, context: runEvent() });
+  assert.equal(chosen.run.id, 99);
+  state.runs = state.runs.filter((entry) => entry.id !== 99);
+  assert.deepEqual(await plan({ github, context: runEvent() }), { action: "review", number: 7 });
+});
+
+test("a label added while the screens upload doesn't approve them", async () => {
+  const { github, state, label } = fakeGitHub();
+  state.duringUpload = () => label();
+  assert.equal((await reconcile(github, runEvent(), { app: artifact() })).review.state, "pending");
+  // The label's own reconcile follows: it came before the screens appeared, so it comes off.
+  assert.deepEqual([(await reconcile(github, prEvent("labeled"))).review.state, state.labels], ["pending", []]);
+  label();
+  assert.equal((await reconcile(github, prEvent("labeled"))).review.state, "success");
 });
 
 test("lookalike comments are ignored", async () => {
   const lookalike = { id: 1, user: { login: "someone" }, body: `<!-- stablebar-screens -->\n<!-- stablebar-screens-data ${JSON.stringify({
-    head, base, baseRef: "main", runId: 99, runAttempt: 1, ranScreens: true, fingerprint: "f".repeat(64), shownAt: "2000-01-01T00:00:00Z",
+    head, base, baseRef: "main", runId: 99, runAttempt: 1, runCreatedAt: "2026-10-31T09:50:00Z", ranScreens: true, fingerprint: "f".repeat(64),
+    shownAt: "2000-01-01T00:00:00Z",
     total: 1, changed: 1, failed: 0, failure: null })} -->` };
   const { github, state, label } = fakeGitHub({ comments: [lookalike] });
   label();

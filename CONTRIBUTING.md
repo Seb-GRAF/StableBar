@@ -165,7 +165,7 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 | Pending: "The base changed…" | The pull request's base changed since its screens were drawn. Push a commit to draw them again. |
 | Failure | Drawing failed; the comment says what. A `visual-ok` added while it showed the failure still approves it. |
 
-`visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
+`visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens against the same base keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
 
 Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. **Screens** reads the pull request's changed files from GitHub, so screens they call for that weren't drawn fail the review, but review such a change itself before you trust its screens.
 

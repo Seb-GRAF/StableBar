@@ -280,12 +280,14 @@ export function withReview(body, review, data) {
 
 const isTime = (value) => typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value));
 
-/** The comment's data: what was drawn for which head and CI run, against which base, and since when it's shown. */
+/** The comment's data: what was drawn for which head and CI run, when that run started, and since when it's shown. */
 function isData(data) {
-  return hasOnly(data, ["head", "base", "baseRef", "runId", "runAttempt", "ranScreens", "fingerprint", "shownAt", "total", "changed", "failed", "failure"])
+  return hasOnly(data, ["head", "base", "baseRef", "runId", "runAttempt", "runCreatedAt", "ranScreens", "fingerprint", "shownAt", "total", "changed",
+    "failed", "failure"])
     && isHex(data.head, 40) && (data.base === null || isHex(data.base, 40))
     && (data.baseRef === null || (typeof data.baseRef === "string" && data.baseRef.length > 0 && data.baseRef.length <= 255))
     && (data.runId === null || isCount(data.runId, 1)) && (data.runAttempt === null || isCount(data.runAttempt, 1))
+    && (data.runCreatedAt === null || isTime(data.runCreatedAt))
     && typeof data.ranScreens === "boolean"
     && (data.fingerprint === null || isHex(data.fingerprint, 64)) && (data.shownAt === null || isTime(data.shownAt))
     && isCount(data.total) && isCount(data.changed) && isCount(data.failed)

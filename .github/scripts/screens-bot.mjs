@@ -43,13 +43,16 @@ async function pullRequestOfRun({ github, owner, repo, run }) {
   return (pulls.find((pr) => pr.head.sha === run.head_sha) ?? pulls[0])?.number ?? null;
 }
 
-/** The newest finished CI run for a head, preferring the runs GitHub lists the pull request on. */
-async function latestRun({ github, owner, repo, number, sha }) {
+/**
+ * The newest finished CI run for the pull request's head, from its own head repository and branch: a
+ * pull request from another fork at the same commit has runs of its own, and they don't count.
+ */
+async function latestRun({ github, owner, repo, pr }) {
   const runs = (await github.paginate(github.rest.actions.listWorkflowRuns,
-    { owner, repo, workflow_id: "ci.yml", head_sha: sha, event: "pull_request", status: "completed", per_page: 100 }))
-    .filter((run) => run.path === workflowPath);
-  const listed = runs.filter((run) => run.pull_requests.some((pr) => pr.number === number));
-  return [...(listed.length > 0 ? listed : runs)].sort((a, b) => b.run_number - a.run_number)[0] ?? null;
+    { owner, repo, workflow_id: "ci.yml", head_sha: pr.head.sha, event: "pull_request", status: "completed", per_page: 100 }))
+    .filter((run) => run.path === workflowPath && run.head_branch === pr.head.ref
+      && pr.head.repo?.full_name !== undefined && run.head_repository?.full_name === pr.head.repo.full_name);
+  return runs.sort((a, b) => b.run_number - a.run_number)[0] ?? null;
 }
 
 /**
@@ -65,7 +68,7 @@ export async function plan({ github, context }) {
   if (!number) return { action: "none" };
   const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: number });
   if (pr.state !== "open") return { action: "close", number };
-  const run = await latestRun({ github, owner, repo, number, sha: pr.head.sha });
+  const run = await latestRun({ github, owner, repo, pr });
   const existing = findScreensComment(await comments(github, owner, repo, number));
   const data = existing ? readData(existing.body) : null;
   if (!run || (data?.runId === run.id && data?.runAttempt === run.run_attempt)) return { action: "review", number };
@@ -77,7 +80,7 @@ export async function plan({ github, context }) {
   return {
     action: "publish", number,
     run: {
-      id: run.id, attempt: run.run_attempt, head: pr.head.sha,
+      id: run.id, attempt: run.run_attempt, head: pr.head.sha, createdAt: run.created_at,
       jobs: Object.fromEntries(Object.entries(jobNames).map(([key, name]) => [key, jobs.find((job) => job.name === name)?.conclusion ?? "missing"])),
       artifacts: Object.fromEntries(Object.entries(kinds).map(([kind, { artifact }]) => [kind, uploaded.includes(artifact)])),
       expected: Object.fromEntries(Object.keys(kinds).map((kind) => [kind, files.some((file) => changePatterns[kind].test(file))])),
@@ -134,11 +137,18 @@ export function readArtifact(folder, prefixes, always) {
 const comments = (github, owner, repo, number) =>
   github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 });
 
-/** When visual-ok was last added to the pull request, as GitHub's ISO time, or null. */
-async function lastLabeled({ github, owner, repo, number }) {
+/** When visual-ok was last added to the pull request, and when its base last changed, as GitHub's ISO times, or null. */
+async function history({ github, owner, repo, number }) {
   const events = await github.paginate(github.rest.issues.listEvents, { owner, repo, issue_number: number, per_page: 100 });
-  return events.filter((event) => event.event === "labeled" && event.label?.name === approval).map((event) => event.created_at).sort().at(-1) ?? null;
+  const last = (matches) => events.filter(matches).map((event) => event.created_at).sort().at(-1) ?? null;
+  return {
+    labeledAt: last((event) => event.event === "labeled" && event.label?.name === approval),
+    baseChangedAt: last((event) => event.event === "base_ref_changed"),
+  };
 }
+
+/** Whether the pull request's base changed after `time`, an ISO time. */
+const changedSince = (baseChangedAt, time) => baseChangedAt !== null && time !== null && Date.parse(baseChangedAt) > Date.parse(time);
 
 async function removeApproval({ github, owner, repo, number }) {
   try {
@@ -264,27 +274,32 @@ function gather(run, folders) {
  * Publishes a run from plan(): uploads the images of its changed screens, writes or rewrites the
  * comment, sets the status on the head, takes visual-ok off when it came before these screens, and then
  * deletes the images of the pull request's other heads. Screens the comment already showed keep the
- * time they first appeared, and so their approval.
+ * time they first appeared, and so their approval, unless the base changed since. New screens appear
+ * when the comment is written: that write's time becomes `shownAt`, so a label added during the uploads
+ * approves nothing. A run that started before the base last changed compared the old base: its review
+ * waits for a new run.
  */
-async function publish({ github, owner, repo, pr, existing, data: previous, now, labels, labeledAt, run, folders, target }) {
+async function publish({ github, owner, repo, pr, existing, data: previous, labels, labeledAt, baseChangedAt, run, folders, target }) {
   const number = pr.number, head = pr.head.sha;
   const { screens, failed, files, ranScreens } = gather(run, folders);
-  const drawn = { head, base: pr.base.sha, baseRef: pr.base.ref, runId: run.id, runAttempt: run.attempt };
-  let review, body;
+  const drawn = { head, base: pr.base.sha, baseRef: pr.base.ref, runId: run.id, runAttempt: run.attempt, runCreatedAt: run.createdAt ?? null };
+  const baseChanged = changedSince(baseChangedAt, drawn.runCreatedAt);
+  let review, body, data, shownLater = false;
   if (!ranScreens) {
     review = reviewState({ ranScreens: false });
-    const data = { ...drawn, ranScreens: false, fingerprint: null, shownAt: null, total: 0, changed: 0, failed: 0, failure: null };
+    data = { ...drawn, ranScreens: false, fingerprint: null, shownAt: null, total: 0, changed: 0, failed: 0, failure: null };
     body = noScreensBody({ reason: `This pull request at ${head.slice(0, 7)} changes neither the app nor the website, so there are no screens to compare.`,
       review, data });
   } else {
     const shown = screens.filter((screen) => screen.status !== "unchanged").flatMap((screen) => Object.values(screen.images));
     const urls = await upload({ github, owner, repo, number, head, target, images: shown.map((file) => [file, files.get(file).data]) });
     const print = fingerprint({ screens, failed }, (file) => files.get(file).digest);
-    const shownAt = previous?.fingerprint === print && previous.shownAt ? previous.shownAt : now;
+    const carried = previous?.fingerprint === print && previous.shownAt !== null && !baseChanged && !changedSince(baseChangedAt, previous.shownAt);
     const counts = summary(screens, failed);
-    review = reviewState({ ranScreens: true, ...counts, labels, labeledAt, shownAt });
+    data = { ...drawn, ranScreens: true, fingerprint: print, shownAt: carried ? previous.shownAt : null, ...counts };
+    shownLater = !carried;
+    review = reviewState({ ...data, labels, labeledAt, baseChanged });
     if (review.removeLabel) await removeApproval({ github, owner, repo, number });
-    const data = { ...drawn, ranScreens: true, fingerprint: print, shownAt, ...counts };
     body = commentBody({ baseRef: pr.base.ref, base: pr.base.sha, head, screens, failed, imageURL: (file) => urls.get(file), review, data });
   }
   let comment = existing;
@@ -292,6 +307,10 @@ async function publish({ github, owner, repo, pr, existing, data: previous, now,
     comment = (await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body })).data;
   } else if (ranScreens) {
     comment = (await github.rest.issues.createComment({ owner, repo, issue_number: number, body })).data;
+  }
+  if (shownLater && comment) {
+    comment = (await github.rest.issues.updateComment({ owner, repo, comment_id: comment.id,
+      body: withReview(body, review, { ...data, shownAt: comment.updated_at }) })).data;
   }
   await setStatus({ github, owner, repo, sha: head, review, url: comment?.html_url });
   await deleteAssets({ github, owner, repo, pick: (assets) => staleAssets(assets, number, head) });
@@ -303,9 +322,11 @@ async function publish({ github, owner, repo, pr, existing, data: previous, now,
  * whether the pull request still has the base its screens were compared with. Sets the status when
  * the comment is for the current head; a newer head's run sets its own.
  */
-async function review({ github, owner, repo, pr, existing, data, labels, labeledAt }) {
-  if (!data) return null;
-  const baseChanged = data.baseRef !== null && data.baseRef !== pr.base.ref;
+async function review({ github, owner, repo, pr, existing, data: stored, labels, labeledAt, baseChangedAt }) {
+  if (!stored) return null;
+  // A publication cut short before it recorded when its screens appeared: the comment's last write is no earlier.
+  const data = stored.ranScreens && stored.shownAt === null ? { ...stored, shownAt: existing.updated_at } : stored;
+  const baseChanged = changedSince(baseChangedAt, data.runCreatedAt);
   const result = reviewState({ ...data, labels, labeledAt, baseChanged });
   if (result.removeLabel) await removeApproval({ github, owner, repo, number: pr.number });
   const body = withReview(existing.body, result, data);
@@ -343,8 +364,7 @@ export async function apply({ github, context, plan: chosen, folders = {} }) {
   const existing = findScreensComment(await comments(github, owner, repo, number));
   const state = {
     github, owner, repo, pr, existing, data: existing ? readData(existing.body) : null,
-    now: new Date(response.headers?.date ?? Date.now()).toISOString(),
-    labels: pr.labels.map((label) => label.name), labeledAt: await lastLabeled({ github, owner, repo, number }),
+    labels: pr.labels.map((label) => label.name), ...await history({ github, owner, repo, number }),
   };
   if (chosen.action === "publish" && chosen.run.head === pr.head.sha) {
     return { action: "publish", review: await publish({ ...state, run: chosen.run, folders, target: context.payload.repository?.default_branch }) };
