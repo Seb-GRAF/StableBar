@@ -2,11 +2,32 @@ import AppKit
 import SwiftUI
 
 /// Draws the images in docs/images from the real bar, popup and Settings views, in the dark and
-/// light appearance. Sample data and a fixed time give the same pixels on every run until the views
-/// change. `scripts/render-docs-images.sh` runs it and converts the images to WebP.
+/// light appearance. Sample data, a fixed date in UTC and a local, empty Store index give the same
+/// pixels on every run until the views change. `scripts/render-docs-images.sh` runs it and converts
+/// the images to WebP.
 @MainActor
 enum DocsImages {
+    /// Thursday 22 October 2026, 09:41 UTC, the time the bar's sample clock shows: what every clock in a
+    /// render draws instead of the current time.
+    static let date = Date(timeIntervalSince1970: 1_792_662_060)
+
+    /// Draws times in UTC, so a render shows the same clock on every Mac.
+    static func useUTC() {
+        setenv("TZ", "UTC", 1)
+        NSTimeZone.resetSystemTimeZone()
+    }
+
+    /// Points the store's Store client at a local, empty index in `directory`, so the theme gallery,
+    /// the widget catalog and Packages never reach the network while a render draws them.
+    static func offline(_ store: BarStore, in directory: URL) throws {
+        let index = directory.appending(path: "index.json")
+        try Data(#"{"packages":[]}"#.utf8).write(to: index)
+        store.packageStoreClient = PackageStoreClient(packages: WidgetPackageStore(directory: directory.appending(path: "packages")),
+                                                      indexURL: index)
+    }
+
     static func render(to directory: URL) async throws {
+        useUTC()
         let samples = FileManager.default.temporaryDirectory.appending(path: "stablebar-docs-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: samples) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -191,6 +212,7 @@ enum DocsImages {
             return type
         })
         let store = BarStore(configurationURL: url, registry: registry)
+        try offline(store, in: directory)
         store.workspaceStore.executablePath = { aerospace.path }
         store.reloadConfiguration()
         store.activeApp = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first
@@ -203,6 +225,7 @@ enum DocsImages {
     private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], ready: () -> Bool,
                                  to url: URL) async throws {
         let view = NSHostingView(rootView: content
+            .environment(\.fixedDate, date)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14))))
