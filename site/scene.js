@@ -2402,13 +2402,21 @@ function drawCottage(s, c) {
   ribbon(c, [[wx + ww / 2, wy + 1], [wx + ww / 2, wy + wh - 1]], TEX, 12, { tin: 1, tout: 1, w0: 0.8, w1: 0.8 });
   ribbon(c, [[wx + 1, wy + wh / 2], [wx + ww - 1, wy + wh / 2]], TEX, 13, { tin: 1, tout: 1, w0: 0.8, w1: 0.8 });
   c.fillStyle = INK; c.fill();
-  // the door (it opens for the keeper: see the states)
+  // the door (it opens for the keeper: see the states and drawVisit)
   const dx = x0 + w * 0.56, dw = w * 0.24, dh = h * 0.66;
   k.door = { x: dx, y: k.base - dh, w: dw, h: dh };
-  print(c, [[dx, k.base], [dx, k.base - dh], [dx + dw, k.base - dh], [dx + dw, k.base]], mul(C.door, P.paper));
-  c.beginPath(); edges(c, [[dx, k.base], [dx, k.base - dh], [dx + dw, k.base - dh], [dx + dw, k.base]], DET * 0.85, 14, false, { ov: 1 });
-  c.fillStyle = INK; c.fill();
-  dot(c, dx + dw * 0.78, k.base - dh * 0.48, 1.3 * u + 0.4, INK);
+  drawDoor(s, c);
+}
+
+/* the cottage's door, hinged on its right: shut, or swung out (open 1: against the wall), and moved by a knock (jig).
+   Shut and still it's the one drawn with the cottage, so the knocks and the keeper's visit draw it the same way. Its
+   handle is on the outside: it goes with the door as it opens, out of sight once the door is past square */
+function drawDoor(s, c, open = 0, jig = 0) {
+  const u = s.g.u, k = s.g.cot, d = k.door, hx = d.x + d.w + jig, fx = lerp(d.x, d.x + d.w * 1.55, open) + jig;
+  const door = [[fx, k.base - 1 * u * open], [fx, d.y + 2 * u * open], [hx, d.y], [hx, k.base]];
+  print(c, door, mul(C.door, s.P.paper));
+  c.beginPath(); edges(c, door, DET * 0.85, 14, false, { ov: 1 }); c.fillStyle = INK; c.fill();
+  if (hx - fx > 3 * u) dot(c, lerp(fx, hx, 0.78), k.base - d.h * 0.48, 1.3 * u + 0.4, INK);
 }
 
 /* the tower: white with curved stripes in the theme's colours, a door, two windows and a gallery */
@@ -2839,11 +2847,7 @@ function drawVisit(s, c) {
     }
   }
   // the door, swinging out on its right-hand hinge until it lies against the wall
-  const hx = d.x + d.w + jig, fx = lerp(d.x, d.x + d.w * 1.55, open) + jig;
-  const door = [[hx, k.base], [hx, d.y], [fx, d.y + 2 * u * open], [fx, k.base - 1 * u * open]];
-  print(c, door, mul(C.door, P.paper));
-  c.beginPath(); edges(c, door, DET * 0.85, 3, true, { ov: 0.6 }); c.fillStyle = INK; c.fill();
-  if (Math.abs(fx - hx) > 3 * u) dot(c, lerp(hx, fx, 0.85), k.base - d.h * 0.48, 1.3 * u + 0.4, INK);
+  drawDoor(s, c, open, jig);
 }
 
 /* install: night, the cottage door open with warm light, the keeper waving */
