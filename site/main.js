@@ -918,8 +918,14 @@ if (scene) {
   };
 
   /* The pointer and a finger steer the light and stir the grass, clouds and water, once the opening is over.
-     On touch only a sideways drag steers; the page keeps its vertical scrolling (touch-action: pan-y). */
-  addEventListener("pointermove", e => { if (landed) S("pointer", e.clientX, e.clientY, e.pointerType); }, { passive: true });
+     On touch only a sideways drag steers; the page keeps its vertical scrolling (touch-action: pan-y).
+     Over a signpost's board out at sea, the pointer shows it's a link (see the footer below). */
+  const onPage = el => Boolean(el.closest?.("a, button, input, label, pre, .note, .dock, [role='dialog']"));
+  addEventListener("pointermove", e => {
+    if (!landed) return;
+    const hot = S("pointer", e.clientX, e.clientY, e.pointerType);
+    root.classList.toggle("on-board", Boolean(hot?.href) && !onPage(e.target));
+  }, { passive: true });
   addEventListener("pointerdown", e => { if (landed) S("pointer", e.clientX, e.clientY, e.pointerType); }, { passive: true });
   addEventListener("pointerup", e => { if (e.pointerType !== "mouse") S("release"); }, { passive: true });
   addEventListener("pointercancel", () => S("release"), { passive: true });
@@ -933,18 +939,32 @@ if (scene) {
   }, { passive: true });
   addEventListener("touchend", () => { swipe = null; S("release"); }, { passive: true });
   addEventListener("touchcancel", () => { swipe = null; S("release"); }, { passive: true });
-  root.addEventListener("mouseleave", () => S("release"));
-  addEventListener("blur", () => S("release"));
+  root.addEventListener("mouseleave", () => { root.classList.remove("on-board"); S("release"); });
+  addEventListener("blur", () => { root.classList.remove("on-board"); S("release"); });
 
-  /* A click or tap on the landscape, not on the page, drops something there.
-     A click that only closes a popup or a menu doesn't, nor one that ends the opening. */
+  /* The footer's links, on signposts out at sea: one on each island, in the footer's order (see setSigns in scene.js) */
+  S("setSigns", [...document.querySelectorAll("#foot [data-sign]")].map(el => ({
+    title: el.dataset.sign,
+    boards: [...el.querySelectorAll("a")].map(a => ({ text: a.dataset.board || a.textContent.trim(), href: a.getAttribute("href") })),
+  })));
+  // a board goes where its link does: in a new tab with ⌘ or Ctrl, and back to the top for "#"
+  const follow = (href, e) => {
+    if (href === "#") scrollTo({ top: 0, behavior: "instant" });
+    else if (e.metaKey || e.ctrlKey || e.shiftKey) window.open(href, "_blank", "noopener");
+    else location.href = href;
+  };
+
+  /* A click or tap on the landscape, not on the page, drops something there, or out at sea follows the signpost's
+     board it's on. A click that only closes a popup or a menu doesn't, nor one that ends the opening. */
   let overlay = false, pressedInOpening = false;
   addEventListener("pointerdown", () => { pressedInOpening = !landed; }, true);
   document.addEventListener("click", () => { overlay = Boolean(openId || adding || !ctx.hidden || reviewing); }, true);
   document.addEventListener("click", e => {
     if (overlay || editing || e.detail === 0 || !landed || pressedInOpening) return;
-    if (e.target.closest("a, button, input, label, pre, .note, .dock, [role='dialog']")) return;
+    if (onPage(e.target)) return;
     if (String(getSelection?.() || "")) return;
+    const hit = S("atSea", e.clientX, e.clientY);
+    if (hit?.href) return follow(hit.href, e);
     S("tap", e.clientX, e.clientY);
   });
 
@@ -968,6 +988,7 @@ if (scene) {
       S("setDive", Math.max(0, n - back), back);
     };
     dive.hidden = false;
+    root.classList.add("has-dive");
     addEventListener("scroll", diving, { passive: true });
     diving();
   }
