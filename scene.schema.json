@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StableBar scene",
+  "description": "One screen that StableBar --render-scenes draws offscreen. A scene runs nothing: its outputs, history and workspaces replace every command, provider and window manager.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["configuration", "draw"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "configuration": {
+      "description": "A StableBar configuration, or the path of one relative to this file.",
+      "oneOf": [{ "type": "object" }, { "type": "string" }]
+    },
+    "outputs": {
+      "description": "Script outputs by widget id or provider name: an object as a script prints it, or plain text.",
+      "type": "object",
+      "additionalProperties": { "type": ["object", "string"] }
+    },
+    "history": {
+      "description": "Graph samples by widget id or provider name.",
+      "type": "object",
+      "additionalProperties": { "type": "array", "items": { "type": "number" } }
+    },
+    "workspaces": {
+      "description": "AeroSpace's list-workspaces --json objects.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "windows": {
+      "description": "AeroSpace's list-windows --json objects.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "activeApp": { "description": "The active app's bundle identifier. Finder by default.", "type": "string" },
+    "draw": { "description": "What to draw.", "enum": ["bar", "editBar", "popup", "settings"] },
+    "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
+    "section": {
+      "description": "The Settings section to draw when no widget is named.",
+      "enum": ["general", "bar", "theme", "profiles", "packages"]
+    },
+    "tab": { "description": "The tab of the widget's Settings page.", "enum": ["content", "style", "behavior"] },
+    "appearances": {
+      "description": "The appearances to draw, each to its own image. Both by default.",
+      "type": "array",
+      "items": { "enum": ["dark", "light"] },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "width": { "description": "The image's width in points.", "type": "number", "minimum": 100 },
+    "height": { "description": "The image's height in points.", "type": "number", "minimum": 20 }
+  }
+}
