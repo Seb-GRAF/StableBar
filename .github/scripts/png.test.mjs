@@ -62,3 +62,24 @@ test("decodePNG reads RGB scanlines with every filter as opaque RGBA", () => {
 test("decodePNG rejects what isn't an 8-bit RGB or RGBA PNG", () => {
   assert.throws(() => decodePNG(Buffer.from("not a png")), /Unsupported PNG/);
 });
+
+test("decodePNG refuses images larger than its limits, cut short, or inflating past their size", () => {
+  const header = (width, height) => {
+    const data = Buffer.alloc(13);
+    data.writeUInt32BE(width, 0);
+    data.writeUInt32BE(height, 4);
+    data[8] = 8;
+    data[9] = 6;
+    return chunk("IHDR", data);
+  };
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const png = (width, height, raw) => Buffer.concat([signature, header(width, height), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+  // Its header alone says too much: nothing is inflated.
+  assert.throws(() => decodePNG(png(100000, 100000, Buffer.alloc(10))), /larger than/);
+  assert.throws(() => decodePNG(png(4, 4, Buffer.alloc(4 * 17)), { maxPixels: 15 }), /larger than/);
+  // A chunk that claims more bytes than the file has.
+  const whole = encodePNG({ width: 2, height: 2, rgba: new Uint8Array(16) });
+  assert.throws(() => decodePNG(whole.subarray(0, whole.length - 20)), /cut short/);
+  // Image data that inflates to far more than a 2 by 2 image holds.
+  assert.throws(() => decodePNG(png(2, 2, Buffer.alloc(50 * 1024 * 1024))), /Unsupported PNG/);
+});

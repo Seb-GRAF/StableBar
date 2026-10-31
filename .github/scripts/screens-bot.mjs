@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { validateArtifact, readManifest, fingerprint, summary, reviewState, commentBody, withReview, noScreensBody, readData,
   findScreensComment, assetName, releaseTag, staleAssets, pullRequestAssets } from "./screens-comment.mjs";
+import { decodePNG, encodePNG } from "./png.mjs";
 
 const statusContext = "Visual review";
 const approval = "visual-ok";
@@ -61,7 +62,14 @@ export async function findRun({ github, context }) {
   return null;
 }
 
-/** The screens, failures and files of a downloaded artifact folder, checked as untrusted data. */
+/** A digest of an image's pixels, the same for any encoding of them. */
+const pixelDigest = ({ width, height, rgba }) => createHash("sha256").update(`${width}x${height}\n`).update(rgba).digest("hex");
+
+/**
+ * The screens, failures and images of a downloaded artifact folder, checked as untrusted data. Every
+ * image its screens name is decoded within limits and encoded again, so only the bot's own PNGs are
+ * uploaded: `files` maps each name to `{data, digest}`, the digest being of the pixels.
+ */
 export function readArtifact(folder, prefixes) {
   if (!existsSync(folder)) return { ok: false, problems: ["It couldn't be downloaded."] };
   const files = readdirSync(folder).map((name) => {
@@ -83,7 +91,18 @@ export function readArtifact(folder, prefixes) {
   const manifest = files.find((file) => file.name === "manifest.json");
   if (!manifest) return { ok: false, problems: ["It has no manifest.json."] };
   const read = readManifest(readFileSync(manifest.path, "utf8"), files.map((file) => file.name), prefixes);
-  return read.ok ? { ...read, files: new Map(files.map((file) => [file.name, file.path])) } : read;
+  if (!read.ok) return read;
+  const images = new Map();
+  for (const name of new Set(read.screens.flatMap((screen) => Object.values(screen.images)))) {
+    let image;
+    try {
+      image = decodePNG(readFileSync(join(folder, name)));
+    } catch (error) {
+      return { ok: false, problems: [`\`${name}\` isn't a PNG the bot can read: ${error.message}`] };
+    }
+    images.set(name, { data: encodePNG(image), digest: pixelDigest(image) });
+  }
+  return { ...read, files: images };
 }
 
 const comments = (github, owner, repo, number) =>
@@ -115,7 +134,7 @@ async function previewRelease({ github, owner, repo, target }) {
   }
 }
 
-/** Uploads `images`, [file, path] pairs, and returns each file's URL as GitHub answers it. A rerun of a head replaces its images. */
+/** Uploads `images`, [file, PNG data] pairs, and returns each file's URL as GitHub answers it. A rerun of a head replaces its images. */
 async function upload({ github, owner, repo, number, head, target, images }) {
   const urls = new Map();
   if (images.length === 0) return urls;
@@ -124,8 +143,7 @@ async function upload({ github, owner, repo, number, head, target, images }) {
   for (const asset of pullRequestAssets(assets, number).filter((entry) => entry.name.startsWith(assetName(number, head, "")))) {
     await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
   }
-  for (const [file, path] of images) {
-    const data = readFileSync(path);
+  for (const [file, data] of images) {
     const { data: asset } = await github.rest.repos.uploadReleaseAsset({ owner, repo, release_id: release.id, name: assetName(number, head, file), data,
       headers: { "content-type": "image/png", "content-length": data.length } });
     urls.set(file, asset.browser_download_url);
@@ -182,7 +200,7 @@ function gather(run, folders) {
     }
     screens.push(...read.screens);
     failed.push(...read.failed);
-    for (const [name, path] of read.files) files.set(name, path);
+    for (const [name, image] of read.files) files.set(name, image);
   }
   return { screens, failed, files, ranScreens };
 }
@@ -208,9 +226,8 @@ export async function publishRun({ github, context, run, folders }) {
   } else {
     const shown = screens.filter((screen) => screen.status !== "unchanged").flatMap((screen) => Object.values(screen.images));
     const urls = await upload({ github, owner, repo, number: run.number, head: run.head, target: context.payload.repository?.default_branch,
-      images: shown.map((file) => [file, files.get(file)]) });
-    const digest = (file) => createHash("sha256").update(readFileSync(files.get(file))).digest("hex");
-    const print = fingerprint({ screens, failed }, digest);
+      images: shown.map((file) => [file, files.get(file).data]) });
+    const print = fingerprint({ screens, failed }, (file) => files.get(file).digest);
     const counts = summary(screens, failed);
     review = reviewState({ ranScreens: true, ...counts, labels: await labelsOf(github, owner, repo, run.number),
       approved: previous?.approved ?? null, fingerprint: print });

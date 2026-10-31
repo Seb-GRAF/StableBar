@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { encodePNG } from "./png.mjs";
+import zlib from "node:zlib";
+import { decodePNG, encodePNG } from "./png.mjs";
 import { main as compare } from "./compare-screens.mjs";
 import { readData, releaseTag } from "./screens-comment.mjs";
 import { changePatterns, deleteScreens, failRun, findRun, publishRun, updateReview } from "./screens-bot.mjs";
@@ -93,7 +94,7 @@ function fakeGitHub({ pulls = [], comments = [], labels = [], releases = [], job
         const renamed = name.replaceAll("~", ".");
         const asset = { id: state.next++, name: renamed, browser_download_url: `https://example.test/download/${renamed}` };
         state.releases.find((release) => release.id === release_id).assets.push(asset);
-        state.uploads.push({ name, size: data.length, type: headers["content-type"] });
+        state.uploads.push({ name, size: data.length, type: headers["content-type"], data: Buffer.from(data) });
         return { data: asset };
       },
       deleteReleaseAsset: async ({ asset_id }) => {
@@ -266,6 +267,41 @@ test("publishRun reports failed jobs and refuses unusable artifacts", async () =
     run: ran({ jobs: { current: "success", build: "success", app: "skipped", site: "skipped" }, artifacts: { app: false, site: false } }) });
   assert.equal(skipped.state, "failure");
   assert.match(state.comments[0].body, /- `app`: `Draw screens was skipped, but this pull request changes what it draws\.`/);
+  assert.equal(state.uploads.length, 0);
+});
+
+/** `file` with a text chunk after its header: other bytes, the same pixels. */
+function withText(file) {
+  const png = readFileSync(file);
+  const body = Buffer.concat([Buffer.from("tEXt", "latin1"), Buffer.from("Comment\0from a pull request", "latin1")]);
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(body.length - 4);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(body));
+  writeFileSync(file, Buffer.concat([png.subarray(0, 33), length, body, crc, png.subarray(33)]));
+}
+
+test("publishRun uploads its own encoding of the pixels, and fingerprints the pixels", async () => {
+  const { github, state } = fakeGitHub({ pulls: [pr()] });
+  const plain = artifact();
+  await publishRun({ github, context: runContext(), run: ran(), folders: { app: plain } });
+  const first = readData(state.comments[0].body).fingerprint;
+  const uploaded = state.uploads.find((upload) => upload.name.endsWith("after.png"));
+  assert.deepEqual(uploaded.data, encodePNG(decodePNG(readFileSync(join(plain, "docs~hero-dark-after.png")))));
+  const texted = artifact();
+  for (const kind of ["before", "after", "diff"]) withText(join(texted, `docs~hero-dark-${kind}.png`));
+  await publishRun({ github, context: runContext(), run: ran(), folders: { app: texted } });
+  assert.equal(readData(state.comments[0].body).fingerprint, first);
+  assert.ok(!state.uploads.at(-1).data.includes("from a pull request"));
+});
+
+test("publishRun refuses an image it can't decode", async () => {
+  const { github, state } = fakeGitHub({ pulls: [pr()] });
+  const folder = artifact();
+  writeFileSync(join(folder, "docs~hero-dark-diff.png"), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const review = await publishRun({ github, context: runContext(), run: ran(), folders: { app: folder } });
+  assert.equal(review.state, "failure");
+  assert.match(state.comments[0].body, /'docs~hero-dark-diff\.png' isn't a PNG the bot can read/);
   assert.equal(state.uploads.length, 0);
 });
 

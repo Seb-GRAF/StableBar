@@ -3,6 +3,8 @@
 import zlib from "node:zlib";
 
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+/** The largest image decodePNG takes, before inflating anything: a long website page is about 2880 by 12000. */
+const limits = { maxWidth: 20000, maxHeight: 100000, maxPixels: 80_000_000 };
 
 function paeth(a, b, c) {
   const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
@@ -18,14 +20,18 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-/** The pixels of a PNG as `{width, height, rgba}`, every pixel four bytes. */
-export function decodePNG(input) {
+/**
+ * The pixels of a PNG as `{width, height, rgba}`, every pixel four bytes. It throws for an image larger
+ * than its limits, a chunk cut short, or image data that doesn't inflate to exactly the image's size.
+ */
+export function decodePNG(input, { maxWidth = limits.maxWidth, maxHeight = limits.maxHeight, maxPixels = limits.maxPixels } = {}) {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input);
   if (buffer.length < 8 || !buffer.subarray(0, 8).equals(signature)) throw new Error("Unsupported PNG: no PNG signature.");
   let offset = 8, width = 0, height = 0, bitDepth = 0, colorType = -1, interlace = -1;
   const data = [];
   while (offset + 8 <= buffer.length) {
     const length = buffer.readUInt32BE(offset);
+    if (offset + 12 + length > buffer.length) throw new Error("Unsupported PNG: a chunk is cut short.");
     const type = buffer.toString("latin1", offset + 4, offset + 8);
     const body = buffer.subarray(offset + 8, offset + 8 + length);
     if (type === "IHDR") {
@@ -44,9 +50,17 @@ export function decodePNG(input) {
   if (!width || !height || bitDepth !== 8 || (colorType !== 2 && colorType !== 6) || interlace !== 0) {
     throw new Error("Unsupported PNG: only 8-bit RGB or RGBA without interlacing.");
   }
+  if (width > maxWidth || height > maxHeight || width * height > maxPixels) {
+    throw new Error(`Unsupported PNG: ${width}×${height} is larger than it takes.`);
+  }
   const channels = colorType === 6 ? 4 : 3;
   const stride = width * channels;
-  const raw = zlib.inflateSync(Buffer.concat(data));
+  let raw;
+  try {
+    raw = zlib.inflateSync(Buffer.concat(data), { maxOutputLength: height * (stride + 1) });
+  } catch (error) {
+    throw new Error(`Unsupported PNG: its image data doesn't inflate to its size (${error.code ?? error.message}).`);
+  }
   if (raw.length < height * (stride + 1)) throw new Error("Unsupported PNG: the image data is cut short.");
   const pixels = new Uint8Array(height * stride);
   for (let y = 0; y < height; y++) {
