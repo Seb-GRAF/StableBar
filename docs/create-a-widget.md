@@ -166,6 +166,6 @@ With `bar.inlineHoverControls` (**Open hover controls inline** in **Settings →
 }
 ```
 
-Provide the current slider value in script output `values.duration`; `onChange` receives `VALUE` when the drag ends. Control labels are hidden, with their titles kept for accessibility. Set a width on sliders to give them space.
+Provide the current slider value in script output `values.duration`; `onChange` receives `VALUE` when the drag ends. Control labels are hidden, with their titles kept for accessibility. Set a width on sliders to give them space. Add `"endStop": { "value": 0, "label": "∞" }` for one more stop past `max`, set apart by a notch: dragging past 240 snaps the knob onto it, and `onChange` receives `0` (see [`slider`](popups.md)).
 
 A widget with `hoverLayout` runs its `onClick` command when clicked, even when it also has a popup. Without `onClick`, clicking still opens its popup. Tooltips stay hidden while hover controls are available. Add or edit `hoverLayout` through the widget's **Edit as JSON…** action or the CLI; includes, templates, profiles, and package overrides merge it like `layout`. Set it to `null` to remove it.

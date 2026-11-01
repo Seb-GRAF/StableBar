@@ -893,6 +893,21 @@
         }
       }
     },
+    "sliderEndStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "label"],
+      "properties": {
+        "value": {
+          "$ref": "#/definitions/number",
+          "description": "What the slider sends as VALUE on the end stop, and the value of its source that puts the knob there."
+        },
+        "label": {
+          "$ref": "#/definitions/string",
+          "description": "Drawn under the end stop and read by VoiceOver, such as ∞."
+        }
+      }
+    },
     "option": {
       "type": "object",
       "additionalProperties": false,
@@ -1055,6 +1070,10 @@
         },
         "onChange": {
           "$ref": "#/definitions/string"
+        },
+        "endStop": {
+          "$ref": "#/definitions/sliderEndStop",
+          "description": "For sliders: one more stop past max, set apart by a notch, such as ∞. Its value must be outside min…max."
         },
         "options": {
           "type": "array",
