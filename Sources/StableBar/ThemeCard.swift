@@ -173,7 +173,8 @@ struct ThemeSampleBar: View {
             .padding(.top, look.defaults.paddingTop ?? appearance.paddingVertical)
             .padding(.bottom, look.defaults.paddingBottom ?? appearance.paddingVertical)
             .background {
-                if focused && workspace?.indicator != .underline {
+                // As on the bar: no indicator means the background one, and `none` leaves the focused label alone.
+                if focused && (workspace?.indicator ?? .background) == .background {
                     RoundedRectangle(cornerRadius: style.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
                         .fill(style.background?.shapeStyle ?? AnyShapeStyle(appearance.accent))
                 }
