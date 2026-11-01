@@ -4,6 +4,7 @@ import SwiftUI
 enum SettingsPalette {
     static let background = dynamic(light: 0xf5f5f7ff, dark: 0x1e1e20ff)
     static let sidebar = dynamic(light: 0xebebeeff, dark: 0x252527ff)
+    static let stage = dynamic(light: 0xe6e6eaff, dark: 0x161618ff)
     static let group = dynamic(light: 0xffffffff, dark: 0x2a2a2dff)
     static let groupBorder = dynamic(light: 0x00000014, dark: 0xffffff12)
     static let separator = dynamic(light: 0x00000013, dark: 0xffffff13)

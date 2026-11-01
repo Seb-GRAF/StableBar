@@ -57,14 +57,16 @@ struct WidgetsView: View {
     var body: some View {
         let names = WidgetDisplayName.names(for: widgets, packageNames: store.widgetPackageNames, providers: store.configuration?.providers ?? [:])
         VStack(spacing: 0) {
-            ScreenBand(editor: editor, kinds: kinds, screen: screen) { sharing = $0 }
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
-            BarPreview(store: store, kind: screen, names: names, selected: selectedWidget, select: { id in
-                if let id { select(id) } else { select(.bar) }
-            }, session: dragSession, move: { move($0, to: $1, before: $2) })
+            VStack(spacing: 0) {
+                ScreenBand(editor: editor, kinds: kinds, screen: screen) { sharing = $0 }
+                    .padding(.vertical, 12)
+                BarPreview(store: store, kind: screen, names: names, selected: selectedWidget, select: { id in
+                    if let id { select(id) } else { select(.bar) }
+                }, session: dragSession, move: { move($0, to: $1, before: $2) })
+            }
             .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            .background(SettingsPalette.stage)
             HStack(spacing: 0) {
                 list(names)
                     .frame(width: 230)
@@ -75,7 +77,6 @@ struct WidgetsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .overlay(alignment: .top) { Divider() }
-            .padding(.top, 10)
         }
         .task { await setup.load() }
         .onChange(of: editor.searchTarget, initial: true) { showSearchTarget() }

@@ -88,9 +88,11 @@ struct BarInspector: View {
             .padding(.bottom, 14)
             if widget != nil {
                 SettingsSegments(selection: $editor.widgetTab, options: WidgetTab.allCases.map { ($0, $0.title) })
+                    .frame(maxWidth: 330)
                     .padding(.horizontal, 20).padding(.bottom, 8)
             } else if editor.barItem != .everyWidget {
                 SettingsSegments(selection: $editor.barTab, options: BarTab.allCases.map { ($0, $0.title) })
+                    .frame(maxWidth: 330)
                     .padding(.horizontal, 20).padding(.bottom, 8)
             }
             ScrollView {
