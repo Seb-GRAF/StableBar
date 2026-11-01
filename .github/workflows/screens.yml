@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - name: Plan
         id: plan
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           # A plan that fails marks the head errored, as Apply does, so a required Visual review doesn't wait forever.
           script: |
@@ -82,7 +82,7 @@ jobs:
           run-id: ${{ steps.plan.outputs.run-id }}
           github-token: ${{ github.token }}
       - name: Apply
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PLAN: ${{ steps.plan.outputs.plan }}
         with:
