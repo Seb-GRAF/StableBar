@@ -50,7 +50,8 @@ indirect enum PopupContent: Sendable {
     case graph(height: Double, source: String?, lineWidth: Double)
     case list(source: String, row: PopupBlock)
     case button(title: String, command: String)
-    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, command: String)
+    /// A slider over `minimum`…`maximum`, and past a notch the `endStop` when it has one.
+    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
     case toggle(title: String, source: String, command: String)
     case segmented(title: String, source: String, options: [PopupControlOption], command: String)
     /// A pill that opens a panel: the groups in `lists[groupsSource]` beside the chosen group's options and levels, rows of
@@ -117,7 +118,7 @@ struct PopupBlock: Decodable, Sendable {
         case type, role, style, alignment, children, text, field, height, source, row, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, transition
-        case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource
+        case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -207,9 +208,13 @@ struct PopupBlock: Decodable, Sendable {
             guard minimum < maximum, step > 0, minimum.isFinite, maximum.isFinite, step.isFinite else {
                 throw DecodingError.dataCorruptedError(forKey: .min, in: values, debugDescription: "A slider needs finite min < max and a positive finite step.")
             }
+            let endStop = try values.decodeIfPresent(SliderEndStop.self, forKey: .endStop)
+            if let endStop, (minimum...maximum).contains(endStop.value) {
+                throw DecodingError.dataCorruptedError(forKey: .endStop, in: values, debugDescription: "An end stop's value must be outside min…max, so the slider can tell it from a step.")
+            }
             content = .slider(title: try values.decode(String.self, forKey: .title),
                               source: try values.decode(String.self, forKey: .source), minimum: minimum, maximum: maximum,
-                              step: step, command: try values.decode(String.self, forKey: .onChange))
+                              step: step, endStop: endStop, command: try values.decode(String.self, forKey: .onChange))
         case "toggle":
             content = .toggle(title: try values.decode(String.self, forKey: .title),
                               source: try values.decode(String.self, forKey: .source),

@@ -1,0 +1,58 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "awake",
+        "type": "script",
+        "command": "true",
+        "position": "right",
+        "popup": {
+          "style": { "width": 280, "paddingHorizontal": 12, "paddingVertical": 12, "spacing": 6 },
+          "layout": {
+            "type": "column",
+            "children": [
+              { "type": "text", "text": "Keep awake", "style": { "fontWeight": "bold", "fontSize": 15, "paddingHorizontal": 8, "paddingVertical": 4 } },
+              { "type": "field", "field": "status", "style": { "paddingHorizontal": 8, "paddingVertical": 4 } },
+              {
+                "type": "row",
+                "style": { "paddingHorizontal": 8, "paddingVertical": 6, "spacing": 8 },
+                "children": [
+                  { "type": "slider", "title": "Minutes", "source": "minutes", "min": 15, "max": 240, "step": 15, "onChange": "true", "endStop": { "value": 0, "label": "∞" } },
+                  { "type": "field", "field": "minutesLabel", "alignment": "center", "style": { "width": 40 } }
+                ]
+              },
+              {
+                "type": "row",
+                "style": { "paddingHorizontal": 8, "paddingVertical": 6, "spacing": 8 },
+                "children": [
+                  { "type": "slider", "title": "Minutes", "source": "lastStep", "min": 15, "max": 240, "step": 15, "onChange": "true", "endStop": { "value": 0, "label": "∞" } },
+                  { "type": "field", "field": "lastStepLabel", "alignment": "center", "style": { "width": 40 } }
+                ]
+              },
+              {
+                "type": "row",
+                "style": { "paddingHorizontal": 8, "paddingVertical": 6, "spacing": 8 },
+                "children": [
+                  { "type": "slider", "title": "Minutes", "source": "endStop", "min": 15, "max": 240, "step": 15, "onChange": "true", "endStop": { "value": 0, "label": "∞" } },
+                  { "type": "field", "field": "endStopLabel", "alignment": "center", "style": { "width": 40 } }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "awake": {
+      "text": "Awake",
+      "icon": "pill.fill",
+      "values": { "minutes": 165, "lastStep": 240, "endStop": 0 },
+      "fields": { "status": "Keeping awake indefinitely", "minutesLabel": "165m", "lastStepLabel": "240m", "endStopLabel": "∞" }
+    }
+  },
+  "draw": "popup",
+  "widget": "awake",
+  "height": 260
+}

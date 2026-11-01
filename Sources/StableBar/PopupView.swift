@@ -405,9 +405,17 @@ struct PopupBlockView: View {
                 Text(title).frame(maxWidth: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-        case let .slider(title, source, minimum, maximum, step, command):
-            PopupSlider(title: title, value: context.values[source] ?? Double(fields[source] ?? "") ?? minimum,
-                        minimum: minimum, maximum: maximum, step: step) { context.runAction(command, ["VALUE": String($0)]) }
+        case let .slider(title, source, minimum, maximum, step, endStop, command):
+            let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
+            if let endStop {
+                EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
+                    context.runAction(command, ["VALUE": String($0)])
+                }
+            } else {
+                PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
+                    context.runAction(command, ["VALUE": String($0)])
+                }
+            }
         case let .toggle(title, source, command):
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
                 context.runAction(command, ["VALUE": $0 ? "true" : "false"])
