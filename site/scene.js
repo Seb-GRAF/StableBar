@@ -239,8 +239,8 @@ const MEADOW_MAX = 14, MEADOW_PHONE = 8, SPROUT_MIN = 3, SPROUT_MAX = 6;
    and, up from the horizon, of the sky or, down from it, of the sea it stands on (see layout). `lx` is the lighthouse,
    `cx` the cottage. Each wears one of the other themes: its lighthouse's pyjamas, and its ground by day (lit and
    shady), darker with the hour like the page's green. `sign` is where its signpost stands, on the tip toward the
-   middle, and which way its boards point (see setSigns); on the first, `walk` is the stretch of slope its two
-   strollers go to and fro on, from x0 to x1 at one depth (see stroll), and `cx2` a second cottage, one each. */
+   middle, and which way its boards point (see setSigns); on the first, `office` is where its two makers work, the
+   middle of their two desks at one depth (see office), and `cx2` a second cottage, one each. */
 // (an island seen at its own size stands this far down its sea, as a part of it: it's as far off as the sea there)
 const DIVE_GAP = 7, SHORE = 0.27;
 const ISLANDS = [
@@ -248,7 +248,7 @@ const ISLANDS = [
   { theme: 'nord', ground: ['#E8EDF4', '#BFCBDB'],
     ridge: [[0.52, 0.12], [0.56, 0.02], [0.6, -0.08], [0.65, -0.1], [0.69, -0.13], [0.74, -0.24], [0.79, -0.38], [0.82, -0.42], [0.85, -0.37], [0.9, -0.24], [0.95, -0.1], [0.99, 0.12]],
     shore: [[0.52, 0.12], [0.6, 0.21], [0.72, 0.26], [0.86, 0.27], [0.95, 0.22], [0.99, 0.12]], lx: 0.63, cx: 0.71, cx2: 0.915,
-    sign: [0.565, 0.13, -1], walk: [0.62, 0.93, 0.155] },
+    sign: [0.565, 0.13, -1], office: [0.744, 0.155] },
   // on the left, a table mountain: steep all round, flat on top
   { theme: 'gruvbox', ground: ['#B8BB26', '#98971A'],
     ridge: [[0.02, 0.12], [0.04, 0], [0.06, -0.12], [0.08, -0.17], [0.13, -0.18], [0.2, -0.18], [0.27, -0.17], [0.33, -0.16], [0.36, -0.11], [0.38, -0.02], [0.4, 0.12]],
@@ -271,17 +271,18 @@ const ISLANDS = [
     ridge: [[0, 0.12], [0.03, 0.02], [0.08, -0.05], [0.13, -0.07], [0.18, -0.04], [0.23, -0.06], [0.28, -0.11], [0.33, -0.12], [0.38, -0.08], [0.43, -0.02], [0.46, 0.04], [0.48, 0.12]],
     shore: [[0, 0.12], [0.07, 0.22], [0.2, 0.27], [0.36, 0.25], [0.45, 0.19], [0.48, 0.12]], lx: 0.31, cx: 0.13, sign: [0.44, 0.13, 1] },
 ];
-/* The two who made StableBar, as they stroll on the first island: their colours (hair, beard, shirt, trousers) and
-   where each walks, `side` to the left of the other and `near` a step nearer, and which of the island's cottages is
-   his (see stroll and drawWalker) */
+/* The two who made StableBar, at their desks on the first island: their colours (hair, beard, shirt, trousers), which
+   side of the desks each sits on (`seat`: -1 the left, facing right) and which of the island's cottages is his (see
+   office and drawWalker) */
 const MAKERS = {
-  seb: { hair: '#A06A42', beard: '#C9753A', shirt: '#A4B89C', legs: '#4A5D82', skin: '#F4CFB2', curls: true, side: -1, near: 0, home: 'cot' },
-  steve: { hair: '#2A221E', beard: '#3A2E28', shirt: '#3F5B78', legs: '#34363E', skin: '#EDC4A2', collar: true, side: 1, near: 1, home: 'cot2' },
+  seb: { hair: '#A06A42', beard: '#C9753A', shirt: '#A4B89C', legs: '#4A5D82', skin: '#F4CFB2', curls: true, seat: -1, home: 'cot' },
+  steve: { hair: '#2A221E', beard: '#3A2E28', shirt: '#3F5B78', legs: '#34363E', skin: '#EDC4A2', collar: true, seat: 1, home: 'cot2' },
 };
 // their size, times the keeper's
 const WALK_SC = 1.35;
-// what they say to each other on a stop, a line each
-const CHATS = [['ship it?', 'ship it.'], ['is it stable?', 'it’s in the name'], ['one more widget', '…fine'], ['who wrote this one?', 'a sheep']];
+// what they say to each other across the desks, a line each, and over the other's shoulder at his screen
+const CHATS = [['ship it?', 'ship it.'], ['is it stable?', 'it’s in the name'], ['one more widget', '…fine'], ['who wrote this one?', 'a sheep'], ['coffee?', 'always']];
+const PEEKS = [['nice', 'I know'], ['is that a bug?', 'a feature'], ['tabs or spaces?', 'yes']];
 /* What each island has of its own: its light, its animals, grass and box, its games with the bar (the page's
    only). One island's state at a time lives on the scene (see enter); the others wait in their world objects. */
 const islandState = () => ({
@@ -297,7 +298,7 @@ const islandState = () => ({
   // a lived-in hill: the animals already there, the grass they eat, and a sheep in a box up in the sky
   flocked: false, meadow: [], sproutAt: 0,
   // its signpost: the board under the pointer and since when, and each board's outline as last drawn (see drawSign);
-  // and the two strolling on it, if it's theirs (see stroll)
+  // and the two working on it, if it's theirs (see office)
   boards: { hot: -1, at: -9, hits: [] }, pair: null,
   box: { v: null, gx: null, gy: null, side: null, lastSide: null, la: 0, seenAt: -9, hop: -9, wob: -9, nextWob: 0, peek: -9, lit: 0, open: false, openAt: -9, blinkAt: -9, nextBlink: 0, knocks: 0, knockAt: -9, hopK: 1, out: null, burst: 0, lid: 0, sheep: null },
 });
@@ -353,10 +354,10 @@ function tower(g, x, base, h, er) {
      draw    { name(base, ...args) }: any of the drawings named in Hill.felt.draw, in place of the felt pen's, which comes
              as base to call or not. The drawings call each other through DRAW, so an override is used wherever
              its drawing is, by the felt ones too.
-   A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, obj gets s, and walker
-   gets s and one of s.walkers()): s.g the geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh
-   the tower, lamp, cot the cottage, clouds, sheepCloud, stars, tufts; on an island, sign its signpost and walk its
-   strollers' line), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
+   A drawing gets the scene s and the canvas c (the animals get c, u, their colour, o and t, obj gets s, walker gets s
+   and one of s.walkers(), chair and office s and one of s.props()): s.g the geometry (W, H, u, pw, top, horizon, ridge, shore, hillPoly, hillClip, lh
+   the tower, lamp, cot the cottage, clouds, sheepCloud, stars, tufts; on an island, sign its signpost and office its
+   makers' desks), s.P the palette now, s.t the time, s.d the hour (0 day, 1 night), s.style the
    style on, s.theme the visitor's theme, s.beam, s.pres how far in each section's scene is, s.reduced. Lengths are CSS
    pixels of the scene; sizes go in u (g.u, 1 on a window of about 1138 by 1138) and pens in pw. The islands of the
    dive use the same drawings in their own s.g, on a canvas scaled by view, each in its own theme's style (but the
@@ -379,6 +380,7 @@ const FELT = {
     cow: drawCow, gull: drawGull, duck: drawDuck, monster: drawMonster, states: drawStates, washing: drawWashing,
     huts: drawHuts, desk: drawDesk, doorway: drawDoorway, editKeeper: drawEditKeeper, keeper: drawKeeper, tile: drawTile,
     labels: drawLabels, splashes: drawSplashes, ball: drawBall, doodles: drawDoodles, sign: drawSign, walker: drawWalker,
+    chair: drawChair, office: drawOffice,
   },
 };
 const STYLES = { 'built-in': FELT };
@@ -548,11 +550,14 @@ class Scene {
     g.cot ={ x: cx, base: this.ridgeY(cx) + 3 * u, w: cw, h: cw * 0.62 };
     if (I.cx2) g.cot2 = { x: I.cx2 * W, base: this.ridgeY(I.cx2 * W) + 3 * u, w: cw, h: cw * 0.62 };
     g.tufts = this.tufts(rng(this.o.seed + cx));
-    // its signpost, planted in the grass, and the line its strollers walk
+    // its signpost, planted in the grass, and its makers' office: their seats, each facing the desks, and the coffee
+    // corner up the slope behind Steve, its foot well clear of the ridge (see office)
     const [sx, sy, dir] = I.sign;
     g.sign = { x: sx * W, y: hz + sy * sea, dir, i: ISLANDS.indexOf(I) };
-    if (I.walk) {
-      g.walk = { x0: I.walk[0] * W, x1: I.walk[1] * W, y: hz + I.walk[2] * sea };
+    if (I.office) {
+      const k = u * WALK_SC, x = I.office[0] * W, y = hz + I.office[1] * sea, cx = x + 70 * k;
+      const seats = Object.fromEntries(Object.entries(MAKERS).map(([who, M]) => [who, { x: x + M.seat * 32 * k, y, dir: -M.seat }]));
+      g.office = { x, y, k, seats, coffee: { x: cx, y: Math.max(y - 30 * k, this.ridgeY(cx) + 46 * k) } };
       for (const [who, M] of Object.entries(MAKERS)) if (g[M.home]) g[M.home].who = who;
     }
     this.g = was;
@@ -585,7 +590,7 @@ class Scene {
   sky() { const c = this.P && (TINT ? TINT(this.P.sky) : this.P.sky); return c ? '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('') : null; }
 
   /* ----- input, in client coordinates ----- */
-  /* What's at a point out at sea: a board of a signpost ({ href }) or one of the two strolling ({ who }), on the
+  /* What's at a point out at sea: a board of a signpost ({ href }) or one of its two makers ({ who }), on the
      nearest island close enough to read, or null. `mark`: the board found is the one under the pointer from now on,
      and the others aren't (it swings as the pointer comes onto it: see drawSign) */
   atSea(x, y, mark = false) {
@@ -627,7 +632,7 @@ class Scene {
     if (this.reduced) this.aim(x, y);
     this.poke();
     this.wake();
-    // (the page points at a board or a stroller: see atSea)
+    // (the page points at a board or a maker: see atSea)
     return hot;
   }
   release() {
@@ -648,7 +653,7 @@ class Scene {
   onTower(x, y) { const T = this.g.lh; return y >= this.top && Math.abs(x - T.x) < T.wB * 0.75 && y > T.hatTop - T.er * 1.6 && y < T.base; }
   tapAt(x, y) {
     this.poke();
-    // one of the two strolling: he stops, waves and says hi; nothing drops
+    // one of the two makers: he stops what he's doing, waves and says hi; nothing drops
     const who = this.whoAt(x, y);
     if (who) {
       this.hello(who);
@@ -1482,7 +1487,7 @@ class Scene {
     this.updateBox(dt);
     this.updateBall(dt);
     this.updateBore();
-    if (g.walk) this.stroll(dt);
+    if (g.office) this.office(dt);
     this.doodles = this.doodles.filter(d => this.t - d.t0 < d.life);
     this.splashes = this.splashes.filter(p => this.t - p.t0 < 0.7);
   }
@@ -1656,6 +1661,9 @@ class Scene {
     if (g.key && x > g.key.x0 && x < g.key.x1 && y > g.key.y0 - 30 * u) return false;
     if (Math.abs(x - T.x) < T.wB * 0.9 + 20 * u && y < T.base + 42 * u) return false;
     for (const c of [k, g.cot2]) if (c && Math.abs(x - c.x) < c.w * 0.8 + 18 * u && y < c.base + 32 * u) return false;
+    // (out at sea, the makers' desks and coffee corner, the slope just behind it, and the way between them)
+    const O = g.office;
+    if (O && x > O.x - 50 * O.k && x < O.coffee.x + 26 * O.k && y > O.coffee.y - 42 * O.k && y < O.y + 14 * O.k) return false;
     const sg = g.sign;
     if (sg && Math.abs(x - sg.x) < 36 * u && y > sg.y - 44 * u && y < sg.y + 18 * u) return false;
     if (this.state === 'tiling' || this.pres.tiling > 0.01) for (const q of hutSpots(this)) if (Math.abs(x - q.x) < 42 * u && y > q.y - 74 * u && y < q.y + 24 * u) return false;
@@ -1881,7 +1889,7 @@ class Scene {
   }
   // a knock: the door jumps and says so, a little more with each knock in a row; at the third the keeper comes to the
   // door (see VISIT and drawVisit), unless he's out on the ridge with his tile (nobody comes) or already at the open
-  // door at night. A cottage one of the strollers lives in (k.who): he goes over to see who's there (see answer)
+  // door at night. A cottage one of the makers lives in (k.who): he goes over to see who's there (see answer)
   knock(k = this.g.cot) {
     const d = k.door, kn = this.knocks;
     if (this.visit || this.pair?.check) return;
@@ -2020,89 +2028,137 @@ class Scene {
   }
 
   /* ----- the two who made it -----
-     On the snowy peak, the first island out at sea, Seb and Steve stroll side by side along the slope (g.walk): to
-     one end, a stop, and back, now and then stopping on the way for a line each (CHATS). Point at them and they stop
-     and look at you; tap one and he waves and says hi. Without motion they stand and talk. Each lives in one of the
-     island's two cottages (MAKERS' home): knock three times on his door and he hurries over to see who's there,
-     looks one way and the other, and comes back (see answer); the other waits for him. */
-  stroll(dt) {
-    const g = this.g, u = g.u, t = this.t, W = g.walk, R = Math.random, rm = this.reduced;
-    const p = this.pair ||= { x: lerp(W.x0, W.x1, 0.3 + R() * 0.4), dir: R() < 0.5 ? -1 : 1, act: 'go', until: t + 3 + R() * 4, ph: 0, next: (R() * CHATS.length) | 0, say: null, hi: null, look: null, check: null };
+     On the snowy peak, the first island out at sea, Seb and Steve work in the open: two desks pushed together on the
+     slope (g.office), a monitor each, back to back, and a coffee corner up the slope behind Steve. Mostly they type,
+     with a line each across the desks now and then (CHATS). Every half a minute or so one of them gets up, never both:
+     for a coffee (the grinder, the machine, and back with a cup), to look at the other's screen over his shoulder
+     (PEEKS), or to stretch (see errand). Point at one and he stops and looks at you, turning his chair round if you're
+     behind him; tap one and he waves and says hi. Each lives in one of the island's two cottages (MAKERS' home): knock
+     three times on his door and he hurries over to see who's there, looks one way and the other, and comes back to his
+     desk (see answer). Without motion they sit and work, and get up only to answer the door. */
+  office(dt) {
+    const O = this.g.office, t = this.t, R = Math.random;
+    const p = this.pair ||= {
+      m: Object.fromEntries(Object.keys(MAKERS).map(who => { const S = O.seats[who]; return [who, { who, x: S.x, y: S.y, face: S.dir, sat: true, ph: 0, steps: [], look: null, cup: false, cupAt: -99 }]; })),
+      say: null, hi: null, check: null, next: (R() * CHATS.length) | 0, chatAt: t + 4 + R() * 6, upAt: t + 12 + R() * 14,
+    };
     if (p.hi && t - p.hi.t0 > 2) p.hi = null;
     // a line, and the other's answer a moment later
     const sy = p.say;
     if (sy && !sy.answered && t - sy.t0 > 1.5) { sy.answered = true; this.say(sy.who === 'seb' ? 'steve' : 'seb', sy.lines[1]); }
-    if (p.check) return this.atDoor(dt);
-    // watched: the pointer close by
-    const q = this.ptr, mid = W.y - 18 * u * WALK_SC;
-    p.look = q.on && q.kind === 'mouse' && Math.abs(q.x - p.x) < 80 * u && Math.abs(q.y - mid) < 60 * u ? q.x : null;
-    if (rm) { p.x = (W.x0 + W.x1) / 2; p.act = 'chat'; return; }
-    if (p.hi || p.look != null) return;
-    if (p.act === 'go') {
-      p.x += p.dir * 19 * u * dt; p.ph += dt * 8.5;
-      if (p.x > W.x1 || p.x < W.x0) { p.x = clamp(p.x, W.x0, W.x1); p.act = 'turn'; p.until = t + 1.2 + R() * 1.6; }
-      else if (t > p.until) {
-        p.act = 'chat'; p.until = t + 4;
-        const first = R() < 0.5 ? 'seb' : 'steve', lines = CHATS[p.next++ % CHATS.length];
-        p.say = { who: first, lines, t0: t, answered: false };
-        this.say(first, lines[0]);
-      }
-    } else if (t > p.until) {
-      if (p.act === 'turn') p.dir = -p.dir;
-      p.act = 'go'; p.until = t + 8 + R() * 8;
+    // each goes on with what he's doing, unless he's watched (the pointer close by) or saying hi; not on his way to
+    // the door
+    const q = this.ptr, ms = Object.values(p.m);
+    for (const m of ms) {
+      const door = p.check === m.who, mid = m.y - (m.sat ? 24 : 18) * O.k;
+      m.look = !door && q.on && q.kind === 'mouse' && Math.abs(q.x - m.x) < 60 * O.k && Math.abs(q.y - mid) < 45 * O.k ? q.x : null;
+      if (door || (m.look == null && p.hi?.who !== m.who)) this.walkOn(m, dt);
+    }
+    if (this.reduced || p.check || ms.some(m => !m.sat || m.steps.length)) return;
+    if (t > p.upAt) {
+      p.upAt = t + 22 + R() * 20; p.chatAt = Math.max(p.chatAt, t + 6);
+      const r = R();
+      this.errand(ms[(R() * ms.length) | 0], r < 0.6 ? 'coffee' : r < 0.85 ? 'peek' : 'stretch');
+    } else if (t > p.chatAt && !(sy && t - sy.t0 < 4)) {
+      p.chatAt = t + 12 + R() * 12;
+      this.chat(R() < 0.5 ? 'seb' : 'steve', CHATS[p.next++ % CHATS.length]);
     }
   }
-  // someone knocked three times at his cottage k: he goes to his door
+  // a line from one of them, and the other's answer (see office)
+  chat(who, lines) {
+    this.pair.say = { who, lines, t0: this.t, answered: false };
+    this.say(who, lines[0]);
+  }
+  /* Up from his desk for a while (m: one of pair.m): out in front of his chair, round behind it and up the slope, where
+     the errand takes him, and the same way back to sit down. The way to the coffee corner and to the other's chair
+     passes behind the desks. Each step is one of walkOn's. */
+  errand(m, kind) {
+    const O = this.g.office, k = O.k, S = O.seats[m.who], other = O.seats[m.who === 'seb' ? 'steve' : 'seb'], cf = O.coffee;
+    const out = [S.x - S.dir * 3 * k, S.y + 4 * k], back = [S.x - S.dir * 12 * k, S.y - 10 * k];
+    const up = [{ up: true, for: 0.35 }, { to: out }], home = [{ to: back }, { to: out }, { to: [S.x, S.y] }, { sit: true }];
+    if (kind === 'stretch') m.steps = [...up, { for: 2.4, pose: 'stretch', face: S.dir }, { to: [S.x, S.y] }, { sit: true }];
+    // behind the other's chair, looking at his screen over his shoulder: a line each
+    else if (kind === 'peek') m.steps = [...up, { to: back }, { to: [other.x - other.dir * 13 * k, other.y - 2 * k] }, { for: 3.6, face: other.dir, chat: PEEKS[(Math.random() * PEEKS.length) | 0] }, ...home];
+    // at the counter's end, by the grinder: it grinds, the machine pours, and he takes the cup back to his desk
+    else m.steps = [...up, { to: back }, { to: [cf.x - 23 * k, cf.y + 1.5 * k] }, { for: 1.5, pose: 'reach', face: 1, brew: 'brrr' }, { for: 1.9, pose: 'reach', face: 1, brew: 'pssh' }, { for: 0.4, cup: true, face: -1 }, ...home];
+  }
+  // someone knocked three times at his cottage k: he hurries to his door, from his desk or wherever he is, and back
   answer(k) {
-    const o = this.walkers().find(w => w.who === k.who);
-    if (!o || !k.door) return;
-    this.pair.check = { who: k.who, k, stage: 'go', x: o.x, y: o.y, ph: 0, face: 1, t0: this.t, said: false };
+    const p = this.pair, m = p?.m[k.who], d = k.door;
+    if (!m || !d) return;
+    const O = this.g.office, S = O.seats[m.who], out = [S.x - S.dir * 3 * O.k, S.y + 4 * O.k];
+    p.check = m.who;
+    m.steps = [...(m.sat ? [{ up: true, for: 0.3 }, { to: out, fast: true }] : []), { to: [d.x + d.w / 2, k.base + 1.5 * this.g.u], fast: true },
+      { for: 2.3, looks: true, say: 'hello?' }, { to: out, fast: true }, { to: [S.x, S.y] }, { sit: true, done: true }];
     this.wake();
   }
-  // over to the door, quickly; there he says hello, looks one way and the other, and comes back to his place
-  atDoor(dt) {
-    const g = this.g, u = g.u, t = this.t, p = this.pair, ck = p.check, d = ck.k.door, M = MAKERS[ck.who];
-    const to = ck.stage === 'go' ? [d.x + d.w / 2, ck.k.base + 1.5 * u] : ck.stage === 'back' ? [p.x + M.side * 13 * u, g.walk.y + M.near * 6 * u] : null;
-    if (to) {
-      const dx = to[0] - ck.x, dy = to[1] - ck.y, dist = Math.hypot(dx, dy), step = 58 * u * dt;
-      if (this.reduced || dist <= step) {
-        ck.x = to[0]; ck.y = to[1];
-        if (ck.stage === 'go') { ck.stage = 'look'; ck.t0 = t; } else p.check = null;
-      } else { ck.x += dx / dist * step; ck.y += dy / dist * step; ck.ph += dt * 13; ck.face = Math.sign(dx) || ck.face; }
+  /* His next step: walk to a point (`to`, quickly with `fast`), stay a while (`for` seconds, in a `pose`, facing `face`;
+     `looks` one way and then the other), stand up or sit down. What a step brings is done as it starts: a line (`say`,
+     or `chat` and the other's answer), the coffee machine going (`brew`), a cup in hand (`cup`). Sitting down, he puts
+     his cup on his desk; `done` ends a visit to the door. */
+  walkOn(m, dt) {
+    const st = m.steps[0];
+    if (!st) return;
+    const g = this.g, O = g.office, t = this.t, S = O.seats[m.who];
+    if (st.at == null) {
+      st.at = t;
+      if (st.up) m.sat = false;
+      if (st.face) m.face = st.face;
+      if (st.cup) m.cup = true;
+      if (st.say) this.say(m.who, st.say, 1.6);
+      if (st.chat) this.chat(m.who, st.chat);
+      if (st.brew) this.doodle('chat', O.coffee.x - (st.brew === 'brrr' ? 13 : 0) * O.k, O.coffee.y - 44 * O.k, { text: st.brew, life: 1.4, calm: true });
+      if (st.sit) {
+        Object.assign(m, { sat: true, face: S.dir, x: S.x, y: S.y });
+        if (m.cup) { m.cup = false; m.cupAt = t; }
+        if (st.done) this.pair.check = null;
+      }
+    }
+    if (st.to) {
+      const [tx, ty] = st.to, dx = tx - m.x, dy = ty - m.y, dist = Math.hypot(dx, dy), step = (st.fast ? 58 : 26) * g.u * dt;
+      if (this.reduced || dist <= step) { m.x = tx; m.y = ty; m.steps.shift(); }
+      else { m.x += dx / dist * step; m.y += dy / dist * step; m.ph += dt * (st.fast ? 13 : 9); if (Math.abs(dx) > 0.01) m.face = Math.sign(dx); }
       return;
     }
-    const a = t - ck.t0;
-    if (!ck.said) { ck.said = true; this.say(ck.who, 'hello?', 1.6); }
-    ck.face = a < 1 ? -1 : 1;
-    if (a > 2.3) ck.stage = 'back';
+    if (st.looks) m.face = t - st.at < 1 ? -1 : 1;
+    if (t - st.at >= (st.for || 0)) m.steps.shift();
   }
-  // the two of them as they're drawn: where each stands, which way he faces, his stride and his pose
+  // the two of them as they're drawn: where each is, which way he faces, his stride, sitting or not, his pose, and
+  // whether his screen lights his face (at his desk, facing it)
   walkers() {
-    const p = this.pair, W = this.g.walk;
-    if (!p || !W) return [];
-    const u = this.g.u, t = this.t, ck = p.check, going = p.act === 'go' && !p.hi && p.look == null && !ck && !this.reduced;
-    return Object.entries(MAKERS).map(([who, M]) => {
-      const hi = p.hi?.who === who;
-      // at his door, or on his way there or back
-      if (ck?.who === who) return { who, M, x: ck.x, y: ck.y, flip: ck.face < 0, walk: ck.stage === 'look' ? 0 : ck.ph, pose: hi ? 'wave' : null };
-      const x = p.x + M.side * 13 * u, y = W.y + M.near * 6 * u;
-      // walking, the way they go; stopped, toward each other; watched, toward the pointer; waiting, toward the one away
-      let face = going ? p.dir : -M.side;
-      if (p.look != null) face = p.look < x ? -1 : 1;
-      if (ck) face = ck.x < x ? -1 : 1;
-      const talk = p.say && (p.say.answered ? who !== p.say.who : who === p.say.who) && t - p.say.t0 < 3.2;
-      return { who, M, x, y, flip: face < 0, walk: going ? p.ph + (M.side > 0 ? 2.2 : 0) : 0, pose: hi ? 'wave' : talk ? 'talk' : null };
+    const p = this.pair, O = this.g.office;
+    if (!p || !O) return [];
+    const t = this.t;
+    return Object.values(p.m).map(m => {
+      const st = m.steps[0], hi = p.hi?.who === m.who, door = p.check === m.who, dir = O.seats[m.who].dir;
+      const talk = p.say && (p.say.answered ? m.who !== p.say.who : m.who === p.say.who) && t - p.say.t0 < 3.2;
+      // watched: toward the pointer, turning his chair round if need be
+      const face = m.look != null ? (m.look < m.x ? -1 : 1) : m.face;
+      const going = st?.to && st.at != null && (door || (m.look == null && !hi)) && !this.reduced;
+      let pose = (st?.at != null && st.pose) || (m.cup ? 'carry' : null);
+      if (m.sat) pose = face === dir && m.look == null ? 'type' : 'rest';
+      if (talk) pose = 'talk';
+      if (hi) pose = 'wave';
+      return { who: m.who, M: MAKERS[m.who], x: m.x, y: m.y, flip: face < 0, walk: going ? m.ph : 0, sit: m.sat, lit: m.sat && face === dir, pose };
     });
+  }
+  // what the office has on the ground, to draw among the animals (ws: the walkers): the desks, the coffee corner and the
+  // two chairs, each turned the way its maker sits in it, or toward the desks when he's up
+  props(ws) {
+    const O = this.g.office;
+    if (!O) return [];
+    return [{ office: 'desks', y: O.y - 0.5 }, { office: 'coffee', y: O.coffee.y },
+      ...Object.entries(O.seats).map(([who, S]) => { const o = ws.find(w => w.who === who); return { chair: who, x: S.x, y: S.y - 0.01, flip: o?.sit ? o.flip : S.dir < 0 }; })];
   }
   whoAt(x, y) {
     const k = this.g.u * WALK_SC;
     return this.walkers().find(o => Math.abs(x - o.x) < 9 * k && y > o.y - 40 * k && y < o.y + 3 * k)?.who || null;
   }
-  // a line over his head, away from the other's
+  // a line over his head: Seb's to the left of it, Steve's to the right
   say(who, text, life = 1.9) {
     const o = this.walkers().find(w => w.who === who);
     if (!o) return;
-    const k = this.g.u * WALK_SC, left = o.M.side < 0;
+    const k = this.g.u * WALK_SC, left = who === 'seb';
     this.doodle('chat', o.x + (left ? 3 : -3) * k, o.y - 47 * k, { text, align: left ? 'right' : 'left', life, calm: true });
   }
   hello(who) {
@@ -2313,14 +2369,14 @@ function drawLand(s, c, w) {
   DRAW.eye(s, c);
   DRAW.hat(s, c);
   // animals and the grass on the hill, back to front (a tuft in front of the one eating it), and out at sea the
-  // signpost and whoever strolls there among them
-  const sign = s.signOf() && s.g.sign;
+  // signpost, and the office with its two makers, among them
+  const sign = s.signOf() && s.g.sign, ws = s.walkers();
   const items = [...s.objs.map(o => [o.leap ? s.box.gy + 0.25 : o.y, o]), ...s.meadow.map(m => [m.y + 0.5, m]), ...(s.box.gx != null ? [[s.box.gy, s.box]] : []),
-    ...(sign ? [[sign.y, sign]] : []), ...s.walkers().map(o => [o.y, o])].sort((a, b) => a[0] - b[0]);
+    ...(sign ? [[sign.y, sign]] : []), ...ws.map(o => [o.y, o]), ...s.props(ws).map(o => [o.y, o])].sort((a, b) => a[0] - b[0]);
   const wet = o => o.state === 'float' || o.state === 'swim' || (o.state === 'fall' && s.isSea(o.x, o.ty));
   for (const [, it] of items) {
     if (wet(it)) { c.save(); if (afloat(s, c, it.state === 'fall' ? it.ty : it.y)) DRAW.obj(s, c, it); c.restore(); }
-    else it === s.box ? DRAW.box(s, c) : it === sign ? DRAW.sign(s, c) : it.who ? DRAW.walker(s, c, it) : it.blades ? DRAW.meadow(s, c, it) : it.leap ? DRAW.leap(s, c, it) : DRAW.obj(s, c, it);
+    else it === s.box ? DRAW.box(s, c) : it === sign ? DRAW.sign(s, c) : it.office ? DRAW.office(s, c, it) : it.chair ? DRAW.chair(s, c, it) : it.who ? DRAW.walker(s, c, it) : it.blades ? DRAW.meadow(s, c, it) : it.leap ? DRAW.leap(s, c, it) : DRAW.obj(s, c, it);
   }
   // the section's little scenes over them, on the page's hill: animals pass behind the desk, the huts and the keeper
   if (w === s.w0) {
@@ -3204,17 +3260,24 @@ function drawSign(s, c) {
 }
 
 /* One of the two who made StableBar (MAKERS), drawn as the keeper is, at o.x, o.y facing right unless o.flip, mid-stride
-   by o.walk: Seb's curls and ginger beard over a sage tee, Steve's swept-up dark hair and short even beard over a slate
-   shirt with a collar. o.pose: 'talk' (a hand going) or 'wave' */
+   by o.walk, or sitting (o.sit) on his chair, drawn before him (see drawChair): Seb's curls and ginger beard over a
+   sage tee, Steve's swept-up dark hair and short even beard over a slate shirt with a collar. o.pose: 'talk' (a hand
+   going), 'wave', 'type' (a hand on the keys, one and then the other), 'rest' (hands on his knees), 'stretch' (arms
+   up), 'reach' (a hand out to the counter) or 'carry' (a cup in hand). At night his screen lights his face (o.lit). */
 function drawWalker(s, c, o) {
   const M = o.M, P = s.P, u = s.g.u * WALK_SC, t = s.reduced ? 0 : s.t, col = h => mul(hex(h), P.paper);
-  const skin = col(M.skin), shirt = col(M.shirt), hair = col(M.hair), beard = col(M.beard);
+  const skin = col(M.skin), shirt = col(M.shirt), hair = col(M.hair), beard = col(M.beard), pose = o.pose;
   c.save(); c.translate(o.x, o.y); c.scale(o.flip ? -1 : 1, 1);
-  // legs and shoes
-  const st = Math.sin(o.walk) * 0.45, feet = [-2 * u + Math.sin(st) * 9 * u, 2 * u - Math.sin(st) * 9 * u];
+  // legs and shoes; sitting, thighs along the seat and shins down to the ground
+  const st = Math.sin(o.walk) * 0.45, feet = o.sit ? [8 * u, 10.5 * u] : [-2 * u + Math.sin(st) * 9 * u, 2 * u - Math.sin(st) * 9 * u];
   c.beginPath();
-  ribbon(c, [[-2 * u, -12 * u], [feet[0], 0]], DET * 1.6, 1, { tin: 1, tout: 1, w0: 1, w1: 1 });
-  ribbon(c, [[2 * u, -12 * u], [feet[1], 0]], DET * 1.6, 2, { tin: 1, tout: 1, w0: 1, w1: 1 });
+  if (o.sit) {
+    ribbon(c, [[-2 * u, -12.5 * u], [7.4 * u, -12.8 * u], [7 * u, 0]], DET * 1.6, 1, { tin: 1, tout: 1, w0: 1, w1: 1 });
+    ribbon(c, [[0, -11.8 * u], [9.6 * u, -11.8 * u], [9.5 * u, 0]], DET * 1.6, 2, { tin: 1, tout: 1, w0: 1, w1: 1 });
+  } else {
+    ribbon(c, [[-2 * u, -12 * u], [feet[0], 0]], DET * 1.6, 1, { tin: 1, tout: 1, w0: 1, w1: 1 });
+    ribbon(c, [[2 * u, -12 * u], [feet[1], 0]], DET * 1.6, 2, { tin: 1, tout: 1, w0: 1, w1: 1 });
+  }
   c.fillStyle = rgba(col(M.legs)); c.fill();
   for (const fx of feet) dot(c, fx + 1.5 * u, -0.5 * u, 2.2 * u, INK);
   // arms: Seb's bare (the pen), Steve's in his sleeves; each with a hand
@@ -3224,7 +3287,12 @@ function drawWalker(s, c, o) {
     const [hx, hy] = pts.at(-1);
     dot(c, hx, hy, 1.5 * u, skin);
   };
-  arm([[-4.6 * u, -22 * u], [-6.5 * u - st * 4 * u, -14 * u]], 4);
+  // (typing, a hand comes up off the keys in turn)
+  const key = ph => pose === 'type' ? Math.max(0, Math.sin(t * 11 + ph)) * 1.4 * u : 0;
+  if (pose === 'type') arm([[1 * u, -22 * u], [6 * u, -15.5 * u], [13 * u, -17.8 * u - key(Math.PI)]], 4);
+  else if (pose === 'rest') arm([[1 * u, -22 * u], [4 * u, -15 * u], [8 * u, -13.6 * u]], 4);
+  else if (pose === 'stretch') arm([[-1 * u, -23 * u], [-3.5 * u, -32 * u], [-0.5 * u, -41 * u]], 4);
+  else arm([[-4.6 * u, -22 * u], [-6.5 * u - st * 4 * u, -14 * u]], 4);
   // the shirt
   const tee = [[-5.5 * u, -11 * u], [-6 * u, -20.6 * u], [-8.2 * u, -21.2 * u], [-7 * u, -24.6 * u], [7 * u, -24.6 * u], [8.2 * u, -21.2 * u], [6 * u, -20.6 * u], [5.5 * u, -11 * u]];
   const body = M.curls ? tee : [[-5.5 * u, -11 * u], [-6 * u, -24.4 * u], [6 * u, -24.4 * u], [5.5 * u, -11 * u]];
@@ -3237,8 +3305,13 @@ function drawWalker(s, c, o) {
   }
   c.fillStyle = INK; c.fill();
   const wv = Math.sin(t * 7) * 0.5, chat = Math.sin(t * 5.3) * 1.2 * u;
-  if (o.pose === 'wave') arm([[4.6 * u, -22 * u], [10 * u, -28 * u], [10 * u + Math.sin(wv) * 7 * u, -36 * u]], 5);
-  else if (o.pose === 'talk') arm([[4.6 * u, -22 * u], [9 * u, -16.5 * u], [13 * u, -20 * u + chat]], 5);
+  if (pose === 'wave') arm([[4.6 * u, -22 * u], [10 * u, -28 * u], [10 * u + Math.sin(wv) * 7 * u, -36 * u]], 5);
+  else if (pose === 'talk') arm([[4.6 * u, -22 * u], [9 * u, -16.5 * u], [13 * u, -20 * u + chat]], 5);
+  else if (pose === 'type') arm([[4.6 * u, -22 * u], [8 * u, -15 * u], [15.5 * u, -17.6 * u - key(0)]], 5);
+  else if (pose === 'rest') arm([[4.6 * u, -22 * u], [7 * u, -15 * u], [10.5 * u, -13.4 * u]], 5);
+  else if (pose === 'stretch') arm([[4.6 * u, -22 * u], [6 * u, -32 * u], [2.5 * u, -41 * u]], 5);
+  else if (pose === 'reach') arm([[4.6 * u, -22 * u], [9.5 * u, -21 * u], [14 * u, -23 * u]], 5);
+  else if (pose === 'carry') { arm([[4.6 * u, -22 * u], [6.5 * u, -15.5 * u], [10.5 * u, -17 * u]], 5); drawCup(s, c, 11.5 * u, -15.6 * u, u * 0.85, '#FFFFFF', false); }
   else arm([[4.6 * u, -22 * u], [6.5 * u + st * 4 * u, -14 * u]], 5);
   // the head
   const head = ellipse(0.5 * u, -30 * u, 5 * u, 5.6 * u, 20);
@@ -3276,6 +3349,160 @@ function drawWalker(s, c, o) {
     print(c, quiff, hair);
     c.beginPath(); loop(c, quiff, DET, 8, { over: 0.04 }); c.fillStyle = INK; c.fill();
     c.beginPath(); ribbon(c, [[-2.4 * u, -35.4 * u], [1.4 * u, -37.2 * u], [5 * u, -37.4 * u]], TEX * 0.8, 21, { tin: 1, tout: 2 }); c.fillStyle = rgba(mix(hair, hex('#FFFFFF'), 0.4)); c.fill();
+  }
+  const night = smooth(0.4, 0.8, s.d);
+  if (o.lit && night > 0.05) glow(c, 9 * u, -29 * u, 9 * u, 9 * u, 0.4 * night);
+  c.restore();
+}
+
+/* The makers' office out at sea (see office), drawn in the island's own Nord colours. */
+// a soft light added over what's there, round x, y (screens at night)
+function glow(c, x, y, rx, ry, a) {
+  c.save(); c.globalCompositeOperation = 'lighter'; c.translate(x, y); c.scale(1, ry / rx);
+  const gr = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+  gr.addColorStop(0, `rgba(90,130,180,${a})`); gr.addColorStop(0.45, `rgba(90,130,180,${a * 0.45})`); gr.addColorStop(1, 'rgba(90,130,180,0)');
+  c.fillStyle = gr; c.fillRect(-rx, -rx, rx * 2, rx * 2); c.restore();
+}
+// a mug standing at x, y, k its unit, steaming if `hot`
+function drawCup(s, c, x, y, k, colour, hot) {
+  const P = s.P, m = [[x - 2.2 * k, y], [x - 2.4 * k, y - 4 * k], [x + 2.2 * k, y - 4 * k], [x + 2 * k, y]];
+  print(c, m, mul(hex(colour), P.paper));
+  c.beginPath(); edges(c, m, TEX, 71, true, { ov: 0.5 }); ribbon(c, ellipse(x + 2.6 * k, y - 2 * k, 1.3 * k, 1.3 * k, 8, -1.2, 1.2), TEX, 72, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+  if (!hot) return;
+  const t = s.reduced ? 0 : s.t;
+  c.beginPath();
+  for (const i of [0, 1]) { const ph = t * 1.6 + i * 2, sx = x - 0.8 * k + i * 1.6 * k; ribbon(c, curve([[sx, y - 5 * k], [sx + Math.sin(ph) * 0.9 * k, y - 7 * k], [sx - Math.sin(ph) * 0.9 * k, y - 9 * k]], 1), TEX * 0.8, 73 + i, { tin: 1, tout: 2 }); }
+  c.fillStyle = rgba(P.paper, 0.75); c.fill();
+}
+/* an office chair seen from the side, at o.x, o.y, its back on the left unless o.flip: wheels, a stem, the seat and a
+   tall back */
+function drawChair(s, c, o) {
+  const P = s.P, u = s.g.u * WALK_SC, dark = mul(hex('#3B4050'), P.paper);
+  c.save(); c.translate(o.x, o.y); c.scale(o.flip ? -1 : 1, 1);
+  c.beginPath();
+  ribbon(c, [[-7 * u, -1.6 * u], [6 * u, -1.6 * u]], DET * 1.2, 31, { tin: 1, tout: 1 });
+  ribbon(c, [[-0.5 * u, -1.6 * u], [-0.5 * u, -9.5 * u]], DET * 1.4, 32, { tin: 1, tout: 1 });
+  ribbon(c, [[-0.5 * u, -10 * u], [-8 * u, -11 * u], [-8.6 * u, -14 * u]], DET * 1.1, 33, { tin: 1, tout: 1 });
+  c.fillStyle = INK; c.fill();
+  for (const x of [-6.6, 5.6]) dot(c, x * u, -0.9 * u, 1.3 * u, INK);
+  const seat = [[-6.5 * u, -11.6 * u], [6 * u, -11.6 * u], [6 * u, -9.4 * u], [-6.5 * u, -9.4 * u]];
+  print(c, seat, dark); c.beginPath(); edges(c, seat, DET, 34, true, { ov: 0.6 }); c.fillStyle = INK; c.fill();
+  shape(c, curve([[-10.2 * u, -13.5 * u], [-10.6 * u, -21 * u], [-9.8 * u, -27.5 * u], [-7.6 * u, -27.8 * u], [-7.4 * u, -20 * u], [-7.8 * u, -13.5 * u]], 2, true), dark, DET, 35, { over: 0.04 });
+  c.restore();
+}
+/* what's on a screen, in the quad Q (top left, top right, bottom right, bottom left): a Nord desktop with StableBar
+   across its top (a space lit, two not, the clock) and an editor; a little brighter at night */
+function drawScreen(c, Q, night) {
+  const at = (x, y) => { const a = [lerp(Q[0][0], Q[1][0], x), lerp(Q[0][1], Q[1][1], x)], b = [lerp(Q[3][0], Q[2][0], x), lerp(Q[3][1], Q[2][1], x)]; return [lerp(a[0], b[0], y), lerp(a[1], b[1], y)]; };
+  const fill = (x0, y0, x1, y1, h) => { poly(c, [at(x0, y0), at(x1, y0), at(x1, y1), at(x0, y1)]); c.fillStyle = rgba(mix(hex(h), [255, 255, 255], 0.12 * night)); c.fill(); };
+  fill(0, 0, 1, 1, '#5E81AC');
+  fill(0.03, 0.04, 0.97, 0.17, '#2E3440');
+  ['#88C0D0', '#4C566A', '#4C566A'].forEach((h, i) => fill(0.07 + i * 0.075, 0.07, 0.125 + i * 0.075, 0.14, h));
+  fill(0.7, 0.08, 0.92, 0.13, '#D8DEE9');
+  fill(0.1, 0.27, 0.9, 0.93, '#3B4252');
+  [['#81A1C1', 0.16, 0.5], ['#B48EAD', 0.22, 0.62], ['#A3BE8C', 0.22, 0.48], ['#D8DEE9', 0.16, 0.36], ['#EBCB8B', 0.22, 0.56]].forEach(([h, x0, w], i) => fill(x0, 0.37 + i * 0.11, x0 + w, 0.42 + i * 0.11, h));
+}
+/* it.office 'desks': two desks seen from the side, pushed together with a gap between them, the two monitors back to
+   back in the middle, turned a little toward you; keyboards, Seb's plant and Steve's mug in the gap, and Seb's cup for
+   a while after he fetched one. 'coffee': the coffee corner seen from the front, a long cabinet with its sign, the
+   grinder with its hopper of beans, the knock box, the machine with cups warming on top and one under the spout, the
+   milk jug, a latte macchiato and two glasses of water. */
+function drawOffice(s, c, it) {
+  const g = s.g, O = g.office, P = s.P, k = O.k, night = smooth(0.4, 0.8, s.d), t = s.t;
+  const col = h => mul(hex(h), P.paper), white = col('#FFFFFF'), dark = col('#4C566A'), steel = col('#D8DEE9');
+  const R = (x0, y0, x1, y1) => [[x0 * k, y0 * k], [x1 * k, y0 * k], [x1 * k, y1 * k], [x0 * k, y1 * k]];
+  // a box narrower or wider at the top: its foot from xb0 to xb1 at yb, its top from xt0 to xt1 at yt
+  const T = (xb0, xb1, yb, xt0, xt1, yt) => [[xt0 * k, yt * k], [xt1 * k, yt * k], [xb1 * k, yb * k], [xb0 * k, yb * k]];
+  const fill = (pts, colour, sd, w = TEX) => { print(c, pts, colour); c.beginPath(); edges(c, pts, w, sd, true, { ov: 0.35 }); c.fillStyle = INK; c.fill(); };
+  c.save();
+  if (it.office === 'desks') {
+    c.translate(O.x, O.y);
+    // a desk's top from x0 to x1, and its two legs
+    const desk = (x0, x1, sd) => {
+      fill(R(x0, -17.2, x1, -15.4), col('#E4E7EC'), sd, DET);
+      c.beginPath(); ribbon(c, [[(x0 + 1.4) * k, -15.4 * k], [(x0 + 1.6) * k, 0]], DET * 1.2, sd + 1, { tin: 1, tout: 1 }); ribbon(c, [[(x1 - 1.4) * k, -15.4 * k], [(x1 - 1.6) * k, 0]], DET * 1.2, sd + 2, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    };
+    /* a monitor on the desk at mx, its screen toward its user: on the left (dir -1) or the right (1); turned a little
+       toward you, so its picture shows */
+    const monitor = (mx, dir) => {
+      const sx = x => mx + -dir * x * k, top = -17.2 * k;
+      c.beginPath(); ribbon(c, [[sx(-1.5), top], [sx(2.5), top]], DET * 1.3, 74, { tin: 1, tout: 1 }); ribbon(c, [[sx(1), top], [sx(1.2), top - 5 * k]], DET * 1.3, 75, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+      if (night > 0.05) glow(c, sx(-1), top - 9.5 * k, 12 * k, 10 * k, 0.5 * night);
+      const bez = [[sx(-5.5), top - 15.5 * k], [sx(3.3), top - 14.5 * k], [sx(3.3), top - 3.9 * k], [sx(-5.5), top - 3.3 * k]];
+      print(c, bez, col('#2E3440'));
+      const Q = [[sx(-4.6), top - 14.6 * k], [sx(2.4), top - 13.6 * k], [sx(2.4), top - 4.8 * k], [sx(-4.6), top - 4.2 * k]];
+      drawScreen(c, dir < 0 ? Q : [Q[1], Q[0], Q[3], Q[2]], night);
+      c.beginPath(); edges(c, bez, DET, 76 + dir, true, { ov: 0.6 }); ribbon(c, [[sx(3.3), top - 14.4 * k], [sx(4), top - 13 * k], [sx(4), top - 5.6 * k], [sx(3.3), top - 3.9 * k]], DET * 0.9, 77, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    };
+    const keyboard = (x0, x1) => fill([[x0 * k, -18.2 * k], [x1 * k, -18.4 * k], [x1 * k, -17.2 * k], [x0 * k, -17.2 * k]], col('#D8DEE9'), 78 + x0);
+    desk(-22, -1.6, 80); desk(1.6, 22, 84);
+    monitor(-10.5 * k, -1); monitor(10.5 * k, 1);
+    keyboard(-21, -15.6); keyboard(15.6, 21);
+    // Seb's plant
+    c.beginPath();
+    for (const [a, l] of [[-0.55, 6], [0, 7.8], [0.5, 6.4], [-1, 4.6], [1, 4.8], [-0.25, 7], [0.25, 7.2]]) ribbon(c, [[-4.4 * k, -21.2 * k], [(-4.4 + Math.sin(a) * l) * k, (-21.2 - Math.cos(a) * l) * k]], DET * 1.7, 90 + a, { tin: 1, tout: 3 });
+    c.fillStyle = rgba(col('#8FBF6A')); c.fill();
+    fill(T(-6.1, -2.7, -17.2, -6.6, -2.2, -21.4), col('#D08770'), 95);
+    // Steve's mug, steaming for a while after a coffee, and Seb's cup
+    const m = s.pair?.m;
+    drawCup(s, c, 4.6 * k, -17.2 * k, k, '#BF616A', m && t - m.steve.cupAt < 60);
+    if (m && t - m.seb.cupAt < 90) drawCup(s, c, -13.2 * k, -17.2 * k, k * 0.85, '#FFFFFF', t - m.seb.cupAt < 60);
+  } else {
+    c.translate(O.coffee.x, O.coffee.y);
+    const glass = rgba(col('#BFDCEB'), 0.9);
+    // the cabinet: a band with the sign, three doors
+    fill(R(-19, -18.5, 19, 0), mul(C.wood, P.paper), 100, DET);
+    c.beginPath(); ribbon(c, [[-18 * k, -13.4 * k], [18 * k, -13.4 * k]], TEX, 101, { tin: 1, tout: 1 });
+    for (const x of [-6.3, 6.3]) ribbon(c, [[x * k, -13.4 * k], [x * k, -1.4 * k]], TEX, 99 + x, { tin: 1, tout: 1 });
+    c.fillStyle = INK; c.fill();
+    for (const x of [-8, 4.6, 8]) dot(c, x * k, -7.5 * k, 0.7 * k, INK);
+    label(c, 'coffee', 0, -16 * k, 4.2 * k + 1, rgba(white), 'center', -0.02);
+    fill(R(-20, -20.2, 20, -18.5), dark, 102, DET);
+    // the grinder: base, body, chute, and its hopper of beans with a lid
+    fill(R(-16.4, -22.4, -10.4, -20.2), dark, 120);
+    fill(T(-15.8, -11, -22.4, -15.2, -11.6, -31), col('#434C5E'), 121);
+    c.beginPath(); ribbon(c, [[-11.4 * k, -27.4 * k], [-9.8 * k, -25.6 * k]], DET * 1.3, 122, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    const hop = T(-15, -11.8, -31, -17, -9.8, -38.6);
+    print(c, hop, glass);
+    for (const [bx, by] of [[-14.4, -32], [-13, -32.4], [-12.4, -31.8], [-15, -33.4], [-13.6, -33.6], [-12, -33.2], [-15.6, -34.8], [-14.2, -35], [-12.8, -34.8], [-11.3, -34.6], [-14.9, -36], [-13.4, -36.2], [-11.9, -36]]) dot(c, bx * k, by * k, 0.72 * k, col('#6B4430'));
+    c.beginPath(); edges(c, hop, TEX, 123, true, { ov: 0.35 }); c.fillStyle = INK; c.fill();
+    fill(R(-17.4, -40, -9.4, -38.6), dark, 124);
+    // the knock box
+    fill(R(-9.4, -23, -6.8, -20.2), dark, 125);
+    // the machine: body, the lid with three cups upside down on it, a gauge and a light, the group head with its handle
+    // toward you and a cup under it, the steam wand on the right
+    fill(R(-5.6, -33, 6.4, -20.2), col('#BF616A'), 103, DET);
+    fill(R(-6.2, -34.4, 7, -33), steel, 104);
+    for (const x of [-3.6, -0.4, 2.8]) fill(T(x - 1.4, x + 1.4, -34.4, x - 1.1, x + 1.1, -36.4), white, 126 + x);
+    dot(c, -2.6 * k, -30.2 * k, 1.5 * k, col('#ECEFF4'));
+    c.beginPath(); loop(c, ellipse(-2.6 * k, -30.2 * k, 1.5 * k, 1.5 * k, 12), TEX, 105); ribbon(c, [[-2.6 * k, -30.2 * k], [-1.8 * k, -31 * k]], TEX * 0.8, 106, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    dot(c, 2.6 * k, -30.2 * k, 0.8 * k, col('#A3BE8C'));
+    fill(T(-1.8, 1.8, -25, -2.2, 2.2, -26.6), dark, 107);
+    c.beginPath(); ribbon(c, [[0.6 * k, -25.4 * k], [2.8 * k, -23.6 * k]], DET * 1.5, 108, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    fill(T(-1.2, 1.2, -21.1, -1.5, 1.5, -23.6), white, 109);
+    print(c, R(-3.4, -21.1, 3.4, -20.2), dark);
+    c.beginPath(); ribbon(c, [[5 * k, -27.6 * k], [5.3 * k, -23.4 * k], [4.9 * k, -22.4 * k]], TEX, 118, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    // the milk jug, steel, its spout to the right
+    fill(T(8.2, 11, -20.2, 8.6, 10.6, -24.4), steel, 127);
+    c.beginPath(); ribbon(c, [[10.6 * k, -24.4 * k], [11.6 * k, -25 * k]], TEX * 1.2, 128, { tin: 1, tout: 1 }); ribbon(c, ellipse(8 * k, -22.4 * k, 1.1 * k, 1.3 * k, 8, Math.PI * 0.55, Math.PI * 1.45), TEX, 129, { tin: 1, tout: 1 }); c.fillStyle = INK; c.fill();
+    // a latte macchiato: coffee, milk, foam
+    const latte = T(12.4, 14.6, -20.2, 12.2, 14.8, -26.4);
+    print(c, latte, glass);
+    print(c, T(12.45, 14.55, -20.4, 12.35, 14.65, -22.6), col('#7A4B33'));
+    print(c, T(12.35, 14.65, -22.6, 12.28, 14.72, -24.4), col('#E2C9A2'));
+    print(c, T(12.28, 14.72, -24.4, 12.24, 14.76, -25.4), white);
+    c.beginPath(); edges(c, latte, DET * 0.8, 130, true, { ov: 0.35 }); c.fillStyle = INK; c.fill();
+    // two glasses of water, each with a glint
+    for (const x of [16.3, 18.6]) {
+      const gl = T(x - 1, x + 1, -20.2, x - 1.25, x + 1.25, -24);
+      print(c, gl, glass); print(c, T(x - 1, x + 1, -20.4, x - 1.15, x + 1.15, -22.4), rgba(col('#88C0D0'), 0.9));
+      c.beginPath(); edges(c, gl, DET * 0.8, 131 + x, true, { ov: 0.35 }); c.fillStyle = INK; c.fill();
+      c.beginPath(); ribbon(c, [[(x - 0.55) * k, -23.2 * k], [(x - 0.4) * k, -21.2 * k]], TEX * 0.6, 133 + x, { tin: 1, tout: 1 }); c.fillStyle = rgba(white, 0.9); c.fill();
+    }
+    // steam off the fresh cup
+    c.beginPath();
+    for (const i of [0, 1]) { const ph = (s.reduced ? 0 : t) * 1.6 + i * 2.2, x = -0.6 * k + i * 1.2 * k; ribbon(c, curve([[x, -24 * k], [x + Math.sin(ph) * 0.5 * k, -25.4 * k]], 0.6), TEX * 0.6, 110 + i, { tin: 1, tout: 1 }); }
+    c.fillStyle = rgba(P.paper, 0.7); c.fill();
   }
   c.restore();
 }
@@ -3785,7 +4012,7 @@ function quaver(c, x, y, sz, col, flip) {
 function drawDoodles(s, c) {
   if (!s.doodles.length) return;
   const g = s.g, u = g.u, P = s.P, rm = s.reduced, ink = rgba(mix(P.ink, P.paper, smooth(0.5, 0.7, s.d)));
-  // (what the strollers say stays in ink over ground that stays light at night, such as snow)
+  // (what the makers say stays in ink over ground that stays light at night, such as snow)
   const light = (0.2126 * P.hill[0] + 0.7152 * P.hill[1] + 0.0722 * P.hill[2]) / 255 > 0.42;
   for (const d of s.doodles) {
     const a = s.t - d.t0, k = rm ? 1 : pop(a / 0.24), f = 1 - smooth(d.life - 0.3, d.life, a), col = d.sea ? rgba(P.paper) : d.kind === 'chat' && light ? INK : ink;
