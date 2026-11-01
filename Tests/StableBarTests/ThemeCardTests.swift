@@ -52,6 +52,35 @@ final class ThemeCardTests: XCTestCase {
         }
     }
 
+    @MainActor func testSampleBarFillsTheFocusedWorkspaceOnlyForTheBackgroundIndicator() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        // Only the accent is magenta, so magenta pixels can only come from the focused workspace's fill.
+        for (indicator, fills) in [(#""indicator":"none","#, false), (#""indicator":"background","#, true), ("", true)] {
+            let choice = try fixture.theme(##"""
+            {"defaults":{"foreground":"#ffffff","accent":"#ff00ff","accentText":"#00ff00"},
+             "workspaceDefaults":{\##(indicator)"style":{"states":{"focused":{"foreground":"#00ff00"}}}}}
+            """##, install: false)
+            let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
+            let renderer = ImageRenderer(content: ThemeSampleBar(look: look).frame(width: 580))
+            let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+            var accentPixels = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<bitmap.pixelsWide {
+                    if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.8,
+                       color.redComponent > 0.8 && color.blueComponent > 0.8 && color.greenComponent < 0.2 {
+                        accentPixels += 1
+                    }
+                }
+            }
+            if fills {
+                XCTAssertGreaterThan(accentPixels, 50, "The \(indicator.isEmpty ? "default" : indicator) indicator fills the focused workspace")
+            } else {
+                XCTAssertEqual(accentPixels, 0, "A text-only focused workspace has nothing behind it, as on the bar")
+            }
+        }
+    }
+
     @MainActor func testEveryBundledThemeCardFitsTheProposedWidth() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
