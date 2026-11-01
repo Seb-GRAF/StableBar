@@ -277,7 +277,7 @@ const ISLANDS = [
    drawWalker and drawOffice) */
 const MAKERS = {
   seb: { hair: '#A06A42', beard: '#C9753A', shirt: '#A4B89C', legs: '#4A5D82', skin: '#F4CFB2', mug: '#EBCB8B', curls: true, seat: -1, mugX: [-13.2, 0.85], home: 'cot' },
-  steve: { hair: '#2A221E', beard: '#3A2E28', shirt: '#3F5B78', legs: '#34363E', skin: '#EDC4A2', mug: '#88C0D0', collar: true, seat: 1, mugX: [4.6, 1], home: 'cot2' },
+  steve: { hair: '#2A221E', beard: '#3A2E28', shirt: '#3F5B78', legs: '#34363E', skin: '#EDC4A2', mug: '#A3BE8C', collar: true, seat: 1, mugX: [4.6, 1], home: 'cot2' },
 };
 // their size, times the keeper's
 const WALK_SC = 1.35;
