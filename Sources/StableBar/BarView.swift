@@ -391,7 +391,7 @@ struct WidgetView: View {
         } else if let open = widget.open {
             Button { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } } label: { tile }
                 .buttonStyle(.plain)
-        } else if case let .appleMenu(click) = widget.content, widget.layout != nil {
+        } else if case let .appleMenu(click) = widget.content, widget.layout != nil, !hasOwnClick {
             Button { clickAppleLogo(click, anchor: clickAnchor) } label: { tile }
                 .buttonStyle(.plain)
                 .onHover { if $0, click == .menu { store.appMenu.refresh() } }
