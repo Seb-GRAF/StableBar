@@ -391,6 +391,7 @@ struct WidgetView: View {
         } else if case let .appleMenu(click) = widget.content, widget.layout != nil {
             Button { clickAppleLogo(click, anchor: clickAnchor) } label: { tile }
                 .buttonStyle(.plain)
+                .onHover { if $0, click == .menu { store.appMenu.refresh() } }
         } else if widget.content == .controlCenter {
             Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
                 .buttonStyle(MouseDownButtonStyle())
@@ -568,13 +569,15 @@ struct WidgetView: View {
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
-    /// Runs the Apple logo's click. Without Accessibility access, a menu click asks for it.
+    /// Runs the Apple logo's click. Without Accessibility access, a menu click asks for it; with access but no menu read
+    /// yet, such as just after access was allowed, it reads the menus so the next click opens it.
     private func clickAppleLogo(_ click: AppleMenuClick, anchor: NSView) {
         guard store.barEditing.allowsWidgetActions else { return }
         switch click {
         case .menu:
-            if !store.appMenu.isTrusted { store.windowClearance.requestAccess() }
-            else if let item = store.appMenu.appleMenu { openAppMenu(item, anchor: anchor) }
+            if !AXIsProcessTrusted() { store.windowClearance.requestAccess() }
+            else if store.appMenu.isTrusted, let item = store.appMenu.appleMenu { openAppMenu(item, anchor: anchor) }
+            else { store.appMenu.refresh() }
         case .systemSettings: OpenTarget("com.apple.systempreferences")!.open()
         case .lockScreen:
             let error = lockScreen()
