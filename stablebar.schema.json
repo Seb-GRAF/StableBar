@@ -1458,6 +1458,24 @@
           "$ref": "#/definitions/boolean",
           "description": "Show only the app name until hovered in appMenu widgets. Off by default."
         },
+        "click": {
+          "anyOf": [
+            {
+              "enum": [
+                "menu",
+                "systemSettings",
+                "lockScreen"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What clicking an appleMenu widget does: open the Apple menu (the default, which needs Accessibility access), open System Settings or lock the Mac."
+        },
         "openOnHover": {
           "$ref": "#/definitions/boolean",
           "description": "Open the list of menu bar items when the pointer rests on menuBarItems widgets; false opens it on click. On by default."

@@ -119,6 +119,44 @@ final class WidgetSettingsTests: XCTestCase {
         XCTAssertEqual(WidgetClickChoice.control(for: try widget()), .choices)
     }
 
+    func testTheAppleMenuChoosesItsMenuSystemSettingsOrLockingAndOnlyItsMenuNeedsAccessibility() throws {
+        let plain = try widget(["type": .string("appleMenu")])
+        XCTAssertEqual(plain.content, .appleMenu(click: .menu))
+        for click in AppleMenuClick.allCases {
+            let widget = try widget(["type": .string("appleMenu"), "click": .string(click.rawValue)])
+            XCTAssertEqual(widget.content, .appleMenu(click: click))
+            XCTAssertEqual(WidgetClickChoice.control(for: widget), .appleMenu(click))
+            XCTAssertEqual(WidgetClickChoice.current(for: widget), .advanced)
+            XCTAssertEqual(widget.content.permissions, click == .menu ? [.accessibility] : [])
+            for choice in WidgetClickChoice.allCases {
+                XCTAssertThrowsError(try choice.properties(for: widget, value: "com.apple.iCal"))
+            }
+        }
+        XCTAssertThrowsError(try widget(["type": .string("appleMenu"), "click": .string("restart")]))
+    }
+
+    @MainActor func testTheAppleMenuSavesTheClickChosenInSettings() throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"apple","type":"appleMenu","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editor = ConfigurationEditor(store: store)
+        editor.set(["click": .string("lockScreen")], for: "apple")
+        try editor.history.flush()
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.configuration?.widgets.first?.content, .appleMenu(click: .lockScreen))
+        XCTAssertEqual(try fixture.document()["widgets"], .array([.object(["id": .string("apple"), "type": .string("appleMenu"),
+                                                                          "position": .string("left"), "click": .string("lockScreen")])]))
+        editor.set(["click": .string("menu")], for: "apple")
+        try editor.history.flush()
+        XCTAssertNil(editor.error)
+        XCTAssertEqual(store.configuration?.widgets.first?.content, .appleMenu(click: .menu))
+        editor.undo()
+        editor.undo()
+        XCTAssertEqual(try fixture.document()["widgets"], .array([.object(["id": .string("apple"), "type": .string("appleMenu"),
+                                                                          "position": .string("left")])]))
+    }
+
     func testClickChoicesMapOnlyTheOpenPropertyAndRoundTrip() throws {
         let widget = try widget()
         XCTAssertEqual(WidgetClickChoice.current(for: widget), .nothing)

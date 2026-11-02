@@ -354,13 +354,26 @@ enum WidgetPosition: String, Decodable, Sendable, CaseIterable {
     case left, notchLeft, center, notchRight, right
 }
 
+/// What clicking the Apple logo does.
+enum AppleMenuClick: String, Decodable, Sendable, CaseIterable {
+    case menu, systemSettings, lockScreen
+
+    var title: String {
+        switch self {
+        case .menu: "Open the Apple menu"
+        case .systemSettings: "Open System Settings"
+        case .lockScreen: "Lock the Mac"
+        }
+    }
+}
+
 enum WidgetContent: Equatable, Sendable {
     case spacer
     case provider(String)
     case workspaces
     case activeApp
     case appMenu(expandOnHover: Bool)
-    case appleMenu
+    case appleMenu(click: AppleMenuClick)
     case controlCenter
     case menuBarItems(openOnHover: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
     case clock(format: String)
@@ -403,7 +416,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, timeZone
+        case expandOnHover, openOnHover, shown, hidden, details, timeZone, click
     }
 
     init(from decoder: Decoder) throws {
@@ -456,7 +469,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "aerospace", "workspaces": content = .workspaces
         case "activeApp": content = .activeApp
         case "appMenu": content = .appMenu(expandOnHover: try values.decodeIfPresent(Bool.self, forKey: .expandOnHover) ?? false)
-        case "appleMenu": content = .appleMenu
+        case "appleMenu": content = .appleMenu(click: try values.decodeIfPresent(AppleMenuClick.self, forKey: .click) ?? .menu)
         case "controlCenter": content = .controlCenter
         case "menuBarItems":
             content = .menuBarItems(openOnHover: try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? true,

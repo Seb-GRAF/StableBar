@@ -8,12 +8,9 @@
   },
   "widgets": [
     {
-      "id": "system",
-      "type": "text",
-      "position": "left",
-      "text": "",
-      "icon": "apple.logo",
-      "onClick": "open -a 'System Settings'"
+      "id": "apple",
+      "type": "appleMenu",
+      "position": "left"
     },
     {
       "id": "app-menu",

@@ -35,7 +35,7 @@ enum WidgetAddCatalog {
     static let builtIns: [WidgetAddChoice] = [
         .init(id: "clock", name: "Clock & date", symbol: "clock", description: "Time, date and a month calendar, in your time zone.", properties: ["type": .string("clock"), "format": .string("EEE d MMM  HH:mm"), "details": .bool(true)], replacesPackage: "date"),
         .init(id: "activeApp", name: "Active app", symbol: "macwindow", description: "The frontmost app’s name and icon.", properties: ["type": .string("activeApp")]),
-        .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "The Apple menu. Needs Accessibility access.", properties: ["type": .string("appleMenu")]),
+        .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "Opens the Apple menu or System Settings, or locks the Mac. The menu needs Accessibility access.", properties: ["type": .string("appleMenu")]),
         .init(id: "appMenu", name: "App menus", symbol: "menubar.rectangle", description: "The frontmost app’s menus. Needs Accessibility access.", properties: ["type": .string("appMenu")]),
         .init(id: "controlCenter", name: "Control Center", symbol: "switch.2", description: "Opens macOS Control Center. Needs Accessibility access.", properties: ["type": .string("controlCenter")]),
         .init(id: "menuBarItems", name: "Menu bar items", symbol: "square.grid.2x2", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")]),

@@ -59,7 +59,7 @@ extension SourcePermission {
 extension WidgetContent {
     var permissions: [SourcePermission] {
         switch self {
-        case .appMenu, .appleMenu, .controlCenter, .menuBarItems: [.accessibility]
+        case .appMenu, .appleMenu(click: .menu), .controlCenter, .menuBarItems: [.accessibility]
         default: []
         }
     }

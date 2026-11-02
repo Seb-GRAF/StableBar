@@ -1,7 +1,7 @@
 import Foundation
 
 enum WidgetClickControl: Equatable {
-    case hidden, choices, explanation(String)
+    case hidden, choices, explanation(String), appleMenu(AppleMenuClick)
 }
 
 enum WidgetClickChoice: String, CaseIterable {
@@ -19,7 +19,6 @@ enum WidgetClickChoice: String, CaseIterable {
     static func explanation(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> String? {
         if widget.content == .workspaces { return "Clicking a workspace switches to it." }
         if case .appMenu = widget.content { return "Clicking a menu opens it." }
-        if widget.content == .appleMenu { return "Clicking it opens the Apple menu." }
         if widget.content == .controlCenter { return "Clicking it opens Control Center." }
         if case .menuBarItems = widget.content { return "Clicking it lists the items in the macOS menu bar." }
         var actions: [String] = []
@@ -35,6 +34,7 @@ enum WidgetClickChoice: String, CaseIterable {
 
     static func control(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> WidgetClickControl {
         if widget.content == .spacer { return .hidden }
+        if case let .appleMenu(click) = widget.content { return .appleMenu(click) }
         if let explanation = explanation(for: widget, output: output) { return .explanation(explanation) }
         return .choices
     }

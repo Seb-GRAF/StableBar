@@ -616,6 +616,16 @@ struct BarInspector: View {
         case .hidden: EmptyView()
         case .explanation(let explanation):
             SettingRow(title: "When clicked", hint: explanation) {}
+        case .appleMenu(let click):
+            SettingRow(title: "When clicked", hint: click == .menu ? "Needs Accessibility access" : nil) {
+                Picker("When clicked", selection: Binding(get: { click }, set: {
+                    editor.set(["click": .string($0.rawValue)], for: widget.id)
+                })) {
+                    ForEach(AppleMenuClick.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+            }
         case .choices:
             let current = WidgetClickChoice.current(for: widget, output: output)
             SettingRow(title: "When clicked", hint: clickError ?? widget.open) {

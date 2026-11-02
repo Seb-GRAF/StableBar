@@ -1,0 +1,7 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "settings",
+  "widget": "apple",
+  "tab": "behavior"
+}

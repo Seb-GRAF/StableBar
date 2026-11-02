@@ -48,6 +48,15 @@ enum OpenTarget {
     }
 }
 
+/// Locks the screen at once, like the Apple menu's Lock Screen. macOS has no public call for it, so this calls the
+/// login framework's private one. False when that call is missing.
+@discardableResult func lockScreen() -> Bool {
+    guard let login = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY),
+          let lock = dlsym(login, "SACLockScreenImmediate") else { return false }
+    _ = unsafeBitCast(lock, to: (@convention(c) () -> Int32).self)()
+    return true
+}
+
 /// Asks whether to quit process `pid`, naming it or the app it is, then quits it or, with Force Quit, ends it at once.
 @MainActor func confirmQuit(_ pid: pid_t) {
     let app = NSRunningApplication(processIdentifier: pid)

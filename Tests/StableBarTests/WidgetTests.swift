@@ -671,7 +671,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let data = starter ? try Data(contentsOf: repository.appending(path: "Resources/config.json")) : Data(#"""
     { "widgets": [
-      {"id":"system","type":"text","position":"left","text":""},
+      {"id":"apple","type":"appleMenu","position":"left"},
       {"id":"app-menu","type":"appMenu","position":"left"},
       {"id":"clock","type":"clock","position":"right"}
     ] }
@@ -679,8 +679,9 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     let updated = try SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .current)
         .applying(to: data, menuBarHeight: 24)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
-    #expect(configuration.widgets.map(\.id) == ["system", "workspaces", "app-menu", "meeting", "system-monitor", "sound", "battery",
+    #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "meeting", "system-monitor", "sound", "battery",
                                                 "clock", "menu-bar-items"])
+    #expect(configuration.widgets[0].content == .appleMenu(click: .menu))
     #expect(configuration.workspaceSource == .spaces)
 }
 

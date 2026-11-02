@@ -888,6 +888,11 @@ private struct RelayProbe {
         {"widgets":[{"id":"menus","type":"\#(type)","position":"left","enabled":false}]}
         """#)).isEmpty)
     }
+    for click in ["systemSettings", "lockScreen"] {
+        #expect(registry.permissions(for: try configuration(#"""
+        {"widgets":[{"id":"apple","type":"appleMenu","position":"left","click":"\#(click)"}]}
+        """#)).isEmpty)
+    }
     #expect(registry.permissions(for: nil).isEmpty)
     #expect(DataSourceRegistry.builtIn.permissions(for: try configuration(#"""
     {"providers":{"meetings":{"type":"calendar","calendars":["Work"]}},
