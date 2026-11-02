@@ -16,7 +16,7 @@
             "style": { "spacing": 12 },
             "row": {
               "type": "column",
-              "style": { "spacing": 6 },
+              "style": { "spacing": 6, "width": 100 },
               "children": [
                 { "type": "field", "field": "app", "alignment": "center" },
                 { "type": "field", "field": "badge", "alignment": "center", "style": { "fontSize": 20 } }

@@ -396,10 +396,16 @@ struct PopupBlockView: View {
                 .accessibilityLabel("History graph")
         case let .list(source, row, orientation):
             if orientation == .horizontal {
-                HStack(spacing: appearance.spacing) {
+                let entries = HStack(spacing: appearance.spacing) {
                     ForEach(Array((context.lists[source] ?? []).enumerated()), id: \.offset) { _, fields in
                         child(row, of: style, fields: fields)
                     }
+                }
+                if context.fillsWidth {
+                    ScrollView(.horizontal) { entries }
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    entries
                 }
             } else {
                 VStack(spacing: appearance.spacing) {

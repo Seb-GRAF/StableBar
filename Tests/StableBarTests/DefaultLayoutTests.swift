@@ -176,9 +176,11 @@ private enum FrontmostApp {
     }
 }
 
-@Test(arguments: [("", "column"), (#","orientation":null"#, "column"),
-                  (#","orientation":"vertical""#, "column"), (#","orientation":"horizontal""#, "row")], [false, true]) @MainActor
-func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: String), fillsWidth: Bool) throws {
+@Test(arguments: [("", "column", false), ("", "column", true),
+                  (#","orientation":null"#, "column", false), (#","orientation":null"#, "column", true),
+                  (#","orientation":"vertical""#, "column", false), (#","orientation":"vertical""#, "column", true),
+                  (#","orientation":"horizontal""#, "row", false)]) @MainActor
+func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: String, fillsWidth: Bool)) throws {
     let list = try decode(PopupBlock.self, #"""
     {"type":"list","source":"apps"\#(direction.property),"style":{"spacing":11},
      "row":{"type":"field","field":"label","style":{"width":100}}}
@@ -189,7 +191,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
       {"type":"field","field":"second","style":{"width":100}}]}
     """#)
     let context = BlockContext(lists: ["apps": [["label": "Mail 3"], ["label": "Messages 12"]]],
-                               fillsWidth: fillsWidth, open: { _ in }, runAction: { _, _ in })
+                               fillsWidth: direction.fillsWidth, open: { _ in }, runAction: { _, _ in })
     let drawn = try draw(PopupBlockView(block: list, inheritedStyle: WidgetStyle(), fields: [:], context: context))
     let reference = try draw(PopupBlockView(block: expected, inheritedStyle: WidgetStyle(),
                                            fields: ["first": "Mail 3", "second": "Messages 12"], context: context))

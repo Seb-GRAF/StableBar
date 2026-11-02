@@ -3,6 +3,36 @@ import SwiftUI
 import Testing
 @testable import StableBar
 
+@Test @MainActor func horizontalPopupListsScrollToTheirLastEntry() async throws {
+    let block = try JSONDecoder().decode(PopupBlock.self, from: Data(#"""
+    {"type":"list","source":"apps","orientation":"horizontal","style":{"spacing":11},
+     "row":{"type":"field","field":"app","style":{"width":100,"height":20}}}
+    """#.utf8))
+    let context = BlockContext(lists: ["apps": [["app": "Mail"], ["app": "Messages"], ["app": "Reminders"]]],
+                               open: { _ in }, runAction: { _, _ in })
+    let host = NSHostingView(rootView: PopupBlockView(block: block, inheritedStyle: WidgetStyle(), fields: [:], context: context)
+        .frame(width: 180))
+    _ = NSApplication.shared
+    let window = NSWindow(contentRect: CGRect(x: -9000, y: -6000, width: 180, height: 60), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    host.layoutSubtreeIfNeeded()
+    try await Task.sleep(for: .milliseconds(100))
+    func scrolls(_ view: NSView) -> [NSScrollView] {
+        (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrolls)
+    }
+    let scroll = try #require(scrolls(host).first)
+    let document = try #require(scroll.documentView)
+    #expect(abs(document.bounds.width - 322) < 0.5)
+    #expect(abs(scroll.contentSize.width - 180) < 0.5)
+    let lastEntry = CGRect(x: 222, y: 0, width: 100, height: 20)
+    #expect(!document.visibleRect.contains(lastEntry))
+    document.scrollToVisible(lastEntry)
+    #expect(document.visibleRect.contains(lastEntry))
+}
+
 /// A popup block's click reaches its action anywhere inside the box its style gives it, not only on
 /// its glyph: a 42-point play button around a 17-point symbol.
 @Test(arguments: [#""onClick":"play""#, #""open":"com.apple.Music""#]) @MainActor
