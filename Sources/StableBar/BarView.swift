@@ -342,8 +342,11 @@ struct WidgetView: View {
     private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }
 
     /// Whether the widget's own command, link, popup or menu takes its click, before a built-in click such as the Apple logo's.
+    /// A menu counts even when empty, as in Settings.
     private var hasOwnClick: Bool {
-        widgetPopup(widget, store: store) != nil || (store.scripts[widget.id]?.output.onClick ?? widget.onClick) != nil || widget.open != nil
+        let output = store.scripts[widget.id]?.output
+        return widgetPopup(widget, store: store) != nil || (output?.onClick ?? widget.onClick) != nil || widget.open != nil
+            || (output?.menu ?? widget.menu) != nil
     }
 
     private var inlineHoverControls: Bool { store.configuration?.bar.inlineHoverControls == true }
@@ -624,13 +627,13 @@ struct WidgetView: View {
                 Image(systemName: "apple.logo").accessibilityLabel("Apple")
                     .foregroundStyle(appearance.foreground)
                     .padding(padding)
-            } else if click == .menu, store.appMenu.isTrusted {
-                AppMenuView(appMenu: store.appMenu, items: [store.appMenu.appleMenu].compactMap { $0 }, isAppleMenu: true,
+            } else if click == .menu, store.appMenu.isTrusted, let appleMenu = store.appMenu.appleMenu {
+                AppMenuView(appMenu: store.appMenu, items: [appleMenu], isAppleMenu: true,
                             appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor,
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
                 AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
-                                help: click == .menu ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to ask for access; later clicks open System Settings." : nil) {
+                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to ask for access; later clicks open System Settings." : nil) {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
@@ -1167,7 +1170,7 @@ private struct AppMenuTitle: View {
     }
 }
 
-/// The Apple logo as a button, drawn like the Apple menu's logo, for clicks that don't open the menu.
+/// The Apple logo as a button, drawn like the Apple menu's logo, for clicks that don't open the menu and until the menu is read.
 private struct AppleLogoButton: View {
     let appearance: WidgetAppearance
     let padding: EdgeInsets
