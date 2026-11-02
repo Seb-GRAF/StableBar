@@ -261,6 +261,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - run: npm ci --ignore-scripts
       - run: node --test .github/scripts/*.test.mjs
 
   # Draws the docs images and the scenes with the pull request's app and with its base's, and
@@ -421,9 +422,10 @@ jobs:
         id: next
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STABLEBAR_RELEASE_CHANNEL: beta
         run: |
           if release=$(./scripts/unchanged-app.sh); then
-            echo "No beta: the commits since $release change only docs, CI or tests."
+            echo "No beta: the app is unchanged since $release."
             exit 0
           fi
           npx semantic-release --dry-run
@@ -505,9 +507,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Stable ships only an app that beta users already ran: this commit's beta, or the beta
-      # before commits that change only docs, CI or tests. A stable tag on this commit means a
-      # release failed after pushing its tag; this run finishes its GitHub release and feed item.
       - name: Require a beta of this app
         id: tags
         run: |
@@ -522,8 +521,7 @@ jobs:
           if [[ -n "$beta" ]]; then
             echo "Releasing the commit that shipped as $beta."
           elif release=$(./scripts/unchanged-app.sh) && [[ "$release" == *-beta.* ]]; then
-            echo "Releasing the app that shipped as $release; the commits since change only docs, CI" \
-              "or tests."
+            echo "Releasing the unchanged app that shipped as $release."
           else
             echo "::error::The newest commit on main, $GITHUB_SHA, has no beta. Its beta may still be" \
               "building, or it has nothing to release."

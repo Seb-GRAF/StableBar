@@ -1,0 +1,6 @@
+Sources
+Resources
+Package.swift
+Package.resolved
+scripts
+:(exclude)scripts/set-site-version.sh
