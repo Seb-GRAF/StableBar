@@ -189,7 +189,29 @@ enum SceneRenderer {
                                               dark: dark, settle: settle, ready: {
                 !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
             }, to: url)
+        case .uninstall:
+            try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
+                                              size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
         }
+    }
+
+    /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.
+    private static let uninstallSample = UninstallSnapshot(
+        menuBarHides: true, turnedOnMenuBarAutoHide: true, opensAtLogin: true,
+        commands: [URL(filePath: "/usr/local/bin/stablebar")], hasKeychainItems: true,
+        configuration: URL(filePath: NSHomeDirectory()).appending(path: ".config/stablebar", directoryHint: .isDirectory),
+        app: URL(filePath: "/Applications/StableBar.app", directoryHint: .isDirectory), asksForPassword: true)
+
+    /// The Uninstall sheet, confirming or listing the step that failed: the password prompt for the command, cancelled.
+    private static func uninstallSheet(_ scene: SceneFile, store: BarStore) -> some View {
+        let snapshot = uninstallSample
+        let failed = scene.uninstall == .failed
+        let outcomes = snapshot.stepsBeforeQuit(UninstallOptions(snapshot)).map { step in
+            UninstallOutcome(step: step, error: step == .command(snapshot.commands[0]) ? "Cancelled." : nil)
+        }
+        return UninstallSheet(store: store, snapshot: snapshot, outcomes: failed ? outcomes : nil, finishing: failed)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(SettingsPalette.background)
     }
 
     private static func bar(_ store: BarStore) -> some View {
