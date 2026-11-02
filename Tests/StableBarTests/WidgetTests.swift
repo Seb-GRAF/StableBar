@@ -295,9 +295,9 @@ private func calls(_ log: URL) -> [Substring] {
     case "$1" in
       subscribe)
         printf '%s\\n' '{"ok":true,"kind":"subscribe","status":"subscribed"}'
-        /bin/sleep 0.3
+        while [ ! -f "${0%/*}/event" ]; do /bin/sleep 0.01; done
         printf '%s\\n' '{"ok":true,"kind":"event","channel":"active-workspace","status":"success"}'
-        exec /bin/sleep 30 ;;
+        exec /usr/bin/tail -f /dev/null ;;
       query)
         if [ "$2" = workspaces ]; then printf '%s\\n' '{"ok":true,"result":{"payload":{"workspaces":[]}}}'
         else printf '%s\\n' '{"ok":true,"result":{"payload":{"windows":[]}}}'; fi ;;
@@ -305,6 +305,11 @@ private func calls(_ log: URL) -> [Substring] {
     """)
     defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
     fixture.store.configure(source: .omniwm, workspaces: true, mode: false)
+    for _ in 0..<200 where !calls(fixture.log).contains(where: { $0.hasPrefix("query windows") }) {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    try #require(calls(fixture.log).contains(where: { $0.hasPrefix("query windows") }))
+    try Data().write(to: fixture.directory.appending(path: "event"))
     for _ in 0..<200 where calls(fixture.log).filter({ $0.hasPrefix("query workspaces") }).count < 2 {
         try await Task.sleep(for: .milliseconds(20))
     }
