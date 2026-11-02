@@ -383,6 +383,9 @@ struct WidgetView: View {
         } else if let open = widget.open {
             Button { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } } label: { tile }
                 .buttonStyle(.plain)
+        } else if case let .appleMenu(click) = widget.content, widget.layout != nil {
+            Button { clickAppleLogo(click, anchor: clickAnchor) } label: { tile }
+                .buttonStyle(.plain)
         } else if widget.content == .controlCenter {
             Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
                 .buttonStyle(MouseDownButtonStyle())
@@ -560,14 +563,17 @@ struct WidgetView: View {
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
-    /// Runs the Apple logo's click when it doesn't open the Apple menu: without Accessibility access, a menu click asks for it.
-    private func clickAppleLogo(_ click: AppleMenuClick) {
+    /// Runs the Apple logo's click. Without Accessibility access, a menu click asks for it.
+    private func clickAppleLogo(_ click: AppleMenuClick, anchor: NSView) {
         guard store.barEditing.allowsWidgetActions else { return }
         switch click {
-        case .menu: store.windowClearance.requestAccess()
+        case .menu:
+            if !store.appMenu.isTrusted { store.windowClearance.requestAccess() }
+            else if let item = store.appMenu.appleMenu { openAppMenu(item, anchor: anchor) }
         case .systemSettings: OpenTarget("com.apple.systempreferences")!.open()
         case .lockScreen:
-            if !lockScreen() { store.actionErrors[widget.id] = "This version of macOS has no Lock Screen call StableBar can use." }
+            let error = lockScreen()
+            if store.actionErrors[widget.id] != error { store.actionErrors[widget.id] = error }
         }
     }
 
@@ -613,7 +619,7 @@ struct WidgetView: View {
             } else {
                 AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
                                 help: click == .menu ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to ask for access; later clicks open System Settings." : nil) {
-                    clickAppleLogo(click)
+                    clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
                 }
