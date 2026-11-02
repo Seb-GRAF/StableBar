@@ -133,6 +133,13 @@ final class WidgetSettingsTests: XCTestCase {
             }
         }
         XCTAssertThrowsError(try widget(["type": .string("appleMenu"), "click": .string("restart")]))
+        for own: [String: ConfigurationValue] in [["onClick": .string("echo keep")], ["open": .string("com.apple.iCal")],
+                                                  ["menu": .array([])], ["popupName": .string("details")]] {
+            let widget = try widget(own.merging(["type": .string("appleMenu"), "click": .string("lockScreen")]) { $1 })
+            guard case .explanation = WidgetClickChoice.control(for: widget) else {
+                return XCTFail("\(own) takes the click, so Settings explains it instead of offering the Apple choices")
+            }
+        }
     }
 
     @MainActor func testTheAppleMenuSavesTheClickChosenInSettings() throws {

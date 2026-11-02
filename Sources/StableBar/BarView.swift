@@ -341,6 +341,11 @@ struct WidgetView: View {
 
     private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }
 
+    /// Whether the widget's own command, link, popup or menu takes its click, before a built-in click such as the Apple logo's.
+    private var hasOwnClick: Bool {
+        widgetPopup(widget, store: store) != nil || (store.scripts[widget.id]?.output.onClick ?? widget.onClick) != nil || widget.open != nil
+    }
+
     private var inlineHoverControls: Bool { store.configuration?.bar.inlineHoverControls == true }
 
     private var isSound: Bool { widget.layout == nil && store.configuration?.providerType(of: widget) == DataSourceType.audio.name }
@@ -612,7 +617,11 @@ struct WidgetView: View {
             }
         case let .appleMenu(click) where widget.layout == nil:
             let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
-            if click == .menu, store.appMenu.isTrusted {
+            if hasOwnClick {
+                Image(systemName: "apple.logo").accessibilityLabel("Apple")
+                    .foregroundStyle(appearance.foreground)
+                    .padding(padding)
+            } else if click == .menu, store.appMenu.isTrusted {
                 AppMenuView(appMenu: store.appMenu, items: [store.appMenu.appleMenu].compactMap { $0 }, isAppleMenu: true,
                             appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor,
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)

@@ -58,7 +58,7 @@ An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View
 
 Click a title to open its menu in a popup below the bar, drawn in your theme's popup style. While a menu is open, move the pointer onto another title to switch to its menu, as in the macOS menu bar; with **Morph between popups** on, the open menu changes into the next one. Rest the pointer on an item with a submenu, or click it, to open the submenu beside it.
 
-The Apple logo is a separate `appleMenu` widget, and the starter bar has one. Add **Apple menu** to show it, or leave it out to keep only the app's menus. Its click opens the Apple menu by default. In **Settings → Bar**, select it and choose **When clicked** under **Behavior**: **Open the Apple menu**, **Open System Settings** or **Lock the Mac**, or set `click` to `menu`, `systemSettings` or `lockScreen`. Only the Apple menu needs Accessibility access; without it, the logo stays on the bar and clicking it asks for access.
+The Apple logo is a separate `appleMenu` widget, and the starter bar has one. Add **Apple menu** to show it, or leave it out to keep only the app's menus. Its click opens the Apple menu by default. In **Settings → Bar**, select it and choose **When clicked** under **Behavior**: **Open the Apple menu**, **Open System Settings** or **Lock the Mac**, or set `click` to `menu`, `systemSettings` or `lockScreen`. Only the Apple menu needs Accessibility access; without it, the logo stays on the bar and clicking it asks for access. A command, link, popup or menu you give the widget yourself takes the click instead.
 
 Both menu widgets use the configured hover background and keep their normal text color when hovered.
 
@@ -72,7 +72,7 @@ Both menu widgets use the configured hover background and keep their normal text
 }
 ```
 
-StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters either widget. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
+StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
 
 ## yabai workspaces
 
