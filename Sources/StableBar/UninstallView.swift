@@ -67,7 +67,7 @@ struct UninstallSheet: View {
     @ViewBuilder private var confirmation: some View {
         Text("Uninstall StableBar?").font(.system(size: 17, weight: .semibold))
         Text(snapshot.homebrew
-             ? "StableBar puts back what it changed on this Mac and removes what it added, then quits. Homebrew installed the app, so finish with \(UninstallSnapshot.homebrewCommand)."
+             ? "StableBar puts back what it changed on this Mac and removes what it added, then you quit it. Homebrew installed the app, so finish with \(UninstallSnapshot.homebrewCommand)."
              : "StableBar puts back what it changed on this Mac and removes what it added, then quits and moves itself to the Trash.")
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
