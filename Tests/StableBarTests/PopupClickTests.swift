@@ -22,16 +22,22 @@ import Testing
     func scrolls(_ view: NSView) -> [NSScrollView] {
         (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrolls)
     }
-    let height: CGFloat = fillsHeight ? 80 : 20
+    // Scroll bars that are always shown, as on a Mac without a trackpad and on CI, take their height from a list that fills
+    // the popup's height. Overlay scroll bars take nothing.
+    func height(_ scroll: NSScrollView) -> CGFloat {
+        guard fillsHeight else { return 20 }
+        return 80 - (scroll.scrollerStyle == .legacy ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy) : 0)
+    }
     for _ in 0..<100 {
         host.layoutSubtreeIfNeeded()
         if let scroll = scrolls(host).first, let document = scroll.documentView,
-           abs(document.bounds.width - 322) < 0.5, abs(document.bounds.height - height) < 0.5,
+           abs(document.bounds.width - 322) < 0.5, abs(document.bounds.height - height(scroll)) < 0.5,
            abs(scroll.contentSize.width - 180) < 0.5 { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     let scroll = try #require(scrolls(host).first)
     let document = try #require(scroll.documentView)
+    let height = height(scroll)
     #expect(abs(document.bounds.width - 322) < 0.5)
     #expect(abs(document.bounds.height - height) < 0.5)
     #expect(abs(scroll.contentSize.width - 180) < 0.5)
