@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.10.0](https://github.com/Seb-GRAF/StableBar/compare/v0.9.0...v0.10.0) (2026-11-02)
+
+### Features
+
+* let a slider end in a separate stop past its range, such as ∞ ([d56745c](https://github.com/Seb-GRAF/StableBar/commit/d56745c91826f417f4d99fc10085e5ba81ae06fe)), closes [#399](https://github.com/Seb-GRAF/StableBar/issues/399)
+* let the Apple logo open the Apple menu, System Settings or lock the Mac ([f7dab87](https://github.com/Seb-GRAF/StableBar/commit/f7dab87f38aad32e83d1940f249e68755faf4caf)), closes [#411](https://github.com/Seb-GRAF/StableBar/issues/411)
+* show script list entries horizontally ([baa1c7e](https://github.com/Seb-GRAF/StableBar/commit/baa1c7e1485d0dab3ad1bcbafe0a915544af7ffa))
+
+### Bug Fixes
+
+* draw graphs from the right and start the CPU at its real use ([d94f70b](https://github.com/Seb-GRAF/StableBar/commit/d94f70b261dd86e6b83fe1d368797b0c24a5ee36))
+* draw text-only focused workspaces without a fill in theme previews ([9f8a242](https://github.com/Seb-GRAF/StableBar/commit/9f8a2428a8e2cac359a68c8e3d3013e28e7e53f0)), closes [#400](https://github.com/Seb-GRAF/StableBar/issues/400)
+* finish the Settings uninstall after StableBar quits ([51d89e1](https://github.com/Seb-GRAF/StableBar/commit/51d89e112d7e67f9c22f177dc56dc2765e4b588c)), closes [#413](https://github.com/Seb-GRAF/StableBar/issues/413)
+* give the Bar page's preview room and narrow its tabs ([37a222e](https://github.com/Seb-GRAF/StableBar/commit/37a222e0ba5418c9a2a06036f0740b1966b0eff9)), closes [#402](https://github.com/Seb-GRAF/StableBar/issues/402)
+* hide widgets that have nothing to show and show the icon of one that failed ([227177c](https://github.com/Seb-GRAF/StableBar/commit/227177c53e2381f6002c53120d4ecd1a84a538ea))
+* keep the Apple logo on the bar until its menu is read and count empty menus ([340a5d4](https://github.com/Seb-GRAF/StableBar/commit/340a5d4c41e33276f554f88acf6ceb0badcf914d))
+* let an Apple widget's own command, link, popup or menu take its click ([1498d44](https://github.com/Seb-GRAF/StableBar/commit/1498d44c5651f5579f62261a3aec9ce2935e8297))
+* let an empty menu take the click of an Apple widget with its own layout ([4e91809](https://github.com/Seb-GRAF/StableBar/commit/4e91809e0cc9f4b29a99c4d0d23609deb30f03f8))
+* refresh the Apple menu's access state for a widget with its own layout ([b34715e](https://github.com/Seb-GRAF/StableBar/commit/b34715e93002717f15cd2f4b48922de9cc3821c9))
+* run the Apple logo's click with a custom layout and check that the Mac locked ([98fd09e](https://github.com/Seb-GRAF/StableBar/commit/98fd09e521b043716237fc0dcd65b17868f6fd1e))
+* say Uninstall finishes once StableBar quits ([db2df2c](https://github.com/Seb-GRAF/StableBar/commit/db2df2cf7401502dd084ce76ad5e5c8042d4d822))
+* tell Homebrew users to quit StableBar before brew uninstall ([3029aae](https://github.com/Seb-GRAF/StableBar/commit/3029aaec4e77c3b40de32deec4e56fcf4a1416ff))
+
 ## [0.9.0](https://github.com/Seb-GRAF/StableBar/compare/v0.8.0...v0.9.0) (2026-10-29)
 
 ### Features
