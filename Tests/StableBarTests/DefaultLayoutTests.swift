@@ -176,6 +176,26 @@ private enum FrontmostApp {
     }
 }
 
+@Test(arguments: [("", "column"), (#","orientation":null"#, "column"),
+                  (#","orientation":"vertical""#, "column"), (#","orientation":"horizontal""#, "row")], [false, true]) @MainActor
+func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: String), fillsWidth: Bool) throws {
+    let list = try decode(PopupBlock.self, #"""
+    {"type":"list","source":"apps"\#(direction.property),"style":{"spacing":11},
+     "row":{"type":"field","field":"label","style":{"width":100}}}
+    """#)
+    let expected = try decode(PopupBlock.self, #"""
+    {"type":"\#(direction.type)","style":{"spacing":11},"children":[
+      {"type":"field","field":"first","style":{"width":100}},
+      {"type":"field","field":"second","style":{"width":100}}]}
+    """#)
+    let context = BlockContext(lists: ["apps": [["label": "Mail 3"], ["label": "Messages 12"]]],
+                               fillsWidth: fillsWidth, open: { _ in }, runAction: { _, _ in })
+    let drawn = try draw(PopupBlockView(block: list, inheritedStyle: WidgetStyle(), fields: [:], context: context))
+    let reference = try draw(PopupBlockView(block: expected, inheritedStyle: WidgetStyle(),
+                                           fields: ["first": "Mail 3", "second": "Messages 12"], context: context))
+    #expect(drawn.difference(from: reference) <= tolerance)
+}
+
 @Test @MainActor func scrollingTextTakesItsOwnWidthUpToMaxWidth() throws {
     let context = BlockContext(fillsWidth: false, open: { _ in }, runAction: { _, _ in })
     func drawing(_ text: String, style: String, scrolls: Bool = true) throws -> Drawing {

@@ -1,0 +1,28 @@
+{
+  "bar": { "height": 36 },
+  "widgets": [
+    {
+      "id": "dock-badges",
+      "type": "script",
+      "position": "right",
+      "command": "/bin/bash \"$CONFIG_DIR/badges.sh\"",
+      "interval": 10,
+      "environment": { "APPS": "Mail,Slack,Messages" },
+      "layout": {
+        "type": "list",
+        "source": "apps",
+        "orientation": "horizontal",
+        "style": { "spacing": 12 },
+        "row": {
+          "type": "row",
+          "openField": "bundle",
+          "style": { "spacing": 4 },
+          "children": [
+            { "type": "image", "source": "path", "style": { "width": 18, "height": 18 } },
+            { "type": "field", "field": "badge" }
+          ]
+        }
+      }
+    }
+  ]
+}

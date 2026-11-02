@@ -176,7 +176,7 @@ extension PopupBlock {
         if style.usesModeStates || role.flatMap({ roles[$0.rawValue] })?.usesModeStates == true { return true }
         switch content {
         case let .row(children), let .column(children): return children.contains { $0.usesModeStates(roles: roles) }
-        case let .list(_, row), let .search(_, _, _, row): return row.usesModeStates(roles: roles)
+        case let .list(_, row, _), let .search(_, _, _, row): return row.usesModeStates(roles: roles)
         default: return false
         }
     }

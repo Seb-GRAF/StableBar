@@ -1,0 +1,45 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "badges",
+        "type": "script",
+        "position": "right",
+        "command": "true",
+        "popup": {
+          "style": { "width": 280, "paddingHorizontal": 16, "paddingVertical": 12 },
+          "layout": {
+            "type": "list",
+            "source": "apps",
+            "orientation": "horizontal",
+            "style": { "spacing": 12 },
+            "row": {
+              "type": "column",
+              "style": { "spacing": 6 },
+              "children": [
+                { "type": "field", "field": "app", "alignment": "center" },
+                { "type": "field", "field": "badge", "alignment": "center", "style": { "fontSize": 20 } }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "badges": {
+      "text": "17",
+      "lists": {
+        "apps": [
+          { "app": "Mail", "badge": "3" },
+          { "app": "Messages", "badge": "12" },
+          { "app": "Reminders", "badge": "2" }
+        ]
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "badges",
+  "height": 128
+}
