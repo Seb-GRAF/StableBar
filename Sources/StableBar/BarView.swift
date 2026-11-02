@@ -341,6 +341,14 @@ struct WidgetView: View {
 
     private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }
 
+    /// Whether the widget's own command, link, popup or menu takes its click, before a built-in click such as the Apple logo's.
+    /// A menu counts even when empty, as in Settings.
+    private var hasOwnClick: Bool {
+        let output = store.scripts[widget.id]?.output
+        return widgetPopup(widget, store: store) != nil || (output?.onClick ?? widget.onClick) != nil || widget.open != nil
+            || (output?.menu ?? widget.menu) != nil
+    }
+
     private var inlineHoverControls: Bool { store.configuration?.bar.inlineHoverControls == true }
 
     private var isSound: Bool { widget.layout == nil && store.configuration?.providerType(of: widget) == DataSourceType.audio.name }
@@ -383,6 +391,10 @@ struct WidgetView: View {
         } else if let open = widget.open {
             Button { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } } label: { tile }
                 .buttonStyle(.plain)
+        } else if case let .appleMenu(click) = widget.content, widget.layout != nil, !hasOwnClick {
+            Button { clickAppleLogo(click, anchor: clickAnchor) } label: { tile }
+                .buttonStyle(.plain)
+                .onHover { if $0, click == .menu { store.appMenu.refresh() } }
         } else if widget.content == .controlCenter {
             Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
                 .buttonStyle(MouseDownButtonStyle())
@@ -560,6 +572,22 @@ struct WidgetView: View {
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
+    /// Runs the Apple logo's click. Without Accessibility access, a menu click asks for it; with access but no menu read
+    /// yet, such as just after access was allowed, it reads the menus so the next click opens it.
+    private func clickAppleLogo(_ click: AppleMenuClick, anchor: NSView) {
+        guard store.barEditing.allowsWidgetActions else { return }
+        switch click {
+        case .menu:
+            if !AXIsProcessTrusted() { store.windowClearance.requestAccess() }
+            else if store.appMenu.isTrusted, let item = store.appMenu.appleMenu { openAppMenu(item, anchor: anchor) }
+            else { store.appMenu.refresh() }
+        case .systemSettings: OpenTarget("com.apple.systempreferences")!.open()
+        case .lockScreen:
+            let error = lockScreen()
+            if store.actionErrors[widget.id] != error { store.actionErrors[widget.id] = error }
+        }
+    }
+
     private func runAction(_ command: String, sender: String, button: String? = nil) {
         let context = WidgetActionContext(sender: sender, button: button, modifiers: NSEvent.modifierFlags, display: monitor)
         store.runAction(command, widget: widget, event: ScriptEvent(sender: sender, environment: context.environment))
@@ -593,11 +621,24 @@ struct WidgetView: View {
             .onChange(of: barExpansion == .cramped && hovered) { _, cramped in
                 if cramped { showMenuRow(appearance: appearance, padding: padding) }
             }
-        case .appleMenu where widget.layout == nil:
-            AppMenuView(appMenu: store.appMenu, items: [store.appMenu.appleMenu].compactMap { $0 }, isAppleMenu: true,
-                        appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
-                        padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
-                        requestAccess: store.windowClearance.requestAccess)
+        case let .appleMenu(click) where widget.layout == nil:
+            let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
+            if hasOwnClick {
+                Image(systemName: "apple.logo").accessibilityLabel("Apple")
+                    .foregroundStyle(appearance.foreground)
+                    .padding(padding)
+            } else if click == .menu, store.appMenu.isTrusted, let appleMenu = store.appMenu.appleMenu {
+                AppMenuView(appMenu: store.appMenu, items: [appleMenu], isAppleMenu: true,
+                            appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor,
+                            open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
+            } else {
+                AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
+                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to ask for access; later clicks open System Settings." : nil) {
+                    clickAppleLogo(click, anchor: clickAnchor)
+                } hover: {
+                    if click == .menu { store.appMenu.refresh() }
+                }
+            }
         case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
             let leftOut = widget.shownMenuBarItems.references + hidden.references
             MenuBarItemsView(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults),
@@ -1115,7 +1156,7 @@ private struct AppMenuTitle: View {
                 }
             }
             .foregroundStyle(appearance.foreground)
-            .padding(.horizontal, 7)
+            .padding(.horizontal, isAppleMenu ? 0 : 7)
             .padding(padding)
             .background {
                 if highlighted { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
@@ -1126,6 +1167,37 @@ private struct AppMenuTitle: View {
         .buttonStyle(.plain)
         .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onAppear { anchors[index] = anchor }
+    }
+}
+
+/// The Apple logo as a button, drawn like the Apple menu's logo, for clicks that don't open the menu and until the menu is read.
+private struct AppleLogoButton: View {
+    let appearance: WidgetAppearance
+    let padding: EdgeInsets
+    let label: String
+    let help: String?
+    let action: () -> Void
+    let hover: () -> Void
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "apple.logo").accessibilityLabel(label)
+                .foregroundStyle(appearance.foreground)
+                .padding(padding)
+                .background {
+                    if hovered { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help ?? "")
+        .animation(hoverAnimation(hovered, reduceMotion: reduceMotion), value: hovered)
+        .onHover { inside in
+            hovered = inside
+            if inside { hover() }
+        }
     }
 }
 

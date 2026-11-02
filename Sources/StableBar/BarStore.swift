@@ -131,6 +131,8 @@ final class BarStore: NSObject {
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
             try migrateConfigurationFile(sharedConfigurationURL)
+            try migrateStarterAppleLogo(sharedConfigurationURL)
+            for setup in screenSetupsWithOwnBars { try? migrateStarterAppleLogo(ownBarURL(for: setup)) }
             if !UserDefaults.standard.bool(forKey: "migratedEarlierColors") {
                 try migrateEarlierColors(sharedConfigurationURL)
                 UserDefaults.standard.set(true, forKey: "migratedEarlierColors")
@@ -169,7 +171,7 @@ final class BarStore: NSObject {
     private func readAppMenu() {
         let shown = configuration?.widgets.contains { widget in
             switch widget.content {
-            case .appMenu, .appleMenu: widget.enabled
+            case .appMenu, .appleMenu(click: .menu): widget.enabled
             default: false
             }
         } == true

@@ -290,6 +290,32 @@ func migrateEarlierColors(_ url: URL) throws {
     try writeConfiguration(configurationData(root, editing: original), to: url)
 }
 
+/// The Apple logo that earlier starter configurations had: a text widget that ran `open -a 'System Settings'`.
+private let earlierStarterAppleLogo: [String: ConfigurationValue] = [
+    "type": .string("text"), "text": .string(""), "icon": .string("apple.logo"), "onClick": .string("open -a 'System Settings'")
+]
+
+/// Turns the earlier starter's Apple logo into an Apple menu widget that opens System Settings, so a click still
+/// does what it did. A logo given anything more than its place, look or visibility, such as a popup, stays as it is.
+func migrateStarterAppleLogo(_ url: URL) throws {
+    let original = try Data(contentsOf: url)
+    var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+    guard case var .array(widgets) = root["widgets"] else { return }
+    let kept: Set<String> = ["id", "position", "style", "tooltip", "enabled", "display", "group", "priority", "overflow", "role"]
+    for (index, value) in widgets.enumerated() {
+        guard case var .object(widget) = value,
+              earlierStarterAppleLogo.allSatisfy({ widget[$0.key] == $0.value }),
+              widget.keys.allSatisfy({ kept.contains($0) || earlierStarterAppleLogo[$0] != nil }) else { continue }
+        for key in earlierStarterAppleLogo.keys { widget[key] = nil }
+        widget["type"] = .string("appleMenu")
+        widget["click"] = .string(AppleMenuClick.systemSettings.rawValue)
+        widgets[index] = .object(widget)
+    }
+    guard root["widgets"] != .array(widgets) else { return }
+    root["widgets"] = .array(widgets)
+    try writeConfiguration(configurationData(root, editing: original), to: url)
+}
+
 func configurationData(_ document: [String: ConfigurationValue]) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

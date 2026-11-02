@@ -2,6 +2,53 @@ import XCTest
 @testable import StableBar
 
 final class ConfigurationEditsTests: XCTestCase {
+    func testTheEarlierStarterAppleLogoBecomesAnAppleMenuThatStillOpensSystemSettings() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let logo = #""type": "text", "text": "", "icon": "apple.logo", "onClick": "open -a 'System Settings'""#
+        try Data(#"""
+        {
+          "bar": { "height": 40, "inset": 12 },
+          "widgets": [
+            {
+              "id": "system",
+              "type": "text",
+              "position": "left",
+              "text": "",
+              "icon": "apple.logo",
+              "onClick": "open -a 'System Settings'"
+            },
+            { "id": "styled", "position": "right", \#(logo), "style": { "foreground": "#ff8800" }, "enabled": false, "tooltip": "Settings" },
+            { "id": "timed", "position": "left", \#(logo), "timeout": 5 },
+            { "id": "finder", "position": "left", "type": "text", "text": "", "icon": "apple.logo", "onClick": "open -a Finder" },
+            { "id": "clock", "type": "clock", "position": "right" }
+          ]
+        }
+        """#.utf8).write(to: url)
+        try migrateStarterAppleLogo(url)
+        let migrated = try Data(contentsOf: url)
+        let configuration = try JSONDecoder().decode(Configuration.self, from: migrated)
+        XCTAssertEqual(configuration.widgets.map(\.id), ["system", "styled", "timed", "finder", "clock"])
+        for widget in configuration.widgets.prefix(2) {
+            XCTAssertEqual(widget.content, .appleMenu(click: .systemSettings))
+            XCTAssertNil(widget.icon)
+            XCTAssertNil(widget.onClick)
+        }
+        XCTAssertEqual(configuration.widgets[0].position, .left)
+        XCTAssertEqual(configuration.widgets[1].position, .right)
+        XCTAssertEqual(configuration.widgets[1].style.foreground, HexColor(0xff8800ff))
+        XCTAssertFalse(configuration.widgets[1].enabled)
+        XCTAssertEqual(configuration.widgets[1].tooltip, "Settings")
+        XCTAssertEqual(configuration.widgets[2].content, .text(""), "A command timeout is more than the starter had")
+        XCTAssertEqual(configuration.widgets[3].onClick, "open -a Finder")
+        let text = String(decoding: migrated, as: UTF8.self)
+        XCTAssertTrue(text.contains(#""bar": { "height": 40, "inset": 12 }"#), text)
+        XCTAssertTrue(text.contains(#"{ "id": "clock", "type": "clock", "position": "right" }"#), text)
+
+        try migrateStarterAppleLogo(url)
+        XCTAssertEqual(try Data(contentsOf: url), migrated, "A converted file isn't written again")
+    }
+
     func testAGradientEditReplacesASavedColorPairInsteadOfMergingWithIt() throws {
         let gradient: ConfigurationValue = .object(["gradient": .object(["colors": .array([.string("#111111"), .string("#222222")])])])
         let main: [String: ConfigurationValue] = [

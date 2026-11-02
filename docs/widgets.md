@@ -5,7 +5,7 @@
 | `workspaces` (or `aerospace`) | Occupied or visible workspaces on this display, with app icons; click to switch | — |
 | `activeApp` | Frontmost app name and icon | — |
 | `appMenu` | Frontmost app's menus; click a title to open its menu | `expandOnHover`: show only the app name until hovered (default `false`) |
-| `appleMenu` | Apple logo; click to open the Apple menu | — |
+| `appleMenu` | Apple logo; click to open the Apple menu or System Settings, or lock the Mac | `click`: `menu` (default), `systemSettings` or `lockScreen` |
 | `controlCenter` | Control Center icon; click to open macOS Control Center | — |
 | `menuBarItems` | Grid symbol; rest the pointer on it or click it to list the items in the macOS menu bar, with their apps' icons, and open one | `openOnHover`: list them when the pointer rests on it (default `true`); `false` lists them only on click |
 | `clock` | Local date/time, updated each minute, or each second when the format shows seconds | `format`: DateFormatter format |
@@ -14,7 +14,7 @@
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
 | `system`, `network`, `battery`, `audio`, `calendar` | Native CPU and memory, network, battery, audio output or calendar data | — |
 
-**Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, Menu bar items, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. Apple menu, App menus, Control Center and Menu bar items need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
+**Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, Menu bar items, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. App menus, Control Center, Menu bar items and an Apple menu that opens the menu need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces). Script starts with a clock command you can change through **More → Edit as JSON…**.
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
@@ -58,7 +58,7 @@ An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View
 
 Click a title to open its menu in a popup below the bar, drawn in your theme's popup style. While a menu is open, move the pointer onto another title to switch to its menu, as in the macOS menu bar; with **Morph between popups** on, the open menu changes into the next one. Rest the pointer on an item with a submenu, or click it, to open the submenu beside it.
 
-The Apple logo is a separate `appleMenu` widget. Add **Apple menu** to show it, or leave it out to keep only the app's menus.
+The Apple logo is a separate `appleMenu` widget, and the starter bar has one. Add **Apple menu** to show it, or leave it out to keep only the app's menus. Its click opens the Apple menu by default. In **Settings → Bar**, select it and choose **When clicked** under **Behavior**: **Open the Apple menu**, **Open System Settings** or **Lock the Mac**, or set `click` to `menu`, `systemSettings` or `lockScreen`. Only the Apple menu needs Accessibility access; without it, the logo stays on the bar and clicking it asks for access. A command, link, popup or menu you give the widget yourself takes the click instead.
 
 Both menu widgets use the configured hover background and keep their normal text color when hovered.
 
@@ -66,12 +66,13 @@ Both menu widgets use the configured hover background and keep their normal text
 {
   "widgets": [
     { "id": "apple", "type": "appleMenu", "position": "left" },
-    { "id": "menus", "type": "appMenu", "position": "left", "expandOnHover": true }
+    { "id": "menus", "type": "appMenu", "position": "left", "expandOnHover": true },
+    { "id": "lock", "type": "appleMenu", "position": "right", "click": "lockScreen" }
   ]
 }
 ```
 
-StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters either widget. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then the widgets show a warning, except while setup is open. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
+StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks and submenus, but not keyboard shortcuts. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
 
 ## yabai workspaces
 

@@ -305,11 +305,9 @@
   "widgets": [
     {
       "id": "system",
-      "type": "text",
+      "type": "appleMenu",
       "position": "left",
-      "icon": "apple.logo",
-      "text": "",
-      "open": "com.apple.systempreferences"
+      "click": "systemSettings"
     },
     {
       "id": "spaces",
