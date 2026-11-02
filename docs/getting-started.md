@@ -85,7 +85,7 @@ On macOS 26, enable **Settings → General → Windows and notifications → Kee
 - deletes package and source tokens from the Keychain;
 - quits. Once it has quit, it resets its Accessibility, Calendars and Automation permissions, deletes its caches and preferences and moves StableBar to the Trash. These steps wait so the bar doesn't keep running without its permissions or its app.
 
-**Also move ~/.config/stablebar to the Trash** is off by default, because that folder holds your configuration, scripts and packages. A configuration elsewhere, opened with `--config`, stays. If a step fails, for example because you cancel the password prompt, the other steps still run. StableBar lists what's left to do by hand and stays whole until you click **Quit StableBar**, which finishes the rest. If a step fails after StableBar has quit, an alert lists what's left to do by hand.
+**Also move ~/.config/stablebar to the Trash** is off by default, because that folder holds your configuration, scripts and packages. A configuration elsewhere, opened with `--config`, stays. If a step fails, for example because you cancel the password prompt, the other steps still run. StableBar lists what's left to do by hand and stays whole until you click **Quit StableBar**, which finishes the rest, unless another StableBar kept running: then quit that one and uninstall again. If a step fails after StableBar has quit, an alert lists what's left to do by hand.
 
 When Homebrew installed StableBar, the app stays in Applications: run **Uninstall** first, then `brew uninstall --cask stablebar`. `brew uninstall --zap --cask stablebar` does both: it runs `stablebar --uninstall --yes`, then also deletes `~/.config/stablebar`.
 

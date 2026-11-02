@@ -114,7 +114,7 @@ struct UninstallSheet: View {
 
     @ViewBuilder private func finished(_ outcomes: [UninstallOutcome]) -> some View {
         let failed = outcomes.filter { $0.error != nil }
-        Text(failed.isEmpty ? "StableBar is uninstalled" : "Some steps still need you")
+        Text(failed.isEmpty ? "Quit StableBar to finish uninstalling" : "Some steps still need you")
             .font(.system(size: 17, weight: .semibold))
         ForEach(failed, id: \.step) { outcome in
             VStack(alignment: .leading, spacing: 3) {
