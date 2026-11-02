@@ -3,6 +3,44 @@ import SwiftUI
 import Testing
 @testable import StableBar
 
+@Test(arguments: [false, true]) @MainActor func horizontalPopupListsScrollToTheirLastEntry(fillsHeight: Bool) async throws {
+    let block = try JSONDecoder().decode(PopupBlock.self, from: Data(#"""
+    {"type":"list","source":"apps","orientation":"horizontal","style":{"spacing":11},
+     "row":{"type":"field","field":"app","wrap":true,"maxHeight":20,"style":{"width":100}}}
+    """#.utf8))
+    let context = BlockContext(lists: ["apps": [["app": "Mail\nInbox"], ["app": "Messages\nUnread"], ["app": "Reminders\nToday"]]],
+                               open: { _ in }, runAction: { _, _ in })
+    let host = NSHostingView(rootView: PopupBlockView(block: block, inheritedStyle: WidgetStyle(), fields: [:], context: context)
+        .environment(\.popupFillsHeight, fillsHeight)
+        .frame(width: 180, height: fillsHeight ? 80 : nil))
+    _ = NSApplication.shared
+    let window = NSWindow(contentRect: CGRect(x: -9000, y: -6000, width: 180, height: 80), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    defer { window.close() }
+    func scrolls(_ view: NSView) -> [NSScrollView] {
+        (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap(scrolls)
+    }
+    let height: CGFloat = fillsHeight ? 80 : 20
+    for _ in 0..<100 {
+        host.layoutSubtreeIfNeeded()
+        if let scroll = scrolls(host).first, let document = scroll.documentView,
+           abs(document.bounds.width - 322) < 0.5, abs(document.bounds.height - height) < 0.5,
+           abs(scroll.contentSize.width - 180) < 0.5 { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let scroll = try #require(scrolls(host).first)
+    let document = try #require(scroll.documentView)
+    #expect(abs(document.bounds.width - 322) < 0.5)
+    #expect(abs(document.bounds.height - height) < 0.5)
+    #expect(abs(scroll.contentSize.width - 180) < 0.5)
+    let lastEntry = CGRect(x: 222, y: 0, width: 100, height: height)
+    #expect(!document.visibleRect.contains(lastEntry))
+    document.scrollToVisible(lastEntry)
+    #expect(document.visibleRect.contains(lastEntry))
+}
+
 /// A popup block's click reaches its action anywhere inside the box its style gives it, not only on
 /// its glyph: a 42-point play button around a 17-point symbol.
 @Test(arguments: [#""onClick":"play""#, #""open":"com.apple.Music""#]) @MainActor

@@ -394,10 +394,24 @@ struct PopupBlockView: View {
                 .stroke(appearance.accent, lineWidth: lineWidth)
                 .frame(height: height)
                 .accessibilityLabel("History graph")
-        case let .list(source, row):
-            VStack(spacing: appearance.spacing) {
-                ForEach(Array((context.lists[source] ?? []).enumerated()), id: \.offset) { _, fields in
-                    child(row, of: style, fields: fields)
+        case let .list(source, row, orientation):
+            if orientation == .horizontal {
+                let entries = HStack(spacing: appearance.spacing) {
+                    ForEach(Array((context.lists[source] ?? []).enumerated()), id: \.offset) { _, fields in
+                        child(row, of: style, fields: fields)
+                    }
+                }
+                if context.fillsWidth {
+                    ScrollView(.horizontal) { entries }
+                        .fixedSize(horizontal: false, vertical: !fillsHeight)
+                } else {
+                    entries
+                }
+            } else {
+                VStack(spacing: appearance.spacing) {
+                    ForEach(Array((context.lists[source] ?? []).enumerated()), id: \.offset) { _, fields in
+                        child(row, of: style, fields: fields)
+                    }
                 }
             }
         case let .button(title, command):

@@ -1,0 +1,18 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../examples/dock-badges/config.json",
+  "outputs": {
+    "dock-badges": {
+      "text": "",
+      "lists": {
+        "apps": [
+          { "app": "Mail", "bundle": "com.apple.mail", "path": "/System/Applications/Mail.app", "badge": "3" },
+          { "app": "Messages", "bundle": "com.apple.MobileSMS", "path": "/System/Applications/Messages.app", "badge": "12" },
+          { "app": "Reminders", "bundle": "com.apple.reminders", "path": "/System/Applications/Reminders.app", "badge": "2" }
+        ]
+      }
+    }
+  },
+  "draw": "bar",
+  "width": 400
+}

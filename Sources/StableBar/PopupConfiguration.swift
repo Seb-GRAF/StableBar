@@ -48,7 +48,7 @@ indirect enum PopupContent: Sendable {
     case text(String)
     case field(String)
     case graph(height: Double, source: String?, lineWidth: Double)
-    case list(source: String, row: PopupBlock)
+    case list(source: String, row: PopupBlock, orientation: ListOrientation)
     case button(title: String, command: String)
     /// A slider over `minimum`…`maximum`, and past a notch the `endStop` when it has one.
     case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
@@ -115,7 +115,7 @@ struct PopupBlock: Decodable, Sendable {
     let transition: WidgetTransition?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, role, style, alignment, children, text, field, height, source, row, title, onClick
+        case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
@@ -197,7 +197,8 @@ struct PopupBlock: Decodable, Sendable {
                              lineWidth: try values.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 1.5)
         case "list":
             content = .list(source: try values.decode(String.self, forKey: .source),
-                            row: try values.decode(PopupBlock.self, forKey: .row))
+                            row: try values.decode(PopupBlock.self, forKey: .row),
+                            orientation: try values.decodeIfPresent(ListOrientation.self, forKey: .orientation) ?? .vertical)
         case "button":
             content = .button(title: try values.decode(String.self, forKey: .title),
                               command: try values.decode(String.self, forKey: .onClick))
@@ -288,6 +289,10 @@ struct PopupBlock: Decodable, Sendable {
             }
         }
     }
+}
+
+enum ListOrientation: String, Decodable, Sendable {
+    case horizontal, vertical
 }
 
 enum ImageFit: String, Decodable, Sendable {
