@@ -103,6 +103,9 @@ struct StableBarApp {
                     exit(await UninstallCommand.run(removesConfiguration: removesConfiguration, showsMenuBar: showsMenuBar, confirmed: confirmed))
                 }
                 dispatchMain()
+            case let .finishUninstall(bar):
+                Task { exit(await UninstallSystem.finish(after: bar)) }
+                dispatchMain()
             case .help:
                 print(LaunchCommand.usage)
             case let .run(url):
