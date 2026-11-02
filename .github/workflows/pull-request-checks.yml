@@ -28,7 +28,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v9
         with:
           script: |
             const { checkLinkedIssue } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pull-request-checks.mjs`);
@@ -60,7 +60,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/github-script@v8
+      - uses: actions/github-script@v9
         with:
           script: |
             const { checkDescription } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pull-request-checks.mjs`);
