@@ -15,6 +15,8 @@ enum LaunchCommand {
     case triageContext(URL)
     case report(URL)
     case uninstall(removesConfiguration: Bool, showsMenuBar: Bool, confirmed: Bool)
+    /// Started by Settings › Uninstall, not by hand: finishes the uninstall once the bar with this process ID has quit.
+    case finishUninstall(pid_t)
     case help
 
     static let configurationURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/stablebar/config.json")
@@ -136,6 +138,9 @@ enum LaunchCommand {
             }
             self = .uninstall(removesConfiguration: options.contains("--remove-config"), showsMenuBar: options.contains("--show-menu-bar"),
                               confirmed: options.contains("--yes"))
+        case "--finish-uninstall" where arguments.count == 2 && !targeted:
+            guard let bar = pid_t(arguments[1]), bar > 0 else { throw CommandFailure(message: Self.usage) }
+            self = .finishUninstall(bar)
         case "--help" where arguments.count == 1:
             self = .help
         default:

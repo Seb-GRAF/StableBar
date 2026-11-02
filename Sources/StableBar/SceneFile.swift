@@ -4,11 +4,13 @@ import Foundation
 /// `StableBar --render-scenes` reads these from `scenes/`, and scene.schema.json describes them. A scene
 /// runs nothing: commands, providers and window managers are replaced by the samples it gives.
 struct SceneFile: Decodable {
-    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings }
+    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages }
     enum Tab: String, Decodable, CaseIterable { case content, style, behavior }
+    /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
+    enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
     /// The configuration inline, or the path of a configuration file relative to the scene file.
     enum Configuration: Equatable { case inline([String: ConfigurationValue]), file(String) }
 
@@ -30,12 +32,14 @@ struct SceneFile: Decodable {
     var section: Section?
     /// The tab of the widget's Settings page.
     var tab: Tab?
+    /// What the Uninstall sheet shows, for `uninstall`.
+    var uninstall: Uninstall?
     var appearances: [Appearance] = Appearance.allCases
     var width: Double?
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, activeApp, draw, widget, section, tab, appearances, width, height
+        case configuration, outputs, history, workspaces, windows, activeApp, draw, widget, section, tab, uninstall, appearances, width, height
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +59,7 @@ struct SceneFile: Decodable {
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
+        uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,
@@ -74,6 +79,9 @@ struct SceneFile: Decodable {
         if draw == .settings, widget == nil, section == nil {
             throw DecodingError.dataCorruptedError(forKey: .section, in: values,
                                                    debugDescription: "A settings scene names a widget or a section.")
+        }
+        if uninstall != nil, draw != .uninstall {
+            throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
         }
         if tab != nil, widget == nil {
             throw DecodingError.dataCorruptedError(forKey: .tab, in: values, debugDescription: "A tab belongs to a widget's Settings page.")

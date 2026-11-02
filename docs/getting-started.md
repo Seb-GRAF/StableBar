@@ -83,13 +83,11 @@ On macOS 26, enable **Settings → General → Windows and notifications → Kee
 - turns off **Open at login**;
 - removes the `stablebar` command that [**Command line**](command-line.md#install-the-command) installed, asking for an administrator password when its folder needs one. A `stablebar` command that StableBar didn't write stays;
 - deletes package and source tokens from the Keychain;
-- resets its Accessibility, Calendars and Automation permissions;
-- deletes its caches and preferences;
-- moves StableBar to the Trash and quits.
+- quits. Once it has quit, it resets its Accessibility, Calendars and Automation permissions, deletes its caches and preferences and moves StableBar to the Trash. These steps wait so the bar doesn't keep running without its permissions or its app.
 
-**Also move ~/.config/stablebar to the Trash** is off by default, because that folder holds your configuration, scripts and packages. A configuration elsewhere, opened with `--config`, stays. If a step fails, for example because you cancel the password prompt, the other steps still run, and StableBar lists what's left to do by hand before you quit it.
+**Also move ~/.config/stablebar to the Trash** is off by default, because that folder holds your configuration, scripts and packages. A configuration elsewhere, opened with `--config`, stays. If a step fails, for example because you cancel the password prompt, the other steps still run. StableBar lists what's left to do by hand and stays whole until you click **Quit StableBar**, which finishes the rest, unless another StableBar kept running: then quit that one and uninstall again. If StableBar can't start the steps that wait for it to quit, it lists them too, to do by hand. If a step fails after StableBar has quit, an alert lists what's left to do by hand.
 
-When Homebrew installed StableBar, the app stays in Applications: run **Uninstall** first, then `brew uninstall --cask stablebar`. `brew uninstall --zap --cask stablebar` does both: it runs `stablebar --uninstall --yes`, then also deletes `~/.config/stablebar`.
+When Homebrew installed StableBar, the app stays in Applications: run **Uninstall** first and click **Quit StableBar**, then run `brew uninstall --cask stablebar`. `brew uninstall --zap --cask stablebar` does both: it runs `stablebar --uninstall --yes`, then also deletes `~/.config/stablebar`.
 
 `stablebar --uninstall` does the same from Terminal; see [Command-line controls](command-line.md).
 

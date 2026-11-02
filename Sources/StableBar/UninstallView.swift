@@ -27,13 +27,16 @@ struct UninstallSheet: View {
     @State private var options: UninstallOptions
     @State private var running = false
     @State private var outcomes: [UninstallOutcome]?
+    /// Whether `--finish-uninstall` waits for StableBar to quit.
+    @State private var finishing = false
     @Environment(\.dismiss) private var dismiss
 
-    init(store: BarStore, snapshot: UninstallSnapshot, outcomes: [UninstallOutcome]? = nil) {
+    init(store: BarStore, snapshot: UninstallSnapshot, outcomes: [UninstallOutcome]? = nil, finishing: Bool = false) {
         self.store = store
         self.snapshot = snapshot
         _options = State(initialValue: UninstallOptions(snapshot))
         _outcomes = State(initialValue: outcomes)
+        _finishing = State(initialValue: finishing)
     }
 
     var body: some View {
@@ -47,8 +50,8 @@ struct UninstallSheet: View {
             HStack {
                 if running { ProgressView().controlSize(.small) }
                 Spacer()
-                if let outcomes {
-                    Button("Quit StableBar") { UninstallSystem.quit(after: outcomes) }.keyboardShortcut(.defaultAction)
+                if outcomes != nil {
+                    Button("Quit StableBar") { NSApp.terminate(nil) }.keyboardShortcut(.defaultAction)
                 } else {
                     Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction).disabled(running)
                     Button("Uninstall", role: .destructive, action: uninstall).disabled(running)
@@ -64,8 +67,8 @@ struct UninstallSheet: View {
     @ViewBuilder private var confirmation: some View {
         Text("Uninstall StableBar?").font(.system(size: 17, weight: .semibold))
         Text(snapshot.homebrew
-             ? "StableBar puts back what it changed on this Mac and removes what it added, then quits. Homebrew installed the app, so finish with \(UninstallSnapshot.homebrewCommand)."
-             : "StableBar puts back what it changed on this Mac, removes what it added and moves itself to the Trash, then quits.")
+             ? "StableBar puts back what it changed on this Mac and removes what it added, then you quit it. Homebrew installed the app, so finish with \(UninstallSnapshot.homebrewCommand)."
+             : "StableBar puts back what it changed on this Mac and removes what it added, then quits and moves itself to the Trash.")
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         VStack(alignment: .leading, spacing: 6) {
@@ -111,7 +114,7 @@ struct UninstallSheet: View {
 
     @ViewBuilder private func finished(_ outcomes: [UninstallOutcome]) -> some View {
         let failed = outcomes.filter { $0.error != nil }
-        Text(failed.isEmpty ? "StableBar is uninstalled" : "Some steps still need you")
+        Text(failed.isEmpty ? "Quit StableBar to finish uninstalling" : "Some steps still need you")
             .font(.system(size: 17, weight: .semibold))
         ForEach(failed, id: \.step) { outcome in
             VStack(alignment: .leading, spacing: 3) {
@@ -121,6 +124,13 @@ struct UninstallSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 22)
             }
+        }
+        if finishing {
+            Text(snapshot.homebrew
+                 ? "Once StableBar has quit, it resets its permissions and deletes its caches and preferences."
+                 : "Once StableBar has quit, it resets its permissions, deletes its caches and preferences and moves itself to the Trash.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         if snapshot.homebrew {
             Text("Homebrew installed StableBar. To remove the app, run this in Terminal after quitting:")
@@ -146,10 +156,22 @@ struct UninstallSheet: View {
             // Stopped widgets and update checks can't write back the caches and preferences the steps remove.
             store.update?.stop()
             store.stop()
-            let outcomes = await Uninstall.run(snapshot.steps(options), perform: UninstallSystem.perform)
+            // What would take away the app, its permissions and preferences waits until StableBar has quit, so a step that
+            // fails here leaves it whole until you quit it.
+            var outcomes = await Uninstall.run(snapshot.stepsBeforeQuit(options), perform: UninstallSystem.perform)
+            if Uninstall.finishesAfterQuit(outcomes) {
+                do {
+                    try UninstallSystem.finishAfterQuit()
+                    finishing = true
+                } catch {
+                    outcomes += snapshot.stepsAfterQuit.map {
+                        UninstallOutcome(step: $0, error: "StableBar couldn’t start this step: \(errorMessage(error))")
+                    }
+                }
+            }
             running = false
             if outcomes.allSatisfy({ $0.error == nil }) && !snapshot.homebrew {
-                UninstallSystem.quit(after: outcomes)
+                NSApp.terminate(nil)
             } else {
                 self.outcomes = outcomes
             }

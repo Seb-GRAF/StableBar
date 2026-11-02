@@ -23,14 +23,25 @@ struct UninstallSnapshot: Equatable {
     static let homebrewCommand = "brew uninstall --cask stablebar"
 
     func steps(_ options: UninstallOptions) -> [UninstallStep] {
+        stepsBeforeQuit(options) + stepsAfterQuit
+    }
+
+    /// What Settings does while the bar still runs, so a step that fails leaves StableBar whole.
+    func stepsBeforeQuit(_ options: UninstallOptions) -> [UninstallStep] {
         var steps: [UninstallStep] = running > 0 ? [.quit(running)] : []
         if menuBarHides && options.showsMenuBar { steps.append(.showMenuBar) }
         if opensAtLogin { steps.append(.loginItem) }
         steps += commands.map(UninstallStep.command)
         if hasKeychainItems { steps.append(.keychain) }
         if let configuration, options.removesConfiguration { steps.append(.configuration(configuration)) }
-        // Permissions go after the menu bar: in the app, turning auto-hide off uses StableBar's access to System Events.
-        steps += [.permissions, .files(files)]
+        return steps
+    }
+
+    /// What a running bar can't do to itself: it would lose its permissions, write back its caches and preferences,
+    /// and read files from an app in the Trash. Settings leaves these to `--finish-uninstall` once the bar has quit.
+    /// They also come after the menu bar, because turning auto-hide off uses StableBar's access to System Events.
+    var stepsAfterQuit: [UninstallStep] {
+        var steps: [UninstallStep] = [.permissions, .files(files)]
         if let app, !homebrew { steps.append(.app(app)) }
         return steps
     }
@@ -123,11 +134,65 @@ enum Uninstall {
         return outcomes
     }
 
+    /// Whether the steps after quitting can follow: not when another StableBar kept running, because it would write back
+    /// the files and preferences they remove.
+    static func finishesAfterQuit(_ outcomes: [UninstallOutcome]) -> Bool {
+        !outcomes.contains { if case .quit = $0.step { $0.error != nil } else { false } }
+    }
+
+    /// Checks `isRunning` every `interval`, at most `polls` times, and returns whether it stopped.
+    @MainActor
+    static func waitForQuit(polls: Int = .max, every interval: Duration = .milliseconds(100),
+                            _ isRunning: () -> Bool) async throws -> Bool {
+        for _ in 0..<polls {
+            if !isRunning() { return true }
+            try await Task.sleep(for: interval)
+        }
+        return !isRunning()
+    }
+
+    /// The steps that failed, each with what to do by hand.
+    static func leftToDo(_ outcomes: [UninstallOutcome]) -> String {
+        outcomes.compactMap { outcome in outcome.error.map { "\(outcome.step.title)\n\($0) \(outcome.step.fix)" } }
+            .joined(separator: "\n\n")
+    }
+
     static func remove(_ urls: [URL]) throws {
         for url in urls where FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
     }
+}
+
+/// Starts a process in a session of its own, reading and writing nothing, so it keeps running after StableBar quits.
+func spawnDetached(_ executable: String, arguments: [String]) throws {
+    var actions: posix_spawn_file_actions_t?
+    var attributes: posix_spawnattr_t?
+    posix_spawn_file_actions_init(&actions)
+    posix_spawnattr_init(&attributes)
+    defer {
+        posix_spawn_file_actions_destroy(&actions)
+        posix_spawnattr_destroy(&attributes)
+    }
+    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT |
+                                               POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
+    var signals = sigset_t()
+    sigemptyset(&signals)
+    posix_spawnattr_setsigmask(&attributes, &signals)
+    sigfillset(&signals)
+    posix_spawnattr_setsigdefault(&attributes, &signals)
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0)
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0)
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0)
+    let argv = ([executable] + arguments).map { strdup($0) } + [nil]
+    let envp = ProcessInfo.processInfo.environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+    defer {
+        argv.forEach { free($0) }
+        envp.forEach { free($0) }
+    }
+    var process: pid_t = 0
+    let result = posix_spawn(&process, executable, &actions, &attributes, argv, envp)
+    guard result == 0 else { throw CommandFailure(message: "\(String(cString: strerror(result))).") }
 }
 
 /// Reads this Mac and performs the steps, for Settings and `--uninstall`.
@@ -149,10 +214,16 @@ enum UninstallSystem {
             commands: commands,
             hasKeychainItems: packageSecretsExist(),
             configuration: FileManager.default.fileExists(atPath: configuration.path) ? configuration : nil,
-            files: UninstallSnapshot.files(home: FileManager.default.homeDirectoryForCurrentUser, bundleID: bundleID),
-            app: Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.bundleURL : nil,
+            files: files(),
+            app: app,
             homebrew: UninstallSnapshot.installedByHomebrew(),
             asksForPassword: commands.contains { !FileManager.default.isWritableFile(atPath: $0.deletingLastPathComponent().path) })
+    }
+
+    private static var app: URL? { Bundle.main.bundleURL.pathExtension == "app" ? Bundle.main.bundleURL : nil }
+
+    private static func files() -> [URL] {
+        UninstallSnapshot.files(home: FileManager.default.homeDirectoryForCurrentUser, bundleID: bundleID)
     }
 
     static func perform(_ step: UninstallStep) async throws {
@@ -160,11 +231,8 @@ enum UninstallSystem {
         case .quit:
             let copies = otherCopies()
             copies.forEach { $0.terminate() }
-            var polls = 0
-            while copies.contains(where: { kill($0.processIdentifier, 0) == 0 }) {
-                polls += 1
-                if polls > 100 { throw CommandFailure(message: "StableBar is still running.") }
-                try await Task.sleep(for: .milliseconds(100))
+            guard try await Uninstall.waitForQuit(polls: 100, { copies.contains { kill($0.processIdentifier, 0) == 0 } }) else {
+                throw CommandFailure(message: "StableBar is still running.")
             }
         case .showMenuBar:
             try await MenuBarAutoHide.set(false)
@@ -184,12 +252,23 @@ enum UninstallSystem {
         }
     }
 
-    /// Quits after Uninstall. Once it removed the preferences, it removes those Settings wrote since, such as its window's frame.
-    static func quit(after outcomes: [UninstallOutcome]) {
-        if outcomes.contains(where: { if case .files = $0.step { $0.error == nil } else { false } }) {
-            UserDefaults.standard.removePersistentDomain(forName: bundleID)
-        }
-        NSApp.terminate(nil)
+    /// Starts `--finish-uninstall` for this bar, which does the steps after quitting once the bar has quit, even if it crashes.
+    static func finishAfterQuit() throws {
+        guard let executable = Bundle.main.executablePath else { throw CommandFailure(message: "StableBar’s executable is missing.") }
+        try spawnDetached(executable, arguments: ["--finish-uninstall", String(getpid())])
+    }
+
+    /// `--finish-uninstall PID`: waits for the bar to quit, then resets its permissions, deletes its caches and preferences,
+    /// including what the bar wrote as it quit, and moves the app to the Trash. An alert lists any step that failed.
+    static func finish(after bar: pid_t) async -> Int32 {
+        _ = try? await Uninstall.waitForQuit { kill(bar, 0) == 0 }
+        let snapshot = UninstallSnapshot(files: files(), app: app, homebrew: UninstallSnapshot.installedByHomebrew())
+        let outcomes = await Uninstall.run(snapshot.stepsAfterQuit, perform: perform)
+        guard outcomes.contains(where: { $0.error != nil }) else { return 0 }
+        CFUserNotificationDisplayAlert(0, kCFUserNotificationCautionAlertLevel, nil, nil, nil,
+                                       "StableBar couldn’t finish uninstalling" as CFString,
+                                       Uninstall.leftToDo(outcomes) as CFString, "OK" as CFString, nil, nil, nil)
+        return 1
     }
 
     private static func otherCopies() -> [NSRunningApplication] {
