@@ -61,6 +61,7 @@ test("website-only fixes and features cannot trigger or raise an app release", a
   history.git("tag", "v0.9.0");
   history.commit("feat!: rebuild the website", "site/index.html");
   history.commit("fix: correct the guide", "docs/clock.md");
+  history.commit("fix: update the website download links", "scripts/set-site-version.sh");
   assert.equal(await history.analyze("beta"), null);
   assert.equal(await history.analyze("stable"), null);
 

@@ -92,7 +92,7 @@ Pull requests run `swift test` on macOS and check that every commit message, and
 
 A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.resolved`, `scripts` or the CI workflow also compiles the release and draws the [docs images](#docs-images), as `main` does. If it changes `Resources`, `scripts` or the workflow, the **Package** job builds the DMG as a beta would, ad-hoc signed because pull requests get no Developer ID, and checks its signature, version and starter configuration. **Draw screens** runs when the app, `scenes`, the `examples` scenes read or the comparison scripts change, and **Draw website screens** when `site` changes.
 
-[semantic-release](https://github.com/semantic-release/semantic-release) reads the commits since the last stable release and decides the next version. Only `feat`, `fix`, `perf` and `refactor` commits that change app inputs (`Sources`, `Resources`, `Package.swift`, `Package.resolved` or `scripts`) count. Website, guide, CI and test files do not count, regardless of the commit type.
+[semantic-release](https://github.com/semantic-release/semantic-release) reads the commits since the last stable release and decides the next version. Only `feat`, `fix`, `perf` and `refactor` commits that change app inputs (`Sources`, `Resources`, `Package.swift`, `Package.resolved` or `scripts`, except `scripts/set-site-version.sh`) count. Website, guide, CI and test files do not count, regardless of the commit type.
 
 | Commit | Release |
 | --- | --- |

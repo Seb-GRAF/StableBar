@@ -193,6 +193,7 @@ private struct ReleaseHistory {
     try await history.commit("chore: review pull requests with CodeRabbit", changing: ".coderabbit.yaml")
     try await history.commit("fix: correct the guide", changing: "docs/clock.md")
     try await history.commit("feat: redraw the website", changing: "site/index.html")
+    try await history.commit("fix: update the website download links", changing: "scripts/set-site-version.sh")
     try await history.commit("refactor: tidy the guide", changing: "docs/clock.md")
     try await history.commit("docs!: rename the guide", changing: "docs/clock.md")
     try await history.git(["switch", "--quiet", "main"])
