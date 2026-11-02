@@ -403,7 +403,7 @@ struct PopupBlockView: View {
                 }
                 if context.fillsWidth {
                     ScrollView(.horizontal) { entries }
-                        .fixedSize(horizontal: false, vertical: true)
+                        .fixedSize(horizontal: false, vertical: !fillsHeight)
                 } else {
                     entries
                 }

@@ -1005,6 +1005,9 @@
               ]
             },
             {
+              "$ref": "#/definitions/reference"
+            },
+            {
               "type": "null"
             }
           ],
