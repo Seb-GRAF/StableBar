@@ -133,6 +133,9 @@ private struct ReleaseHistory {
         try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: URL(filePath: setVersion).deletingLastPathComponent()
             .appending(path: "unchanged-app.sh"), to: scripts.appending(path: "unchanged-app.sh"))
+        try FileManager.default.createDirectory(at: repository.appending(path: ".github"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: URL(filePath: setVersion).deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: ".github/app-paths"), to: repository.appending(path: ".github/app-paths"))
         try await git(["init", "--quiet"])
         try await git(["add", "."])
         try await git(["commit", "--quiet", "-m", "chore: start"])
@@ -177,7 +180,7 @@ private struct ReleaseHistory {
 }
 
 // CI publishes no beta for such a commit, and a stable release ships it as the beta before it.
-@Test func unchangedAppNamesTheBetaWhenLaterCommitsChangeOnlyDocsCIAndTests() async throws {
+@Test func unchangedAppNamesTheBetaWhenLaterCommitsChangeOnlyMaintenanceAndTheWebsite() async throws {
     let history = try await ReleaseHistory()
     defer { history.remove() }
     try await history.commit("feat: add a clock", changing: "Sources/StableBar/Clock.swift")
@@ -187,6 +190,11 @@ private struct ReleaseHistory {
     try await history.git(["switch", "--quiet", "-c", "docs/clock"])
     try await history.commit("docs: explain the clock", changing: "docs/clock.md")
     try await history.commit("test: cover the clock", changing: "Tests/StableBarTests/ClockTests.swift")
+    try await history.commit("chore: review pull requests with CodeRabbit", changing: ".coderabbit.yaml")
+    try await history.commit("fix: correct the guide", changing: "docs/clock.md")
+    try await history.commit("feat: redraw the website", changing: "site/index.html")
+    try await history.commit("refactor: tidy the guide", changing: "docs/clock.md")
+    try await history.commit("docs!: rename the guide", changing: "docs/clock.md")
     try await history.git(["switch", "--quiet", "main"])
     try await history.git(["merge", "--quiet", "--no-ff", "-m", "Merge pull request #1 from someone/docs/clock", "docs/clock"])
     #expect(try await history.unchangedApp() == "v0.8.0-beta.20261024075505.382")
@@ -204,10 +212,7 @@ private struct ReleaseHistory {
     ("docs: explain the clock in its help", "Sources/StableBar/Clock.swift"),
     ("docs: describe the night theme", "Resources/themes/night.json"),
     ("ci: lay out the DMG", "scripts/package.sh"),
-    ("ci(deps): bump Sparkle", "Package.resolved"),
-    ("fix: correct the guide", "docs/clock.md"),
-    ("refactor: tidy the guide", "docs/clock.md"),
-    ("docs!: rename the guide", "docs/clock.md")
+    ("ci(deps): bump Sparkle", "Package.resolved")
 ])
 func unchangedAppRejectsCommitsThatCanChangeTheApp(message: String, path: String) async throws {
     let history = try await ReleaseHistory()
