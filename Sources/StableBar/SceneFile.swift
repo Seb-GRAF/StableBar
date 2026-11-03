@@ -126,6 +126,10 @@ extension SceneFile.MenuItem: Decodable {
         virtualKey = try values.decodeIfPresent(Int.self, forKey: .virtualKey)
         glyph = try values.decodeIfPresent(Int.self, forKey: .glyph)
         modifiers = try values.decodeIfPresent(Int.self, forKey: .modifiers) ?? 0
+        if modifiers < 0 {
+            throw DecodingError.dataCorruptedError(forKey: .modifiers, in: values,
+                                                   debugDescription: "Modifiers are flags added up from 0.")
+        }
         enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         checked = try values.decodeIfPresent(Bool.self, forKey: .checked) ?? false
         submenu = try values.decodeIfPresent(Bool.self, forKey: .submenu) ?? false

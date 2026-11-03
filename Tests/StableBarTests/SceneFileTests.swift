@@ -82,7 +82,10 @@ private func scene(_ json: String) throws -> SceneFile {
     (#"{"configuration": {}, "draw": "settings"}"#, "section"),
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "style"}"#, "tab"),
     (#"{"configuration": {}, "draw": "bar", "menu": [{"title": "Copy"}]}"#, "menu"),
-    (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut")
+    (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
+    // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.
+    (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "key": "C", "modifiers": -1}]}"#,
+     "menu.0.modifiers")
 ])
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }
