@@ -130,19 +130,24 @@ struct SetupTourView: View {
         let corner = min(16, glassHeight / 2)
         let sweep = t > 1.7 ? progress((t - 1.7).truncatingRemainder(dividingBy: 4.5), 0, 1.6) : 0
         let gleam = t > 3 ? progress((t - 3).truncatingRemainder(dividingBy: 5), 0, 1.5) : 0
-        let letters = Array("StableBar")
+        let pen = FeltPen(time: t)
+        let glassShown = progress(t, 1, 0.05) * (1 - progress(d, SetupDemo.wipes, 0.6))
         let word = HStack(spacing: 0) {
-            ForEach(letters.indices, id: \.self) { index in
+            ForEach(Self.wordmark.indices, id: \.self) { index in
                 let shown = UnitCurve.easeOut.value(at: progress(t, 1.3 + Double(index) * 0.06, 0.9))
-                Text(String(letters[index]))
-                    .padding(.horizontal, 9.5 * (1 - shown))
-                    .scaleEffect(0.96 + 0.04 * shown)
-                    .offset(y: 40 * (1 - shown))
-                    .blur(radius: 12 * (1 - shown))
-                    .opacity(shown)
+                ZStack {
+                    Self.wordmark[index].outline.stroke(Color(white: 0.07), style: StrokeStyle(lineWidth: 3.4, lineJoin: .round))
+                    Self.wordmark[index].outline.fill(.white)
+                }
+                .frame(width: Self.wordmark[index].advance, height: CTFontGetAscent(Self.wordmarkFont) + CTFontGetDescent(Self.wordmarkFont))
+                .padding(.horizontal, 9.5 * (1 - shown))
+                .scaleEffect(0.96 + 0.04 * shown)
+                .offset(y: 40 * (1 - shown))
+                .blur(radius: 12 * (1 - shown))
+                .opacity(shown)
             }
         }
-        .font(.system(size: 76, weight: .semibold))
+        .rotationEffect(.degrees(-1.5))
         return ZStack {
             ForEach(Self.embers.indices, id: \.self) { index in
                 let ember = Self.embers[index]
@@ -154,22 +159,10 @@ struct SetupTourView: View {
                     .opacity(0.9 * (rise < 0.15 ? rise / 0.15 : 1 - (rise - 0.15) / 0.85) * progress(t, 0.5, 1) * (1 - progress(d, 0, 1)))
                     .position(x: size.width * ember.x + 30 * rise, y: size.height + 10 - size.height * 0.87 * rise)
             }
-            Rectangle()
-                .fill(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .white.opacity(0.95), location: 0.2),
-                                             .init(color: .white, location: 0.5), .init(color: .white.opacity(0.95), location: 0.8),
-                                             .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-                .frame(width: lineWidth * draw, height: 2)
-                .shadow(color: warm, radius: 8)
+            pen.line(from: CGPoint(x: (size.width - lineWidth) / 2, y: home),
+                     to: CGPoint(x: (size.width - lineWidth) / 2 + lineWidth * draw, y: home), width: 3.2, seed: 1)
+                .fill(FeltPen.ink)
                 .opacity(1 - progress(t, 1.25, 0.5))
-                .position(x: size.width / 2, y: home)
-            ForEach([-1.0, 1.0], id: \.self) { side in
-                Circle()
-                    .fill(.white)
-                    .frame(width: 9, height: 9)
-                    .shadow(color: .orange, radius: 10)
-                    .opacity(progress(t, 0.2, 0.05) * (1 - progress(t, 1.05, 0.15)))
-                    .position(x: size.width / 2 + side * lineWidth / 2 * 0.87 * draw, y: home)
-            }
             ZStack {
                 RoundedRectangle(cornerRadius: corner)
                     .fill(LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom))
@@ -191,14 +184,15 @@ struct SetupTourView: View {
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 10)
                 .opacity(progress(t, 1.6, 0.8) * (1 - progress(d, 0, 0.3)))
-                RoundedRectangle(cornerRadius: corner)
-                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.35), .white.opacity(0.12)], startPoint: .top, endPoint: .bottom),
-                                  lineWidth: 1)
             }
             .frame(width: glassWidth, height: glassHeight)
             .clipShape(RoundedRectangle(cornerRadius: corner))
-            .opacity(progress(t, 1, 0.05) * (1 - progress(d, SetupDemo.wipes, 0.6)))
-            .position(x: size.width / 2, y: home)
+            .opacity(glassShown)
+            .position(x: size.width / 2 + 2.6, y: home + 1.9)
+            pen.loop(around: CGRect(x: (size.width - glassWidth) / 2, y: home - glassHeight / 2, width: glassWidth, height: glassHeight),
+                     cornerRadius: corner, width: 2.1, seed: 2)
+                .fill(FeltPen.ink)
+                .opacity(glassShown)
             word
                 .overlay {
                     LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: warm, location: 0.5), .init(color: .clear, location: 0.6)],
@@ -220,8 +214,8 @@ struct SetupTourView: View {
                 SetupDemo(store: session.store, display: BarDisplay(screen: screen), looks: looks, elapsed: d, size: size, stage: stage, target: bar)
             }
             Text("A native, configurable bar for your Mac.")
-                .font(.system(size: 17, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
+                .font(Self.handwriting)
+                .foregroundStyle(FeltPen.ink)
                 .offset(y: 8 * (1 - UnitCurve.easeOut.value(at: progress(t, 2.4, 0.5))))
                 .opacity(progress(t, 2.4, 0.5) * leaving)
                 .position(x: size.width / 2, y: home + 72)
@@ -291,6 +285,15 @@ struct SetupTourView: View {
         (0.09, 10.1, 6.5), (0.92, 7.4, 1.7), (0.37, 9.1, 6.0), (0.46, 6.4, 5.0), (0.78, 7.9, 2.4), (0.33, 8.4, 1.2),
         (0.93, 10.3, 4.6), (0.38, 6.0, 2.7), (0.81, 10.4, 6.9), (0.6, 7.0, 3.7), (0.37, 8.2, 1.7), (0.39, 7.3, 6.5)
     ]
+
+    private static let wordmarkFont = shantellSans("shantell-sans-display", size: 76)
+    private static let wordmark: [(outline: Path, advance: Double)] = "StableBar".utf16.map { character in
+        var character = character, glyph = CGGlyph()
+        CTFontGetGlyphsForCharacters(wordmarkFont, &character, &glyph, 1)
+        var flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: CTFontGetAscent(wordmarkFont))
+        return (Path(CTFontCreatePathForGlyph(wordmarkFont, glyph, &flip)!), CTFontGetAdvancesForGlyphs(wordmarkFont, .horizontal, &glyph, nil, 1))
+    }
+    private static let handwriting = Font(shantellSans("shantell-sans-hand", size: 20))
 
     private func ghost<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
@@ -780,13 +783,13 @@ func progress(_ time: Double, _ start: Double, _ duration: Double) -> Double {
     min(max((time - start) / duration, 0), 1)
 }
 
-/// Setup's two amber backgrounds, drifting and fading into each other.
+/// Setup's day and dusk backgrounds, in the landing page's colors, drifting and fading into each other.
 private struct SetupBackdrop: View {
     let size: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let light = Wallpaper.image!
-    private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic")!)!
+    private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupDusk", withExtension: "heic")!)!
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in

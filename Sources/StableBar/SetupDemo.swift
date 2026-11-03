@@ -28,6 +28,7 @@ struct SetupDemo: View {
     static let wipes = 7.9
     private static let finder = NSWorkspace.shared.icon(forFile: "/System/Library/CoreServices/Finder.app")
     private static let safari = NSWorkspace.shared.icon(forFile: "/Applications/Safari.app")
+    private static let handwriting = Font(shantellSans("shantell-sans-hand", size: 13))
 
     var body: some View {
         let flight = UnitCurve.easeInOut.value(at: progress(elapsed, Self.flight, Self.landing - Self.flight))
@@ -123,29 +124,28 @@ struct SetupDemo: View {
 
     private var guides: some View {
         let grow = UnitCurve.easeOut.value(at: progress(elapsed, 0.3, 0.8))
+        let pen = FeltPen(time: elapsed)
         return ZStack {
             Path { path in
-                for y in [stage.minY - 0.5, stage.maxY + 0.5] {
-                    path.move(to: CGPoint(x: stage.midX - size.width / 2 * grow, y: y))
-                    path.addLine(to: CGPoint(x: stage.midX + size.width / 2 * grow, y: y))
+                for (index, y) in [stage.minY - 0.5, stage.maxY + 0.5].enumerated() {
+                    path.addPath(pen.line(from: CGPoint(x: stage.midX - size.width / 2 * grow, y: y),
+                                          to: CGPoint(x: stage.midX + size.width / 2 * grow, y: y), width: 1.35, seed: Double(index)))
                 }
             }
-            .stroke(Color.orange.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 5]))
+            .fill(FeltPen.ink.opacity(0.35))
             Group {
                 Path { path in
-                    for x in [stage.minX, stage.maxX] {
-                        path.move(to: CGPoint(x: x, y: stage.minY - 30))
-                        path.addLine(to: CGPoint(x: x, y: stage.maxY + 30))
+                    for (index, x) in [stage.minX, stage.maxX].enumerated() {
+                        path.addPath(pen.line(from: CGPoint(x: x, y: stage.minY - 30), to: CGPoint(x: x, y: stage.maxY + 30), width: 1.35, seed: Double(index) + 2))
                     }
-                    for (from, to) in [(stage.minX, stage.midX - 64), (stage.midX + 64, stage.maxX)] {
-                        path.move(to: CGPoint(x: from, y: stage.minY - 22))
-                        path.addLine(to: CGPoint(x: to, y: stage.minY - 22))
+                    for (index, (from, to)) in [(stage.minX, stage.midX - 64), (stage.midX + 64, stage.maxX)].enumerated() {
+                        path.addPath(pen.line(from: CGPoint(x: from, y: stage.minY - 22), to: CGPoint(x: to, y: stage.minY - 22), width: 1.35, seed: Double(index) + 4))
                     }
                 }
-                .stroke(Color.orange.opacity(0.6), lineWidth: 1)
+                .fill(FeltPen.ink.opacity(0.6))
                 Text("\(Int(stage.width)) × \(Int(stage.height)) pt")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color.orange)
+                    .font(Self.handwriting)
+                    .foregroundStyle(FeltPen.ink)
                     .position(x: stage.midX, y: stage.minY - 22)
             }
             .opacity(progress(elapsed, 0.6, 0.3))
@@ -225,6 +225,7 @@ struct SetupDemo: View {
         let settled = Spring(duration: 0.55, bounce: 0.35).value(target: 1.0, time: max(elapsed - drop, 0))
         let spark = progress(elapsed, drop + 0.1, 0.5)
         let click = index == 5 ? Self.clockClick : index == 3 ? Self.cpuClick : -1
+        let pen = FeltPen(time: elapsed)
         return content()
             .blur(radius: 8 * (1 - shown))
             .opacity(shown)
@@ -232,9 +233,11 @@ struct SetupDemo: View {
             .offset(y: -30 * (1 - settled))
             .scaleEffect(1 - 0.06 * sin(.pi * progress(elapsed, click, 0.18)))
             .background {
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(Color.orange.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                    .opacity(progress(elapsed, 0.6, 0.3) * (1 - shown))
+                GeometryReader { proxy in
+                    pen.loop(around: CGRect(origin: .zero, size: proxy.size), cornerRadius: 8, width: 1.35, seed: Double(index))
+                        .fill(FeltPen.ink.opacity(0.6))
+                }
+                .opacity(progress(elapsed, 0.6, 0.3) * (1 - shown))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 10)
@@ -244,10 +247,10 @@ struct SetupDemo: View {
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 4) {
-                    Rectangle().frame(width: 1, height: 12)
-                    Text(name).font(.system(size: 10, weight: .medium, design: .monospaced))
+                    pen.line(from: CGPoint(x: 0.5, y: 0), to: CGPoint(x: 0.5, y: 12), width: 1.35, seed: Double(index)).frame(width: 1, height: 12)
+                    Text(name).font(Self.handwriting)
                 }
-                .foregroundStyle(Color.orange.opacity(0.85))
+                .foregroundStyle(FeltPen.ink.opacity(0.85))
                 .fixedSize()
                 .alignmentGuide(.bottom) { $0[.top] - 6 }
                 .opacity(progress(elapsed, drop + 0.2, 0.3) * (1 - progress(elapsed, 3.3, 0.4)))
