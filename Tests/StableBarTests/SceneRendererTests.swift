@@ -165,6 +165,18 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     #expect(colors(image) > 10)
 }
 
+@Test @MainActor func popupSceneDrawsASampleAppMenu() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"""
+    {"configuration": {"widgets": [{"id": "menus", "type": "appMenu", "position": "left"}]}, "draw": "popup", "widget": "menus",
+     "menu": [{"title": "New Window", "key": "N"}, {"title": ""}, {"title": "Fill", "key": "F", "modifiers": 28}]}
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(image.pixelsWide == Int((2 * (260 + 48.0)).rounded()))
+    #expect(colors(image) > 10)
+}
+
 @Test @MainActor func editBarSceneFitsItsLayoutHeight() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
