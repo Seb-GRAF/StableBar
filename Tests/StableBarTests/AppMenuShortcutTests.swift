@@ -33,6 +33,8 @@ func menuShortcutShowsItsModifiersInTheOrderMacOSMenusDo(modifiers: Int, shortcu
     ("\u{238B}", 53, 27, "⎋"),
     ("\u{2327}", 53, 28, "⌧"),
     ("\r", 36, 11, "↩"),
+    // Return in a right-to-left script, as Carbon's kMenuReturnR2LGlyph.
+    ("\r", 36, 12, "↪"),
     ("\t", 48, 2, "⇥"),
     (" ", 49, 9, "Space"),
     ("\u{F729}", 115, 102, "↖"),
