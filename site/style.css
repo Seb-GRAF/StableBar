@@ -772,7 +772,7 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
   -webkit-mask: radial-gradient(circle at 50% 50%, #000 2.6px, transparent 2.8px) -4px -4px / 8px 8px, linear-gradient(#000 0 0) center / calc(100% - 8px) calc(100% - 8px) no-repeat;
   mask: radial-gradient(circle at 50% 50%, #000 2.6px, transparent 2.8px) -4px -4px / 8px 8px, linear-gradient(#000 0 0) center / calc(100% - 8px) calc(100% - 8px) no-repeat;
 }
-.stamp svg { width: 40px; height: 48px; }
+.stamp img { width: 40px; height: 48px; }
 .postmark { position: absolute; top: -6px; right: 34px; width: 74px; height: 50px; rotate: -12deg; color: #3a3a46; opacity: .75; pointer-events: none; }
 .pc-addr .to { font: 600 15px/1 var(--hand); color: var(--red); }
 .pc-addr .addr { padding: 0 2px 4px; border-bottom: 2px dotted #9aa3b5; font: 600 19px/1.1 var(--hand); font-variation-settings: "INFM" 100, "BNCE" 60; }
@@ -832,7 +832,7 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
   .pc-addr { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin-top: 18px !important; padding: 16px 70px 0 0; }
   .pc-addr::before { left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 2.2px; }
   .stamp { position: absolute; right: 0; top: 14px; width: 52px; height: 62px; margin: 0; }
-  .stamp svg { width: 32px; height: 40px; }
+  .stamp img { width: 32px; height: 40px; }
   .postmark { top: 12px; right: 30px; width: 60px; height: 42px; }
   .ws-big { zoom: 1.25; }
   .ws-big .ai { display: none; }

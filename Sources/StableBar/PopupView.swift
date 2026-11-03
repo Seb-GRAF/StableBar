@@ -1009,6 +1009,7 @@ struct AppMenuList: View {
     let openSubmenu: (AXUIElement?, NSView) -> Void
     let press: (AppMenuEntry) -> Void
     @State private var submenu: Int?
+    @State private var keyWidth: CGFloat = 0
 
     var body: some View {
         let checks = entries.contains(where: \.isChecked)
@@ -1017,7 +1018,7 @@ struct AppMenuList: View {
                 if entry.title.isEmpty {
                     Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1).padding(.vertical, 4)
                 } else {
-                    AppMenuRow(entry: entry, checks: checks, appearance: appearance, open: submenu == index) { row in
+                    AppMenuRow(entry: entry, checks: checks, keyWidth: keyWidth, appearance: appearance, open: submenu == index) { row in
                         guard submenu != index else { return }
                         let opens = entry.hasSubmenu && entry.isEnabled
                         submenu = opens ? index : nil
@@ -1028,12 +1029,23 @@ struct AppMenuList: View {
                 }
             }
         }
+        .onPreferenceChange(MenuKeyWidth.self) { keyWidth = $0 }
+    }
+}
+
+/// The width of a menu's widest shortcut key, which sets the width of the column the keys line up in.
+private struct MenuKeyWidth: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
 private struct AppMenuRow: View {
     let entry: AppMenuEntry
     let checks: Bool
+    let keyWidth: CGFloat
     let appearance: WidgetAppearance
     let open: Bool
     let rest: (NSView) -> Void
@@ -1051,6 +1063,12 @@ private struct AppMenuRow: View {
                 }
                 Text(entry.title).lineLimit(1)
                 Spacer(minLength: 8)
+                if let shortcut = entry.shortcut {
+                    MenuShortcutLabel(shortcut: shortcut, keyWidth: keyWidth)
+                        .foregroundStyle(appearance.foreground.opacity(0.5))
+                        .fixedSize()
+                        .layoutPriority(1)
+                }
                 if entry.hasSubmenu { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)) }
             }
             .padding(.horizontal, 8)
@@ -1067,6 +1085,27 @@ private struct AppMenuRow: View {
             guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
             rest(anchor)
         }
+    }
+}
+
+/// A shortcut as macOS menus show it: 🌐 for fn and the modifiers, then the key in a column as wide as the menu's
+/// widest key, so the modifiers end at the same place on every row and the keys line up on their leading edge.
+private struct MenuShortcutLabel: View {
+    let shortcut: MenuShortcut
+    let keyWidth: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if shortcut.function { Image(systemName: "globe").imageScale(.small) }
+            Text(shortcut.modifiers)
+            key
+                .background(GeometryReader { Color.clear.preference(key: MenuKeyWidth.self, value: $0.size.width) })
+                .frame(minWidth: keyWidth, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder private var key: some View {
+        if let symbol = shortcut.keySymbol { Image(systemName: symbol) } else { Text(shortcut.key) }
     }
 }
 

@@ -14,6 +14,7 @@ struct AppMenuEntry {
     let isEnabled: Bool
     let isChecked: Bool
     let hasSubmenu: Bool
+    var shortcut: MenuShortcut? = nil
     var icon: NSImage? = nil
     var menuBarDisplay: CGDirectDisplayID? = nil
 }
@@ -26,6 +27,7 @@ final class AppMenu: NSObject {
     var hidesAccessWarning = false
     @ObservationIgnored private let checkAccess: () -> Bool
     @ObservationIgnored private let readAttribute: @Sendable (String, AXUIElement) -> CFTypeRef?
+    @ObservationIgnored private let readAttributes: @Sendable ([String], AXUIElement) -> [CFTypeRef?]
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var app: NSRunningApplication?
     @ObservationIgnored private var submenus: [PopupPanel] = []
@@ -44,9 +46,11 @@ final class AppMenu: NSObject {
              guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
              return value
          },
+         readAttributes: @escaping @Sendable ([String], AXUIElement) -> [CFTypeRef?] = copyAttributes,
          sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
         self.checkAccess = checkAccess
         self.readAttribute = readAttribute
+        self.readAttributes = readAttributes
         self.sleep = sleep
         isTrusted = checkAccess()
         super.init()
@@ -106,33 +110,50 @@ final class AppMenu: NSObject {
         var pid: pid_t = 0
         AXUIElementGetPid(item.element, &pid)
         guard pid == app?.processIdentifier else { return nil }
-        return popup(entries(of: item.element))
+        return Self.popup(entries(of: item.element))
     }
 
-    private func popup(_ entries: [AppMenuEntry]) -> PopupConfiguration {
+    /// The popup that shows a menu's entries.
+    static func popup(_ entries: [AppMenuEntry]) -> PopupConfiguration {
         var popup = PopupConfiguration(style: WidgetStyle(paddingHorizontal: 5, paddingVertical: 5, spacing: 0, width: 260),
                                        layout: PopupBlock(content: .appMenu(entries)))
         popup.alignment = .leading
         return popup
     }
 
+    /// What a menu's entries show, read from each item in one call: every Accessibility call is a round trip to the
+    /// app, and Chromium apps answer slowly. Chrome's File menu took 16 ms to read with four separate reads per item,
+    /// and 13 ms with these eight in one call.
+    private static let entryAttributes = [
+        kAXTitleAttribute, kAXEnabledAttribute, kAXMenuItemMarkCharAttribute, kAXChildrenAttribute, kAXMenuItemCmdCharAttribute,
+        kAXMenuItemCmdVirtualKeyAttribute, kAXMenuItemCmdGlyphAttribute, kAXMenuItemCmdModifiersAttribute,
+    ]
+
     private func entries(of element: AXUIElement) -> [AppMenuEntry] {
         guard let menu = submenu(of: element) else { return [] }
         var entries: [AppMenuEntry] = []
         for child in children(of: menu) {
-            guard let title = attribute(kAXTitleAttribute, of: child) as? String ?? text(in: child),
+            AXUIElementSetMessagingTimeout(child, 0.1)
+            let values = readAttributes(Self.entryAttributes, child)
+            guard values.count == Self.entryAttributes.count,
+                  let title = values[0] as? String ?? text(in: child),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
-            entries.append(AppMenuEntry(title: title, element: child,
-                                        isEnabled: attribute(kAXEnabledAttribute, of: child) as? Bool == true,
-                                        isChecked: attribute(kAXMenuItemMarkCharAttribute, of: child) as? String != nil,
-                                        hasSubmenu: submenu(of: child) != nil))
+            entries.append(AppMenuEntry(title: title, element: child, isEnabled: values[1] as? Bool == true,
+                                        isChecked: values[2] as? String != nil,
+                                        hasSubmenu: submenu(among: values[3] as? [AXUIElement] ?? []) != nil,
+                                        shortcut: MenuShortcut(character: values[4] as? String, virtualKey: values[5] as? Int,
+                                                               glyph: values[6] as? Int, modifiers: values[7] as? Int ?? 0)))
         }
         if entries.last?.title.isEmpty == true { entries.removeLast() }
         return entries
     }
 
     private func submenu(of element: AXUIElement) -> AXUIElement? {
-        children(of: element).first { attribute(kAXRoleAttribute, of: $0) as? String == kAXMenuRole }
+        submenu(among: children(of: element))
+    }
+
+    private func submenu(among children: [AXUIElement]) -> AXUIElement? {
+        children.first { attribute(kAXRoleAttribute, of: $0) as? String == kAXMenuRole }
     }
 
     private func text(in element: AXUIElement) -> String? {
@@ -146,7 +167,7 @@ final class AppMenu: NSObject {
         let window = row.window!
         closeSubmenus(after: window)
         guard let element else { return }
-        let popup = popup(entries(of: element))
+        let popup = Self.popup(entries(of: element))
         let host = NSHostingView(rootView: content(popup).frame(width: popup.style.width!))
         let frame = window.convertToScreen(row.convert(row.bounds, to: nil))
         let screen = window.screen!.visibleFrame
@@ -194,7 +215,7 @@ final class AppMenu: NSObject {
     }
 
     func popup(forMenuBarItem element: AXUIElement) -> PopupConfiguration {
-        popup(entries(of: element))
+        Self.popup(entries(of: element))
     }
 
     func readMenuBarItems(requestingAccess: Bool) async -> Bool {
@@ -599,6 +620,20 @@ private func bluetoothGlyph() -> NSImage {
     image.isTemplate = true
     image.accessibilityDescription = "Bluetooth"
     return image
+}
+
+/// The values of `names` on `element` from one Accessibility call, nil where the element has no value. The element's
+/// messaging timeout applies.
+func copyAttributes(_ names: [String], of element: AXUIElement) -> [CFTypeRef?] {
+    var values: CFArray?
+    guard AXUIElementCopyMultipleAttributeValues(element, names as CFArray, [], &values) == .success,
+          let values = values as? [AnyObject], values.count == names.count else { return names.map { _ in nil } }
+    return values.map { value in
+        let type = CFGetTypeID(value)
+        if type == CFNullGetTypeID() { return nil }
+        if type == AXValueGetTypeID(), AXValueGetType(value as! AXValue) == .axError { return nil }
+        return value
+    }
 }
 
 private func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> CGRect {

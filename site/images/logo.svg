@@ -1,0 +1,20 @@
+<svg viewBox="250 230 600 585" width="600" height="585" xmlns="http://www.w3.org/2000/svg">
+    <radialGradient id="mkglow"><stop offset="0" stop-color="#FFE04A" stop-opacity=".6"/><stop offset="1" stop-color="#FFE04A" stop-opacity="0"/></radialGradient>
+    <linearGradient id="mkfade" gradientUnits="userSpaceOnUse" x1="511.8" y1="0" x2="850" y2="0"><stop offset=".55" stop-color="#FFE04A"/><stop offset="1" stop-color="#FFE04A" stop-opacity="0"/></linearGradient>
+    <circle cx="470" cy="405.25" r="161.5" fill="url(#mkglow)"/>
+    <filter id="w67" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.0220" numOctaves="2" seed="3"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="6.0" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <g transform="translate(0 0) scale(1)">
+      <g transform="translate(7 6)"><path d="M511.8 388.15 L850 323.55 L850 479.35 L511.8 422.35 Z" fill="url(#mkfade)"/></g>
+      <g filter="url(#w67)" stroke="#111111" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"><path d="M511.8 388.15 L780 336.85 M511.8 422.35 L780 466.05" fill="none"/></g>
+    </g>
+    <filter id="w68" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.0220" numOctaves="2" seed="3"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="6.0" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <g transform="translate(0 0) scale(1)">
+      <g transform="translate(7 6)"></g>
+      <g filter="url(#w68)" stroke="#111111" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"><path d="M270 792 C 400 784 580 798 750 790" fill="none"/><path d="M310 790 l 6 -20 l 6 20 l 6 -14" fill="none" stroke-width="5"/><path d="M666 790 l 6 -20 l 6 20 l 6 -14" fill="none" stroke-width="5"/><path d="M708 790 l 6 -20 l 6 20 l 6 -14" fill="none" stroke-width="5"/></g>
+    </g>
+    <filter id="w69" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="0.0209" numOctaves="2" seed="3"></feTurbulence><feDisplacementMap in="SourceGraphic" scale="6.3" xChannelSelector="R" yChannelSelector="G"/></filter>
+    <g transform="translate(470 790) scale(0.95)">
+      <g transform="translate(7.36842105263158 6.315789473684211)"><path d="M-62 -348 L62 -348 L100 0 L-100 0 Z" fill="#FFFFFF" class=""/><clipPath id="mkbody"><path d="M-62 -348 L62 -348 L100 0 L-100 0 Z"/></clipPath><g clip-path="url(#mkbody)" fill="#FF4A36"><rect x="-120" y="-290" width="240" height="72"/><rect x="-120" y="-140" width="240" height="72"/></g><rect x="-48" y="-440" width="96" height="70" rx="8" fill="#FFE04A" class=""/><path d="M-62 -436 C -62 -482 -30 -504 0 -506 C 30 -504 62 -482 62 -436 Z" fill="#FF4A36" class=""/><circle cx="0" cy="-518" r="13" fill="#FF4A36" class=""/></g>
+      <g filter="url(#w69)" stroke="#111111" stroke-width="9.473684210526317" stroke-linejoin="round" stroke-linecap="round"><path d="M-62 -348 L62 -348 L100 0 L-100 0 Z" fill="none" class=""/><rect x="-12" y="-196" width="24" height="34" rx="5" fill="#111111"/><path d="M-22 0 L-22 -48 A22 22 0 0 1 22 -48 L22 0 Z" fill="#111111"/><rect x="-84" y="-370" width="168" height="24" rx="6" fill="#111111"/><rect x="-48" y="-440" width="96" height="70" rx="8" fill="none" class=""/><path d="M-62 -436 C -62 -482 -30 -504 0 -506 C 30 -504 62 -482 62 -436 Z" fill="none" class=""/><circle cx="0" cy="-518" r="13" fill="none" class=""/></g>
+    </g>
+  </svg>

@@ -257,7 +257,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         MenuBarAutoHide.forgetIfShown()
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "rectangle.topthird.inset.filled", accessibilityDescription: "StableBar")
+        statusItem.button?.image = NSImage(named: "StatusBarIconTemplate")
+        statusItem.button?.image?.accessibilityDescription = "StableBar"
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu

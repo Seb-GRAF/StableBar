@@ -1,0 +1,29 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "popup",
+  "widget": "app-menu",
+  "menu": [
+    { "title": "Minimize", "key": "M" },
+    { "title": "Minimize All", "key": "M", "modifiers": 2 },
+    { "title": "Zoom" },
+    { "title": "Fill", "key": "F", "modifiers": 28 },
+    { "title": "Center", "key": "C", "modifiers": 28 },
+    { "title": "" },
+    { "title": "Move & Resize", "submenu": true },
+    { "title": "Full-Screen Tile", "submenu": true },
+    { "title": "" },
+    { "title": "Remove Window from Set", "enabled": false },
+    { "title": "Cycle Through Windows", "key": "`" },
+    { "title": "Show Previous Tab", "key": "\t", "virtualKey": 48, "glyph": 2, "modifiers": 13 },
+    { "title": "Show Next Tab", "key": "\t", "virtualKey": 48, "glyph": 2, "modifiers": 12 },
+    { "title": "Move Tab to New Window" },
+    { "title": "Merge All Windows" },
+    { "title": "" },
+    { "title": "Bring All to Front" },
+    { "title": "" },
+    { "title": "Downloads", "checked": true },
+    { "title": "Documents" }
+  ],
+  "height": 450
+}

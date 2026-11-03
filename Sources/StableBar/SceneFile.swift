@@ -25,6 +25,8 @@ struct SceneFile: Decodable {
     var windows: [ConfigurationValue]?
     /// The bundle identifier of the active app, Finder by default.
     var activeApp: String?
+    /// The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one.
+    var menu: [MenuItem]?
     var draw: Draw
     /// The widget whose popup or Settings page to draw.
     var widget: String?
@@ -39,7 +41,23 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, activeApp, draw, widget, section, tab, uninstall, appearances, width, height
+        case configuration, outputs, history, workspaces, windows, activeApp, menu, draw, widget, section, tab, uninstall, appearances, width, height
+    }
+
+    /// An item of a sample menu, with the values Accessibility gives a menu item. An empty title is a separator.
+    struct MenuItem: Equatable {
+        var title: String
+        /// `AXMenuItemCmdChar`: the shortcut's character.
+        var key: String?
+        /// `AXMenuItemCmdVirtualKey`: the virtual key code of a key without a character.
+        var virtualKey: Int?
+        /// `AXMenuItemCmdGlyph`: the menu glyph of a key without a character.
+        var glyph: Int?
+        /// `AXMenuItemCmdModifiers`: 0 is ⌘ alone, then 1 adds ⇧, 2 ⌥, 4 ⌃, 8 removes ⌘ and 16 adds fn.
+        var modifiers = 0
+        var enabled = true
+        var checked = false
+        var submenu = false
     }
 
     init(from decoder: Decoder) throws {
@@ -55,6 +73,7 @@ struct SceneFile: Decodable {
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
         windows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .windows)
         activeApp = try values.decodeIfPresent(String.self, forKey: .activeApp)
+        menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
         draw = try values.decode(Draw.self, forKey: .draw)
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
         section = try values.decodeIfPresent(Section.self, forKey: .section)
@@ -80,6 +99,9 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .section, in: values,
                                                    debugDescription: "A settings scene names a widget or a section.")
         }
+        if menu != nil, draw != .popup {
+            throw DecodingError.dataCorruptedError(forKey: .menu, in: values, debugDescription: "A menu belongs to a popup scene.")
+        }
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
         }
@@ -90,5 +112,26 @@ struct SceneFile: Decodable {
 
     static func read(_ url: URL) throws -> SceneFile {
         try JSONDecoder().decode(SceneFile.self, from: Data(contentsOf: url))
+    }
+}
+
+extension SceneFile.MenuItem: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case title, key, virtualKey, glyph, modifiers, enabled, checked, submenu }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        title = try values.decode(String.self, forKey: .title)
+        key = try values.decodeIfPresent(String.self, forKey: .key)
+        virtualKey = try values.decodeIfPresent(Int.self, forKey: .virtualKey)
+        glyph = try values.decodeIfPresent(Int.self, forKey: .glyph)
+        modifiers = try values.decodeIfPresent(Int.self, forKey: .modifiers) ?? 0
+        if modifiers < 0 {
+            throw DecodingError.dataCorruptedError(forKey: .modifiers, in: values,
+                                                   debugDescription: "Modifiers are flags added up from 0.")
+        }
+        enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        checked = try values.decodeIfPresent(Bool.self, forKey: .checked) ?? false
+        submenu = try values.decodeIfPresent(Bool.self, forKey: .submenu) ?? false
     }
 }
