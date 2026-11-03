@@ -34,7 +34,7 @@ extension ScreenKind {
 }
 
 struct Wallpaper: View {
-    static let image = Bundle.main.url(forResource: "SetupAmberLight", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
+    static let image = Bundle.main.url(forResource: "SetupDay", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
 
     var body: some View {
         GeometryReader { geometry in
@@ -42,7 +42,8 @@ struct Wallpaper: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .blur(radius: max(geometry.size.width, geometry.size.height) * 0.03, opaque: true)
                     .clipped()
             } else {
                 SettingsPalette.background

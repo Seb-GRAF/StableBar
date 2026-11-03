@@ -5,9 +5,9 @@ import SwiftUI
 /// on screen, and every clock in the drawing shows `DocsImages.date`.
 @MainActor
 enum OffscreenSnapshot {
-    private static let darkBackdrop = Bundle.main.url(forResource: "SetupAmberDark", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
+    private static let darkBackdrop = Bundle.main.url(forResource: "SetupDusk", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
 
-    /// The setup tour's amber wallpaper, or a flat color where the app's resources aren't bundled, as in tests.
+    /// The setup tour's wallpaper, or a flat color where the app's resources aren't bundled, as in tests.
     @ViewBuilder static func backdrop(dark: Bool) -> some View {
         if let image = dark ? darkBackdrop : Wallpaper.image {
             Image(nsImage: image).resizable().scaledToFill()
