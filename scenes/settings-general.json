@@ -23,5 +23,6 @@
     }
   },
   "draw": "settings",
-  "section": "general"
+  "section": "general",
+  "height": 1640
 }

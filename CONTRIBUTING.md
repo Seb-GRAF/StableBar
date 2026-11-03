@@ -131,7 +131,7 @@ Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their st
 
 ## Scenes
 
-A scene file in [scenes](scenes) describes one screen to draw: a configuration, inline or as a path such as `../Resources/config.json`, the sample outputs, graph history and AeroSpace workspaces its widgets show, and what to draw: the `bar`, the bar in edit mode (`editBar`), a widget's `popup`, a `settings` page, or the `uninstall` sheet for a sample Mac. [scene.schema.json](scene.schema.json) lists every key. Draw them with:
+A scene file in [scenes](scenes) describes one screen to draw: a configuration, inline or as a path such as `../Resources/config.json`, the sample outputs, graph history and AeroSpace workspaces its widgets show, and what to draw: the `bar`, the bar in edit mode (`editBar`), a widget's `popup`, a `settings` page, the `uninstall` sheet for a sample Mac, or the `update` popup for a sample offer. [scene.schema.json](scene.schema.json) lists every key. Draw them with:
 
 ```sh
 StableBar --render-scenes /tmp/scenes scenes

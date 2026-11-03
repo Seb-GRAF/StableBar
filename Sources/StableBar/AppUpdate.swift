@@ -34,18 +34,43 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     @ObservationIgnored private var receivedLength: UInt64 = 0
     @ObservationIgnored private var checkTimer: Timer?
     @ObservationIgnored private var foundUpdate = false
+    let starRequest: StarRequest
+    /// The version the popup lists changes since, and where it reads their release notes.
+    @ObservationIgnored private(set) var installedVersion = AppVersion().version ?? ""
+    @ObservationIgnored private(set) var loadHistory: @Sendable (_ installed: String, _ offered: String) async throws -> [UpdateRelease] = {
+        try await UpdateRelease.load(after: $0, through: $1)
+    }
 
-    init(makeUpdater: (any SPUUserDriver, any SPUUpdaterDelegate) -> SPUUpdater = { driver, delegate in
+    init(starRequest: StarRequest = StarRequest(),
+         makeUpdater: (any SPUUserDriver, any SPUUpdaterDelegate) -> SPUUpdater = { driver, delegate in
         SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: delegate)
     }) {
+        self.starRequest = starRequest
         super.init()
-        if UserDefaults.standard.string(forKey: "updateTrack") == nil {
-            UserDefaults.standard.set(AppVersion().channel == .beta ? "beta" : "stable", forKey: "updateTrack")
-        }
         updater = makeUpdater(self, self)
     }
 
+    /// StableBar 0.11.0 offered to 0.10.0, with its release notes and a due star request. It checks, loads
+    /// and saves nothing: the scenes' sample.
+    static func sample() -> AppUpdate {
+        let update = AppUpdate(starRequest: StarRequest(start: .distantPast))
+        let changes = ["show keyboard shortcuts in app menus",
+                       "open the Apple menu, System Settings or the lock screen from the Apple logo",
+                       "use the lighthouse logo across the app and website"]
+        update.installedVersion = "0.10.0"
+        update.version = "0.11.0"
+        update.changes = changes
+        update.loadHistory = { _, _ in
+            [UpdateRelease(tagName: "v0.11.0", body: changes.map { "* \($0)" }.joined(separator: "\n"),
+                           publishedAt: Date(timeIntervalSinceReferenceDate: 815_000_000))]
+        }
+        return update
+    }
+
     func start() throws {
+        if UserDefaults.standard.string(forKey: "updateTrack") == nil {
+            UserDefaults.standard.set(AppVersion().channel == .beta ? "beta" : "stable", forKey: "updateTrack")
+        }
         try updater.start()
         let timer = Timer(fire: Date(timeIntervalSinceNow: 15), interval: 4 * 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.checkForUpdateInformation() }
@@ -237,7 +262,7 @@ struct UpdateDetails: View {
         VStack(alignment: .leading, spacing: appearance.spacing) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("StableBar \(version)").fontWeight(.semibold)
-                Text("You have \(AppVersion().version!)").foregroundStyle(.secondary)
+                Text("You have \(update.installedVersion)").foregroundStyle(.secondary)
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
@@ -257,7 +282,7 @@ struct UpdateDetails: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Link(destination: URL(string: "https://github.com/Seb-GRAF/StableBar/compare/v\(AppVersion().version!)...v\(version)")!) {
+            Link(destination: URL(string: "https://github.com/Seb-GRAF/StableBar/compare/v\(update.installedVersion)...v\(version)")!) {
                 HStack(spacing: 3) {
                     Text("View all changes on GitHub")
                     Image(systemName: "arrow.up.right")
@@ -265,6 +290,9 @@ struct UpdateDetails: View {
             }
             .foregroundStyle(.secondary)
             Divider()
+            if update.starRequest.isDue() {
+                StarRequestLine(request: update.starRequest, appearance: appearance)
+            }
             VStack(spacing: 8) {
                 if update.stage == .downloading || update.stage == .extracting {
                     HStack {
@@ -297,7 +325,7 @@ struct UpdateDetails: View {
             releases = []
             notesError = ""
             do {
-                let history = try await UpdateRelease.load(after: AppVersion().version!, through: version)
+                let history = try await update.loadHistory(update.installedVersion, version)
                 try Task.checkCancellation()
                 releases = history
             } catch {
