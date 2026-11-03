@@ -152,18 +152,12 @@ enum SceneRenderer {
             guard let popup = scene.menu.map({ AppMenu.popup($0.map(menuEntry)) }) ?? widgetPopup(widget, store: store) else {
                 throw CommandFailure(message: "widget: \(id) has no popup.")
             }
-            let popupWidth = CGFloat(popup.style.width ?? 360)
-            let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
-                                    store: store, widget: widget)
-                .environment(\.screenKind, .monitor)
-                .frame(width: popupWidth)
-                .fixedSize(horizontal: false, vertical: true)
-                .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background { OffscreenSnapshot.backdrop(dark: dark) }
-            try await OffscreenSnapshot.write(content, size: NSSize(width: popupWidth + 48, height: CGFloat(scene.height ?? 600)),
-                                              dark: dark, settle: settle, to: url)
+            try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark, settle: settle, to: url)
+        case .update:
+            store.update = AppUpdate.sample()
+            let popup = AppUpdate.popup
+            try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
+                                dark: dark, settle: settle, to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -195,6 +189,23 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
         }
+    }
+
+    /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
+    private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore, height: CGFloat,
+                                  dark: Bool, settle: Duration, to url: URL) async throws {
+        guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
+        let popupWidth = CGFloat(popup.style.width ?? 360)
+        let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
+                                store: store, widget: widget)
+            .environment(\.screenKind, .monitor)
+            .frame(width: popupWidth)
+            .fixedSize(horizontal: false, vertical: true)
+            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background { OffscreenSnapshot.backdrop(dark: dark) }
+        try await OffscreenSnapshot.write(content, size: NSSize(width: popupWidth + 48, height: height), dark: dark, settle: settle, to: url)
     }
 
     /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.

@@ -55,7 +55,10 @@
         }
       }
     },
-    "draw": { "description": "What to draw.", "enum": ["bar", "editBar", "popup", "settings", "uninstall"] },
+    "draw": {
+      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub.",
+      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update"]
+    },
     "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
     "section": {
       "description": "The Settings section to draw when no widget is named.",
