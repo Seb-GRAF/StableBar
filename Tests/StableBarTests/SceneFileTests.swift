@@ -49,6 +49,25 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.history.isEmpty)
     #expect(decoded.workspaces == nil)
     #expect(decoded.widget == nil)
+    #expect(decoded.menu == nil)
+}
+
+@Test func sceneDecodesASampleMenu() throws {
+    let decoded = try scene(#"""
+    {
+      "configuration": { "widgets": [] },
+      "draw": "popup",
+      "widget": "menus",
+      "menu": [
+        { "title": "Fill", "key": "F", "virtualKey": 3, "glyph": 70, "modifiers": 28, "enabled": false, "checked": true, "submenu": true },
+        { "title": "Copy" }
+      ]
+    }
+    """#)
+    #expect(decoded.menu == [
+        SceneFile.MenuItem(title: "Fill", key: "F", virtualKey: 3, glyph: 70, modifiers: 28, enabled: false, checked: true, submenu: true),
+        SceneFile.MenuItem(title: "Copy", key: nil, virtualKey: nil, glyph: nil, modifiers: 0, enabled: true, checked: false, submenu: false),
+    ])
 }
 
 @Test func sceneRejectsUnknownProperties() throws {
@@ -61,7 +80,12 @@ private func scene(_ json: String) throws -> SceneFile {
 @Test(arguments: [
     (#"{"configuration": {}, "draw": "popup"}"#, "widget"),
     (#"{"configuration": {}, "draw": "settings"}"#, "section"),
-    (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "style"}"#, "tab")
+    (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "style"}"#, "tab"),
+    (#"{"configuration": {}, "draw": "bar", "menu": [{"title": "Copy"}]}"#, "menu"),
+    (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
+    // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.
+    (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "key": "C", "modifiers": -1}]}"#,
+     "menu.0.modifiers")
 ])
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }

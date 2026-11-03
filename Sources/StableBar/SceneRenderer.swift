@@ -149,7 +149,9 @@ enum SceneRenderer {
             guard let widget = look.widgets.first(where: { $0.id == id }) else {
                 throw CommandFailure(message: "widget: The configuration has no widget \(id).")
             }
-            guard let popup = widgetPopup(widget, store: store) else { throw CommandFailure(message: "widget: \(id) has no popup.") }
+            guard let popup = scene.menu.map({ AppMenu.popup($0.map(menuEntry)) }) ?? widgetPopup(widget, store: store) else {
+                throw CommandFailure(message: "widget: \(id) has no popup.")
+            }
             let popupWidth = CGFloat(popup.style.width ?? 360)
             let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
                                     store: store, widget: widget)
@@ -212,6 +214,13 @@ enum SceneRenderer {
         return UninstallSheet(store: store, snapshot: snapshot, outcomes: failed ? outcomes : nil, finishing: failed)
             .frame(maxHeight: .infinity, alignment: .top)
             .background(SettingsPalette.background)
+    }
+
+    /// An app menu's entry for a scene's sample menu item, which nothing presses.
+    private static func menuEntry(_ item: SceneFile.MenuItem) -> AppMenuEntry {
+        AppMenuEntry(title: item.title, element: AXUIElementCreateSystemWide(), isEnabled: item.enabled, isChecked: item.checked,
+                     hasSubmenu: item.submenu, shortcut: MenuShortcut(character: item.key, virtualKey: item.virtualKey,
+                                                                      glyph: item.glyph, modifiers: item.modifiers))
     }
 
     private static func bar(_ store: BarStore) -> some View {
