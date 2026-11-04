@@ -302,6 +302,11 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(target(5, 30)?.before, "a")
         XCTAssertEqual(target(70, 0)?.before, "b", "Above the first row counts as the first row")
         XCTAssertEqual(target(5, 80)?.before, "c", "Below the last row counts as the last row")
+        var preview = frames
+        preview["moving"] = CGRect(x: 10, y: 62, width: 40, height: 22)
+        XCTAssertNil(try XCTUnwrap(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 70, frames: preview)).before,
+                     "A row that only the dragged widget's preview fills keeps it at the end")
+        XCTAssertEqual(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 45, frames: preview)?.before, "c")
     }
 
     func testFlowRowsContinueOnTheNextRowOnlyWhenTheNextItemDoesNotFit() {
