@@ -4,7 +4,7 @@ import Testing
 @testable import StableBar
 
 @Test(arguments: [900.0, 2000.0]) @MainActor
-func previewWallpaperLeavesTheSettingsHeaderClickable(width: Double) throws {
+func previewWallpaperLeavesTheSettingsHeaderClickable(width: Double) async throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     let store = try fixture.store()
@@ -33,26 +33,38 @@ func previewWallpaperLeavesTheSettingsHeaderClickable(width: Double) throws {
                           backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     window.alphaValue = 0
-    window.contentView = NSHostingView(rootView: content)
+    let host = NSHostingView(rootView: content)
+    window.contentView = host
     window.orderFrontRegardless()
     defer { window.close() }
-    RunLoop.main.run(until: Date().addingTimeInterval(0.2))
 
-    func click(x: Double, y: Double) throws {
+    func poll(until condition: () -> Bool) async -> Bool {
+        for _ in 0..<100 {
+            host.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            await Task.yield()
+        }
+        return false
+    }
+    let ready = await poll {
+        window.isVisible && host.frame.size == NSSize(width: width, height: 234)
+            && host.hitTest(CGPoint(x: width / 2, y: 26)) != nil
+    }
+    try #require(ready)
+
+    func click(x: Double, y: Double, until condition: () -> Bool) async throws -> Bool {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 234 - y),
                 modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber, context: nil,
                 eventNumber: 0, clickCount: 1, pressure: 1))
             window.sendEvent(event)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
         }
+        return await poll(until: condition)
     }
-    try click(x: width / 2, y: 26)
-    #expect(tabClicks == 1)
-    try click(x: 140, y: 95)
-    let selectedScreen = editor.barScreen
-    #expect(selectedScreen == .monitor)
-    try click(x: width - 65, y: 102)
-    let editingBar = store.barEditing.isActive
+    let clickedTab = try await click(x: width / 2, y: 26) { tabClicks == 1 }
+    #expect(clickedTab)
+    let selectedScreen = try await click(x: 140, y: 95) { editor.barScreen == .monitor }
+    #expect(selectedScreen)
+    let editingBar = try await click(x: width - 65, y: 102) { store.barEditing.isActive }
     #expect(editingBar)
 }
