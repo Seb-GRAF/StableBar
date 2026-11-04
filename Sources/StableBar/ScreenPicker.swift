@@ -35,10 +35,11 @@ extension ScreenKind {
 
 struct Wallpaper: View {
     static let image = Bundle.main.url(forResource: "SetupDay", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
+    var backgroundImage = Self.image
 
     var body: some View {
         GeometryReader { geometry in
-            if let image = Self.image {
+            if let image = backgroundImage {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFill()
@@ -49,6 +50,8 @@ struct Wallpaper: View {
                 SettingsPalette.background
             }
         }
+        // Clipping the scaled image only limits its drawing, not its hit area.
+        .allowsHitTesting(false)
     }
 }
 
