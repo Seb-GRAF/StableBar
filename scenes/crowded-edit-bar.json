@@ -1,0 +1,25 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "height": 40, "offset": 0, "inset": 12, "spacing": 8 },
+    "widgets": [
+      { "id": "apple", "type": "appleMenu", "position": "left" },
+      { "id": "app-menu", "type": "appMenu", "position": "left" },
+      { "id": "cpu", "type": "text", "icon": "cpu", "text": "12%", "position": "right" },
+      { "id": "memory", "type": "text", "icon": "memorychip", "text": "8.4 GB", "position": "right" },
+      { "id": "disk", "type": "text", "icon": "internaldrive", "text": "214 GB", "position": "right" },
+      { "id": "network", "type": "text", "icon": "arrow.up.arrow.down", "text": "1.2 MB/s", "position": "right" },
+      { "id": "weather", "type": "text", "icon": "cloud.sun", "text": "14°", "position": "right" },
+      { "id": "meeting", "type": "text", "icon": "video", "text": "Stand-up in 5 min", "position": "right" },
+      { "id": "focus", "type": "text", "icon": "moon", "text": "Focus", "position": "right" },
+      { "id": "vpn", "type": "text", "icon": "lock.shield", "text": "VPN", "position": "right" },
+      { "id": "bluetooth", "type": "text", "icon": "headphones", "text": "AirPods", "position": "right" },
+      { "id": "battery", "type": "text", "icon": "battery.75percent", "text": "76%", "position": "right" },
+      { "id": "wifi", "type": "text", "icon": "wifi", "text": "Home", "position": "right" },
+      { "id": "timer", "type": "text", "icon": "timer", "text": "24:59", "position": "right" },
+      { "id": "music", "type": "text", "icon": "music.note", "text": "Clair de Lune", "position": "right" },
+      { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
+    ]
+  },
+  "draw": "editBar"
+}

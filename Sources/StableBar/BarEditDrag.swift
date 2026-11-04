@@ -96,10 +96,12 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     let displayID: Int
     let position: WidgetPosition
     let frames: [String: CGRect]
+    /// The tray's +, which shapes its rows.
+    let addSlot: CGRect
     @ViewBuilder let content: () -> Content
 
     func makeNSView(context: Context) -> BarEditDropTargetView {
-        let view = BarEditDropTargetView(rootView: AnyView(content()))
+        let view = BarEditDropTargetView(rootView: AnyView(content()), sizingOptions: [])
         view.registerForDraggedTypes([BarEditDragSourceView.pasteboardType])
         return view
     }
@@ -110,6 +112,7 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
         view.displayID = displayID
         view.position = position
         view.frames = frames
+        view.addSlot = addSlot.isNull ? nil : addSlot
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BarEditDropTargetView, context: Context) -> CGSize? {
@@ -117,12 +120,17 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     }
 }
 
+/// A tray takes the size the edit bar's layout gives it. Its widgets on one row are often wider, so
+/// neither the tray nor its content reports their size to Auto Layout, which would otherwise stretch
+/// the tray past the screen's edge.
 final class BarEditDropTargetView: WidgetHostingView {
     override var isFlipped: Bool { true }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
     weak var editing: BarEditing?
     var displayID = 0
     var position = WidgetPosition.left
     var frames: [String: CGRect] = [:]
+    var addSlot: CGRect?
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
 
@@ -160,8 +168,9 @@ final class BarEditDropTargetView: WidgetHostingView {
     }
 
     private func target(_ sender: any NSDraggingInfo, payload: WidgetDragSession.Payload) -> BarEditInsertion? {
-        editing?.dropTarget(payload.widgetID, on: displayID, position: position,
-                            x: convert(sender.draggingLocation, from: nil).x, frames: frames)
+        let location = convert(sender.draggingLocation, from: nil)
+        return editing?.dropTarget(payload.widgetID, on: displayID, position: position, x: location.x, y: location.y,
+                                   frames: frames, addSlot: addSlot)
     }
 
     private func acceptedPayload(_ sender: any NSDraggingInfo) -> WidgetDragSession.Payload? {

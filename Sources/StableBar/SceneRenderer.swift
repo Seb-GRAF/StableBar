@@ -241,8 +241,9 @@ enum SceneRenderer {
     }
 
     /// The edit bar's height once its layout settles: edit mode measures its trays after the first
-    /// layout, so the strip grows to fit them. Lays the bar out offscreen until the height stops
-    /// changing and every widget has a frame, as BarEditViewTests does.
+    /// layout, and a crowded tray reports its extra rows after the next, so the strip grows to fit them.
+    /// Lays the bar out offscreen until every widget has a frame and the height holds for a few passes,
+    /// as BarEditViewTests does.
     private static func editBarHeight(_ store: BarStore, width: CGFloat) async throws -> CGFloat {
         guard var height = store.barEditing.geometry(for: display)?.layoutHeight else {
             throw CommandFailure(message: "draw: Edit mode needs a configuration.")
@@ -256,14 +257,17 @@ enum SceneRenderer {
         host.sizingOptions = []
         window.contentView = host
         let expected = Set(store.barEditing.entries(on: display).map(\.id))
+        var settled = 0
         for _ in 0..<100 {
             host.layoutSubtreeIfNeeded()
             let measured = store.barEditing.geometry(for: display)?.layoutHeight ?? height
             if measured != height {
                 height = measured
+                settled = 0
                 window.setContentSize(CGSize(width: width, height: height))
             } else if expected.isSubset(of: dropTargets(in: host).flatMap(\.frames.keys)) {
-                break
+                settled += 1
+                if settled == 3 { break }
             }
             try await Task.sleep(for: .milliseconds(10))
         }

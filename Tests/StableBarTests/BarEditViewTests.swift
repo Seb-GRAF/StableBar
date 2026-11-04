@@ -52,7 +52,7 @@ final class BarEditViewTests: XCTestCase {
         }
     }
 
-    @MainActor func testFifteenRealSizeRightWidgetsFitTheNotchedBarWithoutScrolling() async throws {
+    @MainActor func testFifteenRealSizeRightWidgetsFitTheNotchedBarWithoutWrapping() async throws {
         let widgets = (0..<15).map {
             #"{"id":"widget-\#($0)","type":"text","text":"•","position":"right","style":{"width":18,"height":20}}"#
         }.joined(separator: ",")
@@ -79,25 +79,42 @@ final class BarEditViewTests: XCTestCase {
         XCTAssertTrue(right.frames.values.allSatisfy { abs($0.width - 18) < 0.01 })
         XCTAssertTrue(right.frames.values.allSatisfy { $0.minX >= 0 && $0.maxX <= right.bounds.width },
                       "Section: \(right.frame), bounds: \(right.bounds), tiles: \(right.frames)")
-        for section in sections {
-            let scroll = try XCTUnwrap(descendants(section, of: NSScrollView.self).first)
-            XCTAssertFalse(scroll.hasHorizontalScroller)
-        }
+        XCTAssertEqual(Set(right.frames.values.map { Int($0.minY.rounded()) }).count, 1, "Widgets that fit stay on one row")
+        let slot = try XCTUnwrap(right.addSlot, "The tray hands its + to drop targeting, which shapes rows")
+        XCTAssertLessThanOrEqual(slot.maxX, try XCTUnwrap(right.frames.values.map(\.minX).min()), "+ leads the right tray")
         XCTAssertNil(host.window)
         XCTAssertLessThan(try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight, 84)
     }
 
-    @MainActor func testVerticalMouseWheelScrollsTheNativeViewportWithoutAKeyWindow() throws {
-        let scroll = NSScrollView(frame: CGRect(x: 0, y: 0, width: 200, height: 40))
-        let document = NSView(frame: CGRect(x: 0, y: 0, width: 500, height: 40))
-        let wheel = BarEditScrollWheelView(frame: document.bounds)
-        document.addSubview(wheel)
-        scroll.documentView = document
-        let cgEvent = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: -3, wheel2: 0, wheel3: 0))
-        wheel.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: cgEvent)))
-        XCTAssertGreaterThan(scroll.contentView.bounds.minX, 0)
-        XCTAssertNil(scroll.window)
-        XCTAssertNil(wheel.hitTest(.zero), "The wheel overlay must leave clicks and drags alone")
+    @MainActor func testACrowdedSectionWrapsOntoMoreRowsSoEveryWidgetStaysOnTheNotchedBar() async throws {
+        let widgets = (0..<4).map { #"{"id":"left-\#($0)","type":"text","text":"Left widget \#($0)","position":"left"}"# }
+            + (0..<18).map { #"{"id":"right-\#($0)","type":"text","text":"Right widget \#($0)","position":"right"}"# }
+        let fixture = try ThemeGalleryFixture("{\"widgets\":[\(widgets.joined(separator: ","))]}")
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        let display = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)
+        let render = try await editBarImage(store, on: display, width: 1512)
+        XCTAssertEqual(render.frames.count, 22, "Every widget is laid out")
+        for (position, tray) in render.trays {
+            XCTAssertGreaterThanOrEqual(tray.minX, 0, "\(position)")
+            XCTAssertLessThanOrEqual(tray.maxX, 1512 * render.scale, "\(position) stays on the screen")
+        }
+        for (id, frame) in render.frames {
+            let tray = try XCTUnwrap(render.trays[id.hasPrefix("left") ? .left : .right])
+            XCTAssertTrue(frame.minX >= tray.minX - 0.5 && frame.maxX <= tray.maxX + 0.5, "\(id): \(frame) leaves its tray \(tray)")
+            XCTAssertTrue(frame.minY >= tray.minY - 0.5 && frame.maxY <= tray.maxY + 0.5, "\(id): \(frame) leaves its tray \(tray)")
+        }
+        let rows = { (prefix: String) in Set(render.frames.filter { $0.key.hasPrefix(prefix) }.values.map { Int($0.minY.rounded()) }) }
+        XCTAssertEqual(rows("left").count, 1, "A section that fits keeps one row")
+        XCTAssertGreaterThan(rows("right").count, 1, "The crowded section continues on more rows")
+        let right = render.frames.filter { $0.key.hasPrefix("right") }
+        let order = (0..<18).compactMap { right["right-\($0)"] }
+        XCTAssertEqual(order, order.sorted { $0.minY < $1.minY - 0.5 || (abs($0.minY - $1.minY) <= 0.5 && $0.minX < $1.minX) },
+                       "Rows keep the bar's order, left to right and top to bottom")
+        let height = try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight
+        XCTAssertGreaterThanOrEqual(height * render.scale, try XCTUnwrap(render.trays[.right]).height, "The bar grows to the tallest tray")
     }
 
     @MainActor func testUnorderedWindowsLayOutAllSectionsAndReportWidgetFramesWithoutRevealingTheNormalBar() async throws {
@@ -137,18 +154,12 @@ final class BarEditViewTests: XCTestCase {
             let left = try XCTUnwrap(sections.first { $0.position == .left })
             XCTAssertEqual(Set(left.frames.keys), ["a", "b", "d", "e", "f"])
             XCTAssertLessThan(try XCTUnwrap(left.frames["a"]).midX, try XCTUnwrap(left.frames["b"]).midX)
-            let scroll = try XCTUnwrap(descendants(left, of: NSScrollView.self).first)
-            let original = try XCTUnwrap(left.frames["a"]).minX
-            let wheel = try XCTUnwrap(descendants(left, of: BarEditScrollWheelView.self).first)
-            XCTAssertTrue(wheel.enclosingScrollView === scroll)
-            let event = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: -12, wheel2: 0, wheel3: 0))
-            wheel.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: event)))
-            for _ in 0..<20 {
-                host.layoutSubtreeIfNeeded()
-                if left.frames["a"]?.minX != original { break }
-                try await Task.sleep(for: .milliseconds(10))
+            XCTAssertLessThanOrEqual(left.frame.maxX, 1512, "The tray stays on the screen")
+            for id in ["d", "e", "f"] {
+                let frame = try XCTUnwrap(left.frames[id])
+                XCTAssertGreaterThan(frame.minY, try XCTUnwrap(left.frames["a"]).maxY, "\(id) wraps below the group wider than its tray")
+                XCTAssertLessThanOrEqual(frame.maxX, left.bounds.width, "\(id) stays in its tray")
             }
-            XCTAssertEqual(try XCTUnwrap(left.frames["a"]).minX, original - 120, accuracy: 1)
             XCTAssertFalse(window.isVisible)
             store.barEditing.end()
             for _ in 0..<500 {
@@ -323,9 +334,8 @@ final class BarEditViewTests: XCTestCase {
 
     /// Draws the edit bar into memory, in a window that is never ordered onto the screen.
     /// Trays and widget frames are in pixels; a frame's x is exact, its y depends on the host's flip.
-    @MainActor private func editBarImage(_ store: BarStore, on display: BarDisplay) async throws
+    @MainActor private func editBarImage(_ store: BarStore, on display: BarDisplay, width: CGFloat = 900) async throws
         -> (image: NSBitmapImageRep, scale: CGFloat, trays: [WidgetPosition: CGRect], frames: [String: CGRect]) {
-        let width: CGFloat = 900
         var height = try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: height),
                               styleMask: [.borderless], backing: .buffered, defer: false)
@@ -335,14 +345,18 @@ final class BarEditViewTests: XCTestCase {
         host.sizingOptions = []
         window.contentView = host
         let expected = Set(store.barEditing.entries(on: display).map(\.id))
+        // Trays report their heights after a layout, so wait until the height holds for a few passes.
+        var settled = 0
         for _ in 0..<100 {
             host.layoutSubtreeIfNeeded()
             let measured = try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight
             if measured != height {
                 height = measured
+                settled = 0
                 window.setContentSize(CGSize(width: width, height: height))
             } else if expected.isSubset(of: descendants(host, of: BarEditDropTargetView.self).flatMap(\.frames.keys)) {
-                break
+                settled += 1
+                if settled == 3 { break }
             }
             try await Task.sleep(for: .milliseconds(10))
         }
