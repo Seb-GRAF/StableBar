@@ -89,6 +89,11 @@ private struct BarEditFrames: PreferenceKey {
     static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
 }
 
+private struct BarEditAddSlotFrame: PreferenceKey {
+    static let defaultValue = CGRect.null
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = value.union(nextValue()) }
+}
+
 private struct BarEditRowHeight: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
@@ -104,6 +109,7 @@ private struct BarEditSection: View {
     /// Reports the tray's height at the width it was given.
     let measured: (CGFloat) -> Void
     @State private var frames: [String: CGRect] = [:]
+    @State private var addSlot = CGRect.null
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var editing: BarEditing { store.barEditing }
@@ -112,7 +118,7 @@ private struct BarEditSection: View {
         let state = editing.trayState(on: display.id, position: position)
         let surface = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), config: config, colorScheme: colorScheme)
         let shape = RoundedRectangle(cornerRadius: 9)
-        BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames) {
+        BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames, addSlot: addSlot) {
             BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
                               adding: adding)
                 .background {
@@ -131,6 +137,7 @@ private struct BarEditSection: View {
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state.isTarget)
                 .coordinateSpace(name: "editSection")
                 .onPreferenceChange(BarEditFrames.self) { frames = $0 }
+                .onPreferenceChange(BarEditAddSlotFrame.self) { addSlot = $0 }
                 .onPreferenceChange(BarEditRowHeight.self) { if $0 > 0 { measured($0) } }
         }
         .overlay(alignment: .topLeading) {
@@ -263,7 +270,14 @@ struct BarEditSectionRow: View {
         .opacity(store.barEditing.trayState(on: display.id, position: position).showsAddSlot ? 1 : 0)
         .allowsHitTesting(store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
         .accessibilityHidden(!store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
-        .background { if !measuring { BarEditAddAnchor(view: anchor) } }
+        .background {
+            if !measuring {
+                BarEditAddAnchor(view: anchor)
+                GeometryReader { proxy in
+                    Color.clear.preference(key: BarEditAddSlotFrame.self, value: proxy.frame(in: .named("editSection")))
+                }
+            }
+        }
         .help("Add a widget to \(position.title)")
         .accessibilityLabel("Add a widget to \(position.title)")
     }

@@ -80,6 +80,8 @@ final class BarEditViewTests: XCTestCase {
         XCTAssertTrue(right.frames.values.allSatisfy { $0.minX >= 0 && $0.maxX <= right.bounds.width },
                       "Section: \(right.frame), bounds: \(right.bounds), tiles: \(right.frames)")
         XCTAssertEqual(Set(right.frames.values.map { Int($0.minY.rounded()) }).count, 1, "Widgets that fit stay on one row")
+        let slot = try XCTUnwrap(right.addSlot, "The tray hands its + to drop targeting, which shapes rows")
+        XCTAssertLessThanOrEqual(slot.maxX, try XCTUnwrap(right.frames.values.map(\.minX).min()), "+ leads the right tray")
         XCTAssertNil(host.window)
         XCTAssertLessThan(try XCTUnwrap(store.barEditing.geometry(for: display)).layoutHeight, 84)
     }

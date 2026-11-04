@@ -214,10 +214,10 @@ final class BarEditing {
     /// Frames and pointer share the section viewport's coordinates, including its scroll offset.
     /// Groups are one insertion target, even when a member's frame is missing.
     func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
-                    frames: [String: CGRect]) -> BarEditInsertion? {
+                    frames: [String: CGRect], addSlot: CGRect? = nil) -> BarEditInsertion? {
         guard isActive, let shared = store.configuration else { return nil }
         let configuration = screenKind(displayID).map(shared.onScreen) ?? shared
-        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, y: y, frames: frames,
+        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, y: y, frames: frames, addSlot: addSlot,
                                           widgets: configuration.widgets, groups: configuration.groups)
     }
 

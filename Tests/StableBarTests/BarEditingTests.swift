@@ -307,6 +307,14 @@ final class BarEditingTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 70, frames: preview)).before,
                      "A row that only the dragged widget's preview fills keeps it at the end")
         XCTAssertEqual(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 45, frames: preview)?.before, "c")
+        let trailingSlot = CGRect(x: 10, y: 62, width: 22, height: 22)
+        XCTAssertNil(try XCTUnwrap(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 70, frames: frames,
+                                                      addSlot: trailingSlot)).before,
+                     "The row that only + fills comes after the last widget")
+        let leading = ["a": CGRect(x: 10, y: 34, width: 40, height: 22), "b": CGRect(x: 60, y: 34, width: 40, height: 22)]
+        XCTAssertEqual(editing.dropTarget("moving", on: 2, position: .right, x: 90, y: 15, frames: leading,
+                                          addSlot: CGRect(x: 10, y: 6, width: 22, height: 22))?.before, "a",
+                       "The row that only + fills comes before the first widget")
     }
 
     func testFlowRowsContinueOnTheNextRowOnlyWhenTheNextItemDoesNotFit() {

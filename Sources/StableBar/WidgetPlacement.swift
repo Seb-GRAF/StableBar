@@ -15,16 +15,17 @@ enum WidgetPlacement {
     /// Where a widget dropped at `x` lands among `frames`. With `y`, the tray may wrap onto several rows:
     /// the row nearest the pointer decides, and past its last widget comes the next row's first. Rows come
     /// from every tile in `frames`, the dragged widget's preview too, so a row that only the preview fills
-    /// keeps it at the end; the dragged widget is never an anchor.
+    /// keeps it at the end; the dragged widget is never an anchor. The tray's + in `addSlot` can take a row
+    /// of its own, so it shapes rows too without being an anchor.
     static func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
-                           frames: [String: CGRect], widgets: [WidgetConfiguration],
+                           frames: [String: CGRect], addSlot: CGRect? = nil, widgets: [WidgetConfiguration],
                            groups: [String: WidgetGroupConfiguration]) -> BarEditInsertion? {
         guard let moving = widgets.first(where: { $0.id == id }) else { return nil }
         let remaining = widgets.filter {
             $0.position == position && $0.id != id && (moving.group == nil || $0.group != moving.group)
         }
         let units = BarUnit.make(widgets: remaining, groups: groups)
-        let bands = y == nil ? [] : rows(of: Array(frames.values))
+        let bands = y == nil ? [] : rows(of: Array(frames.values) + [addSlot].compactMap { $0 })
         let pointer = y.flatMap { y in
             bands.indices.min { distance(from: y, to: bands[$0]) < distance(from: y, to: bands[$1]) }
         }
