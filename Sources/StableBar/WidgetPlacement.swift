@@ -12,7 +12,9 @@ enum WidgetPlacement {
         }
     }
 
-    static func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat,
+    /// Where a widget dropped at `x` lands among `frames`. With `y`, the tray may wrap onto several rows:
+    /// the row nearest the pointer decides, and past its last widget comes the next row's first.
+    static func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
                            frames: [String: CGRect], widgets: [WidgetConfiguration],
                            groups: [String: WidgetGroupConfiguration]) -> BarEditInsertion? {
         guard let moving = widgets.first(where: { $0.id == id }) else { return nil }
@@ -20,12 +22,14 @@ enum WidgetPlacement {
             $0.position == position && $0.id != id && (moving.group == nil || $0.group != moving.group)
         }
         let units = BarUnit.make(widgets: remaining, groups: groups)
+        let bounds = units.map { unit in unit.widgets.compactMap { frames[$0.id] }.reduce(CGRect.null) { $0.union($1) } }
+        let wrapped = y.map { rows(of: bounds, nearest: $0) }
         var index = 0
         var end: CGFloat = 8
-        for unit in units {
-            let bounds = unit.widgets.compactMap { frames[$0.id] }.reduce(CGRect.null) { $0.union($1) }
+        for (unit, (offset, bounds)) in zip(units, bounds.enumerated()) {
             guard !bounds.isNull else { index += unit.widgets.count; continue }
-            if x < bounds.midX {
+            let row = wrapped.map { $0.rows[offset] - $0.pointer } ?? 0
+            if row > 0 || row == 0 && x < bounds.midX {
                 return BarEditInsertion(displayID: displayID, position: position, before: unit.widgets[0].id,
                                         index: index, x: bounds.minX - 3)
             }
@@ -33,6 +37,23 @@ enum WidgetPlacement {
             index += unit.widgets.count
         }
         return BarEditInsertion(displayID: displayID, position: position, before: nil, index: remaining.count, x: end)
+    }
+
+    /// The row of each frame, top to bottom, where frames that overlap vertically share a row, and the
+    /// row nearest `y`. Frames come in the tray's order, so each row follows the one before it.
+    private static func rows(of frames: [CGRect], nearest y: CGFloat) -> (rows: [Int], pointer: Int) {
+        var bands: [ClosedRange<CGFloat>] = []
+        let rows = frames.map { frame in
+            guard !frame.isNull else { return max(bands.count - 1, 0) }
+            if let last = bands.last, frame.minY < last.upperBound {
+                bands[bands.count - 1] = min(last.lowerBound, frame.minY)...max(last.upperBound, frame.maxY)
+            } else {
+                bands.append(frame.minY...frame.maxY)
+            }
+            return bands.count - 1
+        }
+        let distance = { (band: ClosedRange<CGFloat>) in max(band.lowerBound - y, y - band.upperBound, 0) }
+        return (rows, bands.indices.min { distance(bands[$0]) < distance(bands[$1]) } ?? 0)
     }
 
     static func destination(selectedID: String?, widgets: [WidgetConfiguration]) -> WidgetPosition {

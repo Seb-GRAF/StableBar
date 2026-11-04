@@ -9,8 +9,9 @@ class WidgetHostingView: NSView {
         set { hostingView.rootView = newValue; invalidateIntrinsicContentSize() }
     }
 
-    init(rootView: AnyView) {
+    init(rootView: AnyView, sizingOptions: NSHostingSizingOptions = .standardBounds) {
         hostingView = NSHostingView(rootView: rootView)
+        hostingView.sizingOptions = sizingOptions
         super.init(frame: .zero)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(hostingView)

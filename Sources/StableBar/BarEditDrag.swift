@@ -99,7 +99,7 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     @ViewBuilder let content: () -> Content
 
     func makeNSView(context: Context) -> BarEditDropTargetView {
-        let view = BarEditDropTargetView(rootView: AnyView(content()))
+        let view = BarEditDropTargetView(rootView: AnyView(content()), sizingOptions: [])
         view.registerForDraggedTypes([BarEditDragSourceView.pasteboardType])
         return view
     }
@@ -117,8 +117,12 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     }
 }
 
+/// A tray takes the size the edit bar's layout gives it. Its widgets on one row are often wider, so
+/// neither the tray nor its content reports their size to Auto Layout, which would otherwise stretch
+/// the tray past the screen's edge.
 final class BarEditDropTargetView: WidgetHostingView {
     override var isFlipped: Bool { true }
+    override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
     weak var editing: BarEditing?
     var displayID = 0
     var position = WidgetPosition.left
@@ -160,8 +164,8 @@ final class BarEditDropTargetView: WidgetHostingView {
     }
 
     private func target(_ sender: any NSDraggingInfo, payload: WidgetDragSession.Payload) -> BarEditInsertion? {
-        editing?.dropTarget(payload.widgetID, on: displayID, position: position,
-                            x: convert(sender.draggingLocation, from: nil).x, frames: frames)
+        let location = convert(sender.draggingLocation, from: nil)
+        return editing?.dropTarget(payload.widgetID, on: displayID, position: position, x: location.x, y: location.y, frames: frames)
     }
 
     private func acceptedPayload(_ sender: any NSDraggingInfo) -> WidgetDragSession.Payload? {

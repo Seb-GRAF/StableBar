@@ -122,11 +122,10 @@ final class BarEditingTests: XCTestCase {
         }
     }
 
-    func testMeasuredSectionsThatFitABusyNotchedBarKeepTheirWidthWithoutScrolling() throws {
+    func testMeasuredSectionsThatFitABusyNotchedBarKeepTheirWidthWithoutWrapping() throws {
         for rightWidth: CGFloat in [350, 450] {
             let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: rightWidth]
             let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
-            XCTAssertTrue(layout.scrolling.isEmpty)
             for position in WidgetPosition.allCases {
                 let frame = try XCTUnwrap(layout.sections[position])
                 XCTAssertEqual(frame.width, try XCTUnwrap(widths[position]), accuracy: 0.01,
@@ -139,12 +138,12 @@ final class BarEditingTests: XCTestCase {
         }
     }
 
-    func testOnlyTheSectionThatCannotFitScrollsAndSectionsReachTheRightInset() throws {
+    func testOnlyTheSectionThatCannotFitWrapsAndSectionsReachTheRightInset() throws {
         let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: 2000]
         for (width, display) in [(CGFloat(800), external), (1512, laptop)] {
             let layout = BarEditLayout(width: width, display: display, bar: BarSettings(), preferredWidths: widths)
-            XCTAssertEqual(layout.scrolling, [.right])
             let right = try XCTUnwrap(layout.sections[.right])
+            XCTAssertLessThan(right.width, 2000, "Only the crowded section gets less room than its widgets need")
             XCTAssertEqual(right.x + right.width, width - 12, accuracy: 0.01)
             let ordered = layout.sections.values.sorted { $0.x < $1.x }
             for (index, frame) in ordered.enumerated() {
@@ -161,7 +160,6 @@ final class BarEditingTests: XCTestCase {
     func testEmptyTraysHoldOnlyTheirDragChipWithoutOverlappingOtherTraysOrTheNotch() throws {
         for display in [laptop, external] {
             let layout = BarEditLayout(width: 1512, display: display, bar: BarSettings())
-            XCTAssertTrue(layout.scrolling.isEmpty)
             let ordered = layout.sections.sorted { $0.value.x < $1.value.x }
             for (index, entry) in ordered.enumerated() {
                 XCTAssertEqual(entry.value.width, max(36, BarEditTrayMetrics.chipWidth(for: entry.key)))
@@ -175,10 +173,9 @@ final class BarEditingTests: XCTestCase {
         }
     }
 
-    func testDragLabelsYieldSpaceBeforeFittingWidgetsHaveToScroll() throws {
+    func testDragLabelsYieldSpaceBeforeFittingWidgetsHaveToWrap() throws {
         let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 36, .notchRight: 36, .center: 36, .right: 530]
         let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
-        XCTAssertTrue(layout.scrolling.isEmpty)
         XCTAssertEqual(try XCTUnwrap(layout.sections[.right]).width, 530, accuracy: 0.01)
     }
 
@@ -233,25 +230,6 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(editing.opacity(for: "b"), 1)
     }
 
-    func testOverflowEdgesAndMouseWheelOffsetsFollowTheVisibleContent() {
-        XCTAssertEqual(BarEditOverflow(bounds: CGRect(x: 6, y: 0, width: 188, height: 22), viewportWidth: 200),
-                       BarEditOverflow(bounds: .null, viewportWidth: 200))
-        let start = BarEditOverflow(bounds: CGRect(x: 6, y: 0, width: 500, height: 22), viewportWidth: 200)
-        XCTAssertFalse(start.leading)
-        XCTAssertTrue(start.trailing)
-        let middle = BarEditOverflow(bounds: CGRect(x: -114, y: 0, width: 500, height: 22), viewportWidth: 200)
-        XCTAssertTrue(middle.leading)
-        XCTAssertTrue(middle.trailing)
-        let end = BarEditOverflow(bounds: CGRect(x: -306, y: 0, width: 500, height: 22), viewportWidth: 200)
-        XCTAssertTrue(end.leading)
-        XCTAssertFalse(end.trailing)
-        XCTAssertEqual(BarEditOverflow.offset(from: 0, deltaX: 0, deltaY: -3, precise: false, contentWidth: 500, viewportWidth: 200), 30)
-        XCTAssertEqual(BarEditOverflow.offset(from: 30, deltaX: -12, deltaY: 0, precise: true, contentWidth: 500, viewportWidth: 200), 42)
-        XCTAssertEqual(BarEditOverflow.offset(from: 30, deltaX: 0, deltaY: 100, precise: true, contentWidth: 500, viewportWidth: 200), 0)
-        XCTAssertEqual(BarEditOverflow.offset(from: 290, deltaX: 0, deltaY: -100, precise: true, contentWidth: 500, viewportWidth: 200), 300)
-        XCTAssertEqual(BarEditOverflow.offset(from: 0, deltaX: 0, deltaY: -10, precise: false, contentWidth: 100, viewportWidth: 200), 0)
-    }
-
     @MainActor func testEditHeightFollowsMeasuredContentPerDisplayAndClearsOnExit() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -298,6 +276,50 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(editing.dropTarget("b", on: 1, position: .left, x: 0, frames: frames)?.index, 0)
         XCTAssertEqual(editing.dropTarget("d", on: 2, position: .center, x: 500, frames: [:])?.index, 0)
         XCTAssertNil(editing.dropTarget("missing", on: 2, position: .left, x: 0, frames: frames))
+    }
+
+    @MainActor func testDropTargetsInAWrappedTrayFollowTheRowUnderThePointer() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"a","type":"clock","position":"right"},{"id":"b","type":"clock","position":"right"},
+        {"id":"c","type":"clock","position":"right"},{"id":"d","type":"clock","position":"right"},
+        {"id":"moving","type":"clock","position":"left"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let editing = store.barEditing
+        editing.begin()
+        let frames = ["a": CGRect(x: 10, y: 6, width: 40, height: 22), "b": CGRect(x: 60, y: 6, width: 40, height: 22),
+                      "c": CGRect(x: 10, y: 34, width: 40, height: 22), "d": CGRect(x: 60, y: 34, width: 40, height: 22)]
+        let target = { (x: CGFloat, y: CGFloat) in editing.dropTarget("moving", on: 2, position: .right, x: x, y: y, frames: frames) }
+        XCTAssertEqual(target(5, 15)?.before, "a")
+        XCTAssertEqual(target(90, 15)?.before, "c", "Past the end of the first row inserts before the second row")
+        XCTAssertEqual(target(90, 15)?.index, 2)
+        XCTAssertEqual(target(5, 45)?.before, "c")
+        XCTAssertEqual(target(70, 45)?.before, "d")
+        XCTAssertNil(try XCTUnwrap(target(150, 45)).before, "Past the last widget appends")
+        XCTAssertEqual(target(5, 32)?.before, "c", "Between rows, the nearer row counts")
+        XCTAssertEqual(target(5, 30)?.before, "a")
+        XCTAssertEqual(target(70, 0)?.before, "b", "Above the first row counts as the first row")
+        XCTAssertEqual(target(5, 80)?.before, "c", "Below the last row counts as the last row")
+    }
+
+    func testFlowRowsContinueOnTheNextRowOnlyWhenTheNextItemDoesNotFit() {
+        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: nil), [0..<3])
+        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: 300), [0..<3])
+        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: 250), [0..<2, 2..<3])
+        XCTAssertEqual(BarEditFlow.rows([300, 50, 50], fitting: 200), [0..<1, 1..<3], "An item wider than the tray gets a row of its own")
+        XCTAssertEqual(BarEditFlow.rows([100, 0, 100], fitting: 100), [0..<2, 2..<3], "A collapsed item never starts a row")
+        XCTAssertEqual(BarEditFlow.rows([], fitting: 100), [])
+    }
+
+    @MainActor func testFlowLayoutWrapsAtTheProposedWidthAndStaysOneRowWhenUnconstrained() {
+        let items = BarEditFlow(rowSpacing: 4) {
+            ForEach(0..<3, id: \.self) { _ in Color.clear.frame(width: 100, height: 20) }
+        }
+        XCTAssertEqual(NSHostingView(rootView: items).fittingSize, CGSize(width: 300, height: 20))
+        let wrapped = NSHostingView(rootView: items.frame(width: 250).fixedSize(horizontal: false, vertical: true))
+        XCTAssertEqual(wrapped.fittingSize, CGSize(width: 250, height: 44))
     }
 
     @MainActor func testDropMovesTheWholeGroupOnceAcrossDisplaysAndPositionsAndUndoKeepsEditing() async throws {

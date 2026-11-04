@@ -213,11 +213,11 @@ final class BarEditing {
 
     /// Frames and pointer share the section viewport's coordinates, including its scroll offset.
     /// Groups are one insertion target, even when a member's frame is missing.
-    func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat,
+    func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
                     frames: [String: CGRect]) -> BarEditInsertion? {
         guard isActive, let shared = store.configuration else { return nil }
         let configuration = screenKind(displayID).map(shared.onScreen) ?? shared
-        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, frames: frames,
+        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, y: y, frames: frames,
                                           widgets: configuration.widgets, groups: configuration.groups)
     }
 
@@ -344,6 +344,8 @@ enum BarEditTrayMetrics {
     static let slot: CGFloat = 22
     static let horizontalPadding: CGFloat = 7
     static let verticalPadding: CGFloat = 6
+    /// Between the rows of a tray that wraps, enough for the − badges that overlap a widget's top-left corner.
+    static let rowSpacing: CGFloat = 6
     static let emptyWidth = slot + 2 * horizontalPadding
 
     static func chipWidth(for position: WidgetPosition) -> CGFloat {
@@ -359,10 +361,9 @@ struct BarEditTrayState: Equatable {
 }
 
 /// The normal planner supplies screen order and centering. Only trays wider than
-/// their share of the available space scroll.
+/// their share of the available space wrap onto more rows.
 struct BarEditLayout {
     let sections: [WidgetPosition: BarPlacement]
-    let scrolling: Set<WidgetPosition>
 
     init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:]) {
         let scale = CGFloat(bar.scale(for: display))
@@ -396,16 +397,14 @@ struct BarEditLayout {
         }
         let plan = AdaptiveBarPlanner(inset: inset, spacing: spacing, notchSpacing: notchSpacing, notch: notch)
             .plan(width: width, items: items)
-        let sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
+        sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
             plan.placements[position.rawValue].map { (position, $0) }
         })
-        self.sections = sections
-        scrolling = Set(WidgetPosition.allCases.filter { sections[$0]!.width < content[$0]! - 0.5 })
     }
 
     private static func fit(_ positions: [WidgetPosition], capacity: CGFloat, content: [WidgetPosition: CGFloat],
                             widths: inout [WidgetPosition: CGFloat]) {
-        // Shorten a drag chip before scrolling content that would otherwise fit.
+        // Shorten a drag chip before wrapping content that would otherwise fit.
         let excess = max(0, positions.reduce(CGFloat.zero) { $0 + widths[$1]! } - max(0, capacity))
         let slack = positions.reduce(CGFloat.zero) { $0 + max(0, widths[$1]! - content[$1]!) }
         if slack > 0 {
@@ -417,21 +416,5 @@ struct BarEditLayout {
             widths[position] = width
             remaining -= width
         }
-    }
-}
-
-struct BarEditOverflow: Equatable {
-    let leading: Bool
-    let trailing: Bool
-
-    init(bounds: CGRect, viewportWidth: CGFloat) {
-        leading = !bounds.isNull && bounds.minX < -0.5
-        trailing = !bounds.isNull && bounds.maxX > viewportWidth + 0.5
-    }
-
-    static func offset(from current: CGFloat, deltaX: CGFloat, deltaY: CGFloat, precise: Bool,
-                       contentWidth: CGFloat, viewportWidth: CGFloat) -> CGFloat {
-        let delta = abs(deltaX) > abs(deltaY) ? deltaX : deltaY
-        return min(max(0, current - delta * (precise ? 1 : 10)), max(0, contentWidth - viewportWidth))
     }
 }
