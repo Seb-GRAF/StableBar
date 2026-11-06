@@ -6,7 +6,7 @@ const root = document.documentElement;
 const THEMES = [
   ["built-in", "Built-in", "ws-fill"],
   ["catppuccin", "Catppuccin", "ws-fill"],
-  ["gruvbox", "Gruvbox", "ws-text"],
+  ["gruvbox", "Gruvbox", "ws-fill"],
   ["leman", "Léman", "ws-fill"],
   ["nord", "Nord", "ws-under"],
   ["notch", "Notch", "ws-text"],
