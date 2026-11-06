@@ -14,7 +14,7 @@ StableBar ships with six themes and the Built-in fallback. Themes follow the sys
 | **Notch** | `notch` | A pure black strip that blends into the MacBook notch, with a cyan accent. |
 | **Catppuccin** | `catppuccin` | Rounded pills on a solid strip in Latte and Mocha colors, with a Mauve pill for the focused workspace. |
 | **Nord** | `nord` | A slim 30 pt strip in Snow Storm and Polar Night colors, set in Avenir Next, with a short frost dash under the focused workspace. |
-| **Gruvbox** | `gruvbox` | A strip in Gruvbox colors, set in Rockwell, with red, orange and yellow 70s stripes along its bottom. |
+| **Gruvbox** | `gruvbox` | A strip in Gruvbox colors, set in American Typewriter, with red, orange and yellow 70s stripes along its bottom and an orange block for the focused workspace. |
 | **Phosphor** | `phosphor` | An amber CRT terminal: glowing Monaco on black in dark, brown ink on paper in light, with the focused workspace in reverse video. |
 
 Choose one in setup or in **Settings → Theme**. Theme cards show the same sample bar in each theme's style: three workspaces, Finder, a battery and a clock. The sample shows the theme's bar, widget tiles, fonts, colors and workspace indicator, in the light or dark appearance your bar uses now. Click a card to apply and save it immediately; a checkmark marks your choice, and **Undo** restores the previous theme. You can also select a theme that ships with StableBar by its ID:
