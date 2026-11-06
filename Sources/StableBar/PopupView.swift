@@ -41,6 +41,10 @@ struct PopupView: View {
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     confirmQuit(pid)
+                }, pressMenuBarItem: { reference in
+                    guard store.barEditing.allowsWidgetActions else { return }
+                    if popup.dismissOnAction { store.popup.close() }
+                    store.appMenu.press(reference)
                 }, openSubmenu: { [screenKind] element, row in
                     store.appMenu.openSubmenu(element, beside: row) { submenu in
                         PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
@@ -148,6 +152,7 @@ struct BlockContext {
     let open: (OpenTarget) -> Void
     /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
     var quit: (pid_t) -> Void = { _ in }
+    var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
     /// beside the block.
     var openSubmenu: (AXUIElement?, NSView) -> Void = { _, _ in }
@@ -290,6 +295,11 @@ struct PopupBlockView: View {
                     .buttonStyle(.plain)
             } else if let pid = block.quitField.flatMap({ fields[$0] }).flatMap({ pid_t($0) }) {
                 Button { context.quit(pid) } label: {
+                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+            } else if let reference = block.openMenuBarItem {
+                Button { context.pressMenuBarItem(reference) } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)

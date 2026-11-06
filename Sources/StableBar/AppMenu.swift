@@ -257,6 +257,13 @@ final class AppMenu: NSObject {
         }
     }
 
+    func press(_ reference: MenuBarItemReference) {
+        Task {
+            guard await readMenuBarItems(requestingAccess: true), let item = menuBarItems.first(where: reference.matches) else { return }
+            press(item.entry)
+        }
+    }
+
     func pressUnlessOpen(_ entry: AppMenuEntry) {
         var pid: pid_t = 0
         AXUIElementGetPid(entry.element, &pid)

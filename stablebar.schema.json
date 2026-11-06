@@ -1063,6 +1063,9 @@
         "quitField": {
           "$ref": "#/definitions/string"
         },
+        "openMenuBarItem": {
+          "$ref": "#/definitions/menuBarItem"
+        },
         "lineWidth": {
           "$ref": "#/definitions/number"
         },
