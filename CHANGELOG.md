@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.11.0](https://github.com/Seb-GRAF/StableBar/compare/v0.10.0...v0.11.0) (2026-11-06)
+
+### Features
+
+* ask people once to star StableBar on GitHub ([355bb84](https://github.com/Seb-GRAF/StableBar/commit/355bb847482ec9f4543cb4fd10dbc19eb478dd34)), closes [#423](https://github.com/Seb-GRAF/StableBar/issues/423)
+* draw setup in the website's felt-pen ink over its lighthouse hill ([bf028e6](https://github.com/Seb-GRAF/StableBar/commit/bf028e67a6d97027f363e98ea0bce4c94ab7e360))
+* open an app's menu bar item from a popup block ([3f261fd](https://github.com/Seb-GRAF/StableBar/commit/3f261fd34e3cefa4d270fd845e4a94bdf0ce2226))
+* show keyboard shortcuts in app menus ([b43438e](https://github.com/Seb-GRAF/StableBar/commit/b43438ed5e12427b9c53a699f70fb93ffb7e757a)), closes [#418](https://github.com/Seb-GRAF/StableBar/issues/418)
+* use the lighthouse logo across the app and website ([#420](https://github.com/Seb-GRAF/StableBar/issues/420)) ([ace99e8](https://github.com/Seb-GRAF/StableBar/commit/ace99e8dcaa222c913af7be4cb5438b143c888f8))
+
+### Bug Fixes
+
+* count a wrapped tray's + as a row when dropping a widget ([b40077f](https://github.com/Seb-GRAF/StableBar/commit/b40077f7f394991c56e9aaf2d68639f04457952d))
+* draw Gruvbox's focused workspace as a block on the website ([0cc42c6](https://github.com/Seb-GRAF/StableBar/commit/0cc42c6257b30048830259f8597ae59e1886d39e))
+* keep a dragged widget at the end when its preview wraps onto a new row ([f3cce03](https://github.com/Seb-GRAF/StableBar/commit/f3cce03a031d0ea972007673c15cef1fa7f92c13))
+* keep Settings controls clickable above the bar preview ([43192fa](https://github.com/Seb-GRAF/StableBar/commit/43192fa9c335578a04e35217dab0b1959de51a17))
+* line up Gruvbox's text with its icons and stripes and fill its focused workspace ([485c3cf](https://github.com/Seb-GRAF/StableBar/commit/485c3cf051d3dd27a11f0cb2f93f857b1928a600))
+* reject negative modifiers in a scene's sample menu ([b43e88e](https://github.com/Seb-GRAF/StableBar/commit/b43e88ee362f5bc83ea4f5b69c1db616136ceaee)), closes [#418](https://github.com/Seb-GRAF/StableBar/issues/418)
+* show the right-to-left Return glyph as ↪ in app menus ([7243cff](https://github.com/Seb-GRAF/StableBar/commit/7243cff25249ea758a5c7cfd6edee13421c1b752)), closes [#418](https://github.com/Seb-GRAF/StableBar/issues/418)
+* wrap a crowded position onto more rows while editing the bar in place ([61528de](https://github.com/Seb-GRAF/StableBar/commit/61528de14fb1adb5f47e944e6435f0ba381566ca)), closes [#428](https://github.com/Seb-GRAF/StableBar/issues/428)
+
 ## [0.10.0](https://github.com/Seb-GRAF/StableBar/compare/v0.9.0...v0.10.0) (2026-11-02)
 
 ### Features
