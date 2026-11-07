@@ -23,6 +23,40 @@ final class WidgetSetupTests: XCTestCase {
         XCTAssertEqual(try fixture.document()["widgets"], original)
     }
 
+    @MainActor func testAddingWorkspacesUsesARunningWindowManagerOrSpaces() async throws {
+        for (json, detected, saved) in [
+            (#"{"widgets":[]}"#, WorkspaceSource.spaces, ConfigurationValue?.some(.string("spaces"))),
+            (#"{"widgets":[]}"#, .aerospace, nil),
+            (#"{"workspaceSource":"yabai","widgets":[]}"#, .yabai, .string("yabai"))
+        ] {
+            let fixture = try ThemeGalleryFixture(json)
+            defer { fixture.close() }
+            let store = try fixture.store()
+            defer { store.stop() }
+            var asked: [WorkspaceSource?] = []
+            let setup = WidgetSetup(store: store, workspaceSource: { asked.append($0); return detected })
+            let id = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "workspaces" }), to: .left)
+            XCTAssertNotNil(id, setup.error ?? "")
+            try store.customizationHistory.flush()
+            XCTAssertEqual(asked, [json.contains("yabai") ? .yabai : nil])
+            XCTAssertEqual(try fixture.document()["workspaceSource"], saved)
+            XCTAssertEqual(store.configuration?.workspaceSource, detected)
+            XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
+        }
+    }
+
+    @MainActor func testAddingOtherWidgetsLeavesTheWorkspaceSource() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store, workspaceSource: { _ in XCTFail("Only Workspaces picks a source."); return .spaces })
+        let id = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "text" }), to: .right)
+        XCTAssertNotNil(id)
+        try store.customizationHistory.flush()
+        XCTAssertNil(try fixture.document()["workspaceSource"])
+    }
+
     @MainActor func testUnanchoredAddDoesNotLoadWidgetsForInsertion() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

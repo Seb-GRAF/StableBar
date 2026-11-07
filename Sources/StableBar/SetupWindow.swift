@@ -141,7 +141,7 @@ final class SetupSession {
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
         workspaceSource = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
-                                                   preferring: store.configuration?.workspaceSource ?? .aerospace) ?? .spaces
+                                                   configured: store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
         preview()
     }

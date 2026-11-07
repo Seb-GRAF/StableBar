@@ -101,9 +101,46 @@ enum WorkspaceSource: String, Decodable, Sendable {
         return bundled
     }
 
-    /// The window manager setup offers workspaces for: the configured one, else the first one installed.
-    static func detected(path: String, preferring configured: WorkspaceSource) -> WorkspaceSource? {
-        [configured, .aerospace, .yabai, .omniwm].first { $0.executable(path: path) != nil }
+    /// Whether the manager runs for this user: AeroSpace's or OmniWM's app, or the yabai service. Spaces always does.
+    var isRunning: Bool {
+        switch self {
+        case .aerospace: !NSRunningApplication.runningApplications(withBundleIdentifier: aerospaceBundleID).isEmpty
+        case .omniwm: !NSRunningApplication.runningApplications(withBundleIdentifier: omniwmBundleID).isEmpty
+        case .yabai: userProcessIsRunning(named: "yabai")
+        case .spaces: true
+        }
+    }
+
+    /// The source setup and a new Workspaces widget use: the one the configuration names while it's installed,
+    /// else the first window manager that is installed and running, else macOS Spaces.
+    static func detected(path: String, configured: WorkspaceSource?,
+                         running: (WorkspaceSource) -> Bool = { $0.isRunning }) -> WorkspaceSource {
+        if let configured, configured == .spaces || configured.executable(path: path) != nil { return configured }
+        return [.aerospace, .yabai, .omniwm].first { $0.executable(path: path) != nil && running($0) } ?? .spaces
+    }
+}
+
+let aerospaceBundleID = "bobko.aerospace"
+
+extension BarStore {
+    /// The source a layer of the configuration names; nil when workspaces fall back to AeroSpace.
+    var namedWorkspaceSource: WorkspaceSource? {
+        effectiveDocument["workspaceSource"].flatMap { try? $0.decoded(WorkspaceSource.self) }
+    }
+}
+
+/// Whether a process with this name runs as the current user, such as the yabai service, which has no app.
+func userProcessIsRunning(named name: String) -> Bool {
+    let capacity = proc_listallpids(nil, 0)
+    guard capacity > 0 else { return false }
+    var pids = [pid_t](repeating: 0, count: Int(capacity) + 64)
+    let count = pids.withUnsafeMutableBytes { proc_listallpids($0.baseAddress, Int32($0.count)) }
+    let user = getuid()
+    let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
+    return pids.prefix(Int(max(count, 0))).contains { pid in
+        var info = proc_bsdshortinfo()
+        guard pid > 0, proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size, info.pbsi_uid == user else { return false }
+        return withUnsafeBytes(of: info.pbsi_comm) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) } == name
     }
 }
 
@@ -190,7 +227,7 @@ final class WorkspaceStore {
         observers = [NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
             guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
-                    == (omniwm ? omniwmBundleID : "bobko.aerospace") else { return }
+                    == (omniwm ? omniwmBundleID : aerospaceBundleID) else { return }
             MainActor.assumeIsolated { self?.start() }
         }]
         task = Task {
