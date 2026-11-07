@@ -19,9 +19,10 @@ struct SetupTourView: View {
     private enum Phase { case intro, wallpaper, tour }
 
     private static let pages = [
+        ("Allow what your bar needs.", "macOS asks once for each permission. Continue when every one is allowed."),
         ("Make it yours.", "Choose your widgets, then a theme. Your bar changes as you go."),
         ("Choose where it sits.", "On the top edge, StableBar replaces the macOS menu bar. Below it, macOS menus stay visible."),
-        ("Finishing touches.", "Choose what StableBar may do. Permission buttons ask macOS right away."),
+        ("Finishing touches.", "Choose how StableBar keeps clear of your windows and whether it opens at login."),
         ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
     ]
 
@@ -79,6 +80,18 @@ struct SetupTourView: View {
         .environment(\.colorScheme, .dark)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
+        }
+        .onChange(of: session.needsCalendarAccess) { _, needs in
+            if needs && session.calendarAccess == .notDetermined { Task { await session.requestCalendarAccess() } }
+        }
+        .task(id: phase == .tour) {
+            while phase == .tour && !Task.isCancelled {
+                session.pollAccessibility()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+        .onChange(of: session.menuBarHides) { _, hides in
+            if hides && menuBarQuestion && session.preferences.placement == .top { land() }
         }
         .task {
             guard let configuration = session.store.configuration else { return }
@@ -243,6 +256,7 @@ struct SetupTourView: View {
                     Text("StableBar takes the top edge, and the macOS menu bar hides until you point at it.")
                         .font(.system(size: 16))
                         .foregroundStyle(.white.opacity(0.6))
+                    menuBarAccessNotice
                     if let error = session.error {
                         Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
                     }
@@ -256,17 +270,15 @@ struct SetupTourView: View {
                 .position(x: size.width / 2, y: stage.minY - 110)
                 HStack(spacing: 24) {
                     Button {
-                        Task {
-                            await session.place(.top)
-                            if session.menuBarHides && menuBarQuestion { land() }
-                        }
+                        Task { await session.place(.top) }
                     } label: {
                         Text("Replace the menu bar").frame(height: 48)
                     }
                     .buttonStyle(SetupButtonStyle())
                     .keyboardShortcut(.defaultAction)
+                    .disabled(session.waitingForMenuBarAccess)
                     Button("Keep the menu bar") {
-                        session.preferences.placement = .belowMenuBar
+                        Task { await session.place(.belowMenuBar) }
                         land()
                     }
                     .buttonStyle(.plain)
@@ -307,6 +319,30 @@ struct SetupTourView: View {
         departure = .now.addingTimeInterval(-SetupDemo.flight)
     }
 
+    /// Hiding or showing the menu bar waits for Automation access to System Events instead of failing.
+    @ViewBuilder private var menuBarAccessNotice: some View {
+        if session.waitingForMenuBarAccess {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("macOS asks to let StableBar control System Events. Choose Allow to change the menu bar.")
+            }
+            .font(.callout)
+            .foregroundStyle(.white.opacity(0.75))
+        } else if let placement = session.placementAwaitingAccess {
+            VStack(spacing: 10) {
+                Label("StableBar needs Automation access to \(placement == .top ? "hide" : "show") the macOS menu bar. \(MenuBarAutoHide.accessHint)",
+                      systemImage: "lock")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                Button("Open Automation Settings…") {
+                    lower()
+                    MenuBarAutoHide.openAutomationSettings()
+                }
+                .buttonStyle(SetupButtonStyle(prominent: false))
+            }
+        }
+    }
+
     private var pointer: some View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.up")
@@ -344,7 +380,8 @@ struct SetupTourView: View {
             }
             staged(0.16) {
                 switch session.step {
-                case 0:
+                case 0: permissions
+                case 1:
                     VStack(spacing: 28) {
                         section("Widgets") {
                             Text("Presets add widgets and never remove yours.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
@@ -361,13 +398,26 @@ struct SetupTourView: View {
                             themes
                         }
                     }
-                case 1: placement
-                case 2: access
+                case 2: placement
+                case 3: access
                 default: hints
                 }
             }
             .padding(.top, 32)
-            if let error = session.error {
+            if phase == .tour, session.step > 0, !session.missingPermissions.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(session.step == Self.pages.count - 1 ? "Allow these before you finish" : "Your choices need")
+                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+                    ForEach(session.missingPermissions, id: \.self) { permissionRow($0, compact: true) }
+                }
+                .padding(16)
+                .frame(width: 600, alignment: .leading)
+                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.3)))
+                .padding(.top, 20)
+                .transition(.opacity)
+            }
+            if phase == .tour, let error = session.error {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.orange)
@@ -619,47 +669,15 @@ struct SetupTourView: View {
 
     private var access: some View {
         VStack(alignment: .leading, spacing: 18) {
-            hint("accessibility", "Allow Accessibility", "Lets StableBar move windows and notifications. Menu widgets also use it.") {
-                if session.accessibilityAccess {
-                    Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
-                } else {
-                    Button("Allow…") {
-                        lower()
-                        session.store.windowClearance.requestAccess()
-                    }
-                    .buttonStyle(SetupButtonStyle(prominent: false))
-                }
-            }
-            if session.needsCalendarAccess {
-                hint("calendar", "Allow Calendars", "Meetings shows your next meeting and today's agenda.") {
-                    switch session.calendarAccess {
-                    case .fullAccess:
-                        Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
-                    case .notDetermined:
-                        Button("Allow…") { Task { await session.requestCalendarAccess() } }
-                            .buttonStyle(SetupButtonStyle(prominent: false))
-                    default:
-                        Button("Open Settings…") {
-                            lower()
-                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
-                        }
-                        .buttonStyle(SetupButtonStyle(prominent: false))
-                    }
-                }
-            }
-            if session.needsCalendarSetup {
+            if session.preferences.widgetSets.contains(.meetings) && session.preferences.deferMeetings {
                 HStack {
-                    Text(session.preferences.deferMeetings
-                         ? "Meetings will stay turned off. Turn it on in Settings → Bar when you are ready to allow Calendar access."
-                         : "Without Calendar access, Meetings is saved turned off. Existing widgets stay unchanged.")
+                    Text("Meetings will stay turned off. Turn it on in Settings → Bar when you are ready to allow Calendar access.")
                         .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    Button(session.preferences.deferMeetings ? "Set up Calendar access now" : "Set up Meetings later") {
-                        session.preferences.deferMeetings.toggle()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.8))
+                    Button("Set up Calendar access now") { session.preferences.deferMeetings = false }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.8))
                 }
             }
             hint("macwindow", "Keep windows clear of StableBar", "Moves and resizes ordinary windows. Fullscreen windows stay unchanged.") {
@@ -692,7 +710,7 @@ struct SetupTourView: View {
             let source = session.workspaceSource
             if source == .spaces {
                 if session.preferences.widgetSets.contains(.workspaces(.spaces)) {
-                    Text("Workspaces shows your macOS desktops. To switch desktops from the bar, allow Accessibility above and turn on the Switch to Desktop shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
+                    Text("Workspaces shows your macOS desktops. To switch desktops from the bar, turn on the Switch to Desktop shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
                         .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
                 }
             } else {
@@ -706,6 +724,103 @@ struct SetupTourView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
     }
 
+    private var permissions: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            ForEach(session.neededPermissions, id: \.self) { permissionRow($0) }
+        }
+        .padding(24)
+        .frame(width: 600, alignment: .leading)
+        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+    }
+
+    /// A permission with its state and action. `compact` drops the explanation and keeps the row on one line, for the
+    /// reminder under later steps; the first step explains each one.
+    private func permissionRow(_ permission: SetupPermission, compact: Bool = false) -> some View {
+        let hides = (session.placementAwaitingAccess ?? session.placement) == .top
+        let (symbol, title, detail) = switch permission {
+        case .accessibility:
+            ("accessibility", "Accessibility",
+             "App menus, the Apple menu and Menu bar items open macOS menus. Window clearance and switching desktops use it too.")
+        case .automation:
+            ("menubar.rectangle", "Automation", "Lets StableBar control System Events to \(hides ? "hide" : "show") the macOS menu bar.")
+        case .calendars:
+            ("calendar", "Calendars", "Meetings shows your next meeting and today's agenda.")
+        }
+        return hint(symbol, title, compact ? "" : detail) {
+            if session.isAllowed(permission) {
+                allowedLabel
+            } else if permission == .automation && session.waitingForMenuBarAccess {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("macOS is asking…").font(.system(size: 13)).foregroundStyle(.white.opacity(0.7))
+                }
+            } else if compact {
+                HStack(spacing: 14) {
+                    permissionEscape(permission, hides: hides)
+                    permissionAction(permission)
+                }
+            } else {
+                VStack(alignment: .trailing, spacing: 6) {
+                    permissionAction(permission)
+                    permissionEscape(permission, hides: hides)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func permissionAction(_ permission: SetupPermission) -> some View {
+        switch permission {
+        case .accessibility:
+            permissionButton("Allow…") {
+                lower()
+                session.store.windowClearance.requestAccess()
+            }
+        case .automation:
+            if session.automationAccess == .denied {
+                permissionButton("Open Settings…") {
+                    lower()
+                    MenuBarAutoHide.openAutomationSettings()
+                }
+            } else {
+                permissionButton("Allow…") { Task { await session.allowAutomation() } }
+            }
+        case .calendars:
+            if session.calendarAccess == .notDetermined {
+                permissionButton("Allow…") { Task { await session.requestCalendarAccess() } }
+            } else {
+                permissionButton("Open Settings…") {
+                    lower()
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                }
+            }
+        }
+    }
+
+    /// The choice that drops the need: keeping the menu bar, or setting up Meetings later.
+    @ViewBuilder private func permissionEscape(_ permission: SetupPermission, hides: Bool) -> some View {
+        if permission == .automation && hides {
+            escapeButton("Keep the menu bar instead") { Task { await session.place(.belowMenuBar) } }
+        } else if permission == .calendars && session.needsCalendarSetup {
+            escapeButton("Set up Meetings later") { session.preferences.deferMeetings = true }
+        }
+    }
+
+    private var allowedLabel: some View {
+        Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
+    }
+
+    private func permissionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action).buttonStyle(SetupButtonStyle(prominent: false))
+    }
+
+    private func escapeButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.6))
+    }
+
     private func hint<Control: View>(_ symbol: String, _ title: String, _ detail: String,
                                      @ViewBuilder control: () -> Control = { EmptyView() }) -> some View {
         HStack(spacing: 14) {
@@ -715,7 +830,9 @@ struct SetupTourView: View {
                 .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.system(size: 14, weight: .semibold))
-                Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                if !detail.isEmpty {
+                    Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 12)
             control()
@@ -753,6 +870,7 @@ struct SetupTourView: View {
             }
             .buttonStyle(SetupButtonStyle())
             .keyboardShortcut(.defaultAction)
+            .disabled((session.step == 0 || session.step == Self.pages.count - 1) && !session.missingPermissions.isEmpty)
             Button("Skip setup", action: skip)
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 96, alignment: .leading)
@@ -838,6 +956,7 @@ private struct SetupTile<Label: View>: View {
 
 struct SetupButtonStyle: ButtonStyle {
     var prominent = true
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         configuration.label
@@ -846,7 +965,7 @@ struct SetupButtonStyle: ButtonStyle {
             .padding(.horizontal, 28)
             .frame(minHeight: 40)
             .background(prominent ? Color.white : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-            .opacity(configuration.isPressed ? 0.8 : 1)
+            .opacity(isEnabled ? configuration.isPressed ? 0.8 : 1 : 0.35)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }

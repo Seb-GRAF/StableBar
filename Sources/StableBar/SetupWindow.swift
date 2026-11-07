@@ -114,6 +114,30 @@ private final class SetupTourPanel: NSPanel {
     }
 }
 
+/// What setup reads from macOS and changes there; tests replace it so they never touch this Mac's settings.
+@MainActor
+struct SetupSystem {
+    var automationAccess: (_ asking: Bool) async -> MenuBarAutoHide.Access = { await MenuBarAutoHide.access(asking: $0) }
+    var setMenuBarHidden: (_ hidden: Bool) async throws -> Void = { try await MenuBarAutoHide.set($0) }
+    var menuBarHides: () -> Bool = { MenuBarAutoHide.isOn() }
+    var isTrusted: () -> Bool = { AXIsProcessTrusted() }
+    var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
+    var defaults = UserDefaults.standard
+}
+
+/// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
+enum SetupPermission: CaseIterable, Hashable {
+    case accessibility, automation, calendars
+
+    var title: String {
+        switch self {
+        case .accessibility: "Accessibility"
+        case .automation: "Automation"
+        case .calendars: "Calendars"
+        }
+    }
+}
+
 @MainActor @Observable
 final class SetupSession {
     let store: BarStore
@@ -126,17 +150,33 @@ final class SetupSession {
     var preferences = SetupPreferences() { didSet { preview() } }
     var openAtLogin: Bool?
     var loginStatus = SMAppService.mainApp.status
-    var calendarAccess = EKEventStore.authorizationStatus(for: .event)
-    var menuBarHides = MenuBarAutoHide.isOn()
-    private let menuBarHidAtStart = MenuBarAutoHide.isOn()
-    private let stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar()
-    var accessibilityAccess = AXIsProcessTrusted()
+    var calendarAccess: EKAuthorizationStatus
+    var menuBarHides: Bool
+    private let menuBarHidAtStart: Bool
+    private let stableBarHidMenuBarAtStart: Bool
+    var accessibilityAccess: Bool
+    /// StableBar's access to System Events, which hides and shows the menu bar; nil until setup checks it.
+    private(set) var automationAccess: MenuBarAutoHide.Access?
+    /// The placement that needs Automation access first; setup applies it once access is allowed.
+    private(set) var placementAwaitingAccess: SetupPreferences.Placement?
+    private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
+    @ObservationIgnored let system: SetupSystem
+    private var placementRequest = 0
+    /// macOS is asking whether StableBar may control System Events.
+    var waitingForMenuBarAccess: Bool { accessRequest != nil }
     var error: String?
     private(set) var base: Configuration?
     private let sessionEdits: [ConfigurationEdit]
 
-    init(store: BarStore) {
+    init(store: BarStore, system: SetupSystem = SetupSystem()) {
         self.store = store
+        self.system = system
+        calendarAccess = system.calendarAccess()
+        let menuBarHides = system.menuBarHides()
+        self.menuBarHides = menuBarHides
+        menuBarHidAtStart = menuBarHides
+        stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
+        accessibilityAccess = system.isTrusted()
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
@@ -168,6 +208,55 @@ final class SetupSession {
         store.registry.permissions(for: store.configuration).contains(.calendars) || needsCalendarSetup && !preferences.deferMeetings
     }
 
+    /// Whether the chosen placement means setup changes macOS's menu bar setting, or already did.
+    var needsAutomation: Bool {
+        if placementAwaitingAccess != nil || menuBarHides != menuBarHidAtStart { return true }
+        return placementChangesMenuBar
+    }
+
+    /// The placement needs the menu bar hidden or shown, and it isn't yet.
+    private var placementChangesMenuBar: Bool {
+        switch placement {
+        case .top: !menuBarHides
+        case .belowMenuBar: menuBarHides
+        default: false
+        }
+    }
+
+    /// What macOS must allow for the bar setup builds, in the order setup asks. Every preset has
+    /// app menus and Menu bar items, so Accessibility is always on the list.
+    var neededPermissions: [SetupPermission] {
+        [.accessibility] + (needsAutomation ? [.automation] : []) + (needsCalendarAccess ? [.calendars] : [])
+    }
+
+    /// Setup doesn't finish while any of these is missing.
+    var missingPermissions: [SetupPermission] {
+        neededPermissions.filter { !isAllowed($0) }
+    }
+
+    func isAllowed(_ permission: SetupPermission) -> Bool {
+        switch permission {
+        case .accessibility: accessibilityAccess
+        case .automation: automationAccess == .allowed && placementAwaitingAccess == nil && !placementChangesMenuBar
+        case .calendars: calendarAccess == .fullAccess
+        }
+    }
+
+    /// Asks for Automation access and applies the placement that was waiting for it.
+    func allowAutomation() async {
+        if placementChangesMenuBar || placementAwaitingAccess != nil {
+            await place(placementAwaitingAccess ?? placement)
+        } else {
+            _ = await menuBarAccess()
+        }
+    }
+
+    /// macOS announces no Accessibility change, so setup checks it again while it shows.
+    func pollAccessibility() {
+        let trusted = system.isTrusted()
+        if trusted != accessibilityAccess { accessibilityAccess = trusted }
+    }
+
     func preview() {
         var shown = preferences
         if needsCalendarSetup { shown.deferMeetings = true }
@@ -182,25 +271,57 @@ final class SetupSession {
         }
     }
 
+    /// Hiding or showing the menu bar needs Automation access to System Events, so setup checks it first,
+    /// lets macOS ask once, and otherwise waits for the person to allow it in System Settings.
+    /// The latest choice wins: a placement chosen while macOS asks replaces the earlier one.
     func place(_ placement: SetupPreferences.Placement) async {
+        placementRequest += 1
+        let request = placementRequest
+        placementAwaitingAccess = nil
         if placement == .belowMenuBar { preferences.placement = placement }
+        let changes = (placement == .top) != menuBarHides
+        if changes {
+            let access = await menuBarAccess()
+            guard request == placementRequest else { return }
+            guard access == .allowed else {
+                placementAwaitingAccess = placement
+                error = nil
+                return
+            }
+        }
         do {
             try await setMenuBarHidden(placement == .top)
+            if changes { automationAccess = .allowed }
             preferences.placement = placement
+            error = nil
         } catch {
             let detail = errorMessage(error).contains("-1743")
-                ? "Allow StableBar in System Settings → Privacy & Security → Automation."
+                ? MenuBarAutoHide.accessHint
                 : errorMessage(error)
             self.error = "StableBar couldn’t \(placement == .top ? "hide" : "show") the macOS menu bar. \(detail)"
         }
     }
 
+    /// Clicks while macOS asks share its one dialog.
+    private func menuBarAccess() async -> MenuBarAutoHide.Access {
+        if let accessRequest { return await accessRequest.value }
+        var access = await system.automationAccess(false)
+        if access == .undecided {
+            let request = Task { [system] in await system.automationAccess(true) }
+            accessRequest = request
+            access = await request.value
+            accessRequest = nil
+        }
+        automationAccess = access
+        return access
+    }
+
     private func setMenuBarHidden(_ hidden: Bool) async throws {
         guard hidden != menuBarHides else { return }
-        try await MenuBarAutoHide.set(hidden)
+        try await system.setMenuBarHidden(hidden)
         menuBarHides = hidden
         MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
-            after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart))
+            after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
     }
 
     func requestCalendarAccess() async {
@@ -214,11 +335,18 @@ final class SetupSession {
 
     func refreshAccess() {
         loginStatus = SMAppService.mainApp.status
-        calendarAccess = EKEventStore.authorizationStatus(for: .event)
-        menuBarHides = MenuBarAutoHide.isOn()
-        accessibilityAccess = AXIsProcessTrusted()
+        calendarAccess = system.calendarAccess()
+        menuBarHides = system.menuBarHides()
+        accessibilityAccess = system.isTrusted()
         guard !finished else { return }
         if calendarAccess == .fullAccess { preferences.deferMeetings = false } else { preview() }
+        guard needsAutomation, accessRequest == nil else { return }
+        Task {
+            let access = await system.automationAccess(false)
+            automationAccess = access
+            guard access == .allowed, let placement = placementAwaitingAccess else { return }
+            await place(placement)
+        }
     }
 
     func cancel() {
@@ -228,9 +356,14 @@ final class SetupSession {
     }
 
     func finish() {
+        calendarAccess = system.calendarAccess()
+        accessibilityAccess = system.isTrusted()
+        guard missingPermissions.isEmpty else {
+            error = "Allow \(missingPermissions.map(\.title).formatted()) before you finish setup."
+            return
+        }
         var saved = false
         do {
-            calendarAccess = EKEventStore.authorizationStatus(for: .event)
             if needsCalendarSetup { preferences.deferMeetings = true }
             try preferences.save(to: store.configurationURL, menuBarHeight: menuBarHeight, context: store.context)
             saved = true

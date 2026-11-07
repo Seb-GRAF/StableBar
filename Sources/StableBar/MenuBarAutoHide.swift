@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import CoreServices
 
 /// The macOS setting **Automatically hide and show the menu bar**, which setup turns on for the top edge.
 enum MenuBarAutoHide {
@@ -46,5 +47,63 @@ enum MenuBarAutoHide {
         _ = try await runCommand("/usr/bin/osascript", arguments: [
             "-e", "tell application \"System Events\" to set autohide menu bar of dock preferences to \(hidden)"
         ], timeout: 120)
+    }
+
+    /// Whether StableBar may control System Events, which changes the setting.
+    enum Access: Equatable, Sendable {
+        case allowed, denied, undecided
+    }
+
+    static let systemEvents = "com.apple.systemevents"
+    static let accessHint = "Turn on System Events under StableBar in System Settings → Privacy & Security → Automation."
+
+    /// StableBar's Automation access to System Events. With `asking`, macOS shows its dialog when the person
+    /// hasn't decided yet, and this waits for the answer.
+    @MainActor
+    static func access(asking: Bool) async -> Access {
+        var status = await permission(asking: asking)
+        if Int(status) == procNotFound, await launchSystemEvents() {
+            for _ in 0..<20 where Int(status) == procNotFound {
+                try? await Task.sleep(for: .milliseconds(100))
+                status = await permission(asking: asking)
+            }
+        }
+        return access(for: status)
+    }
+
+    static func access(for status: OSStatus) -> Access {
+        switch Int(status) {
+        case Int(noErr): .allowed
+        case errAEEventNotPermitted: .denied
+        default: .undecided
+        }
+    }
+
+    @MainActor
+    static func openAutomationSettings() {
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
+    }
+
+    /// AEDeterminePermissionToAutomateTarget blocks while macOS's dialog is up, so it runs off the main actor.
+    private static func permission(asking: Bool) async -> OSStatus {
+        await Task.detached {
+            var target = AEAddressDesc()
+            let bundleID = Array(systemEvents.utf8)
+            guard AECreateDesc(DescType(typeApplicationBundleID), bundleID, bundleID.count, &target) == noErr else {
+                return OSStatus(paramErr)
+            }
+            defer { AEDisposeDesc(&target) }
+            return AEDeterminePermissionToAutomateTarget(&target, AEEventClass(typeWildCard), AEEventID(typeWildCard), asking)
+        }.value
+    }
+
+    /// The check needs System Events running; it otherwise starts on the first script.
+    @MainActor
+    private static func launchSystemEvents() async -> Bool {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: systemEvents) else { return false }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        return (try? await NSWorkspace.shared.openApplication(at: url, configuration: configuration)) != nil
     }
 }
