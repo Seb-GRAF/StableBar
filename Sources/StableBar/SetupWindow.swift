@@ -27,8 +27,17 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         showTour(intro: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
+    /// The height the Dock takes at the bottom of a screen, 0 when it sits on a side or another screen.
+    nonisolated static func dockHeight(frame: CGRect, visibleFrame: CGRect) -> Double {
+        max(0, visibleFrame.minY - frame.minY)
+    }
+
     private func showTour(intro: Bool) {
         let screen = NSScreen.main!
+        // macOS hides the Dock only while StableBar is the active app. It shows over the tour whenever
+        // another app is, such as System Settings after Allow…, so the tour keeps its buttons above it.
+        // Measured before the Dock hides.
+        let dock = Self.dockHeight(frame: screen.frame, visibleFrame: screen.visibleFrame)
         let panel = SetupTourPanel(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         panel.title = "Set up StableBar"
         panel.isOpaque = false
@@ -40,7 +49,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + (intro ? 1 : -1))
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
-        let host = NSHostingView(rootView: SetupTourView(session: session!, screen: screen, intro: intro,
+        let host = NSHostingView(rootView: SetupTourView(session: session!, screen: screen, dock: dock, intro: intro,
                                                          finish: { [weak self] in self?.showCard() },
                                                          skip: { [weak self] in self?.closeTour() },
                                                          reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) },

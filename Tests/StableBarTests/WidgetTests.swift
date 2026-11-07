@@ -681,6 +681,16 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     #expect(SetupPreferences.Preset.offered(on: .belowMenuBar, keeping: .notch) == SetupPreferences.Preset.allCases)
 }
 
+@Test func setupKeepsItsButtonsAboveABottomDock() {
+    let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    #expect(SetupWindow.dockHeight(frame: screen, visibleFrame: CGRect(x: 0, y: 76, width: 1440, height: 791)) == 76)
+    #expect(SetupWindow.dockHeight(frame: screen, visibleFrame: CGRect(x: 0, y: 4, width: 1440, height: 863)) == 4)
+    #expect(SetupWindow.dockHeight(frame: screen, visibleFrame: CGRect(x: 70, y: 0, width: 1370, height: 867)) == 0)
+    #expect(SetupWindow.dockHeight(frame: screen, visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 867)) == 0)
+    let below = CGRect(x: 200, y: -1080, width: 1920, height: 1080)
+    #expect(SetupWindow.dockHeight(frame: below, visibleFrame: CGRect(x: 200, y: -1000, width: 1920, height: 1000)) == 80)
+}
+
 @Test func setupPlacesChosenWidgetSetsBesideTheAppAndClockAndKeepsWidgetsWithTheSameID() throws {
     let data = Data(#"""
     { "widgets": [
