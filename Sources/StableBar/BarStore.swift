@@ -868,7 +868,7 @@ final class BarStore: NSObject {
         let script = scripts[widget.id]
         if let error = script?.error { return .failed(error) }
         if widget.content == .workspaces, let error = workspaceStore.error { return .failed(error) }
-        if !widget.content.permissions.isEmpty, !appMenu.isTrusted {
+        if !widget.permissions(source: configuration?.workspaceSource ?? .aerospace).isEmpty, !appMenu.isTrusted {
             return .accessNeeded(.accessibility)
         }
         if let name = widget.providerName, let provider = configuration?.providers[name],

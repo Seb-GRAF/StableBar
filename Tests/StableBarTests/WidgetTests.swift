@@ -334,7 +334,7 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(fixture.store.error == message)
 }
 
-@Test func setupDetectsTheConfiguredWindowManagerBeforeOthersOnThePath() throws {
+@Test func workspacesUseAWindowManagerOnlyWhenItIsInstalledAndRunning() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -342,9 +342,30 @@ private func calls(_ log: URL) -> [Substring] {
         FileManager.default.createFile(atPath: directory.appending(path: name).path, contents: Data("#!/bin/sh\n".utf8),
                                        attributes: [.posixPermissions: 0o700])
     }
-    #expect(WorkspaceSource.detected(path: directory.path, preferring: .omniwm) == .omniwm)
-    #expect(WorkspaceSource.detected(path: directory.path, preferring: .aerospace) == .yabai)
-    #expect(WorkspaceSource.omniwm.executable(path: directory.path) == directory.appending(path: "omniwmctl").path)
+    let path = directory.path
+    // A new configuration names no source: installed managers that aren't running fall back to Spaces.
+    #expect(WorkspaceSource.detected(path: path, configured: nil, running: { _ in false }) == .spaces)
+    #expect(WorkspaceSource.detected(path: path, configured: nil, running: { $0 == .aerospace }) == .spaces)
+    #expect(WorkspaceSource.detected(path: path, configured: nil, running: { $0 == .omniwm }) == .omniwm)
+    #expect(WorkspaceSource.detected(path: path, configured: nil, running: { _ in true }) == .yabai)
+    // A source the configuration names stays while it's installed, running or not.
+    #expect(WorkspaceSource.detected(path: path, configured: .omniwm, running: { _ in false }) == .omniwm)
+    #expect(WorkspaceSource.detected(path: path, configured: .spaces, running: { _ in true }) == .spaces)
+    #expect(WorkspaceSource.detected(path: path, configured: .aerospace, running: { $0 == .yabai }) == .yabai)
+    #expect(WorkspaceSource.omniwm.executable(path: path) == directory.appending(path: "omniwmctl").path)
+}
+
+@Test func yabaiCountsAsRunningOnlyWhileItsProcessRunsForThisUser() throws {
+    let name = "sb-" + UUID().uuidString.prefix(8).lowercased()
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let executable = directory.appending(path: name)
+    try FileManager.default.copyItem(at: URL(filePath: "/bin/sleep"), to: executable)
+    #expect(!userProcessIsRunning(named: name))
+    let process = try Process.run(executable, arguments: ["30"])
+    defer { process.terminate(); process.waitUntilExit() }
+    #expect(userProcessIsRunning(named: name))
 }
 
 @Test @MainActor func workspaceWindowTitlesUseTheConfiguredCharacterLimit() throws {

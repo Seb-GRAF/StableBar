@@ -1,0 +1,21 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "spaces",
+    "widgets": [
+      { "id": "workspaces", "type": "workspaces", "position": "left" },
+      { "id": "clock", "type": "clock", "format": "EEE d MMM  HH:mm", "position": "right" }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "windows": [
+    { "window-id": 1, "window-title": "Safari", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 2, "window-title": "Terminal", "workspace": "2", "app-name": "Terminal", "app-bundle-id": "com.apple.Terminal" }
+  ],
+  "draw": "settings",
+  "section": "general",
+  "height": 1640
+}

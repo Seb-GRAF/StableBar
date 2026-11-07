@@ -52,7 +52,7 @@ extension SourcePermission {
                                             detail: "Calendar widgets show your next meeting and today's agenda. macOS asks for access the first time one updates.",
                                             symbol: "calendar", privacyPane: "Privacy_Calendars")
     static let accessibility = SourcePermission(title: "Accessibility",
-                                                detail: "App menus and the Apple menu read the frontmost app's menus and open them. Control Center and Menu bar items open items in the macOS menu bar.",
+                                                detail: "App menus and the Apple menu read the frontmost app's menus and open them. Control Center and Menu bar items open items in the macOS menu bar. Workspaces switches macOS desktops.",
                                                 symbol: "accessibility", privacyPane: "Privacy_Accessibility")
 }
 
@@ -62,6 +62,14 @@ extension WidgetContent {
         case .appMenu, .appleMenu(click: .menu), .controlCenter, .menuBarItems: [.accessibility]
         default: []
         }
+    }
+}
+
+extension WidgetConfiguration {
+    /// The access the widget needs: its content's, or Accessibility for Workspaces on macOS Spaces, which switches
+    /// desktops by pressing their shortcuts. Window managers switch workspaces themselves.
+    func permissions(source: WorkspaceSource) -> [SourcePermission] {
+        content == .workspaces && source == .spaces ? [.accessibility] : content.permissions
     }
 }
 
@@ -79,7 +87,8 @@ struct DataSourceRegistry: Sendable {
         let running = Set(configuration.activeProviders.compactMap { configuration.providers[$0]?.type })
         var listed = Set<SourcePermission>()
         return (types.filter { running.contains($0.name) }.compactMap(\.permission)
-                + configuration.widgets.filter(\.enabled).flatMap(\.content.permissions)).filter { listed.insert($0).inserted }
+                + configuration.widgets.filter(\.enabled).flatMap { $0.permissions(source: configuration.workspaceSource) })
+            .filter { listed.insert($0).inserted }
     }
 
     static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .calendar])

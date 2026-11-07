@@ -15,6 +15,8 @@ final class WidgetSetup {
     private let store: BarStore
     private let client: PackageStoreClient
     @ObservationIgnored private let widgetsForInsertion: () throws -> [WidgetConfiguration]
+    /// The source a new Workspaces widget reads, given the one the configuration names.
+    @ObservationIgnored private let workspaceSource: (WorkspaceSource?) -> WorkspaceSource
     private(set) var choices = WidgetAddCatalog.compose()
     private(set) var storeUnavailable = false
     private(set) var storeError: String?
@@ -25,9 +27,13 @@ final class WidgetSetup {
     var reviewIsWorking = false
     var error: String?
 
-    init(store: BarStore, client: PackageStoreClient? = nil, widgetsForInsertion: (() throws -> [WidgetConfiguration])? = nil) {
+    init(store: BarStore, client: PackageStoreClient? = nil, widgetsForInsertion: (() throws -> [WidgetConfiguration])? = nil,
+         workspaceSource: ((WorkspaceSource?) -> WorkspaceSource)? = nil) {
         self.store = store
         self.client = client ?? store.packageStoreClient
+        self.workspaceSource = workspaceSource ?? {
+            WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: $0)
+        }
         self.widgetsForInsertion = widgetsForInsertion ?? {
             var loader = ConfigurationLoader()
             loader.themesDirectory = store.themesDirectory
@@ -84,8 +90,18 @@ final class WidgetSetup {
             }
             let id = "widget-" + UUID().uuidString.prefix(8).lowercased()
             let widgets = try anchor == nil ? [] : widgetsForInsertion()
-            guard let edits = choice.add(position: position, id: id, before: anchor, widgets: widgets) else {
+            guard var edits = choice.add(position: position, id: id, before: anchor, widgets: widgets) else {
                 throw CommandFailure(message: "Choose a widget to add.")
+            }
+            // Without a named source, workspaces read AeroSpace even where it isn't running.
+            if choice.properties?["type"] == .string("workspaces") {
+                let source = workspaceSource(store.namedWorkspaceSource)
+                if source != store.configuration?.workspaceSource ?? .aerospace {
+                    var edit = ConfigurationEdit(action: .workspaceSource, name: source.rawValue)
+                    // An active profile's source wins over the main file's, so change it in that profile.
+                    edit.profile = store.origins["workspaceSource"]?.profile
+                    edits.append(edit)
+                }
             }
             try store.customizationHistory.change(edits)
             return id
