@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `workspaces` (or `aerospace`) | Occupied or visible workspaces on this display, with app icons; click to switch | — |
 | `activeApp` | Frontmost app name and icon | — |
-| `appMenu` | Frontmost app's menus; click a title to open its menu | `expandOnHover`: show only the app name until hovered (default `false`) |
+| `appMenu` | The menus the macOS menu bar shows, usually the frontmost app's; click a title to open its menu | `expandOnHover`: show only the app name until hovered (default `false`) |
 | `appleMenu` | Apple logo; click to open the Apple menu or System Settings, or lock the Mac | `click`: `menu` (default), `systemSettings` or `lockScreen` |
 | `controlCenter` | Control Center icon; click to open macOS Control Center | — |
 | `menuBarItems` | Grid symbol; rest the pointer on it or click it to list the items in the macOS menu bar, with their apps' icons, and open one | `openOnHover`: list them when the pointer rests on it (default `true`); `false` lists them only on click |
@@ -54,7 +54,7 @@ A System monitor widget with details creates a default system provider sampling 
 
 ## App menus
 
-An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus takes the free room beside them and slides only the widgets in that room; nothing hides or moves out of the way. When the menus don't fit there, hovering the app name opens them as a row under the bar instead: click a title to open its menu, then move across the titles. The menus stay expanded while one is open. Leave the setting off to show all titles.
+An `appMenu` widget shows the menus the macOS menu bar shows, usually the frontmost app's, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus takes the free room beside them and slides only the widgets in that room; nothing hides or moves out of the way. When the menus don't fit there, hovering the app name opens them as a row under the bar instead: click a title to open its menu, then move across the titles. The menus stay expanded while one is open. Leave the setting off to show all titles.
 
 Click a title to open its menu in a popup below the bar, drawn in your theme's popup style. While a menu is open, move the pointer onto another title to switch to its menu, as in the macOS menu bar; with **Morph between popups** on, the open menu changes into the next one. Rest the pointer on an item with a submenu, or click it, to open the submenu beside it.
 
