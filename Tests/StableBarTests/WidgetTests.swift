@@ -667,6 +667,20 @@ func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throw
     _ = try loader.load(url, data: data)
 }
 
+@Test(arguments: SetupPreferences.Preset.allCases)
+func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
+    for placement in SetupPreferences.Placement.allCases {
+        #expect(preset.preferences(workspaces: .spaces, placement: placement).placement == placement)
+    }
+}
+
+@Test func setupOffersTheNotchPresetOnlyOnTheTopEdge() {
+    #expect(SetupPreferences.Preset.offered(on: .top) == SetupPreferences.Preset.allCases)
+    #expect(SetupPreferences.Preset.offered(on: .belowMenuBar) == [.minimal, .developer, .workday, .everything])
+    #expect(SetupPreferences.Preset.offered(on: .current) == [.minimal, .developer, .workday, .everything])
+    #expect(SetupPreferences.Preset.offered(on: .belowMenuBar, keeping: .notch) == SetupPreferences.Preset.allCases)
+}
+
 @Test func setupPlacesChosenWidgetSetsBesideTheAppAndClockAndKeepsWidgetsWithTheSameID() throws {
     let data = Data(#"""
     { "widgets": [

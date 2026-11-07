@@ -167,7 +167,7 @@ struct SetupPreferences: Equatable {
             case .minimal: "Built-in theme"
             case .developer: "Phosphor theme, dark"
             case .workday: "Léman theme"
-            case .notch: "Notch theme, top edge"
+            case .notch: "Notch theme"
             case .everything: "Catppuccin theme"
             }
         }
@@ -182,6 +182,12 @@ struct SetupPreferences: Equatable {
             }
         }
 
+        /// Notch only blends into the notch on the top edge, so setup offers it once the bar replaces the menu bar.
+        /// A Notch preset already chosen stays offered, so it can still be deselected.
+        static func offered(on placement: Placement, keeping selected: Preset? = nil) -> [Preset] {
+            allCases.filter { $0 != .notch || placement == .top || $0 == selected }
+        }
+
         func preferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
             switch self {
             case .minimal: SetupPreferences(placement: placement, theme: .builtIn, widgetSets: [.sound, .menuBarItems])
@@ -189,7 +195,7 @@ struct SetupPreferences: Equatable {
                                               widgetSets: [.workspaces(workspaces), .system, .sound, .battery, .menuBarItems])
             case .workday: SetupPreferences(placement: placement, theme: .package(id: "leman", version: nil),
                                             widgetSets: [.meetings, .sound, .battery, .menuBarItems])
-            case .notch: SetupPreferences(placement: .top, theme: .package(id: "notch", version: nil), widgetSets: [.sound, .battery, .menuBarItems])
+            case .notch: SetupPreferences(placement: placement, theme: .package(id: "notch", version: nil), widgetSets: [.sound, .battery, .menuBarItems])
             case .everything: SetupPreferences(placement: placement, theme: .package(id: "catppuccin", version: nil),
                                                widgetSets: [.workspaces(workspaces), .meetings, .system, .sound, .battery, .menuBarItems])
             }

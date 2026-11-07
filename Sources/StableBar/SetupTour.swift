@@ -407,14 +407,13 @@ struct SetupTourView: View {
 
     private var presets: some View {
         HStack(spacing: 12) {
-            ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
+            ForEach(SetupPreferences.Preset.offered(on: session.placement, keeping: session.preset), id: \.self) { preset in
                 let selected = session.preset == preset
                 let sets = preset.preferences(workspaces: session.workspaceSource, placement: session.preferences.placement).widgetSets
                 SetupTile(selected: selected) {
                     session.preset = selected ? nil : preset
                     session.preferences = selected ? SetupPreferences(placement: session.preferences.placement)
                         : preset.preferences(workspaces: session.workspaceSource, placement: session.preferences.placement)
-                    if session.preferences.placement == .top { Task { await session.place(.top) } }
                 } label: {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {
@@ -442,7 +441,7 @@ struct SetupTourView: View {
                         .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
                     }
                     .padding(14)
-                    .frame(width: 180, height: 140, alignment: .topLeading)
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 140, maxHeight: 140, alignment: .topLeading)
                 }
                 .help("Adds \(ListFormatter.localizedString(byJoining: sets.map(\.title))).")
             }
