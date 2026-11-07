@@ -15,8 +15,12 @@ final class BarStore: NSObject {
     let windowClearance = WindowClearance()
     let menuBarDelay = MenuBarDelay()
     let appMenu: AppMenu
-    /// The app whose menus the macOS menu bar shows, which App menus and the Apple menu follow.
+    /// The app whose menus the macOS menu bar shows, which App menus and the Apple menu follow, and how the bar
+    /// hears that it changed: the returned object keeps the observation alive.
     @ObservationIgnored var menuBarApp: () -> NSRunningApplication? = { NSWorkspace.shared.menuBarOwningApplication }
+    @ObservationIgnored var observeMenuBarApp: (@escaping @MainActor () -> Void) -> AnyObject = { changed in
+        NSWorkspace.shared.observe(\.menuBarOwningApplication) { _, _ in MainActor.assumeIsolated { changed() } }
+    }
     var crashReports = CrashReports()
     let popup: WidgetPopup
     let innerPopup = WidgetPopup()
@@ -86,7 +90,7 @@ final class BarStore: NSObject {
     private(set) var reloadTask: Task<Void, Never>?
     private var eventObservers: [NSObjectProtocol] = []
     private var reloadObserver: NSObjectProtocol?
-    private var menuBarAppObservation: NSKeyValueObservation?
+    private var menuBarAppObservation: AnyObject?
     private var actions: [UUID: Task<Void, Never>] = [:]
     private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
@@ -155,9 +159,7 @@ final class BarStore: NSObject {
             self, selector: #selector(updateActiveApp), name: NSWorkspace.didActivateApplicationNotification, object: nil)
         // The menus follow the menu bar rather than the front app: macOS hands the menu bar over a moment after it
         // announces an activation, and keeps it on the previous app while an agent without one is in front (#443).
-        menuBarAppObservation = NSWorkspace.shared.observe(\.menuBarOwningApplication) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.readAppMenu() }
-        }
+        menuBarAppObservation = observeMenuBarApp { [weak self] in self?.readAppMenu() }
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
             NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(refreshAppMenu), name: name, object: nil)
         }

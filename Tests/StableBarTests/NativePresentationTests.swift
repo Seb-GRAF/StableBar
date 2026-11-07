@@ -219,13 +219,25 @@ private final class MenuReadFixture: @unchecked Sendable {
     let store = BarStore(configurationURL: root,
                          appMenu: AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep))
     defer { store.stop() }
+    var owner = MenuApplication(pid: 100, bundleID: "com.apple.finder")
+    var ownerChanged: (@MainActor () -> Void)?
     store.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
-    store.menuBarApp = { MenuApplication(pid: 100, bundleID: "com.apple.finder") }
+    store.menuBarApp = { owner }
+    store.observeMenuBarApp = { changed in
+        ownerChanged = changed
+        return NSObject()
+    }
     store.start()
     await store.appMenu.readTask?.value
     #expect(source.reads == [100])
     #expect(store.appMenu.appleMenu?.title == "Apple")
     #expect(store.appMenu.items.map(\.title) == ["First", "File"])
+
+    owner = MenuApplication(pid: 300, bundleID: "com.apple.Safari")
+    let changeOwner = try #require(ownerChanged)
+    changeOwner()
+    await store.appMenu.readTask?.value
+    #expect(source.reads == [100, 300])
 }
 
 @Test @MainActor func appleMenuKeepsItsIconWhenTheSourceAppChanges() throws {
