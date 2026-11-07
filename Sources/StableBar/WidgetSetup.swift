@@ -97,7 +97,10 @@ final class WidgetSetup {
             if choice.properties?["type"] == .string("workspaces") {
                 let source = workspaceSource(store.namedWorkspaceSource)
                 if source != store.configuration?.workspaceSource ?? .aerospace {
-                    edits.append(ConfigurationEdit(action: .workspaceSource, name: source.rawValue))
+                    var edit = ConfigurationEdit(action: .workspaceSource, name: source.rawValue)
+                    // An active profile's source wins over the main file's, so change it in that profile.
+                    edit.profile = store.origins["workspaceSource"]?.profile
+                    edits.append(edit)
                 }
             }
             try store.customizationHistory.change(edits)

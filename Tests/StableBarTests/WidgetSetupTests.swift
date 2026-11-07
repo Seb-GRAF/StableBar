@@ -45,6 +45,22 @@ final class WidgetSetupTests: XCTestCase {
         }
     }
 
+    @MainActor func testAddingWorkspacesChangesTheSourceInTheActiveProfileThatNamesIt() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"profile":"work","widgets":[],"profiles":[{"name":"work","configuration":{"workspaceSource":"yabai"}}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        let setup = WidgetSetup(store: store, workspaceSource: { _ in .spaces })
+        let id = await setup.add(try XCTUnwrap(setup.choices.first { $0.id == "workspaces" }), to: .left)
+        XCTAssertNotNil(id, setup.error ?? "")
+        try store.customizationHistory.flush()
+        let document = try fixture.document()
+        XCTAssertNil(document["workspaceSource"])
+        let profiles = try XCTUnwrap(document["profiles"]?.decoded([[String: ConfigurationValue]].self))
+        XCTAssertEqual(profiles.first?["configuration"], .object(["workspaceSource": .string("spaces")]))
+        XCTAssertEqual(store.configuration?.workspaceSource, .spaces)
+    }
+
     @MainActor func testAddingOtherWidgetsLeavesTheWorkspaceSource() async throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[]}"#)
         defer { fixture.close() }
