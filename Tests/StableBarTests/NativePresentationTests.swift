@@ -207,6 +207,27 @@ private final class MenuReadFixture: @unchecked Sendable {
     #expect(source.reads == [100, 100, 100, 100, 100])
 }
 
+/// A background agent such as Logitech G HUB's can come to the front without a menu bar; macOS keeps showing the
+/// previous app's menus, and so must the bar (#443).
+@Test @MainActor func appMenusFollowTheMenuBarAppWhileAnAgentIsInFront() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(#"{"widgets":[{"id":"menus","type":"appMenu","position":"left"}]}"#.utf8).write(to: root)
+    let source = MenuReadFixture()
+    let store = BarStore(configurationURL: root,
+                         appMenu: AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep))
+    defer { store.stop() }
+    store.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
+    store.menuBarApp = { MenuApplication(pid: 100, bundleID: "com.apple.finder") }
+    store.start()
+    await store.appMenu.readTask?.value
+    #expect(source.reads == [100])
+    #expect(store.appMenu.appleMenu?.title == "Apple")
+    #expect(store.appMenu.items.map(\.title) == ["First", "File"])
+}
+
 @Test @MainActor func appleMenuKeepsItsIconWhenTheSourceAppChanges() throws {
     let appMenu = AppMenu()
     func image(title: String, pid: pid_t) throws -> CGImage {
