@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | `workspaces` (or `aerospace`) | Occupied or visible workspaces on this display, with app icons; click to switch | — |
 | `activeApp` | Frontmost app name and icon | — |
-| `appMenu` | Frontmost app's menus; click a title to open its menu | `expandOnHover`: show only the app name until hovered (default `false`) |
+| `appMenu` | The menus the macOS menu bar shows, usually the frontmost app's; click a title to open its menu | `expandOnHover`: show only the app name until hovered (default `false`) |
 | `appleMenu` | Apple logo; click to open the Apple menu or System Settings, or lock the Mac | `click`: `menu` (default), `systemSettings` or `lockScreen` |
 | `controlCenter` | Control Center icon; click to open macOS Control Center | — |
 | `menuBarItems` | Grid symbol; rest the pointer on it or click it to list the items in the macOS menu bar, with their apps' icons, and open one | `openOnHover`: list them when the pointer rests on it (default `true`); `false` lists them only on click |
@@ -54,7 +54,7 @@ A System monitor widget with details creates a default system provider sampling 
 
 ## App menus
 
-An `appMenu` widget shows the frontmost app's menus, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus takes the free room beside them and slides only the widgets in that room; nothing hides or moves out of the way. When the menus don't fit there, hovering the app name opens them as a row under the bar instead: click a title to open its menu, then move across the titles. The menus stay expanded while one is open. Leave the setting off to show all titles.
+An `appMenu` widget shows the menus the macOS menu bar shows, usually the frontmost app's, such as File, Edit and View, with the app's own menu in bold. In **Settings → Bar**, select App menus and turn on **Expand on hover** to show only the app name until the pointer enters the widget. Expanding the menus takes the free room beside them and slides only the widgets in that room; nothing hides or moves out of the way. When the menus don't fit there, hovering the app name opens them as a row under the bar instead: click a title to open its menu, then move across the titles. The menus stay expanded while one is open. Leave the setting off to show all titles.
 
 Click a title to open its menu in a popup below the bar, drawn in your theme's popup style. While a menu is open, move the pointer onto another title to switch to its menu, as in the macOS menu bar; with **Morph between popups** on, the open menu changes into the next one. Rest the pointer on an item with a submenu, or click it, to open the submenu beside it.
 
@@ -72,7 +72,7 @@ Both menu widgets use the configured hover background and keep their normal text
 }
 ```
 
-StableBar reads the titles through Accessibility when you switch apps, wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks, submenus and keyboard shortcuts, which line up on the right as in the macOS menu bar, with 🌐 for fn. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
+App menus and the Apple menu follow the app that owns the macOS menu bar, even while the menu bar is hidden. A background helper without menus, such as a device driver's agent, can come to the front without taking over the menu bar; the widgets then keep the previous app's menus, as macOS does. StableBar reads the titles through Accessibility when the menu bar moves to another app, when you wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks, submenus and keyboard shortcuts, which line up on the right as in the macOS menu bar, with 🌐 for fn. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
 
 ## yabai workspaces
 
