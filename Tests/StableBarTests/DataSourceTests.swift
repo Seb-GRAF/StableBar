@@ -893,6 +893,18 @@ private struct RelayProbe {
         {"widgets":[{"id":"apple","type":"appleMenu","position":"left","click":"\#(click)"}]}
         """#)).isEmpty)
     }
+    // Workspaces on macOS Spaces switches desktops with keyboard events; window managers switch for themselves.
+    #expect(registry.permissions(for: try configuration(#"""
+    {"workspaceSource":"spaces","widgets":[{"id":"spaces","type":"workspaces","position":"left"}]}
+    """#)) == [.accessibility])
+    #expect(registry.permissions(for: try configuration(#"""
+    {"workspaceSource":"spaces","widgets":[{"id":"spaces","type":"workspaces","position":"left","enabled":false}]}
+    """#)).isEmpty)
+    for source in ["aerospace", "yabai", "omniwm"] {
+        #expect(registry.permissions(for: try configuration(#"""
+        {"workspaceSource":"\#(source)","widgets":[{"id":"spaces","type":"workspaces","position":"left"}]}
+        """#)).isEmpty)
+    }
     #expect(registry.permissions(for: nil).isEmpty)
     #expect(DataSourceRegistry.builtIn.permissions(for: try configuration(#"""
     {"providers":{"meetings":{"type":"calendar","calendars":["Work"]}},
