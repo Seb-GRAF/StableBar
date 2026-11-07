@@ -14,7 +14,13 @@ final class BarStore: NSObject {
     let workspaceStore: WorkspaceStore
     let windowClearance = WindowClearance()
     let menuBarDelay = MenuBarDelay()
-    let appMenu = AppMenu()
+    let appMenu: AppMenu
+    /// The app whose menus the macOS menu bar shows, which App menus and the Apple menu follow, and how the bar
+    /// hears that it changed: the returned object keeps the observation alive.
+    @ObservationIgnored var menuBarApp: () -> NSRunningApplication? = { NSWorkspace.shared.menuBarOwningApplication }
+    @ObservationIgnored var observeMenuBarApp: (@escaping @MainActor () -> Void) -> AnyObject = { changed in
+        NSWorkspace.shared.observe(\.menuBarOwningApplication) { _, _ in MainActor.assumeIsolated { changed() } }
+    }
     var crashReports = CrashReports()
     let popup: WidgetPopup
     let innerPopup = WidgetPopup()
@@ -84,13 +90,16 @@ final class BarStore: NSObject {
     private(set) var reloadTask: Task<Void, Never>?
     private var eventObservers: [NSObjectProtocol] = []
     private var reloadObserver: NSObjectProtocol?
+    private var menuBarAppObservation: AnyObject?
     private var actions: [UUID: Task<Void, Never>] = [:]
     private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
     init(configurationURL: URL = LaunchCommand.configurationURL, registry: DataSourceRegistry = .builtIn,
          popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory,
-         customizationSaveDelay: Duration = .milliseconds(500), release: String? = AppVersion.release) {
+         customizationSaveDelay: Duration = .milliseconds(500), release: String? = AppVersion.release,
+         appMenu: AppMenu = AppMenu()) {
         self.configurationURL = configurationURL
+        self.appMenu = appMenu
         sharedConfigurationURL = configurationURL
         self.release = release
         self.customizationSaveDelay = customizationSaveDelay
@@ -148,6 +157,9 @@ final class BarStore: NSObject {
         packageLibrary.startUpdateChecks()
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(updateActiveApp), name: NSWorkspace.didActivateApplicationNotification, object: nil)
+        // The menus follow the menu bar rather than the front app: macOS hands the menu bar over a moment after it
+        // announces an activation, and keeps it on the previous app while an agent without one is in front (#443).
+        menuBarAppObservation = observeMenuBarApp { [weak self] in self?.readAppMenu() }
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
             NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(refreshAppMenu), name: name, object: nil)
         }
@@ -164,7 +176,6 @@ final class BarStore: NSObject {
         if let screen = NSScreen.main { activeDisplayID = BarDisplay(screen: screen).id }
         popup.close()
         refreshContext()
-        readAppMenu()
         send(.frontApp, ["INFO": activeApp?.localizedName ?? "Desktop"])
     }
 
@@ -175,7 +186,7 @@ final class BarStore: NSObject {
             default: false
             }
         } == true
-        appMenu.read(shown ? activeApp : nil)
+        appMenu.read(shown ? menuBarApp() : nil)
     }
 
     @objc private func refreshAppMenu() {
@@ -1153,6 +1164,7 @@ final class BarStore: NSObject {
         popup.closeAll()
         windowClearance.stop()
         menuBarDelay.stop()
+        menuBarAppObservation = nil
         appMenu.read(nil)
         reloadTask?.cancel()
         configurationWatcher.stop()
