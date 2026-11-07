@@ -3,6 +3,8 @@ import SwiftUI
 struct SetupTourView: View {
     @Bindable var session: SetupSession
     let screen: NSScreen
+    /// The height the Dock takes at the bottom of the screen. The tour lays out above it.
+    let dock: Double
     let finish: () -> Void
     let skip: () -> Void
     let reveal: () -> Void
@@ -26,10 +28,11 @@ struct SetupTourView: View {
         ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
     ]
 
-    init(session: SetupSession, screen: NSScreen, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
+    init(session: SetupSession, screen: NSScreen, dock: Double, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
          reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?) {
         _session = Bindable(session)
         self.screen = screen
+        self.dock = dock
         self.finish = finish
         self.skip = skip
         self.reveal = reveal
@@ -72,8 +75,8 @@ struct SetupTourView: View {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
                     }
                 }
-                .position(x: size.width / 2, y: size.height - 89)
-                dots.position(x: size.width / 2, y: size.height - 44)
+                .position(x: size.width / 2, y: size.height - dock - 89)
+                dots.position(x: size.width / 2, y: size.height - dock - 44)
             }
         }
         .ignoresSafeArea()
@@ -239,7 +242,7 @@ struct SetupTourView: View {
                     .disabled(departure != nil || t < 2.8)
                     .opacity(ready * leaving)
                     .offset(y: 12 * (1 - ready))
-                    .position(x: size.width / 2, y: size.height - 89)
+                    .position(x: size.width / 2, y: size.height - dock - 89)
                 Button("Skip intro") { departure = .now.addingTimeInterval(-SetupDemo.flight) }
                     .buttonStyle(.plain)
                     .font(.system(size: 13))
@@ -247,7 +250,7 @@ struct SetupTourView: View {
                     .keyboardShortcut(.cancelAction)
                     .disabled(d < 0 || d >= SetupDemo.flight)
                     .opacity(progress(d, 0.6, 0.4) * (1 - progress(d, SetupDemo.flight, 0.2)))
-                    .position(x: size.width / 2, y: size.height - 89)
+                    .position(x: size.width / 2, y: size.height - dock - 89)
             }
             if menuBarQuestion && elapsed >= SetupDemo.flight {
                 let asked = UnitCurve.easeOut.value(at: progress(elapsed, SetupDemo.flight, 0.45))
@@ -287,7 +290,7 @@ struct SetupTourView: View {
                     .keyboardShortcut(.cancelAction)
                 }
                 .opacity(asked)
-                .position(x: size.width / 2, y: size.height - 89)
+                .position(x: size.width / 2, y: size.height - dock - 89)
             }
         }
     }
@@ -426,7 +429,7 @@ struct SetupTourView: View {
             }
         }
         .foregroundStyle(.white)
-        .padding(.top, size.height * 0.24)
+        .padding(.top, (size.height - dock) * 0.24)
         .frame(width: size.width, height: size.height, alignment: .top)
     }
 
