@@ -51,6 +51,18 @@ private func difference(_ first: [UInt8], _ second: [UInt8]) -> Int {
     #expect(try difference(calendar(fixed), first) <= 1)
 }
 
+@Test @MainActor func versionRowDrawsTheFixedVersion() throws {
+    // Settings shows AboutView's rows without installing AboutView, so the test draws them the same way.
+    func rows(_ version: String) throws -> [UInt8] {
+        try pixels(VStack { AboutView(update: nil).rows }
+            .frame(width: 480)
+            .environment(\.fixedVersion, AppVersion(version: version, build: nil, development: true)))
+    }
+    let first = try rows("0.0.0-dev")
+    #expect(try difference(rows("0.0.0-dev.ff1d0e9-dirty"), first) > 1)
+    #expect(try difference(rows("0.0.0-dev"), first) <= 1)
+}
+
 @Test func clockFormatSamplesUseTheGivenDate() {
     let format = WidgetClockFormat.common[4]
     #expect(format.value == "EEE d MMM  HH:mm")

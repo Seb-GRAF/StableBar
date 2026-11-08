@@ -27,6 +27,9 @@ struct AppVersion {
         self.development = development
     }
 
+    /// The development build the docs images and scenes show, whichever commit draws them.
+    static let sample = AppVersion(version: "0.0.0-dev", build: nil, development: true)
+
     var channel: Channel {
         guard !development, let version else { return .development }
         let release = version.prefix { $0 != "+" }

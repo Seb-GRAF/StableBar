@@ -1,9 +1,13 @@
 import AppKit
 import SwiftUI
 
+extension EnvironmentValues {
+    /// A version to show instead of this build's, so a render draws the same version row on every commit.
+    @Entry var fixedVersion: AppVersion?
+}
+
 struct AboutView: View {
     let update: AppUpdate?
-    private let version = AppVersion()
 
     var body: some View {
         Form {
@@ -27,13 +31,7 @@ struct AboutView: View {
 
     var rows: some View {
         Group {
-            SettingRow(title: "StableBar \(version.version ?? "version unavailable")",
-                       hint: version.build.map { "\(version.channel.rawValue) · build \($0)" } ?? version.channel.rawValue) {
-                if let update, update.version == nil {
-                    Button("Check now", action: update.checkForUpdates)
-                }
-            }
-            .textSelection(.enabled)
+            VersionRow(update: update)
             if let update {
                 UpdateSettings(update: update)
             } else {
@@ -42,6 +40,24 @@ struct AboutView: View {
                 }
             }
         }
+    }
+}
+
+/// This build's version and channel. A view of its own because Settings shows `AboutView.rows` without
+/// installing `AboutView`, which would leave its environment unread.
+private struct VersionRow: View {
+    let update: AppUpdate?
+    @Environment(\.fixedVersion) private var fixedVersion
+
+    var body: some View {
+        let version = fixedVersion ?? AppVersion()
+        SettingRow(title: "StableBar \(version.version ?? "version unavailable")",
+                   hint: version.build.map { "\(version.channel.rawValue) · build \($0)" } ?? version.channel.rawValue) {
+            if let update, update.version == nil {
+                Button("Check now", action: update.checkForUpdates)
+            }
+        }
+        .textSelection(.enabled)
     }
 }
 
