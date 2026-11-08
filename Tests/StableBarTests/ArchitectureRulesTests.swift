@@ -24,17 +24,14 @@ private func swiftSources() throws -> [(path: String, text: String)] {
     #expect(stored <= 75, "BarStore has \(stored) stored properties: put new state in a type of its own (AGENTS.md)")
 }
 
-/// A view or a task can keep a helper alive after the `BarStore` it points back at is gone, so new references to it
+/// A view or a task can keep a helper alive after the `BarStore` it points back at is gone, so references back to it
 /// are `weak`.
-@Test func unownedReferencesOnlyGoAway() throws {
-    let allowed = ["StableBar/BarEditing.swift": 1, "StableBar/ConfigurationHistory.swift": 2,
-                   "StableBar/WidgetPopup.swift": 1]
+@Test func noUnownedReferences() throws {
     let files = try swiftSources()
     #expect(files.count > 100)
     for file in files {
-        let found = file.text.matches(of: #/\bunowned\b/#).count
-        #expect(found <= allowed[file.path, default: 0],
-                "\(file.path) has \(found) unowned references: hold a store or owner weakly (AGENTS.md)")
+        #expect(file.text.firstMatch(of: #/\bunowned\b/#) == nil,
+                "\(file.path) has an unowned reference: hold a store or owner weakly (AGENTS.md)")
     }
 }
 
