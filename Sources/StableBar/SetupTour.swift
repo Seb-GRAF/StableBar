@@ -491,11 +491,9 @@ struct SetupTourView: View {
         HStack(spacing: 12) {
             ForEach(SetupPreferences.Preset.offered(on: session.placement, keeping: session.preset), id: \.self) { preset in
                 let selected = session.preset == preset
-                let sets = preset.shownWidgetSets(workspaces: session.workspaceSource, placement: session.presetPlacement)
+                let sets = session.shownWidgetSets(preset)
                 SetupTile(selected: selected) {
-                    session.preset = selected ? nil : preset
-                    session.preferences = selected ? SetupPreferences(placement: session.preferences.placement, workspaces: session.workspaceSource)
-                        : preset.preferences(workspaces: session.workspaceSource, placement: session.preferences.placement)
+                    session.toggle(preset)
                 } label: {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack {

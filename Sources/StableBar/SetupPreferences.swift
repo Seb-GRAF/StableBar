@@ -190,16 +190,19 @@ struct SetupPreferences: Equatable {
 
         /// Below the macOS menu bar, a preset leaves out Menu bar items, which the menu bar shows right above it.
         /// The preset's choices. Its widget sets keep Menu bar items wherever the bar sits: setup leaves them out
-        /// below the menu bar when it applies them, so a later move to the top edge still brings them.
-        func preferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
+        /// below the menu bar when it applies them, so a later move to the top edge still brings them. On a Mac
+        /// without an internal battery, Battery would only show a plug and "AC", so the preset leaves it out.
+        func preferences(workspaces: WorkspaceSource, placement: Placement, hasBattery: Bool = true) -> SetupPreferences {
             var preferences = basePreferences(workspaces: workspaces, placement: placement)
             preferences.workspaces = workspaces
+            if !hasBattery { preferences.widgetSets.removeAll { $0 == .battery } }
             return preferences
         }
 
         /// The widget sets the preset's tile shows for a bar at `placement`: below the menu bar, without Menu bar items.
-        func shownWidgetSets(workspaces: WorkspaceSource, placement: Placement) -> [WidgetSet] {
-            preferences(workspaces: workspaces, placement: placement).widgetSets.filter { placement != .belowMenuBar || $0 != .menuBarItems }
+        func shownWidgetSets(workspaces: WorkspaceSource, placement: Placement, hasBattery: Bool = true) -> [WidgetSet] {
+            preferences(workspaces: workspaces, placement: placement, hasBattery: hasBattery).widgetSets
+                .filter { placement != .belowMenuBar || $0 != .menuBarItems }
         }
 
         private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
