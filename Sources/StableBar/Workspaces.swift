@@ -175,6 +175,8 @@ final class WorkspaceStore {
     private(set) var mode: String?
     /// Injectable executable lookup lets lifecycle tests use a scratch event stream.
     var executablePath: (() throws -> String)?
+    /// Where diagnostics go, such as how a subscription ended; tests read them instead.
+    var log: (String) -> Void = { FileHandle.standardError.write(Data("StableBar: \($0)\n".utf8)) }
     private(set) var tracksWorkspaces = true
     var isRunning: Bool { task != nil }
     private var refreshTask: Task<Void, Never>?
@@ -287,7 +289,7 @@ final class WorkspaceStore {
                         let reason = await Self.endReason(of: stream)
                         // Stopping or reconnecting the store while it waited ended the subscription, not a failure.
                         try Task.checkCancellation()
-                        FileHandle.standardError.write(Data("StableBar: the \(title) subscription ended: \(reason).\n".utf8))
+                        log("the \(title) subscription ended: \(reason).")
                     }
                     throw CommandFailure(message: failure ?? "\(title) disconnected. Reconnecting…")
                 } catch {

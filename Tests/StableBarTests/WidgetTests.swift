@@ -1144,6 +1144,25 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
     #expect(short.controlsGap < tall.controlsGap)
 }
 
+/// A subscription whose output ends without a failure logs how it ended, through the store's log.
+@Test @MainActor func aSubscriptionThatEndsWithoutAFailureLogsHowItEnded() async throws {
+    let fixture = try omniwmFixture("""
+    case "$1" in
+      subscribe) printf '%s\\n' '{"ok":true,"kind":"subscribe","status":"subscribed"}'; exit 0 ;;
+      query)
+        if [ "$2" = workspaces ]; then printf '%s\\n' '{"ok":true,"result":{"payload":{"workspaces":[]}}}'
+        else printf '%s\\n' '{"ok":true,"result":{"payload":{"windows":[]}}}'; fi ;;
+    esac
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    var logged: [String] = []
+    fixture.store.log = { logged.append($0) }
+    fixture.store.configure(source: .omniwm, workspaces: true, mode: false)
+    for _ in 0..<200 where logged.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(logged == ["the OmniWM subscription ended: it exited with status 0."])
+    #expect(fixture.store.error == "OmniWM disconnected. Reconnecting…")
+}
+
 /// When a workspace subscription's output ends, StableBar logs how its process ended, so a disconnect that can't be
 /// reproduced still says whether the process exited, was killed or only closed its output.
 @Test func aSubscriptionThatEndsSaysHowItsProcessEnded() async throws {
