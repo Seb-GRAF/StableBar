@@ -785,3 +785,19 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
     #expect(rows == [38, 39])
     #expect(fixture.panel.decorationPanel?.ignoresMouseEvents == true)
 }
+
+/// » opens only menus of the app that owns the menu bar, not titles left from the previous app.
+@Test @MainActor func overflowMenusOpenOnlyForTheMenuBarsApp() {
+    let menu = AppMenu(checkAccess: { true }, readAttribute: { _, _ in nil }, sleep: { _ in })
+    let window = AppMenuItem(title: "Window", element: AXUIElementCreateApplication(100))
+    let help = AppMenuItem(title: "Help", element: AXUIElementCreateApplication(200))
+    #expect(menu.overflowPopup(for: [window]) == nil)
+    menu.read(MenuApplication(pid: 100))
+    guard let popup = menu.overflowPopup(for: [window, help]), case let .appMenu(entries) = popup.layout.content else {
+        Issue.record("No overflow popup for the menu bar's app")
+        return
+    }
+    #expect(entries.map(\.title) == ["Window"])
+    #expect(entries.allSatisfy { $0.hasSubmenu })
+    #expect(menu.overflowPopup(for: [help]) == nil)
+}

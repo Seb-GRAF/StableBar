@@ -586,10 +586,8 @@ struct WidgetView: View {
 
     /// The menus that don't fit beside the notch, each opening its own menu.
     private func openAppMenus(_ items: [AppMenuItem], anchor: NSView) {
-        guard store.barEditing.allowsWidgetActions else { return }
-        let entries = items.map { AppMenuEntry(title: $0.title, element: $0.element, isEnabled: true, isChecked: false, hasSubmenu: true) }
-        store.popup.toggle(AppMenu.popup(entries), widget: widget, defaults: popupDefaults.inheriting(defaults), store: store,
-                           anchor: moreWidgetsAnchor ?? anchor)
+        guard store.barEditing.allowsWidgetActions, let popup = store.appMenu.overflowPopup(for: items) else { return }
+        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
