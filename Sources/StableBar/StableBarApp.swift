@@ -316,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             systemContext = SystemContext { [store] in store.refreshContext() }
             systemContext!.start()
-            if !UserDefaults.standard.bool(forKey: "setupCompleted") { showSetup() }
+            if SetupProgress.opensAtLaunch(in: .standard) { showSetup() }
             await store.crashReports.refresh()
         }
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),

@@ -374,6 +374,7 @@ final class SetupSession {
     }
 
     func cancel() {
+        system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
         Task { try await setMenuBarHidden(menuBarHidAtStart) }
@@ -399,7 +400,7 @@ final class SetupSession {
                 try setLaunchAtLogin(openAtLogin)
             }
             loginStatus = SMAppService.mainApp.status
-            UserDefaults.standard.set(true, forKey: "setupCompleted")
+            system.defaults.set(true, forKey: SetupProgress.completedKey)
             error = nil
             finished = true
         } catch {
@@ -463,5 +464,25 @@ struct SetupCardView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
         }
+    }
+}
+
+/// Whether setup was finished or skipped. StableBar opens setup by itself only until one of them happens;
+/// after that, Getting Started… and Settings → General open it.
+enum SetupProgress {
+    static let completedKey = "setupCompleted"
+    static let skippedKey = "setupSkipped"
+
+    static func opensAtLaunch(in defaults: UserDefaults) -> Bool {
+        !defaults.bool(forKey: completedKey) && !defaults.bool(forKey: skippedKey)
+    }
+
+    /// Setup was skipped and never finished, so Settings offers to finish it.
+    static func wasSkipped(in defaults: UserDefaults) -> Bool {
+        offersToFinish(skipped: defaults.bool(forKey: skippedKey), completed: defaults.bool(forKey: completedKey))
+    }
+
+    static func offersToFinish(skipped: Bool, completed: Bool) -> Bool {
+        skipped && !completed
     }
 }
