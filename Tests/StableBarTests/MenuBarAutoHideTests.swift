@@ -442,3 +442,24 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     defer { allowedStore.stop(); allowedFixture.close() }
     #expect(!SetupSession.Step.allCases.contains { allowed.waitsForPermissions(at: $0) })
 }
+
+/// Choosing Replace the menu bar on the first step takes effect at once: macOS's menu bar hides, the bar moves to the
+/// top edge with the menu bar starter, and the permissions step lists Automation as allowed.
+@MainActor
+@Test func setupsFirstStepReplacesTheMenuBarLive() async throws {
+    let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                                 "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
+    let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
+    let (session, fixture, store, changes) = try setupSession(configuration: json) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.step == SetupSession.Step.placement.rawValue)
+    #expect(session.placement == .belowMenuBar)
+    await session.place(.top)
+    #expect(changes() == [true])
+    #expect(session.menuBarHides)
+    #expect(store.configuration?.bar.belowMenuBar == false)
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+    #expect(session.neededPermissions.contains(.automation))
+    #expect(session.isAllowed(.automation))
+    #expect(!session.waitsForPermissions(at: .permissions))
+}
