@@ -198,7 +198,7 @@ final class SetupSession {
         // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
         // looks again.
         let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
-        let provisional = !system.defaults.bool(forKey: "setupCompleted") && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
+        let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
         preferences.workspaces = workspaceSource

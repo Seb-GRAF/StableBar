@@ -91,7 +91,7 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     store.reloadConfiguration()
     var changes: [Bool] = []
     let defaults = UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!
-    if completed { defaults.set(true, forKey: "setupCompleted") }
+    if completed { defaults.set(true, forKey: SetupProgress.completedKey) }
     let system = SetupSystem(automationAccess: access, setMenuBarHidden: { changes.append($0) },
                              menuBarHides: { changes.last ?? menuBarHides }, isTrusted: { trusted },
                              calendarAccess: { calendars }, defaults: defaults, workspaceSource: workspaces)
@@ -375,7 +375,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     // Finishing saves what the preview showed.
     session.finish()
     #expect(session.finished)
-    #expect(session.system.defaults.bool(forKey: "setupCompleted"))
+    #expect(session.system.defaults.bool(forKey: SetupProgress.completedKey))
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: fixture.url))
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
