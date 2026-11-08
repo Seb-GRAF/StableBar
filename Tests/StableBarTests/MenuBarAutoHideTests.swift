@@ -313,3 +313,23 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     await session.place(.top)
     #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
 }
+
+/// Preset tiles show what applying the preset adds: below the menu bar only once the configuration says so.
+@MainActor
+@Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
+                  (#"{"bar":{"offset":0},"widgets":[]}"#, .current),
+                  (#"{"bar":{"offset":22},"widgets":[]}"#, .current)])
+func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: SetupPreferences.Placement) throws {
+    let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.presetPlacement == placement)
+    session.preferences.placement = .top
+    #expect(session.presetPlacement == .top)
+}
+
+/// The first launch can come before the login shell's PATH, so it also looks in Homebrew's folders.
+@Test func firstLaunchLooksForWindowManagersInHomebrewsFoldersToo() {
+    #expect(WorkspaceSource.firstLaunchSearchPath("/usr/bin:/bin") == "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin")
+    #expect(WorkspaceSource.firstLaunchSearchPath("") == "/opt/homebrew/bin:/usr/local/bin")
+    #expect(WorkspaceSource.firstLaunchSearchPath("/opt/homebrew/bin:/usr/bin") == "/opt/homebrew/bin:/usr/bin:/usr/local/bin")
+}

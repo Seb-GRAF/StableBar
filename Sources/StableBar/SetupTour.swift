@@ -491,7 +491,7 @@ struct SetupTourView: View {
         HStack(spacing: 12) {
             ForEach(SetupPreferences.Preset.offered(on: session.placement, keeping: session.preset), id: \.self) { preset in
                 let selected = session.preset == preset
-                let sets = preset.preferences(workspaces: session.workspaceSource, placement: session.placement).widgetSets
+                let sets = preset.preferences(workspaces: session.workspaceSource, placement: session.presetPlacement).widgetSets
                 SetupTile(selected: selected) {
                     session.preset = selected ? nil : preset
                     session.preferences = selected ? SetupPreferences(placement: session.preferences.placement, workspaces: session.workspaceSource)
@@ -508,7 +508,7 @@ struct SetupTourView: View {
                         Text(preset.detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).padding(.top, 2)
                         Spacer(minLength: 12)
                         HStack(spacing: 4) {
-                            if session.placement == .belowMenuBar {
+                            if session.presetPlacement == .belowMenuBar {
                                 // Below the menu bar, the starter has Workspaces, System and Sound.
                                 let workspaces = SetupPreferences.WidgetSet.workspaces(session.workspaceSource)
                                 Image(systemName: workspaces.symbol).opacity(sets.contains(workspaces) ? 1 : 0.45)

@@ -221,6 +221,13 @@ final class SetupSession {
         return bar.offset == 0 ? .top : bar.offset == earlierBelowMenuBarOffset ? .belowMenuBar : .current
     }
 
+    /// The placement preset tiles show their widgets for. It matches what applying a preset adds, which treats the bar as
+    /// below the menu bar once the chosen placement or the configuration's `bar.belowMenuBar` says so.
+    var presetPlacement: SetupPreferences.Placement {
+        if preferences.placement != .current { return preferences.placement }
+        return base?.bar.belowMenuBar == true ? .belowMenuBar : .current
+    }
+
     var needsCalendarAccess: Bool {
         store.registry.permissions(for: store.configuration).contains(.calendars) || needsCalendarSetup && !preferences.deferMeetings
     }
@@ -240,8 +247,8 @@ final class SetupSession {
         }
     }
 
-    /// What macOS must allow for the bar setup builds, in the order setup asks. Every preset has
-    /// app menus and Menu bar items, so Accessibility is always on the list.
+    /// What macOS must allow for the bar setup builds, in the order setup asks. Accessibility is always on the list:
+    /// the app menus, the Apple menu, Menu bar items, Workspaces and window clearance all depend on it.
     var neededPermissions: [SetupPermission] {
         [.accessibility] + (needsAutomation ? [.automation] : []) + (needsCalendarAccess ? [.calendars] : [])
     }

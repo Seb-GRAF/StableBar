@@ -135,7 +135,8 @@ final class BarStore: NSObject {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
                 let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
                 // Below a visible menu bar, the starter is the one with Workspaces, System and Sound.
-                let workspaces = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: nil)
+                let workspaces = WorkspaceSource.detected(
+                    path: WorkspaceSource.firstLaunchSearchPath(shellEnvironment.withLock { $0["PATH", default: ""] }), configured: nil)
                 let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: Data(contentsOf: template))
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
