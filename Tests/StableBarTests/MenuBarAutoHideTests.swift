@@ -377,3 +377,19 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
     #expect(plain.showsSpacesGuidance)
 }
+
+/// The finishing step's advice follows the source the previewed bar's Workspaces uses, even when setup detected
+/// another manager; a bar without Workspaces keeps the detected manager's advice.
+@MainActor
+@Test func setupAdvisesOnTheSourceThePreviewedWorkspacesUse() throws {
+    let bar = #"{"workspaceSource":"spaces","widgets":[{"id":"workspaces","type":"workspaces","position":"left"},{"id":"mine","type":"text","position":"right","text":"Hi"}]}"#
+    let (session, fixture, store, _) = try setupSession(configuration: bar, workspaces: { _ in .yabai }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(store.configuration?.workspaceSource == .spaces)
+    #expect(session.adviceSource == .spaces)
+    #expect(session.showsSpacesGuidance)
+    let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .yabai }) { _ in .allowed }
+    defer { plainStore.stop(); plainFixture.close() }
+    #expect(plain.adviceSource == .yabai)
+    #expect(!plain.showsSpacesGuidance)
+}
