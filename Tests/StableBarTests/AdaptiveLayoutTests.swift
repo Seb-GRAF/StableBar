@@ -440,6 +440,19 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(BarView.scrolls(width: 100, resting: 400, minimum: 120))
 }
 
+/// App menus that can't move into More widgets and don't fit even at their minimum get squeezed further, and then
+/// scroll like any other squeezed widget.
+@Test func appMenusThatCannotOverflowScrollBelowTheirMinimum() throws {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 16, notch: nil).plan(width: 100, items: [
+        BarLayoutItem(id: "menus", position: .left, width: 400, canOverflow: false, minimumWidth: 120)
+    ])
+    #expect(plan.overflow.isEmpty)
+    let placement = try #require(plan.placements["menus"])
+    #expect(placement == BarPlacement(x: 10, width: 80))
+    #expect(placement.width < 120 - 0.5)
+    #expect(BarView.scrolls(width: placement.width, resting: 400, minimum: 120))
+}
+
 /// App menus measured down to the app name and » set how narrow their unit gets, unless a widget `width` keeps it
 /// as wide as at rest; until they are measured, the unit doesn't shrink.
 @Test func appMenusShrinkOnlyAsFarAsTheirMeasuredNarrowestWidth() {
