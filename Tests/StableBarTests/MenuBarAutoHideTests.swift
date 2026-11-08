@@ -321,13 +321,34 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
 @MainActor
 @Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
                   (#"{"bar":{"offset":0},"widgets":[]}"#, .current),
-                  (#"{"bar":{"offset":22},"widgets":[]}"#, .current)])
+                  (#"{"bar":{"offset":7},"widgets":[]}"#, .current)])
 func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: SetupPreferences.Placement) throws {
     let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
     defer { store.stop(); fixture.close() }
     #expect(session.presetPlacement == placement)
     session.preferences.placement = .top
     #expect(session.presetPlacement == .top)
+}
+
+/// A bar at the offset earlier setups wrote for Below menu bar shows as below the menu bar in setup, even when its
+/// file says `belowMenuBar: false`, so a preset there leaves out Menu bar items, in its tile and on the bar alike,
+/// without changing the stored placement or the preset's own widgets.
+@MainActor
+@Test func setupPresetsLeaveOutMenuBarItemsAtTheEarlierBelowMenuBarOffset() throws {
+    let offset = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
+    let bar = #"{"bar":{"offset":\#(offset),"belowMenuBar":false},"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"}]}"#
+    let (session, fixture, store, _) = try setupSession(configuration: bar) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placement == .belowMenuBar)
+    #expect(session.presetPlacement == .belowMenuBar)
+    session.preset = .minimal
+    session.preferences = SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: session.preferences.placement)
+    #expect(session.preferences.placement == .current)
+    #expect(session.preferences.widgetSets.contains(.menuBarItems))
+    #expect(store.configuration?.widgets.map(\.id).contains("menu-bar-items") == false)
+    session.finish()
+    let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
+    #expect(!saved.widgets.map(\.id).contains("menu-bar-items"))
 }
 
 /// When the first launch finds no window manager, such as before the login shell's PATH arrives, it writes Spaces

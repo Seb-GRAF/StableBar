@@ -244,11 +244,19 @@ final class SetupSession {
         return bar.offset == 0 ? .top : bar.offset == earlierBelowMenuBarOffset ? .belowMenuBar : .current
     }
 
-    /// The placement preset tiles show their widgets for. It matches what applying a preset adds, which treats the bar as
-    /// below the menu bar once the chosen placement or the configuration's `bar.belowMenuBar` says so.
+    /// The placement presets apply for, and their tiles show: the chosen placement, or the one setup shows for the bar,
+    /// which counts `bar.belowMenuBar` and an earlier setup's offset as below the menu bar.
     var presetPlacement: SetupPreferences.Placement {
         if preferences.placement != .current { return preferences.placement }
-        return base?.bar.belowMenuBar == true ? .belowMenuBar : .current
+        return placement == .belowMenuBar || base?.bar.belowMenuBar == true ? .belowMenuBar : .current
+    }
+
+    /// What setup previews and saves: the choices, without Menu bar items while presets apply below the menu bar, which
+    /// the edits can't tell from an earlier setup's offset. The choices themselves keep them for a move to the top edge.
+    private var applied: SetupPreferences {
+        var applied = preferences
+        if presetPlacement == .belowMenuBar { applied.widgetSets.removeAll { $0 == .menuBarItems } }
+        return applied
     }
 
     var needsCalendarAccess: Bool {
@@ -305,7 +313,7 @@ final class SetupSession {
     }
 
     func preview() {
-        var shown = preferences
+        var shown = applied
         if needsCalendarSetup { shown.deferMeetings = true }
         do {
             var loader = ConfigurationLoader()
@@ -422,7 +430,7 @@ final class SetupSession {
         var saved = false
         do {
             if needsCalendarSetup { preferences.deferMeetings = true }
-            try preferences.save(to: store.configurationURL, context: store.context)
+            try applied.save(to: store.configurationURL, context: store.context)
             saved = true
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()
