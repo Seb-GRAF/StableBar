@@ -300,10 +300,18 @@ final class SetupSession {
     /// the bar needs depend on it, and the permissions come after the choices that decide them.
     enum Step: Int, CaseIterable { case placement, look, touches, permissions, tryIt }
 
-    /// Whether Continue waits at `step`: for a choice on the first step, which shows none picked so nobody moves on with
-    /// a placement they didn't choose, and for missing permissions from the permissions step on.
+    /// Whether Continue waits at `step`: on the first step, which shows none picked, until a choice takes effect, so
+    /// nobody moves on with a placement they didn't choose, and for missing permissions from the permissions step on.
     func blocksContinue(at step: Step) -> Bool {
-        (step == .placement && placementChoice == nil) || waitsForPermissions(at: step)
+        (step == .placement && !placementTookEffect) || waitsForPermissions(at: step)
+    }
+
+    /// Whether the choice on the first step has taken effect: the bar's placement is the one chosen and the macOS menu
+    /// bar hides or shows to match. It hasn't while macOS asks for Automation access, once it's refused, or while the
+    /// menu bar changes.
+    var placementTookEffect: Bool {
+        guard let placementChoice, placementAwaitingAccess == nil else { return false }
+        return preferences.placement == placementChoice && menuBarHides == (placementChoice == .top)
     }
 
     /// Whether Continue, or Finish setup, waits at `step` for permissions macOS hasn't allowed yet: from the step that

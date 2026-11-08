@@ -497,3 +497,43 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     await session.place(.top)
     #expect(session.placementChoice == .top)
 }
+
+/// Holds a call to macOS open until the test answers it.
+@MainActor private final class HeldCall<Value: Sendable> {
+    private var waiting: CheckedContinuation<Value, Never>?
+    private var answer: Value?
+    private(set) var started = false
+
+    func wait() async -> Value {
+        started = true
+        if let answer { return answer }
+        return await withCheckedContinuation { waiting = $0 }
+    }
+
+    func answer(_ value: Value) {
+        answer = value
+        waiting?.resume(returning: value)
+        waiting = nil
+    }
+}
+
+/// Continue on the first step also waits until the choice takes effect, so nobody moves on to presets for a placement
+/// the bar doesn't have: not while macOS asks for Automation access, nor once it's refused. Choosing what needs no
+/// change to the menu bar moves on.
+@MainActor
+@Test func setupWaitsOnItsFirstStepUntilTheChoiceTakesEffect() async throws {
+    let question = HeldCall<MenuBarAutoHide.Access>()
+    let (session, fixture, store, changes) = try setupSession { asking in asking ? await question.wait() : .undecided }
+    defer { store.stop(); fixture.close() }
+    let replace = Task { await session.place(.top) }
+    for _ in 0..<100 where !question.started { await Task.yield() }
+    try #require(question.started)
+    #expect(session.blocksContinue(at: .placement))
+    question.answer(.denied)
+    await replace.value
+    #expect(session.placementAwaitingAccess == .top)
+    #expect(session.blocksContinue(at: .placement))
+    await session.place(.belowMenuBar)
+    #expect(changes().isEmpty)
+    #expect(!session.blocksContinue(at: .placement))
+}
