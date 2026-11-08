@@ -92,6 +92,8 @@ Reviews are requested automatically from the people listed in [CODEOWNERS](.gith
 
 [CodeRabbit](https://coderabbit.ai) also reviews every pull request once it is out of draft, and comments only on what matters most. Fix each comment or reply why not, then resolve its thread: unresolved conversations block merging. Its rules come from [AGENTS.md](AGENTS.md) and [.coderabbit.yaml](.coderabbit.yaml).
 
+[DECISIONS.md](DECISIONS.md) lists the lasting decisions about releases, reviews and code. A pull request that sets a new rule or policy adds an entry there.
+
 ## Commits and releases
 
 Pull requests run `swift test` on macOS and check that every commit message, and the pull request title, follows [Conventional Commits](https://www.conventionalcommits.org). Squash merges use the title as the commit message. The tests load every configuration, module and package in `examples`, and the **Test** job parses each script in `scripts` and `examples` with the shell its first line names. The **Test pull request checks** job runs `node --test` on the scripts in `.github/scripts`: the logic of `Linked issue`, `Description` and the [before and after screens](#before-and-after-screens).
