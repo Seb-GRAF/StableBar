@@ -71,6 +71,7 @@ struct SetupTourView: View {
                         .transition(.opacity)
                 }
                 tour(size: size)
+                    .disabled(confirmingSkip)
                 ZStack {
                     if phase == .tour {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
