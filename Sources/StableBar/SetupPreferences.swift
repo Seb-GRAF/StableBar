@@ -258,7 +258,7 @@ struct SetupPreferences: Equatable {
     }
 
     /// StableBar's clock, day, date, two spaces and time, in `locale`'s date order and its hour cycle, or the 24- or
-    /// 12-hour one `hours` picks: `EEE d MMM  HH:mm` in Switzerland, `EEE MMM d  h:mm a` in the US.
+    /// 12-hour one `hours` picks: `EEE d MMM  HH:mm` in the UK, `EEE MMM d  h:mm a` in the US.
     static func clockFormat(locale: Locale = .current, hours: Clock = .current) -> String {
         func pattern(_ template: String, or fallback: String) -> String {
             (DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: locale) ?? fallback)
