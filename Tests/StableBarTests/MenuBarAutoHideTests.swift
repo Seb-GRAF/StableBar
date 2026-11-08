@@ -258,6 +258,11 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     session.openAtLogin = true
     #expect(session.hasChanges)
     session.openAtLogin = nil
+    let placement = session.preferences.placement
     await session.place(.top)
+    #expect(session.hasChanges)
+    // place(.top) also changes the placement, so put it back: the hidden menu bar alone is a change.
+    #expect(session.changedMenuBar)
+    session.preferences.placement = placement
     #expect(session.hasChanges)
 }
