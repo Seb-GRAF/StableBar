@@ -1151,13 +1151,23 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
         let process = Process()
         process.executableURL = URL(filePath: "/bin/sh")
         process.arguments = ["-c", script]
-        process.standardOutput = Pipe()
+        let output = Pipe()
+        process.standardOutput = output
         let exited = AsyncStream<Void> { continuation in
             process.terminationHandler = { _ in continuation.finish() }
         }
+        // As in the subscription loop, the reason is asked for once the output has closed.
+        let closed = AsyncStream<Void> { continuation in
+            output.fileHandleForReading.readabilityHandler = { handle in
+                guard handle.availableData.isEmpty else { return }
+                handle.readabilityHandler = nil
+                continuation.finish()
+            }
+        }
         try process.run()
         defer { if process.isRunning { process.terminate() } }
-        if exits { for await _ in exited {} }
+        for await _ in closed {}
+        if exits { for await _ in exited {} } else { #expect(process.isRunning) }
         return await WorkspaceStore.endReason(of: process)
     }
     #expect(try await reason("exit 3") == "it exited with status 3")

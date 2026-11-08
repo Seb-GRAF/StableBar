@@ -285,6 +285,8 @@ final class WorkspaceStore {
                         // Says how the connection ended, so a disconnect nobody can reproduce, such as on a busy CI
                         // runner, shows whether the process exited, was killed or only closed its output.
                         let reason = await Self.endReason(of: stream)
+                        // Stopping or reconnecting the store while it waited ended the subscription, not a failure.
+                        try Task.checkCancellation()
                         FileHandle.standardError.write(Data("StableBar: the \(title) subscription ended: \(reason).\n".utf8))
                     }
                     throw CommandFailure(message: failure ?? "\(title) disconnected. Reconnecting…")
