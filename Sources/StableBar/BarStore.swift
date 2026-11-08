@@ -150,8 +150,13 @@ final class BarStore: NSObject {
                 let offsets = Set([22, Double(NSStatusBar.system.thickness)]
                     + NSScreen.screens.map { Double($0.safeAreaInsets.top) }.filter { $0 > 0 })
                 try migrateEarlierBelowMenuBarOffset(sharedConfigurationURL, offsets: offsets)
-                for setup in screenSetupsWithOwnBars { try? migrateEarlierBelowMenuBarOffset(ownBarURL(for: setup), offsets: offsets) }
-                UserDefaults.standard.set(true, forKey: "migratedEarlierBelowMenuBarOffset")
+                // An own bar that can't be listed or read is retried at a later launch, without an error on the bar.
+                let ownBars = try? ownBarSetups().map { setup in
+                    (try? migrateEarlierBelowMenuBarOffset(ownBarURL(for: setup), offsets: offsets)) != nil
+                }
+                if let ownBars, !ownBars.contains(false) {
+                    UserDefaults.standard.set(true, forKey: "migratedEarlierBelowMenuBarOffset")
+                }
             }
         } catch {
             configurationError = errorMessage(error)
@@ -358,7 +363,11 @@ final class BarStore: NSObject {
 
     /// The setups with their own bar, from the files beside the main configuration.
     var screenSetupsWithOwnBars: [ScreenSetup] {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: sharedConfigurationURL.deletingLastPathComponent().path)) ?? []
+        (try? ownBarSetups()) ?? []
+    }
+
+    private func ownBarSetups() throws -> [ScreenSetup] {
+        let names = try FileManager.default.contentsOfDirectory(atPath: sharedConfigurationURL.deletingLastPathComponent().path)
         return names.sorted().compactMap(ScreenSetup.init(fileName:))
     }
 
