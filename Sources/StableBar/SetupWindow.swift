@@ -192,6 +192,8 @@ final class SetupSession {
     private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
     @ObservationIgnored let system: SetupSystem
     private var placementRequest = 0
+    /// The menu bar change System Events is still making, if any.
+    @ObservationIgnored private var menuBarChange: Task<Void, Error>?
     /// macOS is asking whether StableBar may control System Events.
     var waitingForMenuBarAccess: Bool { accessRequest != nil }
     var error: String?
@@ -408,12 +410,16 @@ final class SetupSession {
                 return
             }
         }
+        // Skip setup, or a later choice, may come while macOS changes the menu bar; this one then no longer applies,
+        // whether the change worked or not.
         do {
             try await setMenuBarHidden(placement == .top)
             if changes { automationAccess = .allowed }
+            guard request == placementRequest else { return }
             preferences.placement = placement
             error = nil
         } catch {
+            guard request == placementRequest else { return }
             let detail = errorMessage(error).contains("-1743")
                 ? MenuBarAutoHide.accessHint
                 : errorMessage(error)
@@ -435,12 +441,32 @@ final class SetupSession {
         return access
     }
 
+    /// Each menu bar change waits for the one System Events is still making, so the restore after Skip setup lands
+    /// after a hide or show that was still in flight.
     private func setMenuBarHidden(_ hidden: Bool) async throws {
-        guard hidden != menuBarHides else { return }
-        try await system.setMenuBarHidden(hidden)
-        menuBarHides = hidden
+        let previous = menuBarChange
+        let change = Task {
+            _ = try? await previous?.value
+            guard hidden != menuBarHides else { return }
+            do {
+                try await system.setMenuBarHidden(hidden)
+            } catch {
+                // System Events can change the setting and still fail, as when it times out, so the next change, such
+                // as the restore after Skip setup, starts from what macOS reports.
+                recordMenuBar(hides: system.menuBarHides())
+                throw error
+            }
+            recordMenuBar(hides: hidden)
+        }
+        menuBarChange = change
+        try await change.value
+    }
+
+    /// Records whether the menu bar hides, and whether StableBar turned auto-hide on, which Uninstall turns off again.
+    private func recordMenuBar(hides: Bool) {
+        menuBarHides = hides
         MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
-            after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
+            after: hides, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
     }
 
     func requestCalendarAccess() async {
@@ -477,10 +503,14 @@ final class SetupSession {
     }
 
     func cancel() {
+        // A placement still waiting on macOS no longer applies, and the restore below waits for its menu bar change.
+        placementRequest += 1
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
-        Task { try await setMenuBarHidden(menuBarHidAtStart) }
+        // Setup has closed by the time the restore could fail, so nothing shows the error. Settings → General shows
+        // the menu bar setting as it is and changes it.
+        Task { try? await setMenuBarHidden(menuBarHidAtStart) }
     }
 
     func finish() {
