@@ -1,20 +1,16 @@
 import AppKit
 import ApplicationServices
 
-@_silgen_name("CGSMainConnectionID") private func CGSMainConnectionID() -> Int32
-@_silgen_name("CGSSetMenuBarInsetAndAlpha")
-private func CGSSetMenuBarInsetAndAlpha(_ connection: Int32, _: Double, _: Double, _ alpha: Float) -> CGError
-
-private let setMenuBarVisibilityOverride = unsafeBitCast(
-    dlsym(UnsafeMutableRawPointer(bitPattern: -2), "SLSSetMenuBarVisibilityOverrideOnDisplay")!,
-    to: (@convention(c) (Int32, CGDirectDisplayID, Bool) -> CGError).self)
-
+/// Hides or shows the macOS menu bar. On a macOS without the private call, it stays as it is.
 func setMenuBarHidden(_ hidden: Bool) {
-    _ = CGSSetMenuBarInsetAndAlpha(CGSMainConnectionID(), 0, 1, hidden ? 0 : 1)
+    guard let connection = PrivateAPI.mainConnectionID?(), let set = PrivateAPI.setMenuBarInsetAndAlpha else { return }
+    _ = set(connection, 0, 1, hidden ? 0 : 1)
 }
 
+/// Reveals or hides the hidden macOS menu bar on one display. On a macOS without the private call, nothing changes.
 func setMenuBarShown(_ shown: Bool, on display: CGDirectDisplayID) {
-    _ = setMenuBarVisibilityOverride(CGSMainConnectionID(), display, shown)
+    guard let connection = PrivateAPI.mainConnectionID?(), let set = PrivateAPI.setMenuBarVisibilityOverride else { return }
+    _ = set(connection, display, shown)
 }
 
 struct MenuBarHover {

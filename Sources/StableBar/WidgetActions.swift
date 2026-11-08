@@ -52,11 +52,10 @@ enum OpenTarget {
 /// login framework's private one, which returns the session agent's status: 0 once the screen is locked. Nil when it
 /// locked; otherwise why it didn't.
 func lockScreen() -> String? {
-    guard let login = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY),
-          let lock = dlsym(login, "SACLockScreenImmediate") else {
+    guard let lock = PrivateAPI.lockScreenImmediate else {
         return "This version of macOS has no Lock Screen call StableBar can use."
     }
-    let status = unsafeBitCast(lock, to: (@convention(c) () -> Int32).self)()
+    let status = lock()
     return status == 0 ? nil : "macOS didn't lock the screen (status \(status))."
 }
 
