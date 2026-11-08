@@ -44,7 +44,7 @@ private func swiftSources() throws -> [(path: String, text: String)] {
     let files = try swiftSources()
     #expect(files.count > 100)
     for file in files where !allowed.contains(file.path) {
-        #expect(file.text.firstMatch(of: #/@_silgen_name|\bdlsym\(|\bdlopen\(|PrivateFrameworks/#) == nil,
+        #expect(file.text.firstMatch(of: #/@_silgen_name|\b(dlsym|dlopen)\b|PrivateFrameworks/#) == nil,
                 "\(file.path) calls private macOS API: ask a maintainer first (AGENTS.md)")
     }
 }
