@@ -113,7 +113,17 @@ jobs:
           xcodebuild -version
           swift build --build-tests
       - name: Test
-        run: swift test --skip-build
+        run: swift test --skip-build --xunit-output test-results/results.xml
+      # Swift Testing writes test-results/results-swift-testing.xml: every test, its time and its
+      # failures, kept to find flaky tests. XCTest writes one only when its tests run with --parallel,
+      # which this job doesn't use.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results
+          path: test-results/
+          retention-days: 30
+          if-no-files-found: ignore
 
   # Runs on main, and on pull requests that change the app, so a release-only failure shows up
   # before it merges and leaves main without a beta. Pull requests that draw screens use it too.
