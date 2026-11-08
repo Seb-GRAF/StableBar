@@ -1,0 +1,4 @@
+#!/bin/zsh
+# Checks each commit message as it's written, as the Commit messages check on pull requests does.
+# scripts/check.sh --install-hooks turns this on.
+exec "${0:A:h:h}/scripts/check.sh" --message "$1"

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/scripts/check.sh\" --hook-stop",
+            "timeout": 900,
+            "statusMessage": "Building what changed"
+          }
+        ]
+      }
+    ]
+  }
+}

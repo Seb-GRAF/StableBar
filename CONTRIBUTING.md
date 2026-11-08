@@ -26,6 +26,10 @@ swift test
 
 Node.js runs only the release tooling and the commit message check. `npm ci` installs them, and `npx commitlint --from origin/main` checks your commits before you push.
 
+`scripts/check.sh` runs what CI checks for your branch: the syntax of the scripts you changed, your commit messages, the build and every test, and the tests in `.github/scripts` when you changed them. `scripts/check.sh --quick` only builds, and only when Swift files changed since its last successful run; `--commits` only checks the messages. In a worktree without `node_modules`, it uses the main checkout's commitlint.
+
+Run `scripts/check.sh --install-hooks` once per clone: it sets `core.hooksPath` to [.githooks](.githooks), so git checks each commit message as you write it and the messages a push sends, in every worktree of the clone and whatever tool commits. Claude Code also runs the quick build when the agent stops, from [.claude/settings.json](.claude/settings.json), and sends a failing build back to work once. To turn the hooks off for yourself, set `STABLEBAR_SKIP_HOOKS=1`, in your shell or, for Claude Code, with `{"env": {"STABLEBAR_SKIP_HOOKS": "1"}}` in `.claude/settings.local.json`; `git config --unset core.hooksPath` turns the git hooks off for the clone.
+
 [t3.json](t3.json) defines project scripts: it builds each new worktree in the background and adds **Test** and **Build app**. Coding agents read [AGENTS.md](AGENTS.md); `CLAUDE.md` points Claude Code to it.
 
 ### Build an installer
