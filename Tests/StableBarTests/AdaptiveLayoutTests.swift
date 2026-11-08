@@ -433,3 +433,12 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(AppMenuView.shrinkableWidth(widths: widths, overflowWidth: 24) == 176)
     #expect(AppMenuView.shrinkableWidth(widths: [60], overflowWidth: 24) == 0)
 }
+
+/// A widget squeezed below its width scrolls, except App menus, which hide their last menus, until even their
+/// app name and » don't fit.
+@Test func squeezedWidgetsScrollUnlessTheirMenusCanStillShrink() {
+    #expect(!BarView.scrolls(width: 200, resting: 200, minimum: nil))
+    #expect(BarView.scrolls(width: 150, resting: 200, minimum: nil))
+    #expect(!BarView.scrolls(width: 150, resting: 400, minimum: 120))
+    #expect(BarView.scrolls(width: 100, resting: 400, minimum: 120))
+}

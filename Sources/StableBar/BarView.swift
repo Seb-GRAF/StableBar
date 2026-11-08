@@ -7,6 +7,12 @@ struct BarView: View {
         "icon": .string("ellipsis"), "tooltip": .string("More widgets")
     ]).decoded(WidgetConfiguration.self)], style: nil)
 
+    /// Whether a widget squeezed to `width` scrolls: any widget narrower than its width at rest, except App menus,
+    /// which hide their last menus down to `minimum`, the app name and ».
+    static func scrolls(width: CGFloat, resting: CGFloat, minimum: CGFloat?) -> Bool {
+        width < (minimum ?? resting) - 0.5
+    }
+
     static func moreWidgetsID(_ position: WidgetPosition, notched: Bool) -> String {
         notched && [.left, .notchLeft].contains(position) ? "\(moreWidgetsID).left" : moreWidgetsID
     }
@@ -66,7 +72,8 @@ struct BarView: View {
                                 case .right: .trailing
                                 case .notchLeft, .center, .notchRight: .center
                                 }
-                                unitView(unit, config: config, width: placement.width, shrinks: shrinks[unit.id]! > 0)
+                                unitView(unit, config: config, width: placement.width,
+                                         minimum: shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - shrinks[unit.id]!, 0) : nil)
                                     .environment(\.appMenuShrink, shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
                                     .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
                                     .geometryGroup()
@@ -160,8 +167,8 @@ struct BarView: View {
     }
 
     @ViewBuilder
-    private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat, shrinks: Bool) -> some View {
-        if width < restingWidths[unit.id, default: 0] - 0.5 && !shrinks {
+    private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat, minimum: CGFloat?) -> some View {
+        if Self.scrolls(width: width, resting: restingWidths[unit.id, default: 0], minimum: minimum) {
             ScrollView(.horizontal) {
                 BarUnitView(unit: unit, config: config, store: store, display: display.id).fixedSize()
             }
