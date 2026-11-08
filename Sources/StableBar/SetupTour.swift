@@ -16,6 +16,7 @@ struct SetupTourView: View {
     @State private var menuBarQuestion: Bool
     @State private var looks: [(name: String, look: Configuration)] = []
     @State private var previews: [String: ThemePreview] = [:]
+    @State private var confirmingSkip = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Phase { case intro, wallpaper, tour }
@@ -70,6 +71,7 @@ struct SetupTourView: View {
                         .transition(.opacity)
                 }
                 tour(size: size)
+                    .disabled(confirmingSkip)
                 ZStack {
                     if phase == .tour {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
@@ -77,7 +79,11 @@ struct SetupTourView: View {
                 }
                 .position(x: size.width / 2, y: size.height - dock - 89)
                 dots.position(x: size.width / 2, y: size.height - dock - 44)
+                if confirmingSkip {
+                    skipConfirmation.transition(.opacity)
+                }
             }
+            .animation(.easeOut(duration: 0.2), value: confirmingSkip)
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
@@ -883,13 +889,56 @@ struct SetupTourView: View {
             .buttonStyle(SetupButtonStyle())
             .keyboardShortcut(.defaultAction)
             .disabled((session.step == 0 || session.step == Self.pages.count - 1) && !session.missingPermissions.isEmpty)
-            Button("Skip setup", action: skip)
+            Button("Skip setup") { if session.hasChanges { confirmingSkip = true } else { skip() } }
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 96, alignment: .leading)
         }
+        .disabled(confirmingSkip)
         .buttonStyle(.plain)
         .font(.system(size: 13))
         .foregroundStyle(.white.opacity(0.45))
+    }
+
+    /// Asks before Skip setup, or Esc, throws away the choices made so far.
+    private var skipConfirmation: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+                .contentShape(Rectangle())
+                .onTapGesture { confirmingSkip = false }
+            VStack(spacing: 12) {
+                Text("Skip setup?").font(.system(size: 26, weight: .semibold))
+                Text("""
+                    Nothing you chose is saved\(session.changedMenuBar ? ", and the macOS menu bar goes back to how it was" : ""). \
+                    Setup opens again the next time StableBar starts, or from Getting Started… in the menu-bar icon's menu.
+                    """)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 440)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 12) {
+                    Button("Skip Setup") {
+                        confirmingSkip = false
+                        skip()
+                    }
+                    .buttonStyle(SetupButtonStyle(prominent: false))
+                    Button("Keep Setting Up") { confirmingSkip = false }
+                        .buttonStyle(SetupButtonStyle())
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.top, 10)
+                // Esc keeps setting up while the question shows.
+                Button("") { confirmingSkip = false }
+                    .keyboardShortcut(.cancelAction)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(.white)
+            .padding(32)
+            .background(Color(white: 0.11).opacity(0.96), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12)))
+        }
     }
 
     private var dots: some View {
