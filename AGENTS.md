@@ -20,7 +20,7 @@ The developer's own StableBar is usually running while you work.
 
 ## Build and verify
 
-`swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`. Before opening a pull request, run what CI checks for the files you changed:
+`swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`. Before opening a pull request, run what CI checks for the files you changed; `scripts/check.sh` runs all of it, and in Claude Code the project's hooks run its quick build when you stop and its commit message check before a `git push`:
 
 1. `swift build --build-tests`, also after switching branches: `swift test --skip-build` runs whatever test binary the last build left.
 2. `swift test --filter <name>` for what you changed. CI runs the whole suite on macOS for every pull request.
