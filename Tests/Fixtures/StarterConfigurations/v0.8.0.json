@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/stablebar.schema.json",
+  "bar": {
+    "height": 40,
+    "offset": 0,
+    "inset": 12,
+    "spacing": 8
+  },
+  "widgets": [
+    {
+      "id": "system",
+      "type": "text",
+      "position": "left",
+      "text": "",
+      "icon": "apple.logo",
+      "onClick": "open -a 'System Settings'"
+    },
+    {
+      "id": "app-menu",
+      "type": "appMenu",
+      "position": "left"
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "position": "right",
+      "format": "EEE d MMM  HH:mm",
+      "onClick": "open -a Calendar"
+    }
+  ]
+}
