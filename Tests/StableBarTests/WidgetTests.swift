@@ -687,6 +687,209 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     }
 }
 
+private let bundledStarter: Data = {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    return try! Data(contentsOf: repository.appending(path: "Resources/config.json"))
+}()
+
+private func widgetIDs(_ data: Data) throws -> [String] {
+    try JSONDecoder().decode(Configuration.self, from: data).widgets.map(\.id)
+}
+
+@Test func setupsMenuBarStarterIsTheBundledStarter() throws {
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    #expect(document["widgets"] == .array(SetupPreferences.menuBarStarter.map(ConfigurationValue.object)))
+}
+
+@Test func setupBelowTheMenuBarTurnsTheStarterIntoWorkspacesSystemAndSound() throws {
+    let updated = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: bundledStarter)
+    let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
+    #expect(configuration.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
+    #expect(configuration.widgets.map(\.position) == [.left, .right, .right])
+    #expect(configuration.workspaceSource == .yabai)
+    #expect(configuration.bar.belowMenuBar)
+}
+
+/// Setup treats Spaces as a stand-in only on the file the first launch writes when it finds no window manager.
+@Test func setupRecognizesTheStarterTheFirstLaunchWritesWithSpaces() throws {
+    func document(_ data: Data) throws -> [String: ConfigurationValue] { try JSONDecoder().decode([String: ConfigurationValue].self, from: data) }
+    let spaces = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    #expect(SetupPreferences.isFirstLaunchSpacesStarter(try document(spaces)))
+    let yabai = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: bundledStarter)
+    #expect(!SetupPreferences.isFirstLaunchSpacesStarter(try document(yabai)))
+    #expect(!SetupPreferences.isFirstLaunchSpacesStarter(try document(bundledStarter)))
+}
+
+@Test func setupOnTheTopEdgeTurnsTheBelowStarterBackIntoTheMenuBarStarter() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    let top = try SetupPreferences(placement: .top).applying(to: below)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: top)
+    #expect(document["widgets"] == .array(SetupPreferences.menuBarStarter.map(ConfigurationValue.object)))
+}
+
+@Test func setupBelowTheMenuBarRemovesOnlyTheUnchangedMenuBarWidgets() throws {
+    let data = Data(##"""
+    {"widgets": [
+      {"id": "apple", "type": "appleMenu", "position": "left"},
+      {"id": "app-menu", "type": "appMenu", "position": "left"},
+      {"id": "mine", "type": "text", "position": "left", "text": "Hi"},
+      {"id": "sound", "type": "audio", "position": "right"},
+      {"id": "clock", "type": "clock", "position": "right", "format": "HH:mm"},
+      {"id": "menu-bar-items", "type": "menuBarItems", "position": "right"}
+    ]}
+    """##.utf8)
+    #expect(try widgetIDs(SetupPreferences(placement: .belowMenuBar).applying(to: data)) == ["mine", "sound", "clock"])
+}
+
+@Test func setupOnTheTopEdgeLeavesACustomizedBarsWidgetsAlone() throws {
+    let data = Data(##"{"bar": {"belowMenuBar": true}, "widgets": [{"id": "mine", "type": "text", "position": "left", "text": "Hi"}]}"##.utf8)
+    #expect(try widgetIDs(SetupPreferences(placement: .top).applying(to: data)) == ["mine"])
+}
+
+/// A preset chosen while the bar sits below the menu bar still brings Menu bar items when the bar then moves to
+/// the top edge, as its tile shows there.
+@Test func setupPresetsChosenBelowTheMenuBarBringMenuBarItemsToTheTopEdge() throws {
+    let bar = Data(#"{"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"},{"id":"sound","type":"audio","position":"right"}]}"#.utf8)
+    for preset in SetupPreferences.Preset.allCases {
+        var preferences = preset.preferences(workspaces: .spaces, placement: .belowMenuBar)
+        #expect(try !widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
+        preferences.placement = .top
+        #expect(try widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
+    }
+}
+
+@Test func setupPresetsBelowTheMenuBarLeaveOutMenuBarItems() {
+    for preset in SetupPreferences.Preset.allCases {
+        #expect(!preset.shownWidgetSets(workspaces: .spaces, placement: .belowMenuBar).contains(.menuBarItems))
+        #expect(preset.shownWidgetSets(workspaces: .spaces, placement: .top).contains(.menuBarItems))
+    }
+}
+
+@Test func setupPresetsBelowTheMenuBarBuildOnTheBelowStarter() throws {
+    let developer = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    #expect(try widgetIDs(developer.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "sound", "battery"])
+    let everything = SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    // System is already on the starter; what a preset adds goes in front of Sound, as on any bar.
+    #expect(try widgetIDs(everything.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "meeting", "sound", "battery"])
+}
+
+@Test func setupPresetsOnTheTopEdgeGiveTheSameBarFromEitherStarter() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    for preset in SetupPreferences.Preset.allCases {
+        let preferences = preset.preferences(workspaces: .spaces, placement: .top)
+        #expect(try widgetIDs(preferences.applying(to: below)) == widgetIDs(preferences.applying(to: bundledStarter)))
+    }
+}
+
+@Test func setupBelowTheMenuBarLeavesNoClockToFormat() throws {
+    let updated = try SetupPreferences(placement: .belowMenuBar, clock: .twelveHour).applying(to: bundledStarter)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
+    #expect(try !widgetIDs(updated).contains("clock"))
+    #expect(document["widgetOverrides"] == nil)
+}
+
+/// A bar whose file still lists the starter's widgets, but that gets more from a package, has changed: setup keeps
+/// those widgets in mind instead of swapping the starter.
+@Test func setupTreatsABarWithWidgetsFromElsewhereAsChanged() throws {
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    var resolved = document
+    resolved["widgets"] = .array((SetupPreferences.menuBarStarter + SetupPreferences.WidgetSet.meetings.widgets).map(ConfigurationValue.object))
+    let configuration = try JSONDecoder().decode(Configuration.self, from: JSONEncoder().encode(resolved))
+    let edits = try SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
+        .edits(in: configuration, document: document)
+    let added = edits.filter { $0.action == .add }.compactMap { $0.properties?["id"] }
+    #expect(!added.contains(.string("meeting")))
+    #expect(!added.contains(.string("workspaces")))
+}
+
+/// Another file can refer to the starter's widgets, such as an include overriding the clock, so setup leaves the
+/// widgets of a configuration with includes or packages where they are.
+@Test func setupKeepsStarterWidgetsThatOtherFilesCanReferTo() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    try Data(#"{"widgetOverrides": {"clock": {"format": "HH:mm"}}}"#.utf8).write(to: directory.appending(path: "module.json"))
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["includes"] = .array([.string("module.json")])
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try SetupPreferences(placement: .belowMenuBar).applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: updated)
+    #expect(configuration.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+    #expect(configuration.bar.belowMenuBar)
+}
+
+/// Writes the bundled starter with `profiles` into a temporary folder, applies `preferences` through the loader, and
+/// returns the saved document and the widgets it loads.
+private func applyingToStarter(profiles: ConfigurationValue, _ preferences: SetupPreferences) throws
+    -> (document: [String: ConfigurationValue], widgets: [String]) {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["profiles"] = profiles
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try preferences.applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let widgets = try loader.load(root, data: updated).widgets.map(\.id)
+    return (try JSONDecoder().decode([String: ConfigurationValue].self, from: updated), widgets)
+}
+
+/// A profile that doesn't touch the widgets leaves a starter a starter: below the menu bar it still becomes
+/// Workspaces, System and Sound, and the profile stays.
+@Test func setupSwapsAStarterWithAnUnrelatedProfile() throws {
+    let profiles: ConfigurationValue = .array([.object(["name": .string("Dark"), "configuration": .object(["bar": .object(["appearance": .string("dark")])])])])
+    let (document, widgets) = try applyingToStarter(profiles: profiles, SetupPreferences(placement: .belowMenuBar))
+    #expect(widgets == ["workspaces", "system-monitor", "sound"])
+    #expect(document["profiles"] == profiles)
+}
+
+/// A profile that places a starter widget on a kind of screen has changed it: below the menu bar, setup keeps that
+/// widget and the profile's layout.
+@Test func setupKeepsStarterWidgetsThatAProfilePlaces() throws {
+    let profiles: ConfigurationValue = .array([.object(["name": .string("Laptop"), "configuration": .object([
+        "screens": .object(["laptop": .object(["layout": .object(["right": .array([.string("clock")])])])])
+    ])])])
+    let (document, widgets) = try applyingToStarter(profiles: profiles, SetupPreferences(placement: .belowMenuBar))
+    #expect(widgets == ["sound", "clock"])
+    #expect(document["profiles"] == profiles)
+}
+
+/// Overrides change a starter's widgets without changing their definitions, in the file or in one of its profiles.
+/// Setup treats that bar as customized: below the menu bar it keeps the overridden clock and its override.
+@Test(arguments: [false, true])
+func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    let overrides: ConfigurationValue = .object(["clock": .object(["format": .string("HH:mm")])])
+    if inProfile {
+        document["profiles"] = .array([.object(["name": .string("Quiet"), "configuration": .object(["widgetOverrides": overrides])])])
+    } else {
+        document["widgetOverrides"] = overrides
+    }
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try SetupPreferences(placement: .belowMenuBar).applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    #expect(try loader.load(root, data: updated).widgets.map(\.id) == ["sound", "clock"])
+    let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
+    #expect(saved[inProfile ? "profiles" : "widgetOverrides"] == document[inProfile ? "profiles" : "widgetOverrides"])
+}
+
+@Test func setupPointsTheBelowStartersWorkspacesAtTheDetectedManager() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    #expect(try JSONDecoder().decode(Configuration.self, from: below).workspaceSource == .spaces)
+    let updated = try SetupPreferences(workspaces: .yabai).applying(to: below)
+    #expect(try JSONDecoder().decode(Configuration.self, from: updated).workspaceSource == .yabai)
+}
+
 @Test func setupOffersTheNotchPresetOnlyOnTheTopEdge() {
     #expect(SetupPreferences.Preset.offered(on: .top) == SetupPreferences.Preset.allCases)
     #expect(SetupPreferences.Preset.offered(on: .belowMenuBar) == [.minimal, .developer, .workday, .everything])

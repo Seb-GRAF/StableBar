@@ -108,7 +108,7 @@ private struct PinnedPopup {
     let panel: PopupPanel
     let shadow: NSPanel?
     weak var anchor: NSView?
-    unowned let store: BarStore
+    weak var store: BarStore?
     /// The popup's top-left corner under its widget, and the visible part of that screen.
     let home: NSPoint
     let homeScreen: NSRect
@@ -160,6 +160,8 @@ extension PopupTransition {
 final class WidgetPopup {
     private let present: (PopupPanel, Bool) -> Void
     private let mouseLocation: () -> NSPoint
+    /// What the hover delays wait on; tests pass a clock they advance themselves.
+    private let clock: any Clock<Duration>
     private var panel: PopupPanel?
     private(set) var shadowWindow: NSPanel?
     private var widgetID: String?
@@ -192,9 +194,10 @@ final class WidgetPopup {
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
         if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
-    }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }) {
+    }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }, clock: any Clock<Duration> = ContinuousClock()) {
         self.present = present
         self.mouseLocation = mouseLocation
+        self.clock = clock
     }
 
     var isOpen: Bool { panel != nil }
@@ -227,7 +230,7 @@ final class WidgetPopup {
             let delay = panel == nil ? store.configuration!.bar.hoverDelay : 0
             hoverTask = Task {
                 do {
-                    try await Task.sleep(for: .milliseconds(delay))
+                    try await clock.sleep(for: .milliseconds(delay))
                     try await waitForHoverPath()
                     // A wait that ran out while the main thread was busy resumes after a later cancel.
                     try Task.checkCancellation()
@@ -259,7 +262,7 @@ final class WidgetPopup {
         let frame = panel!.frame.insetBy(dx: shown!.inset, dy: shown!.inset)
         var point = mouseLocation()
         while popupHoverTriangleContains(point, from: hoverOrigin, to: frame) {
-            try await Task.sleep(for: .milliseconds(200))
+            try await clock.sleep(for: .milliseconds(200))
             let next = mouseLocation()
             guard next.y < point.y else { return }
             point = next
@@ -272,7 +275,7 @@ final class WidgetPopup {
         hoverTask = Task { [weak self] in
             do {
                 try await self?.waitForHoverPath()
-                try await Task.sleep(for: .milliseconds(200))
+                try await self?.clock.sleep(for: .milliseconds(200))
                 try Task.checkCancellation()
             } catch { return }
             self?.close()
@@ -714,7 +717,7 @@ final class WidgetPopup {
         spots[id] = (popup.panel.frame, pins.resized.contains(id), false)
         close()
         // The widget can leave the bar, with a configuration change or its display, while its popup is pinned.
-        guard let anchor = popup.anchor else {
+        guard let anchor = popup.anchor, let store = popup.store else {
             dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source, animation: popup.animation)
             return
         }
@@ -725,13 +728,13 @@ final class WidgetPopup {
         shown = popup.shown
         widgetID = id
         self.anchor = anchor
-        store = popup.store
+        self.store = store
         animation = popup.animation
         transition = popup.transition
         source = popup.source
         morphPopups = popup.morphPopups
         pinned = true
-        popup.store.setPopupVisibleWidget(id, anchor: anchor)
+        store.setPopupVisibleWidget(id, anchor: anchor)
         watchEvents(anchor: anchor, pinnable: true)
         // A popup keeps the size it was given, so a wider one may need to move left to stay on its screen.
         let size = popup.panel.frame.size

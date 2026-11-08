@@ -17,12 +17,6 @@ private var presentationRepository: URL {
     }
 }
 
-/// Keeps the main actor busy without suspending, as a busy main thread does: a wait that runs out meanwhile resumes
-/// only after the code that runs next.
-@MainActor private func holdMainActor(for interval: TimeInterval) {
-    Thread.sleep(forTimeInterval: interval)
-}
-
 @Test(arguments: [false, true]) @MainActor func hoverTooltipsFitTheirTextAndDoNotCaptureClicks(long: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(##"""
     {"defaults":{"foreground":"#f4f4f5","background":"#25252c","borderWidth":0,"cornerRadius":9,"fontSize":12},
@@ -270,7 +264,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
 }
 
 /// Moving on cancels what a hover would show, also when its wait ran out while the main thread was busy and only its
-/// continuation is left to run.
+/// continuation is left to run: the test clock ends the wait, and the cancel comes before the main actor runs it.
 @Test @MainActor func aHoverCancelledAfterItsWaitRanOutDoesNotShow() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"bar":{"morphPopups":false},
@@ -282,14 +276,11 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     var presentations: [PopupPanel] = []
     var point = NSPoint.zero
     var moving = false
-    var samples = 0
+    let clock = TestClock()
     let popup = WidgetPopup(present: { panel, _ in presentations.append(panel) }, mouseLocation: {
-        if moving {
-            point.y -= 0.25
-            samples += 1
-        }
+        if moving { point.y -= 0.25 }
         return point
-    })
+    }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -314,22 +305,30 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
         popup.showTooltip("Neighbour", widget: configuration.widgets[1], defaults: configuration.defaults,
                           store: store, anchor: anchors[1])
     }
-    try await waitForPopup { samples >= 3 }
-    holdMainActor(for: 0.25)
+    for _ in 0..<2 {
+        try await waitForPopup { clock.sleeping == 1 }
+        try #require(clock.sleeping == 1)
+        clock.advance(by: .milliseconds(200))
+    }
+    try await waitForPopup { clock.sleeping == 1 }
+    try #require(clock.sleeping == 1)
+    clock.advance(by: .milliseconds(200))
     moving = false
     popup.hover(false, store: store, anchor: anchors[1]) {}
     popup.hoverPopup(true)
-    try await Task.sleep(for: .milliseconds(100))
+    await TestClock.settle()
     #expect(presentations.count == 1)
 }
 
-/// Coming back into a popup keeps it open, also when its close delay ran out while the main thread was busy.
+/// Coming back into a popup keeps it open, also when its close delay ran out while the main thread was busy: the test
+/// clock ends the delay, and the pointer comes back before the main actor runs what's left of it.
 @Test @MainActor func aPopupEnteredAfterItsCloseDelayRanOutStaysOpen() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"popups":{"details":{"openOnHover":true,"animation":{"duration":0},"style":{},"layout":{"type":"text","text":"Details"}}},
      "widgets":[{"id":"first","type":"text","text":"First","position":"right","popupName":"details"}]}
     """#.utf8))
-    let popup = WidgetPopup(present: { _, _ in }, mouseLocation: { .zero })
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { _, _ in }, mouseLocation: { .zero }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -344,10 +343,11 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.hoverPopup(true)
     popup.hover(false, store: store, anchor: anchor) {}
     popup.hoverPopup(false)
-    await Task.yield()
-    holdMainActor(for: 0.25)
+    try await waitForPopup { clock.sleeping == 1 }
+    try #require(clock.sleeping == 1)
+    clock.advance(by: .milliseconds(200))
     popup.hoverPopup(true)
-    try await Task.sleep(for: .milliseconds(100))
+    await TestClock.settle()
     #expect(popup.isOpen)
 }
 

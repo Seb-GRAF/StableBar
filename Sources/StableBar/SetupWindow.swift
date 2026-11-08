@@ -132,6 +132,10 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var defaults = UserDefaults.standard
+    /// The workspace source setup uses, given the one the configuration names: see `WorkspaceSource.detected`.
+    var workspaceSource: (_ configured: WorkspaceSource?) -> WorkspaceSource = { configured in
+        WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: configured)
+    }
 }
 
 /// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
@@ -191,12 +195,32 @@ final class SetupSession {
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
-        workspaceSource = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
-                                                   configured: store.namedWorkspaceSource)
+        // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
+        // looks again.
+        let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+        let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
+        workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
+        preferences.workspaces = workspaceSource
         initialPreferences = preferences
         preview()
     }
+
+    /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the
+    /// starter's widgets as well as the preset's.
+    private var previewedWorkspaceSource: WorkspaceSource? {
+        guard let configuration = store.configuration,
+              configuration.widgets.contains(where: { $0.enabled && $0.content == .workspaces }) else { return nil }
+        return configuration.workspaceSource
+    }
+
+    /// The workspace source the finishing step's advice is about: the previewed Workspaces' source, or, on a bar
+    /// without Workspaces, the manager setup detected.
+    var adviceSource: WorkspaceSource { previewedWorkspaceSource ?? workspaceSource }
+
+    /// Whether the bar setup builds shows macOS Spaces in Workspaces, whose desktops switch through the Switch to
+    /// Desktop shortcuts.
+    var showsSpacesGuidance: Bool { previewedWorkspaceSource == .spaces }
 
     /// The offset earlier setups wrote for Below menu bar, before `bar.belowMenuBar`.
     private var earlierBelowMenuBarOffset: Double {
@@ -220,6 +244,21 @@ final class SetupSession {
         return bar.offset == 0 ? .top : bar.offset == earlierBelowMenuBarOffset ? .belowMenuBar : .current
     }
 
+    /// The placement presets apply for, and their tiles show: the chosen placement, or the one setup shows for the bar,
+    /// which counts `bar.belowMenuBar` and an earlier setup's offset as below the menu bar.
+    var presetPlacement: SetupPreferences.Placement {
+        if preferences.placement != .current { return preferences.placement }
+        return placement == .belowMenuBar || base?.bar.belowMenuBar == true ? .belowMenuBar : .current
+    }
+
+    /// What setup previews and saves: the choices, without Menu bar items while presets apply below the menu bar, which
+    /// the edits can't tell from an earlier setup's offset. The choices themselves keep them for a move to the top edge.
+    private var applied: SetupPreferences {
+        var applied = preferences
+        if presetPlacement == .belowMenuBar { applied.widgetSets.removeAll { $0 == .menuBarItems } }
+        return applied
+    }
+
     var needsCalendarAccess: Bool {
         store.registry.permissions(for: store.configuration).contains(.calendars) || needsCalendarSetup && !preferences.deferMeetings
     }
@@ -239,8 +278,8 @@ final class SetupSession {
         }
     }
 
-    /// What macOS must allow for the bar setup builds, in the order setup asks. Every preset has
-    /// app menus and Menu bar items, so Accessibility is always on the list.
+    /// What macOS must allow for the bar setup builds, in the order setup asks. Accessibility is always on the list:
+    /// the app menus, the Apple menu, Menu bar items, Workspaces and window clearance all depend on it.
     var neededPermissions: [SetupPermission] {
         [.accessibility] + (needsAutomation ? [.automation] : []) + (needsCalendarAccess ? [.calendars] : [])
     }
@@ -274,12 +313,13 @@ final class SetupSession {
     }
 
     func preview() {
-        var shown = preferences
+        var shown = applied
         if needsCalendarSetup { shown.deferMeetings = true }
         do {
             var loader = ConfigurationLoader()
             let base = try loader.load(store.configurationURL, context: store.context)
-            try store.setSessionEdits(sessionEdits + shown.edits(in: base))
+            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+            try store.setSessionEdits(sessionEdits + shown.edits(in: base, document: document))
             self.base = base
             error = nil
         } catch {
@@ -390,7 +430,7 @@ final class SetupSession {
         var saved = false
         do {
             if needsCalendarSetup { preferences.deferMeetings = true }
-            try preferences.save(to: store.configurationURL, context: store.context)
+            try applied.save(to: store.configurationURL, context: store.context)
             saved = true
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()

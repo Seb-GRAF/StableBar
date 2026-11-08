@@ -83,15 +83,18 @@ private final class AutomationDialog {
 @MainActor
 private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#,
                           menuBarHides: Bool = false, trusted: Bool = true, calendars: EKAuthorizationStatus = .fullAccess,
+                          completed: Bool = false, workspaces: @escaping (WorkspaceSource?) -> WorkspaceSource = { $0 ?? .spaces },
                           _ access: @escaping (Bool) async -> MenuBarAutoHide.Access)
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     store.reloadConfiguration()
     var changes: [Bool] = []
+    let defaults = UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!
+    if completed { defaults.set(true, forKey: SetupProgress.completedKey) }
     let system = SetupSystem(automationAccess: access, setMenuBarHidden: { changes.append($0) },
                              menuBarHides: { changes.last ?? menuBarHides }, isTrusted: { trusted },
-                             calendarAccess: { calendars }, defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
+                             calendarAccess: { calendars }, defaults: defaults, workspaceSource: workspaces)
     return (SetupSession(store: store, system: system), fixture, store, { changes })
 }
 
@@ -298,4 +301,116 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     #expect(!SetupProgress.offersToFinish(skipped: false, completed: false))
     #expect(SetupProgress.offersToFinish(skipped: true, completed: false))
     #expect(!SetupProgress.offersToFinish(skipped: true, completed: true))
+}
+
+/// Keeping the menu bar turns the starter bar into the one for below the menu bar, live.
+@MainActor
+@Test func setupKeepingTheMenuBarShowsTheBelowMenuBarStarter() async throws {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let starter = try String(contentsOf: repository.appending(path: "Resources/config.json"), encoding: .utf8)
+    let (session, fixture, store, _) = try setupSession(configuration: starter) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    await session.place(.belowMenuBar)
+    #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
+    #expect(store.configuration?.workspaceSource == session.workspaceSource)
+    await session.place(.top)
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+}
+
+/// Preset tiles show what applying the preset adds: below the menu bar only once the configuration says so.
+@MainActor
+@Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
+                  (#"{"bar":{"offset":0},"widgets":[]}"#, .current),
+                  (#"{"bar":{"offset":7},"widgets":[]}"#, .current)])
+func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: SetupPreferences.Placement) throws {
+    let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.presetPlacement == placement)
+    session.preferences.placement = .top
+    #expect(session.presetPlacement == .top)
+}
+
+/// A bar at the offset earlier setups wrote for Below menu bar shows as below the menu bar in setup, even when its
+/// file says `belowMenuBar: false`, so a preset there leaves out Menu bar items, in its tile and on the bar alike,
+/// without changing the stored placement or the preset's own widgets.
+@MainActor
+@Test func setupPresetsLeaveOutMenuBarItemsAtTheEarlierBelowMenuBarOffset() throws {
+    let offset = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
+    let bar = #"{"bar":{"offset":\#(offset),"belowMenuBar":false},"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"}]}"#
+    let (session, fixture, store, _) = try setupSession(configuration: bar) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placement == .belowMenuBar)
+    #expect(session.presetPlacement == .belowMenuBar)
+    session.preset = .minimal
+    session.preferences = SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: session.preferences.placement)
+    #expect(session.preferences.placement == .current)
+    #expect(session.preferences.widgetSets.contains(.menuBarItems))
+    #expect(store.configuration?.widgets.map(\.id).contains("menu-bar-items") == false)
+    session.finish()
+    let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
+    #expect(!saved.widgets.map(\.id).contains("menu-bar-items"))
+}
+
+/// When the first launch finds no window manager, such as before the login shell's PATH arrives, it writes Spaces
+/// into the starter below the menu bar. Setup looks for a manager again until one finishes; after that, or once the
+/// bar has changed, through its widgets, an override or its offset, Spaces is a choice it keeps.
+@MainActor
+@Test(arguments: [(false, "", WorkspaceSource.yabai), (true, "", .spaces), (false, "widget", .spaces), (false, "override", .spaces),
+                  (false, "offset", .spaces)])
+func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: String, expected: WorkspaceSource) throws {
+    let mine: [String: ConfigurationValue] = ["id": .string("mine"), "type": .string("text"), "position": .string("left"), "text": .string("Hi")]
+    let widgets = SetupPreferences.belowMenuBarStarter + (change == "widget" ? [mine] : [])
+    // What the first launch writes: the starter's bar, below the menu bar, with the starter for that placement.
+    var document: [String: ConfigurationValue] = [
+        "bar": .object(["height": .number(40), "offset": .number(change == "offset" ? 6 : 0), "inset": .number(12), "spacing": .number(8),
+                        "belowMenuBar": .bool(true)]),
+        "workspaceSource": .string("spaces"), "widgets": .array(widgets.map(ConfigurationValue.object))
+    ]
+    if change == "override" { document["widgetOverrides"] = .object(["sound": .object(["priority": .number(5)])]) }
+    let json = try #require(String(bytes: JSONEncoder().encode(document), encoding: .utf8))
+    let (session, fixture, store, _) = try setupSession(configuration: json, completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.workspaceSource == expected)
+    #expect(store.configuration?.workspaceSource == expected)
+    // Finishing saves what the preview showed.
+    session.finish()
+    #expect(session.finished)
+    #expect(session.system.defaults.bool(forKey: SetupProgress.completedKey))
+    let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: fixture.url))
+    #expect(saved["workspaceSource"] == .string(expected.rawValue))
+}
+
+/// Setup's finishing step explains the Switch to Desktop shortcuts whenever the bar it builds shows macOS Spaces in
+/// Workspaces, including the starter below the menu bar, which has Workspaces without any preset.
+@MainActor
+@Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() throws {
+    let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                                 "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
+    let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
+    let (session, fixture, store, _) = try setupSession(configuration: json, workspaces: { _ in .spaces }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.showsSpacesGuidance)
+    // A bar without Workspaces has no desktops to switch.
+    let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .spaces }) { _ in .allowed }
+    defer { plainStore.stop(); plainFixture.close() }
+    #expect(!plain.showsSpacesGuidance)
+    // A preset that adds Workspaces brings the desktops, and the guidance, with it.
+    plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
+    #expect(plain.showsSpacesGuidance)
+}
+
+/// The finishing step's advice follows the source the previewed bar's Workspaces uses, even when setup detected
+/// another manager; a bar without Workspaces keeps the detected manager's advice.
+@MainActor
+@Test func setupAdvisesOnTheSourceThePreviewedWorkspacesUse() throws {
+    let bar = #"{"workspaceSource":"spaces","widgets":[{"id":"workspaces","type":"workspaces","position":"left"},{"id":"mine","type":"text","position":"right","text":"Hi"}]}"#
+    let (session, fixture, store, _) = try setupSession(configuration: bar, workspaces: { _ in .yabai }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(store.configuration?.workspaceSource == .spaces)
+    #expect(session.adviceSource == .spaces)
+    #expect(session.showsSpacesGuidance)
+    let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .yabai }) { _ in .allowed }
+    defer { plainStore.stop(); plainFixture.close() }
+    #expect(plain.adviceSource == .yabai)
+    #expect(!plain.showsSpacesGuidance)
 }

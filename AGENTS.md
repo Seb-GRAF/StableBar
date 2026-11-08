@@ -46,7 +46,7 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 - Don't add stored properties to `BarStore`. New state goes into a type of its own, owned by `BarStore` or by the feature that needs it.
 - A helper that points back at `BarStore`, or at another owner, holds it `weak`: a view or a task can keep the helper alive after its owner is gone. Don't add `unowned`.
-- Private macOS API (`@_silgen_name`, `dlsym`, a private framework) stays in `MenuBarDelay.swift`, `Spaces.swift` and `WidgetActions.swift`. A new one needs a maintainer's OK. Look it up at runtime and turn the feature off with a message when it's missing; never force-unwrap it.
+- Private macOS API lives in `PrivateAPI.swift`, looked up at runtime: on a macOS without one of its calls, the call is nil and its feature turns off instead of crashing. Never use `@_silgen_name`, which binds at launch, and never force-unwrap a lookup. A new call needs a maintainer's OK.
 - The configuration file is StableBar's public API: people's files, Store packages and themes depend on it. Keep changes additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. An older build skips the properties of a file saved by a newer release, with a warning; keep that working.
 
 ## Decide or ask

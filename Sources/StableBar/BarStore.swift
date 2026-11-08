@@ -134,7 +134,10 @@ final class BarStore: NSObject {
             if !FileManager.default.fileExists(atPath: sharedConfigurationURL.path) {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
                 let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
-                let data = try SetupPreferences(placement: placement).applying(to: Data(contentsOf: template))
+                // Below a visible menu bar, the starter is the one with Workspaces, System and Sound. Its manager is one
+                // the workspace connection can reach: on the login shell's PATH.
+                let workspaces = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: nil)
+                let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: Data(contentsOf: template))
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
             try migrateConfigurationFile(sharedConfigurationURL)

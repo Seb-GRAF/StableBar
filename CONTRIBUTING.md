@@ -78,7 +78,7 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 - [WidgetPopup.swift](Sources/StableBar/WidgetPopup.swift): anchored panel, dismissal and screen placement.
 - [StableBarApp.swift](Sources/StableBar/StableBarApp.swift): non-activating panels and application lifecycle.
 
-There is no web view or custom drawing loop. Private macOS API is limited to hiding and revealing the macOS menu bar ([MenuBarDelay.swift](Sources/StableBar/MenuBarDelay.swift)), reading Spaces ([Spaces.swift](Sources/StableBar/Spaces.swift)) and Lock Screen ([WidgetActions.swift](Sources/StableBar/WidgetActions.swift)); [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
+There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
 
 ## How we work
 
@@ -179,7 +179,7 @@ Pull requests from forks get the same comment and status: the drawing runs in th
 
 ## When CI fails
 
-- **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow.
+- **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow. Each run's `test-results` artifact lists every Swift Testing test with its time and failures, kept 30 days, so the same test failing across runs is easy to spot.
 - **A crash that ends the test run** (`exited with unexpected signal code 6`). The log doesn't say where. After a local run, look for a `swiftpm-testing-helper` report in `~/Library/Logs/DiagnosticReports`: its crashing thread names the code. Then turn the crash into a test that fails every time.
 - **A job that never ran, or a check that stays in progress.** "The job was not acquired by Runner", or a required check still in progress after its steps finished, needs a rerun, not a fix.
 - **A failure only CI shows.** CI's Macs always show scroll bars: run the test with `-AppleShowScrollBars Always`. Locally, the popup tests that animate fail while the display sleeps or the screen is locked.
