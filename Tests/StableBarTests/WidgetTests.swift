@@ -726,6 +726,22 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(try JSONDecoder().decode(Configuration.self, from: changed).widgets[0].content == .clock(format: "HH"))
 }
 
+/// A starter written while the Mac had another region still counts as one once StableBar has remembered that
+/// region's clock format, and a clock someone changed still doesn't.
+@Test func setupRecognizesAStarterWrittenUnderAnEarlierRegion() throws {
+    // A format this test's Mac doesn't write, standing for another region's.
+    let earlierRegion = "EEE MMM d  HH.mm"
+    let earlier = SetupPreferences.menuBarStarter(clockFormat: earlierRegion)
+    #expect(!SetupPreferences.isMenuBarStarter(earlier, remembered: []))
+    #expect(SetupPreferences.isMenuBarStarter(earlier, remembered: [earlierRegion]))
+    #expect(!SetupPreferences.isMenuBarStarter(SetupPreferences.menuBarStarter(clockFormat: "HH:mm"), remembered: [earlierRegion]))
+
+    let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+    SetupPreferences.rememberStarterClockFormat(in: defaults)
+    SetupPreferences.rememberStarterClockFormat(in: defaults)
+    #expect(SetupPreferences.rememberedStarterClockFormats(in: defaults) == [SetupPreferences.clockFormat()])
+}
+
 /// Setup still recognizes the starter in both forms: as this Mac writes it, and as earlier releases did, with the
 /// bundled clock.
 @Test func setupRecognizesTheStarterWithEitherClock() throws {

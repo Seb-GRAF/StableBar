@@ -131,6 +131,7 @@ final class BarStore: NSObject {
         do {
             let directory = sharedConfigurationURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            SetupPreferences.rememberStarterClockFormat()
             if !FileManager.default.fileExists(atPath: sharedConfigurationURL.path) {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
                 let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
