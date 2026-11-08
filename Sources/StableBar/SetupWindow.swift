@@ -131,6 +131,7 @@ struct SetupSystem {
     var menuBarHides: () -> Bool = { MenuBarAutoHide.isOn() }
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
+    var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
     var defaults = UserDefaults.standard
     /// The workspace source setup uses, given the one the configuration names: see `WorkspaceSource.detected`.
     var workspaceSource: (_ configured: WorkspaceSource?) -> WorkspaceSource = { configured in
@@ -156,6 +157,8 @@ final class SetupSession {
     let store: BarStore
     let themes: [ThemeChoice]
     let workspaceSource: WorkspaceSource
+    /// Whether this Mac has an internal battery, which presets add Battery for.
+    let hasBattery: Bool
     let currentThemeKey: String
     var step = 0
     private(set) var finished = false
@@ -192,6 +195,7 @@ final class SetupSession {
         menuBarHidAtStart = menuBarHides
         stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
+        hasBattery = system.hasBattery()
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices

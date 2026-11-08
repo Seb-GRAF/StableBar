@@ -1193,3 +1193,35 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
     #expect(try await reason("kill -9 $$") == "it was killed by signal 9")
     #expect(try await reason("exec >&-; exec /bin/sleep 30", exits: false) == "its output closed while it kept running")
 }
+
+/// On a Mac without an internal battery, Battery would only ever show a plug and "AC", so the presets leave it out,
+/// both from what they add and from what their tiles show.
+@Test func presetsLeaveBatteryOutOnAMacWithoutABattery() {
+    for preset in SetupPreferences.Preset.allCases {
+        for placement in [SetupPreferences.Placement.top, .belowMenuBar] {
+            #expect(!preset.preferences(workspaces: .spaces, placement: placement, hasBattery: false).widgetSets.contains(.battery))
+            #expect(!preset.shownWidgetSets(workspaces: .spaces, placement: placement, hasBattery: false).contains(.battery))
+        }
+    }
+    let developer = SetupPreferences.Preset.developer
+    #expect(developer.preferences(workspaces: .spaces, placement: .top, hasBattery: true).widgetSets.contains(.battery))
+    #expect(developer.shownWidgetSets(workspaces: .spaces, placement: .top, hasBattery: true).contains(.battery))
+}
+
+/// Setup asks macOS once whether the Mac has a battery; the preset tiles and choices follow what it said.
+@Test @MainActor func setupKnowsWhetherTheMacHasABattery() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appending(path: "config.json")
+    try Data(#"{"widgets":[]}"#.utf8).write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    for hasBattery in [false, true] {
+        let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
+        let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: { _ in }, menuBarHides: { false },
+                                 isTrusted: { true }, calendarAccess: { .fullAccess }, hasBattery: { hasBattery }, defaults: defaults,
+                                 workspaceSource: { _ in .spaces })
+        #expect(SetupSession(store: store, system: system).hasBattery == hasBattery)
+    }
+}
