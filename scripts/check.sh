@@ -56,7 +56,8 @@ swift_state() {
 
 check_quick() {
     local stamp=.build/check-quick state
-    swift_changed || return 0
+    # Back at main's files after a quick build, build once more so the products match them again.
+    swift_changed || [[ -f $stamp ]] || return 0
     state=$(swift_state)
     [[ -f $stamp && "$(< $stamp)" == "$state" ]] && return 0
     swift build --build-tests || return 1
@@ -64,16 +65,37 @@ check_quick() {
     print -r -- "$state" > $stamp
 }
 
+# Whether a command runs git push, read the way the shell splits it: `git -C dir push` pushes,
+# `git commit -m "fix push"` and `git log --grep push` don't.
+runs_git_push() {
+    local -a words=(${(z)1})
+    local i=1
+    while (( i <= $#words )); do
+        if [[ ${words[i]} == (git|*/git) ]]; then
+            (( i++ ))
+            while (( i <= $#words )); do
+                case ${words[i]} in
+                    -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--config-env) (( i += 2 )) ;;
+                    -*) (( i++ )) ;;
+                    push) return 0 ;;
+                    *) break ;;
+                esac
+            done
+        fi
+        (( i++ ))
+    done
+    return 1
+}
+
 # Before a Bash command: a git push waits for its commit messages. Exit 2 blocks the command.
 hook_push() {
     local input=$(cat) command output
     [[ $input == *push* ]] || return 0
-    if (( $+commands[jq] )); then
-        command=$(jq -r '.tool_input.command // ""' <<< "$input" 2> /dev/null) || command=$input
+    if (( $+commands[jq] )) && command=$(jq -r '.tool_input.command // ""' <<< "$input" 2> /dev/null); then
+        runs_git_push "$command" || return 0
     else
-        command=$input
+        [[ $input =~ 'git( [^;&|]*)? push' ]] || return 0
     fi
-    [[ $command =~ 'git( [^;&|]*)? push' ]] || return 0
     if ! output=$(check_commits 2>&1); then
         print -u2 -r -- "A commit message would fail the Commit messages check; reword it before pushing:"
         print -u2 -r -- "$output"
