@@ -563,7 +563,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     session.cancel()
     gate.answer(())
     await replace.value
-    for _ in 0..<100 where changes.count < 2 || hides { try await Task.sleep(for: .milliseconds(20)) }
+    for _ in 0..<1000 where changes.count < 2 || hides { await Task.yield() }
     #expect(changes == [true, false])
     #expect(!hides)
     #expect(store.sessionEdits.count == before)
