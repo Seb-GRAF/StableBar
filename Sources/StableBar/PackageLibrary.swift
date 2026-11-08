@@ -33,7 +33,8 @@ final class PackageDraft {
 @MainActor @Observable
 final class PackageLibrary {
     nonisolated static let updateWidgetID = "stablebar.package-updates"
-    private unowned let store: BarStore
+    /// The update task or a view can keep the library alive after its bar is gone; the library then leaves the bar alone.
+    private weak var store: BarStore?
     private let client: PackageStoreClient
     private let packages: WidgetPackageStore
     private let reviewing: Bool
@@ -137,7 +138,7 @@ final class PackageLibrary {
         showingStore = false
         search = ""
         deselect()
-        store.onCustomizePackages?()
+        store?.onCustomizePackages?()
     }
 
     var selectedID: String? { requestedID ?? draft?.inspection.manifest.id }
@@ -199,7 +200,7 @@ final class PackageLibrary {
     var updates: [WidgetPackageManifest] { installedPackages.filter { update(for: $0) != nil } }
 
     func update(_ manifest: WidgetPackageManifest) async {
-        guard let entry = update(for: manifest) else { return }
+        guard let store, let entry = update(for: manifest) else { return }
         updating.insert(manifest.id)
         defer { updating.remove(manifest.id) }
         do {
@@ -242,6 +243,7 @@ final class PackageLibrary {
     }
 
     private func applyUpdate(_ draft: PackageDraft) async throws {
+        guard let store else { return }
         let manifest = draft.inspection.manifest
         if !isInstalled(draft) {
             draft.inspection = try await install(draft)
@@ -341,10 +343,11 @@ final class PackageLibrary {
 
     func shownWidgets(_ draft: PackageDraft) -> Int {
         let ids = draft.inspection.widgets.map(\.id)
-        return store.configuration?.widgets.filter { ids.contains($0.id) && $0.enabled }.count ?? 0
+        return store?.configuration?.widgets.filter { ids.contains($0.id) && $0.enabled }.count ?? 0
     }
 
     func configurationChanged() {
+        guard let store else { return }
         syncSources()
         do {
             selections = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
@@ -367,7 +370,7 @@ final class PackageLibrary {
     /// Undo and edits to `packageSources` reach the client, and the Store reloads with them.
     /// Compared with the previous configuration, not with the client, so sources set on the client directly stay.
     private func syncSources() {
-        guard let configured = try? PackageSource.configured(in: store.effectiveDocument).filter({ !$0.isStore }) else { return }
+        guard let store, let configured = try? PackageSource.configured(in: store.effectiveDocument).filter({ !$0.isStore }) else { return }
         defer { configuredSources = configured }
         guard let previous = configuredSources, previous != configured else { return }
         sourceSync = Task { [client] in
@@ -378,6 +381,7 @@ final class PackageLibrary {
 
     /// Hands the configured sources to the client and loads them, so the sync after an edit has nothing left to do.
     private func applySources() async {
+        guard let store else { return }
         let configured = (try? PackageSource.configured(in: store.effectiveDocument).filter { !$0.isStore }) ?? []
         configuredSources = configured
         await client.setPrivateSources(configured)
@@ -422,7 +426,7 @@ final class PackageLibrary {
 
     private func preview(_ inspection: WidgetPackageInspection) async throws -> PackagePreviewData {
         let screenshot = try await client.screenshotData(for: inspection)
-        let themesDirectory = store.themesDirectory
+        let themesDirectory = store?.themesDirectory
         let theme = try await Task.detached { () throws -> ThemePreview? in
             if inspection.manifest.kind == .theme {
                 return try ThemePreview(choice: ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false),
@@ -524,6 +528,7 @@ final class PackageLibrary {
 
     /// Opens a folder, an installed copy, or with `sourceID` a package from that source in the Store.
     func select(_ directory: URL, sourceID: String? = nil) async {
+        guard let store else { return }
         selectionRequest += 1
         let request = selectionRequest
         loading = true
@@ -595,7 +600,7 @@ final class PackageLibrary {
     func setSetting(_ name: String, value: ConfigurationValue, in draft: PackageDraft) {
         draft.settings[name] = value
         do {
-            if isActive(draft) && !reviewing {
+            if isActive(draft) && !reviewing, let store {
                 try store.customizationHistory.changePackageSettings(edit(draft, enabled: true))
             }
             draft.error = nil
@@ -636,6 +641,7 @@ final class PackageLibrary {
     }
 
     func add(_ draft: PackageDraft, onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)? = nil) async {
+        guard let store else { return }
         draft.working = true
         defer { draft.working = false }
         do {
@@ -681,6 +687,7 @@ final class PackageLibrary {
     }
 
     func deactivate(_ draft: PackageDraft) {
+        guard let store else { return }
         do {
             try store.customizationHistory.change(edit(draft, enabled: false))
             draft.error = nil
@@ -691,6 +698,7 @@ final class PackageLibrary {
     }
 
     func uninstall(_ manifest: WidgetPackageManifest) async {
+        guard let store else { return }
         do {
             try store.uninstallPackage(id: manifest.id, version: manifest.version, fromCustomization: true)
             drafts[manifest.versionKey] = nil
@@ -718,19 +726,20 @@ final class PackageLibrary {
 extension PackageLibrary {
     /// The Store and the sources the configuration defines now, which `sources` only follows after a catalog load.
     func currentSources() -> [PackageSource] {
-        (try? PackageSource.configured(in: store.effectiveDocument)) ?? [.store]
+        guard let store else { return [.store] }
+        return (try? PackageSource.configured(in: store.effectiveDocument)) ?? [.store]
     }
 
     /// Only sources the main configuration file defines can be edited; one from an include is read-only.
     func isEditable(_ source: PackageSource) -> Bool {
-        guard !source.isStore, let main = try? store.editedMainDocument(),
+        guard !source.isStore, let main = try? store?.editedMainDocument(),
               let sources = try? main["packageSources"]?.decoded([[String: ConfigurationValue]].self) else { return false }
         return sources.contains { $0["id"] == .string(source.id) }
     }
 
     /// The name of the file that defines the source; nil when unknown.
     func definingFile(_ source: PackageSource) -> String? {
-        store.origins["packageSources.\(source.id).id"].map { URL(fileURLWithPath: $0.file).lastPathComponent }
+        store?.origins["packageSources.\(source.id).id"].map { URL(fileURLWithPath: $0.file).lastPathComponent }
     }
 
     /// The IDs of the private sources with a saved token.
@@ -753,6 +762,7 @@ extension PackageLibrary {
     /// Adds the source to the main configuration with Undo, and saves a non-blank token to the Keychain.
     /// Refuses an id the configuration already has, so adding never replaces a source.
     func addSource(_ source: PackageSource, token: String) async throws {
+        guard let store else { return }
         guard !currentSources().contains(where: { $0.id == source.id }) else { throw PackageSourceError.idTaken(source.id) }
         try store.customizationHistory.change([Self.edit(source)])
         if !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { try await client.saveToken(token, for: source) }
@@ -763,6 +773,7 @@ extension PackageLibrary {
     /// A token stays bound to the origin it was saved for, so after a move to another host it isn't sent until
     /// a new one is saved, and Undo of the move brings back a working source.
     func updateSource(_ source: PackageSource, token: String?) async throws {
+        guard let store else { return }
         if isEditable(source) { try store.customizationHistory.change([Self.edit(source)]) }
         if let token { try await client.saveToken(token, for: source) }
         await applySources()
@@ -770,6 +781,7 @@ extension PackageLibrary {
 
     /// Removes the source from the main configuration with Undo. Its token stays, so Undo brings it back working.
     func removeSource(_ id: String) async throws {
+        guard let store else { return }
         try store.customizationHistory.change([ConfigurationEdit(action: .packageSource, id: id)])
         await applySources()
     }

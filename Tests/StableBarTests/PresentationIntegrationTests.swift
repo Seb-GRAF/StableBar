@@ -17,6 +17,12 @@ private var presentationRepository: URL {
     }
 }
 
+/// Keeps the main actor busy without suspending, as a busy main thread does: a wait that runs out meanwhile resumes
+/// only after the code that runs next.
+@MainActor private func holdMainActor(for interval: TimeInterval) {
+    Thread.sleep(forTimeInterval: interval)
+}
+
 @Test(arguments: [false, true]) @MainActor func hoverTooltipsFitTheirTextAndDoNotCaptureClicks(long: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(##"""
     {"defaults":{"foreground":"#f4f4f5","background":"#25252c","borderWidth":0,"cornerRadius":9,"fontSize":12},
@@ -261,6 +267,88 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
         #expect(replace ? presentations.count == 2 : !popup.isOpen)
     }
     #expect(presentations.allSatisfy { !$0.isVisible })
+}
+
+/// Moving on cancels what a hover would show, also when its wait ran out while the main thread was busy and only its
+/// continuation is left to run.
+@Test @MainActor func aHoverCancelledAfterItsWaitRanOutDoesNotShow() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"bar":{"morphPopups":false},
+     "popups":{"details":{"openOnHover":true,"animation":{"duration":0},
+       "style":{},"layout":{"type":"text","text":"Details"}}},
+     "widgets":[{"id":"first","type":"text","text":"First","position":"right","popupName":"details"},
+                {"id":"second","type":"text","text":"Second","position":"right","popupName":"details"}]}
+    """#.utf8))
+    var presentations: [PopupPanel] = []
+    var point = NSPoint.zero
+    var moving = false
+    var samples = 0
+    let popup = WidgetPopup(present: { panel, _ in presentations.append(panel) }, mouseLocation: {
+        if moving {
+            point.y -= 0.25
+            samples += 1
+        }
+        return point
+    })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let anchors = try configuration.widgets.map { try #require(bar.anchors($0.id).first) }
+    let details = try #require(configuration.popups["details"])
+    let frame = bar.panel.convertToScreen(anchors[0].convert(anchors[0].bounds, to: nil))
+    popup.open(details, widget: configuration.widgets[0], defaults: configuration.defaults,
+               store: store, anchor: anchors[0], onHover: true)
+    let target = try #require(presentations.first).frame
+
+    // The pointer heads for the popup across the neighbour, whose tooltip waits while it moves.
+    point = NSPoint(x: frame.midX, y: frame.minY)
+    popup.hover(false, store: store, anchor: anchors[0]) {}
+    point.x += (target.midX - point.x) * (frame.maxY - point.y) / (frame.maxY - target.maxY)
+    moving = true
+    popup.hover(true, store: store, anchor: anchors[1]) {
+        popup.showTooltip("Neighbour", widget: configuration.widgets[1], defaults: configuration.defaults,
+                          store: store, anchor: anchors[1])
+    }
+    try await waitForPopup { samples >= 3 }
+    holdMainActor(for: 0.25)
+    moving = false
+    popup.hover(false, store: store, anchor: anchors[1]) {}
+    popup.hoverPopup(true)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(presentations.count == 1)
+}
+
+/// Coming back into a popup keeps it open, also when its close delay ran out while the main thread was busy.
+@Test @MainActor func aPopupEnteredAfterItsCloseDelayRanOutStaysOpen() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"popups":{"details":{"openOnHover":true,"animation":{"duration":0},"style":{},"layout":{"type":"text","text":"Details"}}},
+     "widgets":[{"id":"first","type":"text","text":"First","position":"right","popupName":"details"}]}
+    """#.utf8))
+    let popup = WidgetPopup(present: { _, _ in }, mouseLocation: { .zero })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let anchor = try #require(bar.anchors("first").first)
+    popup.open(try #require(configuration.popups["details"]), widget: configuration.widgets[0], defaults: configuration.defaults,
+               store: store, anchor: anchor, onHover: true)
+    popup.hoverPopup(true)
+    popup.hover(false, store: store, anchor: anchor) {}
+    popup.hoverPopup(false)
+    await Task.yield()
+    holdMainActor(for: 0.25)
+    popup.hoverPopup(true)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(popup.isOpen)
 }
 
 /// Only the open state sets a background, so opening the popup makes glass start drawing behind the widget,

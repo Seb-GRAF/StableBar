@@ -229,6 +229,8 @@ final class WidgetPopup {
                 do {
                     try await Task.sleep(for: .milliseconds(delay))
                     try await waitForHoverPath()
+                    // A wait that ran out while the main thread was busy resumes after a later cancel.
+                    try Task.checkCancellation()
                 } catch { return }
                 guard store.barEditing.allowsWidgetActions else { return }
                 await show()
@@ -271,6 +273,7 @@ final class WidgetPopup {
             do {
                 try await self?.waitForHoverPath()
                 try await Task.sleep(for: .milliseconds(200))
+                try Task.checkCancellation()
             } catch { return }
             self?.close()
         }
