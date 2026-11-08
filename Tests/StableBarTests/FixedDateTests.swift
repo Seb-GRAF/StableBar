@@ -63,6 +63,29 @@ private func difference(_ first: [UInt8], _ second: [UInt8]) -> Int {
     #expect(try difference(rows("0.0.0-dev"), first) <= 1)
 }
 
+/// Reports the version its environment fixes each time it draws.
+private struct FixedVersionProbe: View {
+    let report: @MainActor (AppVersion?) -> Void
+    @Environment(\.fixedVersion) private var fixedVersion
+
+    var body: some View {
+        let _ = report(fixedVersion)
+        Color.clear
+    }
+}
+
+@Test @MainActor func offscreenDrawingsShowTheSampleVersion() async throws {
+    var drawn: AppVersion?
+    let url = FileManager.default.temporaryDirectory.appending(path: "fixed-version-\(UUID().uuidString).png")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try await OffscreenSnapshot.write(FixedVersionProbe { drawn = $0 }, size: NSSize(width: 40, height: 40), dark: false,
+                                      settle: .zero, to: url)
+    let version = try #require(drawn)
+    #expect(version.version == "0.0.0-dev")
+    #expect(version.build == nil)
+    #expect(version.channel == .development)
+}
+
 @Test func clockFormatSamplesUseTheGivenDate() {
     let format = WidgetClockFormat.common[4]
     #expect(format.value == "EEE d MMM  HH:mm")
