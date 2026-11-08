@@ -27,6 +27,7 @@ enum PrivateAPI {
         "CGSCopySpacesForWindows", as: (@convention(c) (Int32, Int32, CFArray) -> Unmanaged<CFArray>?).self)
 
     /// Locking the screen, like the Apple menu's Lock Screen: the login framework's call, which returns 0 once locked.
+    /// The framework stays open for good: closing it would leave this function pointing at unloaded code.
     static let lockScreenImmediate: (@convention(c) () -> Int32)? = {
         guard let login = dlopen("/System/Library/PrivateFrameworks/login.framework/Versions/Current/login", RTLD_LAZY) else {
             return nil
