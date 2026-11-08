@@ -194,7 +194,7 @@ private var presentationRepository: URL {
     hover(false)
     hover(true, 1)
     popup.hoverPopup(false)
-    try await waitForPopup { store.presentations["second"]?.popupAnchor != nil }
+    try await advance(clock) { store.presentations["second"]?.popupAnchor != nil }
     #expect(popup.isOpen)
     #expect(store.presentations["first"]?.popupAnchor == nil)
     #expect(store.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
