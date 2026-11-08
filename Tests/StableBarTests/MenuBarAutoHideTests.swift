@@ -358,3 +358,22 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: fixture.url))
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
+
+/// Setup's finishing step explains the Switch to Desktop shortcuts whenever the bar it builds shows macOS Spaces in
+/// Workspaces, including the starter below the menu bar, which has Workspaces without any preset.
+@MainActor
+@Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() throws {
+    let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                                 "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
+    let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
+    let (session, fixture, store, _) = try setupSession(configuration: json, workspaces: { _ in .spaces }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.showsSpacesGuidance)
+    // A bar without Workspaces has no desktops to switch.
+    let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .spaces }) { _ in .allowed }
+    defer { plainStore.stop(); plainFixture.close() }
+    #expect(!plain.showsSpacesGuidance)
+    // A preset that adds Workspaces brings the desktops, and the guidance, with it.
+    plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
+    #expect(plain.showsSpacesGuidance)
+}

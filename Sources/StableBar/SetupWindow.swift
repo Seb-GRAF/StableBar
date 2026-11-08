@@ -206,6 +206,13 @@ final class SetupSession {
         preview()
     }
 
+    /// Whether the bar setup builds shows macOS Spaces in Workspaces, whose desktops switch through the Switch to
+    /// Desktop shortcuts. The preview has the starter's widgets as well as the preset's.
+    var showsSpacesGuidance: Bool {
+        guard let configuration = store.configuration, configuration.workspaceSource == .spaces else { return false }
+        return configuration.widgets.contains { $0.enabled && $0.content == .workspaces }
+    }
+
     /// The offset earlier setups wrote for Below menu bar, before `bar.belowMenuBar`.
     private var earlierBelowMenuBarOffset: Double {
         max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)

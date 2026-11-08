@@ -737,7 +737,7 @@ struct SetupTourView: View {
             }
             let source = session.workspaceSource
             if source == .spaces {
-                if session.preferences.widgetSets.contains(.workspaces(.spaces)) {
+                if session.showsSpacesGuidance {
                     Text("Workspaces shows your macOS desktops. To switch desktops from the bar, turn on the Switch to Desktop shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
                         .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                 }
