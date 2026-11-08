@@ -6,7 +6,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Releases
 
-- **Betas from `main`, stable by hand** (2026-10-16, [#3], [#23]). A push to `main` publishes a beta when the app changed since the newest release, and a maintainer promotes a beta to stable, so stable ships what beta users ran. There is no develop branch. Pushes that change only docs, CI or tests don't ship the same app again ([#309]).
+- **Betas from `main`, stable by hand** (2026-10-16, [#3], [#23]). A push to `main` publishes a beta when the app changed since the newest release and a `feat`, `fix`, `perf` or `refactor` commit changed it, and a maintainer promotes a beta to stable, so stable ships what beta users ran. There is no develop branch. Pushes that change only docs, CI or tests don't ship the same app again ([#309]).
 - **Merge commits by default** ([CONTRIBUTING](CONTRIBUTING.md#how-we-work)). semantic-release reads each commit that reaches `main`, so a merge commit keeps every one in the changelog; squash only when the title alone should reach it.
 - **An issue for every `fix`, `feat` or `perf`** (2026-10-31, [#390]). The issue holds the problem and the decision; the `Linked issue` check enforces it. Other types can skip it.
 
@@ -22,7 +22,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, `unowned` references and the files that call private macOS API. Its numbers only go down.
 - **Private macOS API is a maintainer's call** (2026-11-08, [#484]). It stays in the files that use it today; a new one is looked up at runtime and turns its feature off when it's missing.
-- **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive and a rename or removal needs a migration and a test. Builds since 0.9.0 skip what a newer release wrote, with a warning; older ones reject it. Migrations are still open ([#223]).
+- **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. Builds since 0.9.0 skip, with a warning, the properties they don't know in a file that says a newer release wrote it; anything else they don't know, such as a new widget type, is still an error, and older builds reject it all. Migrations are still open ([#223]).
 - **Tests keep their own time** (2026-11-08). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 
 [#3]: https://github.com/Seb-GRAF/StableBar/issues/3
