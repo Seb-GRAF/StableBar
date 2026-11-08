@@ -39,3 +39,12 @@ import Testing
     setMenuBarHidden(true, canReveal: true, setAlpha: record)
     #expect(alphas == [1, 0])
 }
+
+/// Without the call that lists the desktops, or when it lists none, the Spaces source says why instead of failing.
+@Test func spacesSayWhyWhenMacOSCannotListTheDesktops() {
+    let missing: ((Int32) -> Unmanaged<CFArray>?)? = nil
+    for copy in [missing, { _ in nil }] {
+        let error = #expect(throws: CommandFailure.self) { try currentSpaces(copyManagedDisplaySpaces: copy) }
+        #expect(error?.message == "This version of macOS doesn't let StableBar read its Spaces.")
+    }
+}

@@ -67,10 +67,11 @@ func spacesSnapshot(displays: Data, windows: Data, windowSpaces: [Int: [UInt64]]
     }
 }
 
-func currentSpaces() throws -> [Workspace] {
+func currentSpaces(copyManagedDisplaySpaces: ((Int32) -> Unmanaged<CFArray>?)? = PrivateAPI.copyManagedDisplaySpaces)
+    throws -> [Workspace] {
     guard let connection = PrivateAPI.mainConnectionID?(), let getActiveSpace = PrivateAPI.getActiveSpace,
           let copySpacesForWindows = PrivateAPI.copySpacesForWindows,
-          let managedDisplaySpaces = PrivateAPI.copyManagedDisplaySpaces?(connection)?.takeRetainedValue() else {
+          let managedDisplaySpaces = copyManagedDisplaySpaces?(connection)?.takeRetainedValue() else {
         throw CommandFailure(message: "This version of macOS doesn't let StableBar read its Spaces.")
     }
     let info = CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as! [[String: Any]]
