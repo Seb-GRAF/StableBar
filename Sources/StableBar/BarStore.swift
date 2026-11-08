@@ -131,13 +131,16 @@ final class BarStore: NSObject {
         do {
             let directory = sharedConfigurationURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            SetupPreferences.rememberStarterClockFormat()
             if !FileManager.default.fileExists(atPath: sharedConfigurationURL.path) {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
                 let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
                 // Below a visible menu bar, the starter is the one with Workspaces, System and Sound. Its manager is one
                 // the workspace connection can reach: on the login shell's PATH.
                 let workspaces = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: nil)
-                let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: Data(contentsOf: template))
+                // A new configuration's clock follows the Mac's date order and 12- or 24-hour time.
+                let starter = try SetupPreferences.withMacsClock(Data(contentsOf: template))
+                let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: starter)
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
             try migrateConfigurationFile(sharedConfigurationURL)

@@ -230,8 +230,9 @@ struct SetupPreferences: Equatable {
     var keepNotificationsClear: Bool?
     var deferMeetings = false
 
-    /// The starter bar on the top edge, in the menu bar's place: the widgets of Resources/config.json.
-    static let menuBarStarter = widgets(#"""
+    /// The starter bar on the top edge as Resources/config.json and earlier releases write it, with a 24-hour clock in
+    /// day-month order.
+    static let bundledMenuBarStarter = widgets(#"""
         [
           { "id": "apple", "type": "appleMenu", "position": "left" },
           { "id": "app-menu", "type": "appMenu", "position": "left" },
@@ -240,6 +241,92 @@ struct SetupPreferences: Equatable {
           { "id": "menu-bar-items", "type": "menuBarItems", "position": "right" }
         ]
         """#)
+
+    /// The starter bar on the top edge, in the menu bar's place: the widgets of Resources/config.json, with a clock in
+    /// the Mac's date order and hour cycle.
+    static var menuBarStarter: [[String: ConfigurationValue]] { menuBarStarter(clockFormat: clockFormat()) }
+
+    static func menuBarStarter(locale: Locale) -> [[String: ConfigurationValue]] {
+        menuBarStarter(clockFormat: clockFormat(locale: locale))
+    }
+
+    /// The starter bar on the top edge with its clock in `clockFormat`.
+    static func menuBarStarter(clockFormat: String) -> [[String: ConfigurationValue]] {
+        bundledMenuBarStarter.map { widget in
+            guard widget["type"] == .string("clock") else { return widget }
+            var widget = widget
+            widget["format"] = .string(clockFormat)
+            return widget
+        }
+    }
+
+    static let starterClockFormatsKey = "starterClockFormats"
+
+    /// The formats setup writes for the starter's clock in `locale`: the region's own, and its 24- and 12-hour choices.
+    static func starterClockFormats(locale: Locale = .current) -> [String] {
+        var formats: [String] = []
+        for hours in [Clock.current, .twentyFourHour, .twelveHour] where !formats.contains(clockFormat(locale: locale, hours: hours)) {
+            formats.append(clockFormat(locale: locale, hours: hours))
+        }
+        return formats
+    }
+
+    /// Remembers the starter clock formats this Mac's region gives, so a starter written under it still counts as one
+    /// after the region changes. StableBar calls it at every launch.
+    static func rememberStarterClockFormat(in defaults: UserDefaults = .standard) {
+        var formats = rememberedStarterClockFormats(in: defaults)
+        let new = starterClockFormats().filter { !formats.contains($0) }
+        guard !new.isEmpty else { return }
+        formats += new
+        defaults.set(formats, forKey: starterClockFormatsKey)
+    }
+
+    /// The starter clock formats of the regions this Mac has had while StableBar ran.
+    static func rememberedStarterClockFormats(in defaults: UserDefaults = .standard) -> [String] {
+        defaults.stringArray(forKey: starterClockFormatsKey) ?? []
+    }
+
+    /// Whether `widgets` are the starter bar on the top edge: with the bundled clock, or with a clock setup writes for
+    /// this Mac's region now or wrote under an earlier one, its 24- and 12-hour choices included. A clock someone set
+    /// to another format doesn't count.
+    static func isMenuBarStarter(_ widgets: [[String: ConfigurationValue]],
+                                 remembered: [String] = rememberedStarterClockFormats()) -> Bool {
+        starters(remembered: remembered).contains(widgets)
+    }
+
+    /// The starter bar on the top edge with each clock it can have on this Mac.
+    private static func starters(remembered: [String]) -> [[[String: ConfigurationValue]]] {
+        // Earlier releases' setup wrote its 12-hour choice as EEE d MMM  h:mm a.
+        let formats = starterClockFormats() + remembered + ["EEE d MMM  h:mm a"]
+        return [bundledMenuBarStarter] + formats.map { menuBarStarter(clockFormat: $0) }
+    }
+
+    /// StableBar's clock, day, date, two spaces and time, in `locale`'s date order and its hour cycle, or the 24- or
+    /// 12-hour one `hours` picks: `EEE d MMM  HH:mm` in the UK, `EEE MMM d  h:mm a` in the US.
+    static func clockFormat(locale: Locale = .current, hours: Clock = .current) -> String {
+        func pattern(_ template: String, or fallback: String) -> String {
+            (DateFormatter.dateFormat(fromTemplate: template, options: 0, locale: locale) ?? fallback)
+                .replacingOccurrences(of: ",", with: "")
+                .replacingOccurrences(of: "\u{202F}", with: " ")
+                .replacingOccurrences(of: "\u{00A0}", with: " ")
+        }
+        // The 24- and 12-hour choices keep their own time pattern: macOS can force a template to the other hour cycle.
+        let time = switch hours {
+        case .twentyFourHour: "HH:mm"
+        case .twelveHour: "h:mm a"
+        case .current: pattern("jmm", or: "HH:mm")
+        }
+        return pattern("EEEdMMM", or: "EEE d MMM") + "  " + time
+    }
+
+    /// The bundled starter as a new configuration starts: its clock in the Mac's date order and hour cycle. Any other
+    /// file is left as it is.
+    static func withMacsClock(_ data: Data, locale: Locale = .current) throws -> Data {
+        var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
+        guard (try? document["widgets"]?.decoded([[String: ConfigurationValue]].self)) == bundledMenuBarStarter else { return data }
+        document["widgets"] = .array(menuBarStarter(locale: locale).map(ConfigurationValue.object))
+        return try configurationData(document, editing: data)
+    }
 
     /// The starter bar below the macOS menu bar, which already shows the menus, the clock and the menu bar items.
     static let belowMenuBarStarter = WidgetSet.workspaces(.spaces).widgets + WidgetSet.system.widgets + WidgetSet.sound.widgets
@@ -328,11 +415,12 @@ struct SetupPreferences: Equatable {
         // changed, even when its file still lists a starter.
         let changed = Self.changedIDs(in: document)
         let isStarter = configuration.widgets.map(\.id) == ids && changed.isDisjoint(with: ids)
-        if isStarter, placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
+        if isStarter, placement == .belowMenuBar, Self.isMenuBarStarter(widgets), let change = swap(to: Self.belowMenuBarStarter) { return change }
         if isStarter, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
         let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
             let id = Self.id(widget)
-            return Self.menuBarWidgetIDs.contains(id) && !changed.contains(id) && Self.menuBarStarter.contains(widget)
+            return Self.menuBarWidgetIDs.contains(id) && !changed.contains(id)
+                && Self.starters(remembered: Self.rememberedStarterClockFormats()).contains { $0.contains(widget) }
         }.map(Self.id)
         return StarterChange(configuration: configuration, removed: removed, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
     }
@@ -406,7 +494,7 @@ struct SetupPreferences: Equatable {
             for widget in kept {
                 if case .clock = widget.content {
                     edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: [
-                        "format": .string(clock == .twentyFourHour ? "EEE d MMM  HH:mm" : "EEE d MMM  h:mm a")
+                        "format": .string(Self.clockFormat(hours: clock))
                     ]))
                 }
             }
