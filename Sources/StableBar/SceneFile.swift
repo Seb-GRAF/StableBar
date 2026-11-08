@@ -4,7 +4,7 @@ import Foundation
 /// `StableBar --render-scenes` reads these from `scenes/`, and scene.schema.json describes them. A scene
 /// runs nothing: commands, providers and window managers are replaced by the samples it gives.
 struct SceneFile: Decodable {
-    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update }
+    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages }
@@ -41,12 +41,33 @@ struct SceneFile: Decodable {
     var tab: Tab?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
+    /// The step setup shows and the Mac it shows it on, for `setup`.
+    var setup: Setup?
     var appearances: [Appearance] = Appearance.allCases
     var width: Double?
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, activeApp, menu, draw, widget, section, tab, uninstall, appearances, width, height
+        case configuration, outputs, history, workspaces, windows, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
+             width, height
+    }
+
+    /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
+    /// doesn't depend on the Mac that draws it.
+    struct Setup: Equatable {
+        var step = SetupSession.Step.placement
+        /// The first step's choice, made before drawing; none leaves both choices unpicked.
+        var placement: SetupPreferences.Placement?
+        /// The preset picked on the second step.
+        var preset: SetupPreferences.Preset?
+        /// Whether macOS hides its menu bar automatically.
+        var menuBarHides = false
+        /// Whether macOS allows StableBar Accessibility, control of System Events and full Calendar access.
+        var accessibility = true
+        var automation = true
+        var calendars = true
+        /// Whether the Mac has an internal battery, which presets add Battery for.
+        var battery = true
     }
 
     /// An item of a sample menu, with the values Accessibility gives a menu item. An empty title is a separator.
@@ -84,6 +105,7 @@ struct SceneFile: Decodable {
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
+        setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,
@@ -110,6 +132,9 @@ struct SceneFile: Decodable {
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
         }
+        if setup != nil, draw != .setup {
+            throw DecodingError.dataCorruptedError(forKey: .setup, in: values, debugDescription: "setup belongs to a setup scene.")
+        }
         if let tab, tab.isBarTab, widget != nil || section != .bar {
             throw DecodingError.dataCorruptedError(forKey: .tab, in: values,
                                                    debugDescription: "\(tab.rawValue) is a tab of the bar's settings, in the bar section without a widget.")
@@ -121,6 +146,32 @@ struct SceneFile: Decodable {
 
     static func read(_ url: URL) throws -> SceneFile {
         try JSONDecoder().decode(SceneFile.self, from: Data(contentsOf: url))
+    }
+}
+
+extension SceneFile.Setup: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery }
+
+    /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        func named<Value>(_ key: CodingKeys, among choices: [Value]) throws -> Value? {
+            guard let name = try values.decodeIfPresent(String.self, forKey: key) else { return nil }
+            guard let value = choices.first(where: { "\($0)" == name }) else {
+                throw DecodingError.dataCorruptedError(forKey: key, in: values, debugDescription:
+                    "\(key.stringValue) is one of \(choices.map { "\($0)" }.joined(separator: ", ")).")
+            }
+            return value
+        }
+        step = try named(.step, among: SetupSession.Step.allCases) ?? .placement
+        placement = try named(.placement, among: [SetupPreferences.Placement.top, .belowMenuBar])
+        preset = try named(.preset, among: SetupPreferences.Preset.allCases)
+        menuBarHides = try values.decodeIfPresent(Bool.self, forKey: .menuBarHides) ?? false
+        accessibility = try values.decodeIfPresent(Bool.self, forKey: .accessibility) ?? true
+        automation = try values.decodeIfPresent(Bool.self, forKey: .automation) ?? true
+        calendars = try values.decodeIfPresent(Bool.self, forKey: .calendars) ?? true
+        battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
     }
 }
 

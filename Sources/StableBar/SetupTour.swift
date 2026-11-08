@@ -2,7 +2,10 @@ import SwiftUI
 
 struct SetupTourView: View {
     @Bindable var session: SetupSession
-    let screen: NSScreen
+    /// The display setup shows on, which decides where its bar sits.
+    let display: BarDisplay
+    /// The height of that display's macOS menu bar.
+    let menuBarHeight: Double
     /// The height the Dock takes at the bottom of the screen. The tour lays out above it.
     let dock: Double
     let finish: () -> Void
@@ -20,6 +23,8 @@ struct SetupTourView: View {
     @State private var previews: [String: ThemePreview] = [:]
     @State private var confirmingSkip = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The date scenes draw at, which holds the pointer still so two drawings match.
+    @Environment(\.fixedDate) private var fixedDate
 
     private enum Phase { case intro, wallpaper, tour }
 
@@ -33,10 +38,12 @@ struct SetupTourView: View {
     ]
 
 
-    init(session: SetupSession, screen: NSScreen, dock: Double, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
-         reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?, watchIntro: @escaping () -> Void = {}) {
+    init(session: SetupSession, display: BarDisplay, menuBarHeight: Double, dock: Double, intro: Bool, finish: @escaping () -> Void,
+         skip: @escaping () -> Void, reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?,
+         watchIntro: @escaping () -> Void = {}) {
         _session = Bindable(session)
-        self.screen = screen
+        self.display = display
+        self.menuBarHeight = menuBarHeight
         self.dock = dock
         self.finish = finish
         self.skip = skip
@@ -50,17 +57,17 @@ struct SetupTourView: View {
         _menuBarQuestion = State(initialValue: intro && !session.menuBarHides)
     }
 
-    private var barFrame: CGRect {
-        let display = BarDisplay(screen: screen)
+    /// Where the bar sits on a display `width` points wide.
+    private func barFrame(width: Double) -> CGRect {
         guard let configuration = session.store.configuration else { return .zero }
-        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: screen.menuBarHeight),
-                      width: screen.frame.width, height: configuration.barGeometry(for: display).layoutHeight)
+        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: menuBarHeight),
+                      width: width, height: configuration.barGeometry(for: display).layoutHeight)
     }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let bar = barFrame
+            let bar = barFrame(width: size.width)
             ZStack {
                 Color.black
                 SetupBackdrop(size: size)
@@ -235,7 +242,7 @@ struct SetupTourView: View {
                 .opacity(spread * (1 - 0.4 * progress(d, SetupDemo.landing + 0.55, 0.8)))
                 .position(x: size.width / 2, y: bar.maxY)
             if d >= 0 && d < SetupDemo.landing + 0.3 && !looks.isEmpty {
-                SetupDemo(store: session.store, display: BarDisplay(screen: screen), looks: looks, elapsed: d, size: size, stage: stage, target: bar)
+                SetupDemo(store: session.store, display: display, looks: looks, elapsed: d, size: size, stage: stage, target: bar)
             }
             Text("A native, configurable bar for your Mac.")
                 .font(Self.handwriting)
@@ -373,7 +380,7 @@ struct SetupTourView: View {
         .frame(height: 26)
         .background(.white.opacity(0.08), in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
-        .phaseAnimator(reduceMotion ? [0] : [0, -5]) { content, offset in
+        .phaseAnimator(reduceMotion || fixedDate != nil ? [0] : [0, -5]) { content, offset in
             content.offset(y: offset)
         } animation: { _ in .easeInOut(duration: 1) }
     }
@@ -1019,13 +1026,16 @@ func progress(_ time: Double, _ start: Double, _ duration: Double) -> Double {
 private struct SetupBackdrop: View {
     let size: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The date scenes draw at: the backdrop stops there, so two drawings match.
+    @Environment(\.fixedDate) private var fixedDate
 
-    private static let light = Wallpaper.image!
-    private static let dark = NSImage(contentsOf: Bundle.main.url(forResource: "SetupDusk", withExtension: "heic")!)!
+    /// Missing outside the app bundle, as in tests, where the backdrop stays black.
+    private static let light = Wallpaper.image
+    private static let dark = Bundle.main.url(forResource: "SetupDusk", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || fixedDate != nil)) { context in
+            let t = (fixedDate ?? context.date).timeIntervalSinceReferenceDate
             ZStack {
                 layer(Self.light, t: t, phase: 0)
                 layer(Self.dark, t: t, phase: 2).opacity(0.5 + 0.5 * sin(t / 4))
@@ -1035,8 +1045,8 @@ private struct SetupBackdrop: View {
         .clipped()
     }
 
-    private func layer(_ image: NSImage, t: Double, phase: Double) -> some View {
-        Image(nsImage: image)
+    private func layer(_ image: NSImage?, t: Double, phase: Double) -> some View {
+        Image(nsImage: image ?? NSImage())
             .resizable()
             .scaledToFill()
             .frame(width: size.width, height: size.height)

@@ -50,7 +50,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + (intro ? 1 : -1))
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
-        let host = NSHostingView(rootView: SetupTourView(session: session!, screen: screen, dock: dock, intro: intro,
+        let host = NSHostingView(rootView: SetupTourView(session: session!, display: BarDisplay(screen: screen),
+                                                         menuBarHeight: screen.menuBarHeight, dock: dock, intro: intro,
                                                          finish: { [weak self] in self?.showCard() },
                                                          skip: { [weak self] in self?.closeTour() },
                                                          reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) },
@@ -144,6 +145,9 @@ struct SetupSystem {
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
     var defaults = UserDefaults.standard
+    /// Whether setup previews its choices on the running bar, which starts the commands of the widgets they add. A scene
+    /// turns it off, since it runs nothing: setup shows its choices, and the bar shows its configuration as it is.
+    var previewsOnTheBar = true
     /// The workspace source setup uses, given the one the configuration names: see `WorkspaceSource.detected`.
     var workspaceSource: (_ configured: WorkspaceSource?) -> WorkspaceSource = { configured in
         WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: configured)
@@ -377,6 +381,10 @@ final class SetupSession {
     }
 
     func preview() {
+        guard system.previewsOnTheBar else {
+            base = store.configuration
+            return
+        }
         var shown = applied
         if needsCalendarSetup { shown.deferMeetings = true }
         do {

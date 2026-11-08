@@ -105,8 +105,11 @@ struct FeltPen {
     }
 }
 
+/// Shantell Sans from the app's resources, or the system font outside the app bundle, as when tests draw setup.
 func shantellSans(_ file: String, size: Double) -> CTFont {
-    let url = Bundle.main.url(forResource: file, withExtension: "woff2")!
-    let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as! [CTFontDescriptor]
-    return CTFontCreateWithFontDescriptor(descriptors[0], size, nil)
+    guard let url = Bundle.main.url(forResource: file, withExtension: "woff2"),
+          let descriptor = (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor])?.first else {
+        return CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+    }
+    return CTFontCreateWithFontDescriptor(descriptor, size, nil)
 }
