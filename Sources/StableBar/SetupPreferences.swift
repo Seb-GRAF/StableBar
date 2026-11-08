@@ -257,16 +257,28 @@ struct SetupPreferences: Equatable {
         (try? widget["id"]?.decoded(String.self)) ?? ""
     }
 
-    /// The widgets that the file's `widgetOverrides`, or those of its profiles, change.
-    private static func overriddenIDs(in document: [String: ConfigurationValue]) -> Set<String> {
+    /// The widgets that the file, or one of its profiles, changes or places without changing their definitions:
+    /// through `widgetOverrides`, a kind of screen's `layout` or `widgetOrder`.
+    private static func changedIDs(in document: [String: ConfigurationValue]) -> Set<String> {
         var layers = [document]
         if case let .array(profiles)? = document["profiles"] {
             for case let .object(profile) in profiles {
                 if case let .object(configuration)? = profile["configuration"] { layers.append(configuration) }
             }
         }
+        func strings(_ value: ConfigurationValue?) -> [String] {
+            guard case let .array(values)? = value else { return [] }
+            return values.compactMap { if case let .string(id) = $0 { id } else { nil } }
+        }
         return Set(layers.flatMap { layer -> [String] in
-            if case let .object(overrides)? = layer["widgetOverrides"] { Array(overrides.keys) } else { [] }
+            var ids = strings(layer["widgetOrder"])
+            if case let .object(overrides)? = layer["widgetOverrides"] { ids += overrides.keys }
+            if case let .object(screens)? = layer["screens"] {
+                for case let .object(screen) in screens.values {
+                    if case let .object(layout)? = screen["layout"] { ids += layout.values.flatMap(strings) }
+                }
+            }
+            return ids
         })
     }
 
@@ -293,6 +305,9 @@ struct SetupPreferences: Equatable {
         func swap(to starter: [[String: ConfigurationValue]]) -> StarterChange? {
             var swapped = document
             swapped["widgets"] = .array(starter.map(ConfigurationValue.object))
+            // Profiles apply through the loader; the bar the starter swaps to doesn't need them.
+            swapped["profiles"] = nil
+            swapped["profile"] = nil
             guard let data = try? JSONEncoder().encode(swapped),
                   let target = try? JSONDecoder().decode(Configuration.self, from: data) else { return nil }
             let starterIDs = starter.map(Self.id)
@@ -300,15 +315,15 @@ struct SetupPreferences: Equatable {
                                  added: starter.filter { !ids.contains(Self.id($0)) },
                                  isBelowMenuBarStarter: starter == Self.belowMenuBarStarter)
         }
-        // Widgets from includes or packages, or overrides in the file or its profiles, mean the bar has changed, even
-        // when its file still lists a starter.
-        let overridden = Self.overriddenIDs(in: document)
-        let isStarter = configuration.widgets.map(\.id) == ids && overridden.isDisjoint(with: ids)
+        // Widgets from includes or packages, or overrides and layouts in the file or its profiles, mean the bar has
+        // changed, even when its file still lists a starter.
+        let changed = Self.changedIDs(in: document)
+        let isStarter = configuration.widgets.map(\.id) == ids && changed.isDisjoint(with: ids)
         if isStarter, placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
         if isStarter, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
         let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
             let id = Self.id(widget)
-            return Self.menuBarWidgetIDs.contains(id) && !overridden.contains(id) && Self.menuBarStarter.contains(widget)
+            return Self.menuBarWidgetIDs.contains(id) && !changed.contains(id) && Self.menuBarStarter.contains(widget)
         }.map(Self.id)
         return StarterChange(configuration: configuration, removed: removed, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
     }

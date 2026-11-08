@@ -809,6 +809,44 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(configuration.bar.belowMenuBar)
 }
 
+/// Writes the bundled starter with `profiles` into a temporary folder, applies `preferences` through the loader, and
+/// returns the saved document and the widgets it loads.
+private func applyingToStarter(profiles: ConfigurationValue, _ preferences: SetupPreferences) throws
+    -> (document: [String: ConfigurationValue], widgets: [String]) {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["profiles"] = profiles
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try preferences.applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let widgets = try loader.load(root, data: updated).widgets.map(\.id)
+    return (try JSONDecoder().decode([String: ConfigurationValue].self, from: updated), widgets)
+}
+
+/// A profile that doesn't touch the widgets leaves a starter a starter: below the menu bar it still becomes
+/// Workspaces, System and Sound, and the profile stays.
+@Test func setupSwapsAStarterWithAnUnrelatedProfile() throws {
+    let profiles: ConfigurationValue = .array([.object(["name": .string("Dark"), "configuration": .object(["bar": .object(["appearance": .string("dark")])])])])
+    let (document, widgets) = try applyingToStarter(profiles: profiles, SetupPreferences(placement: .belowMenuBar))
+    #expect(widgets == ["workspaces", "system-monitor", "sound"])
+    #expect(document["profiles"] == profiles)
+}
+
+/// A profile that places a starter widget on a kind of screen has changed it: below the menu bar, setup keeps that
+/// widget and the profile's layout.
+@Test func setupKeepsStarterWidgetsThatAProfilePlaces() throws {
+    let profiles: ConfigurationValue = .array([.object(["name": .string("Laptop"), "configuration": .object([
+        "screens": .object(["laptop": .object(["layout": .object(["right": .array([.string("clock")])])])])
+    ])])])
+    let (document, widgets) = try applyingToStarter(profiles: profiles, SetupPreferences(placement: .belowMenuBar))
+    #expect(widgets == ["sound", "clock"])
+    #expect(document["profiles"] == profiles)
+}
+
 /// Overrides change a starter's widgets without changing their definitions, in the file or in one of its profiles.
 /// Setup treats that bar as customized: below the menu bar it keeps the overridden clock and its override.
 @Test(arguments: [false, true])
