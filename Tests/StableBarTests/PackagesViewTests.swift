@@ -1281,7 +1281,7 @@ final class PackagesViewTests: XCTestCase {
     }
 
     @MainActor private func textFields(_ view: NSView) -> [String] {
-        (view as? NSTextField).map { [$0.stringValue] } ?? view.subviews.flatMap(textFields)
+        visibleText(view)
     }
 
     @MainActor private func tables(in view: NSView) -> [NSTableView] {
