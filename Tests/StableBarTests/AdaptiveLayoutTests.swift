@@ -414,6 +414,18 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(kept.overflow.map(\.ids) == [["menus"]])
 }
 
+/// When reserving room for More widgets moves another neighbor there too, App menus take the room it leaves, up to
+/// their full width, instead of keeping the width the first pass squeezed them to.
+@Test func appMenusTakeTheRoomOfEveryNeighborThatMovesIntoMoreWidgets() {
+    let plan = AdaptiveBarPlanner(inset: 0, spacing: 8, notchSpacing: 0, notch: nil, overflowWidth: 30).plan(width: 230, items: [
+        BarLayoutItem(id: "a", position: .left, width: 100),
+        BarLayoutItem(id: "b", position: .left, width: 100),
+        BarLayoutItem(id: "menus", position: .left, width: 250, minimumWidth: 90)
+    ])
+    #expect(plan.overflow.map(\.ids) == [["a", "b"]])
+    #expect(plan.placements["menus"] == BarPlacement(x: 0, width: 192))
+}
+
 @Test func appMenusKeepTheirFullWidthWhenThereIsRoom() {
     let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: nil).plan(width: 1000, items: [
         BarLayoutItem(id: "menus", position: .left, width: 400, minimumWidth: 90)

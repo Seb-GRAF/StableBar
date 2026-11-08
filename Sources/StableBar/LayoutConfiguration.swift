@@ -122,7 +122,9 @@ struct AdaptiveBarPlanner {
         let overflows = visible.count < items.count
         let reserve = overflows ? overflowWidth + spacing : 0
         if overflows {
-            visible = fitting(visible, capacity: end - start - reserve, fromEnd: buttonAtEnd)
+            // Refit at full widths: the items the reserve moves out leave room the first pass's shrinking didn't have.
+            visible = fitting(items.filter { item in visible.contains { $0.id == item.id } },
+                              capacity: end - start - reserve, fromEnd: buttonAtEnd)
         }
         var room = end - start - reserve - occupiedWidth(visible)
         for index in visible.indices where visible[index].growth > 0 {
