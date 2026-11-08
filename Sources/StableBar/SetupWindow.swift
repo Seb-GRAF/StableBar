@@ -508,7 +508,9 @@ final class SetupSession {
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
-        Task { try await setMenuBarHidden(menuBarHidAtStart) }
+        // Setup has closed by the time the restore could fail, so nothing shows the error. Settings → General shows
+        // the menu bar setting as it is and changes it.
+        Task { try? await setMenuBarHidden(menuBarHidAtStart) }
     }
 
     func finish() {
