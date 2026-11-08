@@ -262,6 +262,7 @@ struct SetupTourView: View {
                     menuBarAccessNotice
                     if let error = session.error {
                         Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .multilineTextAlignment(.center)
@@ -337,6 +338,7 @@ struct SetupTourView: View {
                       systemImage: "lock")
                     .font(.callout)
                     .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("Open Automation Settings…") {
                     lower()
                     MenuBarAutoHide.openAutomationSettings()
@@ -365,7 +367,10 @@ struct SetupTourView: View {
 
     private func tour(size: CGSize) -> some View {
         let page = Self.pages[session.step]
-        return VStack(spacing: 12) {
+        let layout = SetupTourLayout(height: size.height, dock: dock)
+        return VStack(spacing: 16) {
+            ScrollView(.vertical) {
+            VStack(spacing: 12) {
             staged(0) {
                 VStack(spacing: 12) {
                     Text("\(session.step + 1)  /  \(Self.pages.count)")
@@ -406,31 +411,49 @@ struct SetupTourView: View {
                 default: hints
                 }
             }
-            .padding(.top, 32)
-            if phase == .tour, session.step > 0, !session.missingPermissions.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(session.step == Self.pages.count - 1 ? "Allow these before you finish" : "Your choices need")
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-                    ForEach(session.missingPermissions, id: \.self) { permissionRow($0, compact: true) }
-                }
-                .padding(16)
-                .frame(width: 600, alignment: .leading)
-                .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.3)))
-                .padding(.top, 20)
-                .transition(.opacity)
-            }
+            .padding(.top, layout.controlsGap)
             if phase == .tour, let error = session.error {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: 560)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
             }
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 12)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            // A step taller than the room fades out at the bottom, so it reads as scrolling on.
+            .mask {
+                VStack(spacing: 0) {
+                    Color.black
+                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 16)
+                }
+            }
+            // What the choices still need sits above Continue, which waits for it, however long the step is.
+            if phase == .tour, session.step > 0, !session.missingPermissions.isEmpty {
+                permissionReminder.transition(.opacity)
+            }
+        }
+        .padding(.top, layout.contentTop)
+        .padding(.bottom, size.height - layout.footerTop)
+        .frame(width: size.width, height: size.height, alignment: .top)
+    }
+
+    private var permissionReminder: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(session.step == Self.pages.count - 1 ? "Allow these before you finish" : "Your choices need")
+                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
+            ForEach(session.missingPermissions, id: \.self) { permissionRow($0, compact: true) }
         }
         .foregroundStyle(.white)
-        .padding(.top, (size.height - dock) * 0.24)
-        .frame(width: size.width, height: size.height, alignment: .top)
+        .padding(16)
+        .frame(width: 600, alignment: .leading)
+        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.3)))
     }
 
     private func staged<Content: View>(_ delay: Double, @ViewBuilder content: () -> Content) -> some View {
@@ -714,11 +737,11 @@ struct SetupTourView: View {
             if source == .spaces {
                 if session.preferences.widgetSets.contains(.workspaces(.spaces)) {
                     Text("Workspaces shows your macOS desktops. To switch desktops from the bar, turn on the Switch to Desktop shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(24)
@@ -986,4 +1009,22 @@ extension AnyTransition {
     static var blurFade: AnyTransition {
         .modifier(active: Blur(radius: 10), identity: Blur(radius: 0)).combined(with: .opacity)
     }
+}
+
+/// Where setup's steps sit on a screen `height` points tall whose Dock takes `dock` points at the bottom. A step starts
+/// a quarter of the way down, closer on a short screen, and scrolls before it reaches Back, Continue and Skip setup.
+struct SetupTourLayout {
+    /// Below the bar and the "Live on your bar" pointer.
+    static let minimumContentTop = 120.0
+    /// The room the tallest step takes: Make it yours with a permission reminder.
+    static let roomyContent = 600.0
+    let height: Double
+    let dock: Double
+
+    /// The top of the footer's buttons, which are centered 89 points above the Dock, with a margin.
+    var footerTop: Double { height - dock - 89 - 24 - 20 }
+    var contentTop: Double { max(Self.minimumContentTop, min((height - dock) * 0.24, footerTop - Self.roomyContent)) }
+    var contentHeight: Double { max(0, footerTop - contentTop) }
+    /// The space between a step's text and its controls, tighter on a short screen.
+    var controlsGap: Double { contentTop < (height - dock) * 0.24 ? 20 : 32 }
 }

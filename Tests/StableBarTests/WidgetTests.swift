@@ -909,3 +909,18 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     #expect(!typeErased)
     #expect(childrenAreBlockViews)
 }
+
+/// Setup's steps start a quarter of the way down, closer on a short screen, and never reach the buttons.
+@Test func setupKeepsItsStepsAboveItsButtons() {
+    let tall = SetupTourLayout(height: 982, dock: 0)
+    #expect(tall.contentTop == 982 * 0.24)
+    #expect(tall.contentTop + tall.contentHeight <= tall.footerTop)
+    let short = SetupTourLayout(height: 900, dock: 76)
+    #expect(short.contentTop >= SetupTourLayout.minimumContentTop)
+    #expect(short.contentTop < (900 - 76) * 0.24)
+    #expect(short.contentHeight >= 560)
+    #expect(short.contentTop + short.contentHeight <= short.footerTop)
+    #expect(short.footerTop < 900 - 76 - 89)
+    #expect(tall.controlsGap == 32)
+    #expect(short.controlsGap < tall.controlsGap)
+}
