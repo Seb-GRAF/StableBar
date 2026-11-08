@@ -10,6 +10,8 @@ struct SetupTourView: View {
     let reveal: () -> Void
     let lower: () -> Void
     let showProfile: ((String) -> Void)?
+    /// Plays the intro again over this setup, keeping the choices made so far.
+    let watchIntro: () -> Void
     @State private var start: Date
     @State private var departure: Date?
     @State private var phase: Phase
@@ -21,16 +23,18 @@ struct SetupTourView: View {
 
     private enum Phase { case intro, wallpaper, tour }
 
+    /// Each step's title and text, in the order of `SetupSession.Step`.
     private static let pages = [
-        ("Allow what your bar needs.", "macOS asks once for each permission. Continue when every one is allowed."),
+        ("Make it your menu bar.", "StableBar works best in the menu bar's place: it takes the top edge, and the macOS menu bar hides until you point at it."),
         ("Make it yours.", "Choose your widgets, then a theme. Your bar changes as you go."),
-        ("Choose where it sits.", "On the top edge, StableBar replaces the macOS menu bar. Below it, macOS menus stay visible."),
         ("Finishing touches.", "Choose how StableBar keeps clear of your windows and whether it opens at login."),
+        ("Allow what your bar needs.", "macOS asks once for each permission. Continue when every one is allowed."),
         ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
     ]
 
+
     init(session: SetupSession, screen: NSScreen, dock: Double, intro: Bool, finish: @escaping () -> Void, skip: @escaping () -> Void,
-         reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?) {
+         reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?, watchIntro: @escaping () -> Void = {}) {
         _session = Bindable(session)
         self.screen = screen
         self.dock = dock
@@ -39,6 +43,7 @@ struct SetupTourView: View {
         self.reveal = reveal
         self.lower = lower
         self.showProfile = showProfile
+        self.watchIntro = watchIntro
         _start = State(initialValue: intro ? .now : .distantPast)
         _departure = State(initialValue: intro ? nil : .distantPast)
         _phase = State(initialValue: intro ? .intro : .tour)
@@ -89,9 +94,6 @@ struct SetupTourView: View {
         .environment(\.colorScheme, .dark)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
-        }
-        .onChange(of: session.needsCalendarAccess) { _, needs in
-            if needs && session.calendarAccess == .notDetermined { Task { await session.requestCalendarAccess() } }
         }
         .task(id: phase == .tour) {
             while phase == .tour && !Task.isCancelled {
@@ -326,6 +328,7 @@ struct SetupTourView: View {
 
     private func land() {
         menuBarQuestion = false
+        session.step = SetupSession.Step.look.rawValue
         departure = .now.addingTimeInterval(-SetupDemo.flight)
     }
 
@@ -393,9 +396,9 @@ struct SetupTourView: View {
                     .frame(maxWidth: 560)
             }
             staged(0.16) {
-                switch session.step {
-                case 0: permissions
-                case 1:
+                switch SetupSession.Step(rawValue: session.step) {
+                case .placement: placement
+                case .look:
                     VStack(spacing: 28) {
                         section("Widgets") {
                             Text("Presets add widgets and never remove yours.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
@@ -403,17 +406,26 @@ struct SetupTourView: View {
                             presets
                         }
                         section("Theme") {
-                            HStack(spacing: 10) {
-                                Text("Appearance").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                                SettingsSegments(selection: $session.preferences.appearance,
-                                                 options: SetupPreferences.Appearance.allCases.map { ($0, $0.rawValue) }, stretches: false)
+                            HStack(spacing: 20) {
+                                if session.store.configuration?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
+                                    HStack(spacing: 10) {
+                                        Text("Clock").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
+                                        SettingsSegments(selection: $session.preferences.clock,
+                                                         options: SetupPreferences.Clock.allCases.map { ($0, $0.rawValue) }, stretches: false)
+                                    }
+                                }
+                                HStack(spacing: 10) {
+                                    Text("Appearance").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
+                                    SettingsSegments(selection: $session.preferences.appearance,
+                                                     options: SetupPreferences.Appearance.allCases.map { ($0, $0.rawValue) }, stretches: false)
+                                }
                             }
                         } content: {
                             themes
                         }
                     }
-                case 2: placement
-                case 3: access
+                case .touches: access
+                case .permissions: permissions
                 default: hints
                 }
             }
@@ -439,8 +451,9 @@ struct SetupTourView: View {
                     LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 16)
                 }
             }
-            // What the choices still need sits above Continue, which waits for it, however long the step is.
-            if phase == .tour, session.step > 0, !session.missingPermissions.isEmpty {
+            // After the permissions step, what is still missing sits above Finish setup, which waits for it, however
+            // long the step is.
+            if phase == .tour, session.step > SetupSession.Step.permissions.rawValue, !session.missingPermissions.isEmpty {
                 permissionReminder.transition(.opacity)
             }
         }
@@ -451,7 +464,7 @@ struct SetupTourView: View {
 
     private var permissionReminder: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(session.step == Self.pages.count - 1 ? "Allow these before you finish" : "Your choices need")
+            Text("Allow these before you finish")
                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
             ForEach(session.missingPermissions, id: \.self) { permissionRow($0, compact: true) }
         }
@@ -614,43 +627,71 @@ struct SetupTourView: View {
             : choice.isBuiltIn ? .builtIn : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
     }
 
+    /// Where the bar sits. Replacing the menu bar is the larger choice, since StableBar works best in its place;
+    /// keeping it is one click away underneath.
     private var placement: some View {
-        VStack(spacing: 32) {
-            HStack(spacing: 16) {
-                placementTile(.top, title: "Top edge", detail: "Hides the macOS menu bar.")
-                placementTile(.belowMenuBar, title: "Below menu bar", detail: "Keeps macOS menus visible.")
-            }
-            if session.store.configuration?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
-                HStack(spacing: 12) {
-                    Text("Clock").font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
-                    SettingsSegments(selection: $session.preferences.clock,
-                                     options: SetupPreferences.Clock.allCases.map { ($0, $0.rawValue) }, stretches: false)
+        VStack(spacing: 22) {
+            VStack(spacing: 12) {
+                SetupTile(selected: session.placement == .top) {
+                    Task { await session.place(.top) }
+                } label: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        placementPicture(.top, width: 488, height: 150)
+                        HStack(spacing: 8) {
+                            Text("Replace the menu bar").font(.system(size: 15, weight: .semibold))
+                            Text("Recommended")
+                                .font(.system(size: 11, weight: .semibold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(.white.opacity(0.14), in: Capsule())
+                        }
+                        Text("StableBar takes the top edge. The macOS menu bar hides until you point at it.")
+                            .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(width: 488, alignment: .leading)
+                    .padding(14)
+                }
+                SetupTile(selected: session.placement == .belowMenuBar) {
+                    Task { await session.place(.belowMenuBar) }
+                } label: {
+                    HStack(spacing: 14) {
+                        placementPicture(.belowMenuBar, width: 84, height: 46)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Keep the menu bar").font(.system(size: 13, weight: .semibold))
+                            Text("StableBar sits below it, and macOS menus stay visible.")
+                                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .frame(width: 488)
                 }
             }
+            menuBarAccessNotice
+            Button {
+                watchIntro()
+            } label: {
+                Label("Watch the intro", systemImage: "play.circle")
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .foregroundStyle(.white.opacity(0.5))
         }
     }
 
-    private func placementTile(_ placement: SetupPreferences.Placement, title: String, detail: String) -> some View {
-        SetupTile(selected: session.placement == placement) {
-            Task { await session.place(placement) }
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                VStack(spacing: 3) {
-                    if placement == .belowMenuBar {
-                        Rectangle().fill(.white.opacity(0.4)).frame(height: 6)
-                    }
-                    RoundedRectangle(cornerRadius: 3).fill(.black.opacity(0.8)).frame(height: 10)
-                        .padding(.horizontal, 4)
-                    Spacer()
-                }
-                .frame(width: 232, height: 124)
-                .background { Wallpaper() }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                Text(title).font(.system(size: 15, weight: .semibold))
-                Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+    /// A small screen with the bar on the top edge, or under a menu bar.
+    private func placementPicture(_ placement: SetupPreferences.Placement, width: Double, height: Double) -> some View {
+        VStack(spacing: 3) {
+            if placement == .belowMenuBar {
+                Rectangle().fill(.white.opacity(0.4)).frame(height: 6)
             }
-            .padding(14)
+            RoundedRectangle(cornerRadius: 3).fill(.black.opacity(0.8)).frame(height: 10)
+                .padding(.horizontal, 4)
+            Spacer()
         }
+        .frame(width: width, height: height)
+        .background { Wallpaper() }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var hints: some View {
@@ -763,7 +804,7 @@ struct SetupTourView: View {
     }
 
     /// A permission with its state and action. `compact` drops the explanation and keeps the row on one line, for the
-    /// reminder under later steps; the first step explains each one.
+    /// reminder on the last step; the permissions step explains each one.
     private func permissionRow(_ permission: SetupPermission, compact: Bool = false) -> some View {
         let hides = (session.placementAwaitingAccess ?? session.placement) == .top
         let (symbol, title, detail) = switch permission {
@@ -898,7 +939,7 @@ struct SetupTourView: View {
             }
             .buttonStyle(SetupButtonStyle())
             .keyboardShortcut(.defaultAction)
-            .disabled((session.step == 0 || session.step == Self.pages.count - 1) && !session.missingPermissions.isEmpty)
+            .disabled(SetupSession.Step(rawValue: session.step).map(session.waitsForPermissions) ?? false)
             Button("Skip setup") { if session.hasChanges { confirmingSkip = true } else { skip() } }
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 96, alignment: .leading)

@@ -24,7 +24,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         self.showProfile = showProfile
         session = SetupSession(store: store)
         store.appMenu.hidesAccessWarning = true
-        showTour(intro: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        showTour(intro: SetupProgress.playsIntro(in: .standard, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
 
     /// The height the Dock takes at the bottom of a screen, 0 when it sits on a side or another screen.
@@ -54,7 +54,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                                                          skip: { [weak self] in self?.closeTour() },
                                                          reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) },
                                                          lower: { [weak panel] in panel?.level = .normal },
-                                                         showProfile: showProfile))
+                                                         showProfile: showProfile,
+                                                         watchIntro: { [weak self] in self?.watchIntro() }))
         host.sizingOptions = []
         panel.contentView = host
         panel.alphaValue = 0
@@ -65,6 +66,14 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             context.duration = 0.4
             panel.animator().alphaValue = 1
         }
+    }
+
+    /// Plays the intro again in a new tour over the same session, so the choices made so far stay.
+    private func watchIntro() {
+        guard let previous = tour else { return }
+        tour = nil
+        previous.close()
+        showTour(intro: true)
     }
 
     private func closeTour() {
@@ -276,6 +285,16 @@ final class SetupSession {
         case .belowMenuBar: menuBarHides
         default: false
         }
+    }
+
+    /// Setup's steps, in the order the tour shows them. Where the bar sits comes first, since the presets and what
+    /// the bar needs depend on it, and the permissions come after the choices that decide them.
+    enum Step: Int, CaseIterable { case placement, look, touches, permissions, tryIt }
+
+    /// Whether Continue, or Finish setup, waits at `step` for permissions macOS hasn't allowed yet: from the step that
+    /// asks for them on.
+    func waitsForPermissions(at step: Step) -> Bool {
+        step.rawValue >= Step.permissions.rawValue && !missingPermissions.isEmpty
     }
 
     /// What macOS must allow for the bar setup builds, in the order setup asks. Accessibility is always on the list:
@@ -515,6 +534,12 @@ enum SetupProgress {
 
     static func opensAtLaunch(in defaults: UserDefaults) -> Bool {
         !defaults.bool(forKey: completedKey) && !defaults.bool(forKey: skippedKey)
+    }
+
+    /// The intro plays on the first run, before setup was finished or skipped, unless Reduce Motion is on. A setup
+    /// opened later starts at its first step, with the intro one click away.
+    static func playsIntro(in defaults: UserDefaults, reduceMotion: Bool) -> Bool {
+        !reduceMotion && opensAtLaunch(in: defaults)
     }
 
     /// Setup was skipped and never finished, so Settings offers to finish it.

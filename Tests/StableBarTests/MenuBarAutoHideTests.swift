@@ -414,3 +414,31 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(plain.adviceSource == .yabai)
     #expect(!plain.showsSpacesGuidance)
 }
+
+/// The intro plays on the first run only, and not with Reduce Motion; a setup reopened later starts at its first step.
+@Test func setupPlaysItsIntroOnTheFirstRunOnly() throws {
+    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    #expect(SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: true))
+    defaults.set(true, forKey: SetupProgress.skippedKey)
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+    defaults.removeObject(forKey: SetupProgress.skippedKey)
+    defaults.set(true, forKey: SetupProgress.completedKey)
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+}
+
+/// Setup asks for permissions after the choices: placement, the bar's look and the finishing touches go on without
+/// them, and only the permissions step and Try your bar wait until they are allowed.
+@MainActor
+@Test func setupWaitsForPermissionsFromItsPermissionsStepOn() throws {
+    let (session, fixture, store, _) = try setupSession(menuBarHides: true, trusted: false) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(SetupSession.Step.allCases == [.placement, .look, .touches, .permissions, .tryIt])
+    #expect(session.missingPermissions == [.accessibility])
+    for step in SetupSession.Step.allCases {
+        #expect(session.waitsForPermissions(at: step) == (step == .permissions || step == .tryIt))
+    }
+    let (allowed, allowedFixture, allowedStore, _) = try setupSession(menuBarHides: true, trusted: true) { _ in .allowed }
+    defer { allowedStore.stop(); allowedFixture.close() }
+    #expect(!SetupSession.Step.allCases.contains { allowed.waitsForPermissions(at: $0) })
+}
