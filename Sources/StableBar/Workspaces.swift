@@ -280,6 +280,13 @@ final class WorkspaceStore {
                         if omniwm { failure = receiveOmniWM(line) ?? failure }
                         else if let event = try? JSONDecoder().decode(AeroSpaceEvent.self, from: line) { receive(event) }
                     }
+                    try Task.checkCancellation()
+                    if failure == nil {
+                        // Says how the connection ended, so a disconnect nobody can reproduce, such as on a busy CI
+                        // runner, shows whether the process exited, was killed or only closed its output.
+                        let reason = await Self.endReason(of: stream)
+                        FileHandle.standardError.write(Data("StableBar: the \(title) subscription ended: \(reason).\n".utf8))
+                    }
                     throw CommandFailure(message: failure ?? "\(title) disconnected. Reconnecting…")
                 } catch {
                     if Task.isCancelled { return }
@@ -296,6 +303,19 @@ final class WorkspaceStore {
                 catch { return }
             }
         }
+    }
+
+    /// How a subscription process ended once its output closed: its exit status or signal, or that it still runs.
+    nonisolated static func endReason(of process: Process) async -> String {
+        // The output closes just before the process exits.
+        for _ in 0..<20 {
+            guard process.isRunning else { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        if process.isRunning { return "its output closed while it kept running" }
+        return process.terminationReason == .uncaughtSignal
+            ? "it was killed by signal \(process.terminationStatus)"
+            : "it exited with status \(process.terminationStatus)"
     }
 
     func receive(_ event: AeroSpaceEvent) {

@@ -1143,3 +1143,24 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
     #expect(tall.controlsGap == 32)
     #expect(short.controlsGap < tall.controlsGap)
 }
+
+/// When a workspace subscription's output ends, StableBar logs how its process ended, so a disconnect that can't be
+/// reproduced still says whether the process exited, was killed or only closed its output.
+@Test func aSubscriptionThatEndsSaysHowItsProcessEnded() async throws {
+    func reason(_ script: String, exits: Bool = true) async throws -> String {
+        let process = Process()
+        process.executableURL = URL(filePath: "/bin/sh")
+        process.arguments = ["-c", script]
+        process.standardOutput = Pipe()
+        let exited = AsyncStream<Void> { continuation in
+            process.terminationHandler = { _ in continuation.finish() }
+        }
+        try process.run()
+        defer { if process.isRunning { process.terminate() } }
+        if exits { for await _ in exited {} }
+        return await WorkspaceStore.endReason(of: process)
+    }
+    #expect(try await reason("exit 3") == "it exited with status 3")
+    #expect(try await reason("kill -9 $$") == "it was killed by signal 9")
+    #expect(try await reason("exec >&-; exec /bin/sleep 30", exits: false) == "its output closed while it kept running")
+}
