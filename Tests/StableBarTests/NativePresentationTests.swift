@@ -821,15 +821,27 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
     let fixture = OffscreenBar(configuration: configuration, display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil),
                                width: barWidth, backingScale: 1, appMenu: menu)
     defer { fixture.close() }
-    await fixture.settle()
-    let clock = try #require(fixture.anchors("clock").first)
-    let clockStart = clock.convert(clock.bounds, to: fixture.host).minX
-    let menus = fixture.anchors("menus")
-    #expect(menus.isEmpty == overflows)
-    for menus in menus {
-        #expect(menus.convert(menus.bounds, to: fixture.host).maxX <= clockStart + 0.5)
+    // The bar measures, plans and measures again over several layout passes: lay out until the anchors stay put for
+    // three passes in a row, counting passes rather than time.
+    var frames: [String: [CGRect]] = [:]
+    var stable = 0
+    var passes = 0
+    while stable < 3 && passes < 200 {
+        passes += 1
+        fixture.host.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(10))
+        let next = Dictionary(uniqueKeysWithValues: ["clock", "menus", BarView.moreWidgetsID].map { id in
+            (id, fixture.anchors(id).map { $0.convert($0.bounds, to: fixture.host) })
+        })
+        stable = next == frames && next["clock"]?.isEmpty == false ? stable + 1 : 0
+        frames = next
     }
-    #expect(fixture.anchors(BarView.moreWidgetsID).isEmpty != overflows)
+    try #require(stable == 3)
+    let clockStart = try #require(frames["clock"]?.first).minX
+    let menus = frames["menus"] ?? []
+    #expect(menus.isEmpty == overflows)
+    for menus in menus { #expect(menus.maxX <= clockStart + 0.5) }
+    #expect(frames[BarView.moreWidgetsID]?.isEmpty != overflows)
 }
 
 @Test @MainActor func overflowMenusOpenOnlyForTheMenuBarsApp() {
