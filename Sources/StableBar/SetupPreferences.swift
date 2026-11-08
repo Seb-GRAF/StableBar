@@ -235,6 +235,14 @@ struct SetupPreferences: Equatable {
     /// The starter bar below the macOS menu bar, which already shows the menus, the clock and the menu bar items.
     static let belowMenuBarStarter = WidgetSet.workspaces(.spaces).widgets + WidgetSet.system.widgets + WidgetSet.sound.widgets
 
+    /// Whether `document` is still the starter below the menu bar with Spaces, as the first launch writes it when it
+    /// finds no window manager, such as before the login shell's PATH arrives.
+    static func isFirstLaunchSpacesStarter(_ document: [String: ConfigurationValue]) -> Bool {
+        document["includes"] == nil && document["packages"] == nil && document["profiles"] == nil
+            && document["workspaceSource"] == .string(WorkspaceSource.spaces.rawValue)
+            && (try? document["widgets"]?.decoded([[String: ConfigurationValue]].self)) == belowMenuBarStarter
+    }
+
     /// The widgets of the menu bar starter that repeat the macOS menu bar.
     static let menuBarWidgetIDs: Set<String> = ["apple", "app-menu", "clock", "menu-bar-items"]
 

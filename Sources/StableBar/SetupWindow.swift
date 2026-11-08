@@ -132,6 +132,10 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var defaults = UserDefaults.standard
+    /// The workspace source setup uses, given the one the configuration names: see `WorkspaceSource.detected`.
+    var workspaceSource: (_ configured: WorkspaceSource?) -> WorkspaceSource = { configured in
+        WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: configured)
+    }
 }
 
 /// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
@@ -191,8 +195,11 @@ final class SetupSession {
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
-        workspaceSource = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
-                                                   configured: store.namedWorkspaceSource)
+        // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
+        // looks again.
+        let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+        let provisional = !system.defaults.bool(forKey: "setupCompleted") && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
+        workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
         preferences.workspaces = workspaceSource
         initialPreferences = preferences

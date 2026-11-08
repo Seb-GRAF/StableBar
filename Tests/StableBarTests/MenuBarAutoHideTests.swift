@@ -83,15 +83,18 @@ private final class AutomationDialog {
 @MainActor
 private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#,
                           menuBarHides: Bool = false, trusted: Bool = true, calendars: EKAuthorizationStatus = .fullAccess,
+                          completed: Bool = false, workspaces: @escaping (WorkspaceSource?) -> WorkspaceSource = { $0 ?? .spaces },
                           _ access: @escaping (Bool) async -> MenuBarAutoHide.Access)
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     store.reloadConfiguration()
     var changes: [Bool] = []
+    let defaults = UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!
+    if completed { defaults.set(true, forKey: "setupCompleted") }
     let system = SetupSystem(automationAccess: access, setMenuBarHidden: { changes.append($0) },
                              menuBarHides: { changes.last ?? menuBarHides }, isTrusted: { trusted },
-                             calendarAccess: { calendars }, defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
+                             calendarAccess: { calendars }, defaults: defaults, workspaceSource: workspaces)
     return (SetupSession(store: store, system: system), fixture, store, { changes })
 }
 
@@ -325,4 +328,21 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
     #expect(session.presetPlacement == placement)
     session.preferences.placement = .top
     #expect(session.presetPlacement == .top)
+}
+
+/// When the first launch finds no window manager, such as before the login shell's PATH arrives, it writes Spaces
+/// into the starter below the menu bar. Setup looks for a manager again until one finishes; after that, or once the
+/// bar has changed, Spaces is a choice it keeps.
+@MainActor
+@Test(arguments: [(false, false, WorkspaceSource.yabai), (true, false, .spaces), (false, true, .spaces)])
+func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, changed: Bool, expected: WorkspaceSource) throws {
+    let mine: [String: ConfigurationValue] = ["id": .string("mine"), "type": .string("text"), "position": .string("left"), "text": .string("Hi")]
+    let widgets = SetupPreferences.belowMenuBarStarter + (changed ? [mine] : [])
+    let document: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                                  "widgets": .array(widgets.map(ConfigurationValue.object))]
+    let (session, fixture, store, _) = try setupSession(configuration: String(decoding: try JSONEncoder().encode(document), as: UTF8.self),
+                                                        completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.workspaceSource == expected)
+    #expect(store.configuration?.workspaceSource == expected)
 }
