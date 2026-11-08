@@ -1,0 +1,4 @@
+#!/bin/zsh
+# Checks the messages of the commits a push sends, which git lists on standard input.
+# scripts/check.sh --install-hooks turns this on.
+exec "${0:A:h:h}/scripts/check.sh" --pre-push

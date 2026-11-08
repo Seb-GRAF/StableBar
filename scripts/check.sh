@@ -1,13 +1,15 @@
 #!/bin/zsh
 # Runs what CI checks for this branch's changes, so a pull request doesn't wait for CI to find them.
 #
-#   scripts/check.sh             script syntax, commit messages, the build and every test, and the tests of
-#                                the pull request checks when .github/scripts changed
-#   scripts/check.sh --commits   only the messages of the commits since main
-#   scripts/check.sh --quick     only the build, when Swift files changed since the last quick check
+#   scripts/check.sh                 script syntax, commit messages, the build and every test, and the tests
+#                                    of the pull request checks when .github/scripts changed
+#   scripts/check.sh --commits       only the messages of the commits since main
+#   scripts/check.sh --quick         only the build, when Swift files changed since the last quick check
+#   scripts/check.sh --install-hooks turns on the git hooks in .githooks for every worktree of this clone
 #
-# Claude Code runs it from .claude/settings.json: --hook-push before a git push, which a failing commit
-# message stops, and --hook-stop when the agent stops, which a failing build sends back to work.
+# The git hooks call --message for each commit message as it's written and --pre-push for the commits a
+# push sends, in every tool. Claude Code also calls --hook-stop when the agent stops, which a failing build
+# sends back to work. STABLEBAR_SKIP_HOOKS turns all three off for one person.
 set -eu
 cd "${0:A:h:h}"
 
@@ -17,21 +19,37 @@ changed() { { git diff --name-only "$(base)"; git ls-files --others --exclude-st
 
 # commitlint from this checkout, or from the main checkout when a worktree has no node_modules. Without
 # either, says so and passes.
-check_commits() {
-    local head=$(git rev-parse HEAD) from=$(base) root=$PWD
-    [[ $head == $from ]] && return 0
+run_commitlint() {
+    local root=$PWD
     [[ -x node_modules/.bin/commitlint ]] || root=${$(git rev-parse --git-common-dir):A:h}
     if [[ ! -x $root/node_modules/.bin/commitlint ]]; then
         print -u2 "Skipped the commit messages: run npm ci first."
         return 0
     fi
-    (cd "$root" && node_modules/.bin/commitlint --from "$from" --to "$head")
+    (cd "$root" && node_modules/.bin/commitlint "$@")
+}
+
+check_commits() {
+    local head=$(git rev-parse HEAD) from=$(base)
+    [[ $head == $from ]] && return 0
+    run_commitlint --from "$from" --to "$head"
+}
+
+# The refs a push sends arrive on standard input, one per line; each is checked from where it leaves main.
+check_push() {
+    local local_ref local_sha remote_ref remote_sha from
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        [[ $local_sha =~ '^0+$' ]] && continue
+        from=$(git merge-base origin/main "$local_sha" 2> /dev/null) || continue
+        [[ $from == $local_sha ]] && continue
+        run_commitlint --from "$from" --to "$local_sha" || return 1
+    done
 }
 
 # Parses each changed script with the shell its first line names, as CI does.
 check_scripts() {
     local script interpreter
-    for script in ${(M)${(f)"$(changed)"}:#(scripts|examples)/*.sh}; do
+    for script in ${(M)${(f)"$(changed)"}:#((scripts|examples)/*.sh|.githooks/*)}; do
         [[ -f $script ]] || continue
         interpreter=$(sed -n '1s/^#!//p' "$script")
         ${=interpreter} -n "$script" || return 1
@@ -65,44 +83,6 @@ check_quick() {
     print -r -- "$state" > $stamp
 }
 
-# Whether a command runs git push, read the way the shell splits it: `git -C dir push` pushes,
-# `git commit -m "fix push"` and `git log --grep push` don't.
-runs_git_push() {
-    local -a words=(${(z)1})
-    local i=1
-    while (( i <= $#words )); do
-        if [[ ${words[i]} == (git|*/git) ]]; then
-            (( i++ ))
-            while (( i <= $#words )); do
-                case ${words[i]} in
-                    -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--config-env) (( i += 2 )) ;;
-                    -*) (( i++ )) ;;
-                    push) return 0 ;;
-                    *) break ;;
-                esac
-            done
-        fi
-        (( i++ ))
-    done
-    return 1
-}
-
-# Before a Bash command: a git push waits for its commit messages. Exit 2 blocks the command.
-hook_push() {
-    local input=$(cat) command output
-    [[ $input == *push* ]] || return 0
-    if (( $+commands[jq] )) && command=$(jq -r '.tool_input.command // ""' <<< "$input" 2> /dev/null); then
-        runs_git_push "$command" || return 0
-    else
-        [[ $input =~ 'git( [^;&|]*)? push' ]] || return 0
-    fi
-    if ! output=$(check_commits 2>&1); then
-        print -u2 -r -- "A commit message would fail the Commit messages check; reword it before pushing:"
-        print -u2 -r -- "$output"
-        exit 2
-    fi
-}
-
 # When the agent stops: a failing build sends it back to work, once. Exit 2 blocks the stop.
 hook_stop() {
     local input=$(cat) output errors
@@ -117,13 +97,24 @@ hook_stop() {
     fi
 }
 
+install_hooks() {
+    git config core.hooksPath .githooks
+    print "Git now runs .githooks in every worktree of this clone: it checks each commit message as you write"
+    print "it, and the messages a push sends."
+}
+
+hooks_off() { [[ -n ${STABLEBAR_SKIP_HOOKS:-} ]] }
+
 case ${1:-} in
     --commits) check_commits ;;
     --quick) check_quick ;;
-    # STABLEBAR_SKIP_HOOKS turns the hooks off for one person, such as in .claude/settings.local.json.
-    --hook-push) [[ -n ${STABLEBAR_SKIP_HOOKS:-} ]] || hook_push ;;
-    --hook-stop) [[ -n ${STABLEBAR_SKIP_HOOKS:-} ]] || hook_stop ;;
+    --install-hooks) install_hooks ;;
+    --message) hooks_off || run_commitlint --edit "${2:A}" ;;
+    --pre-push) hooks_off || check_push ;;
+    --hook-stop) hooks_off || hook_stop ;;
     "")
+        [[ "$(git config --get core.hooksPath)" == .githooks ]] ||
+            print -u2 "The git hooks are off: scripts/check.sh --install-hooks turns them on."
         check_scripts
         check_commits
         swift build --build-tests
@@ -137,7 +128,7 @@ case ${1:-} in
         fi
         ;;
     *)
-        print -u2 "Usage: scripts/check.sh [--commits | --quick]"
+        print -u2 "Usage: scripts/check.sh [--commits | --quick | --install-hooks]"
         exit 64
         ;;
 esac

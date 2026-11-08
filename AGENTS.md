@@ -20,13 +20,15 @@ The developer's own StableBar is usually running while you work.
 
 ## Build and verify
 
-`swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`. Before opening a pull request, run what CI checks for the files you changed; `scripts/check.sh` runs all of it, and in Claude Code the project's hooks run its quick build when you stop and its commit message check before a `git push`:
+`swift build` builds the package; `./scripts/build.sh` builds `dist/StableBar.app`. Before opening a pull request, run what CI checks for the files you changed, or `scripts/check.sh`, which runs all of it:
 
 1. `swift build --build-tests`, also after switching branches: `swift test --skip-build` runs whatever test binary the last build left.
 2. `swift test --filter <name>` for what you changed. CI runs the whole suite on macOS for every pull request.
 3. `node --test .github/scripts/*.test.mjs` when `.github/scripts` changed.
 4. `StableBar --validate PATH` for each configuration or example you changed; it doesn't start their scripts.
 5. `npx commitlint --from origin/main` (after `npm ci`) on your commits, bodies included: every line at most 100 characters.
+
+The git hooks in `.githooks` check each commit message as it's written and again before a push, in any tool. If `git config core.hooksPath` isn't `.githooks`, run `scripts/check.sh --install-hooks` once, and never skip the hooks with `--no-verify`. Before you finish, run `scripts/check.sh --quick`; in Claude Code a project hook runs it when you stop.
 
 Visible changes (the bar, popups, setup, Settings, the website) need before/after images in the pull request. CI draws them: the screens bot comments with the docs images, the scenes in `scenes/` and the website's pages, drawn from `main` and from your branch (see [Before and after screens](CONTRIBUTING.md#before-and-after-screens)). When no screen shows your change, add or extend a scene so the bot draws it. Also put screenshots of the change in the description when you open the pull request, before and after where you can; the bot's comment comes on top. To look before pushing, `StableBar --render-scenes DIR scenes` draws the scenes offscreen from a build, running nothing. Ask before launching the app or taking screenshots of it: a second bar appears on the developer's screen. Add a recording when motion matters.
 
