@@ -326,10 +326,3 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
     session.preferences.placement = .top
     #expect(session.presetPlacement == .top)
 }
-
-/// The first launch can come before the login shell's PATH, so it also looks in Homebrew's folders.
-@Test func firstLaunchLooksForWindowManagersInHomebrewsFoldersToo() {
-    #expect(WorkspaceSource.firstLaunchSearchPath("/usr/bin:/bin") == "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin")
-    #expect(WorkspaceSource.firstLaunchSearchPath("") == "/opt/homebrew/bin:/usr/local/bin")
-    #expect(WorkspaceSource.firstLaunchSearchPath("/opt/homebrew/bin:/usr/bin") == "/opt/homebrew/bin:/usr/bin:/usr/local/bin")
-}

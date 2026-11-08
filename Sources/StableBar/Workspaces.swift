@@ -120,16 +120,6 @@ enum WorkspaceSource: String, Decodable, Sendable {
     }
 }
 
-extension WorkspaceSource {
-    /// Where the first launch looks for a window manager: the login shell's PATH, which can arrive after the first
-    /// launch writes the starter, and Homebrew's folders.
-    static func firstLaunchSearchPath(_ path: String) -> String {
-        var folders = path.split(separator: ":").map(String.init)
-        for folder in ["/opt/homebrew/bin", "/usr/local/bin"] where !folders.contains(folder) { folders.append(folder) }
-        return folders.joined(separator: ":")
-    }
-}
-
 let aerospaceBundleID = "bobko.aerospace"
 
 extension BarStore {
