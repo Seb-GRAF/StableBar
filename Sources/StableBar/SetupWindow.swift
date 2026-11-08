@@ -479,10 +479,10 @@ enum SetupProgress {
 
     /// Setup was skipped and never finished, so Settings offers to finish it.
     static func wasSkipped(in defaults: UserDefaults) -> Bool {
-        defaults.bool(forKey: skippedKey) && !defaults.bool(forKey: completedKey)
+        offersToFinish(skipped: defaults.bool(forKey: skippedKey), completed: defaults.bool(forKey: completedKey))
     }
 
-    static func helpTitle(in defaults: UserDefaults) -> String {
-        wasSkipped(in: defaults) ? "Finish setting up" : "Run setup again"
+    static func offersToFinish(skipped: Bool, completed: Bool) -> Bool {
+        skipped && !completed
     }
 }

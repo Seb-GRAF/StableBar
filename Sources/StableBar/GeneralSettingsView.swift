@@ -4,6 +4,9 @@ import SwiftUI
 struct GeneralSettingsView: View {
     let editor: ConfigurationEditor
     private var store: BarStore { editor.store }
+    /// Observed, so the reminder to finish setup updates while Settings is open.
+    @AppStorage(SetupProgress.skippedKey) private var setupSkipped = false
+    @AppStorage(SetupProgress.completedKey) private var setupCompleted = false
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -68,6 +71,12 @@ struct GeneralSettingsView: View {
                     }
                     .id(SettingsSearchResult.workspaces.id)
                     SettingsGroup("Access") {
+                        if SetupProgress.offersToFinish(skipped: setupSkipped, completed: setupCompleted) {
+                            SettingRow(title: "Finish setting up",
+                                       hint: "You skipped setup. It sets up your widgets, theme and placement, and asks for the access your bar needs.") {
+                                Button("Open setup…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
+                            }
+                        }
                         let permissions = requiredPermissions
                         if permissions.isEmpty {
                             SettingRow(title: "Your current widgets don't need extra access") {}
@@ -102,9 +111,7 @@ struct GeneralSettingsView: View {
                     }
                     .id(SettingsSearchResult.updates.id)
                     SettingsGroup("Help") {
-                        SettingRow(title: SetupProgress.helpTitle(in: .standard),
-                                   hint: SetupProgress.wasSkipped(in: .standard)
-                                       ? "You skipped setup. Choose your widgets, theme and placement there, and allow what your bar needs." : nil) {
+                        SettingRow(title: "Run setup again") {
                             Button("Open setup…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
                         }
                         SettingRow(title: "User guide") {

@@ -294,9 +294,8 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     #expect(!SetupProgress.opensAtLaunch(in: finished.system.defaults))
 }
 
-@Test func settingsOffersToFinishASkippedSetup() throws {
-    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
-    #expect(SetupProgress.helpTitle(in: defaults) == "Run setup again")
-    defaults.set(true, forKey: SetupProgress.skippedKey)
-    #expect(SetupProgress.helpTitle(in: defaults) == "Finish setting up")
+@Test func settingsOffersToFinishASkippedSetup() {
+    #expect(!SetupProgress.offersToFinish(skipped: false, completed: false))
+    #expect(SetupProgress.offersToFinish(skipped: true, completed: false))
+    #expect(!SetupProgress.offersToFinish(skipped: true, completed: true))
 }
