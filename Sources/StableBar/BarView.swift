@@ -18,6 +18,8 @@ struct BarView: View {
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var restingWidths: [String: CGFloat] = [:]
+    /// How far each App menus widget can shrink at the notch, by widget ID.
+    @State private var shrinkableWidths: [String: CGFloat] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -42,9 +44,13 @@ struct BarView: View {
                     let growth = Dictionary(uniqueKeysWithValues: units.map { unit in
                         (unit.id, max((measuredWidths[unit.id] ?? 0) - (restingWidths[unit.id] ?? 0), 0))
                     })
+                    let shrinks = Dictionary(uniqueKeysWithValues: units.map { unit in
+                        (unit.id, unit.widgets.reduce(CGFloat.zero) { $0 + (shrinkableWidths[$1.id] ?? 0) })
+                    })
                     let items = units.map { unit in
                         BarLayoutItem(id: unit.id, position: unit.position, width: restingWidths[unit.id] ?? 0, priority: unit.priority,
-                                      canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!)
+                                      canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!,
+                                      minimumWidth: shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - shrinks[unit.id]!, 0) : nil)
                     }
                     let moreWidth = measuredWidths[Self.moreWidgetsUnit.id] ?? 0
                     let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
@@ -60,7 +66,8 @@ struct BarView: View {
                                 case .right: .trailing
                                 case .notchLeft, .center, .notchRight: .center
                                 }
-                                unitView(unit, config: config, width: placement.width)
+                                unitView(unit, config: config, width: placement.width, shrinks: shrinks[unit.id]! > 0)
+                                    .environment(\.appMenuShrink, shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
                                     .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
                                     .geometryGroup()
                                     .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
@@ -99,6 +106,9 @@ struct BarView: View {
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                         .modifier(MeasuringCopy())
+                        .onPreferenceChange(AppMenuShrinkPreference.self) { widths in
+                            if widths != shrinkableWidths { shrinkableWidths = widths }
+                        }
                     }
                     // Keeps the last width of units that leave, so a returning widget is planned at its size.
                     .onPreferenceChange(BarWidthPreference.self) { widths in
@@ -150,8 +160,8 @@ struct BarView: View {
     }
 
     @ViewBuilder
-    private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat) -> some View {
-        if width < restingWidths[unit.id, default: 0] - 0.5 {
+    private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat, shrinks: Bool) -> some View {
+        if width < restingWidths[unit.id, default: 0] - 0.5 && !shrinks {
             ScrollView(.horizontal) {
                 BarUnitView(unit: unit, config: config, store: store, display: display.id).fixedSize()
             }
@@ -567,6 +577,14 @@ struct WidgetView: View {
         }
     }
 
+    /// The menus that don't fit beside the notch, each opening its own menu.
+    private func openAppMenus(_ items: [AppMenuItem], anchor: NSView) {
+        guard store.barEditing.allowsWidgetActions else { return }
+        let entries = items.map { AppMenuEntry(title: $0.title, element: $0.element, isEnabled: true, isChecked: false, hasSubmenu: true) }
+        store.popup.toggle(AppMenu.popup(entries), widget: widget, defaults: popupDefaults.inheriting(defaults), store: store,
+                           anchor: moreWidgetsAnchor ?? anchor)
+    }
+
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
         guard let popup = store.appMenu.popup(for: item) else { return }
         store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
@@ -613,11 +631,11 @@ struct WidgetView: View {
             AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
                         expanded: barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
                         appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
-                        requestAccess: store.windowClearance.requestAccess) { expanded in
+                        requestAccess: store.windowClearance.requestAccess, expansionChanged: { expanded in
                 if !measuring && expands {
                     store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
-            }
+            }, widgetID: widget.id, openOverflow: openAppMenus)
             .onChange(of: barExpansion == .cramped && hovered) { _, cramped in
                 if cramped { showMenuRow(appearance: appearance, padding: padding) }
             }
@@ -1089,6 +1107,47 @@ private struct AppMenuRow: View {
     }
 }
 
+extension AppMenuView {
+    /// How many menus, from the app's name on, fit in `available` points, leaving room for the overflow button when
+    /// some don't. The app's name always stays.
+    static func visibleCount(widths: [CGFloat], available: CGFloat, overflowWidth: CGFloat) -> Int {
+        guard !widths.isEmpty else { return 0 }
+        if widths.reduce(0, +) <= available + 0.5 { return widths.count }
+        var used = overflowWidth
+        var count = 0
+        for width in widths {
+            if count > 0 && used + width > available + 0.5 { break }
+            used += width
+            count += 1
+        }
+        return count
+    }
+
+    /// How much narrower the menus can get: down to the app's name and the overflow button.
+    static func shrinkableWidth(widths: [CGFloat], overflowWidth: CGFloat) -> CGFloat {
+        guard widths.count > 1 else { return 0 }
+        return max(widths.reduce(0, +) - widths[0] - overflowWidth, 0)
+    }
+}
+
+/// How much narrower than all its menus the bar needs an App menus widget to be; 0 shows every menu.
+private struct AppMenuShrinkKey: EnvironmentKey { static let defaultValue: CGFloat = 0 }
+
+extension EnvironmentValues {
+    var appMenuShrink: CGFloat {
+        get { self[AppMenuShrinkKey.self] }
+        set { self[AppMenuShrinkKey.self] = newValue }
+    }
+}
+
+/// How far each App menus widget can shrink, by widget ID, as the bar's measuring copy draws it.
+struct AppMenuShrinkPreference: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
 struct AppMenuView: View {
     let appMenu: AppMenu
     let items: [AppMenuItem]
@@ -1102,10 +1161,29 @@ struct AppMenuView: View {
     let open: (AppMenuItem, NSView) -> Void
     let requestAccess: () -> Void
     var expansionChanged: (Bool) -> Void = { _ in }
+    /// The widget whose menus can shrink at the notch; nil for menus that never shrink.
+    var widgetID: String?
+    /// Opens the menus that don't fit, from the overflow button.
+    var openOverflow: ([AppMenuItem], NSView) -> Void = { _, _ in }
     @State private var hoveredItem: AppMenuItem?
     @State private var anchors: [Int: NSView] = [:]
+    /// Each menu title's width by its place and title, measured in a hidden row.
+    @State private var titleWidths: [String: CGFloat] = [:]
+    @State private var overflowWidth: CGFloat = 0
+    @State private var overflowAnchor = NSView()
+    @State private var hoveringOverflow = false
+    @Environment(\.appMenuShrink) private var shrink
+
+    private var widths: [CGFloat]? {
+        let widths = items.enumerated().compactMap { titleWidths["\($0.offset):\($0.element.title)"] }
+        return widths.count == items.count ? widths : nil
+    }
 
     var body: some View {
+        let collapsed = expandOnHover && !expanded
+        let count = collapsed ? min(items.count, 1)
+            : shrink > 0.5 && !isAppleMenu ? widths.map { Self.visibleCount(widths: $0, available: $0.reduce(0, +) - shrink, overflowWidth: overflowWidth) } ?? items.count
+            : items.count
         HStack(spacing: 0) {
             if !appMenu.isTrusted && !appMenu.hidesAccessWarning {
                 Button(action: requestAccess) {
@@ -1114,7 +1192,7 @@ struct AppMenuView: View {
                 .buttonStyle(.plain)
                 .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to ask for access; later clicks open System Settings.")
             }
-            ForEach(Array(items.prefix(expandOnHover && !expanded ? 1 : items.count).enumerated()), id: \.offset) { index, item in
+            ForEach(Array(items.prefix(count).enumerated()), id: \.offset) { index, item in
                 let anchor = anchors[index].map(ObjectIdentifier.init)
                 AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,
                              highlighted: openAnchor.map { $0 == anchor } ?? (hoveredItem == item), anchors: $anchors) {
@@ -1126,12 +1204,82 @@ struct AppMenuView: View {
                 }
                 .transition(.opacity)
             }
+            if !collapsed && count < items.count {
+                AppMenuOverflowButton(appearance: appearance, padding: padding, anchor: overflowAnchor,
+                                      highlighted: openAnchor.map { $0 == ObjectIdentifier(overflowAnchor) } ?? hoveringOverflow) {
+                    openOverflow(Array(items.dropFirst(count)), overflowAnchor)
+                }
+                .onHover { inside in
+                    hoveringOverflow = inside
+                    hoveredItem = nil
+                    if inside, openAnchor != nil, openAnchor != ObjectIdentifier(overflowAnchor) {
+                        openOverflow(Array(items.dropFirst(count)), overflowAnchor)
+                    }
+                }
+            }
         }
         .fixedSize(horizontal: true, vertical: false)
         .clipped()
+        .background { measuringRow }
+        .preference(key: AppMenuShrinkPreference.self, value: widgetID.flatMap { id in
+            expandOnHover || isAppleMenu ? nil : widths.map { [id: Self.shrinkableWidth(widths: $0, overflowWidth: overflowWidth)] }
+        } ?? [:])
         .onHover { if $0 { appMenu.refresh() } }
         .onChange(of: hovering || openAnchor != nil, initial: true) { _, expanded in expansionChanged(expanded) }
         .onDisappear { expansionChanged(false) }
+    }
+}
+
+extension AppMenuView {
+    /// Every menu title and the overflow button, hidden, to measure what fits.
+    private var measuringRow: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                Text(item.title).fontWeight(index == 0 ? .bold : nil)
+                    .padding(.horizontal, isAppleMenu ? 0 : 7)
+                    .padding(padding)
+                    .fixedSize()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { titleWidths["\(index):\(item.title)"] = $0 }
+            }
+            AppMenuOverflowButton.label(padding: padding)
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { overflowWidth = $0 }
+        }
+        .hidden()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// » after the menus that fit, which opens the rest.
+private struct AppMenuOverflowButton: View {
+    let appearance: WidgetAppearance
+    let padding: EdgeInsets
+    let anchor: NSView
+    let highlighted: Bool
+    let open: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static func label(padding: EdgeInsets) -> some View {
+        Image(systemName: "chevron.right.2").font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 6)
+            .padding(padding)
+    }
+
+    var body: some View {
+        Button(action: open) {
+            Self.label(padding: padding)
+                .foregroundStyle(appearance.foreground)
+                .background {
+                    if highlighted { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
+                }
+                .background(MenuAnchor(view: anchor))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("More menus")
+        .accessibilityLabel("More menus")
+        .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
     }
 }
 

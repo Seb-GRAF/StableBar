@@ -70,6 +70,7 @@ struct BarLayoutItem {
     var canOverflow = true
     var isSpacer = false
     var growth: CGFloat = 0
+    var minimumWidth: CGFloat?
 }
 
 struct BarPlacement: Equatable {
@@ -143,17 +144,32 @@ struct AdaptiveBarPlanner {
         result.overflow.append(BarOverflow(x: x, atEnd: buttonAtEnd, ids: hidden.map(\.id)))
     }
 
+    /// The items that fit in `capacity`, lowest priority first, then latest in the configuration, moving to More
+    /// widgets. An item that can shrink, such as the app menus, counts at its minimum width and goes after the others
+    /// of its priority, then takes the room left, up to its full width.
     private func fitting(_ items: [BarLayoutItem], capacity: CGFloat, fromEnd: Bool) -> [BarLayoutItem] {
         var visible = items
         let candidates = items.enumerated().filter { $0.element.canOverflow && !$0.element.isSpacer }.sorted {
             if $0.element.priority != $1.element.priority { return $0.element.priority < $1.element.priority }
+            if ($0.element.minimumWidth == nil) != ($1.element.minimumWidth == nil) { return $1.element.minimumWidth != nil }
             return fromEnd ? $0.offset > $1.offset : $0.offset < $1.offset
         }
         for candidate in candidates {
-            if occupiedWidth(visible) <= capacity { break }
+            if smallestWidth(visible) <= capacity { break }
             visible.removeAll { $0.id == candidate.element.id }
         }
+        var excess = occupiedWidth(visible) - capacity
+        for index in visible.indices.reversed() where excess > 0 {
+            guard let minimum = visible[index].minimumWidth else { continue }
+            let cut = min(excess, max(visible[index].width - minimum, 0))
+            visible[index].width -= cut
+            excess -= cut
+        }
         return visible
+    }
+
+    private func smallestWidth(_ items: [BarLayoutItem]) -> CGFloat {
+        items.reduce(0) { $0 + min($1.minimumWidth ?? $1.width, $1.width) } + CGFloat(max(items.count - 1, 0)) * spacing
     }
 
     private func occupiedWidth(_ items: [BarLayoutItem]) -> CGFloat {
