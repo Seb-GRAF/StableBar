@@ -1102,6 +1102,18 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
     #expect(settings.map(\.title) == Array(repeating: "Placement", count: controlling.count))
     #expect(settings.map(\.origin.profile) == controlling)
     #expect(Set(settings.map(\.id)).count == settings.count)
+    #expect(ProfileControlledSetting.placement(origins: loader.origins).map(\.origin.profile) == controlling)
+}
+
+/// Setup's first step, which asks where the bar goes, names only the profiles that control placement.
+@Test func setupsFirstStepNamesOnlyProfilesThatControlPlacement() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-appearance.json")
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: Data(#"""
+    {"bar":{"offset":0},"widgets":[],"profiles":[{"name":"night","configuration":{"bar":{"appearance":"dark"}}}]}
+    """#.utf8))
+    #expect(ProfileControlledSetting.all(in: configuration, origins: loader.origins).map(\.title) == ["Appearance"])
+    #expect(ProfileControlledSetting.placement(origins: loader.origins).isEmpty)
 }
 
 @Test func setupFindsClocksIntroducedByTheCurrentProfile() throws {

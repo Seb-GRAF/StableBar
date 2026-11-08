@@ -672,6 +672,8 @@ struct SetupTourView: View {
                 }
             }
             menuBarAccessNotice
+            // A profile that places the bar keeps it where it is, whichever choice this step saves.
+            profileNotice(ProfileControlledSetting.placement(origins: session.store.origins))
             Button {
                 watchIntro()
             } label: {
@@ -709,12 +711,11 @@ struct SetupTourView: View {
             .frame(width: 440, alignment: .leading)
             .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
-            profileNotice
+            profileNotice(ProfileControlledSetting.all(in: session.store.configuration, origins: session.store.origins))
         }
     }
 
-    @ViewBuilder private var profileNotice: some View {
-        let profileSettings = ProfileControlledSetting.all(in: session.store.configuration, origins: session.store.origins)
+    @ViewBuilder private func profileNotice(_ profileSettings: [ProfileControlledSetting]) -> some View {
         if !profileSettings.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Label("Active profiles control some settings", systemImage: "info.circle").font(.system(size: 13, weight: .semibold))
