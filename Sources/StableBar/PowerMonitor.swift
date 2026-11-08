@@ -25,6 +25,18 @@ final class PowerMonitor: ChangeMonitor, @unchecked Sendable {
         return ScriptOutput(text: "AC", icon: "powerplug", fields: ["state": "ac", "present": "false"])
     }
 
+    /// Whether this Mac has an internal battery. A Mac mini, Mac Studio, iMac or Mac Pro has none, at most a UPS.
+    static func hasInternalBattery() -> Bool {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else { return false }
+        return hasInternalBattery(in: sources.compactMap { IOPSGetPowerSourceDescription(info, $0)?.takeUnretainedValue() as? [String: Any] })
+    }
+
+    /// Whether one of these power source descriptions is an internal battery.
+    static func hasInternalBattery(in descriptions: [[String: Any]]) -> Bool {
+        descriptions.contains { $0[kIOPSTypeKey] as? String == kIOPSInternalBatteryType }
+    }
+
     /// The output for a power source's `description`, or nil when it isn't the internal battery.
     /// Its icon shows the charge in quarters, its tooltip the percentage and what the battery is
     /// doing, and its `health` field is `service` when macOS recommends servicing the battery.

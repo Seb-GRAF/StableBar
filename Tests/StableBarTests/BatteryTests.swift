@@ -141,3 +141,10 @@ private func battery(_ extra: [String: Any] = [:]) -> [String: Any] {
     #expect(BatteryGlyph(level: 0.4, fields: ["state": "charged"], iconSize: 13).power == .plugged)
     #expect(BatteryGlyph(level: 2, fields: [:], iconSize: 13).level == 1)
 }
+
+/// A Mac mini, Mac Studio, iMac or Mac Pro has no internal battery, at most a UPS, so Battery would only show "AC".
+@Test func onlyAnInternalBatteryCountsAsTheMacsBattery() {
+    #expect(PowerMonitor.hasInternalBattery(in: [[kIOPSTypeKey: kIOPSInternalBatteryType]]))
+    #expect(!PowerMonitor.hasInternalBattery(in: [[kIOPSTypeKey: kIOPSUPSType]]))
+    #expect(!PowerMonitor.hasInternalBattery(in: []))
+}
