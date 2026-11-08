@@ -780,6 +780,25 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(!added.contains(.string("workspaces")))
 }
 
+/// Another file can refer to the starter's widgets, such as an include overriding the clock, so setup leaves the
+/// widgets of a configuration with includes or packages where they are.
+@Test func setupKeepsStarterWidgetsThatOtherFilesCanReferTo() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    try Data(#"{"widgetOverrides": {"clock": {"format": "HH:mm"}}}"#.utf8).write(to: directory.appending(path: "module.json"))
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["includes"] = .array([.string("module.json")])
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try SetupPreferences(placement: .belowMenuBar).applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: updated)
+    #expect(configuration.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+    #expect(configuration.bar.belowMenuBar)
+}
+
 @Test func setupPointsTheBelowStartersWorkspacesAtTheDetectedManager() throws {
     let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
     #expect(try JSONDecoder().decode(Configuration.self, from: below).workspaceSource == .spaces)

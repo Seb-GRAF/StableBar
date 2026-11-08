@@ -261,6 +261,10 @@ struct SetupPreferences: Equatable {
         guard let widgets = try? document?["widgets"]?.decoded([[String: ConfigurationValue]].self) else {
             return StarterChange(configuration: configuration)
         }
+        // Includes and packages can refer to these widgets from files setup doesn't edit, so their widgets stay.
+        guard document?["includes"] == nil, document?["packages"] == nil else {
+            return StarterChange(configuration: configuration, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
+        }
         let ids = widgets.map(Self.id)
         func swap(to starter: [[String: ConfigurationValue]]) -> StarterChange? {
             var swapped = document!
