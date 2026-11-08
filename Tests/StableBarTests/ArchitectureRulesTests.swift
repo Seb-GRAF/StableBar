@@ -28,7 +28,7 @@ private func swiftSources() throws -> [(path: String, text: String)] {
 /// are `weak`.
 @Test func unownedReferencesOnlyGoAway() throws {
     let allowed = ["StableBar/BarEditing.swift": 1, "StableBar/ConfigurationHistory.swift": 2,
-                   "StableBar/PackageLibrary.swift": 1, "StableBar/WidgetPopup.swift": 1]
+                   "StableBar/WidgetPopup.swift": 1]
     let files = try swiftSources()
     #expect(files.count > 100)
     for file in files {
