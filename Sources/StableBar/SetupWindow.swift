@@ -192,6 +192,8 @@ final class SetupSession {
     private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
     @ObservationIgnored let system: SetupSystem
     private var placementRequest = 0
+    /// The menu bar change System Events is still making, if any.
+    @ObservationIgnored private var menuBarChange: Task<Void, Error>?
     /// macOS is asking whether StableBar may control System Events.
     var waitingForMenuBarAccess: Bool { accessRequest != nil }
     var error: String?
@@ -411,6 +413,8 @@ final class SetupSession {
         do {
             try await setMenuBarHidden(placement == .top)
             if changes { automationAccess = .allowed }
+            // Skip setup, or a later choice, may have come while macOS changed the menu bar; this one no longer applies.
+            guard request == placementRequest else { return }
             preferences.placement = placement
             error = nil
         } catch {
@@ -435,12 +439,20 @@ final class SetupSession {
         return access
     }
 
+    /// Each menu bar change waits for the one System Events is still making, so the restore after Skip setup lands
+    /// after a hide or show that was still in flight.
     private func setMenuBarHidden(_ hidden: Bool) async throws {
-        guard hidden != menuBarHides else { return }
-        try await system.setMenuBarHidden(hidden)
-        menuBarHides = hidden
-        MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
-            after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
+        let previous = menuBarChange
+        let change = Task {
+            _ = try? await previous?.value
+            guard hidden != menuBarHides else { return }
+            try await system.setMenuBarHidden(hidden)
+            menuBarHides = hidden
+            MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
+                after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
+        }
+        menuBarChange = change
+        try await change.value
     }
 
     func requestCalendarAccess() async {
@@ -477,6 +489,8 @@ final class SetupSession {
     }
 
     func cancel() {
+        // A placement still waiting on macOS no longer applies, and the restore below waits for its menu bar change.
+        placementRequest += 1
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
