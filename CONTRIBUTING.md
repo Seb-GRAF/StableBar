@@ -74,7 +74,7 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 - [WidgetPopup.swift](Sources/StableBar/WidgetPopup.swift): anchored panel, dismissal and screen placement.
 - [StableBarApp.swift](Sources/StableBar/StableBarApp.swift): non-activating panels and application lifecycle.
 
-There is no web view, custom drawing loop or private window-server API. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
+There is no web view or custom drawing loop. Private macOS API is limited to hiding and revealing the macOS menu bar ([MenuBarDelay.swift](Sources/StableBar/MenuBarDelay.swift)), reading Spaces ([Spaces.swift](Sources/StableBar/Spaces.swift)) and Lock Screen ([WidgetActions.swift](Sources/StableBar/WidgetActions.swift)); [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
 
 ## How we work
 
@@ -170,6 +170,14 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 `visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens against the same base keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
 
 Pull requests from forks get the same comment and status: the drawing runs in the fork's pull request, and **Screens** finds the pull request by its branch and head. Two pull requests from one branch at one commit, open or closed, share CI runs the bot can't tell apart, so it compares no screens and fails the review: close the other one if it's open, then push a commit. The comparison runs in the pull request's own CI, so a pull request that changes the CI workflow or the drawing scripts decides what its comparison shows. **Screens** reads the pull request's changed files from GitHub, so screens they call for that weren't drawn fail the review, but review such a change itself before you trust its screens.
+
+## When CI fails
+
+- **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow.
+- **A crash that ends the test run** (`exited with unexpected signal code 6`). The log doesn't say where. After a local run, look for a `swiftpm-testing-helper` report in `~/Library/Logs/DiagnosticReports`: its crashing thread names the code. Then turn the crash into a test that fails every time.
+- **A job that never ran, or a check that stays in progress.** "The job was not acquired by Runner", or a required check still in progress after its steps finished, needs a rerun, not a fix.
+- **A failure only CI shows.** CI's Macs always show scroll bars: run the test with `-AppleShowScrollBars Always`. Locally, the popup tests that animate fail while the display sleeps or the screen is locked.
+- **Tests that don't match the branch.** `swift build` doesn't rebuild the tests: after switching branches, run `swift build --build-tests` before `swift test --skip-build`.
 
 ## Agent skills
 
