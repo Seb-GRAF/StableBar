@@ -346,14 +346,15 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
         "workspaceSource": .string("spaces"), "widgets": .array(widgets.map(ConfigurationValue.object))
     ]
     if change == "override" { document["widgetOverrides"] = .object(["sound": .object(["priority": .number(5)])]) }
-    let (session, fixture, store, _) = try setupSession(configuration: String(decoding: try JSONEncoder().encode(document), as: UTF8.self),
-                                                        completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
+    let json = try #require(String(bytes: JSONEncoder().encode(document), encoding: .utf8))
+    let (session, fixture, store, _) = try setupSession(configuration: json, completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
     defer { store.stop(); fixture.close() }
     #expect(session.workspaceSource == expected)
     #expect(store.configuration?.workspaceSource == expected)
     // Finishing saves what the preview showed.
     session.finish()
     #expect(session.finished)
+    #expect(session.system.defaults.bool(forKey: "setupCompleted"))
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: fixture.url))
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
