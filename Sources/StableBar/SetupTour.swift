@@ -636,7 +636,7 @@ struct SetupTourView: View {
     private var placement: some View {
         VStack(spacing: 22) {
             VStack(spacing: 12) {
-                SetupTile(selected: session.placement == .top) {
+                SetupTile(selected: session.placementChoice == .top) {
                     Task { await session.place(.top) }
                 } label: {
                     VStack(alignment: .leading, spacing: 10) {
@@ -655,7 +655,7 @@ struct SetupTourView: View {
                     .frame(width: 488, alignment: .leading)
                     .padding(14)
                 }
-                SetupTile(selected: session.placement == .belowMenuBar) {
+                SetupTile(selected: session.placementChoice == .belowMenuBar) {
                     Task { await session.place(.belowMenuBar) }
                 } label: {
                     HStack(spacing: 14) {
@@ -943,7 +943,7 @@ struct SetupTourView: View {
             }
             .buttonStyle(SetupButtonStyle())
             .keyboardShortcut(.defaultAction)
-            .disabled(SetupSession.Step(rawValue: session.step).map(session.waitsForPermissions) ?? false)
+            .disabled(SetupSession.Step(rawValue: session.step).map(session.blocksContinue) ?? false)
             Button("Skip setup") { if session.hasChanges { confirmingSkip = true } else { skip() } }
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 96, alignment: .leading)

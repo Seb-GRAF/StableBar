@@ -480,3 +480,20 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     await refused.place(.top)
     #expect(!refused.replacesMenuBar)
 }
+
+/// The first step selects neither choice and waits until the person picks one, so nobody moves on with whatever
+/// placement the bar happened to have. The intro's question counts as the choice.
+@MainActor
+@Test func setupWaitsForAPlacementChoiceOnItsFirstStep() async throws {
+    let (session, fixture, store, _) = try setupSession(menuBarHides: true) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placementChoice == nil)
+    #expect(session.blocksContinue(at: .placement))
+    #expect(!session.blocksContinue(at: .look))
+    #expect(!session.blocksContinue(at: .touches))
+    await session.place(.belowMenuBar)
+    #expect(session.placementChoice == .belowMenuBar)
+    #expect(!session.blocksContinue(at: .placement))
+    await session.place(.top)
+    #expect(session.placementChoice == .top)
+}

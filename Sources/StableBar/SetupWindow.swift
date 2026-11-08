@@ -179,6 +179,9 @@ final class SetupSession {
     var accessibilityAccess: Bool
     /// StableBar's access to System Events, which hides and shows the menu bar; nil until setup checks it.
     private(set) var automationAccess: MenuBarAutoHide.Access?
+    /// The placement the person picked, in the intro or on the first step; nil until they pick one, whatever the bar's
+    /// placement is.
+    private(set) var placementChoice: SetupPreferences.Placement?
     /// The placement that needs Automation access first; setup applies it once access is allowed.
     private(set) var placementAwaitingAccess: SetupPreferences.Placement?
     private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
@@ -297,6 +300,12 @@ final class SetupSession {
     /// the bar needs depend on it, and the permissions come after the choices that decide them.
     enum Step: Int, CaseIterable { case placement, look, touches, permissions, tryIt }
 
+    /// Whether Continue waits at `step`: for a choice on the first step, which shows none picked so nobody moves on with
+    /// a placement they didn't choose, and for missing permissions from the permissions step on.
+    func blocksContinue(at step: Step) -> Bool {
+        (step == .placement && placementChoice == nil) || waitsForPermissions(at: step)
+    }
+
     /// Whether Continue, or Finish setup, waits at `step` for permissions macOS hasn't allowed yet: from the step that
     /// asks for them on.
     func waitsForPermissions(at step: Step) -> Bool {
@@ -356,6 +365,7 @@ final class SetupSession {
     /// lets macOS ask once, and otherwise waits for the person to allow it in System Settings.
     /// The latest choice wins: a placement chosen while macOS asks replaces the earlier one.
     func place(_ placement: SetupPreferences.Placement) async {
+        placementChoice = placement
         placementRequest += 1
         let request = placementRequest
         placementAwaitingAccess = nil
