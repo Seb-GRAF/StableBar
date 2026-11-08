@@ -637,7 +637,7 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(configuration.defaults.foreground == nil)
     #expect(configuration.defaults.fontName == "Helvetica")
     #expect(configuration.defaults.accent == HexColor(0xff8800ff))
-    #expect(configuration.widgets[0].content == .clock(format: "EEE d MMM  h:mm a"))
+    #expect(configuration.widgets[0].content == .clock(format: SetupPreferences.clockFormat(hours: .twelveHour)))
     #expect(configuration.widgets[0].style.foreground == HexColor(0xabcdefff))
     let original = try JSONSerialization.jsonObject(with: data) as! [String: Any]
     let result = try JSONSerialization.jsonObject(with: updated) as! [String: Any]
@@ -698,7 +698,41 @@ private func widgetIDs(_ data: Data) throws -> [String] {
 
 @Test func setupsMenuBarStarterIsTheBundledStarter() throws {
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
-    #expect(document["widgets"] == .array(SetupPreferences.menuBarStarter.map(ConfigurationValue.object)))
+    #expect(document["widgets"] == .array(SetupPreferences.bundledMenuBarStarter.map(ConfigurationValue.object)))
+}
+
+/// StableBar's clock keeps its day, date, two spaces and time, in the Mac's date order and hour cycle. Setup's 24- and
+/// 12-hour choices keep the date order.
+@Test func setupClockFormatsFollowTheMacsDateOrderAndHourCycle() {
+    let us = Locale(identifier: "en_US"), uk = Locale(identifier: "en_GB")
+    #expect(SetupPreferences.clockFormat(locale: us) == "EEE MMM d  h:mm a")
+    #expect(SetupPreferences.clockFormat(locale: uk) == "EEE d MMM  HH:mm")
+    #expect(SetupPreferences.clockFormat(locale: Locale(identifier: "en_US@hours=h23")) == "EEE MMM d  HH:mm")
+    #expect(SetupPreferences.clockFormat(locale: us, hours: .twentyFourHour) == "EEE MMM d  HH:mm")
+    #expect(SetupPreferences.clockFormat(locale: uk, hours: .twelveHour) == "EEE d MMM  h:mm a")
+}
+
+/// A new configuration's clock follows the Mac rather than the bundled starter's 24-hour clock in day-month order.
+@Test func aNewConfigurationsClockFollowsTheMac() throws {
+    let us = try SetupPreferences.withMacsClock(bundledStarter, locale: Locale(identifier: "en_US"))
+    let configuration = try JSONDecoder().decode(Configuration.self, from: us)
+    #expect(configuration.widgets.first { $0.id == "clock" }?.content == .clock(format: "EEE MMM d  h:mm a"))
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: us)
+    var bundled = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["widgets"] = nil
+    bundled["widgets"] = nil
+    #expect(document == bundled)
+    let changed = try SetupPreferences.withMacsClock(Data(#"{"widgets":[{"id":"clock","type":"clock","position":"right","format":"HH"}]}"#.utf8))
+    #expect(try JSONDecoder().decode(Configuration.self, from: changed).widgets[0].content == .clock(format: "HH"))
+}
+
+/// Setup still recognizes the starter in both forms: as this Mac writes it, and as earlier releases did, with the
+/// bundled clock.
+@Test func setupRecognizesTheStarterWithEitherClock() throws {
+    for starter in [bundledStarter, try SetupPreferences.withMacsClock(bundledStarter)] {
+        let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: starter)
+        #expect(try widgetIDs(below) == ["workspaces", "system-monitor", "sound"])
+    }
 }
 
 @Test func setupBelowTheMenuBarTurnsTheStarterIntoWorkspacesSystemAndSound() throws {
@@ -793,7 +827,7 @@ private func widgetIDs(_ data: Data) throws -> [String] {
 @Test func setupTreatsABarWithWidgetsFromElsewhereAsChanged() throws {
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
     var resolved = document
-    resolved["widgets"] = .array((SetupPreferences.menuBarStarter + SetupPreferences.WidgetSet.meetings.widgets).map(ConfigurationValue.object))
+    resolved["widgets"] = .array((SetupPreferences.bundledMenuBarStarter + SetupPreferences.WidgetSet.meetings.widgets).map(ConfigurationValue.object))
     let configuration = try JSONDecoder().decode(Configuration.self, from: JSONEncoder().encode(resolved))
     let edits = try SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
         .edits(in: configuration, document: document)
@@ -1048,13 +1082,13 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     let updated = try SetupPreferences(clock: .twelveHour).applying(to: data, configurationURL: root)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
-    #expect(configuration.widgets.map(\.content) == [.clock(format: "EEE d MMM  h:mm a"), .clock(format: "EEE d MMM  h:mm a")])
+    #expect(configuration.widgets.map(\.content) == [.clock(format: SetupPreferences.clockFormat(hours: .twelveHour)), .clock(format: SetupPreferences.clockFormat(hours: .twelveHour))])
     #expect(configuration.widgets[0].style.fontSize == 15)
     #expect(try Data(contentsOf: module) == moduleData)
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
     #expect(document["includes"] == .array([.string("clocks.json")]))
-    #expect(document["widgets"] == .array([.object(["id": .string("local"), "template": .string("clock"), "format": .string("EEE d MMM  h:mm a")])]))
-    #expect(document["widgetOverrides"] == .object(["imported": .object(["style": .object(["fontSize": .number(15)]), "format": .string("EEE d MMM  h:mm a")])]))
+    #expect(document["widgets"] == .array([.object(["id": .string("local"), "template": .string("clock"), "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
+    #expect(document["widgetOverrides"] == .object(["imported": .object(["style": .object(["fontSize": .number(15)]), "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
 }
 
 @Test func setupWritesRootSettingsThatActiveProfilesCanStillOverride() throws {
@@ -1079,7 +1113,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
                                         "appearance": .string("dark")]))
     #expect(document["defaults"] == original["defaults"])
     #expect(document["widgets"] == .array([.object(["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
-                                                    "format": .string("EEE d MMM  h:mm a")])]))
+                                                    "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
     #expect(document["profiles"] == original["profiles"])
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
@@ -1118,7 +1152,7 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
         .applying(to: data, configurationURL: root, context: context)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated, context: context)
-    #expect(configuration.widgets[0].content == .clock(format: "EEE d MMM  h:mm a"))
+    #expect(configuration.widgets[0].content == .clock(format: SetupPreferences.clockFormat(hours: .twelveHour)))
 }
 
 @Test func layoutBlocksAreConcreteViews() {
