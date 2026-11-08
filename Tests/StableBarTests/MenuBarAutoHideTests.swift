@@ -568,3 +568,58 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(!hides)
     #expect(store.sessionEdits.count == before)
 }
+
+/// A setup session whose menu bar changes go through `change`, which can hold or fail them, while macOS reports the
+/// menu bar through `hides`.
+@MainActor
+private func setupSession(changing change: @escaping (Bool) async throws -> Void, hides: @escaping () -> Bool)
+    throws -> (SetupSession, ThemeGalleryFixture, BarStore) {
+    let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    store.reloadConfiguration()
+    let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: change, menuBarHides: hides,
+                             isTrusted: { true }, calendarAccess: { .fullAccess },
+                             defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
+    return (SetupSession(store: store, system: system), fixture, store)
+}
+
+private struct TimedOut: Error {}
+
+/// System Events can change the menu bar and still fail, as when it times out. Setup then goes by what macOS reports,
+/// so skipping setup still puts the menu bar back.
+@MainActor
+@Test func skippingSetupAfterAFailedChangeThatTookEffectPutsTheMenuBarBack() async throws {
+    var hides = false
+    var changes: [Bool] = []
+    let (session, fixture, store) = try setupSession(changing: { hidden in
+        changes.append(hidden)
+        hides = hidden
+        if hidden { throw TimedOut() }
+    }, hides: { hides })
+    defer { store.stop(); fixture.close() }
+    await session.place(.top)
+    #expect(session.error != nil)
+    session.cancel()
+    for _ in 0..<1000 where changes.count < 2 { await Task.yield() }
+    #expect(changes == [true, false])
+    #expect(!hides)
+}
+
+/// A placement replaced while its menu bar change runs, here by Skip setup, doesn't report that change failing.
+@MainActor
+@Test func aReplacedPlacementDoesNotReportItsFailedChange() async throws {
+    let gate = HeldCall<Void>()
+    let (session, fixture, store) = try setupSession(changing: { hidden in
+        guard hidden else { return }
+        await gate.wait()
+        throw TimedOut()
+    }, hides: { false })
+    defer { store.stop(); fixture.close() }
+    let replace = Task { await session.place(.top) }
+    for _ in 0..<100 where !gate.started { await Task.yield() }
+    try #require(gate.started)
+    session.cancel()
+    gate.answer(())
+    await replace.value
+    #expect(session.error == nil)
+}

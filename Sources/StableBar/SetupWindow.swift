@@ -410,14 +410,16 @@ final class SetupSession {
                 return
             }
         }
+        // Skip setup, or a later choice, may come while macOS changes the menu bar; this one then no longer applies,
+        // whether the change worked or not.
         do {
             try await setMenuBarHidden(placement == .top)
             if changes { automationAccess = .allowed }
-            // Skip setup, or a later choice, may have come while macOS changed the menu bar; this one no longer applies.
             guard request == placementRequest else { return }
             preferences.placement = placement
             error = nil
         } catch {
+            guard request == placementRequest else { return }
             let detail = errorMessage(error).contains("-1743")
                 ? MenuBarAutoHide.accessHint
                 : errorMessage(error)
@@ -446,13 +448,25 @@ final class SetupSession {
         let change = Task {
             _ = try? await previous?.value
             guard hidden != menuBarHides else { return }
-            try await system.setMenuBarHidden(hidden)
-            menuBarHides = hidden
-            MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
-                after: hidden, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
+            do {
+                try await system.setMenuBarHidden(hidden)
+            } catch {
+                // System Events can change the setting and still fail, as when it times out, so the next change, such
+                // as the restore after Skip setup, starts from what macOS reports.
+                recordMenuBar(hides: system.menuBarHides())
+                throw error
+            }
+            recordMenuBar(hides: hidden)
         }
         menuBarChange = change
         try await change.value
+    }
+
+    /// Records whether the menu bar hides, and whether StableBar turned auto-hide on, which Uninstall turns off again.
+    private func recordMenuBar(hides: Bool) {
+        menuBarHides = hides
+        MenuBarAutoHide.setTurnedOnByStableBar(MenuBarAutoHide.turnedOnByStableBar(
+            after: hides, wasOn: menuBarHidAtStart, wasStableBars: stableBarHidMenuBarAtStart), in: system.defaults)
     }
 
     func requestCalendarAccess() async {
