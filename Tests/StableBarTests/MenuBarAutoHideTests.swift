@@ -414,3 +414,126 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(plain.adviceSource == .yabai)
     #expect(!plain.showsSpacesGuidance)
 }
+
+/// The intro plays on the first run only, and not with Reduce Motion; a setup reopened later starts at its first step.
+@Test func setupPlaysItsIntroOnTheFirstRunOnly() throws {
+    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    #expect(SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: true))
+    defaults.set(true, forKey: SetupProgress.skippedKey)
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+    defaults.removeObject(forKey: SetupProgress.skippedKey)
+    defaults.set(true, forKey: SetupProgress.completedKey)
+    #expect(!SetupProgress.playsIntro(in: defaults, reduceMotion: false))
+}
+
+/// Setup asks for permissions after the choices: placement, the bar's look and the finishing touches go on without
+/// them, and only the permissions step and Try your bar wait until they are allowed.
+@MainActor
+@Test func setupWaitsForPermissionsFromItsPermissionsStepOn() throws {
+    let (session, fixture, store, _) = try setupSession(menuBarHides: true, trusted: false) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(SetupSession.Step.allCases == [.placement, .look, .touches, .permissions, .tryIt])
+    #expect(session.missingPermissions == [.accessibility])
+    for step in SetupSession.Step.allCases {
+        #expect(session.waitsForPermissions(at: step) == (step == .permissions || step == .tryIt))
+    }
+    let (allowed, allowedFixture, allowedStore, _) = try setupSession(menuBarHides: true, trusted: true) { _ in .allowed }
+    defer { allowedStore.stop(); allowedFixture.close() }
+    #expect(!SetupSession.Step.allCases.contains { allowed.waitsForPermissions(at: $0) })
+}
+
+/// Choosing Replace the menu bar on the first step takes effect at once: macOS's menu bar hides, the bar moves to the
+/// top edge with the menu bar starter, and the permissions step lists Automation as allowed.
+@MainActor
+@Test func setupsFirstStepReplacesTheMenuBarLive() async throws {
+    let starter: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
+                                                 "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))]
+    let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
+    let (session, fixture, store, changes) = try setupSession(configuration: json) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.step == SetupSession.Step.placement.rawValue)
+    #expect(session.placement == .belowMenuBar)
+    await session.place(.top)
+    #expect(changes() == [true])
+    #expect(session.menuBarHides)
+    #expect(store.configuration?.bar.belowMenuBar == false)
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+    #expect(session.neededPermissions.contains(.automation))
+    #expect(session.isAllowed(.automation))
+    #expect(!session.waitsForPermissions(at: .permissions))
+}
+
+/// Replace the menu bar has taken effect once the bar goes on the top edge and the macOS menu bar hides, whether
+/// setup hid it or it already was, so the intro's question moves on either way. A choice waiting for Automation
+/// hasn't.
+@MainActor
+@Test func setupKnowsWhenReplacingTheMenuBarTookEffect() async throws {
+    let (hidden, hiddenFixture, hiddenStore, hiddenChanges) = try setupSession(menuBarHides: true) { _ in .allowed }
+    defer { hiddenStore.stop(); hiddenFixture.close() }
+    #expect(!hidden.replacesMenuBar)
+    await hidden.place(.top)
+    #expect(hiddenChanges().isEmpty)
+    #expect(hidden.replacesMenuBar)
+    let (refused, refusedFixture, refusedStore, _) = try setupSession { _ in .denied }
+    defer { refusedStore.stop(); refusedFixture.close() }
+    await refused.place(.top)
+    #expect(!refused.replacesMenuBar)
+}
+
+/// The first step selects neither choice and waits until the person picks one, so nobody moves on with whatever
+/// placement the bar happened to have. The intro's question counts as the choice.
+@MainActor
+@Test func setupWaitsForAPlacementChoiceOnItsFirstStep() async throws {
+    let (session, fixture, store, _) = try setupSession(menuBarHides: true) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placementChoice == nil)
+    #expect(session.blocksContinue(at: .placement))
+    #expect(!session.blocksContinue(at: .look))
+    #expect(!session.blocksContinue(at: .touches))
+    await session.place(.belowMenuBar)
+    #expect(session.placementChoice == .belowMenuBar)
+    #expect(!session.blocksContinue(at: .placement))
+    await session.place(.top)
+    #expect(session.placementChoice == .top)
+}
+
+/// Holds a call to macOS open until the test answers it.
+@MainActor private final class HeldCall<Value: Sendable> {
+    private var waiting: CheckedContinuation<Value, Never>?
+    private var answer: Value?
+    private(set) var started = false
+
+    func wait() async -> Value {
+        started = true
+        if let answer { return answer }
+        return await withCheckedContinuation { waiting = $0 }
+    }
+
+    func answer(_ value: Value) {
+        answer = value
+        waiting?.resume(returning: value)
+        waiting = nil
+    }
+}
+
+/// Continue on the first step also waits until the choice takes effect, so nobody moves on to presets for a placement
+/// the bar doesn't have: not while macOS asks for Automation access, nor once it's refused. Choosing what needs no
+/// change to the menu bar moves on.
+@MainActor
+@Test func setupWaitsOnItsFirstStepUntilTheChoiceTakesEffect() async throws {
+    let question = HeldCall<MenuBarAutoHide.Access>()
+    let (session, fixture, store, changes) = try setupSession { asking in asking ? await question.wait() : .undecided }
+    defer { store.stop(); fixture.close() }
+    let replace = Task { await session.place(.top) }
+    for _ in 0..<100 where !question.started { await Task.yield() }
+    try #require(question.started)
+    #expect(session.blocksContinue(at: .placement))
+    question.answer(.denied)
+    await replace.value
+    #expect(session.placementAwaitingAccess == .top)
+    #expect(session.blocksContinue(at: .placement))
+    await session.place(.belowMenuBar)
+    #expect(changes().isEmpty)
+    #expect(!session.blocksContinue(at: .placement))
+}

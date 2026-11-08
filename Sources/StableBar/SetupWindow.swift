@@ -24,7 +24,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         self.showProfile = showProfile
         session = SetupSession(store: store)
         store.appMenu.hidesAccessWarning = true
-        showTour(intro: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+        showTour(intro: SetupProgress.playsIntro(in: .standard, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
 
     /// The height the Dock takes at the bottom of a screen, 0 when it sits on a side or another screen.
@@ -54,7 +54,8 @@ final class SetupWindow: NSObject, NSWindowDelegate {
                                                          skip: { [weak self] in self?.closeTour() },
                                                          reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) },
                                                          lower: { [weak panel] in panel?.level = .normal },
-                                                         showProfile: showProfile))
+                                                         showProfile: showProfile,
+                                                         watchIntro: { [weak self] in self?.watchIntro() }))
         host.sizingOptions = []
         panel.contentView = host
         panel.alphaValue = 0
@@ -65,6 +66,14 @@ final class SetupWindow: NSObject, NSWindowDelegate {
             context.duration = 0.4
             panel.animator().alphaValue = 1
         }
+    }
+
+    /// Plays the intro again in a new tour over the same session, so the choices made so far stay.
+    private func watchIntro() {
+        guard let previous = tour else { return }
+        tour = nil
+        previous.close()
+        showTour(intro: true)
     }
 
     private func closeTour() {
@@ -173,6 +182,9 @@ final class SetupSession {
     var accessibilityAccess: Bool
     /// StableBar's access to System Events, which hides and shows the menu bar; nil until setup checks it.
     private(set) var automationAccess: MenuBarAutoHide.Access?
+    /// The placement the person picked, in the intro or on the first step; nil until they pick one, whatever the bar's
+    /// placement is.
+    private(set) var placementChoice: SetupPreferences.Placement?
     /// The placement that needs Automation access first; setup applies it once access is allowed.
     private(set) var placementAwaitingAccess: SetupPreferences.Placement?
     private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
@@ -296,6 +308,36 @@ final class SetupSession {
         }
     }
 
+    /// Whether choosing to replace the menu bar has taken effect: the bar goes on the top edge and the macOS menu bar
+    /// hides, whether setup hid it or it already was.
+    var replacesMenuBar: Bool {
+        preferences.placement == .top && menuBarHides && placementAwaitingAccess == nil
+    }
+
+    /// Setup's steps, in the order the tour shows them. Where the bar sits comes first, since the presets and what
+    /// the bar needs depend on it, and the permissions come after the choices that decide them.
+    enum Step: Int, CaseIterable { case placement, look, touches, permissions, tryIt }
+
+    /// Whether Continue waits at `step`: on the first step, which shows none picked, until a choice takes effect, so
+    /// nobody moves on with a placement they didn't choose, and for missing permissions from the permissions step on.
+    func blocksContinue(at step: Step) -> Bool {
+        (step == .placement && !placementTookEffect) || waitsForPermissions(at: step)
+    }
+
+    /// Whether the choice on the first step has taken effect: the bar's placement is the one chosen and the macOS menu
+    /// bar hides or shows to match. It hasn't while macOS asks for Automation access, once it's refused, or while the
+    /// menu bar changes.
+    var placementTookEffect: Bool {
+        guard let placementChoice, placementAwaitingAccess == nil else { return false }
+        return preferences.placement == placementChoice && menuBarHides == (placementChoice == .top)
+    }
+
+    /// Whether Continue, or Finish setup, waits at `step` for permissions macOS hasn't allowed yet: from the step that
+    /// asks for them on.
+    func waitsForPermissions(at step: Step) -> Bool {
+        step.rawValue >= Step.permissions.rawValue && !missingPermissions.isEmpty
+    }
+
     /// What macOS must allow for the bar setup builds, in the order setup asks. Accessibility is always on the list:
     /// the app menus, the Apple menu, Menu bar items, Workspaces and window clearance all depend on it.
     var neededPermissions: [SetupPermission] {
@@ -349,6 +391,7 @@ final class SetupSession {
     /// lets macOS ask once, and otherwise waits for the person to allow it in System Settings.
     /// The latest choice wins: a placement chosen while macOS asks replaces the earlier one.
     func place(_ placement: SetupPreferences.Placement) async {
+        placementChoice = placement
         placementRequest += 1
         let request = placementRequest
         placementAwaitingAccess = nil
@@ -533,6 +576,12 @@ enum SetupProgress {
 
     static func opensAtLaunch(in defaults: UserDefaults) -> Bool {
         !defaults.bool(forKey: completedKey) && !defaults.bool(forKey: skippedKey)
+    }
+
+    /// The intro plays on the first run, before setup was finished or skipped, unless Reduce Motion is on. A setup
+    /// opened later starts at its first step, with the intro one click away.
+    static func playsIntro(in defaults: UserDefaults, reduceMotion: Bool) -> Bool {
+        !reduceMotion && opensAtLaunch(in: defaults)
     }
 
     /// Setup was skipped and never finished, so Settings offers to finish it.
