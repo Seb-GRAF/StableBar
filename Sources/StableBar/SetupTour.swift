@@ -629,31 +629,17 @@ struct SetupTourView: View {
         }
     }
 
-    private var profileSettings: [(String, ConfigurationOrigin)] {
-        let store = session.store
-        let settings = [("Appearance", "bar.appearance"), ("Placement", "bar.offset"),
-                        ("Window clearance", "bar.keepWindowsClear"), ("Notification clearance", "bar.keepNotificationsClear")]
-            + (store.configuration?.widgets.flatMap { widget -> [(String, String)] in
-                var settings = [(widget.id, "widgets.\(widget.id).enabled")]
-                if case .clock = widget.content { settings.append(("Clock \(widget.id)", "widgets.\(widget.id).format")) }
-                return settings
-            } ?? [])
-        return settings.compactMap { title, path in
-            guard let origin = store.origins[path], origin.profile != nil else { return nil }
-            return (title, origin)
-        }
-    }
-
     @ViewBuilder private var profileNotice: some View {
+        let profileSettings = ProfileControlledSetting.all(in: session.store.configuration, origins: session.store.origins)
         if !profileSettings.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 Label("Active profiles control some settings", systemImage: "info.circle").font(.system(size: 13, weight: .semibold))
-                ForEach(profileSettings, id: \.0) { title, origin in
-                    Text("\(title): \(session.store.sourceText(origin)).")
-                    if let showProfile {
-                        Button("Edit \(origin.profile!) profile…") {
+                ForEach(profileSettings) { setting in
+                    Text("\(setting.title): \(session.store.sourceText(setting.origin)).")
+                    if let showProfile, let profile = setting.origin.profile {
+                        Button("Edit \(profile) profile…") {
                             lower()
-                            showProfile(origin.profile!)
+                            showProfile(profile)
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.white.opacity(0.8))

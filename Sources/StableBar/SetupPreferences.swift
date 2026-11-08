@@ -318,3 +318,30 @@ struct SetupPreferences: Equatable {
         return edits
     }
 }
+
+/// A setting setup saves that an active profile controls, for setup's profile notice.
+struct ProfileControlledSetting: Identifiable {
+    let title: String
+    let origin: ConfigurationOrigin
+
+    var id: String { "\(title)\n\(origin.profile ?? "")" }
+
+    /// The settings setup saves that active profiles control, once for each profile. Placement counts both the offset and
+    /// `belowMenuBar`, so a profile that sets either one is named.
+    static func all(in configuration: Configuration?, origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
+        let settings = [("Appearance", ["bar.appearance"]), ("Placement", ["bar.offset", "bar.belowMenuBar"]),
+                        ("Window clearance", ["bar.keepWindowsClear"]), ("Notification clearance", ["bar.keepNotificationsClear"])]
+            + (configuration?.widgets.flatMap { widget -> [(String, [String])] in
+                var settings = [(widget.id, ["widgets.\(widget.id).enabled"])]
+                if case .clock = widget.content { settings.append(("Clock \(widget.id)", ["widgets.\(widget.id).format"])) }
+                return settings
+            } ?? [])
+        return settings.flatMap { title, paths in
+            var profiles = Set<String>()
+            return paths.compactMap { path -> ProfileControlledSetting? in
+                guard let origin = origins[path], let profile = origin.profile, profiles.insert(profile).inserted else { return nil }
+                return ProfileControlledSetting(title: title, origin: origin)
+            }
+        }
+    }
+}

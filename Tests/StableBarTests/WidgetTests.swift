@@ -885,6 +885,22 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     #expect(configuration.widgets[0].content == .clock(format: "ss"))
 }
 
+@Test(arguments: [
+    (#"[{"name":"desk","configuration":{"bar":{"belowMenuBar":true}}}]"#, ["desk"]),
+    (#"[{"name":"desk","configuration":{"bar":{"offset":6,"belowMenuBar":true}}}]"#, ["desk"]),
+    (#"[{"name":"desk","configuration":{"bar":{"offset":6}}},{"name":"away","configuration":{"bar":{"belowMenuBar":false}}}]"#,
+     ["desk", "away"]),
+])
+func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [String]) throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-placement.json")
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root, data: Data(#"{"bar":{"offset":0},"widgets":[],"profiles":\#(profiles)}"#.utf8))
+    let settings = ProfileControlledSetting.all(in: configuration, origins: loader.origins)
+    #expect(settings.map(\.title) == Array(repeating: "Placement", count: controlling.count))
+    #expect(settings.map(\.origin.profile) == controlling)
+    #expect(Set(settings.map(\.id)).count == settings.count)
+}
+
 @Test func setupFindsClocksIntroducedByTheCurrentProfile() throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-clock.json")
     let data = Data(#"""
