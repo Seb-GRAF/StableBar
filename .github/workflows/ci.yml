@@ -112,11 +112,14 @@ jobs:
           swift --version
           xcodebuild -version
           swift build --build-tests
-      - name: Test
-        run: swift test --skip-build --xunit-output test-results/results.xml
       # Swift Testing writes test-results/results-swift-testing.xml: every test, its time and its
-      # failures, kept to find flaky tests. XCTest writes one only when its tests run with --parallel,
-      # which this job doesn't use.
+      # failures, kept to find flaky tests. It can't create the folder, and exits 1 without a word when
+      # the folder is missing. XCTest writes one only when its tests run with --parallel, which this job
+      # doesn't use.
+      - name: Test
+        run: |
+          mkdir -p test-results
+          swift test --skip-build --xunit-output test-results/results.xml
       - uses: actions/upload-artifact@v7
         if: always()
         with:
