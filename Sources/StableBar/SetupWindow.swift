@@ -210,6 +210,20 @@ final class SetupSession {
         preview()
     }
 
+    /// Chooses `preset`, as its tile does, or the current bar again when it's the chosen one. On a Mac without an
+    /// internal battery, the preset leaves Battery out.
+    func toggle(_ preset: SetupPreferences.Preset) {
+        let selected = self.preset == preset
+        self.preset = selected ? nil : preset
+        preferences = selected ? SetupPreferences(placement: preferences.placement, workspaces: workspaceSource)
+            : preset.preferences(workspaces: workspaceSource, placement: preferences.placement, hasBattery: hasBattery)
+    }
+
+    /// The widget sets `preset`'s tile shows, for where the bar sits and for this Mac.
+    func shownWidgetSets(_ preset: SetupPreferences.Preset) -> [SetupPreferences.WidgetSet] {
+        preset.shownWidgetSets(workspaces: workspaceSource, placement: presetPlacement, hasBattery: hasBattery)
+    }
+
     /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the
     /// starter's widgets as well as the preset's.
     private var previewedWorkspaceSource: WorkspaceSource? {

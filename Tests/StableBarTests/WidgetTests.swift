@@ -1208,8 +1208,8 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
     #expect(developer.shownWidgetSets(workspaces: .spaces, placement: .top, hasBattery: true).contains(.battery))
 }
 
-/// Setup asks macOS once whether the Mac has a battery; the preset tiles and choices follow what it said.
-@Test @MainActor func setupKnowsWhetherTheMacHasABattery() throws {
+/// Setup asks macOS once whether the Mac has a battery, and choosing a preset, as its tile does, follows what it said.
+@Test @MainActor func choosingAPresetFollowsWhetherTheMacHasABattery() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -1222,6 +1222,14 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
         let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: { _ in }, menuBarHides: { false },
                                  isTrusted: { true }, calendarAccess: { .fullAccess }, hasBattery: { hasBattery }, defaults: defaults,
                                  workspaceSource: { _ in .spaces })
-        #expect(SetupSession(store: store, system: system).hasBattery == hasBattery)
+        let session = SetupSession(store: store, system: system)
+        #expect(session.hasBattery == hasBattery)
+        #expect(session.shownWidgetSets(.developer).contains(.battery) == hasBattery)
+        session.toggle(.developer)
+        #expect(session.preset == .developer)
+        #expect(session.preferences.widgetSets.contains(.battery) == hasBattery)
+        session.toggle(.developer)
+        #expect(session.preset == nil)
+        #expect(!session.preferences.widgetSets.contains(.battery))
     }
 }
