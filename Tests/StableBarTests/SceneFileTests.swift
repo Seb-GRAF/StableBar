@@ -104,6 +104,37 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "window"}"#) }
 }
 
+/// A setup scene names the step to draw and pins what setup reads from the Mac, so a drawing doesn't depend on it.
+@Test func sceneDecodesASetupStep() throws {
+    let decoded = try scene(#"""
+    {
+      "configuration": { "widgets": [] },
+      "draw": "setup",
+      "setup": { "step": "permissions", "placement": "belowMenuBar", "preset": "developer", "menuBarHides": true,
+                 "accessibility": false, "automation": false, "calendars": false, "battery": false }
+    }
+    """#)
+    #expect(decoded.draw == .setup)
+    #expect(decoded.setup == SceneFile.Setup(step: .permissions, placement: .belowMenuBar, preset: .developer, menuBarHides: true,
+                                             accessibility: false, automation: false, calendars: false, battery: false))
+    let plain = try scene(#"{"configuration": {"widgets": []}, "draw": "setup", "setup": {}}"#)
+    #expect(plain.setup == SceneFile.Setup())
+    #expect(SceneFile.Setup() == SceneFile.Setup(step: .placement, placement: nil, preset: nil, menuBarHides: false,
+                                                 accessibility: true, automation: true, calendars: true, battery: true))
+    #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
+}
+
+@Test(arguments: [
+    #""draw": "setup", "setup": {"stage": "look"}"#,
+    #""draw": "setup", "setup": {"step": "intro"}"#,
+    #""draw": "setup", "setup": {"placement": "current"}"#,
+    #""draw": "setup", "setup": {"preset": "gaming"}"#,
+    #""draw": "bar", "setup": {"step": "look"}"#,
+])
+func sceneRejectsASetupItCannotDraw(json: String) {
+    #expect(throws: (any Error).self) { try scene(#"{"configuration": {"widgets": []}, \#(json)}"#) }
+}
+
 @Test func sceneSchemaListsTheSamePropertiesAsTheDecoder() throws {
     let schema = try JSONDecoder().decode([String: ConfigurationValue].self,
                                           from: Data(contentsOf: repository.appending(path: "scene.schema.json")))
@@ -121,6 +152,13 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(choices(properties["section"]) == Set(SceneFile.Section.allCases.map(\.rawValue)))
     #expect(choices(properties["tab"]) == Set(SceneFile.Tab.allCases.map(\.rawValue)))
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
+    guard case let .object(setup)? = properties["setup"], case let .object(setupProperties)? = setup["properties"] else {
+        Issue.record("scene.schema.json describes no setup properties"); return
+    }
+    #expect(Set(setupProperties.keys) == Set(SceneFile.Setup.CodingKeys.allCases.map(\.stringValue)))
+    #expect(choices(setupProperties["step"]) == Set(SetupSession.Step.allCases.map { "\($0)" }))
+    #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar"])
+    #expect(choices(setupProperties["preset"]) == Set(SetupPreferences.Preset.allCases.map { "\($0)" }))
 }
 
 @Test @MainActor func everySceneInTheRepositoryLoads() throws {

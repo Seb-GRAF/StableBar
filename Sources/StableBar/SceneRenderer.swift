@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import os
 import SwiftUI
 
 /// Draws scene files offscreen. A scene's store is built the way the tests build theirs: its
@@ -197,7 +198,56 @@ enum SceneRenderer {
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+        case .setup:
+            try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store,
+                                size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
+                                dark: dark, settle: settle, to: url)
         }
+    }
+
+    /// The height of `display`'s macOS menu bar in setup scenes: a display without a notch, on macOS 26 and later.
+    private static let setupMenuBarHeight = 30.0
+
+    /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
+    /// bar above it as setup previews it.
+    private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, size: NSSize, dark: Bool, settle: Duration,
+                                  to url: URL) async throws {
+        guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
+            throw CommandFailure(message: "setup: No defaults to draw with.")
+        }
+        var hides = setup.menuBarHides
+        var system = SetupSystem()
+        system.automationAccess = { _ in setup.automation ? .allowed : .denied }
+        system.setMenuBarHidden = { hides = $0 }
+        system.menuBarHides = { hides }
+        system.isTrusted = { setup.accessibility }
+        system.calendarAccess = { setup.calendars ? .fullAccess : .notDetermined }
+        system.defaults = defaults
+        system.workspaceSource = { $0 ?? .spaces }
+        system.hasBattery = { setup.battery }
+        system.previewsOnTheBar = false
+        let session = SetupSession(store: store, system: system)
+        if let placement = setup.placement { await session.place(placement) }
+        if let preset = setup.preset { session.toggle(preset) }
+        session.step = setup.step.rawValue
+        store.appMenu.hidesAccessWarning = true
+        store.barEditing.setupIsOpen = true
+        // The bar keeps its widgets as configured, but sits where the first step's choice puts it.
+        let barTop: Double = switch session.placement {
+        case .top: 0
+        case .belowMenuBar: setupMenuBarHeight
+        case .current: store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: setupMenuBarHeight) } ?? 0
+        }
+        let view = ZStack(alignment: .top) {
+            SetupTourView(session: session, display: display, menuBarHeight: setupMenuBarHeight, dock: 0, intro: false,
+                          finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
+            bar(store).padding(.top, barTop)
+            if !session.menuBarHides {
+                // The macOS menu bar, over the top of the screen while it shows.
+                Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
+            }
+        }
+        try await OffscreenSnapshot.write(view, size: size, dark: dark, settle: settle, to: url)
     }
 
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
@@ -303,4 +353,13 @@ enum SceneRenderer {
         if let samples = keys.lazy.compactMap({ scene.history[$0] }).first { script.samples = samples }
         return script
     }
+}
+
+/// The preferences setup reads and writes while a scene draws it, kept in memory, so drawing leaves nothing on disk.
+private final class SceneDefaults: UserDefaults, @unchecked Sendable {
+    private let values = OSAllocatedUnfairLock<[String: Any]>(uncheckedState: [:])
+
+    override func object(forKey defaultName: String) -> Any? { values.withLockUnchecked { $0[defaultName] } }
+    override func set(_ value: Any?, forKey defaultName: String) { values.withLockUnchecked { $0[defaultName] = value } }
+    override func removeObject(forKey defaultName: String) { values.withLockUnchecked { $0[defaultName] = nil } }
 }

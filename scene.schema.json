@@ -56,8 +56,8 @@
       }
     },
     "draw": {
-      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub.",
-      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update"]
+      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add.",
+      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup"]
     },
     "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
     "section": {
@@ -68,6 +68,45 @@
     "uninstall": {
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",
       "enum": ["confirm", "failed"]
+    },
+    "setup": {
+      "description": "For `setup`: the step to draw, the choices made before it, and what setup reads from the Mac, pinned so the drawing doesn't depend on the Mac that draws it. Every key is optional.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "step": {
+          "description": "The step of the tour: where the bar goes, its look, the finishing touches, the permissions, or Try your bar. placement by default.",
+          "enum": ["placement", "look", "touches", "permissions", "tryIt"]
+        },
+        "placement": {
+          "description": "The first step's choice, made before drawing: Replace the menu bar (top) or Keep the menu bar (belowMenuBar). Without it, neither is picked.",
+          "enum": ["top", "belowMenuBar"]
+        },
+        "preset": {
+          "description": "The preset picked on the second step.",
+          "enum": ["minimal", "developer", "workday", "notch", "everything"]
+        },
+        "menuBarHides": {
+          "description": "Whether macOS hides its menu bar automatically. false by default.",
+          "type": "boolean"
+        },
+        "accessibility": {
+          "description": "Whether macOS allows StableBar Accessibility. true by default.",
+          "type": "boolean"
+        },
+        "automation": {
+          "description": "Whether macOS lets StableBar control System Events, which hiding or showing the menu bar needs. true by default.",
+          "type": "boolean"
+        },
+        "calendars": {
+          "description": "Whether macOS allows StableBar full Calendar access. true by default.",
+          "type": "boolean"
+        },
+        "battery": {
+          "description": "Whether the Mac has an internal battery, which presets add Battery for. true by default.",
+          "type": "boolean"
+        }
+      }
     },
     "appearances": {
       "description": "The appearances to draw, each to its own image. Both by default.",

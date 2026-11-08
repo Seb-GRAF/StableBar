@@ -204,6 +204,43 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     #expect(colors(image) > 10)
 }
 
+/// The pixels of `image`, to compare two drawings.
+private func pixels(_ image: NSBitmapImageRep) -> Data? {
+    image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }
+}
+
+/// A setup scene draws the step it names with nothing moving, so two drawings match however long each settles. The
+/// first step loads nothing as it opens, unlike the theme cards of the second, and fits without scrolling, and the bar
+/// shows no clock, whose time zone other tests change, so only motion could tell the drawings apart.
+/// Like every scene it runs nothing: setup's choices show in the tour, not on the bar, where the widgets a preset adds
+/// would start their commands.
+@Test @MainActor func setupSceneDrawsTheSameStepHoweverLongItSettles() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let json = #"""
+    {"configuration": "config.json", "draw": "setup",
+     "setup": {"step": "placement", "placement": "top", "preset": "developer"}, "width": 1200, "height": 1000}
+    """#
+    var images: [NSBitmapImageRep] = []
+    for (name, settle) in [("early", Duration.seconds(1)), ("late", .milliseconds(2200))] {
+        let folder = directory.appending(path: name)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(#"{"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}"#.utf8)
+            .write(to: folder.appending(path: "config.json"))
+        let store = try store(json, in: folder)
+        defer { store.stop() }
+        let url = directory.appending(path: "\(name).png")
+        try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url, settle: settle)
+        images.append(try #require(NSBitmapImageRep(data: Data(contentsOf: url))))
+        #expect(store.sessionEdits.isEmpty)
+        #expect(store.scripts.isEmpty)
+    }
+    #expect(images[0].pixelsWide == 2400)
+    #expect(images[0].pixelsHigh == 2000)
+    #expect(colors(images[0]) > 10)
+    #expect(pixels(images[0]) == pixels(images[1]))
+}
+
 @Test @MainActor func popupSceneWithoutAPopupFails() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
