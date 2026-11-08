@@ -176,6 +176,8 @@ final class SetupSession {
     var error: String?
     private(set) var base: Configuration?
     private let sessionEdits: [ConfigurationEdit]
+    /// The choices setup opened with, to tell whether skipping would lose any.
+    @ObservationIgnored private var initialPreferences = SetupPreferences()
 
     init(store: BarStore, system: SetupSystem = SetupSystem()) {
         self.store = store
@@ -192,6 +194,7 @@ final class SetupSession {
         workspaceSource = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
                                                    configured: store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
+        initialPreferences = preferences
         preview()
     }
 
@@ -360,6 +363,14 @@ final class SetupSession {
             guard access == .allowed, let placement = placementAwaitingAccess else { return }
             await place(placement)
         }
+    }
+
+    /// Whether setup changed macOS's menu bar setting, which skipping puts back.
+    var changedMenuBar: Bool { menuBarHides != menuBarHidAtStart }
+
+    /// Whether skipping would throw something away: a choice, Open at login, or the menu bar setting setup changed.
+    var hasChanges: Bool {
+        preferences != initialPreferences || openAtLogin != nil || menuBarHides != menuBarHidAtStart || placementAwaitingAccess != nil
     }
 
     func cancel() {

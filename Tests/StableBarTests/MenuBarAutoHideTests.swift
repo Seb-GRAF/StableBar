@@ -242,3 +242,22 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     defer { store.stop(); fixture.close() }
     #expect(session.placement == .belowMenuBar)
 }
+
+/// Skip setup asks first once something would be lost: a choice, Open at login, or the menu bar setup changed.
+@MainActor
+@Test func setupKnowsWhenSkippingWouldLoseChoices() async throws {
+    let (session, fixture, store, _) = try setupSession { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(!session.hasChanges)
+    session.step = 3
+    #expect(!session.hasChanges)
+    session.preferences.theme = .builtIn
+    #expect(session.hasChanges)
+    session.preferences.theme = .current
+    #expect(!session.hasChanges)
+    session.openAtLogin = true
+    #expect(session.hasChanges)
+    session.openAtLogin = nil
+    await session.place(.top)
+    #expect(session.hasChanges)
+}
