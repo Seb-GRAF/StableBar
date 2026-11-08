@@ -739,7 +739,26 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
     SetupPreferences.rememberStarterClockFormat(in: defaults)
     SetupPreferences.rememberStarterClockFormat(in: defaults)
-    #expect(SetupPreferences.rememberedStarterClockFormats(in: defaults) == [SetupPreferences.clockFormat()])
+    #expect(SetupPreferences.rememberedStarterClockFormats(in: defaults) == SetupPreferences.starterClockFormats())
+    #expect(Set(SetupPreferences.starterClockFormats(locale: Locale(identifier: "en_US")))
+            == ["EEE MMM d  h:mm a", "EEE MMM d  HH:mm"])
+}
+
+/// A starter whose clock got setup's 24- or 12-hour choice is still the starter, so moving it below the menu bar
+/// still swaps it for the starter there instead of keeping a second clock beside the macOS one.
+@Test func aStarterWithSetupsHourChoiceMovesBelowTheMenuBar() throws {
+    for hours in [SetupPreferences.Clock.twentyFourHour, .twelveHour] {
+        // Without any format remembered from earlier regions, which launches in this test run may have stored.
+        let starter = SetupPreferences.menuBarStarter(clockFormat: SetupPreferences.clockFormat(hours: hours))
+        #expect(SetupPreferences.isMenuBarStarter(starter, remembered: []))
+        let chosen = try SetupPreferences(clock: hours).applying(to: SetupPreferences.withMacsClock(bundledStarter))
+        let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: chosen)
+        #expect(try widgetIDs(below) == ["workspaces", "system-monitor", "sound"])
+    }
+    #expect(!SetupPreferences.isMenuBarStarter(SetupPreferences.menuBarStarter(clockFormat: "HH:mm"), remembered: []))
+    let custom = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai)
+        .applying(to: JSONEncoder().encode(["widgets": SetupPreferences.menuBarStarter(clockFormat: "HH:mm")]))
+    #expect(try widgetIDs(custom).contains("clock"), "A clock someone set to another format stays")
 }
 
 /// Setup still recognizes the starter in both forms: as this Mac writes it, and as earlier releases did, with the

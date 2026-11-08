@@ -262,13 +262,22 @@ struct SetupPreferences: Equatable {
 
     static let starterClockFormatsKey = "starterClockFormats"
 
-    /// Remembers the starter clock format this Mac's region gives, so a starter written under it still counts as one
+    /// The formats setup writes for the starter's clock in `locale`: the region's own, and its 24- and 12-hour choices.
+    static func starterClockFormats(locale: Locale = .current) -> [String] {
+        var formats: [String] = []
+        for hours in [Clock.current, .twentyFourHour, .twelveHour] where !formats.contains(clockFormat(locale: locale, hours: hours)) {
+            formats.append(clockFormat(locale: locale, hours: hours))
+        }
+        return formats
+    }
+
+    /// Remembers the starter clock formats this Mac's region gives, so a starter written under it still counts as one
     /// after the region changes. StableBar calls it at every launch.
     static func rememberStarterClockFormat(in defaults: UserDefaults = .standard) {
-        let format = clockFormat()
         var formats = rememberedStarterClockFormats(in: defaults)
-        guard !formats.contains(format) else { return }
-        formats.append(format)
+        let new = starterClockFormats().filter { !formats.contains($0) }
+        guard !new.isEmpty else { return }
+        formats += new
         defaults.set(formats, forKey: starterClockFormatsKey)
     }
 
@@ -277,8 +286,9 @@ struct SetupPreferences: Equatable {
         defaults.stringArray(forKey: starterClockFormatsKey) ?? []
     }
 
-    /// Whether `widgets` are the starter bar on the top edge: with the bundled clock, or with the clock this Mac writes
-    /// now or wrote under an earlier region. A clock someone changed doesn't count.
+    /// Whether `widgets` are the starter bar on the top edge: with the bundled clock, or with a clock setup writes for
+    /// this Mac's region now or wrote under an earlier one, its 24- and 12-hour choices included. A clock someone set
+    /// to another format doesn't count.
     static func isMenuBarStarter(_ widgets: [[String: ConfigurationValue]],
                                  remembered: [String] = rememberedStarterClockFormats()) -> Bool {
         starters(remembered: remembered).contains(widgets)
@@ -286,7 +296,9 @@ struct SetupPreferences: Equatable {
 
     /// The starter bar on the top edge with each clock it can have on this Mac.
     private static func starters(remembered: [String]) -> [[[String: ConfigurationValue]]] {
-        [bundledMenuBarStarter, menuBarStarter] + remembered.map { menuBarStarter(clockFormat: $0) }
+        // Earlier releases' setup wrote its 12-hour choice as EEE d MMM  h:mm a.
+        let formats = starterClockFormats() + remembered + ["EEE d MMM  h:mm a"]
+        return [bundledMenuBarStarter] + formats.map { menuBarStarter(clockFormat: $0) }
     }
 
     /// StableBar's clock, day, date, two spaces and time, in `locale`'s date order and its hour cycle, or the 24- or
