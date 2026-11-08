@@ -126,6 +126,17 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
 func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
+    // The child leaves the command's process group, so stopping the command doesn't end it. However the test ends,
+    // early too, this ends it, waiting a little for a marker that comes late.
+    defer {
+        for _ in 0..<200 {
+            if let child = (try? String(contentsOf: marker, encoding: .utf8)).flatMap({ Int32($0) }) {
+                kill(child, SIGKILL)
+                break
+            }
+            usleep(10_000)
+        }
+    }
     // The timeout must leave a busy runner time to start perl and write the marker. When the test cancels, the
     // timeout is long, so the cancel comes first however long the main actor takes to notice the marker.
     let task = Task {
@@ -146,7 +157,6 @@ func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async 
         try await Task.sleep(for: .milliseconds(5))
     }
     let child = try #require(Int32(String(contentsOf: marker, encoding: .utf8)))
-    defer { kill(child, SIGKILL) }
     #expect(getpgid(child) == child)
     if !timeout { task.cancel() }
     do {
