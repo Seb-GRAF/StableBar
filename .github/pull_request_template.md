@@ -19,7 +19,8 @@ extend a scene in scenes/. Add a short recording when motion matters: upload it 
 
 ## Merging
 
-<!-- With a merge commit or rebase merge, semantic-release reads every commit; a squash leaves only the title.
+<!-- With a merge commit or rebase merge, semantic-release reads every commit. A squash leaves one commit, and semantic-release
+reads its whole message, so check that message when squashing.
 Say which this needs. -->
 
 <!-- End with the model and harness that did the work, such as "Claude Opus 5.5 via Claude Code", or with "No agent". The Description check reads this last line. -->
