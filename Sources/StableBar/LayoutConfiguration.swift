@@ -25,6 +25,8 @@ struct BarUnit: Identifiable {
     var priority: Int { widgets.map(\.priority).max()! }
     var canOverflow: Bool { widgets.allSatisfy { $0.overflow == .automatic } }
     var isSpacer: Bool { widgets.count == 1 && widgets[0].content == .spacer }
+    /// Whether the unit has App menus that hide their last menus behind » to fit.
+    var hasShrinkingAppMenus: Bool { widgets.contains { $0.content == .appMenu(expandOnHover: false) && $0.layout == nil } }
 
     /// How the unit enters and leaves the bar: the first transition its widgets set.
     var transition: WidgetTransition? { widgets.lazy.compactMap(\.transition).first }

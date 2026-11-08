@@ -429,9 +429,6 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     // The app's name always stays.
     #expect(AppMenuView.visibleCount(widths: widths, available: 50, overflowWidth: 24) == 1)
     #expect(AppMenuView.visibleCount(widths: [], available: 50, overflowWidth: 24) == 0)
-    // How far the menus can shrink: down to the app's name and the overflow button.
-    #expect(AppMenuView.shrinkableWidth(widths: widths, overflowWidth: 24) == 176)
-    #expect(AppMenuView.shrinkableWidth(widths: [60], overflowWidth: 24) == 0)
 }
 
 /// A widget squeezed below its width scrolls, except App menus, which hide their last menus, until even their
@@ -441,4 +438,12 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(BarView.scrolls(width: 150, resting: 200, minimum: nil))
     #expect(!BarView.scrolls(width: 150, resting: 400, minimum: 120))
     #expect(BarView.scrolls(width: 100, resting: 400, minimum: 120))
+}
+
+/// App menus measured down to the app name and » set how narrow their unit gets, unless a widget `width` keeps it
+/// as wide as at rest; until they are measured, the unit doesn't shrink.
+@Test func appMenusShrinkOnlyAsFarAsTheirMeasuredNarrowestWidth() {
+    #expect(BarView.minimumWidth(resting: 400, narrowest: 300) == 300)
+    #expect(BarView.minimumWidth(resting: 120, narrowest: 120) == nil)
+    #expect(BarView.minimumWidth(resting: 400, narrowest: nil) == nil)
 }

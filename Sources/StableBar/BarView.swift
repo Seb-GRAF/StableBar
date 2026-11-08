@@ -13,6 +13,13 @@ struct BarView: View {
         width < (minimum ?? resting) - 0.5
     }
 
+    /// How narrow a unit can get: its width measured with its App menus down to the app name and », which keeps the
+    /// widget's own `width` or `minWidth`. Nil when that's no narrower than at rest, so the unit doesn't shrink.
+    static func minimumWidth(resting: CGFloat?, narrowest: CGFloat?) -> CGFloat? {
+        guard let resting, let narrowest, narrowest < resting - 0.5 else { return nil }
+        return narrowest
+    }
+
     static func moreWidgetsID(_ position: WidgetPosition, notched: Bool) -> String {
         notched && [.left, .notchLeft].contains(position) ? "\(moreWidgetsID).left" : moreWidgetsID
     }
@@ -24,8 +31,8 @@ struct BarView: View {
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var restingWidths: [String: CGFloat] = [:]
-    /// How far each App menus widget can shrink at the notch, by widget ID.
-    @State private var shrinkableWidths: [String: CGFloat] = [:]
+    /// Each unit with App menus measured with only the app name and », by unit ID.
+    @State private var narrowestWidths: [String: CGFloat] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -50,13 +57,13 @@ struct BarView: View {
                     let growth = Dictionary(uniqueKeysWithValues: units.map { unit in
                         (unit.id, max((measuredWidths[unit.id] ?? 0) - (restingWidths[unit.id] ?? 0), 0))
                     })
-                    let shrinks = Dictionary(uniqueKeysWithValues: units.map { unit in
-                        (unit.id, unit.widgets.reduce(CGFloat.zero) { $0 + (shrinkableWidths[$1.id] ?? 0) })
+                    let minimums = Dictionary(uniqueKeysWithValues: units.compactMap { unit in
+                        Self.minimumWidth(resting: restingWidths[unit.id], narrowest: narrowestWidths[unit.id]).map { (unit.id, $0) }
                     })
                     let items = units.map { unit in
                         BarLayoutItem(id: unit.id, position: unit.position, width: restingWidths[unit.id] ?? 0, priority: unit.priority,
                                       canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!,
-                                      minimumWidth: shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - shrinks[unit.id]!, 0) : nil)
+                                      minimumWidth: minimums[unit.id])
                     }
                     let moreWidth = measuredWidths[Self.moreWidgetsUnit.id] ?? 0
                     let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
@@ -72,9 +79,8 @@ struct BarView: View {
                                 case .right: .trailing
                                 case .notchLeft, .center, .notchRight: .center
                                 }
-                                unitView(unit, config: config, width: placement.width,
-                                         minimum: shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - shrinks[unit.id]!, 0) : nil)
-                                    .environment(\.appMenuShrink, shrinks[unit.id]! > 0 ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
+                                unitView(unit, config: config, width: placement.width, minimum: minimums[unit.id])
+                                    .environment(\.appMenuShrink, minimums[unit.id] != nil ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
                                     .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
                                     .geometryGroup()
                                     .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
@@ -107,14 +113,25 @@ struct BarView: View {
                                         }
                                     }
                             }
+                            // Units with App menus again, down to the app name and », as narrow as they get.
+                            ForEach(units.filter(\.hasShrinkingAppMenus)) { unit in
+                                BarUnitView(unit: unit, config: config, store: store, display: display.id)
+                                    .environment(\.appMenuShrink, .greatestFiniteMagnitude)
+                                    .fixedSize()
+                                    .background {
+                                        GeometryReader { proxy in
+                                            Color.clear.preference(key: BarNarrowestWidthPreference.self, value: [unit.id: proxy.size.width])
+                                        }
+                                    }
+                            }
                         }
                         .fixedSize()
                         .hidden()
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                         .modifier(MeasuringCopy())
-                        .onPreferenceChange(AppMenuShrinkPreference.self) { widths in
-                            if widths != shrinkableWidths { shrinkableWidths = widths }
+                        .onPreferenceChange(BarNarrowestWidthPreference.self) { widths in
+                            if widths != narrowestWidths { narrowestWidths = widths }
                         }
                     }
                     // Keeps the last width of units that leave, so a returning widget is planned at its size.
@@ -225,6 +242,14 @@ private struct MoreWidgetsButton: View {
 }
 
 private struct BarWidthPreference: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+/// The width of each unit with App menus measured with only the app name and », by unit ID.
+private struct BarNarrowestWidthPreference: PreferenceKey {
     static let defaultValue: [String: CGFloat] = [:]
     static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
         value.merge(nextValue()) { $1 }
@@ -640,7 +665,7 @@ struct WidgetView: View {
                 if !measuring && expands {
                     store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
-            }, widgetID: widget.id, openOverflow: openAppMenus)
+            }, openOverflow: openAppMenus)
             .onChange(of: barExpansion == .cramped && hovered) { _, cramped in
                 if cramped { showMenuRow(appearance: appearance, padding: padding) }
             }
@@ -1127,12 +1152,6 @@ extension AppMenuView {
         }
         return count
     }
-
-    /// How much narrower the menus can get: down to the app's name and the overflow button.
-    static func shrinkableWidth(widths: [CGFloat], overflowWidth: CGFloat) -> CGFloat {
-        guard widths.count > 1 else { return 0 }
-        return max(widths.reduce(0, +) - widths[0] - overflowWidth, 0)
-    }
 }
 
 /// How much narrower than all its menus the bar needs an App menus widget to be; 0 shows every menu.
@@ -1142,14 +1161,6 @@ extension EnvironmentValues {
     var appMenuShrink: CGFloat {
         get { self[AppMenuShrinkKey.self] }
         set { self[AppMenuShrinkKey.self] = newValue }
-    }
-}
-
-/// How far each App menus widget can shrink, by widget ID, as the bar's measuring copy draws it.
-struct AppMenuShrinkPreference: PreferenceKey {
-    static let defaultValue: [String: CGFloat] = [:]
-    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
-        value.merge(nextValue()) { $1 }
     }
 }
 
@@ -1166,8 +1177,6 @@ struct AppMenuView: View {
     let open: (AppMenuItem, NSView) -> Void
     let requestAccess: () -> Void
     var expansionChanged: (Bool) -> Void = { _ in }
-    /// The widget whose menus can shrink at the notch; nil for menus that never shrink.
-    var widgetID: String?
     /// Opens the menus that don't fit, from the overflow button.
     var openOverflow: ([AppMenuItem], NSView) -> Void = { _, _ in }
     @State private var hoveredItem: AppMenuItem?
@@ -1226,9 +1235,6 @@ struct AppMenuView: View {
         .fixedSize(horizontal: true, vertical: false)
         .clipped()
         .background { measuringRow }
-        .preference(key: AppMenuShrinkPreference.self, value: widgetID.flatMap { id in
-            expandOnHover || isAppleMenu ? nil : widths.map { [id: Self.shrinkableWidth(widths: $0, overflowWidth: overflowWidth)] }
-        } ?? [:])
         .onHover { if $0 { appMenu.refresh() } }
         .onChange(of: hovering || openAnchor != nil, initial: true) { _, expanded in expansionChanged(expanded) }
         .onDisappear { expansionChanged(false) }

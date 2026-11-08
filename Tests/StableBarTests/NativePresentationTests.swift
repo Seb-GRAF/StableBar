@@ -510,13 +510,14 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     let display: BarDisplay
 
     init(configuration: Configuration, display: BarDisplay, width: CGFloat, workspaces: [Workspace] = [],
-         backingScale: CGFloat = 2, sharedStore: BarStore? = nil) {
+         backingScale: CGFloat = 2, sharedStore: BarStore? = nil, appMenu: AppMenu = AppMenu()) {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
         self.backingScale = backingScale
         self.display = display
         ownsStore = sharedStore == nil
-        store = sharedStore ?? BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
+        store = sharedStore ?? BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString),
+                                        appMenu: appMenu)
         if sharedStore == nil {
             store.configuration = configuration
             store.workspaceStore.workspaces = workspaces
@@ -787,6 +788,50 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
 }
 
 /// » opens only menus of the app that owns the menu bar, not titles left from the previous app.
+/// App menus that read `titles` from the menu bar: the Apple menu, then the app's menus.
+@MainActor private func appMenu(showing titles: [String]) async -> AppMenu {
+    let menu = AppMenu(checkAccess: { true }, readAttribute: { name, element in
+        var pid: pid_t = 0
+        AXUIElementGetPid(element, &pid)
+        switch name {
+        case kAXMenuBarAttribute: return AXUIElementCreateApplication(1)
+        case kAXChildrenAttribute: return titles.indices.map { AXUIElementCreateApplication(pid_t(1000 + $0)) } as CFArray
+        case kAXTitleAttribute: return titles[Int(pid) - 1000] as CFString
+        default: return nil
+        }
+    }, sleep: { _ in })
+    menu.read(MenuApplication(pid: 100))
+    await menu.readTask?.value
+    return menu
+}
+
+/// App menus squeezed beside a clock hide their last menus to fit. A widget `width` or `minWidth` keeps them from
+/// getting narrower: squeezed below it, they move into More widgets instead of spilling over the clock.
+@Test(arguments: [("{}", 300.0, false), (#"{"minWidth":300}"#, 300.0, true), (#"{"width":120}"#, 160.0, true)])
+@MainActor func appMenusShrinkNoFurtherThanTheirWidgetsWidth(style: String, barWidth: Double, overflows: Bool) async throws {
+    let menu = await appMenu(showing: ["Apple", "Xcode", "File", "Edit", "View", "Find", "Navigate", "Editor", "Product",
+                                       "Debug", "Window", "Help"])
+    try #require(menu.items.count == 11)
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"bar":{"inset":10,"spacing":8},"widgets":[
+      {"id":"menus","type":"appMenu","position":"left","style":\#(style)},
+      {"id":"clock","type":"text","text":"12:00","position":"right","overflow":"never"}
+    ]}
+    """#.utf8))
+    let fixture = OffscreenBar(configuration: configuration, display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil),
+                               width: barWidth, backingScale: 1, appMenu: menu)
+    defer { fixture.close() }
+    await fixture.settle()
+    let clock = try #require(fixture.anchors("clock").first)
+    let clockStart = clock.convert(clock.bounds, to: fixture.host).minX
+    let menus = fixture.anchors("menus")
+    #expect(menus.isEmpty == overflows)
+    for menus in menus {
+        #expect(menus.convert(menus.bounds, to: fixture.host).maxX <= clockStart + 0.5)
+    }
+    #expect(fixture.anchors(BarView.moreWidgetsID).isEmpty != overflows)
+}
+
 @Test @MainActor func overflowMenusOpenOnlyForTheMenuBarsApp() {
     let menu = AppMenu(checkAccess: { true }, readAttribute: { _, _ in nil }, sleep: { _ in })
     let window = AppMenuItem(title: "Window", element: AXUIElementCreateApplication(100))
