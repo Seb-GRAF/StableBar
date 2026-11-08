@@ -382,3 +382,93 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(store.configuration?.onScreen(.laptop).bar.belowMenuBar == true)
     #expect(store.configuration?.onScreen(.monitor).bar.belowMenuBar == false)
 }
+
+@Test func appMenusShrinkIntoTheRoomLeftBeforeAnythingMovesIntoMoreWidgets() {
+    let planner = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600)
+    let plan = planner.plan(width: 1000, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 30),
+        BarLayoutItem(id: "spaces", position: .left, width: 100),
+        BarLayoutItem(id: "menus", position: .left, width: 400, minimumWidth: 90)
+    ])
+    #expect(plan.overflow.isEmpty)
+    #expect(plan.placements["spaces"] == BarPlacement(x: 48, width: 100))
+    #expect(plan.placements["menus"] == BarPlacement(x: 156, width: 224))
+}
+
+@Test func appMenusMoveIntoMoreWidgetsOnlyAfterTheirNeighbors() {
+    let planner = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600)
+    let plan = planner.plan(width: 1000, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 30),
+        BarLayoutItem(id: "spaces", position: .left, width: 250),
+        BarLayoutItem(id: "menus", position: .left, width: 400, minimumWidth: 120)
+    ])
+    #expect(plan.overflow.map(\.ids) == [["spaces"]])
+    // The room the neighbor left goes back to the menus, short of the More widgets button.
+    #expect(plan.placements["menus"] == BarPlacement(x: 48, width: 294))
+    // Neighbors with a higher priority still win.
+    let kept = planner.plan(width: 1000, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 30, priority: 10),
+        BarLayoutItem(id: "spaces", position: .left, width: 250, priority: 10),
+        BarLayoutItem(id: "menus", position: .left, width: 400, minimumWidth: 120)
+    ])
+    #expect(kept.overflow.map(\.ids) == [["menus"]])
+}
+
+/// When reserving room for More widgets moves another neighbor there too, App menus take the room it leaves, up to
+/// their full width, instead of keeping the width the first pass squeezed them to.
+@Test func appMenusTakeTheRoomOfEveryNeighborThatMovesIntoMoreWidgets() {
+    let plan = AdaptiveBarPlanner(inset: 0, spacing: 8, notchSpacing: 0, notch: nil, overflowWidth: 30).plan(width: 230, items: [
+        BarLayoutItem(id: "a", position: .left, width: 100),
+        BarLayoutItem(id: "b", position: .left, width: 100),
+        BarLayoutItem(id: "menus", position: .left, width: 250, minimumWidth: 90)
+    ])
+    #expect(plan.overflow.map(\.ids) == [["a", "b"]])
+    #expect(plan.placements["menus"] == BarPlacement(x: 0, width: 192))
+}
+
+@Test func appMenusKeepTheirFullWidthWhenThereIsRoom() {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: nil).plan(width: 1000, items: [
+        BarLayoutItem(id: "menus", position: .left, width: 400, minimumWidth: 90)
+    ])
+    #expect(plan.placements["menus"] == BarPlacement(x: 10, width: 400))
+}
+
+@Test func appMenusShowTheMenusThatFitBeforeTheirOverflowButton() {
+    let widths: [CGFloat] = [60, 40, 40, 50, 70]
+    #expect(AppMenuView.visibleCount(widths: widths, available: 300, overflowWidth: 24) == 5)
+    #expect(AppMenuView.visibleCount(widths: widths, available: 260, overflowWidth: 24) == 5)
+    #expect(AppMenuView.visibleCount(widths: widths, available: 200, overflowWidth: 24) == 3)
+    // The app's name always stays.
+    #expect(AppMenuView.visibleCount(widths: widths, available: 50, overflowWidth: 24) == 1)
+    #expect(AppMenuView.visibleCount(widths: [], available: 50, overflowWidth: 24) == 0)
+}
+
+/// A widget squeezed below its width scrolls, except App menus, which hide their last menus, until even their
+/// app name and » don't fit.
+@Test func squeezedWidgetsScrollUnlessTheirMenusCanStillShrink() {
+    #expect(!BarView.scrolls(width: 200, resting: 200, minimum: nil))
+    #expect(BarView.scrolls(width: 150, resting: 200, minimum: nil))
+    #expect(!BarView.scrolls(width: 150, resting: 400, minimum: 120))
+    #expect(BarView.scrolls(width: 100, resting: 400, minimum: 120))
+}
+
+/// App menus that can't move into More widgets and don't fit even at their minimum get squeezed further, and then
+/// scroll like any other squeezed widget.
+@Test func appMenusThatCannotOverflowScrollBelowTheirMinimum() throws {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 16, notch: nil).plan(width: 100, items: [
+        BarLayoutItem(id: "menus", position: .left, width: 400, canOverflow: false, minimumWidth: 120)
+    ])
+    #expect(plan.overflow.isEmpty)
+    let placement = try #require(plan.placements["menus"])
+    #expect(placement == BarPlacement(x: 10, width: 80))
+    #expect(placement.width < 120 - 0.5)
+    #expect(BarView.scrolls(width: placement.width, resting: 400, minimum: 120))
+}
+
+/// App menus measured down to the app name and » set how narrow their unit gets, unless a widget `width` keeps it
+/// as wide as at rest; until they are measured, the unit doesn't shrink.
+@Test func appMenusShrinkOnlyAsFarAsTheirMeasuredNarrowestWidth() {
+    #expect(BarView.minimumWidth(resting: 400, narrowest: 300) == 300)
+    #expect(BarView.minimumWidth(resting: 120, narrowest: 120) == nil)
+    #expect(BarView.minimumWidth(resting: 400, narrowest: nil) == nil)
+}

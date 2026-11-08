@@ -107,10 +107,23 @@ final class AppMenu: NSObject {
     }
 
     func popup(for item: AppMenuItem) -> PopupConfiguration? {
+        guard belongsToMenuBarApp(item) else { return nil }
+        return Self.popup(entries(of: item.element))
+    }
+
+    /// The popup » opens: the menus that don't fit, each opening its own menu. Titles left from the previous app,
+    /// shown until the new app's menus are read, stay out of it.
+    func overflowPopup(for items: [AppMenuItem]) -> PopupConfiguration? {
+        let entries = items.filter(belongsToMenuBarApp).map { item in
+            AppMenuEntry(title: item.title, element: item.element, isEnabled: true, isChecked: false, hasSubmenu: true)
+        }
+        return entries.isEmpty ? nil : Self.popup(entries)
+    }
+
+    private func belongsToMenuBarApp(_ item: AppMenuItem) -> Bool {
         var pid: pid_t = 0
         AXUIElementGetPid(item.element, &pid)
-        guard pid == app?.processIdentifier else { return nil }
-        return Self.popup(entries(of: item.element))
+        return pid == app?.processIdentifier
     }
 
     /// The popup that shows a menu's entries.
