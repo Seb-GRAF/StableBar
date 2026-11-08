@@ -51,7 +51,7 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 ## Decide or ask
 
-Decide on your own: refactors that change no behavior, fixes within an issue's scope, tests, and docs for what the code already does.
+Decide on your own: refactors that change no behavior, fixes within an issue's scope, tests, and docs for what the code already does. [DECISIONS.md](DECISIONS.md) lists what's already settled; reopening one is a maintainer's call.
 
 Ask a maintainer before changing the configuration format, adding a permission or an entitlement, calling private API, adding a dependency, or changing CI, signing or releases. When a choice is a matter of taste, such as a layout or the words on a screen, show two or three options as renders and let the maintainer pick.
 
@@ -78,7 +78,7 @@ A configuration change rarely lives in one place. Before calling one done, say w
 ## Documentation and work artifacts
 
 - The guide in `docs/` is the user manual, and the triage skill relies on it to tell whether something is already supported. When you change how a feature behaves, update its section. Keep the README short: it introduces StableBar and links to the guide. Don't add notes that the code already answers.
-- Don't commit plans, specs, research notes or scratch files, even when a skill suggests it. Keep them outside the repository; the issue or pull request is the record.
+- Don't commit plans, specs, research notes or scratch files, even when a skill suggests it. Keep them outside the repository; the issue or pull request is the record. A decision meant to outlast its pull request, such as a rule, a policy or a choice not to do something, also gets a short entry in [DECISIONS.md](DECISIONS.md).
 
 ## Skills
 

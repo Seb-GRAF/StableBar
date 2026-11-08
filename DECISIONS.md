@@ -1,0 +1,26 @@
+# Decisions
+
+Lasting decisions about how StableBar is built, reviewed and shipped, so they don't get argued again or lost in a closed pull request. Each says what was decided, why, and where. Product choices, such as a feature that was declined, stay in their issues, where the [triage skill](.agents/skills/triage/SKILL.md) finds them.
+
+Add an entry when a pull request sets a rule, a policy or a choice not to do something. Changing or removing one is the maintainers' call.
+
+## Releases
+
+- **Betas from `main`, stable by hand** (2026-10-16, #3, #23). Every push to `main` with a qualifying app change publishes a beta, and a maintainer promotes a beta to stable, so stable ships what beta users ran. There is no develop branch. Pushes that change only docs, CI or tests publish no beta (#309).
+- **Merge commits by default** ([CONTRIBUTING](CONTRIBUTING.md#how-we-work)). semantic-release reads each commit that reaches `main`, so a merge commit keeps every one in the changelog; squash only when the title alone should reach it.
+- **An issue for every `fix`, `feat` or `perf`** (2026-10-31, #390). The issue holds the problem and the decision; the `Linked issue` check enforces it. Other types can skip it.
+
+## Reviews and checks
+
+- **CodeRabbit reviews every pull request** (2026-10-31, #391). It's free for open source, its quiet profile posts only what matters, and it reviews every push. No paid review tools or API keys.
+- **No auto-merge** (2026-10-31). The rules need no approval, but a maintainer merges; nothing merges itself.
+- **A person approves changed screens** (2026-10-31, #395, #397). CI draws before/after screens, and any maintainer, the author too, adds `visual-ok` after looking. A visible change also shows screenshots in its pull request description (2026-11-08, #484).
+- **CI builds with one pinned Xcode** (2026-11-08, #479). A runner image update can't change the toolchain under a pull request; moving to a newer Xcode is a pull request of its own.
+- **Commit messages are checked before they leave the Mac** (2026-11-08, #485). Git hooks check them in every tool, and Claude Code also builds when an agent stops. `STABLEBAR_SKIP_HOOKS=1` turns the hooks off for one person.
+
+## Code
+
+- **Architecture rules are tests** (2026-11-08, #484). `ArchitectureRulesTests` caps `BarStore`'s stored state, `unowned` references and the files that call private macOS API. Its numbers only go down.
+- **Private macOS API is a maintainer's call** (2026-11-08, #484). It stays in the files that use it today; a new one is looked up at runtime and turns its feature off when it's missing.
+- **The configuration file is public API** (2026-10-26, #337). People's files, Store packages and themes depend on it, so changes are additive and a rename or removal needs a migration and a test. An older build skips what a newer one wrote, with a warning; migrations are still open (#223).
+- **Tests keep their own time** (2026-11-08). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
