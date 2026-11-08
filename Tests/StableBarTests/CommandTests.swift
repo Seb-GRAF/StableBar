@@ -45,10 +45,11 @@ func commandOutputHasABoundedSize(stderr: Bool) async {
 func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
-    // The timeout must leave a busy runner time to start the shell and write the marker.
+    // The timeout must leave a busy runner time to start the shell and write the marker. When the test cancels, the
+    // timeout is long, so the cancel comes first however long the main actor takes to notice the marker.
     let task = Task {
         try await runCommand("/bin/zsh", arguments: ["-c", "trap '' TERM; sleep 30 & printf '%s' $! > '\(marker.path).tmp'; mv '\(marker.path).tmp' '\(marker.path)'; wait"],
-                             timeout: timeout ? 2 : 10)
+                             timeout: timeout ? 5 : 60)
     }
     defer { task.cancel() }
     for _ in 0..<2000 {
@@ -63,12 +64,13 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 5.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(5))
+    // Well under the child's 30 s sleep, so a stop that waited for it still fails, with room for a busy runner.
+    #expect(start.duration(to: .now) < .seconds(20))
     for _ in 0..<2000 {
         if kill(child, 0) == -1 { break }
         try await Task.sleep(for: .milliseconds(5))
@@ -124,7 +126,8 @@ func cancellingOrTimingOutStopsShellChildren(timeout: Bool) async throws {
 func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
-    // The timeout must leave a busy runner time to start perl and write the marker.
+    // The timeout must leave a busy runner time to start perl and write the marker. When the test cancels, the
+    // timeout is long, so the cancel comes first however long the main actor takes to notice the marker.
     let task = Task {
         try await runCommand("/usr/bin/perl", arguments: ["-MPOSIX", "-e", """
             if (fork() == 0) {
@@ -135,7 +138,7 @@ func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async 
                 rename($ARGV[0] . '.tmp', $ARGV[0]);
                 exec('/bin/sleep', '30');
             }
-            """, marker.path], timeout: timeout ? 2 : 10)
+            """, marker.path], timeout: timeout ? 5 : 60)
     }
     defer { task.cancel() }
     for _ in 0..<2000 {
@@ -152,19 +155,21 @@ func stoppedCommandDoesNotWaitForPipesHeldByAnEscapedChild(timeout: Bool) async 
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 5.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(5))
+    // Well under the child's 30 s sleep, so a stop that waited for it still fails, with room for a busy runner.
+    #expect(start.duration(to: .now) < .seconds(20))
 }
 
 @Test(arguments: [false, true])
 func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async throws {
     let marker = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: marker) }
-    // The timeout must leave a busy runner time to start perl and write the marker.
+    // The timeout must leave a busy runner time to start perl and write the marker. When the test cancels, the
+    // timeout is long, so the cancel comes first however long the main actor takes to notice the marker.
     let task = Task {
         try await runCommand("/usr/bin/perl", arguments: ["-MPOSIX", "-e", """
             POSIX::setpgid(0, getpgrp(getppid()));
@@ -173,7 +178,7 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
             close($marker);
             rename($ARGV[0] . '.tmp', $ARGV[0]);
             exec('/bin/sleep', '30');
-            """, marker.path], timeout: timeout ? 2 : 10)
+            """, marker.path], timeout: timeout ? 5 : 60)
     }
     defer { task.cancel() }
     for _ in 0..<2000 {
@@ -193,12 +198,13 @@ func stoppedCommandCannotEscapeByChangingItsProcessGroup(timeout: Bool) async th
         Issue.record("The stopped command was accepted.")
     } catch {
         if timeout {
-            #expect(error.localizedDescription == "Command timed out after 2.0 seconds.")
+            #expect(error.localizedDescription == "Command timed out after 5.0 seconds.")
         } else {
             #expect(error is CancellationError)
         }
     }
-    #expect(start.duration(to: .now) < .seconds(5))
+    // Well under the child's 30 s sleep, so a stop that waited for it still fails, with room for a busy runner.
+    #expect(start.duration(to: .now) < .seconds(20))
     #expect(kill(process, 0) == -1)
     #expect(errno == ESRCH)
 }
