@@ -1,10 +1,12 @@
 import AppKit
 import ApplicationServices
 
-/// Hides or shows the macOS menu bar. On a macOS without the private call, it stays as it is.
-func setMenuBarHidden(_ hidden: Bool) {
-    guard let connection = PrivateAPI.mainConnectionID?(), let set = PrivateAPI.setMenuBarInsetAndAlpha else { return }
-    _ = set(connection, 0, 1, hidden ? 0 : 1)
+/// Hides or shows the macOS menu bar. It hides only on a macOS that also lets StableBar reveal it on one display,
+/// which opening an app menu from the bar needs; without those private calls, the menu bar stays as it is.
+func setMenuBarHidden(_ hidden: Bool, canReveal: Bool = PrivateAPI.setMenuBarVisibilityOverride != nil,
+                      setAlpha: ((Int32, Double, Double, Float) -> CGError)? = PrivateAPI.setMenuBarInsetAndAlpha) {
+    guard !hidden || canReveal, let connection = PrivateAPI.mainConnectionID?(), let setAlpha else { return }
+    _ = setAlpha(connection, 0, 1, hidden ? 0 : 1)
 }
 
 /// Reveals or hides the hidden macOS menu bar on one display. On a macOS without the private call, nothing changes.

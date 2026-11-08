@@ -25,3 +25,17 @@ import Testing
     #expect(!displays.isEmpty)
     #expect(PrivateAPI.getActiveSpace?(connection) != 0)
 }
+
+/// Hiding the menu bar on a macOS that can't reveal it on one display would leave the app menus out of reach, so it
+/// stays shown there; showing it always works.
+@Test func theMenuBarStaysShownWhenMacOSCannotRevealIt() {
+    var alphas: [Float] = []
+    let record: (Int32, Double, Double, Float) -> CGError = { _, _, _, alpha in
+        alphas.append(alpha)
+        return .success
+    }
+    setMenuBarHidden(true, canReveal: false, setAlpha: record)
+    setMenuBarHidden(false, canReveal: false, setAlpha: record)
+    setMenuBarHidden(true, canReveal: true, setAlpha: record)
+    #expect(alphas == [1, 0])
+}
