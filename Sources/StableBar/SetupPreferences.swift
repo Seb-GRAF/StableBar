@@ -272,8 +272,10 @@ struct SetupPreferences: Equatable {
                                  added: starter.filter { !ids.contains(Self.id($0)) },
                                  isBelowMenuBarStarter: starter == Self.belowMenuBarStarter)
         }
-        if placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
-        if placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
+        // Widgets from includes or packages mean the bar has changed, even when its file still lists a starter.
+        let isOnlyItsFile = configuration.widgets.map(\.id) == ids
+        if isOnlyItsFile, placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
+        if isOnlyItsFile, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
         let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
             Self.menuBarWidgetIDs.contains(Self.id(widget)) && Self.menuBarStarter.contains(widget)
         }.map(Self.id)

@@ -766,6 +766,20 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(document["widgetOverrides"] == nil)
 }
 
+/// A bar whose file still lists the starter's widgets, but that gets more from a package, has changed: setup keeps
+/// those widgets in mind instead of swapping the starter.
+@Test func setupTreatsABarWithWidgetsFromElsewhereAsChanged() throws {
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    var resolved = document
+    resolved["widgets"] = .array((SetupPreferences.menuBarStarter + SetupPreferences.WidgetSet.meetings.widgets).map(ConfigurationValue.object))
+    let configuration = try JSONDecoder().decode(Configuration.self, from: JSONEncoder().encode(resolved))
+    let edits = try SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
+        .edits(in: configuration, document: document)
+    let added = edits.filter { $0.action == .add }.compactMap { $0.properties?["id"] }
+    #expect(!added.contains(.string("meeting")))
+    #expect(!added.contains(.string("workspaces")))
+}
+
 @Test func setupPointsTheBelowStartersWorkspacesAtTheDetectedManager() throws {
     let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
     #expect(try JSONDecoder().decode(Configuration.self, from: below).workspaceSource == .spaces)
