@@ -21,9 +21,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 ## Code
 
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, `unowned` references and the files that call private macOS API. Its numbers only go down.
-- **Private macOS API is a maintainer's call** (2026-11-08, [#484]). It stays in the files that use it today; a new one is looked up at runtime and turns its feature off when it's missing.
-- **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. Builds since 0.9.0 skip, with a warning, the properties they don't know once the configuration says a newer release wrote it, and older builds stop at the first one; the [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations are still open ([#223]).
-- **Tests keep their own time** (2026-11-08). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
+- **Private macOS API is a maintainer's call** (2026-11-08, [#484], [#490]). Every call lives in `PrivateAPI.swift` and is looked up at runtime, never with `@_silgen_name`, so a macOS without one turns off only its feature.
+- **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. StableBar 0.9.0 and later, and betas built after [#337], skip the properties they don't know, with a warning, once the configuration says a newer release wrote it. Earlier versions stop at the first one. The [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations are still open ([#223]).
+- **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 
 [#3]: https://github.com/Seb-GRAF/StableBar/issues/3
 [#23]: https://github.com/Seb-GRAF/StableBar/pull/23
@@ -37,3 +37,5 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#479]: https://github.com/Seb-GRAF/StableBar/pull/479
 [#484]: https://github.com/Seb-GRAF/StableBar/pull/484
 [#485]: https://github.com/Seb-GRAF/StableBar/pull/485
+[#490]: https://github.com/Seb-GRAF/StableBar/pull/490
+[#491]: https://github.com/Seb-GRAF/StableBar/pull/491
