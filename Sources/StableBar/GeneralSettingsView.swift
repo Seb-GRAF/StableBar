@@ -102,7 +102,9 @@ struct GeneralSettingsView: View {
                     }
                     .id(SettingsSearchResult.updates.id)
                     SettingsGroup("Help") {
-                        SettingRow(title: "Run setup again") {
+                        SettingRow(title: SetupProgress.helpTitle(in: .standard),
+                                   hint: SetupProgress.wasSkipped(in: .standard)
+                                       ? "You skipped setup. Choose your widgets, theme and placement there, and allow what your bar needs." : nil) {
                             Button("Open setup…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
                         }
                         SettingRow(title: "User guide") {

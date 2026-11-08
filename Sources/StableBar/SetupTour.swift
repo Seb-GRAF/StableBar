@@ -909,7 +909,7 @@ struct SetupTourView: View {
                 Text("Skip setup?").font(.system(size: 26, weight: .semibold))
                 Text("""
                     Nothing you chose is saved\(session.changedMenuBar ? ", and the macOS menu bar goes back to how it was" : ""). \
-                    Setup opens again the next time StableBar starts, or from Getting Started… in the menu-bar icon's menu.
+                    Open it again any time with Getting Started… in the menu-bar icon's menu, or in Settings → General.
                     """)
                     .font(.system(size: 14))
                     .foregroundStyle(.white.opacity(0.65))

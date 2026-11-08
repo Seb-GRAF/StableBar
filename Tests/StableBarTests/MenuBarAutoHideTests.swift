@@ -266,3 +266,37 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     session.preferences.placement = placement
     #expect(session.hasChanges)
 }
+
+@Test func setupOpensByItselfUntilItIsFinishedOrSkipped() throws {
+    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    #expect(SetupProgress.opensAtLaunch(in: defaults))
+    #expect(!SetupProgress.wasSkipped(in: defaults))
+    defaults.set(true, forKey: SetupProgress.skippedKey)
+    #expect(!SetupProgress.opensAtLaunch(in: defaults))
+    #expect(SetupProgress.wasSkipped(in: defaults))
+    defaults.set(true, forKey: SetupProgress.completedKey)
+    #expect(!SetupProgress.opensAtLaunch(in: defaults))
+    #expect(!SetupProgress.wasSkipped(in: defaults))
+}
+
+@MainActor
+@Test func skippingSetupRemembersItAndFinishingMarksItCompleted() async throws {
+    let (skipped, skippedFixture, skippedStore, _) = try setupSession { _ in .allowed }
+    defer { skippedStore.stop(); skippedFixture.close() }
+    skipped.cancel()
+    #expect(SetupProgress.wasSkipped(in: skipped.system.defaults))
+    // The menu bar already hides, so a bar on the top edge needs no Automation access to finish.
+    let (finished, finishedFixture, finishedStore, _) = try setupSession(menuBarHides: true) { _ in .allowed }
+    defer { finishedStore.stop(); finishedFixture.close() }
+    finished.finish()
+    #expect(finished.finished)
+    #expect(finished.system.defaults.bool(forKey: SetupProgress.completedKey))
+    #expect(!SetupProgress.opensAtLaunch(in: finished.system.defaults))
+}
+
+@Test func settingsOffersToFinishASkippedSetup() throws {
+    let defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    #expect(SetupProgress.helpTitle(in: defaults) == "Run setup again")
+    defaults.set(true, forKey: SetupProgress.skippedKey)
+    #expect(SetupProgress.helpTitle(in: defaults) == "Finish setting up")
+}
