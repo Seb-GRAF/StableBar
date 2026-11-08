@@ -1232,6 +1232,8 @@ final class WidgetPresentation {
     /// The number of the last output `show` was given.
     @ObservationIgnored private var shownOutput = 0
     @ObservationIgnored private(set) var expiry: Task<Void, Never>?
+    /// What a `temporary` output's duration runs on; tests set a clock they advance themselves.
+    @ObservationIgnored var clock: any Clock<Duration> = ContinuousClock()
 
     /// Assigns only what changed: equal assignments must not invalidate the widget's views. With a
     /// `visibility` animation, a change of `hidden` animates the widget in or out.
@@ -1275,8 +1277,9 @@ final class WidgetPresentation {
         temporary = next
         expiry?.cancel()
         if temporaryFields != next.fields { setTemporaryFields(next.fields, animation: animation) }
+        let clock = clock
         expiry = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(next.duration))
+            try? await clock.sleep(for: .seconds(next.duration))
             guard !Task.isCancelled, let self else { return }
             temporary = nil
             setTemporaryFields(nil, animation: animation)

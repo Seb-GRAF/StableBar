@@ -334,6 +334,8 @@ private func output(_ json: String) throws -> ScriptOutput {
     let a = try #require(store.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
+    let clock = TestClock()
+    first.clock = clock
     try await confirmation("a shows its temporary fields", expectedCount: 1) { shown in
         try await confirmation("b stays valid", expectedCount: 0) { invalidated in
             withObservationTracking { _ = first.temporaryFields } onChange: { shown() }
@@ -344,10 +346,17 @@ private func output(_ json: String) throws -> ScriptOutput {
     #expect(first.temporaryFields == ["text": "62"])
     try a.accept(output(#"{"text":"","icon":"speaker.wave.2"}"#))
     #expect(first.temporaryFields == ["text": "62"])
+    try await clock.waitForSleepers()
+    clock.advance(by: .milliseconds(999))
+    await TestClock.settle()
+    #expect(first.temporaryFields == ["text": "62"])
+    clock.advance(by: .milliseconds(1))
     _ = try await expiry(of: first)
+    #expect(clock.sleeping == 0)
     try await confirmation("Nothing runs after it expires", expectedCount: 0) { changed in
         withObservationTracking { _ = first.temporaryFields; _ = first.style; _ = first.hidden } onChange: { changed() }
-        try await Task.sleep(for: .milliseconds(300))
+        clock.advance(by: .seconds(1))
+        await TestClock.settle()
     }
 }
 
@@ -355,10 +364,14 @@ private func output(_ json: String) throws -> ScriptOutput {
     let store = try makeStore(threeWidgets)
     let a = try #require(store.scripts["a"])
     let first = try #require(store.presentations["a"])
+    let clock = TestClock()
+    first.clock = clock
     try a.accept(output(#"{"text":"","temporary":{"fields":{"text":"61"},"duration":0.2}}"#))
     try a.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":30}}"#))
     #expect(first.temporaryFields == ["text": "62"])
-    try await Task.sleep(for: .milliseconds(600))
+    try await clock.waitForSleepers()
+    clock.advance(by: .milliseconds(600))
+    await TestClock.settle()
     #expect(first.temporaryFields == ["text": "62"], "The first temporary output's expiry was cancelled")
     try await confirmation("The same temporary output leaves it alone", expectedCount: 0) { changed in
         withObservationTracking { _ = first.temporaryFields } onChange: { changed() }
@@ -383,14 +396,20 @@ private func output(_ json: String) throws -> ScriptOutput {
     let a = try #require(store.scripts["a"])
     let b = try #require(store.scripts["b"])
     let first = try #require(store.presentations["a"])
+    let clock = TestClock()
+    first.clock = clock
     let copied = #"{"text":"","icon":"doc.on.doc","temporary":{"fields":{"text":"Copied"},"duration":0.2}}"#
     try a.accept(output(copied))
     #expect(first.temporaryFields == ["text": "Copied"])
+    try await clock.waitForSleepers()
+    clock.advance(by: .milliseconds(200))
     _ = try await expiry(of: first)
     try b.accept(output(#"{"text":"B"}"#))
     #expect(first.temporaryFields == nil, "Applying a's output again doesn't show it again")
     try a.accept(output(copied))
     #expect(first.temporaryFields == ["text": "Copied"])
+    try await clock.waitForSleepers()
+    clock.advance(by: .milliseconds(200))
     _ = try await expiry(of: first)
 }
 

@@ -127,6 +127,8 @@ final class ScriptWidget {
     /// A continuous run open this long is steady: an update it sends, or the failure that ends it,
     /// starts a new failure streak. Tests shorten it.
     @ObservationIgnored var steadyRun: Duration = .seconds(10)
+    /// What runs are timed with and the next run waits on; tests set a clock they advance themselves.
+    @ObservationIgnored var clock: any Clock<Duration> = ContinuousClock()
 
     func start(command: String, interval: Double?, timeout: Double = 10, environment: [String: String] = [:]) {
         start(schedule: SourceSchedule(interval: interval)) {
@@ -182,7 +184,7 @@ final class ScriptWidget {
                 diagnostics.lastEvent = event.sender
                 diagnostics.lastStarted = Date()
                 diagnostics.executionCount += 1
-                let started = ContinuousClock.now
+                let elapsed = clock.stopwatch()
                 var delay = schedule.interval
                 // The single-slot queue: while an update is being applied, only the newest waits. A
                 // failure ends the run, so it waits outside the slot until the output sent before it is applied.
@@ -201,7 +203,7 @@ final class ScriptWidget {
                         guard case let .output(result, process) = update else { continue }
                         if let process { record(process) }
                         try accept(result.get())
-                        if schedule.continuous, started.duration(to: .now) >= steadyRun { diagnostics.consecutiveFailures = 0 }
+                        if schedule.continuous, elapsed() >= steadyRun { diagnostics.consecutiveFailures = 0 }
                     }
                     try Task.checkCancellation()
                     if case let (error, process)? = failure.withLock({ $0 }) {
@@ -218,7 +220,7 @@ final class ScriptWidget {
                         onUpdate?()
                     }
                     diagnostics.failureCount += 1
-                    if schedule.continuous, started.duration(to: .now) >= steadyRun { diagnostics.consecutiveFailures = 0 }
+                    if schedule.continuous, elapsed() >= steadyRun { diagnostics.consecutiveFailures = 0 }
                     diagnostics.consecutiveFailures += 1
                     if let failure = error as? CommandFailure {
                         if !failure.stdout.isEmpty { diagnostics.lastStdout = String(decoding: failure.stdout.suffix(16_384), as: UTF8.self) }
@@ -229,14 +231,14 @@ final class ScriptWidget {
                     }
                 }
                 source.stop()
-                let duration = started.duration(to: .now).components
+                let duration = elapsed().components
                 diagnostics.lastDuration = Double(duration.seconds) + Double(duration.attoseconds) / 1e18
                 diagnostics.running = false
                 diagnostics.nextDelay = delay
                 if let delay {
                     timer = Task {
                         do {
-                            try await Task.sleep(for: .seconds(delay))
+                            try await clock.sleep(for: .seconds(delay))
                             try Task.checkCancellation()
                             if schedule.continuous { diagnostics.restartCount += 1 }
                             events.yield(ScriptEvent(sender: "routine"))
@@ -320,5 +322,13 @@ final class ScriptWidget {
         cancel()
         makeSource = nil
         diagnostics.suspended = false
+    }
+}
+
+private extension Clock where Duration == Swift.Duration {
+    /// Starts measuring on this clock: each call of what it returns gives the time since.
+    func stopwatch() -> () -> Swift.Duration {
+        let start = now
+        return { start.duration(to: self.now) }
     }
 }
