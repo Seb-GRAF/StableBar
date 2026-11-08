@@ -710,6 +710,9 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(SetupPreferences.clockFormat(locale: Locale(identifier: "en_US@hours=h23")) == "EEE MMM d  HH:mm")
     #expect(SetupPreferences.clockFormat(locale: us, hours: .twentyFourHour) == "EEE MMM d  HH:mm")
     #expect(SetupPreferences.clockFormat(locale: uk, hours: .twelveHour) == "EEE d MMM  h:mm a")
+    // The choices write their own hour cycle rather than a template's, which macOS can force to the other cycle.
+    #expect(SetupPreferences.clockFormat(locale: Locale(identifier: "ja_JP"), hours: .twelveHour).hasSuffix("  h:mm a"))
+    #expect(SetupPreferences.clockFormat(locale: Locale(identifier: "ja_JP"), hours: .twentyFourHour).hasSuffix("  HH:mm"))
 }
 
 /// A new configuration's clock follows the Mac rather than the bundled starter's 24-hour clock in day-month order.

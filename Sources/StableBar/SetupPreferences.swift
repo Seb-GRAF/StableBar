@@ -310,9 +310,10 @@ struct SetupPreferences: Equatable {
                 .replacingOccurrences(of: "\u{202F}", with: " ")
                 .replacingOccurrences(of: "\u{00A0}", with: " ")
         }
+        // The 24- and 12-hour choices keep their own time pattern: macOS can force a template to the other hour cycle.
         let time = switch hours {
-        case .twentyFourHour: pattern("HHmm", or: "HH:mm")
-        case .twelveHour: pattern("hmma", or: "h:mm a")
+        case .twentyFourHour: "HH:mm"
+        case .twelveHour: "h:mm a"
         case .current: pattern("jmm", or: "HH:mm")
         }
         return pattern("EEEdMMM", or: "EEE d MMM") + "  " + time
