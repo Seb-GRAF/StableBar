@@ -443,6 +443,9 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     }
     try await advance(clock, by: .milliseconds(400)) { reading }
     #expect(reading)
+    // The read's sleep starts on another executor, after `reading` is set.
+    try await waitForPopup { clock.sleeping == 1 }
+    try #require(clock.sleeping == 1)
     if leaves { popup.hover(false, store: store, anchor: anchor) {} }
     await letPass(.milliseconds(500), on: clock)
     #expect(popup.isOpen == !leaves)
