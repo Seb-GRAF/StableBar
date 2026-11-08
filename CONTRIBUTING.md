@@ -4,6 +4,8 @@
 
 Requires macOS 14+ and Xcode's Swift 6 toolchain. Optional workspace widgets require AeroSpace 0.21+ or yabai on your login shell's `PATH`.
 
+CI builds with the Xcode that `DEVELOPER_DIR` names in [ci.yml](.github/workflows/ci.yml), currently 26.6, so an update of GitHub's runner image can't change it. A newer Xcode works locally; when CI should move to it, change `DEVELOPER_DIR` in a pull request of its own.
+
 Quit the running app before rebuilding its bundle.
 
 ```sh

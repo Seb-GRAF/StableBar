@@ -18,6 +18,11 @@ on:
 permissions:
   contents: read
 
+# Every macOS job builds with this Xcode, so an update of the runner image can't change the toolchain
+# under a pull request. Move to a newer Xcode in a pull request of its own.
+env:
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
 # A stable release gets its own group, so a newer push can't cancel it while it waits.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && 'stable' || github.ref }}
@@ -105,6 +110,7 @@ jobs:
       - name: Build
         run: |
           swift --version
+          xcodebuild -version
           swift build --build-tests
       - name: Test
         run: swift test --skip-build
