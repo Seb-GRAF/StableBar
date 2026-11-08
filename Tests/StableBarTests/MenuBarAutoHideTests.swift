@@ -351,4 +351,9 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     defer { store.stop(); fixture.close() }
     #expect(session.workspaceSource == expected)
     #expect(store.configuration?.workspaceSource == expected)
+    // Finishing saves what the preview showed.
+    session.finish()
+    #expect(session.finished)
+    let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: fixture.url))
+    #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
