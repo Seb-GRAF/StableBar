@@ -287,6 +287,12 @@ final class SetupSession {
         }
     }
 
+    /// Whether choosing to replace the menu bar has taken effect: the bar goes on the top edge and the macOS menu bar
+    /// hides, whether setup hid it or it already was.
+    var replacesMenuBar: Bool {
+        preferences.placement == .top && menuBarHides && placementAwaitingAccess == nil
+    }
+
     /// Setup's steps, in the order the tour shows them. Where the bar sits comes first, since the presets and what
     /// the bar needs depend on it, and the permissions come after the choices that decide them.
     enum Step: Int, CaseIterable { case placement, look, touches, permissions, tryIt }

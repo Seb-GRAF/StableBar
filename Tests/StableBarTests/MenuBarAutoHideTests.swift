@@ -463,3 +463,20 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(session.isAllowed(.automation))
     #expect(!session.waitsForPermissions(at: .permissions))
 }
+
+/// Replace the menu bar has taken effect once the bar goes on the top edge and the macOS menu bar hides, whether
+/// setup hid it or it already was, so the intro's question moves on either way. A choice waiting for Automation
+/// hasn't.
+@MainActor
+@Test func setupKnowsWhenReplacingTheMenuBarTookEffect() async throws {
+    let (hidden, hiddenFixture, hiddenStore, hiddenChanges) = try setupSession(menuBarHides: true) { _ in .allowed }
+    defer { hiddenStore.stop(); hiddenFixture.close() }
+    #expect(!hidden.replacesMenuBar)
+    await hidden.place(.top)
+    #expect(hiddenChanges().isEmpty)
+    #expect(hidden.replacesMenuBar)
+    let (refused, refusedFixture, refusedStore, _) = try setupSession { _ in .denied }
+    defer { refusedStore.stop(); refusedFixture.close() }
+    await refused.place(.top)
+    #expect(!refused.replacesMenuBar)
+}

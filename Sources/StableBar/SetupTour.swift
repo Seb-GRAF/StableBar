@@ -101,8 +101,8 @@ struct SetupTourView: View {
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .onChange(of: session.menuBarHides) { _, hides in
-            if hides && menuBarQuestion && session.preferences.placement == .top { land() }
+        .onChange(of: session.menuBarHides) {
+            if menuBarQuestion && session.replacesMenuBar { land() }
         }
         .task {
             guard let configuration = session.store.configuration else { return }
@@ -282,7 +282,11 @@ struct SetupTourView: View {
                 .position(x: size.width / 2, y: stage.minY - 110)
                 HStack(spacing: 24) {
                     Button {
-                        Task { await session.place(.top) }
+                        Task {
+                            await session.place(.top)
+                            // The menu bar may already hide, so nothing changes visibly; the choice still took effect.
+                            if menuBarQuestion && session.replacesMenuBar { land() }
+                        }
                     } label: {
                         Text("Replace the menu bar").frame(height: 48)
                     }
