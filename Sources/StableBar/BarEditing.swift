@@ -31,7 +31,7 @@ struct BarEditInsertion: Equatable {
 /// Editing never changes visibility, actions or enabled flags in the configuration.
 @MainActor @Observable
 final class BarEditing {
-    private unowned let store: BarStore
+    private weak var store: BarStore?
     private(set) var isActive = false
     let dragSession = WidgetDragSession()
     let addPopover: BarEditAddPopover
@@ -51,13 +51,13 @@ final class BarEditing {
     }
 
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
-    var isAvailable: Bool { store.configuration != nil }
+    var isAvailable: Bool { store?.configuration != nil }
     var allowsWidgetActions: Bool { !isActive }
 
     func toggle() { if isActive { end() } else { begin() } }
 
     func begin() {
-        guard isAvailable, !isActive else { return }
+        guard isAvailable, !isActive, let store else { return }
         store.onEndCustomizationEditing?()
         store.onEndThemeTrial?()
         store.endThemeTrial()
@@ -80,7 +80,7 @@ final class BarEditing {
         error = nil
         errorDisplayID = nil
         measuredHeights = [:]
-        store.onConfigurationChange?()
+        store?.onConfigurationChange?()
     }
 
     func screensChanged() { addPopover.close(focusBar: false) }
@@ -98,19 +98,20 @@ final class BarEditing {
         return true
     }
 
-    var canUndo: Bool { isActive && store.customizationHistory.canUndo }
+    var canUndo: Bool { isActive && store?.customizationHistory.canUndo == true }
 
     func undo() {
-        guard isActive else { return }
-        perform(on: store.activeDisplayID) { try self.store.customizationHistory.undo() }
+        guard isActive, let store else { return }
+        perform(on: store.activeDisplayID) { try self.store?.customizationHistory.undo() }
     }
 
     func redo() {
-        guard isActive else { return }
-        perform(on: store.activeDisplayID) { try self.store.customizationHistory.redo() }
+        guard isActive, let store else { return }
+        perform(on: store.activeDisplayID) { try self.store?.customizationHistory.redo() }
     }
 
     func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
+        guard let store else { return BarWidgetVisibility(reasons: []) }
         let presentation = store.presentations[widget.id]
         let activeID = store.workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? store.activeDisplayID
         var reasons: [BarWidgetVisibility.Reason] = []
@@ -126,10 +127,11 @@ final class BarEditing {
     /// Turned-off widgets aren't on the bar, even while editing: removing a package or include
     /// widget turns it off, so it leaves the bar. Settings → Your bar can turn it on again.
     func widgets(on display: BarDisplay) -> [WidgetConfiguration] {
-        (store.configuration?.onScreen(ScreenKind(display)).widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
+        (store?.configuration?.onScreen(ScreenKind(display)).widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
     }
 
     func entries(on display: BarDisplay) -> [BarEditWidget] {
+        guard let store else { return [] }
         let widgets = widgets(on: display)
         let names = WidgetDisplayName.names(for: store.configuration?.widgets ?? [], packageNames: store.widgetPackageNames,
                                            providers: store.configuration?.providers ?? [:])
@@ -142,6 +144,7 @@ final class BarEditing {
     }
 
     func hasContent(_ widget: WidgetConfiguration) -> Bool {
+        guard let store else { return false }
         let label = store.label(for: widget).overlaid(by: store.presentations[widget.id]?.temporaryFields)
         let output = store.scripts[widget.id]?.output
         let layout = widget.layout ?? widget.defaultLayout(label, output: output,
@@ -157,7 +160,7 @@ final class BarEditing {
     }
 
     func geometry(for display: BarDisplay) -> BarGeometry? {
-        guard let config = store.configuration?.onScreen(ScreenKind(display)) else { return nil }
+        guard let config = store?.configuration?.onScreen(ScreenKind(display)) else { return nil }
         guard isActive, let height = measuredHeights[display.id] else { return config.barGeometry(for: display) }
         return BarGeometry(layoutHeight: max(config.bar.height * CGFloat(config.bar.scale(for: display)), height + 2 * config.bar.margin),
                            margin: config.bar.margin, outsideExtent: 0)
@@ -170,7 +173,7 @@ final class BarEditing {
     }
 
     func isMoving(_ id: String) -> Bool {
-        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store.configuration?.widgets,
+        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store?.configuration?.widgets,
               let moving = widgets.first(where: { $0.id == movingID }),
               let widget = widgets.first(where: { $0.id == id }) else { return false }
         return widget.id == moving.id || (moving.group != nil && moving.group == widget.group)
@@ -208,14 +211,14 @@ final class BarEditing {
         let height = ceil(height)
         guard measuredHeights[displayID] != height else { return }
         measuredHeights[displayID] = height
-        store.onConfigurationChange?()
+        store?.onConfigurationChange?()
     }
 
     /// Frames and pointer share the section viewport's coordinates, including its scroll offset.
     /// Groups are one insertion target, even when a member's frame is missing.
     func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
                     frames: [String: CGRect], addSlot: CGRect? = nil) -> BarEditInsertion? {
-        guard isActive, let shared = store.configuration else { return nil }
+        guard isActive, let shared = store?.configuration else { return nil }
         let configuration = screenKind(displayID).map(shared.onScreen) ?? shared
         return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, y: y, frames: frames, addSlot: addSlot,
                                           widgets: configuration.widgets, groups: configuration.groups)
@@ -232,7 +235,7 @@ final class BarEditing {
     }
 
     func finishDrop() {
-        guard let dropped, slidingIn else { return }
+        guard let dropped, slidingIn, let store else { return }
         slidingIn = false
         pendingDrops.append((store.configuration!.widgets.filter { isMoving($0.id) }.map(\.id), dropped.target, dropped.token))
         enqueue(on: dropped.target.displayID) {
@@ -247,17 +250,19 @@ final class BarEditing {
                     }
                 }
             }
-            let edits = try WidgetSetup(store: self.store).editsMoving(dropped.id, to: dropped.target.position,
+            guard let store = self.store else { return }
+            let edits = try WidgetSetup(store: store).editsMoving(dropped.id, to: dropped.target.position,
                 before: dropped.target.before, on: self.screenKind(dropped.target.displayID))
-            try await self.store.customizationHistory.moveWidget(dropped.id, edits: edits)
+            try await store.customizationHistory.moveWidget(dropped.id, edits: edits)
         }
     }
 
     func move(_ id: String, to position: WidgetPosition, before anchor: String? = nil, on displayID: Int? = nil) {
         guard isActive else { return }
         enqueue(on: displayID) {
-            let edits = try WidgetSetup(store: self.store).editsMoving(id, to: position, before: anchor, on: self.screenKind(displayID))
-            try await self.store.customizationHistory.moveWidget(id, edits: edits)
+            guard let store = self.store else { return }
+            let edits = try WidgetSetup(store: store).editsMoving(id, to: position, before: anchor, on: self.screenKind(displayID))
+            try await store.customizationHistory.moveWidget(id, edits: edits)
         }
     }
 
@@ -265,24 +270,28 @@ final class BarEditing {
         guard isActive else { return }
         // Step over the turned-off widgets the bar leaves out.
         enqueue(on: displayID) {
-            let edits = try WidgetSetup(store: self.store).editsMoving(id, by: offset, on: self.screenKind(displayID), listed: \.enabled)
-            try await self.store.customizationHistory.moveWidget(id, edits: edits)
+            guard let store = self.store else { return }
+            let edits = try WidgetSetup(store: store).editsMoving(id, by: offset, on: self.screenKind(displayID), listed: \.enabled)
+            try await store.customizationHistory.moveWidget(id, edits: edits)
         }
     }
 
     func remove(_ id: String, on displayID: Int? = nil) {
         guard isActive else { return }
-        perform(on: displayID) { try WidgetSetup(store: self.store).remove(id) }
+        perform(on: displayID) {
+            guard let store = self.store else { return }
+            try WidgetSetup(store: store).remove(id)
+        }
     }
 
     func set(_ id: String, _ properties: [String: ConfigurationValue], on displayID: Int) {
         perform(on: displayID) {
-            try self.store.customizationHistory.change(ConfigurationEdit(action: .set, id: id, properties: properties))
+            try self.store?.customizationHistory.change(ConfigurationEdit(action: .set, id: id, properties: properties))
         }
     }
 
     func select(_ id: String) {
-        guard isActive, store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
+        guard isActive, let store, store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
         store.onCustomizeWidget?(id)
     }
 
@@ -295,7 +304,7 @@ final class BarEditing {
             enqueue(on: displayID) { try action() }
             return
         }
-        store.onEndCustomizationEditing?()
+        store?.onEndCustomizationEditing?()
         do { try action(); error = nil; errorDisplayID = nil }
         catch { report(error, on: displayID) }
     }
@@ -310,7 +319,7 @@ final class BarEditing {
                 if queuedEdits == 0 { editTask = nil }
             }
             guard isActive else { return }
-            store.onEndCustomizationEditing?()
+            store?.onEndCustomizationEditing?()
             do { try await action(); error = nil; errorDisplayID = nil }
             catch { report(error, on: displayID) }
         }

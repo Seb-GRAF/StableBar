@@ -69,6 +69,16 @@ final class TestClock: Clock, @unchecked Sendable {
     @MainActor static func settle() async {
         for _ in 0..<20 { await Task.yield() }
     }
+
+    /// Waits until `count` tasks sleep on this clock, counting polls rather than watching a deadline, so a test can
+    /// advance it once the code under test has started waiting.
+    @MainActor func waitForSleepers(_ count: Int = 1) async throws {
+        for _ in 0..<200 {
+            if sleeping == count { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(sleeping == count)
+    }
 }
 
 @Test func aTestClockSleepEndsOnlyWhenTheClockReachesIt() async throws {

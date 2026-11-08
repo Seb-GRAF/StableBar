@@ -108,7 +108,7 @@ private struct PinnedPopup {
     let panel: PopupPanel
     let shadow: NSPanel?
     weak var anchor: NSView?
-    unowned let store: BarStore
+    weak var store: BarStore?
     /// The popup's top-left corner under its widget, and the visible part of that screen.
     let home: NSPoint
     let homeScreen: NSRect
@@ -717,7 +717,7 @@ final class WidgetPopup {
         spots[id] = (popup.panel.frame, pins.resized.contains(id), false)
         close()
         // The widget can leave the bar, with a configuration change or its display, while its popup is pinned.
-        guard let anchor = popup.anchor else {
+        guard let anchor = popup.anchor, let store = popup.store else {
             dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source, animation: popup.animation)
             return
         }
@@ -728,13 +728,13 @@ final class WidgetPopup {
         shown = popup.shown
         widgetID = id
         self.anchor = anchor
-        store = popup.store
+        self.store = store
         animation = popup.animation
         transition = popup.transition
         source = popup.source
         morphPopups = popup.morphPopups
         pinned = true
-        popup.store.setPopupVisibleWidget(id, anchor: anchor)
+        store.setPopupVisibleWidget(id, anchor: anchor)
         watchEvents(anchor: anchor, pinnable: true)
         // A popup keeps the size it was given, so a wider one may need to move left to stay on its screen.
         let size = popup.panel.frame.size
