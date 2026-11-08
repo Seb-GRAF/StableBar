@@ -38,13 +38,18 @@ private func swiftSources() throws -> [(path: String, text: String)] {
     }
 }
 
-/// Private macOS API stays in the files that use it today; a new one is a maintainer's decision.
-@Test func privateAPIStaysInItsFiles() throws {
-    let allowed: Set = ["StableBar/MenuBarDelay.swift", "StableBar/Spaces.swift", "StableBar/WidgetActions.swift"]
+/// Private macOS API is looked up at runtime in PrivateAPI.swift, so a macOS without one of its calls only turns that
+/// feature off; a new call is a maintainer's decision. `@_silgen_name` binds at launch, so it's never used.
+@Test func privateAPIStaysInItsFile() throws {
     let files = try swiftSources()
     #expect(files.count > 100)
-    for file in files where !allowed.contains(file.path) {
-        #expect(file.text.firstMatch(of: #/@_silgen_name|\b(dlsym|dlopen)\b|PrivateFrameworks/#) == nil,
-                "\(file.path) calls private macOS API: ask a maintainer first (AGENTS.md)")
+    for file in files {
+        #expect(file.text.firstMatch(of: #/@_silgen_name/#) == nil, """
+            \(file.path) binds a private symbol at launch, so a macOS without it can't open StableBar: \
+            look it up in PrivateAPI.swift (AGENTS.md)
+            """)
+        guard file.path != "StableBar/PrivateAPI.swift" else { continue }
+        #expect(file.text.firstMatch(of: #/\b(dlsym|dlopen)\b|PrivateFrameworks/#) == nil,
+                "\(file.path) calls private macOS API: add it to PrivateAPI.swift, with a maintainer's OK (AGENTS.md)")
     }
 }

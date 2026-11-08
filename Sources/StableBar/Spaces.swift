@@ -1,11 +1,5 @@
 import AppKit
 
-@_silgen_name("CGSMainConnectionID") private func CGSMainConnectionID() -> Int32
-@_silgen_name("CGSGetActiveSpace") private func CGSGetActiveSpace(_ connection: Int32) -> UInt64
-@_silgen_name("CGSCopyManagedDisplaySpaces") private func CGSCopyManagedDisplaySpaces(_ connection: Int32) -> CFArray
-@_silgen_name("CGSCopySpacesForWindows")
-private func CGSCopySpacesForWindows(_ connection: Int32, _ mask: Int32, _ windows: CFArray) -> CFArray
-
 private struct ManagedDisplay: Decodable {
     let identifier: String
     let currentSpace: ManagedSpace
@@ -73,12 +67,17 @@ func spacesSnapshot(displays: Data, windows: Data, windowSpaces: [Int: [UInt64]]
     }
 }
 
-func currentSpaces() throws -> [Workspace] {
-    let connection = CGSMainConnectionID()
+func currentSpaces(copyManagedDisplaySpaces: ((Int32) -> Unmanaged<CFArray>?)? = PrivateAPI.copyManagedDisplaySpaces)
+    throws -> [Workspace] {
+    guard let connection = PrivateAPI.mainConnectionID?(), let getActiveSpace = PrivateAPI.getActiveSpace,
+          let copySpacesForWindows = PrivateAPI.copySpacesForWindows,
+          let managedDisplaySpaces = copyManagedDisplaySpaces?(connection)?.takeRetainedValue() else {
+        throw CommandFailure(message: "This version of macOS doesn't let StableBar read its Spaces.")
+    }
     let info = CGWindowListCopyWindowInfo(.excludeDesktopElements, kCGNullWindowID) as! [[String: Any]]
     let windowSpaces = info.reduce(into: [Int: [UInt64]]()) { result, window in
         let id = window[kCGWindowNumber as String] as! Int
-        result[id] = CGSCopySpacesForWindows(connection, 7, [id] as CFArray) as? [UInt64]
+        result[id] = copySpacesForWindows(connection, 7, [id] as CFArray)?.takeRetainedValue() as? [UInt64]
     }
     let screens = NSScreen.screens.map { screen in
         let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value
@@ -88,9 +87,9 @@ func currentSpaces() throws -> [Workspace] {
         if app.activationPolicy == .regular { result[app.processIdentifier] = app.bundleIdentifier }
     }
     return try spacesSnapshot(
-        displays: PropertyListSerialization.data(fromPropertyList: CGSCopyManagedDisplaySpaces(connection), format: .binary, options: 0),
+        displays: PropertyListSerialization.data(fromPropertyList: managedDisplaySpaces, format: .binary, options: 0),
         windows: PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0),
-        windowSpaces: windowSpaces, activeSpace: CGSGetActiveSpace(connection), screenUUIDs: screens, bundleIDs: bundleIDs)
+        windowSpaces: windowSpaces, activeSpace: getActiveSpace(connection), screenUUIDs: screens, bundleIDs: bundleIDs)
 }
 
 func switchToDesktop(_ number: Int) throws {

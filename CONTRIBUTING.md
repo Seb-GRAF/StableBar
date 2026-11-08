@@ -78,7 +78,7 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 - [WidgetPopup.swift](Sources/StableBar/WidgetPopup.swift): anchored panel, dismissal and screen placement.
 - [StableBarApp.swift](Sources/StableBar/StableBarApp.swift): non-activating panels and application lifecycle.
 
-There is no web view or custom drawing loop. Private macOS API is limited to hiding and revealing the macOS menu bar ([MenuBarDelay.swift](Sources/StableBar/MenuBarDelay.swift)), reading Spaces ([Spaces.swift](Sources/StableBar/Spaces.swift)) and Lock Screen ([WidgetActions.swift](Sources/StableBar/WidgetActions.swift)); [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
+There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
 
 ## How we work
 
