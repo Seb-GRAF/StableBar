@@ -175,6 +175,8 @@ final class WorkspaceStore {
     private(set) var mode: String?
     /// Injectable executable lookup lets lifecycle tests use a scratch event stream.
     var executablePath: (() throws -> String)?
+    /// Where diagnostics go, such as how a subscription ended; tests read them instead.
+    var log: (String) -> Void = { FileHandle.standardError.write(Data("StableBar: \($0)\n".utf8)) }
     private(set) var tracksWorkspaces = true
     var isRunning: Bool { task != nil }
     private var refreshTask: Task<Void, Never>?
@@ -280,6 +282,15 @@ final class WorkspaceStore {
                         if omniwm { failure = receiveOmniWM(line) ?? failure }
                         else if let event = try? JSONDecoder().decode(AeroSpaceEvent.self, from: line) { receive(event) }
                     }
+                    try Task.checkCancellation()
+                    if failure == nil {
+                        // Says how the connection ended, so a disconnect nobody can reproduce, such as on a busy CI
+                        // runner, shows whether the process exited, was killed or only closed its output.
+                        let reason = await Self.endReason(of: stream)
+                        // Stopping or reconnecting the store while it waited ended the subscription, not a failure.
+                        try Task.checkCancellation()
+                        log("the \(title) subscription ended: \(reason).")
+                    }
                     throw CommandFailure(message: failure ?? "\(title) disconnected. Reconnecting…")
                 } catch {
                     if Task.isCancelled { return }
@@ -296,6 +307,19 @@ final class WorkspaceStore {
                 catch { return }
             }
         }
+    }
+
+    /// How a subscription process ended once its output closed: its exit status or signal, or that it still runs.
+    nonisolated static func endReason(of process: Process) async -> String {
+        // The output closes just before the process exits.
+        for _ in 0..<20 {
+            guard process.isRunning else { break }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        if process.isRunning { return "its output closed while it kept running" }
+        return process.terminationReason == .uncaughtSignal
+            ? "it was killed by signal \(process.terminationStatus)"
+            : "it exited with status \(process.terminationStatus)"
     }
 
     func receive(_ event: AeroSpaceEvent) {
