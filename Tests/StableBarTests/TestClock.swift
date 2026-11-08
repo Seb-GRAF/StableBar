@@ -71,9 +71,10 @@ final class TestClock: Clock, @unchecked Sendable {
     }
 
     /// Waits until `count` tasks sleep on this clock, counting polls rather than watching a deadline, so a test can
-    /// advance it once the code under test has started waiting.
+    /// advance it once the code under test has started waiting. A sleep starts on another executor, which a busy
+    /// runner can keep waiting, so the polls are many.
     @MainActor func waitForSleepers(_ count: Int = 1) async throws {
-        for _ in 0..<200 {
+        for _ in 0..<500 {
             if sleeping == count { return }
             try await Task.sleep(for: .milliseconds(10))
         }

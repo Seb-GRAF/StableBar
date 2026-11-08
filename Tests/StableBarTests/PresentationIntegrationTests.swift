@@ -17,11 +17,15 @@ private var presentationRepository: URL {
     }
 }
 
-/// Moves `clock` on by `step` each time the popup waits on it, until `done`, at most ten times.
+/// Moves `clock` on by `step` each time the popup waits on it, until `done`, at most ten times. A sleep starts on
+/// another executor, so each step waits for it with as many polls as `TestClock.waitForSleepers`.
 @MainActor private func advance(_ clock: TestClock, by step: Duration = .milliseconds(200),
                                 until done: () -> Bool) async throws {
     for _ in 0..<10 {
-        try await waitForPopup { done() || clock.sleeping > 0 }
+        for _ in 0..<500 {
+            if done() || clock.sleeping > 0 { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
         if done() { return }
         clock.advance(by: step)
         await TestClock.settle()
@@ -154,15 +158,14 @@ private var presentationRepository: URL {
     }
 
     hover(true)
-    try await waitForPopup { clock.sleeping == 1 }
+    try await clock.waitForSleepers()
     hover(false)
     #expect(clock.sleeping == 0)
     await letPass(.milliseconds(450), on: clock)
     #expect(presentations.isEmpty)
 
     hover(true)
-    try await waitForPopup { clock.sleeping == 1 }
-    try #require(clock.sleeping == 1)
+    try await clock.waitForSleepers()
     clock.advance(by: .milliseconds(399))
     await TestClock.settle()
     #expect(!popup.isOpen)
@@ -342,12 +345,10 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
                           store: store, anchor: anchors[1])
     }
     for _ in 0..<2 {
-        try await waitForPopup { clock.sleeping == 1 }
-        try #require(clock.sleeping == 1)
+        try await clock.waitForSleepers()
         clock.advance(by: .milliseconds(200))
     }
-    try await waitForPopup { clock.sleeping == 1 }
-    try #require(clock.sleeping == 1)
+    try await clock.waitForSleepers()
     clock.advance(by: .milliseconds(200))
     moving = false
     popup.hover(false, store: store, anchor: anchors[1]) {}
@@ -379,8 +380,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.hoverPopup(true)
     popup.hover(false, store: store, anchor: anchor) {}
     popup.hoverPopup(false)
-    try await waitForPopup { clock.sleeping == 1 }
-    try #require(clock.sleeping == 1)
+    try await clock.waitForSleepers()
     clock.advance(by: .milliseconds(200))
     popup.hoverPopup(true)
     await TestClock.settle()
@@ -444,8 +444,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     try await advance(clock, by: .milliseconds(400)) { reading }
     #expect(reading)
     // The read's sleep starts on another executor, after `reading` is set.
-    try await waitForPopup { clock.sleeping == 1 }
-    try #require(clock.sleeping == 1)
+    try await clock.waitForSleepers()
     if leaves { popup.hover(false, store: store, anchor: anchor) {} }
     await letPass(.milliseconds(500), on: clock)
     #expect(popup.isOpen == !leaves)
@@ -508,8 +507,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.hover(true, store: store, anchor: anchor) {
         popup.open(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: anchor, onHover: true)
     }
-    try await waitForPopup { clock.sleeping == 1 }
-    try #require(clock.sleeping == 1)
+    try await clock.waitForSleepers()
     if remove { popup.removeAnchor(anchor) } else { popup.close() }
     #expect(clock.sleeping == 0)
     await letPass(.milliseconds(500), on: clock)
