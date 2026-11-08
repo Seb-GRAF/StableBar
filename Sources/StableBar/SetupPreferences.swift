@@ -211,13 +211,13 @@ struct SetupPreferences: Equatable {
     var keepNotificationsClear: Bool?
     var deferMeetings = false
 
-    func save(to url: URL, menuBarHeight: Double, context: ConfigurationContext) throws {
+    func save(to url: URL, context: ConfigurationContext) throws {
         let original = try Data(contentsOf: url)
-        let data = try applying(to: original, menuBarHeight: menuBarHeight, configurationURL: url, context: context)
+        let data = try applying(to: original, configurationURL: url, context: context)
         try writeConfiguration(data, to: url)
     }
 
-    func applying(to data: Data, menuBarHeight: Double, configurationURL: URL? = nil,
+    func applying(to data: Data, configurationURL: URL? = nil,
                   context: ConfigurationContext = ConfigurationContext()) throws -> Data {
         let configuration: Configuration
         if let configurationURL {
@@ -229,11 +229,11 @@ struct SetupPreferences: Equatable {
         if self == SetupPreferences() { return data }
         var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
         var ids = configuration.widgets.map(\.id)
-        for edit in try edits(in: configuration, menuBarHeight: menuBarHeight) { document = try edit.applying(to: document, widgetIDs: &ids) }
+        for edit in try edits(in: configuration) { document = try edit.applying(to: document, widgetIDs: &ids) }
         return try configurationData(document, editing: data)
     }
 
-    func edits(in configuration: Configuration, menuBarHeight: Double) throws -> [ConfigurationEdit] {
+    func edits(in configuration: Configuration) throws -> [ConfigurationEdit] {
         var edits: [ConfigurationEdit] = []
         switch theme {
         case .current: break
@@ -252,7 +252,13 @@ struct SetupPreferences: Equatable {
             edits.append(ConfigurationEdit(action: .bar, properties: ["appearance": value]))
         }
         if placement != .current {
-            edits.append(ConfigurationEdit(action: .bar, properties: ["offset": .number(placement == .top ? 0 : menuBarHeight)]))
+            var properties: [String: ConfigurationValue] = ["offset": .number(0)]
+            if placement == .belowMenuBar {
+                properties["belowMenuBar"] = .bool(true)
+            } else if configuration.bar.belowMenuBar {
+                properties["belowMenuBar"] = .bool(false)
+            }
+            edits.append(ConfigurationEdit(action: .bar, properties: properties))
         }
         if let keepWindowsClear {
             edits.append(ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(keepWindowsClear)]))

@@ -81,6 +81,8 @@ private func scene(_ json: String) throws -> SceneFile {
     (#"{"configuration": {}, "draw": "popup"}"#, "widget"),
     (#"{"configuration": {}, "draw": "settings"}"#, "section"),
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "style"}"#, "tab"),
+    (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "placement"}"#, "tab"),
+    (#"{"configuration": {}, "draw": "settings", "widget": "clock", "tab": "placement"}"#, "tab"),
     (#"{"configuration": {}, "draw": "bar", "menu": [{"title": "Copy"}]}"#, "menu"),
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
     // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.
@@ -90,6 +92,12 @@ private func scene(_ json: String) throws -> SceneFile {
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }
     #expect(errorMessage(try #require(error)).contains(key))
+}
+
+@Test func sceneCanOpenATabOfTheBarsSettings() throws {
+    let decoded = try scene(#"{"configuration": {}, "draw": "settings", "section": "bar", "tab": "placement"}"#)
+    #expect(decoded.section == .bar)
+    #expect(decoded.tab == .placement)
 }
 
 @Test func sceneRejectsAnUnknownDraw() {

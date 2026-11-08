@@ -47,7 +47,7 @@ struct SetupTourView: View {
     private var barFrame: CGRect {
         let display = BarDisplay(screen: screen)
         guard let configuration = session.store.configuration else { return .zero }
-        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.offset,
+        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: screen.menuBarHeight),
                       width: screen.frame.width, height: configuration.barGeometry(for: display).layoutHeight)
     }
 
@@ -661,7 +661,7 @@ struct SetupTourView: View {
                 }
                 Text("Setup saves your defaults. These profiles still take priority, so a saved change may not change the bar now. Review the controlling settings in Profiles.")
                 if let configuration = session.store.configuration {
-                    Text("Effective placement: \(configuration.bar.offset.formatted()) pt from top.")
+                    Text("Effective placement: \(configuration.bar.placementDescription).")
                 }
             }
             .font(.system(size: 12))

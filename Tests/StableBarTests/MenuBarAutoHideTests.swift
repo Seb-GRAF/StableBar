@@ -1,3 +1,4 @@
+import AppKit
 import CoreServices
 import EventKit
 import Foundation
@@ -80,10 +81,11 @@ private final class AutomationDialog {
 /// A setup session over a scratch configuration whose macOS state is faked and whose menu bar changes are
 /// recorded instead of made.
 @MainActor
-private func setupSession(menuBarHides: Bool = false, trusted: Bool = true, calendars: EKAuthorizationStatus = .fullAccess,
+private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#,
+                          menuBarHides: Bool = false, trusted: Bool = true, calendars: EKAuthorizationStatus = .fullAccess,
                           _ access: @escaping (Bool) async -> MenuBarAutoHide.Access)
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
-    let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+    let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     store.reloadConfiguration()
     var changes: [Bool] = []
@@ -219,4 +221,24 @@ private func setupSession(menuBarHides: Bool = false, trusted: Bool = true, cale
     #expect(!session.finished)
     session.preferences.deferMeetings = true
     #expect(session.missingPermissions.isEmpty)
+}
+
+@MainActor
+@Test(arguments: [(#"{"bar":{"belowMenuBar":true},"widgets":[]}"#, SetupPreferences.Placement.belowMenuBar),
+                  (#"{"bar":{"belowMenuBar":true,"offset":8},"widgets":[]}"#, .current),
+                  (#"{"bar":{"offset":0},"widgets":[]}"#, .top),
+                  (#"{"bar":{"offset":12},"widgets":[]}"#, .current)])
+func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreferences.Placement) throws {
+    let (session, fixture, store, _) = try setupSession(configuration: configuration) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placement == placement)
+}
+
+/// Setup used to write the menu bar's height as the offset; such a bar still shows as below the menu bar.
+@MainActor
+@Test func setupShowsAnEarlierBelowMenuBarOffsetAsBelowTheMenuBar() throws {
+    let earlier = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
+    let (session, fixture, store, _) = try setupSession(configuration: #"{"bar":{"offset":\#(earlier)},"widgets":[]}"#) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    #expect(session.placement == .belowMenuBar)
 }

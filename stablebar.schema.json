@@ -1805,7 +1805,12 @@
           }
         },
         "offset": {
-          "$ref": "#/definitions/number"
+          "$ref": "#/definitions/number",
+          "description": "Moves the bar down, in points: from the top edge, or from the bottom of the menu bar with belowMenuBar."
+        },
+        "belowMenuBar": {
+          "$ref": "#/definitions/boolean",
+          "description": "Starts the bar under each display's macOS menu bar instead of at the top edge. A display whose menu bar hides keeps the bar at its top edge. Disabled by default."
         },
         "margin": {
           "$ref": "#/definitions/number",
@@ -2034,6 +2039,9 @@
             },
             "offset": {
               "$ref": "#/definitions/bar/properties/offset"
+            },
+            "belowMenuBar": {
+              "$ref": "#/definitions/bar/properties/belowMenuBar"
             },
             "margin": {
               "$ref": "#/definitions/bar/properties/margin"

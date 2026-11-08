@@ -57,7 +57,8 @@ struct BarPreview: View {
                             }
                         }
                     }
-                    .padding(.top, min(store.configuration?.onScreen(kind).bar.offset ?? 0, max(0, geometry.size.height - height)))
+                    .padding(.top, min(store.configuration?.onScreen(kind).bar.top(menuBar: kind.screens.first?.menuBarHeight ?? 0) ?? 0,
+                                       max(0, geometry.size.height - height)))
                 if let notch {
                     UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)
                         .fill(.black)

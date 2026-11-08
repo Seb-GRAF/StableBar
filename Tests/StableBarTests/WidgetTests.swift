@@ -611,7 +611,7 @@ private func calls(_ log: URL) -> [Substring] {
 
 @Test func setupKeepsUntouchedConfigurationByteForByte() throws {
     let data = Data(#"{ "widgets": [{"id":"time","type":"clock","position":"right","format":"HH.mm"}], "bar": {"height": 30} }"#.utf8)
-    #expect(try SetupPreferences().applying(to: data, menuBarHeight: 38) == data)
+    #expect(try SetupPreferences().applying(to: data) == data)
 }
 
 @Test func setupChangesOnlySelectedSettingsAndPreservesCustomWidgets() throws {
@@ -627,9 +627,10 @@ private func calls(_ log: URL) -> [Substring] {
     }
     """##.utf8)
     let preferences = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour)
-    let updated = try preferences.applying(to: data, menuBarHeight: 38)
+    let updated = try preferences.applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
-    #expect(configuration.bar.offset == 38)
+    #expect(configuration.bar.offset == 0)
+    #expect(configuration.bar.belowMenuBar)
     #expect(configuration.bar.height == 48)
     #expect(configuration.bar.notchSpacing == 20)
     #expect(configuration.bar.appearance == .dark)
@@ -641,18 +642,30 @@ private func calls(_ log: URL) -> [Substring] {
     let original = try JSONSerialization.jsonObject(with: data) as! [String: Any]
     let result = try JSONSerialization.jsonObject(with: updated) as! [String: Any]
     #expect((original["widgets"] as! [NSDictionary])[1] == (result["widgets"] as! [NSDictionary])[1])
-    let clockOnly = try SetupPreferences(clock: .twentyFourHour).applying(to: updated, menuBarHeight: 24)
+    let clockOnly = try SetupPreferences(clock: .twentyFourHour).applying(to: updated)
     let clockResult = try JSONSerialization.jsonObject(with: clockOnly) as! [String: Any]
     #expect(clockResult["defaults"] as! NSDictionary == result["defaults"] as! NSDictionary)
     #expect(clockResult["bar"] as! NSDictionary == result["bar"] as! NSDictionary)
-    let themed = try SetupPreferences(theme: .package(id: "slate", version: "1.0.0")).applying(to: updated, menuBarHeight: 24)
+    let themed = try SetupPreferences(theme: .package(id: "slate", version: "1.0.0")).applying(to: updated)
     let themedResult = try JSONSerialization.jsonObject(with: themed) as! [String: Any]
     #expect(themedResult["defaults"] as! NSDictionary == original["defaults"] as! NSDictionary)
     #expect(themedResult["theme"] as! NSDictionary == ["id": "slate", "version": "1.0.0"])
-    let bundled = try SetupPreferences(appearance: .automatic, theme: .package(id: "paper", version: nil)).applying(to: updated, menuBarHeight: 24)
+    let bundled = try SetupPreferences(appearance: .automatic, theme: .package(id: "paper", version: nil)).applying(to: updated)
     let bundledResult = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundled)
     #expect(bundledResult["theme"] == .object(["id": .string("paper")]))
-    #expect(bundledResult["bar"] == .object(["height": .number(48), "offset": .number(38), "notchSpacing": .number(20), "appearance": .null]))
+    #expect(bundledResult["bar"] == .object(["height": .number(48), "offset": .number(0), "belowMenuBar": .bool(true), "notchSpacing": .number(20),
+                                             "appearance": .null]))
+}
+
+@Test func setupOnTheTopEdgeTurnsOffBelowTheMenuBar() throws {
+    let data = Data(#"{"bar": {"belowMenuBar": true, "offset": 6}, "widgets": []}"#.utf8)
+    let bar = try JSONDecoder().decode(Configuration.self, from: SetupPreferences(placement: .top).applying(to: data)).bar
+    #expect(bar.offset == 0)
+    #expect(!bar.belowMenuBar)
+    let edge = Data(#"{"bar": {"offset": 6}, "widgets": []}"#.utf8)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self,
+                                            from: SetupPreferences(placement: .top).applying(to: edge))
+    #expect(document["bar"] == .object(["offset": .number(0)]))
 }
 
 @Test(arguments: SetupPreferences.Preset.allCases)
@@ -661,7 +674,7 @@ func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throw
     let url = repository.appending(path: "Resources/config.json")
     let preferences = preset.preferences(workspaces: .spaces, placement: .current)
     if case .package(let id, _) = preferences.theme { #expect(!legacyThemeIDs.contains(id)) }
-    let data = try preferences.applying(to: Data(contentsOf: url), menuBarHeight: 24)
+    let data = try preferences.applying(to: Data(contentsOf: url))
     var loader = ConfigurationLoader()
     loader.themesDirectory = repository.appending(path: "Resources/themes")
     _ = try loader.load(url, data: data)
@@ -699,13 +712,13 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
       {"id":"meeting","type":"text","position":"right","text":"Mine"}
     ] }
     """#.utf8)
-    let updated = try SetupPreferences(widgetSets: [.meetings, .system, .workspaces(.yabai)]).applying(to: data, menuBarHeight: 24)
+    let updated = try SetupPreferences(widgetSets: [.meetings, .system, .workspaces(.yabai)]).applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
     #expect(configuration.widgets.map(\.id) == ["workspaces", "app", "system-monitor", "time", "meeting"])
     #expect(configuration.widgets[4].content == .text("Mine"))
     #expect(configuration.workspaceSource == .yabai)
     let appended = try SetupPreferences(widgetSets: [.workspaces(.aerospace)])
-        .applying(to: Data(#"{"widgets":[{"id":"time","type":"clock","position":"right"}]}"#.utf8), menuBarHeight: 24)
+        .applying(to: Data(#"{"widgets":[{"id":"time","type":"clock","position":"right"}]}"#.utf8))
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: appended)
     #expect(try document["widgets"]!.decoded([[String: ConfigurationValue]].self).map { $0["id"] } == [.string("time"), .string("workspaces")])
     #expect(document["workspaceSource"] == nil)
@@ -722,7 +735,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     ] }
     """#.utf8)
     let updated = try SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .current)
-        .applying(to: data, menuBarHeight: 24)
+        .applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
     #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "meeting", "system-monitor", "sound", "battery",
                                                 "clock", "menu-bar-items"])
@@ -747,7 +760,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     #expect(SetupPreferences.WidgetSet.meetings.state(in: original) == .disabled)
     #expect(SetupPreferences.WidgetSet.workspaces(.yabai).state(in: original) == .conflict)
     let updated = try SetupPreferences(widgetSets: [.system, .meetings, .workspaces(.yabai)])
-        .applying(to: data, menuBarHeight: 24)
+        .applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
     #expect(configuration.widgets.map(\.enabled) == [true, true, false])
     #expect(configuration.widgets.map(\.position) == [.left, .center, .right])
@@ -759,14 +772,14 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
 
 @Test func setupDefersMeetingsWithoutTurningOffExistingCalendars() throws {
     let preferences = SetupPreferences(widgetSets: [.meetings], deferMeetings: true)
-    let new = try preferences.applying(to: Data(#"{"widgets":[]}"#.utf8), menuBarHeight: 24)
+    let new = try preferences.applying(to: Data(#"{"widgets":[]}"#.utf8))
     let newConfiguration = try JSONDecoder().decode(Configuration.self, from: new)
     #expect(newConfiguration.widgets[0].id == "meeting")
     #expect(!newConfiguration.widgets[0].enabled)
     #expect(newConfiguration.activeProviders.isEmpty)
     for enabled in [true, false] {
         let data = Data(#"{"widgets":[{"id":"meeting","type":"calendar","position":"left","enabled":\#(enabled)}]}"#.utf8)
-        let updated = try preferences.applying(to: data, menuBarHeight: 24)
+        let updated = try preferences.applying(to: data)
         let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
         #expect(configuration.widgets[0].enabled == enabled)
         #expect(configuration.widgets[0].position == .left)
@@ -782,7 +795,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     try moduleData.write(to: module)
     let root = directory.appending(path: "config.json")
     let data = Data(#"{"includes":["widgets.json"],"widgets":[]}"#.utf8)
-    let updated = try SetupPreferences(widgetSets: [.meetings]).applying(to: data, menuBarHeight: 24, configurationURL: root)
+    let updated = try SetupPreferences(widgetSets: [.meetings]).applying(to: data, configurationURL: root)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
     #expect(configuration.widgets[0].enabled)
@@ -798,7 +811,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
       "profiles":[{"name":"quiet","configuration":{"widgetOverrides":{"system-monitor":{"enabled":false}}}}]
     }
     """#.utf8)
-    let updated = try SetupPreferences(widgetSets: [.system]).applying(to: data, menuBarHeight: 24, configurationURL: root)
+    let updated = try SetupPreferences(widgetSets: [.system]).applying(to: data, configurationURL: root)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
     #expect(!configuration.widgets[0].enabled)
@@ -809,8 +822,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
 @Test func setupRejectsInvalidConfigurationBeforeEditing() {
     #expect(throws: CommandFailure.self) {
         try SetupPreferences(appearance: .dark).applying(
-            to: Data(#"{"widgets":[{"id":"custom","type":"script","position":"left","command":"date","interval":0}]}"#.utf8),
-            menuBarHeight: 24)
+            to: Data(#"{"widgets":[{"id":"custom","type":"script","position":"left","command":"date","interval":0}]}"#.utf8))
     }
 }
 
@@ -830,7 +842,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
       "widgetOverrides": {"imported": {"style": {"fontSize": 15}}}
     }
     """#.utf8)
-    let updated = try SetupPreferences(clock: .twelveHour).applying(to: data, menuBarHeight: 24, configurationURL: root)
+    let updated = try SetupPreferences(clock: .twelveHour).applying(to: data, configurationURL: root)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
     #expect(configuration.widgets.map(\.content) == [.clock(format: "EEE d MMM  h:mm a"), .clock(format: "EEE d MMM  h:mm a")])
@@ -857,10 +869,11 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     }
     """##.utf8)
     let updated = try SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour)
-        .applying(to: data, menuBarHeight: 24, configurationURL: root)
+        .applying(to: data, configurationURL: root)
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
     let original = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
-    #expect(document["bar"] == .object(["height": .number(40), "offset": .number(24), "appearance": .string("dark")]))
+    #expect(document["bar"] == .object(["height": .number(40), "offset": .number(0), "belowMenuBar": .bool(true),
+                                        "appearance": .string("dark")]))
     #expect(document["defaults"] == original["defaults"])
     #expect(document["widgets"] == .array([.object(["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
                                                     "format": .string("EEE d MMM  h:mm a")])]))
@@ -883,7 +896,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
     """#.utf8)
     let context = ConfigurationContext(onBattery: true)
     let updated = try SetupPreferences(clock: .twelveHour)
-        .applying(to: data, menuBarHeight: 24, configurationURL: root, context: context)
+        .applying(to: data, configurationURL: root, context: context)
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated, context: context)
     #expect(configuration.widgets[0].content == .clock(format: "EEE d MMM  h:mm a"))

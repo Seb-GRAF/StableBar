@@ -8,7 +8,12 @@ struct SceneFile: Decodable {
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages }
-    enum Tab: String, Decodable, CaseIterable { case content, style, behavior }
+    /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (size, look, placement).
+    enum Tab: String, Decodable, CaseIterable {
+        case content, style, behavior, size, look, placement
+
+        var isBarTab: Bool { [.size, .look, .placement].contains(self) }
+    }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
     /// The configuration inline, or the path of a configuration file relative to the scene file.
@@ -32,7 +37,7 @@ struct SceneFile: Decodable {
     var widget: String?
     /// The Settings section to draw when no widget is named.
     var section: Section?
-    /// The tab of the widget's Settings page.
+    /// The tab of the widget's Settings page, or of the bar's when the scene opens the Bar section without a widget.
     var tab: Tab?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
@@ -105,8 +110,12 @@ struct SceneFile: Decodable {
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
         }
-        if tab != nil, widget == nil {
-            throw DecodingError.dataCorruptedError(forKey: .tab, in: values, debugDescription: "A tab belongs to a widget's Settings page.")
+        if let tab, tab.isBarTab, widget != nil || section != .bar {
+            throw DecodingError.dataCorruptedError(forKey: .tab, in: values,
+                                                   debugDescription: "\(tab.rawValue) is a tab of the bar's settings, in the bar section without a widget.")
+        }
+        if let tab, !tab.isBarTab, widget == nil {
+            throw DecodingError.dataCorruptedError(forKey: .tab, in: values, debugDescription: "\(tab.rawValue) is a tab of a widget's Settings page.")
         }
     }
 
