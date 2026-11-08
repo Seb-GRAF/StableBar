@@ -246,6 +246,19 @@ struct SetupPreferences: Equatable {
         (try? widget["id"]?.decoded(String.self)) ?? ""
     }
 
+    /// The widgets that the file's `widgetOverrides`, or those of its profiles, change.
+    private static func overriddenIDs(in document: [String: ConfigurationValue]) -> Set<String> {
+        var layers = [document]
+        if case let .array(profiles)? = document["profiles"] {
+            for case let .object(profile) in profiles {
+                if case let .object(configuration)? = profile["configuration"] { layers.append(configuration) }
+            }
+        }
+        return Set(layers.flatMap { layer -> [String] in
+            if case let .object(overrides)? = layer["widgetOverrides"] { Array(overrides.keys) } else { [] }
+        })
+    }
+
     /// The bar the chosen placement starts from, and how the configuration's widgets change to get there.
     private struct StarterChange {
         var configuration: Configuration
@@ -258,16 +271,16 @@ struct SetupPreferences: Equatable {
     /// its widgets, except that below the menu bar it loses the menu bar starter's unchanged copies of what the menu
     /// bar shows.
     private func starterChange(in configuration: Configuration, document: [String: ConfigurationValue]?) -> StarterChange {
-        guard let widgets = try? document?["widgets"]?.decoded([[String: ConfigurationValue]].self) else {
+        guard let document, let widgets = try? document["widgets"]?.decoded([[String: ConfigurationValue]].self) else {
             return StarterChange(configuration: configuration)
         }
         // Includes and packages can refer to these widgets from files setup doesn't edit, so their widgets stay.
-        guard document?["includes"] == nil, document?["packages"] == nil else {
+        guard document["includes"] == nil, document["packages"] == nil else {
             return StarterChange(configuration: configuration, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
         }
         let ids = widgets.map(Self.id)
         func swap(to starter: [[String: ConfigurationValue]]) -> StarterChange? {
-            var swapped = document!
+            var swapped = document
             swapped["widgets"] = .array(starter.map(ConfigurationValue.object))
             guard let data = try? JSONEncoder().encode(swapped),
                   let target = try? JSONDecoder().decode(Configuration.self, from: data) else { return nil }
@@ -276,12 +289,15 @@ struct SetupPreferences: Equatable {
                                  added: starter.filter { !ids.contains(Self.id($0)) },
                                  isBelowMenuBarStarter: starter == Self.belowMenuBarStarter)
         }
-        // Widgets from includes or packages mean the bar has changed, even when its file still lists a starter.
-        let isOnlyItsFile = configuration.widgets.map(\.id) == ids
-        if isOnlyItsFile, placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
-        if isOnlyItsFile, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
+        // Widgets from includes or packages, or overrides in the file or its profiles, mean the bar has changed, even
+        // when its file still lists a starter.
+        let overridden = Self.overriddenIDs(in: document)
+        let isStarter = configuration.widgets.map(\.id) == ids && overridden.isDisjoint(with: ids)
+        if isStarter, placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
+        if isStarter, placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
         let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
-            Self.menuBarWidgetIDs.contains(Self.id(widget)) && Self.menuBarStarter.contains(widget)
+            let id = Self.id(widget)
+            return Self.menuBarWidgetIDs.contains(id) && !overridden.contains(id) && Self.menuBarStarter.contains(widget)
         }.map(Self.id)
         return StarterChange(configuration: configuration, removed: removed, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
     }

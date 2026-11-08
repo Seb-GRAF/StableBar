@@ -799,6 +799,30 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(configuration.bar.belowMenuBar)
 }
 
+/// Overrides change a starter's widgets without changing their definitions, in the file or in one of its profiles.
+/// Setup treats that bar as customized: below the menu bar it keeps the overridden clock and its override.
+@Test(arguments: [false, true])
+func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let root = directory.appending(path: "config.json")
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    let overrides: ConfigurationValue = .object(["clock": .object(["format": .string("HH:mm")])])
+    if inProfile {
+        document["profiles"] = .array([.object(["name": .string("Quiet"), "configuration": .object(["widgetOverrides": overrides])])])
+    } else {
+        document["widgetOverrides"] = overrides
+    }
+    let data = try JSONEncoder().encode(document)
+    try data.write(to: root)
+    let updated = try SetupPreferences(placement: .belowMenuBar).applying(to: data, configurationURL: root)
+    var loader = ConfigurationLoader()
+    #expect(try loader.load(root, data: updated).widgets.map(\.id) == ["sound", "clock"])
+    let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
+    #expect(saved[inProfile ? "profiles" : "widgetOverrides"] == document[inProfile ? "profiles" : "widgetOverrides"])
+}
+
 @Test func setupPointsTheBelowStartersWorkspacesAtTheDetectedManager() throws {
     let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
     #expect(try JSONDecoder().decode(Configuration.self, from: below).workspaceSource == .spaces)
