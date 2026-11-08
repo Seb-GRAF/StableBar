@@ -22,6 +22,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         self.arrangeBar = arrangeBar
         self.customizeWidgets = customizeWidgets
         self.showProfile = showProfile
+        store.barEditing.setupIsOpen = true
         session = SetupSession(store: store)
         store.appMenu.hidesAccessWarning = true
         showTour(intro: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
@@ -111,6 +112,7 @@ final class SetupWindow: NSObject, NSWindowDelegate {
     private func end() {
         if session?.finished == false { session?.cancel() }
         session?.store.appMenu.hidesAccessWarning = false
+        session?.store.barEditing.setupIsOpen = false
         session = nil
     }
 }

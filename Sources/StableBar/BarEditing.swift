@@ -50,8 +50,14 @@ final class BarEditing {
         self.addPopover = addPopover
     }
 
+    /// True while setup is open. Its choices are unsaved session edits, which edit mode would save at once and can't
+    /// edit, so Edit Bar in Place waits until setup ends, and opening setup ends edit mode.
+    var setupIsOpen = false {
+        didSet { if setupIsOpen { end() } }
+    }
+
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
-    var isAvailable: Bool { store?.configuration != nil }
+    var isAvailable: Bool { store?.configuration != nil && !setupIsOpen }
     var allowsWidgetActions: Bool { !isActive }
 
     func toggle() { if isActive { end() } else { begin() } }
