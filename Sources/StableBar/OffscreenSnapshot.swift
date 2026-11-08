@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Draws views to PNG files in offscreen windows, for the docs images and scene files. Nothing appears
-/// on screen, and every clock in the drawing shows `DocsImages.date`.
+/// on screen, every clock in the drawing shows `DocsImages.date`, and the version row shows `AppVersion.sample`.
 @MainActor
 enum OffscreenSnapshot {
     private static let darkBackdrop = Bundle.main.url(forResource: "SetupDusk", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
@@ -23,6 +23,7 @@ enum OffscreenSnapshot {
                       prepare: () -> Void = {}, to url: URL) async throws {
         let view = NSHostingView(rootView: content
             .environment(\.fixedDate, DocsImages.date)
+            .environment(\.fixedVersion, AppVersion.sample)
             .environment(\.offline, true)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 14))
