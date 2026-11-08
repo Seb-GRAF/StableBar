@@ -45,9 +45,9 @@ reviews:
       instructions: >-
         Most tests run on the main actor, in parallel. A test that bounds main-actor scheduling
         with wall-clock time (short sleeps, deadline loops, short timeouts) fails at random on CI:
-        suggest waiting by counting polls instead. A fixture that runs git needs a timeout of 60
-        seconds or more. A purely visual fix is proven with before/after images, so don't ask for a
-        UI test.
+        suggest waiting by counting polls instead. A sleep that only checks that nothing happens is
+        fine. A fixture that runs git needs a timeout of 60 seconds or more. A purely visual fix is
+        proven with before/after images, so don't ask for a UI test.
     - path: "docs/**"
       instructions: >-
         docs/ is the user manual. Point out instructions that this pull request's code contradicts,
