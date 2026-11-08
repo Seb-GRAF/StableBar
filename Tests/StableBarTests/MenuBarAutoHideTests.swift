@@ -332,14 +332,20 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
 
 /// When the first launch finds no window manager, such as before the login shell's PATH arrives, it writes Spaces
 /// into the starter below the menu bar. Setup looks for a manager again until one finishes; after that, or once the
-/// bar has changed, Spaces is a choice it keeps.
+/// bar has changed, through its widgets, an override or its offset, Spaces is a choice it keeps.
 @MainActor
-@Test(arguments: [(false, false, WorkspaceSource.yabai), (true, false, .spaces), (false, true, .spaces)])
-func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, changed: Bool, expected: WorkspaceSource) throws {
+@Test(arguments: [(false, "", WorkspaceSource.yabai), (true, "", .spaces), (false, "widget", .spaces), (false, "override", .spaces),
+                  (false, "offset", .spaces)])
+func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: String, expected: WorkspaceSource) throws {
     let mine: [String: ConfigurationValue] = ["id": .string("mine"), "type": .string("text"), "position": .string("left"), "text": .string("Hi")]
-    let widgets = SetupPreferences.belowMenuBarStarter + (changed ? [mine] : [])
-    let document: [String: ConfigurationValue] = ["bar": .object(["belowMenuBar": .bool(true)]), "workspaceSource": .string("spaces"),
-                                                  "widgets": .array(widgets.map(ConfigurationValue.object))]
+    let widgets = SetupPreferences.belowMenuBarStarter + (change == "widget" ? [mine] : [])
+    // What the first launch writes: the starter's bar, below the menu bar, with the starter for that placement.
+    var document: [String: ConfigurationValue] = [
+        "bar": .object(["height": .number(40), "offset": .number(change == "offset" ? 6 : 0), "inset": .number(12), "spacing": .number(8),
+                        "belowMenuBar": .bool(true)]),
+        "workspaceSource": .string("spaces"), "widgets": .array(widgets.map(ConfigurationValue.object))
+    ]
+    if change == "override" { document["widgetOverrides"] = .object(["sound": .object(["priority": .number(5)])]) }
     let (session, fixture, store, _) = try setupSession(configuration: String(decoding: try JSONEncoder().encode(document), as: UTF8.self),
                                                         completed: completed, workspaces: { $0 ?? .yabai }) { _ in .allowed }
     defer { store.stop(); fixture.close() }

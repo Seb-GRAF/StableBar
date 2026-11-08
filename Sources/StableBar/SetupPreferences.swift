@@ -236,9 +236,12 @@ struct SetupPreferences: Equatable {
     static let belowMenuBarStarter = WidgetSet.workspaces(.spaces).widgets + WidgetSet.system.widgets + WidgetSet.sound.widgets
 
     /// Whether `document` is still the starter below the menu bar with Spaces, as the first launch writes it when it
-    /// finds no window manager, such as before the login shell's PATH arrives.
+    /// finds no window manager, such as before the login shell's PATH arrives: no other files, profiles or overrides,
+    /// the starter's widgets, and the bar at its starting offset.
     static func isFirstLaunchSpacesStarter(_ document: [String: ConfigurationValue]) -> Bool {
-        document["includes"] == nil && document["packages"] == nil && document["profiles"] == nil
+        let offset = (try? document["bar"]?.decoded([String: ConfigurationValue].self))?["offset"]
+        return document["includes"] == nil && document["packages"] == nil && document["profiles"] == nil
+            && document["widgetOverrides"] == nil && (offset == nil || offset == .number(0))
             && document["workspaceSource"] == .string(WorkspaceSource.spaces.rawValue)
             && (try? document["widgets"]?.decoded([[String: ConfigurationValue]].self)) == belowMenuBarStarter
     }

@@ -710,6 +710,16 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(configuration.bar.belowMenuBar)
 }
 
+/// Setup treats Spaces as a stand-in only on the file the first launch writes when it finds no window manager.
+@Test func setupRecognizesTheStarterTheFirstLaunchWritesWithSpaces() throws {
+    func document(_ data: Data) throws -> [String: ConfigurationValue] { try JSONDecoder().decode([String: ConfigurationValue].self, from: data) }
+    let spaces = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    #expect(SetupPreferences.isFirstLaunchSpacesStarter(try document(spaces)))
+    let yabai = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: bundledStarter)
+    #expect(!SetupPreferences.isFirstLaunchSpacesStarter(try document(yabai)))
+    #expect(!SetupPreferences.isFirstLaunchSpacesStarter(try document(bundledStarter)))
+}
+
 @Test func setupOnTheTopEdgeTurnsTheBelowStarterBackIntoTheMenuBarStarter() throws {
     let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
     let top = try SetupPreferences(placement: .top).applying(to: below)
