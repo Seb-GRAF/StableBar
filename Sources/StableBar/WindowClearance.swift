@@ -9,7 +9,7 @@ struct WindowClearanceDisplay: Equatable {
 
     init(frame: CGRect, visibleFrame: CGRect, configuration: Configuration, display: BarDisplay, desktopTop: CGFloat) {
         let geometry = configuration.barGeometry(for: display)
-        let top = frame.maxY - configuration.onScreen(ScreenKind(display)).bar.offset
+        let top = frame.maxY - configuration.onScreen(ScreenKind(display)).bar.top(menuBar: menuBarHeight(frame: frame, visibleFrame: visibleFrame))
         self.init(frame: frame, visibleFrame: visibleFrame,
                   barFrame: CGRect(x: frame.minX, y: top - geometry.panelHeight, width: frame.width, height: geometry.panelHeight),
                   desktopTop: desktopTop)

@@ -164,3 +164,13 @@ struct BarLayout {
         return origins
     }
 }
+
+/// The band a display's visible frame leaves at its top: the menu bar while it shows, and on a notched
+/// display at least the notch. 0 when the menu bar hides or the display has none.
+func menuBarHeight(frame: CGRect, visibleFrame: CGRect) -> Double {
+    max(0, frame.maxY - visibleFrame.maxY)
+}
+
+extension NSScreen {
+    var menuBarHeight: Double { StableBar.menuBarHeight(frame: frame, visibleFrame: visibleFrame) }
+}

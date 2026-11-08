@@ -328,3 +328,57 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     let overridden = try decode(defaults: #"{"minWidth":200}"#, style: #"{"minWidth":80,"maxWidth":100}"#)
     #expect(overridden.widgets[0].style.inheriting(overridden.defaults).minWidth == 80)
 }
+
+@Test func aBarBelowTheMenuBarStartsUnderEachDisplaysOwnMenuBar() throws {
+    let below = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"belowMenuBar": true, "offset": 4}"#.utf8))
+    #expect(below.belowMenuBar)
+    #expect(below.top(menuBar: 30) == 34)
+    #expect(below.top(menuBar: 33) == 37)
+    #expect(below.top(menuBar: 0) == 4)
+    let edge = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"offset": 4}"#.utf8))
+    #expect(!edge.belowMenuBar)
+    #expect(edge.top(menuBar: 30) == 4)
+}
+
+@Test func aDisplaysMenuBarIsTheBandAboveItsVisibleFrame() {
+    let monitor = CGRect(x: 0, y: 0, width: 2560, height: 1440)
+    #expect(menuBarHeight(frame: monitor, visibleFrame: CGRect(x: 0, y: 0, width: 2560, height: 1410)) == 30)
+    #expect(menuBarHeight(frame: monitor, visibleFrame: CGRect(x: 0, y: 76, width: 2560, height: 1334)) == 30)
+    #expect(menuBarHeight(frame: monitor, visibleFrame: monitor) == 0)
+    let laptop = CGRect(x: -1512, y: 458, width: 1512, height: 982)
+    #expect(menuBarHeight(frame: laptop, visibleFrame: CGRect(x: -1512, y: 458, width: 1512, height: 949)) == 33)
+}
+
+@Test func windowClearanceKeepsWindowsBelowABarUnderTheMenuBar() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"{"bar": {"belowMenuBar": true}, "widgets": []}"#.utf8))
+    let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+    let frame = CGRect(x: 0, y: 0, width: 1440, height: 900)
+    let below = WindowClearanceDisplay(frame: frame, visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 870),
+                                       configuration: configuration, display: display, desktopTop: 900)
+    #expect(below.barFrame.minY == 30)
+    let hidden = WindowClearanceDisplay(frame: frame, visibleFrame: frame, configuration: configuration, display: display, desktopTop: 900)
+    #expect(hidden.barFrame.minY == 0)
+}
+
+@Test func settingsSearchFindsWhereToPutTheBarBelowTheMenuBar() {
+    #expect(SettingsSearchResult.barPlacement.matches("below the menu bar"))
+}
+
+@Test func aBarsPlacementReadsAsItsDistanceFromTheTopOrTheMenuBar() throws {
+    func placement(_ json: String) throws -> String {
+        try JSONDecoder().decode(BarSettings.self, from: Data(json.utf8)).placementDescription
+    }
+    #expect(try placement(#"{}"#) == "on the top edge")
+    #expect(try placement(#"{"offset": 12}"#) == "12 pt from top")
+    #expect(try placement(#"{"belowMenuBar": true}"#) == "below the menu bar")
+    #expect(try placement(#"{"belowMenuBar": true, "offset": 6}"#) == "6 pt below the menu bar")
+}
+
+@MainActor @Test func aKindOfScreenCanPutItsBarBelowTheMenuBar() throws {
+    let fixture = try ThemeGalleryFixture(#"{"screens":{"laptop":{"bar":{"belowMenuBar":true}}},"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
+    defer { fixture.close() }
+    let store = try fixture.store()
+    defer { store.stop() }
+    #expect(store.configuration?.onScreen(.laptop).bar.belowMenuBar == true)
+    #expect(store.configuration?.onScreen(.monitor).bar.belowMenuBar == false)
+}

@@ -169,6 +169,15 @@ enum SceneRenderer {
                 case .content: editor.widgetTab = .content
                 case .style: editor.widgetTab = .style
                 case .behavior: editor.widgetTab = .behavior
+                case .size, .look, .placement: break
+                }
+            } else if let tab = scene.tab, tab.isBarTab {
+                editor.section = .widgets
+                editor.barItem = .bar
+                editor.barTab = switch tab {
+                case .look: .look
+                case .placement: .placement
+                default: .size
                 }
             } else {
                 switch scene.section ?? .general {

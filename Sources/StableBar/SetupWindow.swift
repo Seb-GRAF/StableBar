@@ -195,7 +195,8 @@ final class SetupSession {
         preview()
     }
 
-    var menuBarHeight: Double {
+    /// The offset earlier setups wrote for Below menu bar, before `bar.belowMenuBar`.
+    private var earlierBelowMenuBarOffset: Double {
         max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
     }
 
@@ -207,10 +208,13 @@ final class SetupSession {
         themes.first { $0.key == currentThemeKey }?.title ?? currentThemeKey
     }
 
+    /// The placement setup shows as chosen. Earlier setups wrote the menu bar's height as the offset for
+    /// Below menu bar, so that offset still counts as below the menu bar.
     var placement: SetupPreferences.Placement {
         if preferences.placement != .current { return preferences.placement }
-        let offset = base?.bar.offset
-        return offset == 0 ? .top : offset == menuBarHeight ? .belowMenuBar : .current
+        guard let bar = base?.bar else { return .current }
+        if bar.belowMenuBar { return bar.offset == 0 ? .belowMenuBar : .current }
+        return bar.offset == 0 ? .top : bar.offset == earlierBelowMenuBarOffset ? .belowMenuBar : .current
     }
 
     var needsCalendarAccess: Bool {
@@ -272,7 +276,7 @@ final class SetupSession {
         do {
             var loader = ConfigurationLoader()
             let base = try loader.load(store.configurationURL, context: store.context)
-            try store.setSessionEdits(sessionEdits + shown.edits(in: base, menuBarHeight: menuBarHeight))
+            try store.setSessionEdits(sessionEdits + shown.edits(in: base))
             self.base = base
             error = nil
         } catch {
@@ -374,7 +378,7 @@ final class SetupSession {
         var saved = false
         do {
             if needsCalendarSetup { preferences.deferMeetings = true }
-            try preferences.save(to: store.configurationURL, menuBarHeight: menuBarHeight, context: store.context)
+            try preferences.save(to: store.configurationURL, context: store.context)
             saved = true
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()

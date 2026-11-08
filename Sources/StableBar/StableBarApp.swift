@@ -400,7 +400,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.barGeometry = geometry
             let height = geometry.inputHeight
             let bar = config.onScreen(ScreenKind(BarDisplay(screen: screen))).bar
-            let frame = NSRect(x: screen.frame.minX, y: top - bar.offset - height, width: screen.frame.width, height: height)
+            let frame = NSRect(x: screen.frame.minX, y: top - bar.top(menuBar: screen.menuBarHeight) - height, width: screen.frame.width, height: height)
             if wasEditing && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = bar.animation.duration

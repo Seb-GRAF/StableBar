@@ -250,7 +250,10 @@ struct BarInspector: View {
             }
         case .placement:
             SettingsGroup("Position") {
-                bar.number("Offset from top", "offset", default: 0, in: 0...200)
+                bar.toggle("Below the menu bar", "belowMenuBar", default: false,
+                           hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
+                bar.number("Offset from top", "offset", default: 0, in: 0...200,
+                           hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
                 bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
             SettingsGroup("Size on each screen") {

@@ -51,7 +51,7 @@ final class ConfigurationWriteTests: XCTestCase {
         try store.customizationHistory.change(.init(action: .bar, properties: ["height": .number(40)]))
         try store.customizationHistory.flush()
         try store.applyEdits([], persist: true)
-        try SetupPreferences().save(to: fixture.url, menuBarHeight: 24, context: store.context)
+        try SetupPreferences().save(to: fixture.url, context: store.context)
         let after = try FileManager.default.attributesOfItem(atPath: fixture.url.path)
         XCTAssertEqual(after[.modificationDate] as? Date, attributes[.modificationDate] as? Date)
         XCTAssertEqual(after[.systemFileNumber] as? NSNumber, attributes[.systemFileNumber] as? NSNumber)
@@ -65,7 +65,7 @@ final class ConfigurationWriteTests: XCTestCase {
             try store.customizationHistory.change(.init(action: .bar, properties: ["height": .number(48)]))
             try store.customizationHistory.flush()
         case "persist": try store.applyEdits([.init(action: .bar, properties: ["height": .number(48)])], persist: true)
-        default: try SetupPreferences(appearance: .light).save(to: store.configurationURL, menuBarHeight: 24, context: store.context)
+        default: try SetupPreferences(appearance: .light).save(to: store.configurationURL, context: store.context)
         }
     }
 }

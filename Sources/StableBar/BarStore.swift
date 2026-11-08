@@ -134,9 +134,7 @@ final class BarStore: NSObject {
             if !FileManager.default.fileExists(atPath: sharedConfigurationURL.path) {
                 let template = Bundle.main.url(forResource: "config", withExtension: "json")!
                 let placement: SetupPreferences.Placement = UserDefaults.standard.bool(forKey: "_HIHideMenuBar") ? .current : .belowMenuBar
-                let data = try SetupPreferences(placement: placement).applying(
-                    to: Data(contentsOf: template),
-                    menuBarHeight: max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0))
+                let data = try SetupPreferences(placement: placement).applying(to: Data(contentsOf: template))
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
             try migrateConfigurationFile(sharedConfigurationURL)

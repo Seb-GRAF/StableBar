@@ -534,6 +534,7 @@ struct BarSettings: Decodable, Sendable {
     var height = 40.0
     var displayScale: [String: Double] = [:]
     var offset = 0.0
+    var belowMenuBar = false
     var margin = 0.0
     var keepWindowsClear = false
     var keepNotificationsClear = false
@@ -555,7 +556,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, style, appearance, glass
+        case height, displayScale, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, style, appearance, glass
     }
 
     init() {}
@@ -569,6 +570,7 @@ struct BarSettings: Decodable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .displayScale, in: values, debugDescription: "Use builtIn or external with a positive number.")
         }
         offset = try values.decodeIfPresent(Double.self, forKey: .offset) ?? offset
+        belowMenuBar = try values.decodeIfPresent(Bool.self, forKey: .belowMenuBar) ?? belowMenuBar
         margin = try values.decodeIfPresent(Double.self, forKey: .margin) ?? margin
         keepWindowsClear = try values.decodeIfPresent(Bool.self, forKey: .keepWindowsClear) ?? keepWindowsClear
         keepNotificationsClear = try values.decodeIfPresent(Bool.self, forKey: .keepNotificationsClear) ?? keepNotificationsClear
@@ -594,6 +596,19 @@ struct BarSettings: Decodable, Sendable {
         displayScale[display.isBuiltIn ? "builtIn" : "external"] ?? 1
     }
 
+    /// Where the bar sits, in words: "on the top edge", "12 pt from top" or "6 pt below the menu bar".
+    var placementDescription: String {
+        let distance = offset == 0 ? "" : "\(offset.formatted()) pt "
+        if belowMenuBar { return distance + "below the menu bar" }
+        return offset == 0 ? "on the top edge" : distance + "from top"
+    }
+
+    /// How far below the top of a display the bar starts, on a display whose menu bar is `menuBar` points tall:
+    /// `offset`, measured from the bottom of the menu bar when the bar sits below it.
+    func top(menuBar: Double) -> Double {
+        offset + (belowMenuBar ? menuBar : 0)
+    }
+
     var animation: WidgetAnimation {
         var animation = motion.animation
         animation.duration = animationDuration ?? animation.duration
@@ -602,7 +617,7 @@ struct BarSettings: Decodable, Sendable {
 }
 
 struct ScreenConfiguration: Decodable, Sendable {
-    static let barKeys: Set<String> = ["height", "offset", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "style",
+    static let barKeys: Set<String> = ["height", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "style",
                                        "glass", "appearance", "motion", "popupTransition", "morphPopups"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?

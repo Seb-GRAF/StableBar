@@ -64,7 +64,7 @@
       "description": "The Settings section to draw when no widget is named.",
       "enum": ["general", "bar", "theme", "profiles", "packages"]
     },
-    "tab": { "description": "The tab of the widget's Settings page.", "enum": ["content", "style", "behavior"] },
+    "tab": { "description": "The tab of the widget's Settings page: content, style or behavior. With section bar and no widget, the tab of the bar's settings: size, look or placement.", "enum": ["content", "style", "behavior", "size", "look", "placement"] },
     "uninstall": {
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",
       "enum": ["confirm", "failed"]
