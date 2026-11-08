@@ -771,12 +771,10 @@ struct SetupTourView: View {
                     set: { session.preferences.keepNotificationsClear = $0 }))
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
-            hint("power", "Open at login", appIsInApplications()
+            hint("power", "Open at login", session.system.isInApplications()
                  ? "Starts StableBar when you log in." : "Move StableBar to Applications to start it at login.") {
-                if appIsInApplications() {
-                    Toggle("Open at login", isOn: Binding(
-                        get: { session.openAtLogin ?? (session.loginStatus == .enabled || session.loginStatus == .requiresApproval) },
-                        set: { session.openAtLogin = $0 }))
+                if session.system.isInApplications() {
+                    Toggle("Open at login", isOn: Binding(get: { session.opensAtLogin }, set: { session.openAtLogin = $0 }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small)
                 } else {
                     Button("Show in Finder") {

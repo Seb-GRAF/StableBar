@@ -68,6 +68,8 @@ struct SceneFile: Decodable {
         var calendars = true
         /// Whether the Mac has an internal battery, which presets add Battery for.
         var battery = true
+        /// Whether StableBar runs from an Applications folder, which Open at login needs.
+        var inApplications = true
     }
 
     /// An item of a sample menu, with the values Accessibility gives a menu item. An empty title is a separator.
@@ -150,7 +152,9 @@ struct SceneFile: Decodable {
 }
 
 extension SceneFile.Setup: Decodable {
-    enum CodingKeys: String, CodingKey, CaseIterable { case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery }
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, inApplications
+    }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
     init(from decoder: Decoder) throws {
@@ -172,6 +176,7 @@ extension SceneFile.Setup: Decodable {
         automation = try values.decodeIfPresent(Bool.self, forKey: .automation) ?? true
         calendars = try values.decodeIfPresent(Bool.self, forKey: .calendars) ?? true
         battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
+        inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
     }
 }
 

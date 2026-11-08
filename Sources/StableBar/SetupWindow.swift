@@ -144,6 +144,9 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
+    /// Whether StableBar runs from an Applications folder, the only place it can open at login from.
+    var isInApplications: () -> Bool = { appIsInApplications() }
+    var setOpenAtLogin: (_ enabled: Bool) throws -> Void = { try setLaunchAtLogin($0) }
     var defaults = UserDefaults.standard
     /// Whether setup previews its choices on the running bar, which starts the commands of the widgets they add. A scene
     /// turns it off, since it runs nothing: setup shows its choices, and the bar shows its configuration as it is.
@@ -179,8 +182,16 @@ final class SetupSession {
     private(set) var finished = false
     var preset: SetupPreferences.Preset?
     var preferences = SetupPreferences() { didSet { preview() } }
+    /// The person's Open at login choice; nil until they make one.
     var openAtLogin: Bool?
     var loginStatus = SMAppService.mainApp.status
+    /// Setup turns on Open at login when it makes the bar replace the menu bar: macOS then keeps the menu bar hidden
+    /// even while StableBar isn't running, so without it nothing would sit on the top edge after the next login.
+    var recommendsOpenAtLogin: Bool { placementChoice == .top && system.isInApplications() }
+    /// Whether StableBar opens at login once setup finishes, as its switch shows it.
+    var opensAtLogin: Bool {
+        openAtLogin ?? (loginStatus == .enabled || loginStatus == .requiresApproval || recommendsOpenAtLogin)
+    }
     var calendarAccess: EKAuthorizationStatus
     var menuBarHides: Bool
     private let menuBarHidAtStart: Bool
@@ -536,9 +547,11 @@ final class SetupSession {
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()
             if let error = store.configurationError { throw CommandFailure(message: error) }
+            // Only a choice or the recommendation changes it, so a change made in System Settings meanwhile stays.
             let status = SMAppService.mainApp.status
-            if let openAtLogin, openAtLogin != (status == .enabled || status == .requiresApproval) {
-                try setLaunchAtLogin(openAtLogin)
+            if let wanted = openAtLogin ?? (recommendsOpenAtLogin ? true : nil),
+               wanted != (status == .enabled || status == .requiresApproval) {
+                try system.setOpenAtLogin(wanted)
             }
             loginStatus = SMAppService.mainApp.status
             system.defaults.set(true, forKey: SetupProgress.completedKey)
