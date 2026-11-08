@@ -189,11 +189,17 @@ struct SetupPreferences: Equatable {
         }
 
         /// Below the macOS menu bar, a preset leaves out Menu bar items, which the menu bar shows right above it.
+        /// The preset's choices. Its widget sets keep Menu bar items wherever the bar sits: setup leaves them out
+        /// below the menu bar when it applies them, so a later move to the top edge still brings them.
         func preferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
             var preferences = basePreferences(workspaces: workspaces, placement: placement)
             preferences.workspaces = workspaces
-            if placement == .belowMenuBar { preferences.widgetSets.removeAll { $0 == .menuBarItems } }
             return preferences
+        }
+
+        /// The widget sets the preset's tile shows for a bar at `placement`: below the menu bar, without Menu bar items.
+        func shownWidgetSets(workspaces: WorkspaceSource, placement: Placement) -> [WidgetSet] {
+            preferences(workspaces: workspaces, placement: placement).widgetSets.filter { placement != .belowMenuBar || $0 != .menuBarItems }
         }
 
         private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {

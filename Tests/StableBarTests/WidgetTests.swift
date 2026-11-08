@@ -746,10 +746,22 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(try widgetIDs(SetupPreferences(placement: .top).applying(to: data)) == ["mine"])
 }
 
+/// A preset chosen while the bar sits below the menu bar still brings Menu bar items when the bar then moves to
+/// the top edge, as its tile shows there.
+@Test func setupPresetsChosenBelowTheMenuBarBringMenuBarItemsToTheTopEdge() throws {
+    let bar = Data(#"{"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"},{"id":"sound","type":"audio","position":"right"}]}"#.utf8)
+    for preset in SetupPreferences.Preset.allCases {
+        var preferences = preset.preferences(workspaces: .spaces, placement: .belowMenuBar)
+        #expect(try !widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
+        preferences.placement = .top
+        #expect(try widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
+    }
+}
+
 @Test func setupPresetsBelowTheMenuBarLeaveOutMenuBarItems() {
     for preset in SetupPreferences.Preset.allCases {
-        #expect(!preset.preferences(workspaces: .spaces, placement: .belowMenuBar).widgetSets.contains(.menuBarItems))
-        #expect(preset.preferences(workspaces: .spaces, placement: .top).widgetSets.contains(.menuBarItems))
+        #expect(!preset.shownWidgetSets(workspaces: .spaces, placement: .belowMenuBar).contains(.menuBarItems))
+        #expect(preset.shownWidgetSets(workspaces: .spaces, placement: .top).contains(.menuBarItems))
     }
 }
 
