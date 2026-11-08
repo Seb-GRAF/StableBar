@@ -144,6 +144,15 @@ final class BarStore: NSObject {
                 try migrateEarlierColors(sharedConfigurationURL)
                 UserDefaults.standard.set(true, forKey: "migratedEarlierColors")
             }
+            // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
+            // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.
+            if !UserDefaults.standard.bool(forKey: "migratedEarlierBelowMenuBarOffset") && !MenuBarAutoHide.isOn() {
+                let offsets = Set([22, Double(NSStatusBar.system.thickness)]
+                    + NSScreen.screens.map { Double($0.safeAreaInsets.top) }.filter { $0 > 0 })
+                try migrateEarlierBelowMenuBarOffset(sharedConfigurationURL, offsets: offsets)
+                for setup in screenSetupsWithOwnBars { try? migrateEarlierBelowMenuBarOffset(ownBarURL(for: setup), offsets: offsets) }
+                UserDefaults.standard.set(true, forKey: "migratedEarlierBelowMenuBarOffset")
+            }
         } catch {
             configurationError = errorMessage(error)
         }

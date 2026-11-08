@@ -316,6 +316,20 @@ func migrateStarterAppleLogo(_ url: URL) throws {
     try writeConfiguration(configurationData(root, editing: original), to: url)
 }
 
+/// Turns the offset an earlier setup wrote for Below menu bar into `belowMenuBar`, so the bar starts under each display's own
+/// menu bar. Earlier setups wrote the menu bar's height then, one of `offsets`, as the bar's own offset. A bar that already
+/// says whether it sits below the menu bar stays as it is.
+func migrateEarlierBelowMenuBarOffset(_ url: URL, offsets: Set<Double>) throws {
+    let original = try Data(contentsOf: url)
+    var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+    guard case let .object(bar) = root["bar"], bar["belowMenuBar"] == nil,
+          case let .number(offset) = bar["offset"], offsets.contains(offset) else { return }
+    var ids: [String] = []
+    root = try ConfigurationEdit(action: .bar, properties: ["offset": .number(0), "belowMenuBar": .bool(true)])
+        .applying(to: root, widgetIDs: &ids)
+    try writeConfiguration(configurationData(root, editing: original), to: url)
+}
+
 func configurationData(_ document: [String: ConfigurationValue]) throws -> Data {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

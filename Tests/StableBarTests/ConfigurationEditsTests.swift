@@ -49,6 +49,44 @@ final class ConfigurationEditsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url), migrated, "A converted file isn't written again")
     }
 
+    func testAnOffsetAnEarlierSetupWroteForBelowTheMenuBarBecomesBelowMenuBar() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let earlier: Set<Double> = [22, 32]
+        for offset in [22, 32] {
+            try Data(#"""
+            {
+              "bar": { "height": 40, "offset": \#(offset) },
+              "widgets": [ { "id": "clock", "type": "clock", "position": "right" } ]
+            }
+            """#.utf8).write(to: url)
+            try migrateEarlierBelowMenuBarOffset(url, offsets: earlier)
+            let migrated = try Data(contentsOf: url)
+            let bar = try JSONDecoder().decode(Configuration.self, from: migrated).bar
+            XCTAssertTrue(bar.belowMenuBar, "offset \(offset)")
+            XCTAssertEqual(bar.offset, 0, "offset \(offset)")
+            XCTAssertEqual(bar.height, 40)
+            let text = String(decoding: migrated, as: UTF8.self)
+            XCTAssertTrue(text.contains(#"{ "id": "clock", "type": "clock", "position": "right" }"#), text)
+
+            try migrateEarlierBelowMenuBarOffset(url, offsets: earlier)
+            XCTAssertEqual(try Data(contentsOf: url), migrated, "A converted file isn't written again")
+        }
+    }
+
+    func testAnOffsetNoEarlierSetupWroteStaysAsItIs() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        for bar in [#""bar": { "offset": 12 }"#, #""bar": { "offset": 0 }"#, #""bar": { "offset": 22, "belowMenuBar": false }"#,
+                    #""bar": { "offset": 22, "belowMenuBar": true }"#, #""bar": { "height": 40 }"#,
+                    #""screens": { "laptop": { "bar": { "offset": 22 } } }"#] {
+            let original = Data("{ \(bar), \"widgets\": [] }".utf8)
+            try original.write(to: url)
+            try migrateEarlierBelowMenuBarOffset(url, offsets: [22, 32])
+            XCTAssertEqual(try Data(contentsOf: url), original, bar)
+        }
+    }
+
     func testAGradientEditReplacesASavedColorPairInsteadOfMergingWithIt() throws {
         let gradient: ConfigurationValue = .object(["gradient": .object(["colors": .array([.string("#111111"), .string("#222222")])])])
         let main: [String: ConfigurationValue] = [
