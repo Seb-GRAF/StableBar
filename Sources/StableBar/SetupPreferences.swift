@@ -188,7 +188,15 @@ struct SetupPreferences: Equatable {
             allCases.filter { $0 != .notch || placement == .top || $0 == selected }
         }
 
+        /// Below the macOS menu bar, a preset leaves out Menu bar items, which the menu bar shows right above it.
         func preferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
+            var preferences = basePreferences(workspaces: workspaces, placement: placement)
+            preferences.workspaces = workspaces
+            if placement == .belowMenuBar { preferences.widgetSets.removeAll { $0 == .menuBarItems } }
+            return preferences
+        }
+
+        private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
             switch self {
             case .minimal: SetupPreferences(placement: placement, theme: .builtIn, widgetSets: [.sound, .menuBarItems])
             case .developer: SetupPreferences(appearance: .dark, placement: placement, theme: .package(id: "phosphor", version: nil),
@@ -207,9 +215,71 @@ struct SetupPreferences: Equatable {
     var clock = Clock.current
     var theme = Theme.current
     var widgetSets: [WidgetSet] = []
+    /// The source of a starter bar's Workspaces, as setup detects it; nil leaves the configuration's source.
+    var workspaces: WorkspaceSource?
     var keepWindowsClear: Bool?
     var keepNotificationsClear: Bool?
     var deferMeetings = false
+
+    /// The starter bar on the top edge, in the menu bar's place: the widgets of Resources/config.json.
+    static let menuBarStarter = widgets(#"""
+        [
+          { "id": "apple", "type": "appleMenu", "position": "left" },
+          { "id": "app-menu", "type": "appMenu", "position": "left" },
+          { "id": "sound", "type": "audio", "position": "right" },
+          { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm", "onClick": "open -a Calendar" },
+          { "id": "menu-bar-items", "type": "menuBarItems", "position": "right" }
+        ]
+        """#)
+
+    /// The starter bar below the macOS menu bar, which already shows the menus, the clock and the menu bar items.
+    static let belowMenuBarStarter = WidgetSet.workspaces(.spaces).widgets + WidgetSet.system.widgets + WidgetSet.sound.widgets
+
+    /// The widgets of the menu bar starter that repeat the macOS menu bar.
+    static let menuBarWidgetIDs: Set<String> = ["apple", "app-menu", "clock", "menu-bar-items"]
+
+    private static func widgets(_ json: String) -> [[String: ConfigurationValue]] {
+        try! JSONDecoder().decode([[String: ConfigurationValue]].self, from: Data(json.utf8))
+    }
+
+    private static func id(_ widget: [String: ConfigurationValue]) -> String {
+        (try? widget["id"]?.decoded(String.self)) ?? ""
+    }
+
+    /// The bar the chosen placement starts from, and how the configuration's widgets change to get there.
+    private struct StarterChange {
+        var configuration: Configuration
+        var removed: [String] = []
+        var added: [[String: ConfigurationValue]] = []
+        var isBelowMenuBarStarter = false
+    }
+
+    /// A configuration that is still a starter bar becomes the starter of the chosen placement. A changed one keeps
+    /// its widgets, except that below the menu bar it loses the menu bar starter's unchanged copies of what the menu
+    /// bar shows.
+    private func starterChange(in configuration: Configuration, document: [String: ConfigurationValue]?) -> StarterChange {
+        guard let widgets = try? document?["widgets"]?.decoded([[String: ConfigurationValue]].self) else {
+            return StarterChange(configuration: configuration)
+        }
+        let ids = widgets.map(Self.id)
+        func swap(to starter: [[String: ConfigurationValue]]) -> StarterChange? {
+            var swapped = document!
+            swapped["widgets"] = .array(starter.map(ConfigurationValue.object))
+            guard let data = try? JSONEncoder().encode(swapped),
+                  let target = try? JSONDecoder().decode(Configuration.self, from: data) else { return nil }
+            let starterIDs = starter.map(Self.id)
+            return StarterChange(configuration: target, removed: ids.filter { !starterIDs.contains($0) },
+                                 added: starter.filter { !ids.contains(Self.id($0)) },
+                                 isBelowMenuBarStarter: starter == Self.belowMenuBarStarter)
+        }
+        if placement == .belowMenuBar, widgets == Self.menuBarStarter, let change = swap(to: Self.belowMenuBarStarter) { return change }
+        if placement == .top, widgets == Self.belowMenuBarStarter, let change = swap(to: Self.menuBarStarter) { return change }
+        let removed = placement != .belowMenuBar ? [] : widgets.filter { widget in
+            Self.menuBarWidgetIDs.contains(Self.id(widget)) && Self.menuBarStarter.contains(widget)
+        }.map(Self.id)
+        return StarterChange(configuration: configuration, removed: removed, isBelowMenuBarStarter: widgets == Self.belowMenuBarStarter)
+    }
+
 
     func save(to url: URL, context: ConfigurationContext) throws {
         let original = try Data(contentsOf: url)
@@ -228,12 +298,16 @@ struct SetupPreferences: Equatable {
         }
         if self == SetupPreferences() { return data }
         var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
+        let edits = try edits(in: configuration, document: document)
+        if edits.isEmpty { return data }
         var ids = configuration.widgets.map(\.id)
-        for edit in try edits(in: configuration) { document = try edit.applying(to: document, widgetIDs: &ids) }
+        for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
         return try configurationData(document, editing: data)
     }
 
-    func edits(in configuration: Configuration) throws -> [ConfigurationEdit] {
+    /// The edits that turn `configuration` into the bar setup builds. `document` is the configuration file's own
+    /// content, which tells whether its widgets are still a starter bar.
+    func edits(in configuration: Configuration, document: [String: ConfigurationValue]? = nil) throws -> [ConfigurationEdit] {
         var edits: [ConfigurationEdit] = []
         switch theme {
         case .current: break
@@ -266,8 +340,13 @@ struct SetupPreferences: Equatable {
         if let keepNotificationsClear {
             edits.append(ConfigurationEdit(action: .bar, properties: ["keepNotificationsClear": .bool(keepNotificationsClear)]))
         }
+        let starter = starterChange(in: configuration, document: document)
+        for id in starter.removed { edits.append(ConfigurationEdit(action: .remove, id: id)) }
+        for widget in starter.added { edits.append(ConfigurationEdit(action: .add, properties: widget)) }
+        let target = starter.configuration
+        let kept = target.widgets.filter { !starter.removed.contains($0.id) }
         if clock != .current {
-            for widget in configuration.widgets {
+            for widget in kept {
                 if case .clock = widget.content {
                     edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: [
                         "format": .string(clock == .twentyFourHour ? "EEE d MMM  HH:mm" : "EEE d MMM  h:mm a")
@@ -275,10 +354,11 @@ struct SetupPreferences: Equatable {
                 }
             }
         }
-        var order = configuration.widgets.map(\.id)
-        var appended = order
-        for set in widgetSets {
-            let state = set.state(in: configuration)
+        let below = placement == .belowMenuBar || placement == .current && configuration.bar.belowMenuBar
+        var order = kept.map(\.id)
+        var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
+        for set in widgetSets where !(below && set == .menuBarItems) {
+            let state = set.state(in: target)
             if state == .added || state == .conflict { continue }
             for var widget in set.widgets {
                 let id = try widget["id"]!.decoded(String.self)
@@ -297,13 +377,13 @@ struct SetupPreferences: Equatable {
                 appended.append(id)
                 let ends = ["audio", "battery", "clock", "menuBarItems"]
                 let end = try ends.firstIndex(of: widget["type"]!.decoded(String.self)) ?? -1
-                let anchor = configuration.widgets.first { existing in
+                let anchor = kept.first { existing in
                     switch existing.content {
                     case .activeApp, .appMenu: widget["position"] == .string("left")
                     case .clock: widget["position"] == .string("right") && ends.firstIndex(of: "clock")! > end
                     case .menuBarItems: widget["position"] == .string("right") && ends.firstIndex(of: "menuBarItems")! > end
                     case let .provider(name):
-                        widget["position"] == .string("right") && ends.firstIndex(of: configuration.providers[name]!.type) ?? -1 > end
+                        widget["position"] == .string("right") && ends.firstIndex(of: target.providers[name]!.type) ?? -1 > end
                     default: false
                     }
                 }
@@ -311,8 +391,12 @@ struct SetupPreferences: Equatable {
             }
         }
         if order != appended { edits.append(ConfigurationEdit(action: .reorder, ids: order)) }
-        for case let .workspaces(source) in widgetSets
-        where source != configuration.workspaceSource && WidgetSet.workspaces(source).state(in: configuration) != .conflict {
+        var sources = widgetSets.compactMap { set -> WorkspaceSource? in if case let .workspaces(source) = set { source } else { nil } }
+        if sources.isEmpty, starter.isBelowMenuBarStarter {
+            // A starter that gains Workspaces without a detected manager uses macOS Spaces, which needs none.
+            if let workspaces { sources = [workspaces] } else if starter.added.contains(where: { Self.id($0) == "workspaces" }) { sources = [.spaces] }
+        }
+        for source in sources where source != configuration.workspaceSource && WidgetSet.workspaces(source).state(in: target) != .conflict {
             edits.append(ConfigurationEdit(action: .workspaceSource, name: source.rawValue))
         }
         return edits

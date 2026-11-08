@@ -194,6 +194,7 @@ final class SetupSession {
         workspaceSource = WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] },
                                                    configured: store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
+        preferences.workspaces = workspaceSource
         initialPreferences = preferences
         preview()
     }
@@ -279,7 +280,8 @@ final class SetupSession {
         do {
             var loader = ConfigurationLoader()
             let base = try loader.load(store.configurationURL, context: store.context)
-            try store.setSessionEdits(sessionEdits + shown.edits(in: base))
+            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+            try store.setSessionEdits(sessionEdits + shown.edits(in: base, document: document))
             self.base = base
             error = nil
         } catch {

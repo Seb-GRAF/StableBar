@@ -491,10 +491,10 @@ struct SetupTourView: View {
         HStack(spacing: 12) {
             ForEach(SetupPreferences.Preset.offered(on: session.placement, keeping: session.preset), id: \.self) { preset in
                 let selected = session.preset == preset
-                let sets = preset.preferences(workspaces: session.workspaceSource, placement: session.preferences.placement).widgetSets
+                let sets = preset.preferences(workspaces: session.workspaceSource, placement: session.placement).widgetSets
                 SetupTile(selected: selected) {
                     session.preset = selected ? nil : preset
-                    session.preferences = selected ? SetupPreferences(placement: session.preferences.placement)
+                    session.preferences = selected ? SetupPreferences(placement: session.preferences.placement, workspaces: session.workspaceSource)
                         : preset.preferences(workspaces: session.workspaceSource, placement: session.preferences.placement)
                 } label: {
                     VStack(alignment: .leading, spacing: 0) {
@@ -508,13 +508,23 @@ struct SetupTourView: View {
                         Text(preset.detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).padding(.top, 2)
                         Spacer(minLength: 12)
                         HStack(spacing: 4) {
-                            Image(systemName: "apple.logo").opacity(0.45)
-                            ForEach(sets.filter { if case .workspaces = $0 { true } else { false } }, id: \.self) { Image(systemName: $0.symbol) }
-                            Image(systemName: "menubar.rectangle").opacity(0.45)
-                            Spacer(minLength: 2)
-                            ForEach(sets.filter { if case .workspaces = $0 { false } else { $0 != .menuBarItems } }, id: \.self) { Image(systemName: $0.symbol) }
-                            Image(systemName: "clock").opacity(0.45)
-                            if sets.contains(.menuBarItems) { Image(systemName: SetupPreferences.WidgetSet.menuBarItems.symbol) }
+                            if session.placement == .belowMenuBar {
+                                // Below the menu bar, the starter has Workspaces, System and Sound.
+                                let workspaces = SetupPreferences.WidgetSet.workspaces(session.workspaceSource)
+                                Image(systemName: workspaces.symbol).opacity(sets.contains(workspaces) ? 1 : 0.45)
+                                Spacer(minLength: 2)
+                                Image(systemName: SetupPreferences.WidgetSet.system.symbol).opacity(sets.contains(.system) ? 1 : 0.45)
+                                ForEach(sets.filter { if case .workspaces = $0 { false } else { $0 != .system && $0 != .menuBarItems } },
+                                        id: \.self) { Image(systemName: $0.symbol) }
+                            } else {
+                                Image(systemName: "apple.logo").opacity(0.45)
+                                ForEach(sets.filter { if case .workspaces = $0 { true } else { false } }, id: \.self) { Image(systemName: $0.symbol) }
+                                Image(systemName: "menubar.rectangle").opacity(0.45)
+                                Spacer(minLength: 2)
+                                ForEach(sets.filter { if case .workspaces = $0 { false } else { $0 != .menuBarItems } }, id: \.self) { Image(systemName: $0.symbol) }
+                                Image(systemName: "clock").opacity(0.45)
+                                if sets.contains(.menuBarItems) { Image(systemName: SetupPreferences.WidgetSet.menuBarItems.symbol) }
+                            }
                         }
                         .font(.system(size: 8.5, weight: .medium))
                         .foregroundStyle(.white.opacity(0.85))
@@ -610,7 +620,7 @@ struct SetupTourView: View {
                 placementTile(.top, title: "Top edge", detail: "Hides the macOS menu bar.")
                 placementTile(.belowMenuBar, title: "Below menu bar", detail: "Keeps macOS menus visible.")
             }
-            if session.base?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
+            if session.store.configuration?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
                 HStack(spacing: 12) {
                     Text("Clock").font(.system(size: 13)).foregroundStyle(.white.opacity(0.6))
                     SettingsSegments(selection: $session.preferences.clock,

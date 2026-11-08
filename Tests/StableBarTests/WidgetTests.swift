@@ -687,6 +687,92 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     }
 }
 
+private let bundledStarter: Data = {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    return try! Data(contentsOf: repository.appending(path: "Resources/config.json"))
+}()
+
+private func widgetIDs(_ data: Data) throws -> [String] {
+    try JSONDecoder().decode(Configuration.self, from: data).widgets.map(\.id)
+}
+
+@Test func setupsMenuBarStarterIsTheBundledStarter() throws {
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    #expect(document["widgets"] == .array(SetupPreferences.menuBarStarter.map(ConfigurationValue.object)))
+}
+
+@Test func setupBelowTheMenuBarTurnsTheStarterIntoWorkspacesSystemAndSound() throws {
+    let updated = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: bundledStarter)
+    let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
+    #expect(configuration.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
+    #expect(configuration.widgets.map(\.position) == [.left, .right, .right])
+    #expect(configuration.workspaceSource == .yabai)
+    #expect(configuration.bar.belowMenuBar)
+}
+
+@Test func setupOnTheTopEdgeTurnsTheBelowStarterBackIntoTheMenuBarStarter() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    let top = try SetupPreferences(placement: .top).applying(to: below)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: top)
+    #expect(document["widgets"] == .array(SetupPreferences.menuBarStarter.map(ConfigurationValue.object)))
+}
+
+@Test func setupBelowTheMenuBarRemovesOnlyTheUnchangedMenuBarWidgets() throws {
+    let data = Data(##"""
+    {"widgets": [
+      {"id": "apple", "type": "appleMenu", "position": "left"},
+      {"id": "app-menu", "type": "appMenu", "position": "left"},
+      {"id": "mine", "type": "text", "position": "left", "text": "Hi"},
+      {"id": "sound", "type": "audio", "position": "right"},
+      {"id": "clock", "type": "clock", "position": "right", "format": "HH:mm"},
+      {"id": "menu-bar-items", "type": "menuBarItems", "position": "right"}
+    ]}
+    """##.utf8)
+    #expect(try widgetIDs(SetupPreferences(placement: .belowMenuBar).applying(to: data)) == ["mine", "sound", "clock"])
+}
+
+@Test func setupOnTheTopEdgeLeavesACustomizedBarsWidgetsAlone() throws {
+    let data = Data(##"{"bar": {"belowMenuBar": true}, "widgets": [{"id": "mine", "type": "text", "position": "left", "text": "Hi"}]}"##.utf8)
+    #expect(try widgetIDs(SetupPreferences(placement: .top).applying(to: data)) == ["mine"])
+}
+
+@Test func setupPresetsBelowTheMenuBarLeaveOutMenuBarItems() {
+    for preset in SetupPreferences.Preset.allCases {
+        #expect(!preset.preferences(workspaces: .spaces, placement: .belowMenuBar).widgetSets.contains(.menuBarItems))
+        #expect(preset.preferences(workspaces: .spaces, placement: .top).widgetSets.contains(.menuBarItems))
+    }
+}
+
+@Test func setupPresetsBelowTheMenuBarBuildOnTheBelowStarter() throws {
+    let developer = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    #expect(try widgetIDs(developer.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "sound", "battery"])
+    let everything = SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    // System is already on the starter; what a preset adds goes in front of Sound, as on any bar.
+    #expect(try widgetIDs(everything.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "meeting", "sound", "battery"])
+}
+
+@Test func setupPresetsOnTheTopEdgeGiveTheSameBarFromEitherStarter() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    for preset in SetupPreferences.Preset.allCases {
+        let preferences = preset.preferences(workspaces: .spaces, placement: .top)
+        #expect(try widgetIDs(preferences.applying(to: below)) == widgetIDs(preferences.applying(to: bundledStarter)))
+    }
+}
+
+@Test func setupBelowTheMenuBarLeavesNoClockToFormat() throws {
+    let updated = try SetupPreferences(placement: .belowMenuBar, clock: .twelveHour).applying(to: bundledStarter)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
+    #expect(try !widgetIDs(updated).contains("clock"))
+    #expect(document["widgetOverrides"] == nil)
+}
+
+@Test func setupPointsTheBelowStartersWorkspacesAtTheDetectedManager() throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    #expect(try JSONDecoder().decode(Configuration.self, from: below).workspaceSource == .spaces)
+    let updated = try SetupPreferences(workspaces: .yabai).applying(to: below)
+    #expect(try JSONDecoder().decode(Configuration.self, from: updated).workspaceSource == .yabai)
+}
+
 @Test func setupOffersTheNotchPresetOnlyOnTheTopEdge() {
     #expect(SetupPreferences.Preset.offered(on: .top) == SetupPreferences.Preset.allCases)
     #expect(SetupPreferences.Preset.offered(on: .belowMenuBar) == [.minimal, .developer, .workday, .everything])

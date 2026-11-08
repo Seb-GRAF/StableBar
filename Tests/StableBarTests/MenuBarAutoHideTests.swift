@@ -299,3 +299,17 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     #expect(SetupProgress.offersToFinish(skipped: true, completed: false))
     #expect(!SetupProgress.offersToFinish(skipped: true, completed: true))
 }
+
+/// Keeping the menu bar turns the starter bar into the one for below the menu bar, live.
+@MainActor
+@Test func setupKeepingTheMenuBarShowsTheBelowMenuBarStarter() async throws {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let starter = try String(contentsOf: repository.appending(path: "Resources/config.json"), encoding: .utf8)
+    let (session, fixture, store, _) = try setupSession(configuration: starter) { _ in .allowed }
+    defer { store.stop(); fixture.close() }
+    await session.place(.belowMenuBar)
+    #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])
+    #expect(store.configuration?.workspaceSource == session.workspaceSource)
+    await session.place(.top)
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
+}
