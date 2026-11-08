@@ -17,6 +17,30 @@ private var presentationRepository: URL {
     }
 }
 
+/// Moves `clock` on by `step` each time the popup waits on it, until `done`, at most ten times.
+@MainActor private func advance(_ clock: TestClock, by step: Duration = .milliseconds(200),
+                                until done: () -> Bool) async throws {
+    for _ in 0..<10 {
+        try await waitForPopup { done() || clock.sleeping > 0 }
+        if done() { return }
+        clock.advance(by: step)
+        await TestClock.settle()
+    }
+}
+
+/// Lets `duration` pass on `clock` once what just started waits on it, for a check that nothing happens meanwhile.
+@MainActor private func letPass(_ duration: Duration, on clock: TestClock) async {
+    await TestClock.settle()
+    clock.advance(by: duration)
+    await TestClock.settle()
+}
+
+/// A pointer above `anchor`, which is never on its way into a popup below the bar.
+@MainActor private func pointer(above anchor: NSView) -> NSPoint {
+    let frame = anchor.window!.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+    return NSPoint(x: frame.midX, y: frame.maxY + 100)
+}
+
 @Test(arguments: [false, true]) @MainActor func hoverTooltipsFitTheirTextAndDoNotCaptureClicks(long: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(##"""
     {"defaults":{"foreground":"#f4f4f5","background":"#25252c","borderWidth":0,"cornerRadius":9,"fontSize":12},
@@ -24,7 +48,9 @@ private var presentationRepository: URL {
       "popup":{"style":{},"layout":{"type":"text","text":"Session details"}}}]}
     """##.utf8))
     var presentations: [(panel: PopupPanel, onHover: Bool)] = []
-    let popup = WidgetPopup(present: { presentations.append(($0, $1)) })
+    var mouse = NSPoint.zero
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { presentations.append(($0, $1)) }, mouseLocation: { mouse }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -36,6 +62,7 @@ private var presentationRepository: URL {
     _ = try bar.bitmap(name: "hover-tooltip-before-\(long)")
     let widget = configuration.widgets[0]
     let anchor = try #require(bar.anchors(widget.id).first)
+    mouse = pointer(above: anchor)
     let text = long ? Array(repeating: "Will not sleep for 1 hour", count: 20).joined(separator: " ") : "Will not sleep for 1 hour"
     func hover(_ inside: Bool) {
         popup.hover(inside, store: store, anchor: anchor) {
@@ -45,7 +72,7 @@ private var presentationRepository: URL {
     }
     hover(true)
     #expect(presentations.isEmpty)
-    try await waitForPopup { !presentations.isEmpty }
+    try await advance(clock, by: .milliseconds(400)) { !presentations.isEmpty }
     let tooltip = try #require(presentations.first)
     try capturePopup(tooltip.panel, name: "hover-tooltip-after-\(long)")
     #expect(tooltip.onHover)
@@ -61,13 +88,13 @@ private var presentationRepository: URL {
     try capturePopup(try #require(presentations.last?.panel), name: "hover-tooltip-click-popup-\(long)")
     #expect(store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(anchor))
     hover(false)
-    try await Task.sleep(for: .milliseconds(250))
+    await letPass(.milliseconds(250), on: clock)
     #expect(popup.isOpen)
     popup.close()
     hover(true)
-    try await waitForPopup { popup.isOpen }
+    try await advance(clock, by: .milliseconds(400)) { popup.isOpen }
     hover(false)
-    try await waitForPopup { !popup.isOpen }
+    try await advance(clock) { !popup.isOpen }
     #expect(!popup.isOpen)
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
@@ -102,7 +129,9 @@ private var presentationRepository: URL {
                 {"id":"second","type":"text","text":"Second","position":"right","popupName":"details"}]}
     """#.utf8))
     var presentations: [(panel: PopupPanel, onHover: Bool)] = []
-    let popup = WidgetPopup(present: { presentations.append(($0, $1)) })
+    var mouse = NSPoint.zero
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { presentations.append(($0, $1)) }, mouseLocation: { mouse }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -112,6 +141,7 @@ private var presentationRepository: URL {
     defer { bar.close() }
     await bar.settle()
     let anchors = try configuration.widgets.map { try #require(bar.anchors($0.id).first) }
+    mouse = pointer(above: anchors[0])
     let details = try #require(configuration.popups["details"])
     func hover(_ inside: Bool, _ index: Int = 0) {
         popup.hover(inside, store: store, anchor: anchors[index]) {
@@ -124,35 +154,40 @@ private var presentationRepository: URL {
     }
 
     hover(true)
+    try await waitForPopup { clock.sleeping == 1 }
     hover(false)
-    try await Task.sleep(for: .milliseconds(450))
+    #expect(clock.sleeping == 0)
+    await letPass(.milliseconds(450), on: clock)
     #expect(presentations.isEmpty)
 
-    let hovered = ContinuousClock.now
     hover(true)
-    try await waitForPopup { popup.isOpen }
+    try await waitForPopup { clock.sleeping == 1 }
+    try #require(clock.sleeping == 1)
+    clock.advance(by: .milliseconds(399))
+    await TestClock.settle()
+    #expect(!popup.isOpen)
+    try await advance(clock, by: .milliseconds(1)) { popup.isOpen }
     #expect(popup.isOpen)
-    #expect(ContinuousClock.now - hovered >= .milliseconds(400))
     #expect(presentations.count == 1)
     #expect(presentations.first?.onHover == true)
     #expect(store.presentations["first"]?.popupAnchor == ObjectIdentifier(anchors[0]))
     hover(false)
     #expect(popup.isOpen)
     popup.hoverPopup(true)
-    try await Task.sleep(for: .milliseconds(250))
+    await letPass(.milliseconds(250), on: clock)
     #expect(popup.isOpen)
     popup.hoverPopup(false)
     hover(true)
-    try await Task.sleep(for: .milliseconds(250))
+    await letPass(.milliseconds(250), on: clock)
     #expect(popup.isOpen)
     #expect(presentations.count == 1)
     hover(false)
-    try await waitForPopup { !popup.isOpen }
+    try await advance(clock) { !popup.isOpen }
     #expect(!popup.isOpen)
     #expect(store.presentations["first"]?.popupAnchor == nil)
 
     hover(true)
-    try await waitForPopup { popup.isOpen }
+    try await advance(clock, by: .milliseconds(400)) { popup.isOpen }
     hover(false)
     hover(true, 1)
     popup.hoverPopup(false)
@@ -164,7 +199,7 @@ private var presentationRepository: URL {
     let count = presentations.count
     hover(false, 1)
     hover(true)
-    try await Task.sleep(for: .milliseconds(500))
+    await letPass(.milliseconds(500), on: clock)
     #expect(presentations.count == count)
     #expect(store.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
     click(1)
@@ -174,7 +209,7 @@ private var presentationRepository: URL {
     click()
     #expect(presentations.last?.onHover == false)
     hover(false)
-    try await Task.sleep(for: .milliseconds(500))
+    await letPass(.milliseconds(500), on: clock)
     #expect(popup.isOpen)
     #expect(presentations.count == count + 1)
     click()
@@ -210,13 +245,14 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     var point = NSPoint.zero
     var moving = false
     var samples = 0
+    let clock = TestClock()
     let popup = WidgetPopup(present: { panel, _ in presentations.append(panel) }, mouseLocation: {
         if moving {
             point.y -= 0.25
             samples += 1
         }
         return point
-    })
+    }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -241,7 +277,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
                               store: store, anchor: anchors[1])
         }
     }
-    try await waitForPopup { samples >= 4 }
+    try await advance(clock) { samples >= 4 }
     #expect(samples >= 4)
     #expect(popup.isOpen)
     #expect(presentations.count == 1)
@@ -249,15 +285,15 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     if finish == "enter" {
         if replace { popup.hover(false, store: store, anchor: anchors[1]) {} }
         popup.hoverPopup(true)
-        try await Task.sleep(for: .milliseconds(250))
+        await letPass(.milliseconds(250), on: clock)
         #expect(popup.isOpen)
         #expect(presentations.count == 1)
         popup.hoverPopup(false)
-        try await waitForPopup { !popup.isOpen }
+        try await advance(clock) { !popup.isOpen }
         #expect(!popup.isOpen)
     } else {
         if finish == "away" { point.x = target.minX - 100 }
-        try await waitForPopup { replace ? presentations.count == 2 : !popup.isOpen }
+        try await advance(clock) { replace ? presentations.count == 2 : !popup.isOpen }
         #expect(replace ? presentations.count == 2 : !popup.isOpen)
     }
     #expect(presentations.allSatisfy { !$0.isVisible })
@@ -386,7 +422,8 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     {"widgets":[{"id":"items","type":"text","text":"Items","position":"right",
       "popup":{"openOnHover":true,"style":{},"layout":{"type":"text","text":"Items"}}}]}
     """#.utf8))
-    let popup = WidgetPopup(present: { _, _ in })
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { _, _ in }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -400,14 +437,14 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     var reading = false
     popup.hover(true, store: store, anchor: anchor) {
         reading = true
-        try? await Task.sleep(for: .milliseconds(300))
+        try? await clock.sleep(for: .milliseconds(300))
         guard !Task.isCancelled else { return }
         popup.open(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: anchor, onHover: true)
     }
-    try await waitForPopup { reading }
+    try await advance(clock, by: .milliseconds(400)) { reading }
     #expect(reading)
     if leaves { popup.hover(false, store: store, anchor: anchor) {} }
-    try await Task.sleep(for: .milliseconds(500))
+    await letPass(.milliseconds(500), on: clock)
     #expect(popup.isOpen == !leaves)
     popup.close()
 }
@@ -419,7 +456,8 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     {"widgets":[{"id":"items","type":"text","text":"Items","position":"right",
       "popup":{"openOnHover":true,"style":{},"layout":{"type":"text","text":"Items"}}}]}
     """#.utf8))
-    let popup = WidgetPopup(present: { _, _ in })
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { _, _ in }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -436,7 +474,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     #expect(popup.toggleIfOpen(widget.id, anchor: anchor))
     popup.hover(false, store: store, anchor: anchor) {}
     popup.hoverPopup(false)
-    try await Task.sleep(for: .milliseconds(300))
+    await letPass(.milliseconds(300), on: clock)
     #expect(popup.isOpen)
     #expect(popup.toggleIfOpen(widget.id, anchor: anchor))
     #expect(!popup.isOpen)
@@ -452,7 +490,8 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
       "popup":{"openOnHover":true,"style":{},"layout":{"type":"text","text":"Today"}}}]}
     """#.utf8))
     var presentations = 0
-    let popup = WidgetPopup(present: { _, _ in presentations += 1 })
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { _, _ in presentations += 1 }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
     store.preparePresentations()
@@ -466,8 +505,11 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.hover(true, store: store, anchor: anchor) {
         popup.open(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: anchor, onHover: true)
     }
+    try await waitForPopup { clock.sleeping == 1 }
+    try #require(clock.sleeping == 1)
     if remove { popup.removeAnchor(anchor) } else { popup.close() }
-    try await Task.sleep(for: .milliseconds(500))
+    #expect(clock.sleeping == 0)
+    await letPass(.milliseconds(500), on: clock)
     #expect(presentations == 0)
     #expect(!popup.isOpen)
     #expect(store.presentations[widget.id]?.popupAnchor == nil)
