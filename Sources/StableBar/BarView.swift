@@ -172,6 +172,7 @@ struct BarView: View {
                    value: store.barEditing.isActive && !preview)
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
+        .focusEffectDisabled(!store.barEditing.isActive)
         .frame(maxHeight: .infinity, alignment: .top)
         .allowsHitTesting(!preview)
         .accessibilityHidden(preview)

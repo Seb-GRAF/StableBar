@@ -193,7 +193,7 @@ final class WidgetPopup {
     let pins = PopupPins()
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
-        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
+        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(nil) }
     }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }, clock: any Clock<Duration> = ContinuousClock()) {
         self.present = present
         self.mouseLocation = mouseLocation
@@ -285,7 +285,10 @@ final class WidgetPopup {
     private func keepOpen() {
         pinned = true
         hoverTask?.cancel()
-        panel?.makeKey()
+        if let panel, !panel.isKeyWindow {
+            panel.makeKey()
+            panel.makeFirstResponder(nil)
+        }
     }
 
     /// The open popup or tooltip, when the next one on the same bar `window` morphs out of it. Its windows are taken
