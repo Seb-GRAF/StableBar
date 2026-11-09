@@ -1,9 +1,11 @@
 import Foundation
+import ServiceManagement
 import Testing
 @testable import StableBar
 
 /// A setup session over a stand-in Mac that records what setup asks macOS to change about opening at login.
-@MainActor private func loginSession(inApplications: Bool) throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
+@MainActor private func loginSession(inApplications: Bool, status: @escaping () -> SMAppService.Status = { .notRegistered })
+    throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     store.reloadConfiguration()
@@ -18,6 +20,7 @@ import Testing
     system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
     system.workspaceSource = { $0 ?? .spaces }
     system.isInApplications = { inApplications }
+    system.loginStatus = status
     system.setOpenAtLogin = { logins.append($0) }
     return (SetupSession(store: store, system: system), fixture, store, { logins })
 }
@@ -53,6 +56,20 @@ func openAtLoginStaysAsItIsOtherwise(placement: SetupPreferences.Placement, inAp
     defer { store.stop(); fixture.close() }
     await session.place(placement)
     #expect(!session.opensAtLogin)
+    session.finish()
+    #expect(session.finished)
+    #expect(logins().isEmpty)
+}
+
+/// Turning Open at login off in System Settings while setup is open keeps it off: the recommendation only applies
+/// while the status is still the one setup opened with.
+@Test @MainActor func openAtLoginTurnedOffInSystemSettingsDuringSetupStaysOff() async throws {
+    var status = SMAppService.Status.enabled
+    let (session, fixture, store, logins) = try loginSession(inApplications: true, status: { status })
+    defer { store.stop(); fixture.close() }
+    #expect(session.opensAtLogin)
+    await session.place(.top)
+    status = .notRegistered
     session.finish()
     #expect(session.finished)
     #expect(logins().isEmpty)

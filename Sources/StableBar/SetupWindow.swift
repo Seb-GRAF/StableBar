@@ -146,6 +146,7 @@ struct SetupSystem {
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
     /// Whether StableBar runs from an Applications folder, the only place it can open at login from.
     var isInApplications: () -> Bool = { appIsInApplications() }
+    var loginStatus: () -> SMAppService.Status = { SMAppService.mainApp.status }
     var setOpenAtLogin: (_ enabled: Bool) throws -> Void = { try setLaunchAtLogin($0) }
     var defaults = UserDefaults.standard
     /// Whether setup previews its choices on the running bar, which starts the commands of the widgets they add. A scene
@@ -184,7 +185,9 @@ final class SetupSession {
     var preferences = SetupPreferences() { didSet { preview() } }
     /// The person's Open at login choice; nil until they make one.
     var openAtLogin: Bool?
-    var loginStatus = SMAppService.mainApp.status
+    var loginStatus: SMAppService.Status
+    /// Whether StableBar opened at login when setup opened, to tell a change made in System Settings meanwhile.
+    private let opensAtLoginAtStart: Bool
     /// Setup turns on Open at login when it makes the bar replace the menu bar: macOS then keeps the menu bar hidden
     /// even while StableBar isn't running, so without it nothing would sit on the top edge after the next login.
     var recommendsOpenAtLogin: Bool { placementChoice == .top && system.isInApplications() }
@@ -220,6 +223,9 @@ final class SetupSession {
     init(store: BarStore, system: SetupSystem = SetupSystem()) {
         self.store = store
         self.system = system
+        let loginStatus = system.loginStatus()
+        self.loginStatus = loginStatus
+        opensAtLoginAtStart = loginStatus == .enabled || loginStatus == .requiresApproval
         calendarAccess = system.calendarAccess()
         let menuBarHides = system.menuBarHides()
         self.menuBarHides = menuBarHides
@@ -498,7 +504,7 @@ final class SetupSession {
     }
 
     func refreshAccess() {
-        loginStatus = SMAppService.mainApp.status
+        loginStatus = system.loginStatus()
         calendarAccess = system.calendarAccess()
         menuBarHides = system.menuBarHides()
         accessibilityAccess = system.isTrusted()
@@ -547,19 +553,21 @@ final class SetupSession {
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()
             if let error = store.configurationError { throw CommandFailure(message: error) }
-            // Only a choice or the recommendation changes it, so a change made in System Settings meanwhile stays.
-            let status = SMAppService.mainApp.status
-            if let wanted = openAtLogin ?? (recommendsOpenAtLogin ? true : nil),
-               wanted != (status == .enabled || status == .requiresApproval) {
+            // A choice changes it, and so does the recommendation while the status is still the one setup opened
+            // with, so a change made in System Settings meanwhile stays.
+            let status = system.loginStatus()
+            let enabled = status == .enabled || status == .requiresApproval
+            let recommended = recommendsOpenAtLogin && enabled == opensAtLoginAtStart
+            if let wanted = openAtLogin ?? (recommended ? true : nil), wanted != enabled {
                 try system.setOpenAtLogin(wanted)
             }
-            loginStatus = SMAppService.mainApp.status
+            loginStatus = system.loginStatus()
             system.defaults.set(true, forKey: SetupProgress.completedKey)
             error = nil
             finished = true
         } catch {
             self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
-            loginStatus = SMAppService.mainApp.status
+            loginStatus = system.loginStatus()
         }
     }
 }
