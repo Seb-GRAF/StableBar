@@ -104,7 +104,7 @@ extension WidgetStyle {
             if let color { value[key] = color.configurationValue }
         }
         if let background { value["background"] = background.configurationValue }
-        for (key, number) in [("borderWidth", borderWidth), ("cornerRadius", cornerRadius), ("fontSize", fontSize),
+        for (key, number) in [("borderWidth", borderWidth), ("cornerRadius", cornerRadius), ("flare", flare), ("fontSize", fontSize),
                               ("iconSize", iconSize), ("paddingHorizontal", paddingHorizontal), ("paddingVertical", paddingVertical),
                               ("spacing", spacing), ("width", width), ("minWidth", minWidth), ("maxWidth", maxWidth),
                               ("height", height), ("shadowRadius", shadowRadius), ("paddingLeading", paddingLeading),

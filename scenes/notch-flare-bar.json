@@ -1,0 +1,18 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "height": 36, "style": { "background": "#00000000" } },
+    "groups": {
+      "notch": { "style": { "background": "#000000", "cornerRadius": 10, "flare": 8, "paddingHorizontal": 6 } }
+    },
+    "widgets": [
+      { "id": "battery", "type": "battery", "position": "center", "group": "notch", "style": { "foreground": "#f5f5f7", "height": 36 } },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "center", "group": "notch", "style": { "foreground": "#f5f5f7", "height": 36 } }
+    ]
+  },
+  "outputs": {
+    "battery": { "text": "82%", "values": { "percent": 0.82 }, "fields": { "percent": "82", "state": "battery" } }
+  },
+  "draw": "bar",
+  "width": 500
+}

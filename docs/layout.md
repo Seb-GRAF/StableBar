@@ -73,6 +73,12 @@ Use `"overflow": "never"` for essential widgets. If these alone exceed the avail
 
 A named group has one shared background, padding, border and spacing. Members must use the same `position`; their first appearance places the group. A group overflows as one unit, takes its highest member priority, and stays visible if any member sets `overflow` to `never`.
 
+Set `flare` in a group's style to square its top corners and curve them outward past its sides with that radius, the way the MacBook notch meets the top of the screen. `cornerRadius` then rounds only the bottom corners; `0` keeps the top corners square without a curve. Use it on a group that reaches the top of the bar, such as a black group beside the notch or a notch of your own on another display. The curves draw into the spacing beside the group. A flared group draws no border.
+
+```json
+"groups": { "notch": { "style": { "background": "#000000", "cornerRadius": 10, "flare": 8 } } }
+```
+
 A `spacer` uses the remaining width. Place it between widgets to separate them without choosing a fixed gap. Widget styles accept `minWidth` and `maxWidth` in addition to a fixed `width`.
 
 The [interactive example](../examples/interactive/config.json) combines groups, an expanding spacer, constrained text that rolls to the new app's name, and all popup controls. Copy both files from `examples/interactive` into your configuration directory. Its controls update demo state in `.control-state` next to the configuration; they do not alter macOS settings. The app list opens the selected application.

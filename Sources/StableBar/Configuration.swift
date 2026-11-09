@@ -181,6 +181,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var borderWidth: Double?
     var borderEdges: BarBorderEdges?
     var cornerRadius: Double?
+    var flare: Double?
     var fontName: String?
     var fontSize: Double?
     var fontWeight: String?
@@ -207,7 +208,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var states: [String: WidgetStyle]?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius
+        case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius, flare
         case fontName, fontSize, fontWeight, iconSize, paddingHorizontal, paddingVertical, spacing, width
         case minWidth, maxWidth, shadowRadius, shadowColor, height, paddingLeading, paddingTrailing, paddingTop
         case paddingBottom, offsetX, offsetY, opacity, placement, hoverForeground, states
@@ -226,6 +227,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             borderWidth: borderWidth ?? defaults.borderWidth,
             borderEdges: borderEdges ?? defaults.borderEdges,
             cornerRadius: cornerRadius ?? defaults.cornerRadius,
+            flare: flare ?? defaults.flare,
             fontName: fontName ?? defaults.fontName,
             fontSize: fontSize ?? defaults.fontSize,
             fontWeight: fontWeight ?? defaults.fontWeight,
@@ -273,6 +275,10 @@ extension WidgetStyle {
         borderWidth = try values.decodeIfPresent(Double.self, forKey: .borderWidth)
         borderEdges = try values.decodeIfPresent(BarBorderEdges.self, forKey: .borderEdges)
         cornerRadius = try values.decodeIfPresent(Double.self, forKey: .cornerRadius)
+        flare = try values.decodeIfPresent(Double.self, forKey: .flare)
+        if let flare, flare < 0 {
+            throw DecodingError.dataCorruptedError(forKey: .flare, in: values, debugDescription: "Flare must be nonnegative.")
+        }
         fontName = try values.decodeIfPresent(String.self, forKey: .fontName)
         fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize)
         fontWeight = try values.decodeIfPresent(String.self, forKey: .fontWeight)

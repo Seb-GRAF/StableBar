@@ -323,16 +323,39 @@ struct BarUnitSurface<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        HStack(spacing: style.spacing ?? spacing, content: content)
+        let surface = HStack(spacing: style.spacing ?? spacing, content: content)
             .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 0)
             .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 0)
             .padding(.top, style.paddingTop ?? style.paddingVertical ?? 0)
             .padding(.bottom, style.paddingBottom ?? style.paddingVertical ?? 0)
-            .background(style.background?.shapeStyle ?? AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
-            .overlay {
-                RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
-                    .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
-            }
+        let fill = style.background?.shapeStyle ?? AnyShapeStyle(Color.clear)
+        if let flare = style.flare {
+            surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
+        } else {
+            surface
+                .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
+                .overlay {
+                    RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
+                        .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                }
+        }
+    }
+}
+
+struct FlaredRectangle: Shape {
+    let cornerRadius: Double
+    let flare: Double
+
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.minX - flare, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX + flare, y: rect.minY))
+            path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY), tangent2End: CGPoint(x: rect.maxX, y: rect.maxY), radius: flare)
+            path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.maxY), radius: cornerRadius)
+            path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY), tangent2End: CGPoint(x: rect.minX, y: rect.minY), radius: cornerRadius)
+            path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY), tangent2End: CGPoint(x: rect.minX - flare, y: rect.minY), radius: flare)
+            path.closeSubpath()
+        }
     }
 }
 
