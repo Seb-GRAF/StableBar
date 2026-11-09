@@ -1,6 +1,13 @@
 {
   "$schema": "../scene.schema.json",
-  "configuration": "../Resources/config.json",
+  "configuration": {
+    "includes": [
+      "../Resources/config.json"
+    ],
+    "bar": {
+      "belowMenuBar": true
+    }
+  },
   "outputs": {
     "audio": {
       "text": "45%",
@@ -25,7 +32,8 @@
   "draw": "setup",
   "setup": {
     "step": "look",
-    "placement": "belowMenuBar"
+    "placement": "belowMenuBar",
+    "menuBarHides": true
   },
   "appearances": [
     "dark"
