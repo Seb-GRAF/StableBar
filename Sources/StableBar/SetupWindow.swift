@@ -51,8 +51,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + (intro ? 1 : -1))
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
         let display = BarDisplay(screen: screen)
-        // The screen as it is now: its menu bar shows or hides as setup changes it.
-        let menuBarHeight = { (NSScreen.screens.first { BarDisplay(screen: $0).id == display.id } ?? screen).menuBarHeight }
+        // The screen as it is now, found by its display number rather than its place among the screens, which can
+        // change while setup is open: its menu bar shows or hides as setup changes it.
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        let number = screen.deviceDescription[key] as? NSNumber
+        let menuBarHeight = { (NSScreen.screens.first { $0.deviceDescription[key] as? NSNumber == number } ?? screen).menuBarHeight }
         let host = NSHostingView(rootView: SetupTourView(session: session!, display: display,
                                                          menuBarHeight: menuBarHeight, dock: dock, intro: intro,
                                                          finish: { [weak self] in self?.showCard() },
