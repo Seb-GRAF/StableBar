@@ -239,7 +239,7 @@ enum SceneRenderer {
         case .current: store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: setupMenuBarHeight) } ?? 0
         }
         let view = ZStack(alignment: .top) {
-            SetupTourView(session: session, display: display, menuBarHeight: setupMenuBarHeight, dock: 0, intro: false,
+            SetupTourView(session: session, display: display, menuBarHeight: { setupMenuBarHeight }, dock: 0, intro: false,
                           finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
             bar(store).padding(.top, barTop)
             if !session.menuBarHides {

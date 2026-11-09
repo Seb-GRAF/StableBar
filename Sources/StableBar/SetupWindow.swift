@@ -50,8 +50,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + (intro ? 1 : -1))
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
-        let host = NSHostingView(rootView: SetupTourView(session: session!, display: BarDisplay(screen: screen),
-                                                         menuBarHeight: screen.menuBarHeight, dock: dock, intro: intro,
+        let display = BarDisplay(screen: screen)
+        // The screen as it is now: its menu bar shows or hides as setup changes it.
+        let menuBarHeight = { (NSScreen.screens.first { BarDisplay(screen: $0).id == display.id } ?? screen).menuBarHeight }
+        let host = NSHostingView(rootView: SetupTourView(session: session!, display: display,
+                                                         menuBarHeight: menuBarHeight, dock: dock, intro: intro,
                                                          finish: { [weak self] in self?.showCard() },
                                                          skip: { [weak self] in self?.closeTour() },
                                                          reveal: { [weak panel] in panel?.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1) },
