@@ -70,6 +70,8 @@ func openAtLoginStaysAsItIsOtherwise(placement: SetupPreferences.Placement, inAp
     #expect(session.opensAtLogin)
     await session.place(.top)
     status = .notRegistered
+    session.refreshAccess()
+    #expect(!session.opensAtLogin)
     session.finish()
     #expect(session.finished)
     #expect(logins().isEmpty)

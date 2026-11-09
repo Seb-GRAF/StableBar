@@ -193,7 +193,14 @@ final class SetupSession {
     var recommendsOpenAtLogin: Bool { placementChoice == .top && system.isInApplications() }
     /// Whether StableBar opens at login once setup finishes, as its switch shows it.
     var opensAtLogin: Bool {
-        openAtLogin ?? (loginStatus == .enabled || loginStatus == .requiresApproval || recommendsOpenAtLogin)
+        let enabled = loginStatus == .enabled || loginStatus == .requiresApproval
+        return openAtLogin ?? (enabled || recommendationApplies(enabled: enabled))
+    }
+
+    /// The recommendation applies while the login status is still the one setup opened with, so a change made in
+    /// System Settings meanwhile wins over it.
+    private func recommendationApplies(enabled: Bool) -> Bool {
+        recommendsOpenAtLogin && enabled == opensAtLoginAtStart
     }
     var calendarAccess: EKAuthorizationStatus
     var menuBarHides: Bool
@@ -553,12 +560,10 @@ final class SetupSession {
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()
             if let error = store.configurationError { throw CommandFailure(message: error) }
-            // A choice changes it, and so does the recommendation while the status is still the one setup opened
-            // with, so a change made in System Settings meanwhile stays.
+            // A choice changes it, and so does the recommendation while it applies.
             let status = system.loginStatus()
             let enabled = status == .enabled || status == .requiresApproval
-            let recommended = recommendsOpenAtLogin && enabled == opensAtLoginAtStart
-            if let wanted = openAtLogin ?? (recommended ? true : nil), wanted != enabled {
+            if let wanted = openAtLogin ?? (recommendationApplies(enabled: enabled) ? true : nil), wanted != enabled {
                 try system.setOpenAtLogin(wanted)
             }
             loginStatus = system.loginStatus()
