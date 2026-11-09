@@ -285,8 +285,10 @@ final class WidgetPopup {
     private func keepOpen() {
         pinned = true
         hoverTask?.cancel()
-        panel?.makeKey()
-        panel?.makeFirstResponder(nil)
+        if let panel, !panel.isKeyWindow {
+            panel.makeKey()
+            panel.makeFirstResponder(nil)
+        }
     }
 
     /// The open popup or tooltip, when the next one on the same bar `window` morphs out of it. Its windows are taken
