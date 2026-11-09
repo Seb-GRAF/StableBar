@@ -276,6 +276,9 @@ extension WidgetStyle {
         borderEdges = try values.decodeIfPresent(BarBorderEdges.self, forKey: .borderEdges)
         cornerRadius = try values.decodeIfPresent(Double.self, forKey: .cornerRadius)
         flare = try values.decodeIfPresent(Double.self, forKey: .flare)
+        if let flare, flare < 0 {
+            throw DecodingError.dataCorruptedError(forKey: .flare, in: values, debugDescription: "Flare must be nonnegative.")
+        }
         fontName = try values.decodeIfPresent(String.self, forKey: .fontName)
         fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize)
         fontWeight = try values.decodeIfPresent(String.self, forKey: .fontWeight)

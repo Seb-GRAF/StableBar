@@ -677,7 +677,18 @@
           "$ref": "#/definitions/number"
         },
         "flare": {
-          "$ref": "#/definitions/number",
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "Only group styles consume flare: the group's top corners curve outward past its sides with this radius, and cornerRadius rounds only its bottom corners. 0 keeps the top corners square."
         },
         "fontSize": {
