@@ -44,6 +44,9 @@
       "interval": null,
       "command": "/bin/zsh \"$CONFIG_DIR/controls.sh\"",
       "icon": "slider.horizontal.3",
+      "background": "#00000000",
+      "popupBackground": "#25252c",
+      "tooltipBackground": "#25252c",
       "popup": {
         "openOnHover": true,
         "pinnable": true,

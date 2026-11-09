@@ -23,7 +23,7 @@ struct PopupConfiguration: Decodable, Sendable {
     /// `defaults` already includes popupDefaults. A widget's explicit style reaches its popup;
     /// its bar role deliberately does not.
     func baseStyle(widget: WidgetConfiguration, defaults: WidgetStyle) -> WidgetStyle {
-        resolveStyle([defaults, widget.style, style])
+        resolveStyle([defaults, widget.style, style, WidgetStyle(background: widget.popupBackground)])
     }
 
     init(from decoder: Decoder) throws {

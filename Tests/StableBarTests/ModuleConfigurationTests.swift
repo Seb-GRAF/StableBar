@@ -240,7 +240,8 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     {"templates":{"metric":{"type":"script","position":"right","interval":15,"enabled":false,"tooltip":"CPU usage",
        "popup":{"openOnHover":false,"style":{},"layout":{"type":"text","text":"Details"}},
        "layout":{"type":"list","source":"cores","orientation":"vertical","row":{"type":"field","field":"usage"}},
-       "style":{"fontSize":12,"foreground":"#eeeeee"},"events":["workspace","wake"]}},
+       "style":{"fontSize":12,"foreground":"#eeeeee"},"background":"#00000000",
+       "popupBackground":"#223344","tooltipBackground":"#334455","events":["workspace","wake"]}},
      "widgets":[{"id":"cpu","template":"metric","command":"echo 10%"},
                 {"id":"clock","type":"clock","position":"right","format":"HH:mm"}],
      "widgetOverrides":{"cpu":{"style":{"background":"#111111"}}}}
@@ -248,7 +249,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     try writeConfiguration(##"""
     {"includes":["module.json"],"widgetOverrides":{
       "cpu":{"enabled":true,"interval":null,"events":["refresh"],"style":{"fontSize":16},
-             "tooltip":"System load","popup":{"openOnHover":true},"layout":{"orientation":"horizontal"}},
+             "tooltip":"System load","popup":{"openOnHover":true},"tooltipBackground":"#445566","layout":{"orientation":"horizontal"}},
       "clock":{"enabled":false,"format":"h:mm a"}}}
     """##, to: root)
     var loader = ConfigurationLoader()
@@ -262,6 +263,9 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(cpu.style.foreground == HexColor(0xeeeeeeff))
     #expect(cpu.style.background == .color(HexColor(0x111111ff)))
     #expect(cpu.tooltip == "System load")
+    #expect(cpu.background == .color(HexColor(0)))
+    #expect(cpu.popupBackground == .color(HexColor(0x223344ff)))
+    #expect(cpu.tooltipBackground == .color(HexColor(0x445566ff)))
     #expect(cpu.popup?.openOnHover == true)
     guard case let .list(source, row, orientation) = cpu.layout?.content else {
         Issue.record("The list from the template was not preserved.")

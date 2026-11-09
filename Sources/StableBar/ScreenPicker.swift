@@ -278,7 +278,7 @@ private struct ScreenThumbnail: View {
 
     private func color(_ widget: WidgetConfiguration) -> Color {
         let look = store.configuration?.onScreen(kind)
-        let style = resolveStyle([look?.defaults ?? WidgetStyle(), look?.roleStyle(widget.role) ?? WidgetStyle(), widget.style])
+        let style = resolveStyle([look?.defaults ?? WidgetStyle(), look?.roleStyle(widget.role) ?? WidgetStyle(), widget.barStyle])
         return (style.background?.firstColor ?? style.foreground)?.color ?? .secondary
     }
 }

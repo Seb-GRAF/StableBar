@@ -1085,6 +1085,9 @@ final class BarStore: NSObject {
         var layers = [layer("defaults", configuration.defaults)]
         if let role = widget.role { layers.append(layer("roles.\(role.rawValue)", configuration.roleStyle(role))) }
         layers.append(layer("widgets.\(widget.id).style", widget.style))
+        if let background = widget.background {
+            layers.append(layer("widgets.\(widget.id).background", WidgetStyle(background: background)))
+        }
         for source in configuration.widgets {
             if let style = scripts[source.id]?.output.widgetStyles?[widget.id] {
                 layers.append(layer("output.\(source.id).widgetStyles.\(widget.id)", style))

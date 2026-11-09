@@ -41,6 +41,8 @@ Set `popup.pinnable` to `true` to show a pin button in the popup's top trailing 
 
 `style` and `layout` are required. Use `"style": {}` to inherit the widget's theme. Without `height`, a popup fits its content when it opens; set `height` for a fixed size. Popup colors, typography, borders, corners and shadow inherit widget styles, then `popupDefaults`, then `defaults`. Popup width defaults to 360 points independently of the bar widget width; set it with `popup.style.width`. Padding and spacing can be overridden separately. Height is capped to the space below the bar; long content scrolls.
 
+A widget's `popupBackground` overrides the popup's background without changing its bar tile or tooltip. Set it in **Settings → Bar → Style → Popup background** or in JSON. It also works for shared and built-in popups; see [Backgrounds](widgets.md#backgrounds).
+
 Layout blocks:
 
 | `type` | Required fields | Content |

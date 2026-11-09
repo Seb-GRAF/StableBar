@@ -2,6 +2,50 @@ import Foundation
 import Testing
 @testable import StableBar
 
+@Test @MainActor func widgetBackgroundEditsStayInTheirProfileAndResetOneSurfaceAtATime() throws {
+    try withCustomizationEditor(##"""
+    {"includes":["settings.json"],"widgets":[],
+     "profiles":[{"name":"work","when":{"app":"com.example.inactive"},"configuration":{}}]}
+    """##, included: ##"""
+    {"tokens":{"surface":"#223344"},"popupDefaults":{"background":"@token.surface"},
+     "templates":{"clock":{"type":"clock","position":"right","tooltipBackground":"#445566"}},
+     "widgets":[{"id":"clock.time","template":"clock"}]}
+    """##) { editor, url in
+        let store = editor.store
+        let inherited = store.propertySources(path: "widgets.clock.time", key: "popupBackground", widgetID: "clock.time", values: [:])
+        #expect(inherited.sources.last?.origin?.token == "surface")
+        #expect(inherited.saved == nil)
+        editor.editBar(for: "work")
+        editor.set(["background": .string("#00000000"), "popupBackground": .string("@token.surface"),
+                    "tooltipBackground": .string("#667788")], for: "clock.time")
+        try editor.history.flush()
+        let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
+        #expect(document["widgetOverrides"] == nil)
+        let profile = try #require(document["profiles"]).decoded([ConfigurationProfile].self)[0]
+        #expect(profile.configuration["widgetOverrides"] == .object(["clock.time": .object([
+            "background": .string("#00000000"), "popupBackground": .string("@token.surface"),
+            "tooltipBackground": .string("#667788")
+        ])]))
+        let property = store.propertySources(path: "widgets.clock.time", key: "tooltipBackground", widgetID: "clock.time",
+                                              values: editor.properties(for: "clock.time"))
+        let saved = try #require(property.saved)
+        #expect(saved.path == ["widgets", "clock.time", "tooltipBackground"])
+        try store.removePropertySource(saved)
+        try editor.history.flush()
+        let widget = try #require(store.configuration?.widgets.first)
+        #expect(widget.background == .color(HexColor(0)))
+        #expect(widget.popupBackground == .color(HexColor(0x223344ff)))
+        #expect(widget.tooltipBackground == .color(HexColor(0x445566ff)))
+        editor.undo()
+        #expect(store.configuration?.widgets.first?.tooltipBackground == .color(HexColor(0x667788ff)))
+        editor.endProfileEditing()
+        let original = try #require(store.configuration?.widgets.first)
+        #expect(original.background == nil)
+        #expect(original.popupBackground == nil)
+        #expect(original.tooltipBackground == .color(HexColor(0x445566ff)))
+    }
+}
+
 @Test @MainActor func inheritedGradientEditsKeepTokenStopsInsideTheProfile() throws {
     try withCustomizationEditor(##"""
     {"tokens":{"accent":"#112233","surface":"#445566"},
