@@ -117,6 +117,7 @@ struct EssentialsDetails: View {
                                     .buttonStyle(.plain).help("Quit \(app["name"] ?? "app")…")
                                     .accessibilityLabel("Quit \(app["name"] ?? "app")")
                                     .frame(width: 18)
+                                    .modifier(FocusHighlight(appearance: appearance))
                             }
                         }
                     }
@@ -191,6 +192,7 @@ struct EssentialsDetails: View {
                         .padding(.vertical, 4).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
                 }
                 Divider().overlay(appearance.foreground.opacity(0.12))
                 open("Open Calendar", "com.apple.iCal", symbol: "calendar")
@@ -243,5 +245,6 @@ struct EssentialsDetails: View {
                 .padding(.vertical, 3).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .modifier(FocusHighlight(appearance: appearance))
     }
 }

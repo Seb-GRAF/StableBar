@@ -105,6 +105,7 @@ struct PopupView: View {
         }
         .modifier(PopupBackground(style: presentationStyle, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(),
                                   backgrounds: backgrounds ?? store.popup.backgrounds))
+        .focusEffectDisabled()
         .accessibilityIdentifier("\(widget.id)-popup")
     }
 }
@@ -288,21 +289,25 @@ struct PopupBlockView: View {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
             } else if let value = block.openField.flatMap({ fields[$0] }) ?? block.open {
                 Button { if let target = OpenTarget(value) { context.open(target) } } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
             } else if let pid = block.quitField.flatMap({ fields[$0] }).flatMap({ pid_t($0) }) {
                 Button { context.quit(pid) } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
             } else if let reference = block.openMenuBarItem {
                 Button { context.pressMenuBarItem(reference) } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
             } else if block.keepsLineHeight {
                 boxed(ZStack {
                     Text(" ").hidden()
@@ -429,6 +434,7 @@ struct PopupBlockView: View {
                 Text(title).frame(maxWidth: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .modifier(FocusHighlight(appearance: appearance))
         case let .slider(title, source, minimum, maximum, step, endStop, command):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             if let endStop {
@@ -839,6 +845,7 @@ private struct CornerButton: View {
     let foreground: Color
     let action: () -> Void
     @State private var hovered = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         Button(action: action) {
@@ -846,15 +853,31 @@ private struct CornerButton: View {
                 .contentTransition(.symbolEffect(.replace))
                 .font(.system(size: 11, weight: .semibold))
                 .frame(width: 22, height: 22)
-                .background(foreground.opacity(hovered ? 0.12 : 0), in: Circle())
+                .background(foreground.opacity(hovered || focused ? 0.12 : 0), in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(foreground.opacity(hovered ? 0.9 : 0.55))
+        .focused($focused)
+        .foregroundStyle(foreground.opacity(hovered || focused ? 0.9 : 0.55))
         .help(label)
         .accessibilityLabel(label)
         .onHover { hovered = $0 }
         .animation(.easeOut(duration: 0.12), value: hovered)
+    }
+}
+
+struct FocusHighlight: ViewModifier {
+    let appearance: WidgetAppearance
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .focused($focused)
+            .background {
+                if focused {
+                    RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground).padding(-4)
+                }
+            }
     }
 }
 
@@ -1061,6 +1084,7 @@ private struct AppMenuRow: View {
     let rest: (NSView) -> Void
     let press: () -> Void
     @State private var hovered = false
+    @FocusState private var focused: Bool
     @State private var anchor = NSView()
 
     var body: some View {
@@ -1083,12 +1107,13 @@ private struct AppMenuRow: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background((hovered || open) && entry.isEnabled ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+            .background((hovered || focused || open) && entry.isEnabled ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                         in: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)))
             .background(MenuAnchor(view: anchor))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focused($focused)
         .opacity(entry.isEnabled ? 1 : 0.4)
         .onHover { hovered = $0 }
         .task(id: hovered) {
@@ -1155,18 +1180,20 @@ private struct MenuBarItemButton: View {
     let click: (NSView) -> Void
     let hover: (NSView, Bool) -> Void
     @State private var hovered = false
+    @FocusState private var focused: Bool
     @State private var anchor = NSView()
 
     var body: some View {
         Button { click(anchor) } label: {
             Image(nsImage: entry.icon!).resizable().scaledToFit().frame(width: 18, height: 18)
                 .padding(5)
-                .background(hovered || openAnchor == ObjectIdentifier(anchor) ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+                .background(hovered || focused || openAnchor == ObjectIdentifier(anchor) ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                             in: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)))
                 .background(MenuAnchor(view: anchor))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .focused($focused)
         .accessibilityLabel(entry.title)
         .onHover { inside in
             hovered = inside
@@ -1180,17 +1207,19 @@ struct PopupMenuRow: View {
     let appearance: WidgetAppearance
     let runAction: (String) -> Void
     @State private var hovered = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         Group {
             if let command = item.onClick {
                 Button { runAction(command) } label: { label }
                     .buttonStyle(.plain)
+                    .focused($focused)
             } else {
                 label
             }
         }
-        .background(hovered && item.onClick != nil ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+        .background((hovered || focused) && item.onClick != nil ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                     in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
         .onHover { hovered = $0 }
     }
