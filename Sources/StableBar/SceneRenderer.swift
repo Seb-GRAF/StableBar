@@ -209,7 +209,8 @@ enum SceneRenderer {
     private static let setupMenuBarHeight = 30.0
 
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
-    /// bar above it as setup previews it.
+    /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
+    /// bar hide or show.
     private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, size: NSSize, dark: Bool, settle: Duration,
                                   to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
@@ -228,27 +229,45 @@ enum SceneRenderer {
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
         let session = SetupSession(store: store, system: system)
-        if let placement = setup.placement { await session.place(placement) }
-        if let preset = setup.preset { session.toggle(preset) }
         session.step = setup.step.rawValue
         store.appMenu.hidesAccessWarning = true
         store.barEditing.setupIsOpen = true
-        // The bar keeps its widgets as configured, but sits where the first step's choice puts it.
-        let barTop: Double = switch session.placement {
-        case .top: 0
-        case .belowMenuBar: setupMenuBarHeight
-        case .current: store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: setupMenuBarHeight) } ?? 0
-        }
+        let choices = SetupChoices()
         let view = ZStack(alignment: .top) {
-            SetupTourView(session: session, display: display, menuBarHeight: setupMenuBarHeight, dock: 0, intro: false,
-                          finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
-            bar(store).padding(.top, barTop)
-            if !session.menuBarHides {
-                // The macOS menu bar, over the top of the screen while it shows.
-                Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
+            SetupTourView(session: session, display: display, menuBarHeight: { hides ? 0 : setupMenuBarHeight }, dock: 0,
+                          intro: false, finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
+            SetupChrome(session: session, store: store)
+        }
+        .task {
+            if let placement = setup.placement { await session.place(placement) }
+            if let preset = setup.preset { session.toggle(preset) }
+            choices.made = true
+        }
+        try await OffscreenSnapshot.write(view, size: size, dark: dark, settle: settle, ready: { choices.made }, to: url)
+    }
+
+    /// Whether a setup scene's choices are made, which its drawing waits for.
+    @MainActor private final class SetupChoices {
+        var made = false
+    }
+
+    /// The bar above setup's tour where its configuration puts it, since setup's choices show in the tour, not on the
+    /// bar, and the macOS menu bar over the top of the screen while it shows. The tour points at the bar from the same
+    /// configuration and the same menu bar, so the two agree.
+    private struct SetupChrome: View {
+        let session: SetupSession
+        let store: BarStore
+
+        var body: some View {
+            let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
+            let top = store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: menuBar) } ?? 0
+            ZStack(alignment: .top) {
+                bar(store).padding(.top, top)
+                if !session.menuBarHides {
+                    Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
+                }
             }
         }
-        try await OffscreenSnapshot.write(view, size: size, dark: dark, settle: settle, to: url)
     }
 
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.

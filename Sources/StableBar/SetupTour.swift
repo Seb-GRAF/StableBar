@@ -4,8 +4,8 @@ struct SetupTourView: View {
     @Bindable var session: SetupSession
     /// The display setup shows on, which decides where its bar sits.
     let display: BarDisplay
-    /// The height of that display's macOS menu bar.
-    let menuBarHeight: Double
+    /// Reads the height of that display's macOS menu bar, which changes when setup hides or shows it.
+    let menuBarHeight: () -> Double
     /// The height the Dock takes at the bottom of the screen. The tour lays out above it.
     let dock: Double
     let finish: () -> Void
@@ -22,6 +22,8 @@ struct SetupTourView: View {
     @State private var looks: [(name: String, look: Configuration)] = []
     @State private var previews: [String: ThemePreview] = [:]
     @State private var confirmingSkip = false
+    /// The menu bar's height as last read, so the pointer to the bar follows the bar when the menu bar hides or shows.
+    @State private var currentMenuBarHeight: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The date scenes draw at, which holds the pointer still so two drawings match.
     @Environment(\.fixedDate) private var fixedDate
@@ -38,12 +40,13 @@ struct SetupTourView: View {
     ]
 
 
-    init(session: SetupSession, display: BarDisplay, menuBarHeight: Double, dock: Double, intro: Bool, finish: @escaping () -> Void,
+    init(session: SetupSession, display: BarDisplay, menuBarHeight: @escaping () -> Double, dock: Double, intro: Bool, finish: @escaping () -> Void,
          skip: @escaping () -> Void, reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?,
          watchIntro: @escaping () -> Void = {}) {
         _session = Bindable(session)
         self.display = display
         self.menuBarHeight = menuBarHeight
+        _currentMenuBarHeight = State(initialValue: menuBarHeight())
         self.dock = dock
         self.finish = finish
         self.skip = skip
@@ -60,7 +63,7 @@ struct SetupTourView: View {
     /// Where the bar sits on a display `width` points wide.
     private func barFrame(width: Double) -> CGRect {
         guard let configuration = session.store.configuration else { return .zero }
-        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: menuBarHeight),
+        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: currentMenuBarHeight),
                       width: width, height: configuration.barGeometry(for: display).layoutHeight)
     }
 
@@ -99,6 +102,12 @@ struct SetupTourView: View {
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
+        // The bar moves when macOS hides or shows its menu bar, which the screen's parameters announce a moment after
+        // setup's own change lands.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            currentMenuBarHeight = menuBarHeight()
+        }
+        .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
         }
