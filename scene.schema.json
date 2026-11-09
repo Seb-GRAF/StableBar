@@ -105,6 +105,10 @@
         "battery": {
           "description": "Whether the Mac has an internal battery, which presets add Battery for. true by default.",
           "type": "boolean"
+        },
+        "inApplications": {
+          "description": "Whether StableBar runs from an Applications folder, which Open at login needs. true by default.",
+          "type": "boolean"
         }
       }
     },
