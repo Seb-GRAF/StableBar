@@ -81,7 +81,13 @@ extension BarStore {
         let displayedKey = hover && key == "hoverBackground" ? "background" : key
 
         func configurationSources(_ root: String, keys: [String]) -> [PropertyValueSource] {
-            (contributions[root] ?? []).compactMap { contribution in
+            var root = root
+            var keys = keys
+            if let id = widgetID, root == "widgets.\(id)" {
+                root += "." + keys.joined(separator: ".")
+                keys = []
+            }
+            return (contributions[root] ?? []).compactMap { contribution in
                 let substituted = contribution.settingValue ?? contribution.value
                 let raw = selectedProperty(contribution.value, at: keys)
                 let value: ConfigurationValue?
@@ -109,10 +115,24 @@ extension BarStore {
                     components = root.components(separatedBy: ".")
                 }
                 return PropertyValueSource(path: components + (raw?.keys ?? []), value: rawValue, resolvedValue: value,
-                                           origin: origin, title: root + "." + keys.joined(separator: "."))
+                                           origin: origin, title: ([root] + keys).joined(separator: "."))
             }
         }
 
+        if let widget, path == "widgets.\(widget.id)" {
+            var inherited = ["defaults"]
+            if key == "background" {
+                if let role = widget.role { inherited.append("roles.\(role.rawValue)") }
+            } else {
+                inherited.append("popupDefaults")
+            }
+            inherited.append("widgets.\(widget.id).style")
+            if key == "popupBackground" {
+                if widget.popup != nil { inherited.append("widgets.\(widget.id).popup.style") }
+                else if let name = widget.popupName { inherited.append("popups.\(name).style") }
+            }
+            for root in inherited { sources += configurationSources(root, keys: ["background"]) }
+        }
         for root in paths {
             if hover { sources += configurationSources(root, keys: ["background"]) }
             sources += configurationSources(root, keys: [key])
@@ -139,7 +159,7 @@ extension BarStore {
         var layers: [WidgetStyle] = []
         var states = StyleStates()
         if let configuration, let widget, path == "widgets.\(widget.id).style" {
-            layers = [configuration.defaults, configuration.roleStyle(widget.role), widget.style]
+            layers = [configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]
             for source in configuration.widgets {
                 if let style = scripts[source.id]?.output.widgetStyles?[widget.id] {
                     runtime.append(("Output from \(source.id): widgetStyles", style))

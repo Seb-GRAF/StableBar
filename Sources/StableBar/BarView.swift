@@ -378,7 +378,7 @@ struct WidgetView: View {
     @Environment(\.fixedDate) private var fixedDate
 
     private var resolution: ResolvedWidgetStyle {
-        store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.style]))
+        store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
     }
 
     private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }

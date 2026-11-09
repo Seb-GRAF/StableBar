@@ -394,7 +394,7 @@ struct StyleFields {
     func colorButton(_ title: String, _ key: String) -> some View {
         let property = property(key)
         return FillButton(title: title, value: origin(key).flatMap(\.token).map { .string("@token.\($0)") } ?? property.editingFill,
-                   tokens: store.themeTokenColors, allowsGradient: key == "background", allowsNone: key != "foreground") {
+                   tokens: store.themeTokenColors, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key), allowsNone: key != "foreground") {
             set([key: $0])
         }
     }
@@ -535,8 +535,10 @@ struct StyleFields {
     }
 
     private func origin(_ key: String) -> ConfigurationOrigin? {
+        let property = property(key)
+        if let widgetID, path == "widgets.\(widgetID)" { return property.saved?.origin ?? property.sources.last?.origin }
         let role = widgetID.flatMap { id in store.configuration?.widgets.first { $0.id == id }?.role }
-        return property(key).saved?.origin ?? store.origins["\(path).\(key)"]
+        return property.saved?.origin ?? store.origins["\(path).\(key)"]
             ?? role.flatMap { store.origins["roles.\($0.rawValue).\(key)"] } ?? defaultsPath.flatMap { store.origins["\($0).\(key)"] }
     }
 

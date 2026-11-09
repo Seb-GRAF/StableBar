@@ -301,21 +301,21 @@ final class WidgetPopup {
 
     func showTooltip(_ text: String, widget: WidgetConfiguration, defaults: WidgetStyle,
                      store: BarStore, anchor: NSView) {
-        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: true) { _ in Text(text) }
+        openTooltip(id: widget.id, style: widget.tooltipStyle, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: true) { _ in Text(text) }
     }
 
     /// Shows a widget's hover controls in a tooltip under it, drawn in the tooltip's style. The pointer can move into
     /// it, and it stays open while a control in it is dragged.
     func showControls(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView,
                       @ViewBuilder controls: (WidgetStyle) -> some View) {
-        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: false) { style in
+        openTooltip(id: widget.id, style: widget.tooltipStyle, defaults: defaults, store: store, anchor: anchor, ignoresMouseEvents: false) { style in
             controls(style)
                 .onPreferenceChange(ControlEditingPreference.self) { [weak self] editing in self?.editControls(editing) }
         }
     }
 
     func showRow(widget: WidgetConfiguration, defaults: WidgetStyle, store: BarStore, anchor: NSView, @ViewBuilder row: () -> some View) {
-        openTooltip(id: widget.id, style: widget.style, defaults: defaults, store: store, anchor: anchor,
+        openTooltip(id: widget.id, style: WidgetStyle(background: widget.popupBackground).inheriting(widget.style), defaults: defaults, store: store, anchor: anchor,
                     maxWidth: anchor.window!.screen!.visibleFrame.width - 16, alignment: .leading, ignoresMouseEvents: false) { _ in row() }
         self.store = store
         watchEvents(anchor: anchor, pinnable: false)

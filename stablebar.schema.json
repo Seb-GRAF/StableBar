@@ -1411,6 +1411,18 @@
           "$ref": "#/definitions/string",
           "description": "Hover text. Overrides the script tooltip; an empty string hides it."
         },
+        "background": {
+          "$ref": "#/definitions/background",
+          "description": "Background of the bar widget only, overriding style.background."
+        },
+        "popupBackground": {
+          "$ref": "#/definitions/background",
+          "description": "Background of this widget's popups, overriding the popup's style."
+        },
+        "tooltipBackground": {
+          "$ref": "#/definitions/background",
+          "description": "Background of this widget's tooltips and hover controls."
+        },
         "onClick": {
           "$ref": "#/definitions/string"
         },

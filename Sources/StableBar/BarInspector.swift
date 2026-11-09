@@ -309,7 +309,23 @@ struct BarInspector: View {
     @ViewBuilder private func stylePanel(_ style: StyleFields, name: String, widget: WidgetConfiguration?) -> some View {
         SettingsGroup("Colors") {
             style.color("Text", "foreground")
-            style.color("Background", "background")
+            if let widget {
+                let configuration = store.configuration!.onScreen(screen)
+                let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+                let popup = widgetPopup(widget, store: store)
+                let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
+                    "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,
+                    "popupBackground": (popup?.baseStyle(widget: widget, defaults: defaults)
+                        ?? resolveStyle([defaults, widget.style, WidgetStyle(background: widget.popupBackground)])).background?.configurationValue ?? .null,
+                    "tooltipBackground": widget.tooltipStyle.inheriting(defaults).background?.configurationValue ?? .null
+                ], set: { editor.set($0, for: widget.id) },
+                    unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
+                backgrounds.color("Widget background", "background")
+                backgrounds.color("Popup background", "popupBackground")
+                backgrounds.color("Tooltip background", "tooltipBackground")
+            } else {
+                style.color("Background", "background")
+            }
             style.hoverBackground("Hover background")
             style.color("Accent", "accent")
             if widget == nil {
@@ -339,9 +355,15 @@ struct BarInspector: View {
                     unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
             }
         }
-        if widget != nil, Self.styleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil {
+        if let widget, Self.styleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
+            || ["background", "popupBackground", "tooltipBackground"].contains(where: {
+                store.propertySources(path: "widgets.\(widget.id)", key: $0, widgetID: widget.id, values: [:]).saved != nil
+            }) {
             Button("Go back to the Every widget look") {
-                style.unset(Dictionary(uniqueKeysWithValues: Self.styleKeys.map { ($0, ConfigurationValue.null) }).merging(HoverBackgroundRow.reset) { $1 })
+                editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: [
+                    "style": .object(Dictionary(uniqueKeysWithValues: Self.styleKeys.map { ($0, ConfigurationValue.null) }).merging(HoverBackgroundRow.reset) { $1 }),
+                    "background": .null, "popupBackground": .null, "tooltipBackground": .null
+                ]))
             }
             .controlSize(.small)
             .frame(maxWidth: .infinity)

@@ -396,6 +396,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let popup: PopupConfiguration?
     let popupName: String?
     let style: WidgetStyle
+    let background: BackgroundFill?
+    let popupBackground: BackgroundFill?
+    let tooltipBackground: BackgroundFill?
     let display: DisplaySelection
     let layout: PopupBlock?
     let hoverLayout: PopupBlock?
@@ -416,8 +419,11 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, timeZone, click
+        case expandOnHover, openOnHover, shown, hidden, details, timeZone, click, background, popupBackground, tooltipBackground
     }
+
+    var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
+    var tooltipStyle: WidgetStyle { WidgetStyle(background: tooltipBackground).inheriting(style) }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
@@ -444,6 +450,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         popup = try values.decodeIfPresent(PopupConfiguration.self, forKey: .popup)
         popupName = try values.decodeIfPresent(String.self, forKey: .popupName)
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? WidgetStyle()
+        background = try values.decodeIfPresent(BackgroundFill.self, forKey: .background)
+        popupBackground = try values.decodeIfPresent(BackgroundFill.self, forKey: .popupBackground)
+        tooltipBackground = try values.decodeIfPresent(BackgroundFill.self, forKey: .tooltipBackground)
         display = try values.decodeIfPresent(DisplaySelection.self, forKey: .display) ?? .all
         layout = try values.decodeIfPresent(PopupBlock.self, forKey: .layout)
         hoverLayout = try values.decodeIfPresent(PopupBlock.self, forKey: .hoverLayout)

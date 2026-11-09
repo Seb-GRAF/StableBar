@@ -208,11 +208,32 @@ In JSON, `shown` lists the items on the bar, in order, and `hidden` the items le
 }
 ```
 
+## Backgrounds
+
+In **Settings → Bar**, select a widget and open **Style**. **Widget background**, **Popup background** and **Tooltip background** change only the named surface. Each accepts a color, a light/dark pair, a theme color or a gradient; **None** makes it transparent. Tooltip background also applies to hover controls.
+
+In JSON, set `background`, `popupBackground` and `tooltipBackground` on the widget. For example, a transparent clock with opaque details and tooltip:
+
+```json
+{
+  "id": "clock",
+  "type": "clock",
+  "position": "right",
+  "details": true,
+  "tooltip": "Local time",
+  "background": "#00000000",
+  "popupBackground": "#25252c",
+  "tooltipBackground": "#25252c"
+}
+```
+
+Omitted overrides keep the existing style inheritance. In particular, `style.background` still supplies all three surfaces for older configurations; use the widget's top-level `background` to change only its bar tile. `popupBackground` also overrides `popup.style.background`, including shared and built-in popups. The revert arrow removes that surface's override without changing the others.
+
 ## Tooltips
 
 Set a widget's `tooltip` to show text when the pointer rests on it. It works without a popup and keeps the widget's click action. For example, add `"tooltip": "Will not sleep for 1 hour"` to an Amphetamine widget. You can also edit **Tooltip** in the widget’s **Settings → Bar → Behavior** inspector.
 
-Tooltips inherit `defaults`, `popupDefaults`, and the widget's explicit `style`, using the same colors, font, border, corners, shadow, and glass treatment as popups. Their size fits the text. They open and close with the bar's popup [motion and transition](create-a-widget.md#animation), like the [hover controls](create-a-widget.md#controls-on-hover) of Sound and other widgets.
+Tooltips inherit `defaults`, `popupDefaults`, and the widget's explicit `style`, using the same colors, font, border, corners, shadow, and glass treatment as popups. The widget's `tooltipBackground` overrides just their background, independently of `background` and `popupBackground` (see [Backgrounds](#backgrounds)). Their size fits the text. They open and close with the bar's popup [motion and transition](create-a-widget.md#animation), like the [hover controls](create-a-widget.md#controls-on-hover) of Sound and other widgets.
 
 A tooltip opens once the pointer has rested on its widget for `bar.hoverDelay` milliseconds, 400 by default, the same wait as hover controls and popups that open on hover. Change it under **Delay** in **Settings → General → Hover**. While one of them is open, moving to another widget opens that widget's at once, as macOS does, and with **Morph between popups** the open one moves into it.
 

@@ -92,6 +92,46 @@ private func output(_ json: String) throws -> ScriptOutput {
     }
 }
 
+@Test(arguments: [
+    ("", UInt32(0x111111ff), UInt32(0x222222ff), UInt32(0x111111ff)),
+    (##", "background":"#00000000""##, 0x00000000, 0x222222ff, 0x111111ff),
+    (##", "background":"#00000000", "popupBackground":"#334455""##, 0x00000000, 0x334455ff, 0x111111ff),
+    (##", "background":"#00000000", "popupBackground":"#334455", "tooltipBackground":"#556677""##,
+     0x00000000, 0x334455ff, 0x556677ff)
+])
+func widgetBackgroundsOverrideOnlyTheirOwnSurface(properties: String, bar: UInt32, popup: UInt32, tooltip: UInt32) throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(##"""
+    {"defaults":{"background":"#888888"},"popupDefaults":{"background":"#999999"},
+     "popups":{"details":{"style":{"background":"#222222"},"layout":{"type":"text","text":"Details"}}},
+     "widgets":[{"id":"clock","type":"clock","position":"right","popupName":"details",
+       "style":{"background":"#111111","fontSize":17}\##(properties)}]}
+    """##.utf8))
+    let widget = configuration.widgets[0]
+    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    let barStyle = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, widgets: configuration.widgets, output: { _ in nil }))
+    let popupStyle = try #require(configuration.popups["details"]).baseStyle(widget: widget, defaults: defaults)
+    let tooltipStyle = resolveStyle([defaults, widget.tooltipStyle])
+    #expect(barStyle.background == .color(HexColor(bar)))
+    #expect(popupStyle.background == .color(HexColor(popup)))
+    #expect(tooltipStyle.background == .color(HexColor(tooltip)))
+    #expect(popupStyle.fontSize == 17)
+    #expect(tooltipStyle.fontSize == 17)
+}
+
+@Test func transparentWidgetBackgroundKeepsPopupAndTooltipDefaults() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(##"""
+    {"defaults":{"background":"#888888"},"popupDefaults":{"background":"#999999"},
+     "widgets":[{"id":"clock","type":"clock","position":"right","background":"#00000000",
+       "popup":{"style":{},"layout":{"type":"text","text":"Details"}}}]}
+    """##.utf8))
+    let widget = configuration.widgets[0]
+    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    let barStyle = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, widgets: configuration.widgets, output: { _ in nil }))
+    #expect(barStyle.background == .color(HexColor(0)))
+    #expect(widget.popup?.baseStyle(widget: widget, defaults: defaults).background == .color(HexColor(0x999999ff)))
+    #expect(widget.tooltipStyle.inheriting(defaults).background == .color(HexColor(0x999999ff)))
+}
+
 @Test func gradientAnglesRunClockwiseFromTowardsTheTopAsInCSS() {
     func points(_ angle: Double) -> [CGFloat] {
         let points = BackgroundGradient(colors: [HexColor(0), HexColor(0)], angle: angle).points

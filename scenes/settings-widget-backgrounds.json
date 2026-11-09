@@ -1,0 +1,20 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "tooltip": "Local time",
+        "popup": {
+          "style": {},
+          "layout": { "type": "text", "text": "Clock details" }
+        }
+      }
+    ]
+  },
+  "draw": "settings",
+  "widget": "clock",
+  "tab": "style"
+}

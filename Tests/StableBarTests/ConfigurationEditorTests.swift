@@ -22,7 +22,7 @@ final class ConfigurationEditorTests: XCTestCase {
     }
 
     @MainActor func testResetClearsTheLookOfOwnWidgetsAndEveryOverrideOfImportedOnes() throws {
-        let fixture = try ThemeGalleryFixture(#"{"includes":["included.json"],"widgets":[{"id":"own","type":"text","position":"left","text":"Hi","format":"x","onClick":"open -a Mail","style":{"fontSize":20}},{"id":"items","type":"menuBarItems","position":"right","openOnHover":false}],"widgetOverrides":{"imported":{"text":"Changed","position":"right","style":{"fontSize":9}}}}"#)
+        let fixture = try ThemeGalleryFixture(##"{"includes":["included.json"],"widgets":[{"id":"own","type":"text","position":"left","text":"Hi","background":"#00000000","popupBackground":"#223344","tooltipBackground":"#334455","format":"x","onClick":"open -a Mail","style":{"fontSize":20}},{"id":"items","type":"menuBarItems","position":"right","openOnHover":false}],"widgetOverrides":{"imported":{"text":"Changed","position":"right","style":{"fontSize":9}}}}"##)
         defer { fixture.close() }
         try fixture.write(#"{"widgets":[{"id":"imported","type":"text","position":"left","text":"Original"}]}"#, to: fixture.directory.appending(path: "included.json"))
         let store = try fixture.store()
