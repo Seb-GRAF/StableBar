@@ -251,16 +251,18 @@ enum SceneRenderer {
     }
 
     /// The bar above setup's tour, with its widgets as configured but where the first step's choice puts it, and the
-    /// macOS menu bar over the top of the screen while it shows.
+    /// macOS menu bar over the top of the screen while it shows. Below a hidden menu bar, the bar sits on the top edge,
+    /// as in the app; a choice resets the configured offset, as setup's own edits do.
     private struct SetupChrome: View {
         let session: SetupSession
         let store: BarStore
 
         var body: some View {
+            let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
             let top: Double = switch session.placement {
             case .top: 0
-            case .belowMenuBar: setupMenuBarHeight
-            case .current: store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: setupMenuBarHeight) } ?? 0
+            case .belowMenuBar: menuBar
+            case .current: store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: menuBar) } ?? 0
             }
             ZStack(alignment: .top) {
                 bar(store).padding(.top, top)
