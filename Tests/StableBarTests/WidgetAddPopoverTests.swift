@@ -400,9 +400,7 @@ final class WidgetAddPopoverTests: XCTestCase {
     }
 
     @MainActor private func accessibleText(_ value: NSView) -> [String] {
-        var text = (value as? NSTextField).map { [$0.stringValue, $0.placeholderString ?? ""] } ?? []
-        text += value.subviews.flatMap(accessibleText)
-        return text
+        visibleText(value)
     }
 
     @MainActor private func click(window: NSWindow, at point: CGPoint) throws -> NSEvent {
