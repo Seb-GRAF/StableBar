@@ -284,10 +284,14 @@ private func calls(_ log: URL) -> [Substring] {
     try await Task.sleep(for: .milliseconds(100))
     #expect(fixture.store.error == nil)
     let app = WorkspaceApp(workspace: "1", name: "Safari", bundleID: "com.apple.Safari")
-    fixture.store.focus(WorkspaceWindow(id: 11, title: "Docs", app: app, reference: "ow_a"))
-    for _ in 0..<100 where fixture.store.error == nil { try await Task.sleep(for: .milliseconds(20)) }
+    await fixture.store.focus(WorkspaceWindow(id: 11, title: "Docs", app: app, reference: "ow_a"))?.value
+    // The refresh after the failed focus fails here too, so the focus failure stays.
     #expect(fixture.store.error == "OmniWM: not_found")
-    #expect(calls(fixture.log).sorted() == ["window focus ow_a --format json", "workspace focus-name 1 --format json"])
+    #expect(calls(fixture.log).sorted() == [
+        "query windows --fields id,window-id,workspace,app,title,is-scratchpad --format json",
+        "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json",
+        "window focus ow_a --format json", "workspace focus-name 1 --format json"
+    ])
 }
 
 @Test @MainActor func omniwmEventsRefreshWorkspacesAfterTheSubscriptionStarts() async throws {
