@@ -2,12 +2,17 @@
   "$schema": "../scene.schema.json",
   "configuration": {
     "workspaceSource": "aerospace",
+    "groups": {
+      "clock": {
+        "style": { "background": { "light": "#ffffff", "dark": "#36383c" }, "cornerRadius": 17, "paddingHorizontal": 3, "paddingVertical": 3, "spacing": 3 }
+      }
+    },
     "widgets": [
       { "id": "workspaces", "type": "workspaces", "position": "left" },
       { "id": "app", "type": "appMenu", "position": "left" },
       { "id": "battery", "type": "battery", "position": "right" },
-      { "id": "date", "type": "clock", "format": "EEE d MMM", "position": "right" },
-      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+      { "id": "date", "type": "clock", "format": "EEE d MMM", "position": "right", "group": "clock" },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right", "group": "clock" }
     ]
   },
   "workspaces": [

@@ -314,7 +314,7 @@ struct BarUnitView: View {
             Color.clear.frame(minWidth: unit.widgets[0].style.minWidth ?? 0,
                               idealWidth: unit.widgets[0].style.minWidth ?? 0, maxWidth: .infinity, minHeight: 1)
         } else {
-            BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
+            BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
                 ForEach(unit.widgets) { widget in
                     WidgetView(widget: widget, defaults: config.defaults, popupDefaults: config.popupDefaults, store: store,
                                monitor: display, defaultAnimation: config.bar.animation, defaultTransition: config.bar.motion.transition)
@@ -329,8 +329,10 @@ struct BarUnitView: View {
 /// The same group spacing and surface wrap normal widgets and their edit decorations.
 struct BarUnitSurface<Content: View>: View {
     let style: WidgetStyle
+    let defaults: WidgetStyle
     let spacing: Double
     @ViewBuilder let content: () -> Content
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let surface = HStack(spacing: style.spacing ?? spacing, content: content)
@@ -342,11 +344,14 @@ struct BarUnitSurface<Content: View>: View {
         if let flare = style.flare {
             surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
         } else {
+            let outlined = contrast == .increased && style.background != nil
+            let appearance = WidgetAppearance(style, defaults: defaults)
             surface
                 .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
                 .overlay {
                     RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
-                        .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                        .strokeBorder(outlined ? appearance.foreground : style.borderColor?.color ?? .clear,
+                                      lineWidth: outlined ? appearance.borderWidth : style.borderWidth ?? 0)
                 }
         }
     }
