@@ -5,6 +5,7 @@ struct BarDisplay {
     let isBuiltIn: Bool
     let isMain: Bool
     let notch: ClosedRange<CGFloat>?
+    var notchHeight: CGFloat = 0
     let isPortrait: Bool
 
     init(id: Int, isBuiltIn: Bool, isMain: Bool, notch: ClosedRange<CGFloat>?, isPortrait: Bool = false) {
@@ -23,6 +24,7 @@ struct BarDisplay {
         isPortrait = screen.frame.height > screen.frame.width
         if let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea {
             notch = (left.maxX - screen.frame.minX)...(right.minX - screen.frame.minX)
+            notchHeight = left.height
         } else {
             notch = nil
         }

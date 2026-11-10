@@ -1932,6 +1932,10 @@
         "notchSpacing": {
           "$ref": "#/definitions/number"
         },
+        "fillNotch": {
+          "$ref": "#/definitions/boolean",
+          "description": "Paint the notch black behind the widgets, so screen shares and screenshots, which leave the notch out, show the bar as the display does. Disabled by default."
+        },
         "style": {
           "anyOf": [
             {
@@ -2087,6 +2091,9 @@
             },
             "notchSpacing": {
               "$ref": "#/definitions/bar/properties/notchSpacing"
+            },
+            "fillNotch": {
+              "$ref": "#/definitions/bar/properties/fillNotch"
             },
             "style": {
               "$ref": "#/definitions/bar/properties/style"
