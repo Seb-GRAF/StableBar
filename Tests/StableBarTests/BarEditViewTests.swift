@@ -398,10 +398,13 @@ final class BarEditViewTests: XCTestCase {
     let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1512, height: 100), styleMask: [.borderless],
                           backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
+    // SwiftUI hit-tests only a window that's on screen; a transparent one stays out of sight.
+    window.alphaValue = 0
     defer { window.close() }
     let host = NSHostingView(rootView: BarView(store: store, display: display))
     host.sizingOptions = []
     window.contentView = host
+    window.orderFrontRegardless()
     func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
         view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
     }
@@ -427,4 +430,26 @@ final class BarEditViewTests: XCTestCase {
     }
     let last = try #require(tray.frames["b"])
     #expect(last.minX >= 0 && last.maxX <= tray.bounds.width, "Scrolled to its end, the group shows its last member: \(last) in \(tray.bounds)")
+    var selected: String?
+    store.onCustomizeWidget = { selected = $0 }
+    func click(_ point: CGPoint, until condition: () -> Bool) async throws -> Bool {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: tray.convert(point, to: nil), modifierFlags: [],
+                timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            window.sendEvent(event)
+        }
+        for _ in 0..<100 {
+            host.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+    let selectedLast = try await click(CGPoint(x: last.midX, y: last.midY)) { selected == "b" }
+    #expect(selectedLast, "A click on the scrolled-in member selects it")
+    // The − badge's center, 5 points above and left of the tile's corner on a 14-point circle.
+    let removedLast = try await click(CGPoint(x: last.minX + 2, y: last.minY + 2)) {
+        store.configuration?.widgets.map(\.id) == ["a", "c"]
+    }
+    #expect(removedLast, "A click on the scrolled-in member's − badge removes it")
 }
