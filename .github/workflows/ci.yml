@@ -592,12 +592,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.tags.outputs.finish }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx StableBar.dmg; then
             gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern StableBar.dmg --dir dist
+            ./scripts/check-update-key.sh
           else
             brew install create-dmg
             STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
+            ./scripts/check-update-key.sh
             if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
               gh release upload "v$VERSION" dist/StableBar.dmg --repo "$GITHUB_REPOSITORY" --clobber
             else
