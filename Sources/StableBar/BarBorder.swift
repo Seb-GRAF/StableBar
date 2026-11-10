@@ -6,6 +6,7 @@ struct BarSurface: ViewModifier {
     let settings: BarSettings
     let kind: ScreenKind
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
         let style = store.barStyle(on: kind)
@@ -13,6 +14,14 @@ struct BarSurface: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0)))
             .modifier(GlassBackground(fill: style.background ?? settings.background, glass: settings.glass, surface: \.bar,
                                       shape: RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0))))
+            .background {
+                // A see-through strip shows the popups' surface, which the theme pairs with its text.
+                if reduceTransparency {
+                    let look = store.configuration!.look(on: kind)
+                    Color.clear.modifier(GlassBackground(fill: look.popupDefaults.inheriting(look.defaults).background, glass: settings.glass,
+                                                         surface: \.popups, shape: RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0))))
+                }
+            }
             .overlay { BarBorder(style: style) }
             .animation(reduceMotion ? nil : settings.animation.value, value: style)
     }
@@ -24,9 +33,10 @@ struct GlassBackground<S: Shape>: ViewModifier {
     let surface: KeyPath<GlassSettings, Bool>
     let shape: S
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *), glass.enabled, glass[keyPath: surface] {
+        if #available(macOS 26, *), glass.enabled, glass[keyPath: surface], !reduceTransparency {
             // Keep one view structure while the color comes and goes (hover, open, data states): switching
             // branches rebuilds the content, which dismantles a widget's popup anchor and closes its popup.
             let visible = fill.map { (colorScheme == .dark ? $0.firstColor.dark : $0.firstColor.light) & 0xff > 0 } ?? false
@@ -37,9 +47,42 @@ struct GlassBackground<S: Shape>: ViewModifier {
                 }
             }
         } else {
-            let empty = surface == \GlassSettings.popups ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(Color.clear)
+            let empty = if surface != \GlassSettings.popups {
+                AnyShapeStyle(Color.clear)
+            } else if reduceTransparency {
+                AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
+            } else {
+                AnyShapeStyle(.regularMaterial)
+            }
+            // Widgets keep their fill, tints included: they sit on the bar or a popup, which are opaque.
+            let fill = reduceTransparency && surface != \GlassSettings.widgets ? self.fill?.opaque : self.fill
             content.background(fill?.shapeStyle ?? empty, in: shape)
         }
+    }
+}
+
+private extension BackgroundFill {
+    var opaque: BackgroundFill {
+        switch self {
+        case let .color(color): .color(color.opaque)
+        case let .gradient(gradient):
+            .gradient(BackgroundGradient(colors: gradient.colors.map(\.opaque), angle: gradient.angle, locations: gradient.locations))
+        }
+    }
+}
+
+private extension HexColor {
+    /// The color at full opacity. A clear color stays clear: a see-through strip shows the surface `BarSurface` puts under
+    /// it, and a popup hides its background while a morph card draws it.
+    var opaque: HexColor {
+        HexColor(light: light & 0xff == 0 ? light : light | 0xff, dark: dark & 0xff == 0 ? dark : dark | 0xff)
+    }
+}
+
+extension WidgetAppearance {
+    /// Increase Contrast outlines tiles and popups in their text color, which the theme pairs with their background.
+    func border(increasedContrast: Bool) -> Color {
+        increasedContrast ? foreground : borderColor
     }
 }
 

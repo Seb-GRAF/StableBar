@@ -82,3 +82,11 @@ A reference to a token that no layer defines is an error. Built-in defines all o
 Every widget, popup and bar that has a background becomes glass in the same shape, tinted with that background's color, so hover, open and data-state colors still show. Borders, corners, shadows and text keep the theme's style. Transparent backgrounds stay transparent. `transparency` (0.3 by default) sets how much glass shows through the color, from `0`, the theme's color, to `1`, pure glass; the higher it is, the more a busy or bright wallpaper can make text hard to read. StableBar uses Apple's clear glass with the theme's color as its dimming layer: the frosted regular glass switches small elements between light and dark to match what is behind them, which would leave theme text unreadable. Set `widgets`, `popups` or `bar` to `false` to keep that surface's plain color. Before macOS 26, StableBar draws the colors as usual.
 
 Glass in a background window renders flat, without refraction. StableBar's bar and popups report themselves as active to AppKit so the glass refracts. The glass setting doesn't change their keyboard behavior.
+
+## Reduce Transparency and Increase Contrast
+
+StableBar follows **Reduce transparency** and **Increase contrast** in **System Settings → Accessibility → Display**, and changes as soon as you switch either. No setting in your configuration turns them on or off.
+
+With Reduce transparency on, the bar and popups are opaque. Liquid Glass and the popups' system material are off, and their colors lose any transparency. A see-through strip, such as Built-in's between its tiles, takes the popups' color, the surface the theme sets its text on, or the window background color when popups have none. Widgets keep their own colors, hover and data-state tints included, since they now sit on an opaque bar.
+
+With Increase contrast on, popups, tooltips and widgets that have a background, such as Built-in's tiles or a hover highlight, are outlined in their text color. macOS turns on Reduce transparency with Increase contrast, so text never sits on the wallpaper then.

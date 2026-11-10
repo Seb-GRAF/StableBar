@@ -403,6 +403,7 @@ struct WidgetView: View {
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
@@ -569,7 +570,8 @@ struct WidgetView: View {
                                   shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
             RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+                .strokeBorder(appearance.border(increasedContrast: contrast == .increased && style.background != nil),
+                              lineWidth: appearance.borderWidth)
         }
         .overlay(alignment: .topTrailing) {
             if let error = store.scripts[widget.id]?.error ?? store.actionErrors[widget.id] {
