@@ -437,6 +437,29 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     #expect(items.map(\.hasMenu) == [false, true])
 }
 
+/// A row's title comes from the text it draws, never from its submenu's rows.
+@Test @MainActor func appMenuRowsTakeNoTitleFromTheirSubmenu() {
+    let tree = AccessibilityTree()
+    func history(_ pid: pid_t) -> AXUIElement {
+        tree.add(pid, role: kAXMenuRole, children: [tree.add(pid + 1, role: kAXMenuItemRole, children: [
+            tree.add(pid + 2, role: kAXStaticTextRole, [kAXValueAttribute: "Oct 27: $4.20" as CFString]),
+        ])])
+    }
+    let session = tree.add(9001, role: kAXStaticTextRole, [kAXValueAttribute: "Session 42%" as CFString])
+    let item = tree.add(8000, role: kAXMenuBarItemRole, children: [tree.add(8001, role: kAXMenuRole, children: [
+        tree.add(9000, role: kAXMenuItemRole, children: [session, history(9100)]),
+        tree.add(9002, role: kAXMenuItemRole, children: [history(9200)]),
+        tree.add(9003, role: kAXMenuItemRole, [kAXTitleAttribute: "Quit" as CFString]),
+    ])])
+    let menu = AppMenu(checkAccess: { true }, readAttribute: tree.read, readAttributes: { names, element in names.map { tree.read($0, element) } })
+    guard case let .appMenu(entries) = menu.popup(forMenuBarItem: item).layout.content else {
+        Issue.record("The popup isn't an app menu")
+        return
+    }
+    #expect(entries.map(\.title) == ["Session 42%", "Quit"])
+    #expect(entries.map(\.hasSubmenu) == [true, false])
+}
+
 @Test func macOS27FallsBackToMenuBarAgentsOwnListWhenItsWindowsHoldNoItems() async {
     let tree = AccessibilityTree()
     let clock = tree.add(8001, role: kAXMenuBarItemRole, [kAXIdentifierAttribute: "com.apple.menuextra.clock" as CFString])

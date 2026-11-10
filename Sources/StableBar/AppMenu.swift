@@ -170,8 +170,12 @@ final class AppMenu: NSObject {
     }
 
     private func text(in element: AXUIElement) -> String? {
-        let parts = children(of: element).compactMap { child in
-            attribute(kAXRoleAttribute, of: child) as? String == kAXStaticTextRole ? attribute(kAXValueAttribute, of: child) as? String : text(in: child)
+        let parts = children(of: element).compactMap { child -> String? in
+            switch attribute(kAXRoleAttribute, of: child) as? String {
+            case kAXStaticTextRole: return attribute(kAXValueAttribute, of: child) as? String
+            case kAXMenuRole: return nil
+            default: return text(in: child)
+            }
         }
         return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
