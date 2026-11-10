@@ -415,27 +415,46 @@ final class WorkspaceStore {
         }
     }
 
-    func focus(_ window: WorkspaceWindow) {
+    /// Returns the command's task, which tests await, or nil when no window manager command runs.
+    @discardableResult
+    func focus(_ window: WorkspaceWindow) -> Task<Void, Never>? {
         switch source {
-        case .spaces: NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
-        case .aerospace: run(["focus", "--window-id", String(window.id)])
-        case .yabai: run(["-m", "window", "--focus", String(window.id)])
-        case .omniwm: if let reference = window.reference { run(["window", "focus", reference]) }
+        case .spaces:
+            NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
+            return nil
+        case .aerospace: return run(["focus", "--window-id", String(window.id)], about: window)
+        case .yabai: return run(["-m", "window", "--focus", String(window.id)], about: window)
+        case .omniwm: return window.reference.map { run(["window", "focus", $0], about: window) }
         }
     }
 
-    /// yabai sends no events of its own, so its workspaces refresh after each click.
-    private func run(_ arguments: [String]) {
+    /// yabai sends no events of its own, so its workspaces refresh after each click. A failed command about a
+    /// window refreshes them too, since the window may have left every workspace.
+    @discardableResult
+    private func run(_ arguments: [String], about window: WorkspaceWindow? = nil) -> Task<Void, Never> {
         let source = source
-        Task {
+        return Task {
             do {
                 if source == .omniwm { _ = try await omniwmCommand(executable(), arguments: arguments) }
                 else { _ = try await runCommand(executable(), arguments: arguments) }
-                if source == .yabai { try await refresh() }
             } catch {
-                self.error = error.localizedDescription
+                guard let window else { self.error = error.localizedDescription; return }
+                let failure = error.localizedDescription
+                do { try await refresh() } catch { self.error = failure; return }
+                if lists(window) { self.error = failure }
+                return
+            }
+            if source == .yabai {
+                do { try await refresh() } catch { self.error = error.localizedDescription }
             }
         }
+    }
+
+    /// Whether the snapshot still shows `window`. A window its manager has taken off every workspace, which AeroSpace
+    /// announces with no event, fails every command; once a refresh drops its item, its failure isn't shown.
+    /// Matching the ID alone also covers yabai, whose bundle IDs fall back to app names.
+    private func lists(_ window: WorkspaceWindow) -> Bool {
+        workspaces.contains { $0.windows.contains { $0.id == window.id } }
     }
 
     func canMoveWindows(_ payload: WorkspaceWindowDragSession.Payload, to workspace: String) -> Bool {
@@ -467,7 +486,12 @@ final class WorkspaceStore {
                     default:
                         throw CommandFailure(message: "\(payload.source.title) does not support moving windows.")
                     }
-                    _ = try await runCommand(executable, arguments: arguments)
+                    do { _ = try await runCommand(executable, arguments: arguments) }
+                    catch let commandFailure {
+                        // A window that has left every workspace can't move. Once a refresh shows it gone, move the rest.
+                        do { try await refresh() } catch { throw commandFailure }
+                        if lists(window) { throw commandFailure }
+                    }
                 }
             } catch { failure = error.localizedDescription }
             guard !Task.isCancelled else { return }

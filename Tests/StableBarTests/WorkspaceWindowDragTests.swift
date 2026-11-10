@@ -41,6 +41,51 @@ func workspaceWindowDropRefreshesPartialMovesAndKeepsTheFailure(source: Workspac
     #expect(fixture.store.workspaces.first(where: { $0.name == fixture.destination })?.windows.map(\.id) == [73])
 }
 
+/// The bar can still show a window its manager has taken off every workspace: AeroSpace sends no event when a
+/// window leaves, such as when a menu bar app hides its window. Clicking or dragging that window fails.
+@Test(arguments: [WorkspaceSource.aerospace, .yabai], [false, true]) @MainActor
+func workspaceWindowFailuresDropAWindowThatLeftEveryWorkspace(source: WorkspaceSource, drag: Bool) async throws {
+    let fixture = try WorkspaceMoveFixture(source: source, movedIDs: [], failureID: 73, goneIDs: [73])
+    defer { fixture.close() }
+    let window = fixture.store.workspaces[0].windows[0]
+    let task: Task<Void, Never>
+    if drag {
+        let payload = try #require(fixture.store.windowDrag.begin(source: source, windows: [window]))
+        task = try #require(fixture.store.moveWindows(payload, to: fixture.destination))
+    } else {
+        task = try #require(fixture.store.focus(window))
+    }
+    await task.value
+    #expect(fixture.store.error == nil, "The failure points at an icon that is gone")
+    #expect(fixture.store.workspaces.first(where: { $0.name == "1" })?.windows.map(\.id) == [74, 75])
+}
+
+@Test(arguments: [WorkspaceSource.aerospace, .yabai]) @MainActor
+func workspaceAppDropSkipsAWindowThatLeftEveryWorkspaceAndMovesTheRest(source: WorkspaceSource) async throws {
+    let fixture = try WorkspaceMoveFixture(source: source, movedIDs: [74], failureID: 73, goneIDs: [73])
+    defer { fixture.close() }
+    let finder = fixture.store.workspaces[0].windows.filter { $0.app.bundleID == "com.apple.finder" }
+    let payload = try #require(fixture.store.windowDrag.begin(source: source, windows: finder))
+    await (try #require(fixture.store.moveWindows(payload, to: fixture.destination))).value
+    #expect(fixture.store.error == nil)
+    #expect(try fixture.commands().contains(source == .aerospace
+        ? "<move-node-to-workspace><--window-id><74><--><\(fixture.destination)>"
+        : "<-m><window><74><--space><\(fixture.destination)>"), "The other window still moves")
+    #expect(fixture.store.workspaces.first(where: { $0.name == fixture.destination })?.windows.map(\.id) == [74])
+}
+
+@Test(arguments: [WorkspaceSource.aerospace, .yabai]) @MainActor
+func workspaceWindowFocusRefreshesAndKeepsTheFailureOfAListedWindow(source: WorkspaceSource) async throws {
+    let fixture = try WorkspaceMoveFixture(source: source, movedIDs: [], failureID: 73)
+    defer { fixture.close() }
+    let task = try #require(fixture.store.focus(fixture.store.workspaces[0].windows[0]))
+    await task.value
+    #expect(fixture.store.error == "Window no longer exists")
+    let commands = try fixture.commands()
+    #expect(commands.contains(source == .aerospace ? "<focus><--window-id><73>" : "<-m><window><--focus><73>"))
+    #expect(commands.count == (source == .aerospace ? 3 : 4), "The workspaces are read again after the failure")
+}
+
 @Test @MainActor func workspaceWindowDropRejectsStaleForeignAndUnsupportedMoves() throws {
     let store = WorkspaceStore()
     defer { store.stop() }
@@ -336,14 +381,15 @@ private func workspaceMouse(_ type: NSEvent.EventType, x: CGFloat) throws -> NSE
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     let destination: String
 
-    init(source: WorkspaceSource, movedIDs: [Int], failureID: Int? = nil, store: WorkspaceStore? = nil,
+    /// `goneIDs` are windows the manager no longer lists, although the store's snapshot still shows them.
+    init(source: WorkspaceSource, movedIDs: [Int], failureID: Int? = nil, goneIDs: [Int] = [], store: WorkspaceStore? = nil,
          destination requestedDestination: String? = nil) throws {
         _ = NSApplication.shared
         self.store = store ?? WorkspaceStore()
         destination = requestedDestination ?? (source == .aerospace ? "-two words" : "2")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let executable = directory.appending(path: "window-manager")
-        let windows = dragWorkspaces()[0].windows
+        let windows = dragWorkspaces()[0].windows.filter { !goneIDs.contains($0.id) }
         let spaces: [[String: Any]]
         let snapshot: [[String: Any]]
         if source == .aerospace {
@@ -369,11 +415,13 @@ private func workspaceMouse(_ type: NSEvent.EventType, x: CGFloat) throws -> NSE
             printf '<%s>' "$@"
             printf '\\n'
         } > "calls.$$"
-        if [ "$1" = move-node-to-workspace ] || [ "$2" = window ]; then
-            if [ "$3" = '\(failureID ?? -1)' ]; then
-                echo 'Window no longer exists' >&2
-                exit 1
-            fi
+        if [ "$1" = move-node-to-workspace ] || [ "$1" = focus ] || [ "$2" = window ]; then
+            for argument in "$@"; do
+                if [ "$argument" = '\(failureID ?? -1)' ]; then
+                    echo 'Window no longer exists' >&2
+                    exit 1
+                fi
+            done
             exit 0
         fi
         case "$1" in
