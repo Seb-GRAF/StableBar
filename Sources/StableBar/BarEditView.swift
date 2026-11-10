@@ -229,7 +229,7 @@ struct BarEditSectionRow: View {
                                      groups: config.groups)
             ForEach(units) { unit in
                 let collapsed = editing.isCollapsed(unit.widgets[0].id, on: display.id, position: position)
-                let surface = BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
+                BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
                     ForEach(unit.widgets) { widget in
                         if let entry = entries.first(where: { $0.id == widget.id }) {
                             BarEditTile(store: store, display: display.id, kind: ScreenKind(display), entry: entry, config: config)
@@ -243,16 +243,7 @@ struct BarEditSectionRow: View {
                     }
                 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { unitWidths[unit.id] = $0 }
-                Group {
-                    if unitWidths[unit.id, default: 0] + config.bar.spacing > rowWidth {
-                        // Unclipped, so the − badges that overhang the tiles' corners still show.
-                        ScrollView(.horizontal) { surface }
-                            .scrollIndicators(.hidden)
-                            .scrollClipDisabled()
-                    } else {
-                        surface
-                    }
-                }
+                .modifier(SidewaysScroll(scrolls: unitWidths[unit.id, default: 0] + config.bar.spacing > rowWidth))
                 .opacity(collapsed ? 0 : editing.opacity(for: unit.widgets[0].id))
                 .frame(width: collapsed ? 0 : nil)
                 .padding(leadingSlot ? .leading : .trailing, collapsed ? 0 : config.bar.spacing)
@@ -391,4 +382,19 @@ struct BarEditTile: View {
 
 private extension Animation {
     static let reorder = Animation.spring(duration: 0.3, bounce: 0.15)
+}
+
+/// Scrolls a unit wider than its row sideways, unclipped so the − badges that overhang the tiles' corners still show.
+private struct SidewaysScroll: ViewModifier {
+    let scrolls: Bool
+
+    func body(content: Content) -> some View {
+        if scrolls {
+            ScrollView(.horizontal) { content }
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+        } else {
+            content
+        }
+    }
 }
