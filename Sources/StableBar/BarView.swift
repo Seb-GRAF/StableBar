@@ -345,7 +345,7 @@ struct BarUnitSurface<Content: View>: View {
             surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
         } else {
             let outlined = contrast == .increased && style.background != nil
-            let appearance = WidgetAppearance(style, defaults: defaults)
+            let appearance = WidgetAppearance(WidgetStyle(), defaults: defaults)
             surface
                 .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
                 .overlay {
@@ -354,7 +354,7 @@ struct BarUnitSurface<Content: View>: View {
                         let radius = style.cornerRadius ?? 0
                         UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
                                                topTrailingRadius: radius)
-                            .strokeBorder(WidgetAppearance(WidgetStyle(), defaults: defaults).foreground, lineWidth: max(appearance.borderWidth, 1))
+                            .strokeBorder(appearance.foreground, lineWidth: max(style.borderWidth ?? 1, 1))
                     } else {
                         RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
                             .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
