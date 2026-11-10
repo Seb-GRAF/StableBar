@@ -664,7 +664,7 @@ function reviewHTML(c, back, go) {
   ];
   return `<button class="back">${back}</button><h4>${c.name}</h4><p class="d">${c.description}</p><p class="m">${c.id} · Version ${c.version} · StableBar Store</p>
     <ul class="can">${can.map(([icon, text]) => `<li><svg aria-hidden="true"><use href="#${icon}"/></svg>${text}</li>`).join("")}</ul>
-    <div class="foot"><span>A maintainer read this package before the Store published it.</span><button class="go">${go}</button></div>`;
+    <div class="actions"><span>A maintainer read this package before the Store published it.</span><button class="go">${go}</button></div>`;
 }
 function review(c, query) {
   addPop.classList.add("review");
