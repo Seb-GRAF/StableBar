@@ -793,6 +793,8 @@ struct SetupTourView: View {
                     .buttonStyle(SetupButtonStyle(prominent: false))
                 }
             }
+            Text("Window and notification clearance start when you finish setup.")
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             let source = session.adviceSource
             if source == .spaces {
                 if session.showsSpacesGuidance {

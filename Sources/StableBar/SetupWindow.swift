@@ -180,6 +180,8 @@ enum SetupPermission: CaseIterable, Hashable {
 @MainActor @Observable
 final class SetupSession {
     let store: BarStore
+    /// Windows and banners follow the bar from before setup's previews, including earlier session edits.
+    private let clearanceHold: ClearanceHold
     let themes: [ThemeChoice]
     let workspaceSource: WorkspaceSource
     /// Whether this Mac has an internal battery, which presets add Battery for.
@@ -235,6 +237,7 @@ final class SetupSession {
 
     init(store: BarStore, system: SetupSystem = SetupSystem()) {
         self.store = store
+        clearanceHold = ClearanceHold(configuration: store.clearanceConfiguration)
         self.system = system
         let loginStatus = system.loginStatus()
         self.loginStatus = loginStatus
@@ -255,6 +258,7 @@ final class SetupSession {
         let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         sessionEdits = store.sessionEdits
+        store.windowClearance.hold = clearanceHold
         preferences.workspaces = workspaceSource
         initialPreferences = preferences
         preview()
@@ -546,6 +550,7 @@ final class SetupSession {
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
+        releaseClearanceConfiguration()
         // Setup has closed by the time the restore could fail, so nothing shows the error. Settings → General shows
         // the menu bar setting as it is and changes it.
         Task { try? await setMenuBarHidden(menuBarHidAtStart) }
@@ -566,6 +571,8 @@ final class SetupSession {
             store.sessionEdits = sessionEdits
             store.reloadConfiguration()
             if let error = store.configurationError { throw CommandFailure(message: error) }
+            // The file is saved and loads, so clearance follows it even if Open at login fails below.
+            releaseClearanceConfiguration()
             // A choice changes it, and so does the recommendation while it applies.
             let status = system.loginStatus()
             let enabled = status == .enabled || status == .requiresApproval
@@ -580,6 +587,13 @@ final class SetupSession {
             self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
             loginStatus = system.loginStatus()
         }
+    }
+
+    private func releaseClearanceConfiguration() {
+        guard store.windowClearance.hold === clearanceHold else { return }
+        store.windowClearance.hold = nil
+        // Saving can leave the displayed composition unchanged, so reloading alone may not update clearance.
+        store.onConfigurationChange?()
     }
 }
 
