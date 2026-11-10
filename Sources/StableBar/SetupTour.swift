@@ -31,6 +31,10 @@ struct SetupTourView: View {
     private enum Phase { case intro, wallpaper, tour }
     private var motion: SetupMotion { SetupMotion(reduceMotion: reduceMotion) }
 
+    private var visibleWorkspaceCheckSource: WorkspaceSource? {
+        phase == .tour && session.step == SetupSession.Step.touches.rawValue ? session.workspaceCheckSource : nil
+    }
+
     /// Each step's title and text, in the order of `SetupSession.Step`.
     private static let pages = [
         ("Make it your menu bar.", "StableBar works best in the menu bar's place: it takes the top edge, and the macOS menu bar hides until you point at it."),
@@ -112,7 +116,12 @@ struct SetupTourView: View {
         .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
+            session.workspaceConnection.checkAgain()
         }
+        .onChange(of: visibleWorkspaceCheckSource, initial: true) {
+            session.workspaceConnection.show(visibleWorkspaceCheckSource)
+        }
+        .onDisappear { session.workspaceConnection.hide() }
         .task(id: phase == .tour) {
             while phase == .tour && !Task.isCancelled {
                 session.pollAccessibility()
@@ -818,11 +827,78 @@ struct SetupTourView: View {
                 Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
+            if let source = session.workspaceCheckSource {
+                workspaceConnection(source)
+            }
         }
         .padding(24)
         .frame(width: 600, alignment: .leading)
         .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+    }
+
+    private func workspaceConnection(_ source: WorkspaceSource) -> some View {
+        @Bindable var connection = session.workspaceConnection
+        let result = connection.result
+        let (title, detail): (String, String) = switch result {
+        case .checking: ("Workspaces · \(source.title)", "Checking the connection…")
+        case .connected: ("Workspaces · \(source.title)", "Connected and ready to refresh.")
+        case let .signalsMissing(configuration):
+            ("Let yabai refresh Workspaces", "Add refresh signals to \(configuration), then run yabai --restart-service.")
+        case let .reloadYabai(configuration):
+            ("Load yabai’s refresh signals", "The signals are in \(configuration). Run yabai --restart-service, then check again.")
+        case .ipcOff: ("Connect Workspaces to OmniWM", "Turn on Enable IPC in OmniWM’s menu, then check again.")
+        case let .couldntCheck(reason): ("Workspaces · \(source.title)", reason)
+        }
+        return VStack(alignment: .leading, spacing: 12) {
+            Divider().overlay(.white.opacity(0.1))
+            hint("square.grid.2x2", title, detail) {
+                if connection.isChecking || result == .checking {
+                    ProgressView().controlSize(.small).accessibilityLabel("Checking \(source.title)")
+                } else if result == .connected {
+                    Label("Connected", systemImage: "checkmark")
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
+                }
+            }
+            if case .signalsMissing = result {
+                DisclosureGroup("Show signals to add", isExpanded: $connection.showsSignals) {
+                    ScrollView(.horizontal) {
+                        Text(session.yabaiSignalScript)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .textSelection(.enabled)
+                            .fixedSize()
+                            .padding(10)
+                    }
+                    .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
+            }
+            if result != .checking {
+                HStack(spacing: 16) {
+                    Button("Check Again", action: connection.checkAgain)
+                        .disabled(connection.isChecking)
+                    if case .signalsMissing = result {
+                        Button("Copy signals") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(session.yabaiSignalScript, forType: .string)
+                        }
+                    }
+                    Button("\(source.title) guide ↗") {
+                        lower()
+                        NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/widgets.md#\(source == .yabai ? "yabai" : "omniwm")-workspaces")!)
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.8))
+            }
+            if result != .connected {
+                Text("You can finish setup now. Workspaces may stay stale until this is ready.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private var permissions: some View {

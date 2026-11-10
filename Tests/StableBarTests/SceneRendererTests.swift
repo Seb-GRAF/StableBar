@@ -266,6 +266,20 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(pixels(images[0]) == pixels(images[1]))
 }
 
+/// A configured manager needs no connection result while its check is off screen. Every setup step must still draw.
+@Test(arguments: ["placement", "look", "permissions", "tryIt"]) @MainActor
+func setupScenesOutsideFinishingTouchesDoNotWaitForAWorkspaceCheck(step: String) async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (_, store) = try await drawn(#"""
+    {"configuration": {"workspaceSource": "yabai", "widgets": [{"id": "spaces", "type": "workspaces", "position": "left"}]},
+     "draw": "setup", "setup": {"step": "\#(step)"}}
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(!store.workspaceStore.isRunning)
+    #expect(store.scripts.isEmpty)
+}
+
 @Test @MainActor func popupSceneWithoutAPopupFails() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }

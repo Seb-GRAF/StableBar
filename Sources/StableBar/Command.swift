@@ -45,6 +45,7 @@ struct CommandFailure: LocalizedError {
     let message: String
     var stdout = Data()
     var stderr = Data()
+    var timedOut = false
     var errorDescription: String? { message }
 }
 
@@ -234,7 +235,7 @@ private final class CommandProcess: @unchecked Sendable {
             timer.setEventHandler { [self] in
                 let message = timeout.map { "Command timed out after \($0) seconds." }
                     ?? "Provider exited while a child kept its output open."
-                terminate(CommandFailure(message: message))
+                terminate(CommandFailure(message: message, timedOut: timeout != nil))
             }
             self.timer = timer
             timer.resume()

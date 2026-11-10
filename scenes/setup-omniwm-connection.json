@@ -1,0 +1,28 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "omniwm",
+    "widgets": [
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left"
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right"
+      }
+    ]
+  },
+  "draw": "setup",
+  "setup": {
+    "step": "touches",
+    "placement": "top",
+    "preset": "developer",
+    "menuBarHides": true
+  },
+  "appearances": [
+    "dark"
+  ]
+}
