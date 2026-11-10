@@ -34,6 +34,7 @@ struct TriageFacts {
     var aerospace: String?
     var yabai: String?
     var omniwm: String?
+    var rift: String?
     var processes: [String]
     var configuration: URL
     var validation: String
@@ -54,6 +55,7 @@ struct TriageFacts {
             aerospace: Triage.executable(named: "aerospace", path: path)?.path,
             yabai: Triage.executable(named: "yabai", path: path)?.path,
             omniwm: WorkspaceSource.omniwm.executable(path: path),
+            rift: Triage.executable(named: "rift-cli", path: path)?.path,
             processes: NSRunningApplication.runningApplications(withBundleIdentifier: "org.stablebar.app")
                 .filter { $0.processIdentifier != getpid() }
                 .map { "pid \($0.processIdentifier), \($0.bundleURL?.path ?? "unknown app")" },
@@ -239,6 +241,7 @@ enum Triage {
         - AeroSpace: \(facts.aerospace ?? "not found on PATH")
         - yabai: \(facts.yabai ?? "not found on PATH")
         - OmniWM: \(facts.omniwm ?? "not found on PATH or in its app")
+        - Rift: \(facts.rift ?? "not found on PATH")
         - Other StableBar processes: \(facts.processes.isEmpty ? "none" : facts.processes.joined(separator: "; "))
         - Repository: https://github.com/Seb-GRAF/StableBar
 
@@ -339,7 +342,7 @@ enum Triage {
     - Script widgets and commands: run the command from the configuration with `/bin/zsh -c`
       to see its output and exit status. Ask first when the command changes anything.
     - Crash reports and the system log, at the paths in the context file.
-    - Displays, the notch, Spaces, and AeroSpace, yabai or OmniWM with their versions and
+    - Displays, the notch, Spaces, and AeroSpace, yabai, OmniWM or Rift with their versions and
       configuration, when the problem involves placement or workspaces.
     - Preferences, with the `defaults` command in the context file.
 

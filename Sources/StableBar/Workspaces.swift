@@ -11,6 +11,8 @@ struct Workspace: Decodable, Identifiable, Sendable, Equatable {
     var windows: [WorkspaceWindow] = []
     /// A name the window manager shows instead of `name`, such as an OmniWM workspace's display name.
     var displayName: String?
+    var riftDisplay: String?
+    var riftIndex: Int?
     var id: String { name }
     var label: String { displayName ?? name }
 
@@ -39,7 +41,7 @@ struct WorkspaceWindow: Decodable, Identifiable, Sendable, Equatable {
     let id: Int
     let title: String
     let app: WorkspaceApp
-    /// OmniWM's session-scoped window ID, which `omniwmctl window focus` takes instead of `id`.
+    /// OmniWM's session-scoped window ID or Rift's window ID, which their focus commands take instead of `id`.
     var reference: String?
 
     enum CodingKeys: String, CodingKey {
@@ -70,15 +72,16 @@ struct AeroSpaceEvent: Decodable, Sendable {
 }
 
 enum WorkspaceSource: String, Decodable, Sendable {
-    case aerospace, yabai, omniwm, spaces
+    case aerospace, yabai, omniwm, rift, spaces
 
-    var supportsWindowMoves: Bool { self == .aerospace || self == .yabai }
+    var supportsWindowMoves: Bool { self == .aerospace || self == .yabai || self == .rift }
 
     var title: String {
         switch self {
         case .aerospace: "AeroSpace"
         case .yabai: "yabai"
         case .omniwm: "OmniWM"
+        case .rift: "Rift"
         case .spaces: "Spaces"
         }
     }
@@ -89,6 +92,7 @@ enum WorkspaceSource: String, Decodable, Sendable {
         switch self {
         case .aerospace, .yabai: name = rawValue
         case .omniwm: name = "omniwmctl"
+        case .rift: name = "rift-cli"
         case .spaces: return nil
         }
         if let directory = path.split(separator: ":").first(where: { FileManager.default.isExecutableFile(atPath: "\($0)/\(name)") }) {
@@ -101,12 +105,13 @@ enum WorkspaceSource: String, Decodable, Sendable {
         return bundled
     }
 
-    /// Whether the manager runs for this user: AeroSpace's or OmniWM's app, or the yabai service. Spaces always does.
+    /// Whether the manager runs for this user: AeroSpace's or OmniWM's app, or the yabai or Rift service. Spaces always does.
     var isRunning: Bool {
         switch self {
         case .aerospace: !NSRunningApplication.runningApplications(withBundleIdentifier: aerospaceBundleID).isEmpty
         case .omniwm: !NSRunningApplication.runningApplications(withBundleIdentifier: omniwmBundleID).isEmpty
         case .yabai: userProcessIsRunning(named: "yabai")
+        case .rift: userProcessIsRunning(named: "rift")
         case .spaces: true
         }
     }
@@ -116,7 +121,7 @@ enum WorkspaceSource: String, Decodable, Sendable {
     static func detected(path: String, configured: WorkspaceSource?,
                          running: (WorkspaceSource) -> Bool = { $0.isRunning }) -> WorkspaceSource {
         if let configured, configured == .spaces || configured.executable(path: path) != nil { return configured }
-        return [.aerospace, .yabai, .omniwm].first { $0.executable(path: path) != nil && running($0) } ?? .spaces
+        return [.aerospace, .yabai, .omniwm, .rift].first { $0.executable(path: path) != nil && running($0) } ?? .spaces
     }
 }
 
@@ -224,14 +229,16 @@ final class WorkspaceStore {
             requestRefresh()
             return
         }
-        let omniwm = source == .omniwm
+        let source = source
         let title = source.title
-        observers = [NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
-            guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
-                    == (omniwm ? omniwmBundleID : aerospaceBundleID) else { return }
-            MainActor.assumeIsolated { self?.start() }
-        }]
+        if source != .rift {
+            observers = [NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
+                guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
+                        == (source == .omniwm ? omniwmBundleID : aerospaceBundleID) else { return }
+                MainActor.assumeIsolated { self?.start() }
+            }]
+        }
         task = Task {
             var failures = 0
             while !Task.isCancelled {
@@ -240,12 +247,17 @@ final class WorkspaceStore {
                     let stream = Process()
                     let output = Pipe()
                     stream.executableURL = URL(filePath: try executable())
-                    // Without --reconnect, omniwmctl exits when OmniWM quits, so this loop reports it and retries.
-                    stream.arguments = omniwm
-                        ? ["subscribe", "active-workspace,focused-monitor,focus,windows-changed,layout-changed,display-changed",
-                           "--no-send-initial", "--format", "ndjson"]
-                        : ["subscribe", "focused-workspace-changed", "focused-monitor-changed", "focus-changed",
-                           "window-detected", "mode-changed"]
+                    switch source {
+                    case .omniwm:
+                        // Without --reconnect, omniwmctl exits when OmniWM quits, so this loop reports it and retries.
+                        stream.arguments = ["subscribe", "active-workspace,focused-monitor,focus,windows-changed,layout-changed,display-changed",
+                                            "--no-send-initial", "--format", "ndjson"]
+                    case .rift:
+                        stream.arguments = ["subscribe", "mach", "*"]
+                    default:
+                        stream.arguments = ["subscribe", "focused-workspace-changed", "focused-monitor-changed", "focus-changed",
+                                            "window-detected", "mode-changed"]
+                    }
                     stream.standardOutput = output
                     stream.standardError = FileHandle.standardError
                     let pending = OSAllocatedUnfairLock(initialState: Data())
@@ -279,7 +291,8 @@ final class WorkspaceStore {
                     var failure: String?
                     for await line in lines {
                         try Task.checkCancellation()
-                        if omniwm { failure = receiveOmniWM(line) ?? failure }
+                        if source == .omniwm { failure = receiveOmniWM(line) ?? failure }
+                        else if source == .rift { connectionError = nil; requestRefresh() }
                         else if let event = try? JSONDecoder().decode(AeroSpaceEvent.self, from: line) { receive(event) }
                     }
                     try Task.checkCancellation()
@@ -363,6 +376,7 @@ final class WorkspaceStore {
     }
 
     private func refresh() async throws {
+        let source = source
         let snapshot: [Workspace]
         switch source {
         case .aerospace:
@@ -394,10 +408,13 @@ final class WorkspaceStore {
                 "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad"
             ])
             snapshot = try await omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: screenIDs)
+        case .rift:
+            snapshot = try await riftSnapshot(executable(), screenIDs: screenIDs)
         case .spaces:
             snapshot = try currentSpaces()
         }
         try Task.checkCancellation()
+        guard source == self.source else { return }
         let previousWorkspace = workspaces.first(where: \.isFocused)?.name
         if workspaces != snapshot { workspaces = snapshot }
         if previousWorkspace != workspaces.first(where: \.isFocused)?.name { onWorkspaceChange?() }
@@ -409,9 +426,10 @@ final class WorkspaceStore {
         case .spaces:
             do { try switchToDesktop(Int(workspace.name)!) }
             catch { self.error = error.localizedDescription }
-        case .aerospace: run(["workspace", workspace.name])
-        case .yabai: run(["-m", "space", "--focus", workspace.name])
-        case .omniwm: run(["workspace", "focus-name", workspace.name])
+        case .aerospace: run([["workspace", workspace.name]])
+        case .yabai: run([["-m", "space", "--focus", workspace.name]])
+        case .omniwm: run([["workspace", "focus-name", workspace.name]])
+        case .rift: run(riftFocusDisplay(of: workspace) + [["execute", "workspace", "switch", String(workspace.riftIndex!)]])
         }
     }
 
@@ -422,21 +440,32 @@ final class WorkspaceStore {
         case .spaces:
             NSRunningApplication.runningApplications(withBundleIdentifier: window.app.bundleID).first?.activate()
             return nil
-        case .aerospace: return run(["focus", "--window-id", String(window.id)], about: window)
-        case .yabai: return run(["-m", "window", "--focus", String(window.id)], about: window)
-        case .omniwm: return window.reference.map { run(["window", "focus", $0], about: window) }
+        case .aerospace: return run([["focus", "--window-id", String(window.id)]], about: window)
+        case .yabai: return run([["-m", "window", "--focus", String(window.id)]], about: window)
+        case .omniwm: return window.reference.map { run([["window", "focus", $0]], about: window) }
+        case .rift:
+            return window.reference.map { reference in
+                let focus = ["execute", "window", "focus", "--window-id", reference]
+                guard let workspace = workspaces.first(where: { $0.windows.contains { $0.id == window.id } }), !workspace.isVisible else {
+                    return run([focus], about: window)
+                }
+                return run(riftFocusDisplay(of: workspace) + [["execute", "workspace", "switch", String(workspace.riftIndex!)], focus],
+                           about: window)
+            }
         }
     }
 
     /// yabai sends no events of its own, so its workspaces refresh after each click. A failed command about a
     /// window refreshes them too, since the window may have left every workspace.
     @discardableResult
-    private func run(_ arguments: [String], about window: WorkspaceWindow? = nil) -> Task<Void, Never> {
+    private func run(_ commands: [[String]], about window: WorkspaceWindow? = nil) -> Task<Void, Never> {
         let source = source
         return Task {
             do {
-                if source == .omniwm { _ = try await omniwmCommand(executable(), arguments: arguments) }
-                else { _ = try await runCommand(executable(), arguments: arguments) }
+                for arguments in commands {
+                    if source == .omniwm { _ = try await omniwmCommand(executable(), arguments: arguments) }
+                    else { _ = try await runCommand(executable(), arguments: arguments) }
+                }
             } catch {
                 guard let window else { self.error = error.localizedDescription; return }
                 let failure = error.localizedDescription
@@ -450,6 +479,11 @@ final class WorkspaceStore {
         }
     }
 
+    private func riftFocusDisplay(of workspace: Workspace) -> [[String]] {
+        workspaces.first(where: \.isFocused)?.riftDisplay == workspace.riftDisplay
+            ? [] : [["execute", "display", "focus", "--uuid", workspace.riftDisplay!]]
+    }
+
     /// Whether the snapshot still shows `window`. A window its manager has taken off every workspace, which AeroSpace
     /// announces with no event, fails every command; once a refresh drops its item, its failure isn't shown.
     /// Matching the ID alone also covers yabai, whose bundle IDs fall back to app names.
@@ -459,8 +493,9 @@ final class WorkspaceStore {
 
     func canMoveWindows(_ payload: WorkspaceWindowDragSession.Payload, to workspace: String) -> Bool {
         guard source.supportsWindowMoves, source == payload.source, moveTask == nil,
-              workspace != payload.workspace, workspaces.contains(where: { $0.name == workspace }),
-              let origin = workspaces.first(where: { $0.name == payload.workspace }), !payload.windows.isEmpty else { return false }
+              workspace != payload.workspace, let target = workspaces.first(where: { $0.name == workspace }),
+              let origin = workspaces.first(where: { $0.name == payload.workspace }), origin.riftDisplay == target.riftDisplay,
+              !payload.windows.isEmpty else { return false }
         return payload.windows.allSatisfy { window in
             origin.windows.contains { $0.id == window.id && $0.app.bundleID == window.app.bundleID }
         }
@@ -470,11 +505,14 @@ final class WorkspaceStore {
     func moveWindows(_ payload: WorkspaceWindowDragSession.Payload, to workspace: String) -> Task<Void, Never>? {
         guard windowDrag.active == payload, canMoveWindows(payload, to: workspace) else { return nil }
         windowDrag.end(payload)
+        let focusDisplay = payload.source == .rift ? riftFocusDisplay(of: workspaces.first { $0.name == payload.workspace }!) : []
+        let riftIndex = workspaces.first { $0.name == workspace }!.riftIndex
         moveTask = Task {
             defer { if !Task.isCancelled { moveTask = nil } }
             var failure: String?
             do {
                 let executable = try executable()
+                for arguments in focusDisplay { _ = try await runCommand(executable, arguments: arguments) }
                 for window in payload.windows {
                     try Task.checkCancellation()
                     let arguments: [String]
@@ -483,6 +521,8 @@ final class WorkspaceStore {
                         arguments = ["move-node-to-workspace", "--window-id", String(window.id), "--", workspace]
                     case .yabai:
                         arguments = ["-m", "window", String(window.id), "--space", workspace]
+                    case .rift:
+                        arguments = ["execute", "workspace", "move-window", String(riftIndex!), String(window.id)]
                     default:
                         throw CommandFailure(message: "\(payload.source.title) does not support moving windows.")
                     }

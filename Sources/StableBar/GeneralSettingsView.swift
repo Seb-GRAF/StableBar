@@ -34,7 +34,7 @@ struct GeneralSettingsView: View {
                             set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
                             unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
                         bar.toggle("Keep windows clear of the bar", "keepWindowsClear", default: false,
-                                   hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace, yabai or OmniWM sets gaps.")
+                                   hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace, yabai, OmniWM or Rift sets gaps.")
                         bar.toggle("Keep notifications clear of the bar", "keepNotificationsClear", default: false,
                                    hint: "macOS 26 and later")
                     }
@@ -53,12 +53,17 @@ struct GeneralSettingsView: View {
                     SettingsGroup("Workspaces") {
                         let source = store.configuration?.workspaceSource ?? .aerospace
                         let path = shellEnvironment.withLock { $0["PATH", default: ""] }
-                        let missing = [WorkspaceSource.aerospace, .yabai, .omniwm].filter { $0.executable(path: path) == nil }
+                        let missing = [WorkspaceSource.aerospace, .yabai, .omniwm, .rift].filter { $0.executable(path: path) == nil }
                         SettingRow(title: "Workspace manager", hint: missing.isEmpty ? nil : "Not installed: \(missing.map(\.title).joined(separator: ", ")).") {
-                            SettingsSegments(selection: Binding(get: { source }, set: {
+                            Picker("Workspace manager", selection: Binding(get: { source }, set: {
                                 if $0 != source { editor.change(ConfigurationEdit(action: .workspaceSource, name: $0.rawValue)) }
-                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai"), (.omniwm, "OmniWM"), (.spaces, "Spaces")],
-                               disabled: missing, stretches: false)
+                            })) {
+                                ForEach([WorkspaceSource.aerospace, .yabai, .omniwm, .rift, .spaces], id: \.self) {
+                                    Text($0.title).tag($0).disabled(missing.contains($0))
+                                }
+                            }
+                            .labelsHidden()
+                            .fixedSize()
                         }
                         if missing.contains(source) {
                             Label("\(source.title) isn't installed, so workspace widgets can't show its workspaces. Install it, or choose Spaces.",

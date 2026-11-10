@@ -18,7 +18,7 @@
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
-Window dragging is enabled only for the AeroSpace and yabai workspace sources. Drag an app icon onto another workspace to move that app's windows from the original workspace. With `workspace.windows: true`, dragging an item moves only that window; the [presentation example](../examples/presentation/config.json) uses this mode. Empty workspaces appear while dragging, and the destination is outlined; you can also drop onto a workspace on another display. Moving does not switch to the destination. If one of an app's windows has left every workspace, the others still move. Escape or dropping outside a workspace cancels the move. Clicks keep their usual behavior. OmniWM and macOS Spaces do not support dragging windows from the widget.
+Window dragging is enabled only for the AeroSpace, yabai and Rift workspace sources. Drag an app icon onto another workspace to move that app's windows from the original workspace. With `workspace.windows: true`, dragging an item moves only that window; the [presentation example](../examples/presentation/config.json) uses this mode. Empty workspaces appear while dragging, and the destination is outlined; you can also drop onto a workspace on another display. Moving does not switch to the destination. If one of an app's windows has left every workspace, the others still move. Escape or dropping outside a workspace cancels the move. Clicks keep their usual behavior. OmniWM and macOS Spaces do not support dragging windows from the widget.
 
 ## Essentials details and settings
 
@@ -115,6 +115,19 @@ Adjust the app path if installed elsewhere, and include `--config PATH` before `
 
 StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. If the widget says it can't reach OmniWM, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
 
+## Rift workspaces
+
+[Rift](https://github.com/acsandmann/rift) manages no Space until you turn it on there, with its `toggle_space_activated` binding (**Alt + Z** by default) or `rift-cli execute space toggle-activated`. Then set the source:
+
+```json
+{
+  "workspaceSource": "rift",
+  "widgets": [{ "id": "spaces", "type": "workspaces", "position": "left" }]
+}
+```
+
+StableBar runs `rift-cli` from your login shell's `PATH`. Rift keeps its own workspaces in each macOS Space, so each display shows the workspaces of the Space it's on, and none while Rift doesn't manage that Space. Cells keep Rift's order and show its workspace names. StableBar subscribes to all of Rift's events, so Rift needs no signals, and it reconnects like the AeroSpace connection, except that Rift has no app whose launch StableBar can see. Clicking a workspace runs `rift-cli execute workspace switch INDEX`, and clicking a window item switches to its workspace and focuses that window. Rift switches workspaces on the display that has focus, so a click on another display's bar focuses that display first. Dragging moves windows with `rift-cli execute workspace move-window`, between workspaces on the same display. If the widget says Rift disconnected, check that Rift is running (`rift service start`), then choose **Reconnect** in **Settings → General → Workspaces**.
+
 ## macOS Spaces workspaces
 
 Without a tiling window manager, workspace widgets can show your Mission Control Spaces:
@@ -126,11 +139,11 @@ Without a tiling window manager, workspace widgets can show your Mission Control
 }
 ```
 
-Choose **Spaces** under **Settings → General → Workspaces** to set the same source. Its **Workspace manager** can choose AeroSpace, yabai or OmniWM only when it's installed, and warns when the configured one isn't. Desktops are numbered across displays like Mission Control, and each display shows its own. Fullscreen apps have no desktop number and don't appear. StableBar refreshes when the active Space changes and when apps launch, quit or come to the front, so a window moved to another Space shows there after the next such change.
+Choose **Spaces** under **Settings → General → Workspaces** to set the same source. Its **Workspace manager** can choose AeroSpace, yabai, OmniWM or Rift only when it's installed, and warns when the configured one isn't. Desktops are numbered across displays like Mission Control, and each display shows its own. Fullscreen apps have no desktop number and don't appear. StableBar refreshes when the active Space changes and when apps launch, quit or come to the front, so a window moved to another Space shows there after the next such change.
 
 Clicking a desktop posts its **Switch to Desktop N** shortcut. Turn those shortcuts on in **System Settings → Keyboard → Keyboard Shortcuts → Mission Control**, and allow StableBar in **System Settings → Privacy & Security → Accessibility**; setup and **Settings → General → Access** list Accessibility while a Workspaces widget uses Spaces. macOS offers the shortcuts for desktops 1 to 16. Clicking a window title brings its app to the front. Window titles need Screen Recording access; without it they are empty.
 
-macOS has no public API that lists Spaces or their windows, so this source uses private window-server functions. A macOS update can break it; AeroSpace, yabai and OmniWM don't depend on them.
+macOS has no public API that lists Spaces or their windows, so this source uses private window-server functions. A macOS update can break it; AeroSpace, yabai, OmniWM and Rift don't depend on them.
 
 ## Workspace appearance
 
@@ -140,7 +153,7 @@ A `workspaces` widget (also accepted as `aerospace`) accepts `workspace` with:
 - `indicatorStyle`: underline `height`, `width`, `background`, `cornerRadius`, `offsetX`, `offsetY` and `placement`. `"cell"` (default) preserves the cell-relative underline; `"belowBar"` puts its top at the visible bar background's bottom plus `offsetY`, independently of the cell height. Negative `offsetY` moves the underline upward; the **Bar → Style → Workspaces** and **Theme → Advanced → Workspace look** controls in Settings accept negative offsets too. Its `states.focused` and `states.visible` style the underline under the focused workspace and under a workspace shown on a display without focus; mode states apply after those.
 - `style`: cell typography, foreground, width, height, horizontal/side padding and spacing. Its `states` style each cell by workspace state: `focused` (the focused workspace), else `visible` (shown on a display without focus), else `empty` (no windows), so a cell has at most one. `focusedStyle`, `visibleStyle` and `emptyStyle` are shorthand for those states. The background indicator uses the state's background or border color. `hover` changes the label and app glyphs; the indicators follow the workspace state. `defaults.states` don't apply to cells.
 - `showEmpty` and `showApps`: control empty workspaces and app icons.
-- `windows`: when `true`, shows one item per window instead of one per app. Each item keeps its app icon or `appGlyphs` glyph. Clicking it focuses that window; clicking the workspace number or cell padding switches workspace. An item can outlive its window: AeroSpace, for one, doesn't announce a window leaving every workspace. When clicking an item, or dropping it on another workspace, fails with AeroSpace, yabai or OmniWM, the widget reads the workspaces again and drops the item without an error if its window is gone. The error shows while the window is still listed, or when the workspaces can't be read. `showApps: false` hides these items too.
+- `windows`: when `true`, shows one item per window instead of one per app. Each item keeps its app icon or `appGlyphs` glyph. Clicking it focuses that window; clicking the workspace number or cell padding switches workspace. An item can outlive its window: AeroSpace, for one, doesn't announce a window leaving every workspace. When clicking an item, or dropping it on another workspace, fails with AeroSpace, yabai, OmniWM or Rift, the widget reads the workspaces again and drops the item without an error if its window is gone. The error shows while the window is still listed, or when the workspaces can't be read. `showApps: false` hides these items too.
 - `titleLength`: maximum characters of each window title when `windows` is enabled. Omit it or use `0` for icons only. For example, `"workspace": { "windows": true, "titleLength": 24 }`. The full title is available on hover. Titles refresh with workspace and window events; yabai users can also register `window_title_changed`.
 - `magnification`: magnifies the widget like the Dock, with icons zooming up to this size under the pointer, such as `1.5` for 150%. Icons push their neighbours apart, and the app under the pointer shows its name in a tooltip below the bar. Only the widget's drawing stretches, so the other widgets stay put. Omit it to turn magnification off. In **Settings → Bar**, select the workspace widget and turn on **Magnify on hover**, then set its size with **Magnification**.
 - `appStyle`: font and foreground for app glyphs, width and height in screen points for native app icons (14 × 14 by default). `focusedAppStyle` and `visibleAppStyle` are shorthand for its `states.focused` and `states.visible`.
