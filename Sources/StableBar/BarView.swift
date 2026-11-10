@@ -43,6 +43,8 @@ struct BarView: View {
     let display: BarDisplay
     var nativeDecorations = false
     var preview = false
+    /// Only the view in a bar's own panel follows `--focus`, not Settings' or the setup's.
+    private var focusesWidgets: Bool { nativeDecorations && store.barPanel(display.id)?.focusesWidgets == true }
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var restingWidths: [String: CGFloat] = [:]
@@ -99,6 +101,7 @@ struct BarView: View {
                                     .environment(\.appMenuShrink, minimums[unit.id] != nil ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
                                     .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
                                     .environment(\.barFocus, $focusedWidget)
+                                    .environment(\.focusesWidgets, focusesWidgets)
                                     .geometryGroup()
                                     .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
                                     .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
@@ -121,6 +124,9 @@ struct BarView: View {
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow.map(\.ids))
                     .onMoveCommand { direction in
                         focusedWidget = Self.focusTarget(from: focusedWidget, moving: direction, units: units, placements: plan.placements)
+                    }
+                    .onChange(of: focusesWidgets) {
+                        focusedWidget = focusesWidgets ? Self.focusTarget(from: nil, moving: .right, units: units, placements: plan.placements) : nil
                     }
                     .overlay {
                         HStack(spacing: 0) {
@@ -301,6 +307,8 @@ extension EnvironmentValues {
     @Entry var barExpansion: BarExpansion?
     /// The widget with the bar's keyboard focus. Only the bar's own widgets take it, not those in More widgets or Settings.
     @Entry var barFocus: FocusState<String?>.Binding?
+    /// Whether the bar has the keyboard from `StableBar --focus`, the only time its widgets can take `barFocus`.
+    @Entry var focusesWidgets = false
     /// A date to draw instead of the current time, so a render shows the same clock on every run.
     @Entry var fixedDate: Date?
     /// Draws without the network, as a render does: remote images stay empty.
@@ -432,6 +440,7 @@ struct WidgetView: View {
     @Environment(\.barExpansion) private var barExpansion
     @Environment(\.fixedDate) private var fixedDate
     @Environment(\.barFocus) private var barFocus
+    @Environment(\.focusesWidgets) private var focusesWidgets
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
@@ -517,7 +526,7 @@ struct WidgetView: View {
         }
         if let barFocus {
             element
-                .focusable()
+                .focusable(focusesWidgets)
                 .focused(barFocus, equals: widget.id)
                 .onKeyPress(keys: [.return, .space]) { _ in
                     guard let click else { return .ignored }

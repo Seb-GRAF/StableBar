@@ -138,7 +138,7 @@ struct StableBarApp {
 }
 
 @MainActor
-class BarPanel: NSPanel {
+class BarPanel: NSPanel, Observable {
     var barGeometry: BarGeometry?
     var isEditingBar = false {
         didSet {
@@ -147,7 +147,18 @@ class BarPanel: NSPanel {
         }
     }
     /// From `StableBar --focus` until Escape or another window takes the keyboard: the arrow keys move between widgets.
-    private(set) var focusesWidgets = false
+    /// The bar's view follows it, so that only then can its widgets take focus.
+    private(set) var focusesWidgets: Bool {
+        get {
+            observations.access(self, keyPath: \.focusesWidgets)
+            return widgetsFocused
+        }
+        set {
+            observations.withMutation(of: self, keyPath: \.focusesWidgets) { widgetsFocused = newValue }
+        }
+    }
+    private var widgetsFocused = false
+    private let observations = ObservationRegistrar()
     private(set) var decorationPanel: PassiveBarPanel?
     /// The workspace cell under the current drag, which the bar takes on its cells' behalf.
     weak var workspaceDropTarget: WorkspaceWindowDropTargetView?
