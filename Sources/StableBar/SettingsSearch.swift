@@ -18,7 +18,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .windows: ("Keep windows clear of the bar", .general, "General", "windows notifications overlap clearance accessibility")
         case .hover: ("Hover delay and controls", .general, "General › Hover", "tooltip wait milliseconds popup inline slider volume")
         case .workspaces: ("Workspace manager", .general, "General", "aerospace yabai omniwm rift spaces mission control desktops source reconnect connection")
-        case .access: ("Permissions", .general, "General", "access accessibility calendar location automation denied")
+        case .access: ("Permissions", .general, "General", "access accessibility calendar location automation denied desktop shortcuts keyboard spaces")
         case .configuration: ("Configuration file", .general, "General", "json path reload finder temporary")
         case .commandLine: ("Install the stablebar command", .general, "General › Command line", "terminal shell path cli script usr local bin")
         case .updates: ("Updates", .general, "General", "version release beta stable automatic download about package notification")

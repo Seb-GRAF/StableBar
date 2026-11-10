@@ -170,9 +170,26 @@ final class WorkspaceStore {
             if source != oldValue { stop(); workspaces = []; error = nil; connectionError = nil }
         }
     }
-    var workspaces: [Workspace] = []
+    var workspaces: [Workspace] = [] {
+        didSet {
+            if workspaces.map(\.name) != oldValue.map(\.name) { refreshDesktopShortcuts() }
+        }
+    }
     let windowDrag = WorkspaceWindowDragSession()
-    var error: String?
+    var desktopShortcuts = DesktopShortcuts()
+    /// Tests supply desktops without reading this Mac's Spaces.
+    var readSpaces: () throws -> [Workspace] = { try currentSpaces() }
+    private(set) var desktopShortcutStatus = DesktopShortcuts.Status(desktops: [], disabled: [], unsupported: [])
+    private var reportedError: String?
+    private var failedDesktopShortcut: Int?
+    /// Menus validate a failed click immediately before showing it, without mutating state while SwiftUI draws.
+    var error: String? {
+        get {
+            if let failedDesktopShortcut, desktopShortcuts.shortcut(for: failedDesktopShortcut) != nil { return nil }
+            return reportedError
+        }
+        set { reportedError = newValue; failedDesktopShortcut = nil }
+    }
     private(set) var connectionError: String?
     var reconnectDelay = 2.0
     var onWorkspaceChange: (() -> Void)?
@@ -191,6 +208,15 @@ final class WorkspaceStore {
     private var task: Task<Void, Never>?
     private var process: Process?
     private var observers: [NSObjectProtocol] = []
+    private var activationObserver: NSObjectProtocol?
+    private let notificationCenter: NotificationCenter
+    private let workspaceNotificationCenter: NotificationCenter
+
+    init(notificationCenter: NotificationCenter = .default,
+         workspaceNotificationCenter: NotificationCenter = NSWorkspace.shared.notificationCenter) {
+        self.notificationCenter = notificationCenter
+        self.workspaceNotificationCenter = workspaceNotificationCenter
+    }
 
     func workspaces(on monitor: Int, showEmpty: Bool) -> [Workspace] {
         workspaces.filter {
@@ -219,11 +245,19 @@ final class WorkspaceStore {
         }
         if source == .spaces {
             task = Task { }
-            let center = NSWorkspace.shared.notificationCenter
+            activationObserver = notificationCenter.addObserver(
+                forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshDesktopShortcuts() }
+            }
+            let center = workspaceNotificationCenter
             observers = [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification,
                               NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification].map {
-                center.addObserver(forName: $0, object: nil, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.requestRefresh() }
+                center.addObserver(forName: $0, object: nil, queue: .main) { [weak self] notification in
+                    let changedSpace = notification.name == NSWorkspace.activeSpaceDidChangeNotification
+                    MainActor.assumeIsolated {
+                        if changedSpace { self?.refreshDesktopShortcuts() }
+                        self?.requestRefresh()
+                    }
                 }
             }
             requestRefresh()
@@ -232,7 +266,7 @@ final class WorkspaceStore {
         let source = source
         let title = source.title
         if source != .rift {
-            observers = [NSWorkspace.shared.notificationCenter.addObserver(
+            observers = [workspaceNotificationCenter.addObserver(
                 forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main) { [weak self] notification in
                 guard (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier
                         == (source == .omniwm ? omniwmBundleID : aerospaceBundleID) else { return }
@@ -411,7 +445,7 @@ final class WorkspaceStore {
         case .rift:
             snapshot = try await riftSnapshot(executable(), screenIDs: screenIDs)
         case .spaces:
-            snapshot = try currentSpaces()
+            snapshot = try readSpaces()
         }
         try Task.checkCancellation()
         guard source == self.source else { return }
@@ -424,8 +458,12 @@ final class WorkspaceStore {
     func select(_ workspace: Workspace) {
         switch source {
         case .spaces:
-            do { try switchToDesktop(Int(workspace.name)!) }
-            catch { self.error = error.localizedDescription }
+            guard let number = Int(workspace.name) else { return }
+            do { try switchToDesktop(number, shortcuts: desktopShortcuts) }
+            catch {
+                self.error = error.localizedDescription
+                failedDesktopShortcut = (error as? DesktopShortcutUnavailable)?.number
+            }
         case .aerospace: run([["workspace", workspace.name]])
         case .yabai: run([["-m", "space", "--focus", workspace.name]])
         case .omniwm: run([["workspace", "focus-name", workspace.name]])
@@ -560,6 +598,13 @@ final class WorkspaceStore {
         if source == .yabai && isRunning { requestRefresh() }
     }
 
+    /// A defaults lookup on activation, page appearance and desktop changes; no timer or extra Spaces query.
+    func refreshDesktopShortcuts() {
+        guard source == .spaces else { return }
+        desktopShortcutStatus = desktopShortcuts.status(for: workspaces.compactMap { Int($0.name) })
+        if let failedDesktopShortcut, desktopShortcuts.shortcut(for: failedDesktopShortcut) != nil { error = nil }
+    }
+
     func refreshForDisplayChange() {
         if isRunning { requestRefresh() }
     }
@@ -588,7 +633,9 @@ final class WorkspaceStore {
         task = nil
         if let process, process.isRunning { process.terminate() }
         process = nil
-        for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+        for observer in observers { workspaceNotificationCenter.removeObserver(observer) }
         observers = []
+        if let activationObserver { notificationCenter.removeObserver(activationObserver) }
+        activationObserver = nil
     }
 }

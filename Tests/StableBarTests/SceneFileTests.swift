@@ -17,6 +17,7 @@ private func scene(_ json: String) throws -> SceneFile {
       "history": { "system": [0.1, 0.2] },
       "workspaces": [{ "workspace": "1" }],
       "windows": [],
+      "desktopShortcuts": [1, 3],
       "activeApp": "com.apple.finder",
       "draw": "settings",
       "widget": "clock",
@@ -32,6 +33,7 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.history["system"] == [0.1, 0.2])
     #expect(decoded.workspaces?.count == 1)
     #expect(decoded.windows?.isEmpty == true)
+    #expect(decoded.desktopShortcuts == [1, 3])
     #expect(decoded.activeApp == "com.apple.finder")
     #expect(decoded.draw == .settings)
     #expect(decoded.widget == "clock")
@@ -48,6 +50,7 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.outputs.isEmpty)
     #expect(decoded.history.isEmpty)
     #expect(decoded.workspaces == nil)
+    #expect(decoded.desktopShortcuts.isEmpty)
     #expect(decoded.widget == nil)
     #expect(decoded.menu == nil)
 }
@@ -88,7 +91,10 @@ private func scene(_ json: String) throws -> SceneFile {
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
     // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "key": "C", "modifiers": -1}]}"#,
-     "menu.0.modifiers")
+     "menu.0.modifiers"),
+    (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [0]}"#, "desktopShortcuts"),
+    (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [17]}"#, "desktopShortcuts"),
+    (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [1, 1]}"#, "desktopShortcuts")
 ])
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }

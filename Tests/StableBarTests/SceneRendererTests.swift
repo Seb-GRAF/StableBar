@@ -105,6 +105,26 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(index.path.hasPrefix(directory.path))
 }
 
+@Test @MainActor func sceneStoreReadsOnlyItsDesktopShortcuts() throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try store(#"""
+    {
+      "configuration": { "workspaceSource": "spaces", "widgets": [{"id": "spaces", "type": "workspaces", "position": "left"}] },
+      "workspaces": [
+        { "workspace": "1", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+        { "workspace": "2", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+      ],
+      "desktopShortcuts": [1], "draw": "setup", "setup": { "step": "permissions" }
+    }
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(store.workspaceStore.source == .spaces)
+    #expect(store.workspaceStore.desktopShortcutStatus.desktops == [1, 2])
+    #expect(store.workspaceStore.desktopShortcutStatus.disabled == [2])
+    #expect(!store.workspaceStore.isRunning)
+}
+
 @Test @MainActor func sceneStoreLoadsAConfigurationFile() throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }

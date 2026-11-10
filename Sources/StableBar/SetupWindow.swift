@@ -308,7 +308,7 @@ final class SetupSession {
 
     /// Whether the bar setup builds shows macOS Spaces in Workspaces, whose desktops switch through the Switch to
     /// Desktop shortcuts.
-    var showsSpacesGuidance: Bool { previewedWorkspaceSource == .spaces }
+    var showsSpacesGuidance: Bool { store.configuration?.usesSpacesWorkspaces == true }
 
     /// The offset earlier setups wrote for Below menu bar, before `bar.belowMenuBar`.
     private var earlierBelowMenuBarOffset: Double {
@@ -537,6 +537,7 @@ final class SetupSession {
     }
 
     func refreshAccess() {
+        store.workspaceStore.refreshDesktopShortcuts()
         loginStatus = system.loginStatus()
         calendarAccess = system.calendarAccess()
         menuBarHides = system.menuBarHides()

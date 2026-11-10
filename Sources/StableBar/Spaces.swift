@@ -92,18 +92,23 @@ func currentSpaces(copyManagedDisplaySpaces: ((Int32) -> Unmanaged<CFArray>?)? =
         windowSpaces: windowSpaces, activeSpace: getActiveSpace(connection), screenUUIDs: screens, bundleIDs: bundleIDs)
 }
 
-func switchToDesktop(_ number: Int) throws {
-    let hotKeys = UserDefaults(suiteName: "com.apple.symbolichotkeys")?.dictionary(forKey: "AppleSymbolicHotKeys")
-    guard let hotKey = hotKeys?[String(117 + number)] as? [String: Any], hotKey["enabled"] as? Bool == true,
-          let parameters = (hotKey["value"] as? [String: Any])?["parameters"] as? [Int] else {
-        throw CommandFailure(message: "Turn on “Switch to Desktop \(number)” in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
+struct DesktopShortcutUnavailable: LocalizedError {
+    let number: Int
+    var errorDescription: String? {
+        "Turn on “Switch to Desktop \(number)” in System Settings → Keyboard → Keyboard Shortcuts → Mission Control."
     }
+}
+
+func switchToDesktop(_ number: Int, shortcuts: DesktopShortcuts = DesktopShortcuts()) throws {
+    guard let shortcut = shortcuts.shortcut(for: number) else { throw DesktopShortcutUnavailable(number: number) }
     guard AXIsProcessTrusted() else {
         throw CommandFailure(message: "Allow StableBar in System Settings → Privacy & Security → Accessibility to switch Spaces.")
     }
     for keyDown in [true, false] {
-        let event = CGEvent(keyboardEventSource: nil, virtualKey: CGKeyCode(parameters[1]), keyDown: keyDown)!
-        event.flags = CGEventFlags(rawValue: UInt64(parameters[2]))
+        guard let event = CGEvent(keyboardEventSource: nil, virtualKey: shortcut.key, keyDown: keyDown) else {
+            throw CommandFailure(message: "macOS couldn't send the desktop shortcut. Try switching again.")
+        }
+        event.flags = CGEventFlags(rawValue: shortcut.modifiers)
         event.post(tap: .cghidEventTap)
     }
 }

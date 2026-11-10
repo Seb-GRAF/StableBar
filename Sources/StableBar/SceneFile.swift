@@ -30,6 +30,8 @@ struct SceneFile: Decodable {
     var workspaces: [ConfigurationValue]?
     /// AeroSpace's `list-windows --json` objects.
     var windows: [ConfigurationValue]?
+    /// Switch to Desktop shortcuts enabled on the stand-in Mac, for setup and Settings. All are off by default.
+    var desktopShortcuts: [Int] = []
     /// The bundle identifier of the active app, Finder by default.
     var activeApp: String?
     /// The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one.
@@ -52,7 +54,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
+        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -106,6 +108,11 @@ struct SceneFile: Decodable {
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
         windows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .windows)
+        desktopShortcuts = try values.decodeIfPresent([Int].self, forKey: .desktopShortcuts) ?? []
+        if desktopShortcuts.contains(where: { !DesktopShortcuts.desktops.contains($0) }) || Set(desktopShortcuts).count != desktopShortcuts.count {
+            throw DecodingError.dataCorruptedError(forKey: .desktopShortcuts, in: values,
+                                                   debugDescription: "Desktop shortcuts name desktops 1 to 16, each once.")
+        }
         activeApp = try values.decodeIfPresent(String.self, forKey: .activeApp)
         menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
         draw = try values.decode(Draw.self, forKey: .draw)

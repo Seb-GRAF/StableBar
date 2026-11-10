@@ -802,12 +802,7 @@ struct SetupTourView: View {
             Text("Window and notification clearance start when you finish setup.")
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             let source = session.adviceSource
-            if source == .spaces {
-                if session.showsSpacesGuidance {
-                    Text("Workspaces shows your macOS desktops. To switch desktops from the bar, turn on the Switch to Desktop shortcuts in System Settings → Keyboard → Keyboard Shortcuts → Mission Control.")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-                }
-            } else {
+            if source != .spaces {
                 Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
@@ -821,11 +816,31 @@ struct SetupTourView: View {
     private var permissions: some View {
         VStack(alignment: .leading, spacing: 18) {
             ForEach(session.neededPermissions, id: \.self) { permissionRow($0) }
+            if session.showsSpacesGuidance {
+                let status = session.store.workspaceStore.desktopShortcutStatus
+                hint("keyboard", DesktopShortcuts.title, status.detail) {
+                    if status.allEnabled {
+                        Label("Ready", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
+                    } else {
+                        permissionButton(DesktopShortcuts.actionTitle) {
+                            lower()
+                            do { try DesktopShortcuts.openSettings() }
+                            catch { session.error = errorMessage(error) }
+                        }
+                        .fixedSize()
+                    }
+                }
+                if !status.allEnabled {
+                    Text("You can continue setup and turn these on later. Only switching desktops from the bar needs them.")
+                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                }
+            }
         }
         .padding(24)
         .frame(width: 600, alignment: .leading)
         .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+        .onAppear { session.store.workspaceStore.refreshDesktopShortcuts() }
     }
 
     /// A permission with its state and action. `compact` drops the explanation and keeps the row on one line, for the

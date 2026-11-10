@@ -46,10 +46,17 @@ enum SceneRenderer {
                 break
             }
         }
+        store.workspaceStore.source = configuration.workspaceSource
+        store.workspaceStore.desktopShortcuts = DesktopShortcuts(read: {
+            Dictionary(uniqueKeysWithValues: scene.desktopShortcuts.map { number in
+                (String(117 + number), ["enabled": true, "value": ["parameters": [65535, number, 262144]]] as [String: Any])
+            })
+        })
         if let workspaces = scene.workspaces {
             store.workspaceStore.workspaces = try workspaceSnapshot(workspaces: JSONEncoder().encode(workspaces),
                                                                     windows: JSONEncoder().encode(scene.windows ?? []))
         }
+        store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
         try DocsImages.offline(store, in: directory)
         store.preparePresentations()
