@@ -596,6 +596,10 @@ jobs:
         run: |
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx StableBar.dmg; then
             gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern StableBar.dmg --dir dist
+            if [[ -n "${SIGNING_IDENTITY:-}" ]] && ! codesign -dvv dist/StableBar.dmg 2>&1 | grep -q '^Authority=Developer ID Application'; then
+              echo "::error::v$VERSION has an ad-hoc DMG. Delete it from the release and run again to build a signed one."
+              exit 1
+            fi
             ./scripts/check-update-key.sh
           else
             brew install create-dmg
