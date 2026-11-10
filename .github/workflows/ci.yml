@@ -479,6 +479,11 @@ jobs:
           brew install create-dmg
           ./scripts/set-version.sh "$VERSION" "$GITHUB_RUN_NUMBER"
           STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
+      - name: Check the update key
+        if: steps.next.outputs.version
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./scripts/check-update-key.sh
       - name: Publish the beta
         if: steps.next.outputs.version
         env:
@@ -575,6 +580,7 @@ jobs:
         if: steps.tags.outputs.finish == ''
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           brew install create-dmg
           npx semantic-release

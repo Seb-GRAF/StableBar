@@ -130,7 +130,7 @@ Both jobs sign and notarize the app with a Developer ID when the repository has 
 
 `scripts/publish-appcast.sh` adds each signed release to `appcast.xml` in the `appcast` prerelease, the feed every release checks, with betas on Sparkle's `beta` channel. Each item carries its GitHub release notes, whose bullet points the update tile's popup lists, and a link to the release.
 
-Sparkle installs an update when its EdDSA signature matches the running app's key or its Developer ID matches the running app's, so a release can change one of the two while the other still matches, never both at once. An app with the key refuses an update without an EdDSA signature, so the feed isn't published without the secret.
+Sparkle installs an update when its EdDSA signature matches the running app's key or its Developer ID matches the running app's, so a release can change one of the two while the other still matches, never both at once. An app with the key refuses an update without an EdDSA signature, so `scripts/check-update-key.sh` signs the DMG before either job publishes it, and stops the release when the secret is missing or doesn't match `SUPublicEDKey`.
 
 The private key was made with Sparkle's `generate_keys`, which `swift build` puts in `.build/artifacts/sparkle/Sparkle/bin`, and lives in the maintainer's login keychain. `generate_keys -p` prints its public key. To set the secret from the keychain:
 
