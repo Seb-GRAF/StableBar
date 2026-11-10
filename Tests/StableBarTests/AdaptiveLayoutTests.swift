@@ -227,6 +227,21 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(plan.placements["cpu"] == BarPlacement(x: 732, width: 150))
 }
 
+@Test func widgetsAtTheNotchStayAgainstItAndTheButtonGoesOnTheirFarSide() {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: -20, notch: 400...600).plan(width: 1000, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 150),
+        BarLayoutItem(id: "menus", position: .left, width: 200),
+        BarLayoutItem(id: "usage", position: .notchLeft, width: 100, priority: 10),
+        BarLayoutItem(id: "clock", position: .notchRight, width: 100, priority: 10),
+        BarLayoutItem(id: "cpu", position: .right, width: 150),
+        BarLayoutItem(id: "music", position: .right, width: 200)
+    ])
+    #expect(plan.overflow == [BarOverflow(x: 282, atEnd: true, ids: ["menus"]), BarOverflow(x: 688, atEnd: false, ids: ["cpu"])])
+    #expect(plan.placements["usage"] == BarPlacement(x: 320, width: 100))
+    #expect(plan.placements["clock"] == BarPlacement(x: 580, width: 100))
+    #expect(plan.placements["music"] == BarPlacement(x: 790, width: 200))
+}
+
 @Test func hoverGrowthTakesOnlyFreeRoomAndNeverHidesOrMovesOtherWidgets() {
     let planner = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600)
     func plan(growth: CGFloat) -> AdaptiveBarPlan {
