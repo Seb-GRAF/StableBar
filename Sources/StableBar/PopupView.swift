@@ -125,7 +125,8 @@ struct PopupBackground: ViewModifier {
                                       shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                    .strokeBorder(hidden ? .clear : appearance.border(increasedContrast: contrast == .increased), lineWidth: appearance.borderWidth)
+                    .strokeBorder(hidden ? .clear : appearance.border(increasedContrast: contrast == .increased),
+                                  lineWidth: contrast == .increased ? max(appearance.borderWidth, 1) : appearance.borderWidth)
             }
     }
 }

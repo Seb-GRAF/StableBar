@@ -354,7 +354,7 @@ struct BarUnitSurface<Content: View>: View {
                         let radius = style.cornerRadius ?? 0
                         UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
                                                topTrailingRadius: radius)
-                            .strokeBorder(WidgetAppearance(WidgetStyle(), defaults: defaults).foreground, lineWidth: appearance.borderWidth)
+                            .strokeBorder(WidgetAppearance(WidgetStyle(), defaults: defaults).foreground, lineWidth: max(appearance.borderWidth, 1))
                     } else {
                         RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
                             .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
@@ -586,7 +586,7 @@ struct WidgetView: View {
                 // stray marks at the ends of a pill.
                 let radius = appearance.cornerRadius
                 UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius, topTrailingRadius: radius)
-                    .strokeBorder(appearance.foreground, lineWidth: appearance.borderWidth)
+                    .strokeBorder(appearance.foreground, lineWidth: max(appearance.borderWidth, 1))
             } else {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
                     .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
