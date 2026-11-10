@@ -245,8 +245,8 @@ func removingReferences(to id: String, in document: [String: ConfigurationValue]
     return document
 }
 
-/// Moves the `customization` and `removedWidgets` that StableBar saved before 0.2.0 into the ordinary keys. No release
-/// reads those keys any more, so the loader does this to every file it reads.
+/// Moves the `customization` and `removedWidgets` that StableBar saved before 0.2.0, which no release reads now, into
+/// the ordinary keys.
 func movingCustomization(_ document: [String: ConfigurationValue]) throws -> [String: ConfigurationValue] {
     var root = document
     guard root["customization"] != nil || root["removedWidgets"] != nil else { return root }
