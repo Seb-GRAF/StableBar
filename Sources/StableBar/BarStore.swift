@@ -126,7 +126,7 @@ final class BarStore: NSObject {
             guard let self else { return }
             popup.close()
             let focused = workspaceStore.workspaces.first(where: \.isFocused)
-            send(.workspace, ["INFO": focused?.name ?? "", "SID": String(focused?.monitor ?? activeDisplayID)])
+            send(.workspace, ["INFO": (workspaceStore.source == .rift ? focused?.label : focused?.name) ?? "", "SID": String(focused?.monitor ?? activeDisplayID)])
         }
         do {
             let directory = sharedConfigurationURL.deletingLastPathComponent()

@@ -338,11 +338,48 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(fixture.store.error == message)
 }
 
+@Test @MainActor func riftShowsManagedDisplaysAndRunsCommandsOnTheClickedDisplay() async throws {
+    let fixture = try omniwmFixture("""
+    case "$1 $2 $4" in
+      "query displays ") printf '%s\\n' '[{"uuid":"A","screen_id":80,"is_active_space":true,"is_active_context":true},{"uuid":"B","screen_id":90,"is_active_space":true,"is_active_context":false},{"uuid":"C","screen_id":70,"is_active_space":false,"is_active_context":false}]' ;;
+      "query workspaces A") printf '%s\\n' '[{"id":"a0","index":0,"name":"first","is_active":true,"windows":[{"id":{"pid":7,"idx":11},"title":"Docs","bundle_id":"com.apple.Safari","app_name":"Safari"},{"id":{"pid":8,"idx":12},"title":"","bundle_id":null,"app_name":"Ghostty"}]},{"id":"a1","index":1,"name":"second","is_active":false,"windows":[{"id":{"pid":9,"idx":13},"title":"List","bundle_id":"com.apple.Notes","app_name":"Notes"}]}]' ;;
+      "query workspaces B") printf '%s\\n' '[{"id":"b0","index":0,"name":"first","is_active":true,"windows":[]},{"id":"b1","index":1,"name":"second","is_active":false,"windows":[]}]' ;;
+    esac
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    let snapshot = try await riftSnapshot(fixture.directory.appending(path: "omniwmctl").path, screenIDs: [90, 80, 70])
+    #expect(snapshot.map(\.name) == ["a0", "a1", "b0", "b1"])
+    #expect(snapshot.map(\.label) == ["first", "second", "first", "second"])
+    #expect(snapshot.map(\.monitor) == [2, 2, 1, 1])
+    #expect(snapshot.map(\.isFocused) == [true, false, false, false])
+    #expect(snapshot.map(\.isVisible) == [true, false, true, false])
+    #expect(snapshot[0].windows.map(\.id) == [11, 12])
+    #expect(snapshot[0].windows.map(\.reference) == [#"{"pid":7,"idx":11}"#, #"{"pid":8,"idx":12}"#])
+    #expect(snapshot[0].apps.map(\.bundleID) == ["Ghostty", "com.apple.Safari"])
+    fixture.store.source = .rift
+    fixture.store.workspaces = snapshot
+    await fixture.store.focus(snapshot[0].windows[0])?.value
+    await fixture.store.focus(snapshot[1].windows[0])?.value
+    fixture.store.select(snapshot[3])
+    for _ in 0..<100 where calls(fixture.log).count < 8 { try await Task.sleep(for: .milliseconds(20)) }
+    let payload = try #require(fixture.store.windowDrag.begin(source: .rift, windows: [snapshot[0].windows[1]]))
+    #expect(!fixture.store.canMoveWindows(payload, to: "b1"))
+    await fixture.store.moveWindows(payload, to: "a1")?.value
+    #expect(fixture.store.error == nil)
+    #expect(calls(fixture.log).prefix(9) == [
+        "query displays", "query workspaces --display A", "query workspaces --display B",
+        #"execute window focus --window-id {"pid":7,"idx":11}"#,
+        "execute workspace switch 1", #"execute window focus --window-id {"pid":9,"idx":13}"#,
+        "execute display focus --uuid B", "execute workspace switch 1",
+        "execute workspace move-window 1 12"
+    ])
+}
+
 @Test func workspacesUseAWindowManagerOnlyWhenItIsInstalledAndRunning() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
-    for name in ["yabai", "omniwmctl"] {
+    for name in ["yabai", "omniwmctl", "rift-cli"] {
         FileManager.default.createFile(atPath: directory.appending(path: name).path, contents: Data("#!/bin/sh\n".utf8),
                                        attributes: [.posixPermissions: 0o700])
     }
@@ -351,12 +388,14 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(WorkspaceSource.detected(path: path, configured: nil, running: { _ in false }) == .spaces)
     #expect(WorkspaceSource.detected(path: path, configured: nil, running: { $0 == .aerospace }) == .spaces)
     #expect(WorkspaceSource.detected(path: path, configured: nil, running: { $0 == .omniwm }) == .omniwm)
+    #expect(WorkspaceSource.detected(path: path, configured: nil, running: { $0 == .rift }) == .rift)
     #expect(WorkspaceSource.detected(path: path, configured: nil, running: { _ in true }) == .yabai)
     // A source the configuration names stays while it's installed, running or not.
     #expect(WorkspaceSource.detected(path: path, configured: .omniwm, running: { _ in false }) == .omniwm)
     #expect(WorkspaceSource.detected(path: path, configured: .spaces, running: { _ in true }) == .spaces)
     #expect(WorkspaceSource.detected(path: path, configured: .aerospace, running: { $0 == .yabai }) == .yabai)
     #expect(WorkspaceSource.omniwm.executable(path: path) == directory.appending(path: "omniwmctl").path)
+    #expect(WorkspaceSource.rift.executable(path: path) == directory.appending(path: "rift-cli").path)
 }
 
 @Test func yabaiCountsAsRunningOnlyWhileItsProcessRunsForThisUser() throws {
