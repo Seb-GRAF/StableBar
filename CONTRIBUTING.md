@@ -122,12 +122,26 @@ A stable release pushes its commit and tag before it publishes the GitHub releas
 
 Both jobs use the CI run number, which only goes up, so a stable build always numbers higher than the betas before it. In-app updates compare that number to find the newest release.
 
-Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed: Sparkle installs an update only when it's signed by the same developer as the running app. Without one, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:
+Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed, with an EdDSA signature as well. Without a Developer ID, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:
 
 - the `DEVELOPER_ID_CERTIFICATE` secret: the Developer ID Application certificate and its private key, exported as a `.p12` and base64-encoded, with its password in the `DEVELOPER_ID_CERTIFICATE_PASSWORD` secret;
-- an App Store Connect API key for notarization: the `.p8` file's contents in the `NOTARY_API_KEY` secret, and its key ID and issuer ID in the `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER` variables.
+- an App Store Connect API key for notarization: the `.p8` file's contents in the `NOTARY_API_KEY` secret, and its key ID and issuer ID in the `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER` variables;
+- the `SPARKLE_ED_PRIVATE_KEY` secret: the private EdDSA key whose public key is `SUPublicEDKey` in [Resources/Info.plist](Resources/Info.plist).
 
 `scripts/publish-appcast.sh` adds each signed release to `appcast.xml` in the `appcast` prerelease, the feed every release checks, with betas on Sparkle's `beta` channel. Each item carries its GitHub release notes, whose bullet points the update tile's popup lists, and a link to the release.
+
+Sparkle installs an update when its EdDSA signature matches the running app's key or its Developer ID matches the running app's, so a release can change one of the two while the other still matches, never both at once. An app with the key refuses an update without an EdDSA signature, so the feed isn't published without the secret.
+
+The private key was made with Sparkle's `generate_keys`, which `swift build` puts in `.build/artifacts/sparkle/Sparkle/bin`, and lives in the maintainer's login keychain. `generate_keys -p` prints its public key. To set the secret from the keychain:
+
+```sh
+dir=$(mktemp -d)
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -x "$dir/key"
+gh secret set SPARKLE_ED_PRIVATE_KEY < "$dir/key"
+rm -r "$dir"
+```
+
+Before deleting the exported file, keep a copy somewhere safe, such as a password manager: GitHub never shows a secret again. `generate_keys -f <file>` imports that copy into another Mac's keychain. If the key is lost or leaked, make a new one with `generate_keys --account <name>`, put its public key in `SUPublicEDKey`, set the secret to it with `generate_keys --account <name> -x`, and release: installed copies accept that release on its Developer ID and check the new key from then on. To sign with another Developer ID team, keep the key: installed copies accept that release on its EdDSA signature.
 
 A stable release then sets the version and SHA-256 of the `stablebar` cask in [Seb-GRAF/homebrew-tap](https://github.com/Seb-GRAF/homebrew-tap). It pushes with the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token for that repository only, with read and write access to its contents.
 
