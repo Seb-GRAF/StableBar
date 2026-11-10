@@ -538,7 +538,7 @@ struct WidgetView: View {
     /// What VoiceOver reads after the widget's name: the text it shows at `date`, or the latest value of a graph shown
     /// without text.
     private func accessibilityValue(date: Date) -> String {
-        let text = store.label(for: widget, date: date).text
+        let text = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields).text
         guard text.isEmpty, let value = store.scripts[widget.id]?.output.value else { return text }
         return value.formatted(.percent.precision(.fractionLength(0)))
     }
