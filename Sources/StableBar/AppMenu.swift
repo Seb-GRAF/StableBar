@@ -149,7 +149,7 @@ final class AppMenu: NSObject {
             AXUIElementSetMessagingTimeout(child, 0.1)
             let values = readAttributes(Self.entryAttributes, child)
             guard values.count == Self.entryAttributes.count,
-                  let title = values[0] as? String ?? text(in: child),
+                  let title = values[0] as? String ?? text(in: child, readAttribute),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
             entries.append(AppMenuEntry(title: title, element: child, isEnabled: values[1] as? Bool == true,
                                         isChecked: values[2] as? String != nil,
@@ -167,17 +167,6 @@ final class AppMenu: NSObject {
 
     private func submenu(among children: [AXUIElement]) -> AXUIElement? {
         children.first { attribute(kAXRoleAttribute, of: $0) as? String == kAXMenuRole }
-    }
-
-    private func text(in element: AXUIElement) -> String? {
-        let parts = children(of: element).compactMap { child -> String? in
-            switch attribute(kAXRoleAttribute, of: child) as? String {
-            case kAXStaticTextRole: return attribute(kAXValueAttribute, of: child) as? String
-            case kAXMenuRole: return nil
-            default: return text(in: child)
-            }
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " ")
     }
 
     func openSubmenu<Content: View>(_ element: AXUIElement?, beside row: NSView, content: (PopupConfiguration) -> Content) {
@@ -482,7 +471,16 @@ struct FoundMenuBarItem {
         frame = StableBar.frame(of: element, readAttribute)
         description = readAttribute(kAXDescriptionAttribute, element) as? String
         identifier = readAttribute(kAXIdentifierAttribute, element) as? String
-        hasMenu = (readAttribute(kAXChildrenAttribute, element) as? [AXUIElement])?.isEmpty == false
+        let children = readAttribute(kAXChildrenAttribute, element) as? [AXUIElement] ?? []
+        let rows = children.flatMap { child in
+            AXUIElementSetMessagingTimeout(child, 0.1)
+            return readAttribute(kAXChildrenAttribute, child) as? [AXUIElement] ?? []
+        }
+        // StableBar can't draw a row with neither a title nor text, such as a row of buttons, so its menu opens as the app's own.
+        hasMenu = !children.isEmpty && rows.allSatisfy { row in
+            AXUIElementSetMessagingTimeout(row, 0.1)
+            return (readAttribute(kAXTitleAttribute, row) as? String ?? text(in: row, readAttribute)) != nil
+        }
     }
 }
 
@@ -666,6 +664,19 @@ private func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElemen
     if let value = readAttribute(kAXPositionAttribute, element) { AXValueGetValue(value as! AXValue, .cgPoint, &position) }
     if let value = readAttribute(kAXSizeAttribute, element) { AXValueGetValue(value as! AXValue, .cgSize, &size) }
     return CGRect(origin: position, size: size)
+}
+
+/// The text a menu item draws in its child views, as CodexBar's and Tailscale's do, without its submenu's.
+private func text(in element: AXUIElement, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> String? {
+    let parts = (readAttribute(kAXChildrenAttribute, element) as? [AXUIElement] ?? []).compactMap { child -> String? in
+        AXUIElementSetMessagingTimeout(child, 0.1)
+        switch readAttribute(kAXRoleAttribute, child) as? String {
+        case kAXStaticTextRole: return readAttribute(kAXValueAttribute, child) as? String
+        case kAXMenuRole: return nil
+        default: return text(in: child, readAttribute)
+        }
+    }
+    return parts.isEmpty ? nil : parts.joined(separator: " ")
 }
 
 private func showsPanel(_ pid: pid_t) -> Bool {

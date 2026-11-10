@@ -199,7 +199,7 @@ A `controlCenter` widget opens macOS Control Center. A `menuBarItems` widget sho
 
 To list the items only on click, set `"openOnHover": false` or turn off **Open on hover** in the widget's **Settings → Bar → Behavior** inspector. Then click the widget to open the row and click it again to close it.
 
-Clicking an icon whose app has an ordinary menu opens that menu below it, in your theme's popup style. While a menu is open, move the pointer to another icon to switch to its menu. Items that draw their own panel, such as Control Center, Battery or Clock, open their panel as macOS does. To open them, StableBar briefly brings out the hidden menu bar and keeps it invisible until the item closes. Both widgets need Accessibility access; resting the pointer on Menu bar items doesn't ask for it, a click does. StableBar's own menu bar icon isn't listed.
+Clicking an icon whose app has an ordinary menu opens that menu below it, in your theme's popup style. While a menu is open, move the pointer to another icon to switch to its menu. Items that draw their own panel, such as Control Center, Battery or Clock, open their panel as macOS does. So do items whose menu has rows StableBar can't draw, such as CodexBar's provider buttons and usage cards: they open the app's own menu. To open them, StableBar briefly brings out the hidden menu bar and keeps it invisible until the item closes. Both widgets need Accessibility access; resting the pointer on Menu bar items doesn't ask for it, a click does. StableBar's own menu bar icon isn't listed.
 
 ### Items on the bar
 

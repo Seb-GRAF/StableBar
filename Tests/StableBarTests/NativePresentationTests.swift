@@ -437,6 +437,27 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     #expect(items.map(\.hasMenu) == [false, true])
 }
 
+/// CodexBar draws its menu with SwiftUI: a row of provider buttons without text, and a usage card that shows Accessibility
+/// only its history submenu. StableBar can't draw either row, so the item opens CodexBar's own menu, while a row that draws
+/// its text in child views, as Tailscale's do, keeps the menu in StableBar's popup.
+@Test func menuBarItemsOpenTheAppsOwnMenuWhenARowHasNeitherTitleNorText() async {
+    let tree = AccessibilityTree()
+    func app(_ pid: pid_t, rows: [AXUIElement]) {
+        let quit = tree.add(pid + 4000, role: kAXMenuItemRole, [kAXTitleAttribute: "Quit" as CFString])
+        let item = tree.add(pid + 2000, role: kAXMenuBarItemRole, children: [tree.add(pid + 3000, role: kAXMenuRole, children: rows + [quit])])
+        tree.add(pid, role: kAXApplicationRole, [kAXExtrasMenuBarAttribute: tree.add(pid + 1000, role: kAXMenuBarRole, children: [item])])
+    }
+    func text(_ pid: pid_t, _ value: String) -> AXUIElement { tree.add(pid, role: kAXStaticTextRole, [kAXValueAttribute: value as CFString]) }
+    app(950, rows: [tree.add(9000, role: kAXMenuItemRole, children: [tree.add(9001, role: kAXButtonRole), tree.add(9002, role: kAXButtonRole)])])
+    let history = tree.add(9011, role: kAXMenuRole, children: [tree.add(9012, role: kAXMenuItemRole, children: [text(9013, "Oct 27: $4.20")])])
+    app(951, rows: [tree.add(9010, role: kAXMenuItemRole, children: [history])])
+    app(952, rows: [tree.add(9020, role: kAXMenuItemRole, children: [tree.add(9021, role: kAXGroupRole, children: [text(9022, "Connected")])]),
+                    tree.add(9023, role: kAXMenuItemRole, [kAXTitleAttribute: "" as CFString])])
+
+    let items = await foundMenuBarItems(apps: [950, 951, 952], agent: nil, readAttribute: tree.read).sorted { $0.pid < $1.pid }
+    #expect(items.map(\.hasMenu) == [false, false, true])
+}
+
 /// A row's title comes from the text it draws, never from its submenu's rows.
 @Test @MainActor func appMenuRowsTakeNoTitleFromTheirSubmenu() {
     let tree = AccessibilityTree()
