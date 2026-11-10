@@ -265,8 +265,9 @@ final class SetupSession {
     func toggle(_ preset: SetupPreferences.Preset) {
         let selected = self.preset == preset
         self.preset = selected ? nil : preset
-        preferences = selected ? SetupPreferences(placement: preferences.placement, workspaces: workspaceSource)
+        let choices = selected ? SetupPreferences()
             : preset.preferences(workspaces: workspaceSource, placement: preferences.placement, hasBattery: hasBattery)
+        preferences = preferences.replacingPresetChoices(with: choices)
     }
 
     /// The widget sets `preset`'s tile shows, for where the bar sits and for this Mac.

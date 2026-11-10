@@ -230,6 +230,16 @@ struct SetupPreferences: Equatable {
     var keepNotificationsClear: Bool?
     var deferMeetings = false
 
+    /// Presets own appearance, theme and widget sets. Every other choice stays, even a clock or Meetings choice
+    /// this preset doesn't use: it applies again after another change.
+    func replacingPresetChoices(with preset: SetupPreferences) -> SetupPreferences {
+        var merged = self
+        merged.appearance = preset.appearance
+        merged.theme = preset.theme
+        merged.widgetSets = preset.widgetSets
+        return merged
+    }
+
     /// The starter bar on the top edge as Resources/config.json and earlier releases write it, with a 24-hour clock in
     /// day-month order.
     static let bundledMenuBarStarter = widgets(#"""
