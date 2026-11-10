@@ -437,9 +437,8 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     #expect(items.map(\.hasMenu) == [false, true])
 }
 
-/// CodexBar draws its menu with SwiftUI: a row of provider buttons without text, and a usage card that shows Accessibility
-/// only its history submenu. StableBar can't draw either row, so the item opens CodexBar's own menu, while a row that draws
-/// its text in child views, as Tailscale's do, keeps the menu in StableBar's popup.
+/// CodexBar's SwiftUI menu shows Accessibility provider buttons without text, and only the usage card's history submenu.
+/// Tailscale's rows draw their text in child views.
 @Test func menuBarItemsOpenTheAppsOwnMenuWhenARowHasNeitherTitleNorText() async {
     let tree = AccessibilityTree()
     func app(_ pid: pid_t, rows: [AXUIElement]) {

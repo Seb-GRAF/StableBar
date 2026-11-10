@@ -472,10 +472,11 @@ struct FoundMenuBarItem {
         description = readAttribute(kAXDescriptionAttribute, element) as? String
         identifier = readAttribute(kAXIdentifierAttribute, element) as? String
         let children = readAttribute(kAXChildrenAttribute, element) as? [AXUIElement] ?? []
-        let rows = children.flatMap { child in
+        let menu = children.first { child in
             AXUIElementSetMessagingTimeout(child, 0.1)
-            return readAttribute(kAXChildrenAttribute, child) as? [AXUIElement] ?? []
+            return readAttribute(kAXRoleAttribute, child) as? String == kAXMenuRole
         }
+        let rows = menu.flatMap { readAttribute(kAXChildrenAttribute, $0) as? [AXUIElement] } ?? []
         // StableBar can't draw a row with neither a title nor text, such as a row of buttons, so its menu opens as the app's own.
         hasMenu = !children.isEmpty && rows.allSatisfy { row in
             AXUIElementSetMessagingTimeout(row, 0.1)
