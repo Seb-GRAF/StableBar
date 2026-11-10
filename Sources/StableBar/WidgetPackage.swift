@@ -210,11 +210,8 @@ func validatePackagePath(_ url: URL, inside directory: URL) throws {
     }
 }
 
-/// `resolvingSymlinksInPath()`, also for a path that doesn't exist yet, such as a package version about to be installed.
-/// Foundation returns such a path unchanged, links in its existing folders included: a configuration folder reached
-/// through a symbolic link, as in a dotfiles setup, then put every new package outside its resolved root, and a link
-/// to another folder at `packages/<id>` let a new version inside it pass. The missing components are appended to
-/// the nearest existing ancestor once that is resolved; a link counts as existing even when its target doesn't.
+/// `resolvingSymlinksInPath()` for a path that may not exist yet, which Foundation leaves unresolved:
+/// resolves the nearest existing ancestor and appends the missing components.
 private func resolvingSymlinks(_ url: URL) -> URL {
     var existing = url.standardizedFileURL
     var missing: [String] = []
