@@ -245,10 +245,11 @@ func removingReferences(to id: String, in document: [String: ConfigurationValue]
     return document
 }
 
-func migrateConfigurationFile(_ url: URL) throws {
-    let original = try Data(contentsOf: url)
-    var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
-    guard root["customization"] != nil || root["removedWidgets"] != nil else { return }
+/// Moves the `customization` and `removedWidgets` that StableBar saved before 0.2.0 into the ordinary keys. No release
+/// reads those keys any more, so the loader does this to every file it reads.
+func movingCustomization(_ document: [String: ConfigurationValue]) throws -> [String: ConfigurationValue] {
+    var root = document
+    guard root["customization"] != nil || root["removedWidgets"] != nil else { return root }
     let customization = try root.removeValue(forKey: "customization")?.decoded([String: ConfigurationValue].self) ?? [:]
     var edits = try ["bar", "defaults"].compactMap { key in
         try customization[key].map { ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: key)!, properties: try $0.decoded([String: ConfigurationValue].self)) }
@@ -264,7 +265,16 @@ func migrateConfigurationFile(_ url: URL) throws {
     }
     var ids: [String] = []
     for edit in edits { root = try edit.applying(to: root, widgetIDs: &ids) }
-    try writeConfiguration(configurationData(root, editing: original), to: url)
+    return root
+}
+
+/// Saves the moved keys into a file Settings edits: an edit to `bar` would otherwise lose to the `customization` beside it.
+func migrateConfigurationFile(_ url: URL) throws {
+    let original = try Data(contentsOf: url)
+    let root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+    let migrated = try movingCustomization(root)
+    guard migrated != root else { return }
+    try writeConfiguration(configurationData(migrated, editing: original), to: url)
 }
 
 private let earlierSetupColors: [(appearance: String, colors: [String: ConfigurationValue])] = [
@@ -274,10 +284,12 @@ private let earlierSetupColors: [(appearance: String, colors: [String: Configura
               "borderColor": .string("#ffffff1f"), "shadowColor": .string("#00000040")])
 ]
 
+/// Removes the colors setup and the starter configuration wrote into `defaults` before 0.5.0, where they hide a theme.
+/// `null` and `#007aff` are colors people choose today too, so a file pinned to a release, 0.9.0 or later, keeps them.
 func migrateEarlierColors(_ url: URL) throws {
     let original = try Data(contentsOf: url)
     var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
-    guard case var .object(defaults) = root["defaults"] else { return }
+    guard ConfigurationSchema.release(root["$schema"]) == nil, case var .object(defaults) = root["defaults"] else { return }
     if defaults["accent"] == .string("#007aff") { defaults["accent"] = nil }
     for (appearance, colors) in earlierSetupColors where colors.allSatisfy({ defaults[$0.key] == $0.value }) {
         for key in colors.keys { defaults[key] = nil }

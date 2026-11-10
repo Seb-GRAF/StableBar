@@ -145,10 +145,11 @@ final class BarStore: NSObject {
             }
             try migrateConfigurationFile(sharedConfigurationURL)
             try migrateStarterAppleLogo(sharedConfigurationURL)
-            for setup in screenSetupsWithOwnBars { try? migrateStarterAppleLogo(ownBarURL(for: setup)) }
-            if !UserDefaults.standard.bool(forKey: "migratedEarlierColors") {
-                try migrateEarlierColors(sharedConfigurationURL)
-                UserDefaults.standard.set(true, forKey: "migratedEarlierColors")
+            try migrateEarlierColors(sharedConfigurationURL)
+            for url in screenSetupsWithOwnBars.map(ownBarURL(for:)) {
+                try? migrateConfigurationFile(url)
+                try? migrateStarterAppleLogo(url)
+                try? migrateEarlierColors(url)
             }
             // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
             // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.
