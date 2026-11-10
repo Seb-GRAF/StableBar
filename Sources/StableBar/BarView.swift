@@ -354,7 +354,7 @@ struct BarUnitSurface<Content: View>: View {
                         let radius = style.cornerRadius ?? 0
                         UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
                                                topTrailingRadius: radius)
-                            .strokeBorder(appearance.foreground, lineWidth: appearance.borderWidth)
+                            .strokeBorder(WidgetAppearance(WidgetStyle(), defaults: defaults).foreground, lineWidth: appearance.borderWidth)
                     } else {
                         RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
                             .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
