@@ -16,5 +16,6 @@ StableBar reads one JSON configuration, by default `~/.config/stablebar/config.j
 | [Packages and the store](packages.md) | Installing, reviewing, writing and publishing packages |
 | [Settings](settings.md) | Each section of the Settings window |
 | [Command-line controls](command-line.md) | Querying and editing the running bar, sending events, and triage with a coding agent |
+| [Performance](performance.md) | What the bar costs in CPU, wakeups and memory, and how to measure your own setup |
 
 The [examples](../examples) folder holds working setups, and [stablebar.schema.json](../stablebar.schema.json) describes every configuration property.
