@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.12.0](https://github.com/Seb-GRAF/StableBar/compare/v0.11.0...v0.12.0) (2026-11-10)
+
+### Features
+
+* ask for the permissions your bar needs before setup uses them ([#442](https://github.com/Seb-GRAF/StableBar/issues/442)) ([9494cc7](https://github.com/Seb-GRAF/StableBar/commit/9494cc7a6dd7aa4e1cb5304c9f041e4d3ec3be5e)), closes [#441](https://github.com/Seb-GRAF/StableBar/issues/441)
+* let a group's top corners curve outward into the top of the screen ([265eb90](https://github.com/Seb-GRAF/StableBar/commit/265eb908e48e31c573bb493b0a9fab8571ae0e74))
+* paint the notch black so screen shares and screenshots match the display ([c40dda3](https://github.com/Seb-GRAF/StableBar/commit/c40dda344c2a1a0654db824f25f2a5ed9996fc89))
+* set widget, popup and tooltip backgrounds separately ([7eaf5af](https://github.com/Seb-GRAF/StableBar/commit/7eaf5af2ec3d0688766cba554132c86b747535a5))
+* show Rift workspaces in workspace widgets ([d0f6d4d](https://github.com/Seb-GRAF/StableBar/commit/d0f6d4d919688e8413b77f14d83f869821b53efc))
+* turn on Open at login when setup replaces the menu bar ([#507](https://github.com/Seb-GRAF/StableBar/issues/507)) ([d24abe1](https://github.com/Seb-GRAF/StableBar/commit/d24abe1ebccb324235713785b999eea6cd3caa9c))
+
+### Bug Fixes
+
+* ask before Skip setup throws away the choices made so far ([#470](https://github.com/Seb-GRAF/StableBar/issues/470)) ([66f47ea](https://github.com/Seb-GRAF/StableBar/commit/66f47ea12336531cb63afbcf893f26c8a4a7a233)), closes [#454](https://github.com/Seb-GRAF/StableBar/issues/454)
+* ask where the bar goes first, and for permissions after the choices ([#492](https://github.com/Seb-GRAF/StableBar/issues/492)) ([1f45416](https://github.com/Seb-GRAF/StableBar/commit/1f454161ff12ef9bf49c03c2c5a6821080d7c675)), closes [#450](https://github.com/Seb-GRAF/StableBar/issues/450)
+* drop a window that left every workspace when clicking it fails ([ec45fcc](https://github.com/Seb-GRAF/StableBar/commit/ec45fcc1b567aa86dbc4232091b3e707befb7cfd)), closes [#520](https://github.com/Seb-GRAF/StableBar/issues/520)
+* drop stray focus rings and show popup focus in the theme's hover look ([61ea306](https://github.com/Seb-GRAF/StableBar/commit/61ea306bc647e21c80a8a3570873640b0909fc54))
+* fall back to macOS Spaces when no window manager is running ([#436](https://github.com/Seb-GRAF/StableBar/issues/436)) ([5cc4ef2](https://github.com/Seb-GRAF/StableBar/commit/5cc4ef210f4d675a34881b43d44c5f588214aa6c)), closes [#435](https://github.com/Seb-GRAF/StableBar/issues/435) [#435](https://github.com/Seb-GRAF/StableBar/issues/435)
+* give a bar below the menu bar what the menu bar doesn't show ([#469](https://github.com/Seb-GRAF/StableBar/issues/469)) ([1181904](https://github.com/Seb-GRAF/StableBar/commit/118190440c4290cc9ff0bf2821554afd26e3d23e)), closes [#452](https://github.com/Seb-GRAF/StableBar/issues/452)
+* hold Edit Bar in Place until setup is done ([7582976](https://github.com/Seb-GRAF/StableBar/commit/7582976ff532fb98f8e8031afabbad8c8c89292e)), closes [#462](https://github.com/Seb-GRAF/StableBar/issues/462)
+* keep a bar below the menu bar clear of it on every display ([#468](https://github.com/Seb-GRAF/StableBar/issues/468)) ([ff1d0e9](https://github.com/Seb-GRAF/StableBar/commit/ff1d0e9aefd180e6261822f8ead82e9f7cd5fe8a)), closes [#451](https://github.com/Seb-GRAF/StableBar/issues/451)
+* keep a cancelled hover from showing a tooltip or closing its popup late ([#483](https://github.com/Seb-GRAF/StableBar/issues/483)) ([93c44a1](https://github.com/Seb-GRAF/StableBar/commit/93c44a1b03c78206c747483543e99682b1dd1ffd)), closes [#482](https://github.com/Seb-GRAF/StableBar/issues/482)
+* keep a package library that outlives its bar from crashing the test run ([#481](https://github.com/Seb-GRAF/StableBar/issues/481)) ([5f4821d](https://github.com/Seb-GRAF/StableBar/commit/5f4821d677c874aa894ae65a3b7b9cabb82022f8)), closes [#480](https://github.com/Seb-GRAF/StableBar/issues/480)
+* keep a popup's focus when clicking inside it ([f5ecaec](https://github.com/Seb-GRAF/StableBar/commit/f5ecaec239e00d8d136afef9dea2956ed614dbb8))
+* keep setup's buttons above a Dock at the bottom of the screen ([#445](https://github.com/Seb-GRAF/StableBar/issues/445)) ([2784139](https://github.com/Seb-GRAF/StableBar/commit/2784139f1d6a32a1d9116662a7bf46840902052b)), closes [#444](https://github.com/Seb-GRAF/StableBar/issues/444)
+* keep setup's pointer below the bar when the menu bar shows ([#509](https://github.com/Seb-GRAF/StableBar/issues/509)) ([ef22935](https://github.com/Seb-GRAF/StableBar/commit/ef22935a60e4f72f9c4a06cf90e88d8b79a0d562))
+* keep setup's steps, reminders and hints readable on short screens ([#476](https://github.com/Seb-GRAF/StableBar/issues/476)) ([940777d](https://github.com/Seb-GRAF/StableBar/commit/940777d341134ea3f4b9ae22261292609dd7a5fd)), closes [#455](https://github.com/Seb-GRAF/StableBar/issues/455)
+* keep the app menus on the menu bar's app while a background agent is in front ([#446](https://github.com/Seb-GRAF/StableBar/issues/446)) ([a900ef5](https://github.com/Seb-GRAF/StableBar/commit/a900ef5558c44db3b58e7ec4ec7b11f179c6ecaa)), closes [#443](https://github.com/Seb-GRAF/StableBar/issues/443)
+* keep the app menus that fit beside the notch and put the rest behind » ([#477](https://github.com/Seb-GRAF/StableBar/issues/477)) ([8b09465](https://github.com/Seb-GRAF/StableBar/commit/8b09465d216e4f3d39f564b0f80e4bf42f2936f9)), closes [#453](https://github.com/Seb-GRAF/StableBar/issues/453)
+* keep the focus ring while editing the bar ([80195ff](https://github.com/Seb-GRAF/StableBar/commit/80195ffd0d4e61e171716e980b424128831e34dd))
+* keep widgets beside the notch against it when More widgets shows its button ([d74b925](https://github.com/Seb-GRAF/StableBar/commit/d74b925449454fa89f459d8d0e5d256a8661b197))
+* leave Battery out of setup's presets on a Mac without a battery ([3db935d](https://github.com/Seb-GRAF/StableBar/commit/3db935d5f308ddcef1477dca4be9dd37ad241ce5)), closes [#456](https://github.com/Seb-GRAF/StableBar/issues/456)
+* let Skip setup restore the menu bar when a change is still in flight ([#498](https://github.com/Seb-GRAF/StableBar/issues/498)) ([9fdf1ce](https://github.com/Seb-GRAF/StableBar/commit/9fdf1ced0c2355e175b703a6f176f4f6e4899a4e)), closes [#497](https://github.com/Seb-GRAF/StableBar/issues/497)
+* look up private macOS calls at runtime, so a missing one only turns its feature off ([#490](https://github.com/Seb-GRAF/StableBar/issues/490)) ([5f312fd](https://github.com/Seb-GRAF/StableBar/commit/5f312fdf85b67598b450187707a0c5fcdc661b99))
+* move a bar an earlier setup put below the menu bar under it ([#475](https://github.com/Seb-GRAF/StableBar/issues/475)) ([9cada9a](https://github.com/Seb-GRAF/StableBar/commit/9cada9a8e2a8e21302e51db656fd82c90ebf98f5)), closes [#468](https://github.com/Seb-GRAF/StableBar/issues/468) [#474](https://github.com/Seb-GRAF/StableBar/issues/474)
+* name the profile that sets belowMenuBar in setup's profile notice ([#473](https://github.com/Seb-GRAF/StableBar/issues/473)) ([55aea3c](https://github.com/Seb-GRAF/StableBar/commit/55aea3c2892fe1c0392ae7668043290555271728)), closes [#471](https://github.com/Seb-GRAF/StableBar/issues/471)
+* offer the Notch preset only when the bar replaces the menu bar ([#438](https://github.com/Seb-GRAF/StableBar/issues/438)) ([dc5a611](https://github.com/Seb-GRAF/StableBar/commit/dc5a61163eb9dabf8904e4994858f995b9d9c7f7)), closes [#437](https://github.com/Seb-GRAF/StableBar/issues/437)
+* reject a negative group flare ([eae8615](https://github.com/Seb-GRAF/StableBar/commit/eae861547020fde926e15d30c9682bd2b0c5311a))
+* show workspace managers as segments in Settings again ([60e21a5](https://github.com/Seb-GRAF/StableBar/commit/60e21a5249336dcfb19114822e3418a54fc61606))
+* start a new bar with a clock in the Mac's date order and 12- or 24-hour time ([#501](https://github.com/Seb-GRAF/StableBar/issues/501)) ([ed119f7](https://github.com/Seb-GRAF/StableBar/commit/ed119f7b353d0f61c84678209bc1085efc47e561))
+* stop reopening setup at every launch after Skip setup ([#472](https://github.com/Seb-GRAF/StableBar/issues/472)) ([a15e07a](https://github.com/Seb-GRAF/StableBar/commit/a15e07aef2bc424a5c7f716c1e705c6f7ae45d29)), closes [#449](https://github.com/Seb-GRAF/StableBar/issues/449)
+
 ## [0.11.0](https://github.com/Seb-GRAF/StableBar/compare/v0.10.0...v0.11.0) (2026-11-06)
 
 ### Features
