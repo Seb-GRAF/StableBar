@@ -457,7 +457,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
         let note = store.crashReports.note
         if error != nil || note != nil { menu.addItem(.separator()) }
-        if let error { menu.addItem(withTitle: error, action: nil, keyEquivalent: "") }
+        if let error { addItem(Self.menuTitle(error: error), action: #selector(showStatus), to: menu) }
         if let note { addItem(note, action: #selector(showCrashes), to: menu) }
         Task { await store.crashReports.refresh() }
         menu.addItem(.separator())
@@ -470,8 +470,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
     }
 
+    /// Keeps an error's line near the width of the menus' other lines; Settings › Status shows all of it.
+    static func menuTitle(error: String) -> String {
+        error.count > 32 ? String(error.prefix(32)) + "…" : error
+    }
+
     @objc private func showCustomization() { customization.show(store: store) }
     @objc private func showCrashes() { customization.showCrashes(store: store) }
+    @objc func showStatus() { customization.show(store: store, section: .diagnostics) }
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func tryThemes() {
         let screens = NSScreen.screens
