@@ -291,7 +291,7 @@ enum SceneRenderer {
 
     /// `view` with the Accessibility display settings `settings` names on and the others off, since an offscreen drawing
     /// would otherwise read them from the Mac that draws it.
-    private static func drawn(_ view: some View, with settings: [SceneFile.AccessibilityDisplay]) -> some View {
+    static func drawn(_ view: some View, with settings: [SceneFile.AccessibilityDisplay]) -> some View {
         view.environment(\._accessibilityReduceTransparency, settings.contains(.reduceTransparency))
             .environment(\._colorSchemeContrast, settings.contains(.increaseContrast) ? .increased : .standard)
     }
