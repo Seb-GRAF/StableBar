@@ -553,9 +553,9 @@ private extension DataSourceRegistry {
     #expect(power.diagnostics.executionCount == 1)
     #expect(power.diagnostics.nextDelay == nil)
     #expect(power.samples == [0.8, 0.79])
-    store.setSleeping(true)
+    store.setPaused(true, because: .systemAsleep)
     #expect(!monitor.listening)
-    store.setSleeping(false)
+    store.setPaused(false, because: .systemAsleep)
     try await awaitCondition { monitor.listening }
     #expect(power.output.text == "79%")
     try store.applyEdits([ConfigurationEdit(action: .set, id: "power", properties: ["enabled": .bool(false)])], persist: false)
