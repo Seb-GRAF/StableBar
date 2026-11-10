@@ -150,6 +150,8 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
+    /// A notch as the bar sees one, so setup offers Notch exactly where the bar leaves a notch gap.
+    var hasNotchedDisplay: () -> Bool = { NSScreen.screens.map(BarDisplay.init).contains { $0.notch != nil } }
     /// Whether StableBar runs from an Applications folder, the only place it can open at login from.
     var isInApplications: () -> Bool = { appIsInApplications() }
     var loginStatus: () -> SMAppService.Status = { SMAppService.mainApp.status }
@@ -184,6 +186,8 @@ final class SetupSession {
     let workspaceSource: WorkspaceSource
     /// Whether this Mac has an internal battery, which presets add Battery for.
     let hasBattery: Bool
+    /// Whether a connected display has a notch, refreshed when the screens change while setup shows.
+    private(set) var hasNotchedDisplay: Bool
     let currentThemeKey: String
     var step = 0
     private(set) var finished = false
@@ -246,6 +250,7 @@ final class SetupSession {
         stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
+        hasNotchedDisplay = system.hasNotchedDisplay()
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
@@ -272,6 +277,15 @@ final class SetupSession {
     /// The widget sets `preset`'s tile shows, for where the bar sits and for this Mac.
     func shownWidgetSets(_ preset: SetupPreferences.Preset) -> [SetupPreferences.WidgetSet] {
         preset.shownWidgetSets(workspaces: workspaceSource, placement: presetPlacement, hasBattery: hasBattery)
+    }
+
+    var offeredPresets: [SetupPreferences.Preset] {
+        SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: preset)
+    }
+
+    /// A display change updates the tiles without clearing a chosen preset, which stays available to deselect.
+    func refreshDisplays() {
+        hasNotchedDisplay = system.hasNotchedDisplay()
     }
 
     /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the

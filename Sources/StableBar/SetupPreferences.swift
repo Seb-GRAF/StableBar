@@ -182,10 +182,10 @@ struct SetupPreferences: Equatable {
             }
         }
 
-        /// Notch only blends into the notch on the top edge, so setup offers it once the bar replaces the menu bar.
+        /// Notch only blends into a connected display's notch on the top edge.
         /// A Notch preset already chosen stays offered, so it can still be deselected.
-        static func offered(on placement: Placement, keeping selected: Preset? = nil) -> [Preset] {
-            allCases.filter { $0 != .notch || placement == .top || $0 == selected }
+        static func offered(on placement: Placement, hasNotchedDisplay: Bool, keeping selected: Preset? = nil) -> [Preset] {
+            allCases.filter { $0 != .notch || (placement == .top && hasNotchedDisplay) || $0 == selected }
         }
 
         /// Below the macOS menu bar, a preset leaves out Menu bar items, which the menu bar shows right above it.

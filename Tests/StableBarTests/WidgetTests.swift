@@ -1005,11 +1005,18 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
     #expect(try JSONDecoder().decode(Configuration.self, from: updated).workspaceSource == .yabai)
 }
 
-@Test func setupOffersTheNotchPresetOnlyOnTheTopEdge() {
-    #expect(SetupPreferences.Preset.offered(on: .top) == SetupPreferences.Preset.allCases)
-    #expect(SetupPreferences.Preset.offered(on: .belowMenuBar) == [.minimal, .developer, .workday, .everything])
-    #expect(SetupPreferences.Preset.offered(on: .current) == [.minimal, .developer, .workday, .everything])
-    #expect(SetupPreferences.Preset.offered(on: .belowMenuBar, keeping: .notch) == SetupPreferences.Preset.allCases)
+@Test(arguments: SetupPreferences.Placement.allCases, [false, true])
+func setupOffersTheNotchPresetOnlyWithANotchOnTheTopEdge(placement: SetupPreferences.Placement, hasNotchedDisplay: Bool) {
+    let expected: [SetupPreferences.Preset] = placement == .top && hasNotchedDisplay
+        ? SetupPreferences.Preset.allCases : [.minimal, .developer, .workday, .everything]
+    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay) == expected)
+    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: .developer) == expected)
+}
+
+@Test(arguments: SetupPreferences.Placement.allCases, [false, true])
+func setupKeepsTheSelectedNotchPresetOffered(placement: SetupPreferences.Placement, hasNotchedDisplay: Bool) {
+    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: .notch)
+        == SetupPreferences.Preset.allCases)
 }
 
 @Test func setupKeepsItsButtonsAboveABottomDock() {
