@@ -47,6 +47,8 @@ struct SceneFile: Decodable {
     var uninstall: Uninstall?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
+    /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
+    var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
@@ -54,8 +56,8 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
-             accessibilityDisplay, width, height
+        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall,
+             setup, macOSMajorVersion, appearances, accessibilityDisplay, width, height
     }
 
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
@@ -121,6 +123,11 @@ struct SceneFile: Decodable {
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
+        macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
+        if macOSMajorVersion < 14 {
+            throw DecodingError.dataCorruptedError(forKey: .macOSMajorVersion, in: values,
+                                                   debugDescription: "A macOS major version is 14 or later.")
+        }
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,

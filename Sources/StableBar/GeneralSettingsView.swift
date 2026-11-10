@@ -1,9 +1,14 @@
 import AppKit
 import SwiftUI
 
+extension EnvironmentValues {
+    @Entry var macOSVersion = MacOSVersion()
+}
+
 struct GeneralSettingsView: View {
     let editor: ConfigurationEditor
     private var store: BarStore { editor.store }
+    @Environment(\.macOSVersion) private var macOSVersion
     /// Observed, so the reminder to finish setup updates while Settings is open.
     @AppStorage(SetupProgress.skippedKey) private var setupSkipped = false
     @AppStorage(SetupProgress.completedKey) private var setupCompleted = false
@@ -35,8 +40,7 @@ struct GeneralSettingsView: View {
                             unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
                         bar.toggle("Keep windows clear of the bar", "keepWindowsClear", default: false,
                                    hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace, yabai, OmniWM or Rift sets gaps.")
-                        bar.toggle("Keep notifications clear of the bar", "keepNotificationsClear", default: false,
-                                   hint: "macOS 26 and later")
+                        NotificationClearanceSettings(bar: bar, macOSVersion: macOSVersion)
                     }
                     .id(SettingsSearchResult.windows.id)
                     SettingsGroup("Hover") {
@@ -179,7 +183,8 @@ struct GeneralSettingsView: View {
 
     private var requiredPermissions: [SourcePermission] {
         var permissions = store.registry.permissions(for: store.configuration)
-        if store.configuration?.bar.keepWindowsClear == true || store.configuration?.bar.keepNotificationsClear == true
+        if store.configuration?.bar.keepWindowsClear == true
+            || (macOSVersion.supportsNotificationClearance && store.configuration?.bar.keepNotificationsClear == true)
             || (store.configuration?.bar.menuBarRevealDelay ?? 0) > 0 {
             permissions.removeAll { $0.privacyPane == SourcePermission.accessibility.privacyPane }
             permissions.append(SourcePermission(title: "Accessibility",
@@ -187,6 +192,19 @@ struct GeneralSettingsView: View {
                 symbol: "accessibility", privacyPane: "Privacy_Accessibility"))
         }
         return permissions
+    }
+}
+
+/// Keeps a shared configuration's saved value visible even where notification clearance isn't available.
+struct NotificationClearanceSettings: View {
+    let bar: StyleFields
+    let macOSVersion: MacOSVersion
+
+    var hint: String { macOSVersion.supportsNotificationClearance ? "macOS 26 and later" : "Needs macOS 26 or later." }
+
+    var body: some View {
+        bar.toggle("Keep notifications clear of the bar", "keepNotificationsClear", default: false, hint: hint)
+            .disabled(!macOSVersion.supportsNotificationClearance)
     }
 }
 

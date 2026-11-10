@@ -1849,7 +1849,7 @@
         },
         "keepNotificationsClear": {
           "$ref": "#/definitions/boolean",
-          "description": "Move notification banners below the bar using Accessibility access on macOS 26. Disabled by default."
+          "description": "Move notification banners below the bar using Accessibility access on macOS 26 or later. Disabled by default."
         },
         "menuBarRevealDelay": {
           "$ref": "#/definitions/number",

@@ -773,6 +773,12 @@ struct SetupTourView: View {
         }
     }
 
+    var clearanceStartNotice: String {
+        session.system.macOSVersion.supportsNotificationClearance
+            ? "Window and notification clearance start when you finish setup."
+            : "Window clearance starts when you finish setup."
+    }
+
     private var access: some View {
         VStack(alignment: .leading, spacing: 18) {
             if session.preferences.widgetSets.contains(.meetings) && session.preferences.deferMeetings {
@@ -792,11 +798,13 @@ struct SetupTourView: View {
                     set: { session.preferences.keepWindowsClear = $0 }))
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
-            hint("bell", "Keep notifications clear of StableBar", "Moves banners below the bar. Requires macOS 26.") {
-                Toggle("Keep notifications clear of StableBar", isOn: Binding(
-                    get: { session.preferences.keepNotificationsClear ?? (session.base?.bar.keepNotificationsClear == true) },
-                    set: { session.preferences.keepNotificationsClear = $0 }))
-                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            if session.system.macOSVersion.supportsNotificationClearance {
+                hint("bell", "Keep notifications clear of StableBar", "Moves banners below the bar.") {
+                    Toggle("Keep notifications clear of StableBar", isOn: Binding(
+                        get: { session.preferences.keepNotificationsClear ?? (session.base?.bar.keepNotificationsClear == true) },
+                        set: { session.preferences.keepNotificationsClear = $0 }))
+                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
+                }
             }
             hint("power", "Open at login", session.system.isInApplications()
                  ? "Starts StableBar when you log in." : "Move StableBar to Applications to start it at login.") {
@@ -811,7 +819,7 @@ struct SetupTourView: View {
                     .buttonStyle(SetupButtonStyle(prominent: false))
                 }
             }
-            Text("Window and notification clearance start when you finish setup.")
+            Text(clearanceStartNotice)
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             let source = session.adviceSource
             if source != .spaces {
