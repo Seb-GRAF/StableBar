@@ -204,10 +204,25 @@ func validatePackageComponent(_ value: String) throws {
 }
 
 func validatePackagePath(_ url: URL, inside directory: URL) throws {
-    let root = directory.standardizedFileURL.resolvingSymlinksInPath().path + "/"
-    guard url.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(root) else {
+    let root = resolvingSymlinks(directory).path + "/"
+    guard resolvingSymlinks(url).path.hasPrefix(root) else {
         throw WidgetPackageError.outsidePackage(url.path)
     }
+}
+
+/// `resolvingSymlinksInPath()`, also for a path that doesn't exist yet, such as a package version about to be installed.
+/// Foundation returns such a path unchanged, links in its existing folders included: a configuration folder reached
+/// through a symbolic link, as in a dotfiles setup, then put every new package outside its resolved root, and a link
+/// to another folder at `packages/<id>` let a new version inside it pass. The missing components are appended to
+/// the nearest existing ancestor once that is resolved; a link counts as existing even when its target doesn't.
+private func resolvingSymlinks(_ url: URL) -> URL {
+    var existing = url.standardizedFileURL
+    var missing: [String] = []
+    while existing.path != "/", (try? FileManager.default.attributesOfItem(atPath: existing.path)) == nil {
+        missing.insert(existing.lastPathComponent, at: 0)
+        existing.deleteLastPathComponent()
+    }
+    return missing.reduce(existing.resolvingSymlinksInPath()) { $0.appending(path: $1) }
 }
 
 func packageFile(_ path: String, inside directory: URL) throws -> URL {
