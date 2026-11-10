@@ -349,9 +349,16 @@ struct BarUnitSurface<Content: View>: View {
             surface
                 .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
                 .overlay {
-                    RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
-                        .strokeBorder(outlined ? appearance.foreground : style.borderColor?.color ?? .clear,
-                                      lineWidth: outlined ? appearance.borderWidth : style.borderWidth ?? 0)
+                    if outlined {
+                        // As in WidgetView, a RoundedRectangle's border would get stray marks at the ends of a pill offscreen.
+                        let radius = style.cornerRadius ?? 0
+                        UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
+                                               topTrailingRadius: radius)
+                            .strokeBorder(appearance.foreground, lineWidth: appearance.borderWidth)
+                    } else {
+                        RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
+                            .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                    }
                 }
         }
     }
@@ -574,9 +581,16 @@ struct WidgetView: View {
         .modifier(GlassBackground(fill: style.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.widgets,
                                   shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
-            RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                .strokeBorder(appearance.border(increasedContrast: contrast == .increased && style.background != nil),
-                              lineWidth: appearance.borderWidth)
+            if contrast == .increased && style.background != nil {
+                // SwiftUI draws a RoundedRectangle's border as a layer border, which drawing offscreen, as the scenes do, gives
+                // stray marks at the ends of a pill.
+                let radius = appearance.cornerRadius
+                UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius, topTrailingRadius: radius)
+                    .strokeBorder(appearance.foreground, lineWidth: appearance.borderWidth)
+            } else {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius)
+                    .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            }
         }
         .overlay(alignment: .topTrailing) {
             if let error = store.scripts[widget.id]?.error ?? store.actionErrors[widget.id] {
