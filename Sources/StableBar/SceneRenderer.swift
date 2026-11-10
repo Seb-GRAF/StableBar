@@ -142,7 +142,7 @@ enum SceneRenderer {
             store.barEditing.begin()
             var height = CGFloat(scene.height ?? 0)
             if scene.height == nil { height = try await editBarHeight(store, width: width) }
-            try await OffscreenSnapshot.write(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) },
+            try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: []),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .popup:
             let look = configuration.look(on: .monitor)
@@ -191,7 +191,7 @@ enum SceneRenderer {
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
-            try await OffscreenSnapshot.write(SettingsView(store: store, editor: editor).background(Color(nsColor: .windowBackgroundColor)),
+            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor).background(Color(nsColor: .windowBackgroundColor)), with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
                 !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
@@ -244,7 +244,7 @@ enum SceneRenderer {
             if let preset = setup.preset { session.toggle(preset) }
             choices.made = true
         }
-        try await OffscreenSnapshot.write(view, size: size, dark: dark, settle: settle, ready: { choices.made }, to: url)
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: { choices.made }, to: url)
     }
 
     /// Whether a setup scene's choices are made, which its drawing waits for.
@@ -340,8 +340,8 @@ enum SceneRenderer {
                               backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        let host = NSHostingView(rootView: BarView(store: store, display: display).environment(\.screenKind, .monitor)
-            .environment(\.fixedDate, DocsImages.date))
+        let host = NSHostingView(rootView: drawn(BarView(store: store, display: display).environment(\.screenKind, .monitor)
+            .environment(\.fixedDate, DocsImages.date), with: []))
         host.sizingOptions = []
         window.contentView = host
         let expected = Set(store.barEditing.entries(on: display).map(\.id))
