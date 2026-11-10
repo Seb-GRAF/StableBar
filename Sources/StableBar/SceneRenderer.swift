@@ -136,7 +136,7 @@ enum SceneRenderer {
         switch scene.draw {
         case .bar:
             let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
-            try await OffscreenSnapshot.write(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) },
+            try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .editBar:
             store.barEditing.begin()
@@ -153,12 +153,13 @@ enum SceneRenderer {
             guard let popup = scene.menu.map({ AppMenu.popup($0.map(menuEntry)) }) ?? widgetPopup(widget, store: store) else {
                 throw CommandFailure(message: "widget: \(id) has no popup.")
             }
-            try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark, settle: settle, to: url)
+            try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark,
+                                accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
         case .update:
             store.update = AppUpdate.sample()
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
-                                dark: dark, settle: settle, to: url)
+                                dark: dark, accessibilityDisplay: [], settle: settle, to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -272,7 +273,7 @@ enum SceneRenderer {
 
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
     private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore, height: CGFloat,
-                                  dark: Bool, settle: Duration, to url: URL) async throws {
+                                  dark: Bool, accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
@@ -284,7 +285,15 @@ enum SceneRenderer {
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { OffscreenSnapshot.backdrop(dark: dark) }
-        try await OffscreenSnapshot.write(content, size: NSSize(width: popupWidth + 48, height: height), dark: dark, settle: settle, to: url)
+        try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
+                                          dark: dark, settle: settle, to: url)
+    }
+
+    /// `view` with the Accessibility display settings `settings` names on and the others off, since an offscreen drawing
+    /// would otherwise read them from the Mac that draws it.
+    private static func drawn(_ view: some View, with settings: [SceneFile.AccessibilityDisplay]) -> some View {
+        view.environment(\._accessibilityReduceTransparency, settings.contains(.reduceTransparency))
+            .environment(\._colorSchemeContrast, settings.contains(.increaseContrast) ? .increased : .standard)
     }
 
     /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.
