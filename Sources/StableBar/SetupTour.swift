@@ -29,6 +29,7 @@ struct SetupTourView: View {
     @Environment(\.fixedDate) private var fixedDate
 
     private enum Phase { case intro, wallpaper, tour }
+    private var motion: SetupMotion { SetupMotion(reduceMotion: reduceMotion) }
 
     /// Each step's title and text, in the order of `SetupSession.Step`.
     private static let pages = [
@@ -474,7 +475,9 @@ struct SetupTourView: View {
             // After the permissions step, what is still missing sits above Finish setup, which waits for it, however
             // long the step is.
             if phase == .tour, session.step > SetupSession.Step.permissions.rawValue, !session.missingPermissions.isEmpty {
-                permissionReminder.transition(.opacity)
+                permissionReminder
+                    .transaction { motion.suppressMovement(in: &$0) }
+                    .transition(.opacity)
             }
         }
         .padding(.top, layout.contentTop)
@@ -499,10 +502,10 @@ struct SetupTourView: View {
         ZStack(alignment: .top) {
             if phase == .tour {
                 content()
+                    // Suppress the controls' own animations inside the step, keeping its outer crossfade.
+                    .transaction { motion.suppressMovement(in: &$0) }
                     .id(session.step)
-                    .transition(.asymmetric(
-                        insertion: .blurFade.combined(with: .offset(y: 12)).animation(.smooth(duration: 0.5).delay(0.22 + delay)),
-                        removal: .blurFade.combined(with: .offset(y: -8)).animation(.easeIn(duration: 0.2))))
+                    .transition(motion.stepTransition(delay: delay))
             }
         }
     }
@@ -592,7 +595,9 @@ struct SetupTourView: View {
                     .padding(.vertical, 12)
                 }
                 .onAppear { scroll.scrollTo(selected, anchor: .center) }
-                .onChange(of: selected) { withAnimation(.smooth(duration: 0.3)) { scroll.scrollTo(selected, anchor: .center) } }
+                .onChange(of: selected) {
+                    withAnimation(motion.movement(.smooth(duration: 0.3))) { scroll.scrollTo(selected, anchor: .center) }
+                }
             }
             .frame(width: 836)
             .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
@@ -940,7 +945,7 @@ struct SetupTourView: View {
 
     private var footer: some View {
         HStack(spacing: 24) {
-            Button("Back") { withAnimation(.smooth(duration: 0.5)) { session.step -= 1 } }
+            Button("Back") { withAnimation(motion.stepAnimation) { session.step -= 1 } }
                 .opacity(session.step > 0 ? 1 : 0)
                 .disabled(session.step == 0)
                 .frame(width: 96, alignment: .trailing)
@@ -949,7 +954,7 @@ struct SetupTourView: View {
                     session.finish()
                     if session.finished { finish() }
                 } else {
-                    withAnimation(.smooth(duration: 0.5)) { session.step += 1 }
+                    withAnimation(motion.stepAnimation) { session.step += 1 }
                 }
             } label: {
                 Text(session.step == Self.pages.count - 1 ? "Finish setup" : "Continue").frame(width: 164, height: 48)
@@ -1018,7 +1023,7 @@ struct SetupTourView: View {
                     .frame(width: index == active ? 20 : 6, height: 6)
             }
         }
-        .animation(.snappy, value: active)
+        .animation(motion.movement(.snappy), value: active)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Step \(session.step + 1) of \(Self.pages.count)")
     }
@@ -1068,6 +1073,9 @@ private struct SetupTile<Label: View>: View {
     let action: () -> Void
     @ViewBuilder let label: Label
     @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var motion: SetupMotion { SetupMotion(reduceMotion: reduceMotion) }
 
     var body: some View {
         Button(action: action) {
@@ -1075,13 +1083,13 @@ private struct SetupTile<Label: View>: View {
                 .background(.white.opacity(selected ? 0.12 : hovering ? 0.09 : 0.05), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(selected ? 0.75 : 0.1), lineWidth: selected ? 1.5 : 1))
                 .shadow(color: .white.opacity(selected ? 0.18 : 0), radius: 16)
-                .scaleEffect(hovering && !selected ? 1.02 : 1)
+                .scaleEffect(motion.scale(hovering && !selected, to: 1.02))
                 .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.2), value: hovering)
-        .animation(.snappy(duration: 0.25), value: selected)
+        .animation(motion.movement(.snappy(duration: 0.2)), value: hovering)
+        .animation(motion.movement(.snappy(duration: 0.25)), value: selected)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
@@ -1089,17 +1097,19 @@ private struct SetupTile<Label: View>: View {
 struct SetupButtonStyle: ButtonStyle {
     var prominent = true
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        configuration.label
+        let motion = SetupMotion(reduceMotion: reduceMotion)
+        return configuration.label
             .font(.system(size: 14, weight: .medium, design: .monospaced))
             .foregroundStyle(prominent ? Color.black : Color.white)
             .padding(.horizontal, 28)
             .frame(minHeight: 40)
             .background(prominent ? Color.white : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
             .opacity(isEnabled ? configuration.isPressed ? 0.8 : 1 : 0.35)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(motion.scale(configuration.isPressed, to: 0.97))
+            .animation(motion.movement(.snappy(duration: 0.15)), value: configuration.isPressed)
     }
 }
 

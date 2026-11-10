@@ -105,14 +105,15 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.appearance = NSAppearance(named: .darkAqua)
-        window.animationBehavior = .alertPanel
+        window.animationBehavior = SetupMotion(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion).cardAnimationBehavior
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         window.contentView = NSHostingView(rootView: SetupCardView(
             session: session!, arrangeBar: arrangeBar, customizeWidgets: customizeWidgets,
-            close: { [weak window] in window?.close() }))
+            close: { [weak window] in window?.close() },
+            motionChanged: { [weak window] in window?.animationBehavior = $0.cardAnimationBehavior }))
         window.center()
         card = window
         window.makeKeyAndOrderFront(nil)
@@ -588,6 +589,8 @@ struct SetupCardView: View {
     let arrangeBar: (() -> Void)?
     let customizeWidgets: (() -> Void)?
     let close: () -> Void
+    let motionChanged: (SetupMotion) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
@@ -634,6 +637,7 @@ struct SetupCardView: View {
         .frame(width: 460, height: 640)
         .background(SettingsPalette.background)
         .focusEffectDisabled()
+        .onChange(of: reduceMotion, initial: true) { motionChanged(SetupMotion(reduceMotion: reduceMotion)) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
         }
