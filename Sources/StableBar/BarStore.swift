@@ -143,13 +143,14 @@ final class BarStore: NSObject {
                 let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: starter)
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
-            try migrateConfigurationFile(sharedConfigurationURL)
-            try migrateStarterAppleLogo(sharedConfigurationURL)
-            try migrateEarlierColors(sharedConfigurationURL)
+            // The colors go first: they skip a file pinned to a release, and the other migrations pin it.
+            try migrateEarlierColors(sharedConfigurationURL, savedBy: release)
+            try migrateConfigurationFile(sharedConfigurationURL, savedBy: release)
+            try migrateStarterAppleLogo(sharedConfigurationURL, savedBy: release)
             for url in screenSetupsWithOwnBars.map(ownBarURL(for:)) {
-                try? migrateConfigurationFile(url)
-                try? migrateStarterAppleLogo(url)
-                try? migrateEarlierColors(url)
+                try? migrateEarlierColors(url, savedBy: release)
+                try? migrateConfigurationFile(url, savedBy: release)
+                try? migrateStarterAppleLogo(url, savedBy: release)
             }
             // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
             // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.

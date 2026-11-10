@@ -1072,7 +1072,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     #expect(error.map(errorMessage) == "bar.appearance: Cannot initialize BarAppearance from invalid String value auto")
 }
 
-@Test func colorsThatSetupAndTheStarterWroteNoLongerHideATheme() throws {
+@Test @MainActor func colorsThatSetupAndTheStarterWroteNoLongerHideATheme() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let root = directory.appending(path: "config.json")
@@ -1106,6 +1106,12 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     try writePackageFile(pinned, to: root)
     try migrateEarlierColors(root)
     #expect(try String(contentsOf: root, encoding: .utf8) == pinned)
+    try writePackageFile(##"{"customization":{"defaults":{\##(dark),"accent":"#007aff"}},"widgets":[]}"##, to: root)
+    let store = BarStore(configurationURL: root, release: "0.10.0")
+    defer { store.stop() }
+    store.start()
+    #expect(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))
+        == ["$schema": .string(ConfigurationSchema.url(release: "0.10.0")), "bar": .object(["appearance": .string("dark")]), "widgets": .array([])])
 }
 
 @Test func statesMergeThroughModulesTemplatesTokensProfilesOverridesAndPackages() throws {
