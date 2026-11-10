@@ -32,7 +32,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --add JSON | --remove ID | --reorder ID... [--persist]
            StableBar [--config PATH] --batch JSON_ARRAY [--persist]
            StableBar [--config PATH] --profile NAME|auto [--persist]
-           StableBar [--config PATH] --reset | --refresh ID | --popup ID
+           StableBar [--config PATH] --reset | --refresh ID | --popup ID | --focus
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID [--source SOURCE]
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
            StableBar [--config PATH] --enable-package ID VERSION [--persist]
@@ -85,6 +85,8 @@ enum LaunchCommand {
             self = .control(url, RuntimeRequest(action: .refresh, id: arguments[1]))
         case "--popup" where arguments.count == 2:
             self = .control(url, RuntimeRequest(action: .popup, id: arguments[1]))
+        case "--focus" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .focus))
         case "--packages" where arguments.count == 1:
             self = .packages(url, "list", nil)
         case "--inspect-package" where arguments.count == 2:

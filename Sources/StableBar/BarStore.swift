@@ -1001,6 +1001,10 @@ final class BarStore: NSObject {
             let config = configuration!.onScreen(ScreenKind(BarDisplay(screen: bar.screen!)))
             popup.open(content, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
                        store: self, anchor: anchor, onHover: false)
+        case .focus:
+            let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID
+            guard let bar = barPanel(activeID) else { throw CommandFailure(message: "No bar on the active display.") }
+            bar.focusWidgets()
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
