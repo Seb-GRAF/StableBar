@@ -105,18 +105,19 @@ struct AdaptiveBarPlanner {
             let left: [WidgetPosition] = [.left, .notchLeft]
             let right: [WidgetPosition] = [.notchRight, .center, .right]
             segment(left.flatMap { position in items.filter { $0.position == position } },
-                    start: inset, end: max(inset, notch.lowerBound - notchSpacing), buttonAtEnd: true, positions: left, result: &result)
+                    start: inset, end: max(inset, notch.lowerBound - notchSpacing), buttonAtEnd: true, atNotch: .notchLeft,
+                    positions: left, result: &result)
             segment(right.flatMap { position in items.filter { $0.position == position } },
-                    start: min(width - inset, notch.upperBound + notchSpacing), end: width - inset, buttonAtEnd: false,
+                    start: min(width - inset, notch.upperBound + notchSpacing), end: width - inset, buttonAtEnd: false, atNotch: .notchRight,
                     positions: right, result: &result)
         } else {
-            segment(items, start: inset, end: width - inset, buttonAtEnd: true,
+            segment(items, start: inset, end: width - inset, buttonAtEnd: true, atNotch: nil,
                     positions: [.left, .notchLeft, .center, .notchRight, .right], result: &result)
         }
         return result
     }
 
-    private func segment(_ items: [BarLayoutItem], start: CGFloat, end: CGFloat, buttonAtEnd: Bool,
+    private func segment(_ items: [BarLayoutItem], start: CGFloat, end: CGFloat, buttonAtEnd: Bool, atNotch: WidgetPosition?,
                          positions: [WidgetPosition], result: inout AdaptiveBarPlan) {
         var visible = fitting(items, capacity: end - start, fromEnd: buttonAtEnd)
         let overflows = visible.count < items.count
@@ -141,10 +142,21 @@ struct AdaptiveBarPlanner {
         let hidden = positions.flatMap { position in
             items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
         }
-        let placed = visible.map { result.placements[$0.id]! }
-        let x = buttonAtEnd
-            ? placed.map { $0.x + $0.width + spacing }.max() ?? end - overflowWidth
-            : placed.map { $0.x - spacing - overflowWidth }.min() ?? start
+        let held = visible.filter { $0.position == atNotch }.map(\.id)
+        for id in held {
+            let placement = result.placements[id]!
+            result.placements[id] = BarPlacement(x: placement.x + (buttonAtEnd ? reserve : -reserve), width: placement.width)
+        }
+        let x: CGFloat
+        if held.isEmpty {
+            let placed = visible.map { result.placements[$0.id]! }
+            x = buttonAtEnd
+                ? placed.map { $0.x + $0.width + spacing }.max() ?? end - overflowWidth
+                : placed.map { $0.x - spacing - overflowWidth }.min() ?? start
+        } else {
+            let placed = held.map { result.placements[$0]! }
+            x = buttonAtEnd ? placed.map(\.x).min()! - spacing - overflowWidth : placed.map { $0.x + $0.width }.max()! + spacing
+        }
         result.overflow.append(BarOverflow(x: x, atEnd: buttonAtEnd, ids: hidden.map(\.id)))
     }
 
