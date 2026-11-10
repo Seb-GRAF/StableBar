@@ -668,7 +668,9 @@ struct ConfigurationLoader: Sendable {
         guard !path.contains(canonical) else {
             throw ConfigurationCompositionError.includeCycle(path + [canonical])
         }
-        var values = try movingCustomization(JSONDecoder().decode([String: ConfigurationValue].self, from: data ?? Data(contentsOf: url)))
+        var values = try JSONDecoder().decode([String: ConfigurationValue].self, from: data ?? Data(contentsOf: url))
+        do { values = try movingCustomization(values) }
+        catch { throw CommandFailure(message: "\(url.lastPathComponent): \(errorMessage(error))") }
         if let release = ConfigurationSchema.release(values["$schema"]) { NewerConfiguration.current?.written(for: release) }
         let includes = try values.removeValue(forKey: "includes")?.decoded([String].self) ?? []
         var merged = ConfigurationLayer(values: ["widgets": .array([])], origins: [:])
