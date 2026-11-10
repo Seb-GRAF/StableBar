@@ -55,14 +55,10 @@ struct GeneralSettingsView: View {
                         let path = shellEnvironment.withLock { $0["PATH", default: ""] }
                         let missing = [WorkspaceSource.aerospace, .yabai, .omniwm, .rift].filter { $0.executable(path: path) == nil }
                         SettingRow(title: "Workspace manager", hint: missing.isEmpty ? nil : "Not installed: \(missing.map(\.title).joined(separator: ", ")).") {
-                            Picker("Workspace manager", selection: Binding(get: { source }, set: {
+                            SettingsSegments(selection: Binding(get: { source }, set: {
                                 if $0 != source { editor.change(ConfigurationEdit(action: .workspaceSource, name: $0.rawValue)) }
-                            })) {
-                                ForEach([WorkspaceSource.aerospace, .yabai, .omniwm, .rift, .spaces], id: \.self) {
-                                    Text($0.title).tag($0).disabled(missing.contains($0))
-                                }
-                            }
-                            .labelsHidden()
+                            }), options: [(WorkspaceSource.aerospace, "AeroSpace"), (.yabai, "yabai"), (.omniwm, "OmniWM"), (.rift, "Rift"), (.spaces, "Spaces")],
+                               disabled: missing, stretches: false)
                             .fixedSize()
                         }
                         if missing.contains(source) {
