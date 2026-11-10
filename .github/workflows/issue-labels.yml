@@ -1,0 +1,29 @@
+name: Issue labels
+
+# Adds needs-triage to a new issue from someone outside the team. Only people with triage access can
+# label an issue: GitHub drops the labels anyone else sets, so a blank issue, or one filed with gh or
+# the API, arrives with none. The issue forms add their labels themselves. No code is checked out.
+on:
+  issues:
+    types: [opened]
+
+permissions: {}
+
+jobs:
+  needs-triage:
+    name: Needs triage
+    if: >-
+      github.event.issue.user.type != 'Bot'
+      && !contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)
+      && !contains(github.event.issue.labels.*.name, 'needs-triage')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Add needs-triage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+        run: gh api --method POST "repos/$REPOSITORY/issues/$NUMBER/labels" -f "labels[]=needs-triage"
