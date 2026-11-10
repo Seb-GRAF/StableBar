@@ -447,7 +447,7 @@ final class BarEditViewTests: XCTestCase {
     }
     let selectedLast = try await click(CGPoint(x: last.midX, y: last.midY)) { selected == "b" }
     #expect(selectedLast, "A click on the scrolled-in member selects it")
-    // The − badge's center, 5 points above and left of the tile's corner on a 14-point circle.
+    // The − badge overlaps the tile's top-left corner.
     let removedLast = try await click(CGPoint(x: last.minX + 2, y: last.minY + 2)) {
         store.configuration?.widgets.map(\.id) == ["a", "c"]
     }
