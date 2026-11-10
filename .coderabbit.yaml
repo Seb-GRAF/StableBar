@@ -40,14 +40,16 @@ reviews:
         A configuration change has to reach every surface in the "Hit every surface" list of
         AGENTS.md: decoding (a coding key and stablebar.schema.json), layers (includes, templates,
         profiles, package overrides), editing (the Settings sections and ConfigurationEdits.swift),
-        and the docs page and examples. Point out any surface this change leaves out.
+        and the docs page and examples. Point out any surface this change leaves out. Comments
+        follow "Writing comments" in AGENTS.md.
     - path: "Tests/**"
       instructions: >-
         Most tests run on the main actor, in parallel. A test that bounds main-actor scheduling
         with wall-clock time (short sleeps, deadline loops, short timeouts) fails at random on CI:
         suggest waiting by counting polls instead. A sleep that only checks that nothing happens is
         fine. A fixture that runs git needs a timeout of 60 seconds or more. A purely visual fix is
-        proven with before/after images, so don't ask for a UI test.
+        proven with before/after images, so don't ask for a UI test. Comments follow "Writing
+        comments" in AGENTS.md.
     - path: "docs/**"
       instructions: >-
         docs/ is the user manual. Point out instructions that this pull request's code contradicts,
@@ -61,6 +63,8 @@ reviews:
         Jobs triggered by pull_request_target or workflow_run must never check out or run the pull
         request's code, and no workflow may put a pull request's title, description or branch name
         into a shell command. Point out any step that does.
+    # Sources and Tests point to the comment rule too, since the docs don't say whether a file that
+    # matches several entries gets them all.
     - path: "**/*.{swift,sh,mjs}"
       instructions: >-
         Comments follow "Writing comments" in AGENTS.md. Point out a comment this pull request adds
