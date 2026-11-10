@@ -431,7 +431,7 @@ main { position: relative; z-index: 1; overflow-x: clip; }
 .addpop .can li { display: flex; align-items: center; gap: 8px; padding: 7px 0; }
 .addpop .can li + li { border-top: 1px solid color-mix(in srgb, var(--win-fg) 8%, transparent); }
 .addpop .can svg { width: 14px; height: 14px; flex: none; color: color-mix(in srgb, var(--win-fg) 60%, transparent); }
-.addpop .foot { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: color-mix(in srgb, var(--win-fg) 68%, transparent); font-size: 11px; }
+.addpop .actions { display: flex; align-items: center; gap: 12px; margin-top: 12px; color: color-mix(in srgb, var(--win-fg) 68%, transparent); font-size: 11px; }
 .addpop .go { flex: none; margin-left: auto; height: 26px; padding: 0 12px; border-radius: 6px; background: var(--blue-fill); color: #fff; font-size: 13px; }
 
 /* The bar's context menu, in the system's style */
