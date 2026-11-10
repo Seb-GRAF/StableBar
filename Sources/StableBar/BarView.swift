@@ -151,6 +151,15 @@ struct BarView: View {
                     .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
                     .scaleEffect(scale, anchor: .topLeading)
                 }
+                .background(alignment: .topLeading) {
+                    if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = display.notch {
+                        UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)
+                            .fill(.black)
+                            .frame(width: notch.upperBound - notch.lowerBound, height: display.notchHeight)
+                            .offset(x: notch.lowerBound - config.bar.margin, y: -config.bar.offset - config.bar.margin)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .modifier(BarSurface(store: store, settings: config.bar, kind: ScreenKind(display)))
                 .overlay(alignment: .topTrailing) {
                     if let error = store.configurationError {

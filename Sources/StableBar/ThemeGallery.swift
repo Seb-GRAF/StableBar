@@ -218,7 +218,7 @@ final class ThemeGallery {
                 removal[property] = .null
             }
             let bar = try (main["bar"]?.decoded([String: ConfigurationValue].self) ?? [:]).filter {
-                ["height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing"].contains($0.key)
+                ["height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch"].contains($0.key)
             }
             if !bar.isEmpty {
                 moved["bar"] = .object(bar)

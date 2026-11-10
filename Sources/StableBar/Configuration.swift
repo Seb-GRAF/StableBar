@@ -566,12 +566,13 @@ struct BarSettings: Decodable, Sendable {
     var animationDuration: Double?
     var notchWidth: Double?
     var notchSpacing = 16.0
+    var fillNotch = false
     var style = WidgetStyle()
     var appearance: BarAppearance?
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, style, appearance, glass
+        case height, displayScale, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
     }
 
     init() {}
@@ -602,6 +603,7 @@ struct BarSettings: Decodable, Sendable {
         animationDuration = try values.decodeIfPresent(Double.self, forKey: .animationDuration)
         notchWidth = try values.decodeIfPresent(Double.self, forKey: .notchWidth)
         notchSpacing = try values.decodeIfPresent(Double.self, forKey: .notchSpacing) ?? notchSpacing
+        fillNotch = try values.decodeIfPresent(Bool.self, forKey: .fillNotch) ?? fillNotch
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? style
         appearance = try values.decodeIfPresent(BarAppearance.self, forKey: .appearance)
         glass = try values.decodeIfPresent(GlassSettings.self, forKey: .glass) ?? glass
@@ -632,7 +634,7 @@ struct BarSettings: Decodable, Sendable {
 }
 
 struct ScreenConfiguration: Decodable, Sendable {
-    static let barKeys: Set<String> = ["height", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "style",
+    static let barKeys: Set<String> = ["height", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "fillNotch", "style",
                                        "glass", "appearance", "motion", "popupTransition", "morphPopups"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?
