@@ -72,8 +72,17 @@ func firstBanner<Element: Hashable>(in window: Element, limit: Int = 200, kind: 
     return nil
 }
 
+/// The configuration clearance follows while setup previews choices that aren't saved yet.
+final class ClearanceHold {
+    let configuration: Configuration?
+    init(configuration: Configuration?) { self.configuration = configuration }
+}
+
 @MainActor @Observable
 final class WindowClearance: NSObject {
+    /// A configuration to follow instead of the live one while its owner (setup) is open. Weak, so the hold ends
+    /// with its owner.
+    @ObservationIgnored weak var hold: ClearanceHold?
     private(set) var isTrusted = AXIsProcessTrusted()
     private var displays: [WindowClearanceDisplay] = []
     private var keepsWindowsClear = false

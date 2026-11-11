@@ -635,7 +635,10 @@ final class BarStore: NSObject {
         return edit
     }
 
-    var clearanceConfiguration: Configuration? { normalComposition?.configuration ?? configuration }
+    var clearanceConfiguration: Configuration? {
+        if let hold = windowClearance.hold { return hold.configuration }
+        return normalComposition?.configuration ?? configuration
+    }
 
     func tryTheme(_ choice: ThemeChoice) throws {
         guard normalComposition != nil else {
