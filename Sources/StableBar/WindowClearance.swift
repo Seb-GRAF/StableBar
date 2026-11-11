@@ -87,12 +87,15 @@ final class WindowClearance: NSObject {
     private var displays: [WindowClearanceDisplay] = []
     private var keepsWindowsClear = false
     private var keepsNotificationsClear = false
+    private let macOSVersion: MacOSVersion
     private var applications: [pid_t: WatchedApplication] = [:]
     private var notificationCenter: (pid: pid_t, element: AXUIElement, observer: AXObserver)?
     private var runningApplications: NSKeyValueObservation?
     private var permissionTimer: Timer?
     private var pending: Set<pid_t> = []
     private var task: Task<Void, Never>?
+
+    var isRunning: Bool { permissionTimer != nil }
 
     private struct WatchedApplication {
         let element: AXUIElement
@@ -101,14 +104,19 @@ final class WindowClearance: NSObject {
         var adjustedFrames: [AXUIElement: CGRect] = [:]
     }
 
+    init(macOSVersion: MacOSVersion = MacOSVersion()) {
+        self.macOSVersion = macOSVersion
+        super.init()
+    }
+
     func update(windows: Bool, notifications: Bool, displays: [WindowClearanceDisplay]) {
         if self.displays != displays {
             self.displays = displays
             for pid in applications.keys { applications[pid]!.adjustedFrames.removeAll() }
         }
         keepsWindowsClear = windows
-        keepsNotificationsClear = notifications
-        guard windows || notifications else { stop(); return }
+        keepsNotificationsClear = notifications && macOSVersion.supportsNotificationClearance
+        guard windows || keepsNotificationsClear else { stop(); return }
         if permissionTimer == nil {
             let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.refreshPermission() }
