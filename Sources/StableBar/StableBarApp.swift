@@ -356,6 +356,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                           name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke),
                                                           name: NSWorkspace.didWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screensSlept),
+                                                          name: NSWorkspace.screensDidSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screensWoke),
+                                                          name: NSWorkspace.screensDidWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sessionResigned),
+                                                          name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sessionBecameActive),
+                                                          name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(screenLocked),
+                                                            name: Notification.Name("com.apple.screenIsLocked"), object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(screenUnlocked),
+                                                            name: Notification.Name("com.apple.screenIsUnlocked"), object: nil)
     }
 
     @objc private func screensChanged() {
@@ -370,17 +382,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func sleeping() {
-        store.setSleeping(true)
+        store.setPaused(true, because: .systemAsleep)
         store.windowClearance.stop()
         store.menuBarDelay.stop()
         menuBarStrip.stop()
     }
 
     @objc private func woke() {
-        store.setSleeping(false)
+        store.setPaused(false, because: .systemAsleep)
         screensChanged()
         store.send(.wake)
     }
+
+    @objc private func screensSlept() { store.setPaused(true, because: .displaysAsleep) }
+    @objc private func screensWoke() { store.setPaused(false, because: .displaysAsleep) }
+    @objc private func screenLocked() { store.setPaused(true, because: .screenLocked) }
+    @objc private func screenUnlocked() { store.setPaused(false, because: .screenLocked) }
+    @objc private func sessionResigned() { store.setPaused(true, because: .sessionInactive) }
+    @objc private func sessionBecameActive() { store.setPaused(false, because: .sessionInactive) }
 
     func clearanceDisplay(frame: CGRect, visibleFrame: CGRect, display: BarDisplay, desktopTop: CGFloat) -> WindowClearanceDisplay? {
         guard let configuration = store.clearanceConfiguration else { return nil }
