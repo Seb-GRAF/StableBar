@@ -58,6 +58,15 @@ enum SceneRenderer {
         }
         store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
+        // Crashes and Send feedback read these samples, never the crash reports of the Mac that draws.
+        let crashes = directory.appending(path: "DiagnosticReports")
+        try FileManager.default.createDirectory(at: crashes, withIntermediateDirectories: true)
+        if scene.section == .crashes { try writeCrashSamples(to: crashes) }
+        guard let crashDefaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
+            throw CommandFailure(message: "crashes: No defaults to draw with.")
+        }
+        let now = DocsImages.date
+        store.crashReports = CrashReports(directories: [crashes], defaults: crashDefaults, now: { now })
         try DocsImages.offline(store, in: directory)
         store.preparePresentations()
         return store
@@ -202,9 +211,12 @@ enum SceneRenderer {
                 case .feedback:
                     editor.showFeedback()
                     editor.feedback = feedbackDraft
+                case .crashes:
+                    editor.showCrashes()
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
+            let waitsForCrashes = scene.widget == nil && scene.section == .crashes
             let move = settingsApplicationMove(for: scene)
             store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
             let settings = SettingsView(store: store, editor: editor, applicationMove: move)
@@ -214,7 +226,9 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
-                !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
+                (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
+                    // Crashes marks what it shows as seen once it has read the reports.
+                    && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
             }, to: url)
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
@@ -352,6 +366,45 @@ enum SceneRenderer {
                           live: BugReport.Live(access: ["Accessibility allowed", "Calendars allowed"], workspaces: "",
                                                profiles: [], problems: [])),
         account: "octocat", agents: [.claude])
+
+    /// Crash reports as macOS writes them, for Crashes in Status: one of a release, one of a development build, and one
+    /// of a launch that dyld stopped, which Crashes leaves out.
+    private static func writeCrashSamples(to folder: URL) throws {
+        func write(_ name: String, version: String, captured: String, exception: [String: Any], termination: [String: Any],
+                   message: String?, frames: [[String: Any]]) throws {
+            let header: [String: Any] = [
+                "app_name": "StableBar", "name": "StableBar", "bug_type": "309", "incident_id": name, "app_version": version,
+                "build_version": version.isEmpty ? "" : "470", "os_version": "macOS 26.1 (25B78)"
+            ]
+            var body: [String: Any] = [
+                "captureTime": captured, "modelCode": "Mac16,8", "exception": exception, "termination": termination, "faultingThread": 0,
+                "threads": [["triggered": true, "queue": "com.apple.main-thread", "frames": frames]],
+                "usedImages": [["name": "StableBar"], ["name": "libswiftCore.dylib"]]
+            ]
+            if let message { body["asi"] = ["libswiftCore.dylib": [message]] }
+            let data = try JSONSerialization.data(withJSONObject: header, options: .sortedKeys) + Data("\n".utf8)
+                + JSONSerialization.data(withJSONObject: body, options: .sortedKeys)
+            try data.write(to: folder.appending(path: "StableBar-\(name).ips"))
+        }
+        try write("2026-10-22-081240", version: "0.11.0", captured: "2026-10-22 08:12:40.5125 +0000",
+                  exception: ["type": "EXC_BREAKPOINT", "signal": "SIGTRAP"],
+                  termination: ["namespace": "SIGNAL", "indicator": "Trace/BPT trap: 5", "code": 5],
+                  message: "WidgetPopup.swift:50: Fatal error: Unexpectedly found nil while unwrapping an Optional value",
+                  frames: [["imageIndex": 1, "imageOffset": 4096, "symbol": "_assertionFailure(_:_:file:line:flags:)", "symbolLocation": 276],
+                           ["imageIndex": 0, "imageOffset": 6_192_548, "symbol": "WidgetPopup.toggle(_:widget:defaults:store:anchor:)",
+                            "symbolLocation": 1308, "sourceFile": "WidgetPopup.swift", "sourceLine": 50]])
+        try write("2026-10-21-174503", version: "", captured: "2026-10-21 17:45:03.0841 +0000",
+                  exception: ["type": "EXC_BAD_ACCESS", "signal": "SIGSEGV", "subtype": "KERN_INVALID_ADDRESS at 0x0000000000000010"],
+                  termination: ["namespace": "SIGNAL", "indicator": "Segmentation fault: 11", "code": 11], message: nil,
+                  frames: [["imageIndex": 0, "imageOffset": 2_210_140, "symbol": "ConfigurationLoader.load(_:data:context:)",
+                            "symbolLocation": 912, "sourceFile": "ConfigurationLoader.swift", "sourceLine": 214]])
+        try write("2026-10-22-090211", version: "", captured: "2026-10-22 09:02:11.3307 +0000",
+                  exception: ["type": "EXC_CRASH", "signal": "SIGABRT"],
+                  termination: ["namespace": "DYLD", "indicator": "Library missing", "code": 1,
+                                "details": ["(terminated at launch; ignore backtrace)"],
+                                "reasons": ["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"]],
+                  message: nil, frames: [])
+    }
 
     /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.
     private static let uninstallSample = UninstallSnapshot(
