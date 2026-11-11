@@ -1150,7 +1150,7 @@
         },
         "markdown": {
           "$ref": "#/definitions/boolean",
-          "description": "For field blocks: show Markdown, such as bold, italics, code and links, and in a field that wraps also headings, lists and code blocks."
+          "description": "For field blocks: show Markdown, such as bold, italics, code and links, and in a field that wraps also headings, lists, code blocks and tables."
         },
         "fitWidth": {
           "$ref": "#/definitions/boolean",

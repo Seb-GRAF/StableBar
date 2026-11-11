@@ -16,6 +16,8 @@ enum MarkdownBlock: Equatable {
         // The lines of a paragraph, or of a table when they start with a pipe.
         var paragraph: [Substring] = []
         var code: [Substring]?
+        // The open code block's fence, which only a run of its character at least as long closes.
+        var opener: Substring = ""
         func endParagraph() {
             if paragraph.count > 1, paragraph.allSatisfy(isRow), paragraph[1].wholeMatch(of: /[ |:-]*-[ |:-]*/) != nil {
                 blocks.append(.table(header: cells(paragraph[0]), rows: paragraph.dropFirst(2).map(cells)))
@@ -25,16 +27,17 @@ enum MarkdownBlock: Equatable {
             paragraph = []
         }
         for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
-            let fence = line.drop { $0 == " " }.hasPrefix("```")
+            let fence = fence(line)
             if let lines = code {
-                if fence {
+                if let fence, fence.run.first == opener.first, fence.run.count >= opener.count, fence.rest.allSatisfy(\.isWhitespace) {
                     blocks.append(.code(lines.joined(separator: "\n")))
                     code = nil
                 } else {
                     code = lines + [line]
                 }
-            } else if fence {
+            } else if let fence {
                 endParagraph()
+                opener = fence.run
                 code = []
             } else if line.allSatisfy({ $0 == " " }) {
                 endParagraph()
@@ -52,6 +55,14 @@ enum MarkdownBlock: Equatable {
         if let code { blocks.append(.code(code.joined(separator: "\n"))) }
         endParagraph()
         return blocks
+    }
+
+    /// The run of three or more backticks or tildes that starts a code fence on `line`, and what follows it.
+    private static func fence(_ line: Substring) -> (run: Substring, rest: Substring)? {
+        let trimmed = line.drop { $0 == " " }
+        guard let marker = trimmed.first, marker == "`" || marker == "~" else { return nil }
+        let run = trimmed.prefix { $0 == marker }
+        return run.count >= 3 ? (run, trimmed.dropFirst(run.count)) : nil
     }
 
     private static func isRow(_ line: Substring) -> Bool {

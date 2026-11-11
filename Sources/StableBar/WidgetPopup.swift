@@ -826,6 +826,7 @@ final class WidgetPopup {
         close()
         // The widget can leave the bar, with a configuration change or its display, while its popup is pinned.
         guard let anchor = popup.anchor, let store = popup.store else {
+            if let onClose = popup.onClose { popup.store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
             dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source, animation: popup.animation)
             return
         }

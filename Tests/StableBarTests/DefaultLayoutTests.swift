@@ -319,6 +319,9 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         .table(header: ["Material", "Price"], rows: [["PLA", "CHF 20"], ["PETG", "CHF 25"]]),
         .code("let arriving")
     ])
+    #expect(MarkdownBlock.blocks("````markdown\n```swift\nlet x = 1\n```\n````") == [.code("```swift\nlet x = 1\n```")],
+            "Only a fence as long as the one that opened a block closes it")
+    #expect(MarkdownBlock.blocks("~~~\n```\n~~~") == [.code("```")])
 }
 
 /// A drawing is one frame, so this checks the still shapes: playing in the measuring copy and under

@@ -110,8 +110,8 @@ struct PopupBlock: Decodable, Sendable {
     let wraps: Bool
     /// The height past which a wrapping field block or a vertical list scrolls.
     let maxHeight: Double?
-    /// Whether a field block shows Markdown: bold, italics, code and links, and when it wraps also headings, lists
-    /// and code blocks.
+    /// Whether a field block shows Markdown: bold, italics, code and links, and when it wraps also headings, lists,
+    /// code blocks and tables.
     let markdown: Bool
     /// Whether a block in a popup is as wide as its content, up to its `maxWidth`, and placed by its alignment.
     let fitsWidth: Bool
