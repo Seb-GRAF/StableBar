@@ -380,7 +380,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
 
-/// Setup's finishing step explains the Switch to Desktop shortcuts whenever the bar it builds shows macOS Spaces in
+/// Setup's permissions step checks the Switch to Desktop shortcuts whenever the bar it builds shows macOS Spaces in
 /// Workspaces, including the starter below the menu bar, which has Workspaces without any preset.
 @MainActor
 @Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() throws {

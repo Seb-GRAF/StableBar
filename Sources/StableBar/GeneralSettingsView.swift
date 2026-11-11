@@ -84,6 +84,9 @@ struct GeneralSettingsView: View {
                         } else {
                             VStack(spacing: 16) { SourcePermissionList(permissions: permissions) }.groupRow()
                         }
+                        if store.configuration?.usesSpacesWorkspaces == true {
+                            DesktopShortcutSettings(workspaces: store.workspaceStore).groupRow()
+                        }
                     }
                     .id(SettingsSearchResult.access.id)
                     SettingsGroup("Configuration file") {

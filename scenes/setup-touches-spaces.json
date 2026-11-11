@@ -1,0 +1,51 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": {
+      "belowMenuBar": true
+    },
+    "workspaceSource": "spaces",
+    "widgets": [
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left"
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "format": "EEE d MMM  HH:mm",
+        "position": "right"
+      }
+    ]
+  },
+  "workspaces": [
+    {
+      "workspace": "1",
+      "workspace-is-focused": true,
+      "workspace-is-visible": true,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "2",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "3",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    }
+  ],
+  "draw": "setup",
+  "setup": {
+    "step": "touches",
+    "placement": "belowMenuBar",
+    "accessibility": true
+  },
+  "appearances": [
+    "dark"
+  ]
+}
