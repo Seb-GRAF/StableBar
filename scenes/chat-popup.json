@@ -1,0 +1,324 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "tokens": {
+      "textMuted": {
+        "light": "#5f6773",
+        "dark": "#9aa3b0"
+      },
+      "bubble": {
+        "light": "#0000000d",
+        "dark": "#ffffff14"
+      },
+      "composer": {
+        "light": "#00000005",
+        "dark": "#ffffff08"
+      },
+      "hairline": {
+        "light": "#0000001f",
+        "dark": "#ffffff1f"
+      },
+      "hover": {
+        "light": "#0000000d",
+        "dark": "#ffffff12"
+      }
+    },
+    "widgets": [
+      {
+        "id": "ask",
+        "type": "script",
+        "command": "true",
+        "position": "right",
+        "icon": "sparkles",
+        "popup": {
+          "pinnable": true,
+          "style": {
+            "width": 440,
+            "paddingHorizontal": 14,
+            "paddingVertical": 12,
+            "spacing": 10
+          },
+          "layout": {
+            "type": "column",
+            "children": [
+              {
+                "type": "row",
+                "style": {
+                  "spacing": 2,
+                  "paddingTrailing": 30
+                },
+                "children": [
+                  {
+                    "type": "chooser",
+                    "title": "Agent, model and effort",
+                    "source": "agent",
+                    "groupsSource": "agents",
+                    "optionsSource": "models",
+                    "levelsSource": "efforts",
+                    "onChange": "true",
+                    "starsSource": "stars",
+                    "onStar": "true"
+                  },
+                  {
+                    "type": "symbol",
+                    "name": "clock",
+                    "onClick": "true",
+                    "alignment": "center",
+                    "style": {
+                      "width": 26,
+                      "height": 26,
+                      "cornerRadius": 7,
+                      "iconSize": 13,
+                      "foreground": "@token.textMuted",
+                      "hoverBackground": "@token.hover"
+                    }
+                  },
+                  {
+                    "type": "symbol",
+                    "name": "square.and.pencil",
+                    "onClick": "true",
+                    "alignment": "center",
+                    "style": {
+                      "width": 26,
+                      "height": 26,
+                      "cornerRadius": 7,
+                      "iconSize": 13,
+                      "foreground": "@token.textMuted",
+                      "hoverBackground": "@token.hover"
+                    }
+                  }
+                ]
+              },
+              {
+                "type": "list",
+                "source": "turns",
+                "maxHeight": 380,
+                "style": {
+                  "spacing": 14
+                },
+                "row": {
+                  "type": "column",
+                  "style": {
+                    "spacing": 8
+                  },
+                  "children": [
+                    {
+                      "type": "field",
+                      "field": "question",
+                      "wrap": true,
+                      "fitWidth": true,
+                      "alignment": "trailing",
+                      "style": {
+                        "maxWidth": 320,
+                        "background": "@token.bubble",
+                        "cornerRadius": 17,
+                        "paddingHorizontal": 12,
+                        "paddingVertical": 7
+                      }
+                    },
+                    {
+                      "type": "field",
+                      "field": "status",
+                      "shimmer": true,
+                      "hideWhenEmpty": "status",
+                      "style": {
+                        "foreground": "@token.textMuted",
+                        "fontWeight": "medium"
+                      }
+                    },
+                    {
+                      "type": "field",
+                      "field": "thoughts",
+                      "wrap": true,
+                      "hideWhenEmpty": "thoughts",
+                      "style": {
+                        "foreground": "@token.textMuted",
+                        "fontSize": 11.5
+                      }
+                    },
+                    {
+                      "type": "field",
+                      "field": "answer",
+                      "wrap": true,
+                      "markdown": true,
+                      "hideWhenEmpty": "answer"
+                    },
+                    {
+                      "type": "row",
+                      "hideWhenEmpty": "copy",
+                      "style": {
+                        "spacing": 2
+                      },
+                      "children": [
+                        {
+                          "type": "symbol",
+                          "name": "doc.on.doc",
+                          "onClickField": "copy",
+                          "alignment": "center",
+                          "style": {
+                            "width": 24,
+                            "height": 24,
+                            "cornerRadius": 6,
+                            "iconSize": 12,
+                            "foreground": "@token.textMuted",
+                            "hoverBackground": "@token.hover"
+                          }
+                        },
+                        {
+                          "type": "symbol",
+                          "name": "arrow.clockwise",
+                          "onClickField": "retry",
+                          "hideWhenEmpty": "retry",
+                          "alignment": "center",
+                          "style": {
+                            "width": 24,
+                            "height": 24,
+                            "cornerRadius": 6,
+                            "iconSize": 12,
+                            "foreground": "@token.textMuted",
+                            "hoverBackground": "@token.hover"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "input",
+                "title": "Question",
+                "placeholder": "Ask a follow-up",
+                "wrap": true,
+                "sendButton": true,
+                "busy": "running",
+                "onStop": "true",
+                "onSubmit": "true",
+                "style": {
+                  "background": "@token.composer",
+                  "borderColor": "@token.hairline",
+                  "borderWidth": 1,
+                  "cornerRadius": 14,
+                  "paddingLeading": 14,
+                  "paddingTrailing": 6,
+                  "paddingVertical": 6
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "ask": {
+      "text": "",
+      "icon": "ellipsis.bubble.fill",
+      "fields": {
+        "agent": "claude",
+        "running": "1"
+      },
+      "lists": {
+        "agents": [
+          {
+            "value": "claude",
+            "title": "Claude Code",
+            "icon": "sparkle",
+            "option": "sonnet",
+            "level": "medium",
+            "levelsTitle": "Effort"
+          },
+          {
+            "value": "codex",
+            "title": "Codex",
+            "icon": "curlybraces",
+            "option": "gpt-6-luna",
+            "level": "low",
+            "levelsTitle": "Effort"
+          }
+        ],
+        "models": [
+          {
+            "group": "claude",
+            "value": "haiku",
+            "title": "Haiku"
+          },
+          {
+            "group": "claude",
+            "value": "sonnet",
+            "title": "Sonnet"
+          },
+          {
+            "group": "claude",
+            "value": "opus",
+            "title": "Opus"
+          },
+          {
+            "group": "codex",
+            "value": "gpt-6-luna",
+            "title": "GPT-6-Luna"
+          }
+        ],
+        "efforts": [
+          {
+            "group": "claude",
+            "value": "instant",
+            "title": "Instant"
+          },
+          {
+            "group": "claude",
+            "value": "low",
+            "title": "Low"
+          },
+          {
+            "group": "claude",
+            "value": "medium",
+            "title": "Medium"
+          },
+          {
+            "group": "claude",
+            "value": "high",
+            "title": "High"
+          },
+          {
+            "group": "codex",
+            "value": "low",
+            "title": "Low"
+          }
+        ],
+        "turns": [
+          {
+            "question": "How much does 3D printing filament cost in Switzerland?",
+            "answer": "Filament usually costs about **CHF 20–30 per 1 kg spool**.\n\n| Material | Price (1 kg) |\n|---|---|\n| PLA | CHF 20–25 |\n| PETG | CHF 20–30 |\n| ABS / ASA | CHF 25–35 |\n\n- **PLA** is the easiest to print.\n- **PETG** is tougher and handles heat better.",
+            "copy": "true",
+            "retry": ""
+          },
+          {
+            "question": "Which one for parts that stay outdoors?",
+            "status": "Thinking",
+            "thoughts": "Outdoor parts need UV and heat resistance, so ASA beats PLA and PETG…"
+          }
+        ],
+        "stars": [
+          {
+            "group": "claude",
+            "option": "haiku",
+            "level": "instant"
+          },
+          {
+            "group": "claude",
+            "option": "sonnet",
+            "level": "medium"
+          },
+          {
+            "group": "codex",
+            "option": "gpt-6-luna",
+            "level": "low"
+          }
+        ]
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "ask",
+  "height": 520
+}

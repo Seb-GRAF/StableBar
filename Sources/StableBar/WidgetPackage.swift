@@ -715,7 +715,7 @@ func preparePackageAssets(_ value: ConfigurationValue, path: String = "", origin
     }
 }
 
-private let commandKeys = ["command", "onClick", "rightClick", "middleClick", "scrollUp", "scrollDown", "mouseEntered", "mouseExited", "onChange"]
+private let commandKeys = ["command", "onClick", "rightClick", "middleClick", "scrollUp", "scrollDown", "mouseEntered", "mouseExited", "onChange", "onStop", "onStar", "onOpen", "onClose"]
 
 private func packageCommands(_ value: ConfigurationValue) -> [String] {
     switch value {
