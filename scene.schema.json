@@ -67,8 +67,8 @@
     },
     "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
     "section": {
-      "description": "The Settings section to draw when no widget is named. `help` opens the first answer of its Questions; `feedback` draws Send feedback in Help, with a sample bug, bug report, GitHub account and coding agent.",
-      "enum": ["general", "bar", "theme", "profiles", "packages", "help", "feedback"]
+      "description": "The Settings section to draw when no widget is named. `help` opens the first answer of its Questions; `feedback` draws Send feedback in Help, with a sample bug, bug report, GitHub account and coding agent; `crashes` draws Crashes in Status, with sample crash reports of a release, of a development build and of a launch that dyld stopped, which Crashes leaves out.",
+      "enum": ["general", "bar", "theme", "profiles", "packages", "help", "feedback", "crashes"]
     },
     "tab": { "description": "The tab of the widget's Settings page: content, style or behavior. With section bar and no widget, the tab of the bar's settings: size, look or placement.", "enum": ["content", "style", "behavior", "size", "look", "placement"] },
     "uninstall": {

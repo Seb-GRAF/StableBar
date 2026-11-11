@@ -58,7 +58,7 @@ struct CrashesView: View {
                     }
                 } header: {
                     HStack(spacing: 6) {
-                        SettingsSectionTitle("\(report.date.formatted(date: .abbreviated, time: .shortened)) · StableBar \(report.version ?? "unknown version")")
+                        SettingsSectionTitle("\(report.date.formatted(date: .abbreviated, time: .shortened)) · StableBar \(report.versionName)")
                         if newIDs.contains(report.id) {
                             Text("New").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
                                 .padding(.horizontal, 5).padding(.vertical, 1)
