@@ -131,7 +131,7 @@
       }
     },
     "applicationMove": {
-      "description": "Draw the Move to Applications row in setup or Settings General without touching any app: its button, confirmation, existing copy, failure, progress, or direction back to an open setup.",
+      "description": "Draw the Move to Applications row in setup or Settings General without touching any app: its button, confirmation, existing copy, failure, progress, or direction back to an open setup. A setup scene also needs setup.inApplications false.",
       "enum": ["ready", "replace", "useExisting", "failed", "moving", "setupOpen"]
     },
     "appearances": {

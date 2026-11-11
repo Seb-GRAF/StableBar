@@ -148,6 +148,13 @@ func sceneDecodesApplicationMoveRows(state: SceneFile.ApplicationMove) throws {
     #expect(throws: (any Error).self) {
         try scene(#"{"configuration":{},"draw":"bar","applicationMove":"\#(state.rawValue)"}"#)
     }
+    // Setup in Applications has no move row to draw.
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration":{},"draw":"setup","applicationMove":"\#(state.rawValue)"}"#)
+    }
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration":{},"draw":"setup","setup":{"step":"touches"},"applicationMove":"\#(state.rawValue)"}"#)
+    }
 }
 
 @Test(arguments: [

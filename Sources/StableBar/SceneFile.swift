@@ -160,6 +160,11 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
                 debugDescription: "applicationMove draws a setup row or Settings General.")
         }
+        // Setup shows the move row only outside Applications, and a setup scene is in Applications by default.
+        if applicationMove != nil, draw == .setup, setup?.inApplications != false {
+            throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
+                debugDescription: "A setup scene draws applicationMove only with setup.inApplications false.")
+        }
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,
