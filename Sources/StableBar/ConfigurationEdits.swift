@@ -245,10 +245,11 @@ func removingReferences(to id: String, in document: [String: ConfigurationValue]
     return document
 }
 
-func migrateConfigurationFile(_ url: URL) throws {
-    let original = try Data(contentsOf: url)
-    var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
-    guard root["customization"] != nil || root["removedWidgets"] != nil else { return }
+/// Moves the `customization` and `removedWidgets` that StableBar saved before 0.2.0, which no release reads now, into
+/// the ordinary keys.
+func movingCustomization(_ document: [String: ConfigurationValue]) throws -> [String: ConfigurationValue] {
+    var root = document
+    guard root["customization"] != nil || root["removedWidgets"] != nil else { return root }
     let customization = try root.removeValue(forKey: "customization")?.decoded([String: ConfigurationValue].self) ?? [:]
     var edits = try ["bar", "defaults"].compactMap { key in
         try customization[key].map { ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: key)!, properties: try $0.decoded([String: ConfigurationValue].self)) }
@@ -264,7 +265,16 @@ func migrateConfigurationFile(_ url: URL) throws {
     }
     var ids: [String] = []
     for edit in edits { root = try edit.applying(to: root, widgetIDs: &ids) }
-    try writeConfiguration(configurationData(root, editing: original), to: url)
+    return root
+}
+
+/// Saves the moved keys into a file Settings edits: an edit to `bar` would otherwise lose to the `customization` beside it.
+func migrateConfigurationFile(_ url: URL, savedBy release: String? = AppVersion.release) throws {
+    let original = try Data(contentsOf: url)
+    let root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+    let migrated = try movingCustomization(root)
+    guard migrated != root else { return }
+    try writeConfiguration(configurationData(migrated, editing: original, savedBy: release), to: url)
 }
 
 private let earlierSetupColors: [(appearance: String, colors: [String: ConfigurationValue])] = [
@@ -274,10 +284,12 @@ private let earlierSetupColors: [(appearance: String, colors: [String: Configura
               "borderColor": .string("#ffffff1f"), "shadowColor": .string("#00000040")])
 ]
 
-func migrateEarlierColors(_ url: URL) throws {
+/// Removes the colors setup and the starter configuration wrote into `defaults` before 0.5.0, where they hide a theme.
+/// `null` and `#007aff` are colors people choose today too, so a file pinned to a release, 0.9.0 or later, keeps them.
+func migrateEarlierColors(_ url: URL, savedBy release: String? = AppVersion.release) throws {
     let original = try Data(contentsOf: url)
-    var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
-    guard case var .object(defaults) = root["defaults"] else { return }
+    var root = try movingCustomization(JSONDecoder().decode([String: ConfigurationValue].self, from: original))
+    guard ConfigurationSchema.release(root["$schema"]) == nil, case var .object(defaults) = root["defaults"] else { return }
     if defaults["accent"] == .string("#007aff") { defaults["accent"] = nil }
     for (appearance, colors) in earlierSetupColors where colors.allSatisfy({ defaults[$0.key] == $0.value }) {
         for key in colors.keys { defaults[key] = nil }
@@ -287,7 +299,7 @@ func migrateEarlierColors(_ url: URL) throws {
     for (key, value) in defaults where value == .null && earlierSetupColors.contains(where: { $0.colors[key] != nil }) { defaults[key] = nil }
     guard root["defaults"] != .object(defaults) else { return }
     root["defaults"] = defaults.isEmpty ? nil : .object(defaults)
-    try writeConfiguration(configurationData(root, editing: original), to: url)
+    try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)
 }
 
 /// The Apple logo that earlier starter configurations had: a text widget that ran `open -a 'System Settings'`.
@@ -297,7 +309,7 @@ private let earlierStarterAppleLogo: [String: ConfigurationValue] = [
 
 /// Turns the earlier starter's Apple logo into an Apple menu widget that opens System Settings, so a click still
 /// does what it did. A logo given anything more than its place, look or visibility, such as a popup, stays as it is.
-func migrateStarterAppleLogo(_ url: URL) throws {
+func migrateStarterAppleLogo(_ url: URL, savedBy release: String? = AppVersion.release) throws {
     let original = try Data(contentsOf: url)
     var root = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
     guard case var .array(widgets) = root["widgets"] else { return }
@@ -313,7 +325,7 @@ func migrateStarterAppleLogo(_ url: URL) throws {
     }
     guard root["widgets"] != .array(widgets) else { return }
     root["widgets"] = .array(widgets)
-    try writeConfiguration(configurationData(root, editing: original), to: url)
+    try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)
 }
 
 /// Turns the offset an earlier setup wrote for Below menu bar into `belowMenuBar`, so the bar starts under each display's own
