@@ -450,6 +450,26 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(workspaceStore.workspaces(on: 1, showEmpty: false).map(\.name) == ["1"])
 }
 
+@Test @MainActor func hiddenAppsAndWorkspacesLeaveTheDisplayedWorkspaces() {
+    let workspaceStore = WorkspaceStore()
+    let finder = WorkspaceApp(workspace: "1", name: "Finder", bundleID: "com.apple.finder")
+    let photoshop = WorkspaceApp(workspace: "1", name: "Adobe Photoshop 2026", bundleID: "com.adobe.Photoshop")
+    let password = WorkspaceApp(workspace: "2", name: "1Password", bundleID: "com.1password.1password")
+    workspaceStore.workspaces = [
+        Workspace(name: "1", isFocused: false, isVisible: false, monitor: 1, apps: [finder, photoshop],
+                  windows: [WorkspaceWindow(id: 1, title: "Home", app: finder), WorkspaceWindow(id: 2, title: "Untitled", app: photoshop)]),
+        Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1, apps: [password]),
+        Workspace(name: "S", isFocused: false, isVisible: false, monitor: 1, apps: [finder]),
+        Workspace(name: "T", isFocused: true, isVisible: true, monitor: 1, apps: [finder])
+    ]
+    let hidden = ["Adobe Photoshop*", "com.1password.1password"]
+    let shown = workspaceStore.workspaces(on: 1, showEmpty: false, hideApps: hidden, hideWorkspaces: ["S", "T"])
+    #expect(shown.map(\.name) == ["1", "T"])
+    #expect(shown[0].apps == [finder])
+    #expect(shown[0].windows.map(\.id) == [1])
+    #expect(workspaceStore.workspaces(on: 1, showEmpty: true, hideApps: hidden).map(\.name) == ["1", "2", "S", "T"])
+}
+
 @Test @MainActor func workspaceRowGrowsWhenAnEmptyWorkspaceAppears() throws {
     let workspaceStore = WorkspaceStore()
     workspaceStore.workspaces = [

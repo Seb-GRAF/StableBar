@@ -125,7 +125,9 @@ final class BarEditing {
         if !(presentation?.display ?? widget.display).includes(display, activeID: activeID) { reasons.append(.display) }
         if presentation?.hidden == true { reasons.append(.output) }
         if widget.content == .workspaces && widget.layout == nil && store.workspaceStore.error == nil
-            && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true).isEmpty {
+            && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true,
+                                               hideApps: widget.workspace?.hideApps ?? [],
+                                               hideWorkspaces: widget.workspace?.hideWorkspaces ?? []).isEmpty {
             reasons.append(.workspaces)
         }
         return BarWidgetVisibility(reasons: reasons)

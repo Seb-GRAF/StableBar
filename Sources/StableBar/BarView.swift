@@ -965,7 +965,8 @@ struct WorkspaceView: View {
     var body: some View {
         let workspaces = workspaceStore.workspaces(on: monitor,
             showEmpty: configuration?.showEmpty == true
-                || (workspaceStore.source.supportsWindowMoves && workspaceStore.windowDrag.active != nil))
+                || (workspaceStore.source.supportsWindowMoves && workspaceStore.windowDrag.active != nil),
+            hideApps: configuration?.hideApps ?? [], hideWorkspaces: configuration?.hideWorkspaces ?? [])
         let indicator = configuration?.indicator ?? .background
         HStack(spacing: appearance.spacing) {
             ForEach(workspaces) { workspace in
@@ -1518,5 +1519,10 @@ struct MenuAnchor: NSViewRepresentable {
 
 func appGlyph(for app: WorkspaceApp, in glyphs: [String: String]) -> String? {
     if let glyph = glyphs[app.bundleID] ?? glyphs[app.name] { return glyph }
-    return glyphs.filter { $0.key.hasSuffix("*") && app.name.hasPrefix($0.key.dropLast()) }.max { $0.key.count < $1.key.count }?.value
+    return glyphs.filter { $0.key.hasSuffix("*") && appMatches(app, key: $0.key) }.max { $0.key.count < $1.key.count }?.value
+}
+
+/// Whether an `appGlyphs` or `hideApps` key names the app: its bundle ID, its name, or a name prefix followed by `*`.
+func appMatches(_ app: WorkspaceApp, key: String) -> Bool {
+    key == app.bundleID || key == app.name || key.hasSuffix("*") && app.name.hasPrefix(key.dropLast())
 }

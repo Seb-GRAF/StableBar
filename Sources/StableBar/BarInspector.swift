@@ -483,6 +483,17 @@ struct BarInspector: View {
                             }
                         }
                     }
+                    SettingRow(title: "Hide apps", hint: "Bundle IDs or app names, separated by commas") {
+                        NameListField(title: "Hide apps", prompt: "com.1password.1password, Raycast", names: widget.workspace?.hideApps ?? []) {
+                            editor.set(["workspace": .object(["hideApps": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])], for: widget.id)
+                        }
+                    }
+                    SettingRow(title: "Hide workspaces", hint: "Names, separated by commas. The focused workspace still shows.") {
+                        NameListField(title: "Hide workspaces", prompt: "S, scratch", names: widget.workspace?.hideWorkspaces ?? []) {
+                            editor.set(["workspace": .object(["hideWorkspaces": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])],
+                                       for: widget.id)
+                        }
+                    }
                     if widget.workspace?.windows == true {
                         let length = Binding(get: { Double(widget.workspace?.titleLength ?? 0) }, set: {
                             editor.set(["workspace": .object(["titleLength": .number($0)])], for: widget.id)
@@ -890,6 +901,32 @@ private struct BoxModel: View {
         }
         .padding(4)
         .help(title)
+    }
+}
+
+/// Saves when editing ends rather than as you type, so a comma typed before the next name stays in the field.
+private struct NameListField: View {
+    let title: String
+    let prompt: String
+    let names: [String]
+    let save: ([String]) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(title, text: $text, prompt: Text(prompt))
+            .labelsHidden()
+            .frame(width: 220)
+            .focused($focused)
+            .onSubmit(commit)
+            .onAppear { text = names.joined(separator: ", ") }
+            .onChange(of: names) { if !focused { text = names.joined(separator: ", ") } }
+            .onChange(of: focused) { if !focused { commit() } }
+    }
+
+    private func commit() {
+        let typed = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if typed != names { save(typed) }
     }
 }
 

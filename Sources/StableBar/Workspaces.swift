@@ -218,9 +218,13 @@ final class WorkspaceStore {
         self.workspaceNotificationCenter = workspaceNotificationCenter
     }
 
-    func workspaces(on monitor: Int, showEmpty: Bool) -> [Workspace] {
-        workspaces.filter {
-            $0.monitor == monitor && (showEmpty || $0.isVisible || !$0.apps.isEmpty)
+    func workspaces(on monitor: Int, showEmpty: Bool, hideApps: [String] = [], hideWorkspaces: [String] = []) -> [Workspace] {
+        workspaces.compactMap { workspace in
+            guard workspace.monitor == monitor, workspace.isFocused || !hideWorkspaces.contains(workspace.name) else { return nil }
+            var workspace = workspace
+            workspace.apps.removeAll { app in hideApps.contains { appMatches(app, key: $0) } }
+            workspace.windows.removeAll { window in hideApps.contains { appMatches(window.app, key: $0) } }
+            return showEmpty || workspace.isVisible || !workspace.apps.isEmpty ? workspace : nil
         }
     }
 
