@@ -228,7 +228,7 @@ struct DiagnosticsView: View {
                         }
                     }
                     Button("Send feedback…") {
-                        editor.feedback.kind = .bug
+                        if !editor.postingFeedback { editor.feedback.kind = .bug }
                         editor.showFeedback()
                     }
                     if reportTask != nil { ProgressView().controlSize(.small) }
