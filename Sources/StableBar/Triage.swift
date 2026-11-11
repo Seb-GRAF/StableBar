@@ -111,7 +111,10 @@ enum Triage {
         try Data(notes.utf8).write(to: notesFile)
         let command = [Bundle.main.executableURL!.path, "--config", configuration.path, "triage", "--agent", agent.rawValue,
                        "--notes", notesFile.path]
-        try Data("#!/bin/sh\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8).write(to: script)
+        // Some terminals run the script without a login shell, so it brings the PATH the agents were found on.
+        let path = CommandLineTool.quoted(shellEnvironment.withLock { $0["PATH", default: ""] })
+        try Data("#!/bin/sh\nexport PATH=\(path)\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8)
+            .write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
         guard let terminal = NSWorkspace.shared.urlForApplication(toOpen: script), NSWorkspace.shared.open(script) else {
             throw CommandFailure(message: "macOS couldn't open \(script.path).")
