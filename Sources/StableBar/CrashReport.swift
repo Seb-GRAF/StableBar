@@ -77,11 +77,14 @@ struct CrashReport: Identifiable, Equatable, Sendable {
                          offset: (symbol == nil ? frame["imageOffset"] : frame["symbolLocation"]) as? Int ?? 0,
                          source: file.map { "\($0)\(line.map { ":\($0)" } ?? "")" })
         }
-        // dyld can also end a process that has run, as for a symbol missing at a later call: that crashed thread shows
-        // the process's own frames, a launch only dyld's.
-        if (body["termination"] as? [String: Any])?["namespace"] as? String == "DYLD", frames.allSatisfy({ $0.image == "dyld" }) {
-            return nil
+        // dyld can also end a process that has run, as for a symbol missing at a later call: then some thread shows the
+        // process's own frames, while at launch every thread is still in dyld.
+        let launching = threads.allSatisfy { thread in
+            (thread["frames"] as? [[String: Any]] ?? []).allSatisfy { frame in
+                (frame["imageIndex"] as? Int).flatMap { images.indices.contains($0) ? images[$0] : nil } == "dyld"
+            }
         }
+        if (body["termination"] as? [String: Any])?["namespace"] as? String == "DYLD", launching { return nil }
     }
 
     /// Where it crashed: the first frame in StableBar's own code, or the top frame when none is.
