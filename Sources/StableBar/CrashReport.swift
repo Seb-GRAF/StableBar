@@ -36,13 +36,12 @@ struct CrashReport: Identifiable, Equatable, Sendable {
     var frames: [Frame]
 
     /// Reads a crash report (`bug_type` 309) of StableBar itself. Other reports, and files macOS is still writing, give nil.
-    /// So does a launch that dyld stopped, such as a build missing a framework: none of StableBar's code ran.
+    /// So does a launch that dyld stopped before StableBar's code ran, such as a build missing a framework.
     init?(data: Data, file: URL) {
         guard let newline = data.firstIndex(of: UInt8(ascii: "\n")),
               let header = try? JSONSerialization.jsonObject(with: data[..<newline]) as? [String: Any],
               header["bug_type"] as? String == "309", (header["app_name"] ?? header["name"]) as? String == "StableBar",
-              let body = try? JSONSerialization.jsonObject(with: data[data.index(after: newline)...]) as? [String: Any],
-              (body["termination"] as? [String: Any])?["namespace"] as? String != "DYLD"
+              let body = try? JSONSerialization.jsonObject(with: data[data.index(after: newline)...]) as? [String: Any]
         else { return nil }
         let bundle = body["bundleInfo"] as? [String: Any]
         let os = body["osVersion"] as? [String: Any]
@@ -77,6 +76,11 @@ struct CrashReport: Identifiable, Equatable, Sendable {
             return Frame(image: image, symbol: symbol,
                          offset: (symbol == nil ? frame["imageOffset"] : frame["symbolLocation"]) as? Int ?? 0,
                          source: file.map { "\($0)\(line.map { ":\($0)" } ?? "")" })
+        }
+        // dyld can also end a process that has run, as for a symbol missing at a later call: that crashed thread shows
+        // the process's own frames, a launch only dyld's.
+        if (body["termination"] as? [String: Any])?["namespace"] as? String == "DYLD", frames.allSatisfy({ $0.image == "dyld" }) {
+            return nil
         }
     }
 

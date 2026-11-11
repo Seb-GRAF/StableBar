@@ -379,7 +379,7 @@ enum SceneRenderer {
             var body: [String: Any] = [
                 "captureTime": captured, "modelCode": "Mac16,8", "exception": exception, "termination": termination, "faultingThread": 0,
                 "threads": [["triggered": true, "queue": "com.apple.main-thread", "frames": frames]],
-                "usedImages": [["name": "StableBar"], ["name": "libswiftCore.dylib"]]
+                "usedImages": [["name": "StableBar"], ["name": "libswiftCore.dylib"], ["name": "dyld"]]
             ]
             if let message { body["asi"] = ["libswiftCore.dylib": [message]] }
             let data = try JSONSerialization.data(withJSONObject: header, options: .sortedKeys) + Data("\n".utf8)
@@ -403,7 +403,9 @@ enum SceneRenderer {
                   termination: ["namespace": "DYLD", "indicator": "Library missing", "code": 1,
                                 "details": ["(terminated at launch; ignore backtrace)"],
                                 "reasons": ["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"]],
-                  message: nil, frames: [])
+                  message: nil, frames: [["imageIndex": 2, "imageOffset": 25_424, "symbol": "dyld4::prepare(dyld4::APIs&, mach_o::UnsafeHeader const*)",
+                                          "symbolLocation": 4004],
+                                         ["imageIndex": 2, "imageOffset": 6_356, "symbol": "start", "symbolLocation": 2840]])
     }
 
     /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.

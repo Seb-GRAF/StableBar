@@ -31,7 +31,8 @@ private func crashReport(app: String = "StableBar", bugType: String = "309", inc
         "usedImages": [
             ["name": "StableBar", "path": "/Users/USER/*/StableBar.app/Contents/MacOS/StableBar"],
             ["name": "libswiftCore.dylib", "path": "/usr/lib/swift/libswiftCore.dylib"],
-            ["name": "libfoo.dylib", "path": "/usr/lib/libfoo.dylib"]
+            ["name": "libfoo.dylib", "path": "/usr/lib/libfoo.dylib"],
+            ["name": "dyld", "path": "/usr/lib/dyld"]
         ]
     ]
     let json = { (value: [String: Any]) in try! JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) }
@@ -77,8 +78,21 @@ private let reportFile = URL(filePath: "/Users/someone/Library/Logs/DiagnosticRe
         "namespace": "DYLD", "indicator": "Library missing", "code": 1, "details": ["(terminated at launch; ignore backtrace)"],
         "reasons": ["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"]
     ]
-    #expect(CrashReport(data: crashReport(version: "", termination: missingFramework), file: reportFile) == nil)
-    #expect(CrashReport(data: crashReport(termination: missingFramework), file: reportFile) == nil)
+    let launch: [[String: Any]] = [
+        ["imageOffset": 4, "symbol": "__abort_with_payload", "symbolLocation": 8, "imageIndex": 3],
+        ["imageOffset": 8, "symbol": "dyld4::prepare(dyld4::APIs&, mach_o::UnsafeHeader const*)", "symbolLocation": 4004, "imageIndex": 3],
+        ["imageOffset": 12, "symbol": "start", "symbolLocation": 2840, "imageIndex": 3]
+    ]
+    #expect(CrashReport(data: crashReport(version: "", frames: launch, termination: missingFramework), file: reportFile) == nil)
+    #expect(CrashReport(data: crashReport(frames: launch, termination: missingFramework), file: reportFile) == nil)
+}
+
+@Test func crashReportKeepsADyldFailureAfterStableBarRan() throws {
+    let missingSymbol: [String: Any] = ["namespace": "DYLD", "indicator": "Symbol missing", "code": 4,
+                                        "reasons": ["Symbol not found: _OBJC_CLASS_$_NSSomething"]]
+    let report = try #require(CrashReport(data: crashReport(termination: missingSymbol), file: reportFile))
+    #expect(report.termination == "Symbol missing")
+    #expect(report.location == "WidgetPopup.toggle(_:widget:defaults:store:anchor:)")
 }
 
 @Test func crashReportMarkdownAndIssueURLFitGitHub() throws {
