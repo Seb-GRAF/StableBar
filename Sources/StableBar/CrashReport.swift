@@ -78,9 +78,10 @@ struct CrashReport: Identifiable, Equatable, Sendable {
                          source: file.map { "\($0)\(line.map { ":\($0)" } ?? "")" })
         }
         // dyld can also end a process that has run, as for a symbol missing at a later call: then some thread shows the
-        // process's own frames, while at launch every thread is still in dyld.
-        let launching = threads.allSatisfy { thread in
-            (thread["frames"] as? [[String: Any]] ?? []).allSatisfy { frame in
+        // process's own frames, while at launch every thread is still in dyld. A report without frames shows neither.
+        let stacks = threads.map { $0["frames"] as? [[String: Any]] ?? [] }
+        let launching = stacks.contains { !$0.isEmpty } && stacks.allSatisfy { frames in
+            frames.allSatisfy { frame in
                 (frame["imageIndex"] as? Int).flatMap { images.indices.contains($0) ? images[$0] : nil } == "dyld"
             }
         }

@@ -95,6 +95,8 @@ private let reportFile = URL(filePath: "/Users/someone/Library/Logs/DiagnosticRe
     let inDyld: [[String: Any]] = [["imageOffset": 4, "symbol": "__abort_with_payload", "symbolLocation": 8, "imageIndex": 3]]
     #expect(CrashReport(data: crashReport(frames: inDyld, termination: missingSymbol), file: reportFile) != nil,
             "The main thread in StableBar shows it ran, though the crashed thread is in dyld")
+    #expect(CrashReport(data: crashReport(frames: [], mainThread: false, termination: missingSymbol), file: reportFile) != nil,
+            "A report without frames doesn't show that the launch stopped in dyld")
 }
 
 @Test func crashReportMarkdownAndIssueURLFitGitHub() throws {
