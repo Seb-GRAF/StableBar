@@ -5,7 +5,8 @@ import Testing
 /// A crash report in the format macOS writes to ~/Library/Logs/DiagnosticReports: a JSON header line, then a JSON body.
 private func crashReport(app: String = "StableBar", bugType: String = "309", incident: String = "4F1C2A9E", version: String = "0.9.0",
                          captured: String = "2026-10-26 14:03:12.1234 +0200", frames: [[String: Any]]? = nil,
-                         message: String? = nil) -> Data {
+                         message: String? = nil,
+                         termination: [String: Any] = ["namespace": "SIGNAL", "indicator": "Segmentation fault: 11", "code": 11]) -> Data {
     let header: [String: Any] = [
         "app_name": app, "name": app, "bug_type": bugType, "incident_id": incident, "timestamp": "2026-10-26 14:03:13.00 +0200",
         "app_version": version, "build_version": version.isEmpty ? "" : "421", "os_version": "macOS 26.6.2 (25G83)", "bundleID": "org.stablebar.app",
@@ -15,7 +16,7 @@ private func crashReport(app: String = "StableBar", bugType: String = "309", inc
         "captureTime": captured, "incident": incident, "modelCode": "Mac16,1",
         "procPath": "/Users/someone/Applications/StableBar.app/Contents/MacOS/StableBar",
         "exception": ["type": "EXC_BAD_ACCESS", "signal": "SIGSEGV", "subtype": "KERN_INVALID_ADDRESS at 0x0000000000000010"],
-        "termination": ["namespace": "SIGNAL", "indicator": "Segmentation fault: 11", "code": 11],
+        "termination": termination,
         "asi": ["libswiftCore.dylib": [message ?? "/Users/someone/StableBar/Sources/StableBar/WidgetPopup.swift:50: Fatal error: Unexpectedly found nil"]],
         "faultingThread": 1,
         "threads": [
@@ -69,6 +70,15 @@ private let reportFile = URL(filePath: "/Users/someone/Library/Logs/DiagnosticRe
     let complete = crashReport()
     #expect(CrashReport(data: complete.prefix(complete.count / 2), file: reportFile) == nil)
     #expect(CrashReport(data: Data("not a report".utf8), file: reportFile) == nil)
+}
+
+@Test func crashReportSkipsLaunchesThatDyldStoppedBeforeStableBarRan() {
+    let missingFramework: [String: Any] = [
+        "namespace": "DYLD", "indicator": "Library missing", "code": 1, "details": ["(terminated at launch; ignore backtrace)"],
+        "reasons": ["Library not loaded: @rpath/Sparkle.framework/Versions/B/Sparkle"]
+    ]
+    #expect(CrashReport(data: crashReport(version: "", termination: missingFramework), file: reportFile) == nil)
+    #expect(CrashReport(data: crashReport(termination: missingFramework), file: reportFile) == nil)
 }
 
 @Test func crashReportMarkdownAndIssueURLFitGitHub() throws {
@@ -128,11 +138,15 @@ private let reportFile = URL(filePath: "/Users/someone/Library/Logs/DiagnosticRe
     #expect(report.markdown.contains(symbol), "The copied report keeps whole symbols")
 }
 
-@Test func crashReportOfABuildWithoutAVersionSaysSo() throws {
+@Test func crashReportOfABuildWithoutAVersionCallsItADevelopmentBuild() throws {
     let report = try #require(CrashReport(data: crashReport(version: ""), file: reportFile))
     #expect(report.version == nil)
     #expect(report.build == nil)
-    #expect(report.markdown.contains("- StableBar: unknown version\n"))
+    #expect(report.release == "development build")
+    #expect(report.markdown.contains("- StableBar: development build\n"))
+    #expect(report.summary.contains(", StableBar development build, StableBar-2026-10-26-140312.ips"))
+    let environment = URLComponents(url: report.issueURL(), resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "environment" }?.value
+    #expect(environment?.hasPrefix("StableBar: development build\n") == true)
 }
 
 private let october27 = ISO8601DateFormatter().date(from: "2026-10-27T00:00:00Z")!

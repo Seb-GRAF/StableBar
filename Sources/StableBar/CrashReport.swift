@@ -36,11 +36,13 @@ struct CrashReport: Identifiable, Equatable, Sendable {
     var frames: [Frame]
 
     /// Reads a crash report (`bug_type` 309) of StableBar itself. Other reports, and files macOS is still writing, give nil.
+    /// So does a launch that dyld stopped, such as a build missing a framework: none of StableBar's code ran.
     init?(data: Data, file: URL) {
         guard let newline = data.firstIndex(of: UInt8(ascii: "\n")),
               let header = try? JSONSerialization.jsonObject(with: data[..<newline]) as? [String: Any],
               header["bug_type"] as? String == "309", (header["app_name"] ?? header["name"]) as? String == "StableBar",
-              let body = try? JSONSerialization.jsonObject(with: data[data.index(after: newline)...]) as? [String: Any]
+              let body = try? JSONSerialization.jsonObject(with: data[data.index(after: newline)...]) as? [String: Any],
+              (body["termination"] as? [String: Any])?["namespace"] as? String != "DYLD"
         else { return nil }
         let bundle = body["bundleInfo"] as? [String: Any]
         let os = body["osVersion"] as? [String: Any]
@@ -142,8 +144,11 @@ struct CrashReport: Identifiable, Equatable, Sendable {
         text.count > limit ? String(text.prefix(limit)) + "…" : text
     }
 
-    private var release: String {
-        [version ?? "unknown version", build.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ")
+    /// The version from the app's Info.plist. A binary without one, as `swift build` makes, is a development build.
+    var versionName: String { version ?? "development build" }
+
+    var release: String {
+        [versionName, build.map { "(\($0))" }].compactMap { $0 }.joined(separator: " ")
     }
 
     private static let unreserved = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")

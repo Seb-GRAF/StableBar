@@ -224,6 +224,15 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     #expect(colors(image) > 10)
 }
 
+@Test @MainActor func settingsSceneDrawsCrashesWithoutTheLaunchDyldStopped() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (image, store) = try await drawn(#"{"configuration": {"widgets": []}, "draw": "settings", "section": "crashes"}"#, in: directory)
+    defer { store.stop() }
+    #expect(colors(image) > 10)
+    #expect(store.crashReports.reports.map(\.versionName) == ["0.11.0", "development build"])
+}
+
 /// The pixels of `image`, to compare two drawings.
 private func pixels(_ image: NSBitmapImageRep) -> Data? {
     image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }
