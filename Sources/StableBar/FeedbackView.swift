@@ -152,6 +152,7 @@ struct FeedbackView: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
                 if let posted = editor.postedIssue { Link("Posted \(posted.absoluteString)", destination: posted) }
+                if let failure = editor.postFailure { Text(failure).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
                 if let notice { Text(notice).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             } header: {
                 SettingsSectionTitle("Send")
@@ -219,6 +220,7 @@ struct FeedbackView: View {
     private func post() {
         editor.postingFeedback = true
         editor.postedIssue = nil
+        editor.postFailure = nil
         notice = nil
         Task {
             do {
@@ -227,7 +229,7 @@ struct FeedbackView: View {
                 editor.feedback.answers = [:]
                 editor.feedback.crash = nil
             } catch {
-                notice = "Couldn't post: \(error.localizedDescription)"
+                editor.postFailure = "Couldn't post: \(error.localizedDescription)"
             }
             editor.postingFeedback = false
         }

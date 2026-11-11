@@ -42,6 +42,7 @@ final class ConfigurationEditor {
     /// lives here so that leaving the pane can't unlock it.
     var postingFeedback = false
     var postedIssue: URL?
+    var postFailure: String?
     var selectedProfileName: String?
     var search = ""
     var searchTarget: String?
