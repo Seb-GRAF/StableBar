@@ -4,8 +4,8 @@ cd "${0:A:h:h}"
 (( $# == 1 )) || { print -u2 'usage: scripts/prepare-app-info.sh <destination Info.plist>'; exit 1 }
 plist=$1
 cp Resources/Info.plist "$plist"
-# Sparkle installs an update only when it is signed by the same developer as the running app, which an
-# ad-hoc signature can't show. Only Developer ID-signed releases keep the update feed.
+# Only Developer ID-signed releases keep the update feed: with the EdDSA key, Sparkle would also install
+# a release over an ad-hoc or local build.
 if [[ "${STABLEBAR_RELEASE_BUILD:-0}" != 1 || -z "${SIGNING_IDENTITY:-}" ]]; then
     /usr/libexec/PlistBuddy -c 'Delete :SUFeedURL' "$plist"
 fi

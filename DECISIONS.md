@@ -9,6 +9,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Betas from `main`, stable by hand** (2026-10-16, [#3], [#23]). A push to `main` publishes a beta when the app changed since the newest release and a `feat`, `fix`, `perf` or `refactor` commit changed it, and a maintainer promotes a beta to stable, so stable ships what beta users ran. There is no develop branch. Pushes that change only docs, CI or tests don't ship the same app again ([#309]).
 - **Merge commits by default** ([CONTRIBUTING](CONTRIBUTING.md#how-we-work)). semantic-release reads each commit that reaches `main`: a merge commit leaves it every commit to read, and a squash leaves one, for when a single commit should stand for the pull request. [Commits and releases](CONTRIBUTING.md#commits-and-releases) says which commits make a release and reach the changelog.
 - **An issue for every `fix`, `feat` or `perf`** (2026-10-31, [#390]). The issue holds the problem and the decision; the `Linked issue` check enforces it. Other types can skip it.
+- **Updates carry an EdDSA signature as well as the Developer ID** (2026-11-10, [#335]). Sparkle checks both, so the signing team or the key can change in a release while the other still matches. This replaces [#100]'s choice of the Developer ID alone. The feed isn't published without the `SPARKLE_ED_PRIVATE_KEY` secret, and [CONTRIBUTING](CONTRIBUTING.md#commits-and-releases) says how to back up and change the key.
 
 ## Reviews and checks
 
@@ -28,8 +29,10 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 [#3]: https://github.com/Seb-GRAF/StableBar/issues/3
 [#23]: https://github.com/Seb-GRAF/StableBar/pull/23
+[#100]: https://github.com/Seb-GRAF/StableBar/pull/100
 [#223]: https://github.com/Seb-GRAF/StableBar/issues/223
 [#309]: https://github.com/Seb-GRAF/StableBar/pull/309
+[#335]: https://github.com/Seb-GRAF/StableBar/issues/335
 [#337]: https://github.com/Seb-GRAF/StableBar/pull/337
 [#390]: https://github.com/Seb-GRAF/StableBar/pull/390
 [#391]: https://github.com/Seb-GRAF/StableBar/pull/391

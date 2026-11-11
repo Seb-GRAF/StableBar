@@ -8,7 +8,7 @@
       "@semantic-release/exec",
       {
         "verifyReleaseCmd": "echo ${nextRelease.version} > .next-version",
-        "prepareCmd": "./scripts/set-version.sh ${nextRelease.version} $GITHUB_RUN_NUMBER && ./scripts/set-site-version.sh ${nextRelease.version} && STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh"
+        "prepareCmd": "./scripts/set-version.sh ${nextRelease.version} $GITHUB_RUN_NUMBER && ./scripts/set-site-version.sh ${nextRelease.version} && STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh && ./scripts/check-update-key.sh"
       }
     ],
     ["@semantic-release/git", { "assets": ["CHANGELOG.md", "Resources/Info.plist", "docs/images/*.webp", "site/index.html"] }],
