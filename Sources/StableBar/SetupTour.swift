@@ -91,13 +91,14 @@ struct SetupTourView: View {
                         .transition(.opacity)
                 }
                 tour(size: size)
-                    .disabled(confirmingSkip)
+                    .disabled(confirmingSkip || session.applicationMove.isBusy)
                 ZStack {
                     if phase == .tour {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
                     }
                 }
                 .position(x: size.width / 2, y: size.height - dock - 89)
+                .disabled(session.applicationMove.isBusy)
                 dots.position(x: size.width / 2, y: size.height - dock - 44)
                 if confirmingSkip {
                     skipConfirmation.transition(.opacity)
@@ -813,11 +814,8 @@ struct SetupTourView: View {
                     Toggle("Open at login", isOn: Binding(get: { session.opensAtLogin }, set: { session.openAtLogin = $0 }))
                         .labelsHidden().toggleStyle(.switch).controlSize(.small)
                 } else {
-                    Button("Show in Finder") {
-                        lower()
-                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
-                    }
-                    .buttonStyle(SetupButtonStyle(prominent: false))
+                    ApplicationMoveControls(controller: session.applicationMove, resume: session.resumeAfterMoving,
+                                            reveal: lower, setup: true)
                 }
             }
             Text("Window and notification clearance start when you finish setup.")

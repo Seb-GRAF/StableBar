@@ -47,6 +47,9 @@ struct SceneFile: Decodable {
     var uninstall: Uninstall?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
+    /// A move row outside Applications, for setup or Settings → General.
+    var applicationMove: ApplicationMove?
+    enum ApplicationMove: String, Decodable, CaseIterable { case ready, replace, useExisting, failed, moving, setupOpen }
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
@@ -54,8 +57,8 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
-             accessibilityDisplay, width, height
+        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall,
+             setup, applicationMove, appearances, accessibilityDisplay, width, height
     }
 
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
@@ -137,6 +140,11 @@ struct SceneFile: Decodable {
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
+        applicationMove = try values.decodeIfPresent(ApplicationMove.self, forKey: .applicationMove)
+        if applicationMove != nil, draw != .setup && !(draw == .settings && section == .general) {
+            throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
+                debugDescription: "applicationMove draws a setup row or Settings General.")
+        }
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,

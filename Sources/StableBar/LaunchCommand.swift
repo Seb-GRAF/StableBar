@@ -17,6 +17,8 @@ enum LaunchCommand {
     case uninstall(removesConfiguration: Bool, showsMenuBar: Bool, confirmed: Bool)
     /// Started by Settings › Uninstall, not by hand: finishes the uninstall once the bar with this process ID has quit.
     case finishUninstall(pid_t)
+    /// A detached helper: wait for this bar to exit, then open the moved app with its original arguments.
+    case finishApplicationMove(URL, pid_t)
     case help
 
     static let configurationURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/stablebar/config.json")
@@ -143,6 +145,9 @@ enum LaunchCommand {
         case "--finish-uninstall" where arguments.count == 2 && !targeted:
             guard let bar = pid_t(arguments[1]), bar > 0 else { throw CommandFailure(message: Self.usage) }
             self = .finishUninstall(bar)
+        case "--finish-application-move" where arguments.count == 3 && !targeted:
+            guard let bar = pid_t(arguments[2]), bar > 0 else { throw CommandFailure(message: Self.usage) }
+            self = .finishApplicationMove(URL(filePath: arguments[1]), bar)
         case "--help" where arguments.count == 1:
             self = .help
         default:

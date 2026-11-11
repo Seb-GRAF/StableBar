@@ -126,6 +126,10 @@
         }
       }
     },
+    "applicationMove": {
+      "description": "Draw the Move to Applications row in setup or Settings General without touching any app: its button, confirmation, existing copy, failure, progress, or direction back to an open setup.",
+      "enum": ["ready", "replace", "useExisting", "failed", "moving", "setupOpen"]
+    },
     "appearances": {
       "description": "The appearances to draw, each to its own image. Both by default.",
       "type": "array",

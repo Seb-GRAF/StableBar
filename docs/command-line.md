@@ -46,6 +46,8 @@ Without `id`, `unset` can also address widget definitions by their ID and profil
 
 **Settings → General → Command line** installs a `stablebar` command in `/usr/local/bin`, which is on the `PATH` of every Mac, so `stablebar --query` works in any terminal. macOS asks for an administrator password when that folder needs one. The section shows **Installed** once the first `stablebar` on your login shell's `PATH` opens this copy of StableBar, whether StableBar installed it or it links to the app. The command is a short script that runs the copy of StableBar it was installed from, so the button is available only once StableBar is in Applications. When the command opens another copy, for example after you moved StableBar, the section names that copy and **Install** points the command at this one. A `stablebar` command that StableBar didn't install is left as it is. [Uninstall](getting-started.md#uninstall) removes it with the rest of StableBar; to remove only the command, run `sudo rm /usr/local/bin/stablebar`.
 
+If StableBar is outside Applications, this section points to **Open at login → Move to Applications** above. It uses `/Applications` or, when that folder is not writable, `~/Applications`, then relaunches and reopens **Settings → General** with the same configuration. Install the command from there. See [setup](getting-started.md) for existing copies and recovery when a move fails.
+
 ## Triage
 
 `triage` hands a problem with your bar, or an idea for StableBar, to a coding agent in the terminal:

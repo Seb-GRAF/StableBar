@@ -198,7 +198,10 @@ enum SceneRenderer {
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
-            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor).background(Color(nsColor: .windowBackgroundColor)), with: []),
+            let move = settingsApplicationMove(for: scene)
+            store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
+            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor, applicationMove: move)
+                                               .background(Color(nsColor: .windowBackgroundColor)), with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
                 !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
@@ -207,10 +210,15 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
         case .setup:
-            try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store,
+            try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
                                 dark: dark, settle: settle, to: url)
         }
+    }
+
+    /// Existing scenes keep reading the app location as before; only move scenes override their controls.
+    static func settingsApplicationMove(for scene: SceneFile) -> ApplicationMoveController? {
+        scene.applicationMove.map { ApplicationMoveController.sample($0) }
     }
 
     /// The height of `display`'s macOS menu bar in setup scenes: a display without a notch, on macOS 26 and later.
@@ -219,7 +227,7 @@ enum SceneRenderer {
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
     /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
     /// bar hide or show.
-    private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, size: NSSize, dark: Bool, settle: Duration,
+    private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore, size: NSSize, dark: Bool, settle: Duration,
                                   to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
@@ -242,7 +250,8 @@ enum SceneRenderer {
             setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
         }
         system.yabaiSignalScript = YabaiSetupSignals.script()
-        let session = SetupSession(store: store, system: system)
+        let session = SetupSession(store: store, system: system,
+                                   applicationMove: .sample(move, inApplications: setup.inApplications))
         defer { session.workspaceConnection.hide() }
         session.step = setup.step.rawValue
         store.appMenu.hidesAccessWarning = true

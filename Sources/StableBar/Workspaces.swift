@@ -71,7 +71,7 @@ struct AeroSpaceEvent: Decodable, Sendable {
     enum CodingKeys: String, CodingKey { case event = "_event", mode }
 }
 
-enum WorkspaceSource: String, Decodable, Sendable {
+enum WorkspaceSource: String, Codable, Sendable {
     case aerospace, yabai, omniwm, rift, spaces
 
     var supportsWindowMoves: Bool { self == .aerospace || self == .yabai || self == .rift }

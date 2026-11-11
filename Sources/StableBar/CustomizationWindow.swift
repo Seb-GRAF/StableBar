@@ -6,8 +6,13 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
     private weak var store: BarStore?
     private var window: NSWindow?
     private var editor: ConfigurationEditor?
+    private let launchResume: ApplicationMoveLaunchResume
+    private(set) lazy var applicationMove = ApplicationMoveController(error: launchResume.take(for: .settings)?.failure)
 
-    init(store: BarStore? = nil) { self.store = store }
+    init(store: BarStore? = nil, launchResume: ApplicationMoveLaunchResume = ApplicationMoveLaunchResume()) {
+        self.store = store
+        self.launchResume = launchResume
+    }
 
     func show(store: BarStore, widgetID: String? = nil, section: CustomizationSection? = nil) {
         self.store = store
@@ -27,7 +32,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             self.editor = editor
             store.onEndCustomizationEditing = { [weak editor] in editor?.finishEditing() }
             store.onCustomizeProfile = { [weak editor] name in editor?.showProfile(name) }
-            window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor))
+            window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor,
+                applicationMove: applicationMove))
             window.center()
             window.setFrameAutosaveName("StableBarSettings")
             self.window = window
@@ -87,6 +93,7 @@ enum CustomizationSection: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     let store: BarStore
     @Bindable var editor: ConfigurationEditor
+    @State var applicationMove: ApplicationMoveController? = ApplicationMoveController()
     @State private var optionHeld = false
     @State private var flagsMonitor: Any?
 
@@ -120,6 +127,7 @@ struct SettingsView: View {
         }
         .background(SettingsPalette.background)
         .environment(store)
+        .environment(applicationMove)
         .environment(\.showsValueSources, editor.showsValueSources || optionHeld)
         .onAppear {
             flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
