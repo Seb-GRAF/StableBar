@@ -16,6 +16,8 @@ struct SceneFile: Decodable {
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
+    /// A setting in System Settings → Accessibility → Display.
+    enum AccessibilityDisplay: String, Decodable, CaseIterable { case increaseContrast, reduceTransparency }
     /// The configuration inline, or the path of a configuration file relative to the scene file.
     enum Configuration: Equatable { case inline([String: ConfigurationValue]), file(String) }
 
@@ -44,12 +46,14 @@ struct SceneFile: Decodable {
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
     var appearances: [Appearance] = Appearance.allCases
+    /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
+    var accessibilityDisplay: [AccessibilityDisplay] = []
     var width: Double?
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, outputs, history, workspaces, windows, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
-             width, height
+             accessibilityDisplay, width, height
     }
 
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
@@ -68,6 +72,8 @@ struct SceneFile: Decodable {
         var calendars = true
         /// Whether the Mac has an internal battery, which presets add Battery for.
         var battery = true
+        /// Whether any connected display has a notch, which the Notch preset needs.
+        var notch = true
         /// Whether StableBar runs from an Applications folder, which Open at login needs.
         var inApplications = true
     }
@@ -113,6 +119,7 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,
                                                    debugDescription: "Appearances name dark, light or both, each once.")
         }
+        accessibilityDisplay = try values.decodeIfPresent([AccessibilityDisplay].self, forKey: .accessibilityDisplay) ?? []
         width = try values.decodeIfPresent(Double.self, forKey: .width)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         if let width, !(100...4000).contains(width) {
@@ -137,6 +144,10 @@ struct SceneFile: Decodable {
         if setup != nil, draw != .setup {
             throw DecodingError.dataCorruptedError(forKey: .setup, in: values, debugDescription: "setup belongs to a setup scene.")
         }
+        if !accessibilityDisplay.isEmpty, draw != .bar, draw != .popup {
+            throw DecodingError.dataCorruptedError(forKey: .accessibilityDisplay, in: values,
+                                                   debugDescription: "accessibilityDisplay belongs to a bar or popup scene.")
+        }
         if let tab, tab.isBarTab, widget != nil || section != .bar {
             throw DecodingError.dataCorruptedError(forKey: .tab, in: values,
                                                    debugDescription: "\(tab.rawValue) is a tab of the bar's settings, in the bar section without a widget.")
@@ -153,7 +164,7 @@ struct SceneFile: Decodable {
 
 extension SceneFile.Setup: Decodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, inApplications
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications
     }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
@@ -176,6 +187,7 @@ extension SceneFile.Setup: Decodable {
         automation = try values.decodeIfPresent(Bool.self, forKey: .automation) ?? true
         calendars = try values.decodeIfPresent(Bool.self, forKey: .calendars) ?? true
         battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
+        notch = try values.decodeIfPresent(Bool.self, forKey: .notch) ?? true
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
     }
 }

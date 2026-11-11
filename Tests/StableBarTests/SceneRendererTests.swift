@@ -238,6 +238,11 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(images[0].pixelsWide == 2400)
     #expect(images[0].pixelsHigh == 2000)
     #expect(colors(images[0]) > 10)
+    if pixels(images[0]) != pixels(images[1]) {
+        for name in ["early", "late"] {
+            try? FileManager.default.copyItem(at: directory.appending(path: "\(name).png"), to: URL(filePath: "test-results/setup-scene-\(name).png"))
+        }
+    }
     #expect(pixels(images[0]) == pixels(images[1]))
 }
 

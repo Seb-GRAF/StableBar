@@ -25,7 +25,7 @@ struct BarEditFlow: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let sizes = Self.sizes(of: subviews, fitting: Self.width(of: proposal))
         let rows = Self.rows(sizes.map(\.width), fitting: Self.width(of: proposal))
         let width = rows.map { sizes[$0].reduce(0) { $0 + $1.width } }.max() ?? 0
         let height = rows.reduce(0) { $0 + (sizes[$1].map(\.height).max() ?? 0) } + CGFloat(max(rows.count - 1, 0)) * rowSpacing
@@ -33,7 +33,7 @@ struct BarEditFlow: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let sizes = Self.sizes(of: subviews, fitting: Self.width(of: proposal))
         var y = bounds.minY
         for row in Self.rows(sizes.map(\.width), fitting: Self.width(of: proposal)) {
             let height = sizes[row].map(\.height).max() ?? 0
@@ -43,6 +43,14 @@ struct BarEditFlow: Layout {
                 x += sizes[index].width
             }
             y += height + rowSpacing
+        }
+    }
+
+    /// Each item's own size, no wider than `width`: an item wider than the tray scrolls inside it.
+    private static func sizes(of subviews: Subviews, fitting width: CGFloat?) -> [CGSize] {
+        subviews.map { subview in
+            let size = subview.sizeThatFits(.unspecified)
+            return CGSize(width: min(size.width, width ?? size.width), height: size.height)
         }
     }
 

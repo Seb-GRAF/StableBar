@@ -533,7 +533,9 @@ final class WidgetPopup {
             GlassBackground(fill: style.background, glass: glass, surface: \.popups, shape: Rectangle()))), size: union.size)
         let outline = CALayer()
         outline.borderWidth = appearance.borderWidth
-        panel.effectiveAppearance.performAsCurrentDrawingAppearance { outline.borderColor = NSColor(appearance.borderColor).cgColor }
+        panel.effectiveAppearance.performAsCurrentDrawingAppearance {
+            outline.borderColor = NSColor(appearance.border(increasedContrast: NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast)).cgColor
+        }
         let cards = [morph, from.panel, panel].map { window in (CALayer(), window) } + [(outline, morph)]
         for (card, window) in cards {
             card.anchorPoint = .zero

@@ -138,18 +138,27 @@ struct StableBarApp {
 }
 
 @MainActor
-class BarPanel: NSPanel {
+class BarPanel: NSPanel, Observable {
     var barGeometry: BarGeometry?
     var isEditingBar = false {
         didSet {
             guard oldValue, !isEditingBar, isKeyWindow else { return }
-            // Ordering out releases a nonactivating panel's keyboard grab and restores
-            // the previous app's focus. Ordering front again does not make it key.
-            let wasVisible = isVisible
-            orderOut(nil)
-            if wasVisible { orderFrontRegardless() }
+            releaseKeyboard()
         }
     }
+    /// From `StableBar --focus` until Escape or another window takes the keyboard: the arrow keys move between widgets.
+    /// The bar's view follows it, so that only then can its widgets take focus.
+    private(set) var focusesWidgets: Bool {
+        get {
+            observations.access(self, keyPath: \.focusesWidgets)
+            return widgetsFocused
+        }
+        set {
+            observations.withMutation(of: self, keyPath: \.focusesWidgets) { widgetsFocused = newValue }
+        }
+    }
+    private var widgetsFocused = false
+    private let observations = ObservationRegistrar()
     private(set) var decorationPanel: PassiveBarPanel?
     /// The workspace cell under the current drag, which the bar takes on its cells' behalf.
     weak var workspaceDropTarget: WorkspaceWindowDropTargetView?
@@ -165,9 +174,31 @@ class BarPanel: NSPanel {
         return CGRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height)
     }
 
-    override var canBecomeKey: Bool { isEditingBar }
+    override var canBecomeKey: Bool { isEditingBar || focusesWidgets }
     override var canBecomeMain: Bool { false }
     @objc var hasKeyAppearance: Bool { true }
+
+    func focusWidgets() {
+        focusesWidgets = true
+        makeKeyAndOrderFront(nil)
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        focusesWidgets = false
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, event.keyCode == 53, focusesWidgets { releaseKeyboard() } else { super.sendEvent(event) }
+    }
+
+    /// Ordering out releases a nonactivating panel's keyboard grab and restores
+    /// the previous app's focus. Ordering front again does not make it key.
+    private func releaseKeyboard() {
+        let wasVisible = isVisible
+        orderOut(nil)
+        if wasVisible { orderFrontRegardless() }
+    }
 
     override var level: NSWindow.Level {
         didSet { decorationPanel?.level = level }
@@ -325,6 +356,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                           name: NSWorkspace.willSleepNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(woke),
                                                           name: NSWorkspace.didWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screensSlept),
+                                                          name: NSWorkspace.screensDidSleepNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(screensWoke),
+                                                          name: NSWorkspace.screensDidWakeNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sessionResigned),
+                                                          name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(sessionBecameActive),
+                                                          name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(screenLocked),
+                                                            name: Notification.Name("com.apple.screenIsLocked"), object: nil)
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(screenUnlocked),
+                                                            name: Notification.Name("com.apple.screenIsUnlocked"), object: nil)
     }
 
     @objc private func screensChanged() {
@@ -339,17 +382,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func sleeping() {
-        store.setSleeping(true)
+        store.setPaused(true, because: .systemAsleep)
         store.windowClearance.stop()
         store.menuBarDelay.stop()
         menuBarStrip.stop()
     }
 
     @objc private func woke() {
-        store.setSleeping(false)
+        store.setPaused(false, because: .systemAsleep)
         screensChanged()
         store.send(.wake)
     }
+
+    @objc private func screensSlept() { store.setPaused(true, because: .displaysAsleep) }
+    @objc private func screensWoke() { store.setPaused(false, because: .displaysAsleep) }
+    @objc private func screenLocked() { store.setPaused(true, because: .screenLocked) }
+    @objc private func screenUnlocked() { store.setPaused(false, because: .screenLocked) }
+    @objc private func sessionResigned() { store.setPaused(true, because: .sessionInactive) }
+    @objc private func sessionBecameActive() { store.setPaused(false, because: .sessionInactive) }
 
     func clearanceDisplay(frame: CGRect, visibleFrame: CGRect, display: BarDisplay, desktopTop: CGFloat) -> WindowClearanceDisplay? {
         guard let configuration = store.clearanceConfiguration else { return nil }
@@ -457,7 +507,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
         let note = store.crashReports.note
         if error != nil || note != nil { menu.addItem(.separator()) }
-        if let error { menu.addItem(withTitle: error, action: nil, keyEquivalent: "") }
+        if let error { addItem(Self.menuTitle(error: error), action: #selector(showStatus), to: menu) }
         if let note { addItem(note, action: #selector(showCrashes), to: menu) }
         Task { await store.crashReports.refresh() }
         menu.addItem(.separator())
@@ -470,8 +520,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
     }
 
+    /// Keeps an error's line near the width of the menus' other lines; Settings › Status shows all of it.
+    static func menuTitle(error: String) -> String {
+        error.count > 32 ? String(error.prefix(32)) + "…" : error
+    }
+
     @objc private func showCustomization() { customization.show(store: store) }
     @objc private func showCrashes() { customization.showCrashes(store: store) }
+    @objc func showStatus() { customization.show(store: store, section: .diagnostics) }
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func tryThemes() {
         let screens = NSScreen.screens

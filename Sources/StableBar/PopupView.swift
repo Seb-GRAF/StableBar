@@ -114,6 +114,7 @@ struct PopupBackground: ViewModifier {
     let style: WidgetStyle
     let glass: GlassSettings
     let backgrounds: PopupBackgrounds
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
@@ -124,7 +125,8 @@ struct PopupBackground: ViewModifier {
                                       shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                    .strokeBorder(hidden ? .clear : appearance.borderColor, lineWidth: appearance.borderWidth)
+                    .strokeBorder(hidden ? .clear : appearance.border(increasedContrast: contrast == .increased),
+                                  lineWidth: contrast == .increased ? max(appearance.borderWidth, 1) : appearance.borderWidth)
             }
     }
 }

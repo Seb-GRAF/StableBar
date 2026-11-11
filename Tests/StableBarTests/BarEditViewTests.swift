@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -381,4 +382,74 @@ final class BarEditViewTests: XCTestCase {
     @MainActor private func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
         view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
     }
+}
+
+@Test @MainActor func aGroupWiderThanItsTrayScrollsSidewaysSoEveryMemberCanBeReached() async throws {
+    let fixture = try ThemeGalleryFixture(#"""
+    {"groups":{"pair":{}},"widgets":[{"id":"a","type":"text","text":"A","position":"right","group":"pair","style":{"width":1500,"height":20}},
+    {"id":"b","type":"text","text":"B","position":"right","group":"pair","style":{"width":40,"height":20}},
+    {"id":"c","type":"text","text":"C","position":"right","style":{"width":40,"height":20}}]}
+    """#)
+    defer { fixture.close() }
+    let store = try fixture.store()
+    defer { store.stop() }
+    store.barEditing.begin()
+    let display = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1512, height: 100), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    // SwiftUI hit-tests only a window that's on screen; a transparent one stays out of sight.
+    window.alphaValue = 0
+    defer { window.close() }
+    let host = NSHostingView(rootView: BarView(store: store, display: display))
+    host.sizingOptions = []
+    window.contentView = host
+    window.orderFrontRegardless()
+    func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
+        view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
+    }
+    var right: BarEditDropTargetView?
+    for _ in 0..<100 {
+        host.layoutSubtreeIfNeeded()
+        right = descendants(host, of: BarEditDropTargetView.self).first { $0.position == .right }
+        if right?.frames.count == 3, !descendants(host, of: NSScrollView.self).isEmpty { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let tray = try #require(right)
+    let scrollViews = descendants(host, of: NSScrollView.self)
+    #expect(scrollViews.count == 1, "Only the group wider than its tray scrolls")
+    let scroll = try #require(scrollViews.first)
+    #expect(scroll.convert(scroll.bounds, to: tray).maxX <= tray.bounds.width, "The group takes the tray's width")
+    #expect(try #require(tray.frames["b"]).minX > tray.bounds.width)
+    scroll.contentView.scroll(to: CGPoint(x: try #require(scroll.documentView).frame.width - scroll.contentView.bounds.width, y: 0))
+    scroll.reflectScrolledClipView(scroll.contentView)
+    for _ in 0..<100 {
+        host.layoutSubtreeIfNeeded()
+        if try #require(tray.frames["b"]).maxX <= tray.bounds.width { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let last = try #require(tray.frames["b"])
+    #expect(last.minX >= 0 && last.maxX <= tray.bounds.width, "Scrolled to its end, the group shows its last member: \(last) in \(tray.bounds)")
+    var selected: String?
+    store.onCustomizeWidget = { selected = $0 }
+    func click(_ point: CGPoint, until condition: () -> Bool) async throws -> Bool {
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: tray.convert(point, to: nil), modifierFlags: [],
+                timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            window.sendEvent(event)
+        }
+        for _ in 0..<100 {
+            host.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return false
+    }
+    let selectedLast = try await click(CGPoint(x: last.midX, y: last.midY)) { selected == "b" }
+    #expect(selectedLast, "A click on the scrolled-in member selects it")
+    // The − badge overlaps the tile's top-left corner.
+    let removedLast = try await click(CGPoint(x: last.minX + 2, y: last.minY + 2)) {
+        store.configuration?.widgets.map(\.id) == ["a", "c"]
+    }
+    #expect(removedLast, "A click on the scrolled-in member's − badge removes it")
 }

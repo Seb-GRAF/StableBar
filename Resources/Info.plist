@@ -19,6 +19,7 @@
     <key>NSAppleEventsUsageDescription</key><string>Hide the macOS menu bar when StableBar replaces it, read app status and run actions configured in your widgets.</string>
     <key>NSCalendarsFullAccessUsageDescription</key><string>Show your next meeting and today's agenda in calendar widgets.</string>
     <key>SUFeedURL</key><string>https://github.com/Seb-GRAF/StableBar/releases/download/appcast/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>WIjwXI9LVyB2sGU43wN12hfgZUmfg69d32sY6fZw7yk=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUScheduledCheckInterval</key><integer>3600</integer>
 </dict></plist>

@@ -37,7 +37,7 @@ enum DocsImages {
                 try sampleStore(in: samples.appending(path: "\(name)-\(appearance)"), theme: theme, dark: dark, widgets: widgets)
             }
             func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore], ready: () -> Bool = { true }) async throws {
-                try await snapshot(content, size: size, dark: dark, stores: stores, ready: ready,
+                try await snapshot(SceneRenderer.drawn(content, with: []), size: size, dark: dark, stores: stores, ready: ready,
                                    to: directory.appending(path: "\(name)-\(appearance).png"))
             }
 

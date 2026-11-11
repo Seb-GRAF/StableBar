@@ -126,6 +126,79 @@ private var presentationRepository: URL {
     #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .popup, id: "missing")) }
 }
 
+/// VoiceOver reads each widget's name and what it shows, and a widget's popup as the open state of a button that
+/// expands. `--focus` gives the bar the keyboard at its leftmost widget; the arrow keys move along the bar, and Return
+/// or Space clicks.
+@Test @MainActor func focusCommandAndVoiceOverReachTheBarsWidgets() async throws {
+    _ = NSApplication.shared
+    // SwiftUI builds its accessibility elements only once an assistive app asks for them.
+    let assistive = NSAccessibility.Attribute(rawValue: "AXEnhancedUserInterface")
+    NSApp.accessibilitySetValue(true, forAttribute: assistive)
+    defer { NSApp.accessibilitySetValue(false, forAttribute: assistive) }
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"agenda","type":"text","text":"Agenda","position":"right",
+      "popup":{"style":{},"layout":{"type":"text","text":"Today"}}},
+      {"id":"bolt","type":"text","text":"","icon":"bolt.fill","position":"left","onClick":"exit 3"},
+      {"id":"note","type":"text","text":"Note","position":"left"}]}
+    """#.utf8))
+    let popup = WidgetPopup(present: { _, _ in })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    bar.panel.alphaValue = 0
+    await bar.settle()
+    store.barPanel = { _ in bar.panel }
+
+    func elements() async throws -> [String: NSObject] {
+        func attribute(_ element: NSObject, _ getter: String) -> String? {
+            element.perform(NSSelectorFromString(getter))?.takeUnretainedValue() as? String
+        }
+        for _ in 0..<50 {
+            bar.host.layoutSubtreeIfNeeded()
+            let children = bar.host.accessibilityChildren() as? [NSObject] ?? []
+            let elements = Dictionary(children.map { (attribute($0, "accessibilityIdentifier") ?? "", $0) }) { first, _ in first }
+            if ["agenda", "bolt", "note"].allSatisfy({ elements[$0] != nil }) { return elements }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw CommandFailure(message: "The bar has no accessibility elements for its widgets.")
+    }
+    func read(_ element: NSObject) -> [String?] {
+        ["accessibilityRole", "accessibilityLabel", "accessibilityValue"].map {
+            element.perform(NSSelectorFromString($0))?.takeUnretainedValue() as? String
+        }
+    }
+    var shown = try await elements()
+    #expect(read(try #require(shown["bolt"])) == ["AXButton", "bolt", ""])
+    #expect(read(try #require(shown["note"])) == ["AXStaticText", "note", "Note"])
+    let agenda = try #require(shown["agenda"] as? PopupButtonAccessibilityView)
+    #expect(read(agenda) == ["AXButton", "agenda", "Agenda"])
+    #expect(!agenda.isAccessibilityExpanded())
+
+    func press(_ keyCode: UInt16, _ characters: String) async throws {
+        bar.panel.sendEvent(try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: bar.panel.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
+            isARepeat: false, keyCode: keyCode)))
+        await bar.settle()
+    }
+    _ = try store.handle(RuntimeRequest(action: .focus))
+    #expect(bar.panel.focusesWidgets)
+    await bar.settle()
+    try await press(36, "\r")
+    for _ in 0..<100 where store.actionErrors["bolt"] == nil { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(store.actionErrors["bolt"] != nil)
+    let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+    try await press(124, right)
+    try await press(124, right)
+    try await press(49, " ")
+    #expect(store.presentations["agenda"]?.popupAnchor != nil)
+    shown = try await elements()
+    #expect(try #require(shown["agenda"] as? PopupButtonAccessibilityView).isAccessibilityExpanded())
+}
+
 @Test @MainActor func hoveringPopupsWaitsAndKeepsBothTheWidgetAndPopupReachable() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"popups":{"details":{"openOnHover":true,"style":{},"layout":{"type":"text","text":"Details"}}},

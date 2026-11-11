@@ -105,14 +105,15 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.isMovableByWindowBackground = true
         window.appearance = NSAppearance(named: .darkAqua)
-        window.animationBehavior = .alertPanel
+        window.animationBehavior = SetupMotion(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion).cardAnimationBehavior
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         window.contentView = NSHostingView(rootView: SetupCardView(
             session: session!, arrangeBar: arrangeBar, customizeWidgets: customizeWidgets,
-            close: { [weak window] in window?.close() }))
+            close: { [weak window] in window?.close() },
+            motionChanged: { [weak window] in window?.animationBehavior = $0.cardAnimationBehavior }))
         window.center()
         card = window
         window.makeKeyAndOrderFront(nil)
@@ -150,6 +151,8 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
+    /// A notch as the bar sees one, so setup offers Notch exactly where the bar leaves a notch gap.
+    var hasNotchedDisplay: () -> Bool = { NSScreen.screens.map(BarDisplay.init).contains { $0.notch != nil } }
     /// Whether StableBar runs from an Applications folder, the only place it can open at login from.
     var isInApplications: () -> Bool = { appIsInApplications() }
     var loginStatus: () -> SMAppService.Status = { SMAppService.mainApp.status }
@@ -195,6 +198,8 @@ final class SetupSession {
     }
     /// Whether this Mac has an internal battery, which presets add Battery for.
     let hasBattery: Bool
+    /// Whether a connected display has a notch, refreshed when the screens change while setup shows.
+    private(set) var hasNotchedDisplay: Bool
     let currentThemeKey: String
     var step = 0
     private(set) var finished = false
@@ -258,6 +263,7 @@ final class SetupSession {
         stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
+        hasNotchedDisplay = system.hasNotchedDisplay()
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
@@ -280,13 +286,23 @@ final class SetupSession {
     func toggle(_ preset: SetupPreferences.Preset) {
         let selected = self.preset == preset
         self.preset = selected ? nil : preset
-        preferences = selected ? SetupPreferences(placement: preferences.placement, workspaces: workspaceSource)
+        let choices = selected ? SetupPreferences()
             : preset.preferences(workspaces: workspaceSource, placement: preferences.placement, hasBattery: hasBattery)
+        preferences = preferences.replacingPresetChoices(with: choices)
     }
 
     /// The widget sets `preset`'s tile shows, for where the bar sits and for this Mac.
     func shownWidgetSets(_ preset: SetupPreferences.Preset) -> [SetupPreferences.WidgetSet] {
         preset.shownWidgetSets(workspaces: workspaceSource, placement: presetPlacement, hasBattery: hasBattery)
+    }
+
+    var offeredPresets: [SetupPreferences.Preset] {
+        SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: preset)
+    }
+
+    /// A display change updates the tiles without clearing a chosen preset, which stays available to deselect.
+    func refreshDisplays() {
+        hasNotchedDisplay = system.hasNotchedDisplay()
     }
 
     /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the
@@ -614,6 +630,8 @@ struct SetupCardView: View {
     let arrangeBar: (() -> Void)?
     let customizeWidgets: (() -> Void)?
     let close: () -> Void
+    let motionChanged: (SetupMotion) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 18) {
@@ -660,6 +678,7 @@ struct SetupCardView: View {
         .frame(width: 460, height: 640)
         .background(SettingsPalette.background)
         .focusEffectDisabled()
+        .onChange(of: reduceMotion, initial: true) { motionChanged(SetupMotion(reduceMotion: reduceMotion)) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
         }

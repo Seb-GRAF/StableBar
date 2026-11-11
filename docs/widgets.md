@@ -199,7 +199,7 @@ A `controlCenter` widget opens macOS Control Center. A `menuBarItems` widget sho
 
 To list the items only on click, set `"openOnHover": false` or turn off **Open on hover** in the widget's **Settings → Bar → Behavior** inspector. Then click the widget to open the row and click it again to close it.
 
-Clicking an icon whose app has an ordinary menu opens that menu below it, in your theme's popup style. While a menu is open, move the pointer to another icon to switch to its menu. Items that draw their own panel, such as Control Center, Battery or Clock, open their panel as macOS does. To open them, StableBar briefly brings out the hidden menu bar and keeps it invisible until the item closes. Both widgets need Accessibility access; resting the pointer on Menu bar items doesn't ask for it, a click does. StableBar's own menu bar icon isn't listed.
+Clicking an icon whose app has an ordinary menu opens that menu below it, in your theme's popup style. While a menu is open, move the pointer to another icon to switch to its menu. Items that draw their own panel, such as Control Center, Battery or Clock, open their panel as macOS does. So do items whose menu has rows StableBar can't draw, such as CodexBar's provider buttons and usage cards: they open the app's own menu. To open them, StableBar briefly brings out the hidden menu bar and keeps it invisible until the item closes. Both widgets need Accessibility access; resting the pointer on Menu bar items doesn't ask for it, a click does. StableBar's own menu bar icon isn't listed.
 
 ### Items on the bar
 
@@ -282,3 +282,9 @@ Add `actions` to any widget for additional controls:
 ```
 
 These commands receive `SENDER=mouse.clicked`, `mouse.scrolled`, `mouse.entered` or `mouse.exited`. Scroll direction follows the signed native vertical delta. Only configured mouse actions intercept input; an unconfigured right click opens the bar's management menu. Actions run in order per widget, while other widgets remain independent. Successful actions refresh the same script instance with `SENDER=action`. A failed action marks its widget with a red badge, with the error in its tooltip, until that widget's next action succeeds. Quitting cancels running and queued actions.
+
+## Keyboard and VoiceOver
+
+VoiceOver reads each widget by the name **Settings → Bar** gives it, then what the widget shows: its text, or the latest value of a graph shown without text, as a percentage. It reads the widget's tooltip as a hint. A widget whose click opens a popup reads as a button that is collapsed or expanded, as its popup is closed or open. Workspaces, App menus and Menu bar items drawn on the bar keep their own button for each workspace, menu and item.
+
+To reach the bar from the keyboard, bind [`StableBar --focus`](command-line.md) to a key, as Control-F2 reaches the macOS menu bar. The bar on the active display takes the keyboard, starting at its leftmost widget, and the widget with focus shows the theme's hover look; with a theme that gives widgets no hover look, the focus doesn't show. The left and right arrow keys move along the bar and wrap around at its ends. Return or Space does what a click does, so it also opens a popup that opens on hover. An open popup takes the keyboard: Tab moves through its controls and Escape closes it; run `--focus` again to come back to the bar. Escape, or a click in another window, gives the keyboard back to the app you were in. Widgets in **More widgets** can't be reached from the keyboard.

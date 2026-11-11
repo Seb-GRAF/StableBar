@@ -84,6 +84,7 @@ private func scene(_ json: String) throws -> SceneFile {
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "placement"}"#, "tab"),
     (#"{"configuration": {}, "draw": "settings", "widget": "clock", "tab": "placement"}"#, "tab"),
     (#"{"configuration": {}, "draw": "bar", "menu": [{"title": "Copy"}]}"#, "menu"),
+    (#"{"configuration": {}, "draw": "settings", "section": "theme", "accessibilityDisplay": ["reduceTransparency"]}"#, "accessibilityDisplay"),
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
     // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "key": "C", "modifiers": -1}]}"#,
@@ -111,16 +112,16 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
       "configuration": { "widgets": [] },
       "draw": "setup",
       "setup": { "step": "permissions", "placement": "belowMenuBar", "preset": "developer", "menuBarHides": true,
-                 "accessibility": false, "automation": false, "calendars": false, "battery": false }
+                 "accessibility": false, "automation": false, "calendars": false, "battery": false, "notch": false }
     }
     """#)
     #expect(decoded.draw == .setup)
     #expect(decoded.setup == SceneFile.Setup(step: .permissions, placement: .belowMenuBar, preset: .developer, menuBarHides: true,
-                                             accessibility: false, automation: false, calendars: false, battery: false))
+                                             accessibility: false, automation: false, calendars: false, battery: false, notch: false))
     let plain = try scene(#"{"configuration": {"widgets": []}, "draw": "setup", "setup": {}}"#)
     #expect(plain.setup == SceneFile.Setup())
     #expect(SceneFile.Setup() == SceneFile.Setup(step: .placement, placement: nil, preset: nil, menuBarHides: false,
-                                                 accessibility: true, automation: true, calendars: true, battery: true))
+                                                 accessibility: true, automation: true, calendars: true, battery: true, notch: true))
     #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
 }
 
@@ -152,6 +153,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(properties["section"]) == Set(SceneFile.Section.allCases.map(\.rawValue)))
     #expect(choices(properties["tab"]) == Set(SceneFile.Tab.allCases.map(\.rawValue)))
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
+    #expect(choices(properties["accessibilityDisplay"]) == Set(SceneFile.AccessibilityDisplay.allCases.map(\.rawValue)))
     guard case let .object(setup)? = properties["setup"], case let .object(setupProperties)? = setup["properties"] else {
         Issue.record("scene.schema.json describes no setup properties"); return
     }

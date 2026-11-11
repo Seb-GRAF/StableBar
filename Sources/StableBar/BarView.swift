@@ -24,15 +24,33 @@ struct BarView: View {
         notched && [.left, .notchLeft].contains(position) ? "\(moreWidgetsID).left" : moreWidgetsID
     }
 
+    /// The widget the left or right arrow key moves keyboard focus to from `id`, in the order `placements` puts `units`
+    /// on the bar, wrapping around at its ends.
+    static func focusTarget(from id: String?, moving direction: MoveCommandDirection, units: [BarUnit],
+                            placements: [String: BarPlacement]) -> String? {
+        let ids = units.filter { !$0.isSpacer && placements[$0.id] != nil }
+            .sorted { placements[$0.id]!.x < placements[$1.id]!.x }
+            .flatMap { $0.widgets.map(\.id) }
+        guard let id, let index = ids.firstIndex(of: id) else { return ids.first }
+        return switch direction {
+        case .left: ids[(index + ids.count - 1) % ids.count]
+        case .right: ids[(index + 1) % ids.count]
+        default: id
+        }
+    }
+
     let store: BarStore
     let display: BarDisplay
     var nativeDecorations = false
     var preview = false
+    /// Only the view in a bar's own panel follows `--focus`, not Settings' or the setup's.
+    private var focusesWidgets: Bool { nativeDecorations && store.barPanel(display.id)?.focusesWidgets == true }
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var restingWidths: [String: CGFloat] = [:]
     /// Each unit with App menus measured with only the app name and », by unit ID.
     @State private var narrowestWidths: [String: CGFloat] = [:]
+    @FocusState private var focusedWidget: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
@@ -82,6 +100,8 @@ struct BarView: View {
                                 unitView(unit, config: config, width: placement.width, minimum: minimums[unit.id])
                                     .environment(\.appMenuShrink, minimums[unit.id] != nil ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
                                     .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
+                                    .environment(\.barFocus, $focusedWidget)
+                                    .environment(\.focusesWidgets, focusesWidgets)
                                     .geometryGroup()
                                     .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
                                     .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
@@ -102,6 +122,12 @@ struct BarView: View {
                     }
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
                     .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow.map(\.ids))
+                    .onMoveCommand { direction in
+                        focusedWidget = Self.focusTarget(from: focusedWidget, moving: direction, units: units, placements: plan.placements)
+                    }
+                    .onChange(of: focusesWidgets) {
+                        focusedWidget = focusesWidgets ? Self.focusTarget(from: nil, moving: .right, units: units, placements: plan.placements) : nil
+                    }
                     .overlay {
                         HStack(spacing: 0) {
                             ForEach(units + [Self.moreWidgetsUnit]) { unit in
@@ -216,7 +242,9 @@ private struct BarContextMenu: View {
         Button("Try Themes…") { store.onTryThemes?(display) }
         let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
         if error != nil || store.crashReports.note != nil { Divider() }
-        if let error { Text(error) }
+        if let error {
+            Button(AppDelegate.menuTitle(error: error)) { NSApp.sendAction(#selector(AppDelegate.showStatus), to: NSApp.delegate, from: nil) }
+        }
         if let note = store.crashReports.note { Button(note) { store.onShowCrashes?() } }
         Divider()
         Button("Settings…") { store.onCustomize?() }
@@ -279,6 +307,10 @@ extension EnvironmentValues {
     }
     @Entry var moreWidgetsAnchor: NSView?
     @Entry var barExpansion: BarExpansion?
+    /// The widget with the bar's keyboard focus. Only the bar's own widgets take it, not those in More widgets or Settings.
+    @Entry var barFocus: FocusState<String?>.Binding?
+    /// Whether the bar has the keyboard from `StableBar --focus`, the only time its widgets can take `barFocus`.
+    @Entry var focusesWidgets = false
     /// A date to draw instead of the current time, so a render shows the same clock on every run.
     @Entry var fixedDate: Date?
     /// Draws without the network, as a render does: remote images stay empty.
@@ -314,7 +346,7 @@ struct BarUnitView: View {
             Color.clear.frame(minWidth: unit.widgets[0].style.minWidth ?? 0,
                               idealWidth: unit.widgets[0].style.minWidth ?? 0, maxWidth: .infinity, minHeight: 1)
         } else {
-            BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
+            BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
                 ForEach(unit.widgets) { widget in
                     WidgetView(widget: widget, defaults: config.defaults, popupDefaults: config.popupDefaults, store: store,
                                monitor: display, defaultAnimation: config.bar.animation, defaultTransition: config.bar.motion.transition)
@@ -329,8 +361,10 @@ struct BarUnitView: View {
 /// The same group spacing and surface wrap normal widgets and their edit decorations.
 struct BarUnitSurface<Content: View>: View {
     let style: WidgetStyle
+    let defaults: WidgetStyle
     let spacing: Double
     @ViewBuilder let content: () -> Content
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let surface = HStack(spacing: style.spacing ?? spacing, content: content)
@@ -342,11 +376,21 @@ struct BarUnitSurface<Content: View>: View {
         if let flare = style.flare {
             surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
         } else {
+            let outlined = contrast == .increased && style.background != nil
+            let appearance = WidgetAppearance(WidgetStyle(), defaults: defaults)
             surface
                 .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
                 .overlay {
-                    RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
-                        .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                    if outlined {
+                        // As in WidgetView, a RoundedRectangle's border would get stray marks at the ends of a pill offscreen.
+                        let radius = style.cornerRadius ?? 0
+                        UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
+                                               topTrailingRadius: radius)
+                            .strokeBorder(appearance.foreground, lineWidth: max(style.borderWidth ?? 1, 1))
+                    } else {
+                        RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
+                            .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                    }
                 }
         }
     }
@@ -403,12 +447,15 @@ struct WidgetView: View {
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
     @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
     @Environment(\.barExpansion) private var barExpansion
     @Environment(\.fixedDate) private var fixedDate
+    @Environment(\.barFocus) private var barFocus
+    @Environment(\.focusesWidgets) private var focusesWidgets
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
@@ -429,12 +476,12 @@ struct WidgetView: View {
     private var isSound: Bool { widget.layout == nil && store.configuration?.providerType(of: widget) == DataSourceType.audio.name }
 
     /// `tile` as a button for its click action, popup or link, or as it is while the bar is being
-    /// edited, when it takes no clicks.
-    @ViewBuilder private func clickable(_ tile: some View, output: ScriptOutput?) -> some View {
+    /// edited, when it takes no clicks. `isOpen` tells whether the popup it opens is open.
+    @ViewBuilder private func clickable(_ tile: some View, output: ScriptOutput?, isOpen: Bool) -> some View {
         if store.barEditing.isActive {
             tile
         } else if widget.id == PackageLibrary.updateWidgetID {
-            HStack(spacing: 0) {
+            let buttons = HStack(spacing: 0) {
                 Button(action: store.packageLibrary.openUpdates) { tile }
                     .accessibilityLabel("Open package updates")
                 Button(action: store.packageLibrary.dismissUpdates) {
@@ -445,40 +492,79 @@ struct WidgetView: View {
                 .help("Dismiss package update notification")
             }
             .buttonStyle(.plain)
+            pressable(buttons, click: store.packageLibrary.openUpdates)
         } else if widget.hoverLayout != nil, let command = output?.onClick ?? widget.onClick {
-            Button { runAction(command, sender: "mouse.clicked", button: "left") } label: { tile }
-                .buttonStyle(.plain)
+            let click = { runAction(command, sender: "mouse.clicked", button: "left") }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if let popup = widgetPopup(widget, store: store) {
-            Button {
+            let click = {
                 guard store.barEditing.allowsWidgetActions else { return }
                 store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
-            } label: {
-                if widget.id == AppUpdate.widgetID {
-                    tile.accessibilityLabel(widget.tooltip!)
-                } else {
-                    tile
-                }
             }
-            .buttonStyle(.plain)
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
         } else if let command = output?.onClick ?? widget.onClick {
-            Button { runAction(command, sender: "mouse.clicked", button: "left") } label: { tile }
-                .buttonStyle(.plain)
+            let click = { runAction(command, sender: "mouse.clicked", button: "left") }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if let open = widget.open {
-            Button { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } } label: { tile }
+            let click = { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
+        } else if case let .appleMenu(appleClick) = widget.content, widget.layout != nil, !hasOwnClick {
+            let click = { clickAppleLogo(appleClick, anchor: clickAnchor) }
+            let button = Button(action: click) { tile }
                 .buttonStyle(.plain)
-        } else if case let .appleMenu(click) = widget.content, widget.layout != nil, !hasOwnClick {
-            Button { clickAppleLogo(click, anchor: clickAnchor) } label: { tile }
-                .buttonStyle(.plain)
-                .onHover { if $0, click == .menu { store.appMenu.refresh() } }
+                .onHover { if $0, appleClick == .menu { store.appMenu.refresh() } }
+            pressable(button, click: click, popupOpen: appleClick == .menu ? isOpen : nil)
         } else if widget.content == .controlCenter {
-            Button { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } } label: { tile }
-                .buttonStyle(MouseDownButtonStyle())
+            let click = { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } }
+            pressable(Button(action: click) { tile }.buttonStyle(MouseDownButtonStyle()), click: click)
         } else if case let .menuBarItems(_, _, hidden) = widget.content, !widget.drawsMenuBarItems {
-            Button { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) } label: { tile }
-                .buttonStyle(.plain)
+            let click = { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
         } else {
-            tile
+            pressable(tile)
         }
+    }
+
+    /// `view`, the widget's tile or button, as the keyboard and VoiceOver press it. While the bar has keyboard focus, the
+    /// arrow keys reach it and Return or Space does `click`. A click that opens a popup reads as a button that expands,
+    /// with `popupOpen` as its state, which SwiftUI can't report.
+    @ViewBuilder private func pressable(_ view: some View, click: (() -> Void)? = nil, popupOpen: Bool? = nil) -> some View {
+        let element = Group {
+            if let click, let popupOpen {
+                view.accessibilityRepresentation {
+                    PopupButtonAccessibility(label: accessibilityName, value: { accessibilityValue(date: .now) },
+                                             expanded: popupOpen, press: click)
+                }
+            } else {
+                view
+            }
+        }
+        if let barFocus {
+            element
+                .focusable(focusesWidgets)
+                .focused(barFocus, equals: widget.id)
+                .onKeyPress(keys: [.return, .space]) { _ in
+                    guard let click else { return .ignored }
+                    click()
+                    return .handled
+                }
+        } else {
+            element
+        }
+    }
+
+    /// What VoiceOver calls the widget: its name in Settings, or the offer of the update widget.
+    private var accessibilityName: String {
+        widget.id == AppUpdate.widgetID ? widget.tooltip!
+            : WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id], providers: store.configuration?.providers ?? [:])
+    }
+
+    /// What VoiceOver reads after the widget's name: the text it shows at `date`, or the latest value of a graph shown
+    /// without text.
+    private func accessibilityValue(date: Date) -> String {
+        let text = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields).text
+        guard text.isEmpty, let value = store.scripts[widget.id]?.output.value else { return text }
+        return value.formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// Opens the widget's hover popup, hover controls or tooltip when the pointer enters it, closes
@@ -523,7 +609,7 @@ struct WidgetView: View {
         let tooltip = store.scripts[widget.id]?.error ?? widget.tooltip ?? output?.tooltip
         let resolution = self.resolution
         let isOpen = store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor)
-        let style = resolution.style(hovered: hovered, open: isOpen)
+        let style = resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let animation = output?.animation ?? widget.animation ?? defaultAnimation
         let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: 0,
@@ -562,14 +648,22 @@ struct WidgetView: View {
             .frame(width: appearance.width, height: style.height.map { CGFloat($0) })
             .frame(minWidth: style.minWidth.map { CGFloat($0) }, maxWidth: style.maxWidth.map { CGFloat($0) })
             .contentShape(Rectangle())
-        clickable(tile, output: output)
+        clickable(tile, output: output, isOpen: isOpen)
         .font(appearance.font)
         .foregroundStyle(appearance.foreground)
         .modifier(GlassBackground(fill: style.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.widgets,
                                   shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
-            RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            if contrast == .increased && style.background != nil {
+                // SwiftUI draws a RoundedRectangle's border as a layer border, which drawing offscreen, as the scenes do, gives
+                // stray marks at the ends of a pill.
+                let radius = appearance.cornerRadius
+                UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius, topTrailingRadius: radius)
+                    .strokeBorder(appearance.foreground, lineWidth: max(appearance.borderWidth, 1))
+            } else {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius)
+                    .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            }
         }
         .overlay(alignment: .topTrailing) {
             if let error = store.scripts[widget.id]?.error ?? store.actionErrors[widget.id] {
@@ -776,6 +870,9 @@ struct WidgetView: View {
         WidgetBlocks(widget: widget, store: store,
                      style: resolution.layoutStyle(configured: widget.layout != nil, hovered: hovered, open: open),
                      date: date, motion: motion, runAction: blockAction)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityName)
+            .accessibilityValue(accessibilityValue(date: date))
     }
 
     private func blockAction(_ command: String, _ environment: [String: String]) {

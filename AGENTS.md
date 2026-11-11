@@ -40,6 +40,19 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 - CI's Macs always show scroll bars (17 points); run a layout test with `-AppleShowScrollBars Always` to see what CI sees.
 - A purely visual fix is proven with before/after images, not with a UI test.
 
+## Writing comments
+
+- Comment only what the code can't say: why it must be so, a constraint that isn't obvious, a macOS quirk, a safety reason.
+- Write for whoever reads the code next: what it does or why it must be so, not the story of the bug, the issue or the fix. That story goes in the issue, the pull request and the commit message.
+
+  ```swift
+  // Bad:  a configuration folder reached through a symbolic link then put every new package outside its root.
+  // Good: Foundation leaves a path that doesn't exist yet unresolved, so resolve its nearest existing ancestor.
+  ```
+
+- Keep it short, usually a line or two. A doc comment doesn't restate the signature, and no comment repeats the code.
+- An issue or pull request number can follow an explanation, never replace it.
+
 ## Architecture rules
 
 `ArchitectureRulesTests` checks the first three; its numbers may only go down.

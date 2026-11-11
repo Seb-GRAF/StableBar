@@ -77,7 +77,7 @@ final class BarStore: NSObject {
     private(set) var screenBarStyles: [String: WidgetStyle] = [:]
     private(set) var providers: [String: ScriptWidget] = [:]
     private var visibleWidgets: [Int: Set<String>] = [:]
-    private var sleeping = false
+    private var pauses: Set<PauseReason> = []
     private var popupWidgetID: String?
     private(set) var inspectedWidgetID: String?
     private var inspectorOpen = false
@@ -143,12 +143,14 @@ final class BarStore: NSObject {
                 let data = try SetupPreferences(placement: placement, workspaces: workspaces).applying(to: starter)
                 try writeConfiguration(data, to: sharedConfigurationURL)
             }
-            try migrateConfigurationFile(sharedConfigurationURL)
-            try migrateStarterAppleLogo(sharedConfigurationURL)
-            for setup in screenSetupsWithOwnBars { try? migrateStarterAppleLogo(ownBarURL(for: setup)) }
-            if !UserDefaults.standard.bool(forKey: "migratedEarlierColors") {
-                try migrateEarlierColors(sharedConfigurationURL)
-                UserDefaults.standard.set(true, forKey: "migratedEarlierColors")
+            // The colors go first: they skip a file pinned to a release, and the other migrations pin it.
+            try migrateEarlierColors(sharedConfigurationURL, savedBy: release)
+            try migrateConfigurationFile(sharedConfigurationURL, savedBy: release)
+            try migrateStarterAppleLogo(sharedConfigurationURL, savedBy: release)
+            for url in screenSetupsWithOwnBars.map(ownBarURL(for:)) {
+                try? migrateEarlierColors(url, savedBy: release)
+                try? migrateConfigurationFile(url, savedBy: release)
+                try? migrateStarterAppleLogo(url, savedBy: release)
             }
             // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
             // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.
@@ -924,8 +926,8 @@ final class BarStore: NSObject {
         return .working
     }
 
-    func setSleeping(_ sleeping: Bool) {
-        self.sleeping = sleeping
+    func setPaused(_ paused: Bool, because reason: PauseReason) {
+        if paused { pauses.insert(reason) } else { pauses.remove(reason) }
         updateSuspension()
     }
 
@@ -948,11 +950,11 @@ final class BarStore: NSObject {
                 .contains { configuration?.subscribedEvents.contains($0.rawValue) == true } == true
             let hidden = definition?.whenVisible == true && !sendsSubscribedEvents
                 && !(configuration?.widgets.contains { $0.content == .provider(name) && visible.contains($0.id) } ?? false)
-            if sleeping || hidden { provider.suspend() } else { provider.resume() }
+            if !pauses.isEmpty || hidden { provider.suspend() } else { provider.resume() }
         }
         for widget in configuration?.widgets ?? [] {
             if case .script = widget.content {
-                if sleeping { scripts[widget.id]?.suspend() } else { scripts[widget.id]?.resume() }
+                if !pauses.isEmpty { scripts[widget.id]?.suspend() } else { scripts[widget.id]?.resume() }
             }
         }
     }
@@ -1004,6 +1006,10 @@ final class BarStore: NSObject {
             let config = configuration!.onScreen(ScreenKind(BarDisplay(screen: bar.screen!)))
             popup.open(content, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
                        store: self, anchor: anchor, onHover: false)
+        case .focus:
+            let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID
+            guard let bar = barPanel(activeID) else { throw CommandFailure(message: "No bar on the active display.") }
+            bar.focusWidgets()
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))

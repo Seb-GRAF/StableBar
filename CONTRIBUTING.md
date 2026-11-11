@@ -116,18 +116,34 @@ Both release channels come from `main`:
 - **Beta:** after the tests pass on `main`, CI builds `dist/StableBar.dmg` as the next version plus `-beta.<UTC timestamp>.<run number>`, such as `0.5.0-beta.20261020103000.114`, and publishes it as a GitHub prerelease. The timestamp uses `YYYYMMDDHHMMSS` so GitHub's alphabetical prerelease sorting keeps same-day betas in order when the run number gains a digit. A beta commits nothing. It requires a qualifying app change since the newest release, and skips an unchanged app. Older fixes already shipped in a beta cannot trigger another beta after maintenance changes. A pending feature or fix still gets its beta when a later docs commit lands; the version includes all qualifying changes since the last stable release.
 - **Stable:** a maintainer starts it from **Actions → CI → Run workflow** on `main`. It releases the newest commit on `main`, and only once that commit has shipped as a beta, or `scripts/unchanged-app.sh` confirms its app inputs match a previous beta, so stable ships the app beta users have run. A maintenance commit that changes app inputs does not trigger a beta; stable must wait for the next qualifying app change and its beta. It sets `CFBundleShortVersionString` to the version and `CFBundleVersion` to the run number in [Resources/Info.plist](Resources/Info.plist) with `scripts/set-version.sh`, points the website's download buttons at the version's DMG with `scripts/set-site-version.sh`, adds its notes to `CHANGELOG.md`, commits all three with the [docs images](#docs-images) as `chore(release): <version>`, tags `v<version>` and publishes a GitHub release with the DMG. The release commit skips CI, so the job then starts the **Website** workflow, which deploys the new download once its DMG is public.
 
+Before starting a stable release, measure the beta as [Performance](docs/performance.md) describes and update the numbers there if they changed, along with the version, the Mac and the conditions they were measured with.
+
 To retry a missing beta, use **Actions → CI → Run workflow** on `main` and choose **beta** as the release channel. The default channel is **stable**.
 
 A stable release pushes its commit and tag before it publishes the GitHub release and the update feed. If it fails after that, start a new stable release from **Run workflow** before anything else lands on `main`; **Re-run jobs** would check out the commit before the tag. When the newest commit already carries a stable tag, the run reuses that version's DMG, or builds it again if the release has none, publishes its GitHub release, deploys the website and adds the release to the update feed.
 
 Both jobs use the CI run number, which only goes up, so a stable build always numbers higher than the betas before it. In-app updates compare that number to find the newest release.
 
-Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed: Sparkle installs an update only when it's signed by the same developer as the running app. Without one, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:
+Both jobs sign and notarize the app with a Developer ID when the repository has one, and only then add the release to the update feed, with an EdDSA signature as well. Without a Developer ID, builds are ad-hoc signed and `scripts/prepare-app-info.sh` leaves out their `SUFeedURL`. To set it up, add:
 
 - the `DEVELOPER_ID_CERTIFICATE` secret: the Developer ID Application certificate and its private key, exported as a `.p12` and base64-encoded, with its password in the `DEVELOPER_ID_CERTIFICATE_PASSWORD` secret;
-- an App Store Connect API key for notarization: the `.p8` file's contents in the `NOTARY_API_KEY` secret, and its key ID and issuer ID in the `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER` variables.
+- an App Store Connect API key for notarization: the `.p8` file's contents in the `NOTARY_API_KEY` secret, and its key ID and issuer ID in the `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER` variables;
+- the `SPARKLE_ED_PRIVATE_KEY` secret: the private EdDSA key whose public key is `SUPublicEDKey` in [Resources/Info.plist](Resources/Info.plist).
 
 `scripts/publish-appcast.sh` adds each signed release to `appcast.xml` in the `appcast` prerelease, the feed every release checks, with betas on Sparkle's `beta` channel. Each item carries its GitHub release notes, whose bullet points the update tile's popup lists, and a link to the release.
+
+Sparkle installs an update when its EdDSA signature matches the running app's key or its Developer ID matches the running app's, so a release can change one of the two while the other still matches, never both at once. An app with the key refuses an update without an EdDSA signature, so `scripts/check-update-key.sh` signs the DMG before either job publishes it, and stops the release when the secret is missing or doesn't match `SUPublicEDKey`.
+
+The private key was made with Sparkle's `generate_keys`, which `swift build` puts in `.build/artifacts/sparkle/Sparkle/bin`, and lives in the maintainer's login keychain. `generate_keys -p` prints its public key. To set the secret from the keychain:
+
+```sh
+dir=$(mktemp -d)
+.build/artifacts/sparkle/Sparkle/bin/generate_keys -x "$dir/key"
+gh secret set SPARKLE_ED_PRIVATE_KEY < "$dir/key"
+rm -r "$dir"
+```
+
+Before deleting the exported file, keep a copy somewhere safe, such as a password manager: GitHub never shows a secret again. `generate_keys -f <file>` imports that copy into another Mac's keychain. If the key is lost or leaked, make a new one with `generate_keys --account <name>`, put its public key in `SUPublicEDKey`, set the secret to it with `generate_keys --account <name> -x`, and release: installed copies accept that release on its Developer ID and check the new key from then on. To sign with another Developer ID team, keep the key: installed copies accept that release on its EdDSA signature. A copy still on a release from before the key can check only the Developer ID, since Sparkle checks an update against the installed app, not against the release before it. So publish the new team's releases with `generate_appcast --minimum-update-version` set to the build number of the first release with the key: older copies skip them and first update to the old team's newest release.
 
 A stable release then sets the version and SHA-256 of the `stablebar` cask in [Seb-GRAF/homebrew-tap](https://github.com/Seb-GRAF/homebrew-tap). It pushes with the `HOMEBREW_TAP_TOKEN` secret: a fine-grained token for that repository only, with read and write access to its contents.
 

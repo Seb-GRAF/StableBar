@@ -149,6 +149,37 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(!configuration.widgets[2].enabled)
 }
 
+@Test func customizationInAnIncludeOrAPackageLoadsMovedAndStaysInTheFile() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let source = directory.appending(path: "source")
+    try writePackageFile(#"{"id":"meter","name":"Meter","version":"1","entry":"config.json"}"#, to: source.appending(path: "package.json"))
+    try writePackageFile(#"""
+    {"widgets":[{"id":"meter","type":"text","position":"right","text":"Meter"}],
+     "customization":{"widgetOverrides":{"meter":{"text":"Moved"}}}}
+    """#, to: source.appending(path: "config.json"))
+    let packages = WidgetPackageStore(directory: directory.appending(path: "bar/packages"))
+    _ = try packages.install(source)
+    let module = directory.appending(path: "bar/module.json")
+    try writePackageFile(#"""
+    {"widgets":[{"id":"module","type":"text","position":"left","text":"Module"},{"id":"gone","type":"text","position":"left","text":"Gone"}],
+     "removedWidgets":["gone"],"customization":{"bar":{"height":44}}}
+    """#, to: module)
+    let root = directory.appending(path: "bar/config.json")
+    try writePackageFile(#"{"includes":["module.json"],"packages":[{"id":"meter","version":"1"}],"widgets":[]}"#, to: root)
+    let files = [module, try packages.directory(id: "meter", version: "1").appending(path: "config.json")]
+    let written = try files.map { try Data(contentsOf: $0) }
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(root)
+    #expect(configuration.bar.height == 44)
+    #expect(configuration.widgets.map(\.id) == ["meter", "module"])
+    #expect(configuration.widgets[0].content == .text("Moved"))
+    let document = loader.document
+    _ = try loader.load(root)
+    #expect(loader.document == document)
+    #expect(try files.map { try Data(contentsOf: $0) } == written)
+}
+
 @Test func tokenCyclesUnknownNamesAndWrongTypesFailWithoutShellInterpolation() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "tokens.json")
     var loader = ConfigurationLoader()
@@ -1041,7 +1072,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     #expect(error.map(errorMessage) == "bar.appearance: Cannot initialize BarAppearance from invalid String value auto")
 }
 
-@Test func colorsThatSetupAndTheStarterWroteNoLongerHideATheme() throws {
+@Test @MainActor func colorsThatSetupAndTheStarterWroteNoLongerHideATheme() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let root = directory.appending(path: "config.json")
@@ -1071,6 +1102,16 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     try writePackageFile(handSet, to: root)
     try migrateEarlierColors(root)
     #expect(try String(contentsOf: root, encoding: .utf8) == handSet)
+    let pinned = "{\"$schema\":\"\(ConfigurationSchema.url(release: "0.9.0"))\",\"defaults\":{\(automatic),\"accent\":\"#007aff\"},\"widgets\":[]}"
+    try writePackageFile(pinned, to: root)
+    try migrateEarlierColors(root)
+    #expect(try String(contentsOf: root, encoding: .utf8) == pinned)
+    try writePackageFile(##"{"customization":{"defaults":{\##(dark),"accent":"#007aff"}},"widgets":[]}"##, to: root)
+    let store = BarStore(configurationURL: root, release: "0.10.0")
+    defer { store.stop() }
+    store.start()
+    #expect(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))
+        == ["$schema": .string(ConfigurationSchema.url(release: "0.10.0")), "bar": .object(["appearance": .string("dark")]), "widgets": .array([])])
 }
 
 @Test func statesMergeThroughModulesTemplatesTokensProfilesOverridesAndPackages() throws {

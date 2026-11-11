@@ -479,6 +479,11 @@ jobs:
           brew install create-dmg
           ./scripts/set-version.sh "$VERSION" "$GITHUB_RUN_NUMBER"
           STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
+      - name: Check the update key
+        if: steps.next.outputs.version
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: ./scripts/check-update-key.sh
       - name: Publish the beta
         if: steps.next.outputs.version
         env:
@@ -492,6 +497,7 @@ jobs:
         if: steps.next.outputs.version && env.SIGNING_IDENTITY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
           VERSION: ${{ steps.next.outputs.version }}
         run: ./scripts/publish-appcast.sh "$VERSION" beta
 
@@ -574,6 +580,7 @@ jobs:
         if: steps.tags.outputs.finish == ''
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           brew install create-dmg
           npx semantic-release
@@ -585,12 +592,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.tags.outputs.finish }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx StableBar.dmg; then
             gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --pattern StableBar.dmg --dir dist
+            if [[ -n "${SIGNING_IDENTITY:-}" ]] && ! codesign -dvv dist/StableBar.dmg 2>&1 | grep -q '^Authority=Developer ID Application'; then
+              echo "::error::v$VERSION has an ad-hoc DMG. Delete it from the release and run again to build a signed one."
+              exit 1
+            fi
+            ./scripts/check-update-key.sh
           else
             brew install create-dmg
             STABLEBAR_RELEASE_BUILD=1 ./scripts/package.sh
+            ./scripts/check-update-key.sh
             if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
               gh release upload "v$VERSION" dist/StableBar.dmg --repo "$GITHUB_REPOSITORY" --clobber
             else
@@ -618,6 +632,7 @@ jobs:
         if: env.SIGNING_IDENTITY
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: ./scripts/publish-appcast.sh "$(cat .next-version)"
       - name: Update the Homebrew cask
         env:

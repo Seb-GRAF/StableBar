@@ -106,6 +106,10 @@
           "description": "Whether the Mac has an internal battery, which presets add Battery for. true by default.",
           "type": "boolean"
         },
+        "notch": {
+          "description": "Whether any connected display has a notch, which the Notch preset needs. true by default.",
+          "type": "boolean"
+        },
         "inApplications": {
           "description": "Whether StableBar runs from an Applications folder, which Open at login needs. true by default.",
           "type": "boolean"
@@ -117,6 +121,12 @@
       "type": "array",
       "items": { "enum": ["dark", "light"] },
       "minItems": 1,
+      "uniqueItems": true
+    },
+    "accessibilityDisplay": {
+      "description": "For `bar` and `popup`: the settings of System Settings → Accessibility → Display to draw with. The others are off, whatever the Mac that draws has. macOS turns on Reduce transparency with Increase contrast, so list both to draw what a Mac with Increase contrast shows.",
+      "type": "array",
+      "items": { "enum": ["increaseContrast", "reduceTransparency"] },
       "uniqueItems": true
     },
     "width": { "description": "The image's width in points.", "type": "number", "minimum": 100, "maximum": 4000 },

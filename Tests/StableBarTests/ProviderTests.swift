@@ -359,9 +359,11 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     store.setVisibleWidgets(ids: ["first"], displayID: 2)
     store.setVisibleWidgets(ids: [], displayID: 1)
     #expect(!shared.diagnostics.suspended)
-    store.setSleeping(true)
+    store.setPaused(true, because: .systemAsleep)
+    store.setPaused(true, because: .screenLocked)
+    store.setPaused(false, because: .systemAsleep)
     #expect(shared.diagnostics.suspended)
-    store.setSleeping(false)
+    store.setPaused(false, because: .screenLocked)
     #expect(!shared.diagnostics.suspended)
     store.retainDisplays([1])
     #expect(shared.diagnostics.suspended)
@@ -393,7 +395,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     var previousPID: Int32 = 0
     for round in 0..<12 {
         store.setVisibleWidgets(ids: ["first"], displayID: 1)
-        store.setSleeping(false)
+        store.setPaused(false, because: .systemAsleep)
         for _ in 0..<100 {
             if let pid = Int32(shared.output.text), pid != previousPID, shared.diagnostics.running { break }
             try await Task.sleep(for: .milliseconds(10))
@@ -402,7 +404,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         #expect(pid != previousPID)
         #expect(shared.diagnostics.running)
         previousPID = pid
-        store.setSleeping(true)
+        store.setPaused(true, because: .systemAsleep)
         for _ in 0..<100 {
             if kill(pid, 0) == -1 { break }
             try await Task.sleep(for: .milliseconds(5))
