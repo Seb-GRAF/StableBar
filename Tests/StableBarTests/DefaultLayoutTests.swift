@@ -287,6 +287,43 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     #expect(try height(#"{"type":"field","field":"answer","wrap":true,"maxHeight":60}"#, "Yes.") == line)
 }
 
+@Test func markdownAnswersSplitIntoParagraphsHeadingsListsAndCode() {
+    let answer = """
+    ## Setup
+    Install it, then run:
+    ```sh
+    swift build
+
+    swift test
+    ```
+    - First
+      - Nested
+    2. Second
+
+    Done.
+    | Material | Price |
+    |---|---:|
+    | PLA | CHF 20 |
+    | PETG | CHF 25 |
+    ```
+    let arriving
+    """
+    #expect(MarkdownBlock.blocks(answer) == [
+        .heading("Setup"),
+        .paragraph("Install it, then run:"),
+        .code("swift build\n\nswift test"),
+        .item(marker: "•", text: "First", depth: 0),
+        .item(marker: "•", text: "Nested", depth: 1),
+        .item(marker: "2.", text: "Second", depth: 0),
+        .paragraph("Done."),
+        .table(header: ["Material", "Price"], rows: [["PLA", "CHF 20"], ["PETG", "CHF 25"]]),
+        .code("let arriving")
+    ])
+    #expect(MarkdownBlock.blocks("````markdown\n```swift\nlet x = 1\n```\n````") == [.code("```swift\nlet x = 1\n```")],
+            "Only a fence as long as the one that opened a block closes it")
+    #expect(MarkdownBlock.blocks("~~~\n```\n~~~") == [.code("```")])
+}
+
 /// A drawing is one frame, so this checks the still shapes: playing in the measuring copy and under
 /// Reduce Motion, and settled when the source is off.
 @Test @MainActor func equalizersDrawStillWhileMeasuredAndSettleWhenTheirSourceIsOff() throws {

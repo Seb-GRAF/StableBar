@@ -308,6 +308,20 @@ private var presentationRepository: URL {
     #expect(!popupHoverTriangleContains(origin, from: origin, to: frame.offsetBy(dx: 0, dy: 100)))
 }
 
+@Test func resizingAPopupMovesTheDraggedEdgesWithinItsScreenAndMinimumSize() {
+    let frame = NSRect(x: 100, y: 100, width: 300, height: 200)
+    let screen = NSRect(x: 0, y: 0, width: 1000, height: 800)
+    let minSize = NSSize(width: 240, height: 140)
+    #expect(resizedPopupFrame(frame, moving: [.bottom, .leading], by: NSPoint(x: -50, y: -30), minSize: minSize, within: screen)
+            == NSRect(x: 50, y: 70, width: 350, height: 230))
+    #expect(resizedPopupFrame(frame, moving: .trailing, by: NSPoint(x: -100, y: -30), minSize: minSize, within: screen)
+            == NSRect(x: 100, y: 100, width: 240, height: 200))
+    #expect(resizedPopupFrame(frame, moving: .top, by: NSPoint(x: 0, y: 900), minSize: minSize, within: screen)
+            == NSRect(x: 100, y: 100, width: 300, height: 700))
+    #expect(resizedPopupFrame(frame, moving: .leading, by: NSPoint(x: -500, y: 0), minSize: minSize, within: screen)
+            == NSRect(x: 0, y: 100, width: 400, height: 200))
+}
+
 @Test(arguments: [false, true], ["enter", "stop", "away"]) @MainActor
 func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(replace: Bool, finish: String) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
@@ -690,7 +704,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     #expect(popup.pins.ids == ["ask"])
     #expect(!popup.isOpen)
     #expect(panel.isMovableByWindowBackground)
-    #expect(panel.styleMask.contains(.resizable))
+    #expect(panel.resizeEdges?.resizable == .all)
     #expect(store.presentations[ask.id]?.popupAnchor == nil)
 
     popup.close()
@@ -702,9 +716,17 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     #expect(abs(panel.frame.maxY - home.maxY) < 0.5)
     #expect(!closed.contains(ObjectIdentifier(panel)))
 
-    let dragged = NSRect(x: panel.frame.minX - 120, y: panel.frame.maxY - 80 - 420, width: 420, height: 420)
-    (panel.contentView as! PopupRevealView).viewWillStartLiveResize()
-    panel.setFrame(dragged, display: false)
+    let edges = try #require(panel.resizeEdges)
+    let corner = NSPoint(x: edges.inset + 2, y: edges.inset + 12)
+    #expect(panel.contentView!.hitTest(corner) === edges)
+    let dragged = NSRect(x: panel.frame.minX - 120, y: panel.frame.minY - 200, width: panel.frame.width + 120, height: panel.frame.height + 200)
+    func mouse(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {
+        try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber,
+                                        context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+    edges.mouseDown(with: try mouse(.leftMouseDown, at: corner))
+    edges.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: corner.x - 120, y: corner.y - 200)))
+    #expect(panel.frame == dragged)
     #expect(popup.pins.resized == ["ask"])
     store.actionErrors[ask.id] = nil
     try await layOut(panel)
@@ -712,7 +734,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     #expect(panel.contentView!.subviews[0].frame == panel.contentView!.bounds)
     popup.unpin(ask.id)
     #expect(popup.pins.ids.isEmpty)
-    #expect(!panel.styleMask.contains(.resizable))
+    #expect(edges.resizable == [.leading, .trailing, .bottom])
     #expect(store.presentations[ask.id]?.popupAnchor == ObjectIdentifier(anchor))
     #expect(store.presentations[other.id]?.popupAnchor == nil)
     try await waitForPopup { panel.frame.maxY == home.maxY }
@@ -1049,4 +1071,96 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
             "note": .string("Native hosting layout calls include SwiftUI/AppKit maintenance; they are not horizontal planner executions. No speedup claim is made.")]
         try configurationData(metrics).write(to: URL(filePath: output).appending(path: "performance.json"))
     }
+}
+
+@Observable @MainActor private final class Turns {
+    var rows: [[String: String]] = []
+}
+
+/// A list block drawn as a popup draws its content: inside a scroll view, animating its data changes.
+private struct TurnsPopup: View {
+    let turns: Turns
+    let block: PopupBlock
+
+    var body: some View {
+        ScrollView {
+            PopupBlockView(block: block, inheritedStyle: WidgetStyle(fontSize: 13), fields: [:],
+                           context: BlockContext(lists: ["turns": turns.rows], open: { _ in }, runAction: { _, _ in }))
+                .frame(width: 300)
+                .animation(.snappy(duration: 0.35), value: turns.rows)
+        }
+    }
+}
+
+@Test @MainActor func aListThatScrollsFollowsItsEndAndShowsANewEntry() async throws {
+    guard #available(macOS 15, *) else { return }
+    let block = try JSONDecoder().decode(PopupBlock.self, from: Data(#"""
+    {"type":"list","source":"turns","maxHeight":120,"row":{"type":"field","field":"text","wrap":true}}
+    """#.utf8))
+    let turns = Turns()
+    let answer = String(repeating: "A line of an answer that keeps going. ", count: 6)
+    turns.rows = (0..<4).map { ["text": "Turn \($0). " + answer] }
+    let window = NSWindow(contentRect: NSRect(x: -6000, y: -6000, width: 300, height: 200), styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    let host = NSHostingView(rootView: TurnsPopup(turns: turns, block: block))
+    window.contentView = host
+    window.orderFrontRegardless()
+    defer { window.close() }
+    func scrollViews(in view: NSView) -> [NSScrollView] {
+        ((view as? NSScrollView).map { [$0] } ?? []) + view.subviews.flatMap(scrollViews)
+    }
+    try await waitForPopup { scrollViews(in: host).count == 2 }
+    let list = try #require(scrollViews(in: host).last)
+    var height: CGFloat { list.documentView!.frame.height }
+    var gap: CGFloat { height - list.documentVisibleRect.maxY }
+    func grow(_ change: () -> Void) async throws {
+        let before = height
+        change()
+        try await waitForPopup { height > before && gap < 1 }
+    }
+    try await waitForPopup { height > 120 && gap < 1 }
+    #expect(gap < 1, "It opens at the end")
+
+    try await grow { turns.rows[3]["text"]! += answer }
+    #expect(gap < 1, "Growth at the end keeps the end in view")
+
+    list.contentView.scroll(to: .zero)
+    list.reflectScrolledClipView(list.contentView)
+    try await grow { turns.rows.append(["text": "A new question"]) }
+    #expect(gap < 1, "A new entry comes into view")
+    try await grow { turns.rows[4]["text"]! += answer }
+    #expect(gap < 1, "Its answer is followed as it arrives")
+}
+
+@Test @MainActor func shiftReturnStartsANewLineInAnInputThatWrapsAndReturnSends() async throws {
+    let block = try JSONDecoder().decode(PopupBlock.self, from: Data(#"""
+    {"type":"input","title":"Question","wrap":true,"sendButton":true,"autofocus":true,"onSubmit":"send"}
+    """#.utf8))
+    var sent: [String] = []
+    let window = NSPanel(contentRect: NSRect(x: -6000, y: -6000, width: 300, height: 200), styleMask: [.titled, .nonactivatingPanel],
+                         backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = NSHostingView(rootView: PopupBlockView(block: block, inheritedStyle: WidgetStyle(fontSize: 13), fields: [:],
+                                                                context: BlockContext(open: { _ in }, runAction: { _, environment in
+                                                                    sent.append(environment["VALUE"] ?? "")
+                                                                })).frame(width: 300))
+    window.makeKeyAndOrderFront(nil)
+    defer { window.close() }
+    try await waitForPopup { window.firstResponder is NSTextView }
+    func type(_ characters: String, code: UInt16, flags: NSEvent.ModifierFlags = []) throws {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            window.sendEvent(try #require(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags, timestamp: 0,
+                                                           windowNumber: window.windowNumber, context: nil, characters: characters,
+                                                           charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)))
+        }
+    }
+    try type("a", code: 0)
+    try type("\r", code: 36, flags: .shift)
+    try type("b", code: 11)
+    try await waitForPopup { (window.firstResponder as? NSTextView)?.string == "a\nb" }
+    #expect((window.firstResponder as? NSTextView)?.string == "a\nb")
+    #expect(sent.isEmpty)
+    try type("\r", code: 36)
+    try await waitForPopup { !sent.isEmpty }
+    #expect(sent == ["a\nb"])
 }

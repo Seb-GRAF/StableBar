@@ -1129,17 +1129,32 @@
           "$ref": "#/definitions/boolean",
           "description": "For input blocks: put the cursor in the field when the popup opens."
         },
+        "sendButton": {
+          "$ref": "#/definitions/boolean",
+          "description": "For input blocks: a round button in the field that sends its text. The block's style draws the field."
+        },
+        "busy": {
+          "$ref": "#/definitions/string",
+          "description": "For input blocks with a send button: a field that, while it isn't empty, turns the send button into a stop button that runs onStop."
+        },
+        "onStop": {
+          "$ref": "#/definitions/string"
+        },
         "wrap": {
           "$ref": "#/definitions/boolean",
-          "description": "For field blocks: show all of the text over as many lines as it needs, selectable."
+          "description": "For field blocks: show all of the text over as many lines as it needs, selectable. For input blocks: run the text onto more lines as you type."
         },
         "maxHeight": {
           "$ref": "#/definitions/number",
-          "description": "For field blocks that wrap: the height past which the text scrolls."
+          "description": "For field blocks that wrap and vertical lists: the height past which they scroll, keeping the newest content in view."
         },
         "markdown": {
           "$ref": "#/definitions/boolean",
-          "description": "For field blocks: show inline Markdown, such as bold, italics, code and links."
+          "description": "For field blocks: show Markdown, such as bold, italics, code and links, and in a field that wraps also headings, lists, code blocks and tables."
+        },
+        "fitWidth": {
+          "$ref": "#/definitions/boolean",
+          "description": "In a popup: make the block as wide as its content, up to its maxWidth, and place it by its alignment, as a chat bubble."
         },
         "shimmer": {
           "$ref": "#/definitions/boolean",
@@ -1156,6 +1171,13 @@
         "levelsSource": {
           "$ref": "#/definitions/string",
           "description": "For chooser blocks: a list of levels, whose rows have group, value and title."
+        },
+        "starsSource": {
+          "$ref": "#/definitions/string",
+          "description": "For chooser blocks: a list of starred presets, whose rows have group, option and level, shown as chips with ⌘1 to ⌘9."
+        },
+        "onStar": {
+          "$ref": "#/definitions/string"
         }
       },
       "description": "A layout block for widget layouts, overlays and popups."
@@ -1204,6 +1226,14 @@
         },
         "animation": {
           "$ref": "#/definitions/animation"
+        },
+        "onOpen": {
+          "$ref": "#/definitions/string",
+          "description": "A command to run each time the popup opens, with SENDER=popup.opened."
+        },
+        "onClose": {
+          "$ref": "#/definitions/string",
+          "description": "A command to run each time the popup closes, pinned or not, with SENDER=popup.closed."
         }
       }
     },

@@ -11,8 +11,12 @@ struct PopupConfiguration: Decodable, Sendable {
     var dismissOnControl = false
     var pinnable = false
     var animation: WidgetAnimation?
+    var onOpen: String?
+    var onClose: String?
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case height, style, layout, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation }
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case height, style, layout, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation, onOpen, onClose
+    }
 
     init(height: Double? = nil, style: WidgetStyle, layout: PopupBlock) {
         self.height = height
@@ -39,6 +43,8 @@ struct PopupConfiguration: Decodable, Sendable {
         dismissOnControl = try values.decodeIfPresent(Bool.self, forKey: .dismissOnControl) ?? dismissOnControl
         pinnable = try values.decodeIfPresent(Bool.self, forKey: .pinnable) ?? pinnable
         animation = try values.decodeIfPresent(WidgetAnimation.self, forKey: .animation)
+        onOpen = try values.decodeIfPresent(String.self, forKey: .onOpen)
+        onClose = try values.decodeIfPresent(String.self, forKey: .onClose)
     }
 }
 
@@ -54,11 +60,15 @@ indirect enum PopupContent: Sendable {
     case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
     case toggle(title: String, source: String, command: String)
     case segmented(title: String, source: String, options: [PopupControlOption], command: String)
-    /// A pill that opens a panel: the groups in `lists[groupsSource]` beside the chosen group's options and levels, rows of
-    /// `lists[optionsSource]` and `lists[levelsSource]` that name it in `group`. `fields[source]` is the chosen group.
-    case chooser(title: String, source: String, groupsSource: String, optionsSource: String, levelsSource: String?, command: String)
+    /// A pill, or chips for the presets starred in `lists[stars.source]`, that opens a panel: the groups in
+    /// `lists[groupsSource]` beside the chosen group's options and levels, rows of `lists[optionsSource]` and
+    /// `lists[levelsSource]` that name it in `group`. `fields[source]` is the chosen group; starring runs `stars.command`.
+    case chooser(title: String, source: String, groupsSource: String, optionsSource: String, levelsSource: String?,
+                 stars: (source: String, command: String)?, command: String)
     case search(title: String, source: String, fields: [String]?, row: PopupBlock)
-    case input(title: String, placeholder: String?, autofocus: Bool, command: String)
+    /// A text field that runs `command` with its text. With `sendButton`, a round button in it sends the text, or runs
+    /// `stop.command` instead while `fields[stop.busy]` isn't empty.
+    case input(title: String, placeholder: String?, autofocus: Bool, sendButton: Bool, stop: (busy: String, command: String)?, command: String)
     case menu
     case divider
     case image(path: String, source: String?, fit: ImageFit)
@@ -95,12 +105,16 @@ struct PopupBlock: Decodable, Sendable {
     let openMenuBarItem: MenuBarItemReference?
     let hideWhenEmpty: String?
     let scrollSpeed: Double?
-    /// Whether a field block shows all of its text over as many lines as it needs, selectable.
+    /// Whether a field block shows all of its text over as many lines as it needs, selectable, and an input block
+    /// runs its text onto more lines as it grows.
     let wraps: Bool
-    /// The height past which a wrapping field block scrolls.
+    /// The height past which a wrapping field block or a vertical list scrolls.
     let maxHeight: Double?
-    /// Whether a field block shows inline Markdown: bold, italics, code and links.
+    /// Whether a field block shows Markdown: bold, italics, code and links, and when it wraps also headings, lists,
+    /// code blocks and tables.
     let markdown: Bool
+    /// Whether a block in a popup is as wide as its content, up to its `maxWidth`, and placed by its alignment.
+    let fitsWidth: Bool
     /// Whether light sweeps across a text or field block, as while something works.
     let shimmer: Bool
     /// Whether a field block draws tabular digits. Configured field blocks do; the default layouts of
@@ -120,6 +134,7 @@ struct PopupBlock: Decodable, Sendable {
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
+        case fitWidth, sendButton, busy, onStop, starsSource, onStar
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -142,6 +157,7 @@ struct PopupBlock: Decodable, Sendable {
         wraps = false
         maxHeight = nil
         markdown = false
+        fitsWidth = false
         shimmer = false
         self.monospacedDigits = monospacedDigits
         self.keepsLineHeight = keepsLineHeight
@@ -187,6 +203,7 @@ struct PopupBlock: Decodable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .maxHeight, in: values, debugDescription: "maxHeight must be greater than zero.")
         }
         markdown = try values.decodeIfPresent(Bool.self, forKey: .markdown) ?? false
+        fitsWidth = try values.decodeIfPresent(Bool.self, forKey: .fitWidth) ?? false
         shimmer = try values.decodeIfPresent(Bool.self, forKey: .shimmer) ?? false
         monospacedDigits = true
         keepsLineHeight = false
@@ -239,6 +256,9 @@ struct PopupBlock: Decodable, Sendable {
                                groupsSource: try values.decode(String.self, forKey: .groupsSource),
                                optionsSource: try values.decode(String.self, forKey: .optionsSource),
                                levelsSource: try values.decodeIfPresent(String.self, forKey: .levelsSource),
+                               stars: try values.decodeIfPresent(String.self, forKey: .starsSource).map {
+                                   (source: $0, command: try values.decode(String.self, forKey: .onStar))
+                               },
                                command: try values.decode(String.self, forKey: .onChange))
         case "search":
             content = .search(title: try values.decode(String.self, forKey: .title),
@@ -249,6 +269,10 @@ struct PopupBlock: Decodable, Sendable {
             content = .input(title: try values.decode(String.self, forKey: .title),
                              placeholder: try values.decodeIfPresent(String.self, forKey: .placeholder),
                              autofocus: try values.decodeIfPresent(Bool.self, forKey: .autofocus) ?? false,
+                             sendButton: try values.decodeIfPresent(Bool.self, forKey: .sendButton) ?? false,
+                             stop: try values.decodeIfPresent(String.self, forKey: .busy).map {
+                                 (busy: $0, command: try values.decode(String.self, forKey: .onStop))
+                             },
                              command: try values.decode(String.self, forKey: .onSubmit))
         case "menu": content = .menu
         case "divider": content = .divider
@@ -281,11 +305,15 @@ struct PopupBlock: Decodable, Sendable {
                                                        debugDescription: "Transitions apply to text, field and symbol blocks.")
             }
         }
-        if wraps || markdown || maxHeight != nil {
-            guard case .field = content, wraps || maxHeight == nil else {
-                throw DecodingError.dataCorruptedError(forKey: .wrap, in: values,
-                                                       debugDescription: "wrap and markdown apply to field blocks, and maxHeight to field blocks that wrap.")
-            }
+        let optionsApply = switch content {
+        case .field: wraps || maxHeight == nil
+        case .input: !markdown && maxHeight == nil
+        case .list(_, _, .vertical): !wraps && !markdown
+        default: !wraps && !markdown && maxHeight == nil
+        }
+        guard optionsApply else {
+            throw DecodingError.dataCorruptedError(forKey: .wrap, in: values, debugDescription:
+                "wrap applies to field and input blocks, markdown to field blocks, and maxHeight to field blocks that wrap and to vertical lists.")
         }
         if shimmer {
             switch content {
