@@ -130,6 +130,11 @@
         }
       }
     },
+    "macOSMajorVersion": {
+      "description": "The macOS major version for feature availability in setup and Settings. 26 by default, independently of the Mac that draws.",
+      "type": "integer",
+      "minimum": 14
+    },
     "appearances": {
       "description": "The appearances to draw, each to its own image. Both by default.",
       "type": "array",

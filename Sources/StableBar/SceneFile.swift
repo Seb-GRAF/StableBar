@@ -60,6 +60,8 @@ struct SceneFile: Decodable {
     var starRequest: StarRequestLine?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
+    /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
+    var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
@@ -68,7 +70,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
-             appearances,
+             macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -152,6 +154,11 @@ struct SceneFile: Decodable {
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
+        macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
+        if macOSMajorVersion < 14 {
+            throw DecodingError.dataCorruptedError(forKey: .macOSMajorVersion, in: values,
+                                                   debugDescription: "A macOS major version is 14 or later.")
+        }
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
             throw DecodingError.dataCorruptedError(forKey: .appearances, in: values,

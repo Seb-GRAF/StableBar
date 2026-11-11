@@ -140,6 +140,7 @@ enum SceneRenderer {
         guard let configuration = store.configuration else { throw CommandFailure(message: "The scene has no configuration.") }
         let dark = appearance == .dark
         let width = CGFloat(scene.width ?? 1100)
+        let macOSVersion = MacOSVersion(major: scene.macOSMajorVersion)
         switch scene.draw {
         case .bar:
             let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
@@ -198,7 +199,8 @@ enum SceneRenderer {
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
-            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor).background(Color(nsColor: .windowBackgroundColor)), with: []),
+            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor)
+                .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor)), with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
                 !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
@@ -210,25 +212,26 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
                                               size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
         case .setup:
-            try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store,
+            try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
                                 dark: dark, settle: settle, to: url)
         }
     }
 
-    /// The height of `display`'s macOS menu bar in setup scenes: a display without a notch, on macOS 26 and later.
+    /// The sample display's macOS menu bar height in setup scenes.
     private static let setupMenuBarHeight = 30.0
 
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
     /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
     /// bar hide or show.
-    private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, size: NSSize, dark: Bool, settle: Duration,
-                                  to url: URL) async throws {
+    private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, macOSVersion: MacOSVersion, size: NSSize,
+                                  dark: Bool, settle: Duration, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
         var hides = setup.menuBarHides
         var system = SetupSystem()
+        system.macOSVersion = macOSVersion
         system.automationAccess = { _ in setup.automation ? .allowed : .denied }
         system.setMenuBarHidden = { hides = $0 }
         system.menuBarHides = { hides }

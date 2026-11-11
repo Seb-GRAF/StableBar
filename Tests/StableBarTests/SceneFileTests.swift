@@ -22,6 +22,7 @@ private func scene(_ json: String) throws -> SceneFile {
       "draw": "settings",
       "widget": "clock",
       "tab": "style",
+      "macOSMajorVersion": 15,
       "appearances": ["light"],
       "width": 900,
       "height": 500
@@ -38,6 +39,7 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.draw == .settings)
     #expect(decoded.widget == "clock")
     #expect(decoded.tab == .style)
+    #expect(decoded.macOSMajorVersion == 15)
     #expect(decoded.appearances == [.light])
     #expect(decoded.width == 900)
     #expect(decoded.height == 500)
@@ -53,6 +55,15 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.desktopShortcuts.isEmpty)
     #expect(decoded.widget == nil)
     #expect(decoded.menu == nil)
+    #expect(decoded.macOSMajorVersion == 26)
+}
+
+@Test(arguments: [0, 13])
+func sceneRejectsUnsupportedMacOSVersions(version: Int) throws {
+    let error = #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "bar", "macOSMajorVersion": \#(version)}"#)
+    }
+    #expect(errorMessage(try #require(error)).contains("macOSMajorVersion"))
 }
 
 @Test func sceneDecodesASampleMenu() throws {
