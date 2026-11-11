@@ -294,8 +294,8 @@ struct BarEditTile: View {
     let display: Int
     let kind: ScreenKind
     let entry: BarEditWidget
-    /// Not the whole `Configuration`: a screen with its own layout rebuilds it on every update, SwiftUI then
-    /// redraws the tile, and the redraw replaces the items of its open context menu, closing an open submenu.
+    /// Only what the tile draws with, so it redraws only when that changes. SwiftUI counts a rebuilt
+    /// `Configuration` as changed, and each redraw replaces the items of the tile's open context menu.
     let look: BarEditLook
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme

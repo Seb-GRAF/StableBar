@@ -478,8 +478,7 @@ final class BarEditViewTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(10))
     }
     let source = try #require(tile)
-    // Redrawing the tile replaces the items of its open context menu, which closes an open submenu.
-    // A redraw also hands the tile's drag source its name again.
+    // A tile redraw runs the drag source's `updateNSView`, which sets this name back to the widget's.
     source.name = "Not redrawn"
     // The edit bar redraws when anything it reads changes, such as which workspace has focus.
     for focused in [true, false, true] {
@@ -489,5 +488,7 @@ final class BarEditViewTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
     }
+    // A drag source SwiftUI replaced would keep the name without having been left alone.
+    #expect(descendants(host, of: BarEditDragSourceView.self).first === source)
     #expect(source.name == "Not redrawn")
 }
