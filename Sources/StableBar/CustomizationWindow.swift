@@ -46,6 +46,11 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         editor?.showCrashes()
     }
 
+    func showFeedback(store: BarStore) {
+        show(store: store)
+        editor?.showFeedback()
+    }
+
     func windowWillClose(_ notification: Notification) {
         editor?.endProfileEditing()
         editor?.finishEditing()

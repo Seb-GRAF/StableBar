@@ -58,23 +58,6 @@ struct BugReport: Equatable, Sendable {
         return CrashReport.redacted(lines.joined(separator: "\n"))
     }
 
-    /// GitHub's bug report form with this report as its Environment. Nothing is sent until the user submits the form.
-    func issueURL(limit: Int = 8000) -> URL {
-        func url(_ lists: Int, _ lines: Int) -> URL {
-            let environment = markdown(listLimit: lists, lineLimit: lines).addingPercentEncoding(withAllowedCharacters: Self.unreserved)!
-            return URL(string: "https://github.com/Seb-GRAF/StableBar/issues/new?template=bug_report.yml&environment=\(environment)")!
-        }
-        var lists = 20, lines = 300
-        var result = url(lists, lines)
-        while result.absoluteString.count > limit, lists > 0 {
-            if lines > 100 { lines /= 2 } else { lists /= 2 }
-            result = url(lists, lines)
-        }
-        return result
-    }
-
-    private static let unreserved = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
-
     /// Gathers everything but `live` from this Mac, the configuration file and the crash reports.
     @MainActor static func gather(configuration url: URL, live: Live?, barRunning: Bool = false, path: String) async -> BugReport {
         let summary = await Task.detached(priority: .userInitiated) { ConfigurationSummary(url: url) }.value

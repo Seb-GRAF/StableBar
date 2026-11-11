@@ -56,24 +56,66 @@ private let example = BugReport(
     #expect(report.markdown.contains("- Active profiles: Base configuration\n- Problems: none\n"))
 }
 
-@Test func bugReportIssueURLFillsTheEnvironmentAndStaysShort() throws {
-    func fields(_ url: URL) -> [String: String] {
-        Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-    }
-    let url = example.issueURL()
+private func formFields(_ url: URL) -> [String: String] {
+    Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+}
+
+private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
+                           answers: ["what-happens": "It's gone.", "steps": "1. Sleep\n2. Wake", "expected": "It's back."], report: example)
+
+@Test func feedbackFillsTheIssueFormOfItsKind() {
+    let url = bug.issueURL()
     #expect(url.absoluteString.hasPrefix("https://github.com/Seb-GRAF/StableBar/issues/new?"))
-    #expect(fields(url) == ["template": "bug_report.yml", "environment": example.markdown])
+    #expect(formFields(url) == ["template": "bug_report.yml", "title": "The clock vanishes after sleep", "what-happens": "It's gone.",
+                                "steps": "1. Sleep\n2. Wake", "expected": "It's back.", "environment": example.markdown])
     #expect(!url.absoluteString.contains("+"))
 
-    var noisy = example
-    noisy.live?.problems = (0..<300).map { "Widget \($0): " + String(repeating: "e", count: 1000) }
-    let short = noisy.issueURL()
-    #expect(short.absoluteString.count <= 8000)
-    let environment = try #require(fields(short)["environment"])
+    var idea = bug
+    idea.kind = .idea
+    idea.answers = ["problem": "No weather.", "proposal": "A weather widget."]
+    #expect(formFields(idea.issueURL()) == ["template": "feature_request.yml", "title": "The clock vanishes after sleep",
+                                            "problem": "No weather.", "proposal": "A weather widget."])
+}
+
+@Test func feedbackIssueURLCutsTheReportToStayShort() throws {
+    var noisy = bug
+    noisy.report?.live?.problems = (0..<300).map { "Widget \($0): " + String(repeating: "e", count: 1000) }
+    let url = noisy.issueURL()
+    #expect(url.absoluteString.count <= 8000)
+    let fields = formFields(url)
+    #expect(fields["what-happens"] == "It's gone.")
+    let environment = try #require(fields["environment"])
     #expect(environment.hasPrefix("- StableBar: 0.9.0 (Stable, build 421)\n"))
     #expect(environment.contains("- Problems:\n  - Widget 0: eee"))
     #expect(environment.contains(" more"))
-    #expect(noisy.markdown.contains("Widget 299: "), "The copied report keeps every problem")
+    #expect(noisy.body.contains("Widget 299: "), "A posted or copied issue keeps every problem")
+}
+
+@Test func feedbackWritesTheIssueAsTheFormDoes() {
+    var feedback = bug
+    feedback.answers["steps"] = nil
+    #expect(feedback.body == """
+    ### What happens
+
+    It's gone.
+
+    ### Steps to reproduce
+
+    _No response_
+
+    ### Expected
+
+    It's back.
+
+    ### Environment
+
+    \(example.markdown)
+    """)
+    #expect(feedback.markdown.hasPrefix("# The clock vanishes after sleep\n\n### What happens\n"))
+    #expect(!feedback.isComplete)
+    feedback.answers["steps"] = " \n"
+    #expect(!feedback.isComplete)
+    #expect(bug.isComplete)
 }
 
 @Test func liveFactsDecodeFromABarOfAnotherVersion() throws {

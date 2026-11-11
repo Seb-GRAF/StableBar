@@ -59,7 +59,7 @@ enum WidgetStatus: Equatable {
 
 /// What Status shows: the overview of every widget, StableBar's recent crashes or one widget.
 enum DiagnosticsSelection: Hashable {
-    case overview, crashes, widget(String)
+    case overview, crashes, feedback, widget(String)
 }
 
 struct DiagnosticsView: View {
@@ -112,6 +112,8 @@ struct DiagnosticsView: View {
                 }
                 if editor.diagnosticSelection == .crashes {
                     CrashesView(crashes: store.crashReports)
+                } else if editor.diagnosticSelection == .feedback {
+                    FeedbackView(store: store, feedback: $editor.feedback)
                 } else if let widget = widgets.first(where: { $0.id == selectedID }) {
                     details(widget)
                 } else {
@@ -148,6 +150,7 @@ struct DiagnosticsView: View {
                 Image(systemName: "exclamationmark.octagon")
             }
             .tag(DiagnosticsSelection.crashes)
+            Label("Send feedback", systemImage: "text.bubble").foregroundStyle(.primary).tag(DiagnosticsSelection.feedback)
             ForEach(widgets.sorted { needingAttention.contains($0.id) && !needingAttention.contains($1.id) }) { widget in
                 let status = store.widgetStatus(for: widget)
                 Label {
@@ -227,7 +230,7 @@ struct DiagnosticsView: View {
                             reportNotice = "Bug report copied. Check it, then paste it into a GitHub issue."
                         }
                     }
-                    Button("Report on GitHub…") { makeReport { NSWorkspace.shared.open($0.issueURL()) } }
+                    Button("Send feedback…") { editor.diagnosticSelection = .feedback }
                     if reportTask != nil { ProgressView().controlSize(.small) }
                 }
                 .disabled(reportTask != nil)
@@ -235,7 +238,7 @@ struct DiagnosticsView: View {
             } header: {
                 SettingsSectionTitle("Report a problem")
             } footer: {
-                Text("The report lists StableBar's version, macOS, your displays, access, theme, packages, problems and crashes from the last 30 days, with your home folder written as ~ and no configuration values. Report on GitHub opens the bug report form with it filled in, for you to check before submitting.")
+                Text("The report lists StableBar's version, macOS, your displays, access, theme, packages, problems and crashes from the last 30 days, with your home folder written as ~ and no configuration values. Send feedback adds it to a bug report for GitHub, for you to check before sending.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

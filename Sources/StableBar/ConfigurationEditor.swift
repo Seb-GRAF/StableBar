@@ -34,6 +34,7 @@ final class ConfigurationEditor {
     var selectedPackageID: String?
     /// What Status shows; nil is the overview of every widget.
     var diagnosticSelection: DiagnosticsSelection? = .overview
+    var feedback = Feedback()
     var selectedProfileName: String?
     var search = ""
     var searchTarget: String?
@@ -102,6 +103,13 @@ final class ConfigurationEditor {
         finishEditing()
         searchTarget = nil
         diagnosticSelection = .crashes
+        section = .diagnostics
+    }
+
+    func showFeedback() {
+        finishEditing()
+        searchTarget = nil
+        diagnosticSelection = .feedback
         section = .diagnostics
     }
 

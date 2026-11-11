@@ -46,7 +46,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .library: ("Installed packages", .packages, "Packages › Installed", "package version update uninstall settings credentials local folder built-in")
         case .store: ("Get widgets and themes from the Store", .packages, "Packages › Store", "store install download")
         case .packageSources: ("Package sources", .packages, "Packages › Sources", "private team company source repository index token gitlab github")
-        case .status: ("Status and troubleshooting", .diagnostics, "Status", "diagnostics error failed refresh snapshot event crash quit unexpectedly report bug issue")
+        case .status: ("Status and troubleshooting", .diagnostics, "Status", "diagnostics error failed refresh snapshot event crash quit unexpectedly report bug issue feedback idea")
         }
     }
 

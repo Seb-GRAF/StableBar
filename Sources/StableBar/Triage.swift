@@ -72,13 +72,18 @@ struct TriageFacts {
 enum Triage {
     static let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "StableBar/triage")
 
-    @MainActor static func run(configuration: URL, agent requested: TriageAgent?, model: String?) throws {
+    @MainActor static func run(configuration: URL, agent requested: TriageAgent?, model: String?, notes: URL?) throws {
         let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
         let terminal = isatty(STDIN_FILENO) == 1 && isatty(STDOUT_FILENO) == 1
         let selected = try choose(from: TriageAgent.installed(path: path), requested: requested, ask: terminal ? { agents in
             try pick(from: agents, read: { readLine() }, write: { print($0, terminator: ""); fflush(stdout) })
         } : nil)
         let files = try writeContextInHelper(configuration: configuration)
+        let notesFile = try notes.map { notes in
+            let copy = files.prompt.deletingLastPathComponent().appending(path: "notes.md")
+            try FileManager.default.copyItem(at: notes, to: copy)
+            return copy
+        }
         guard let selected else {
             print("""
             Neither claude nor codex was found on PATH.
@@ -91,9 +96,23 @@ enum Triage {
             """)
             return
         }
-        print("Starting \(selected.agent.label). It will ask what is going on.\n")
+        print("Starting \(selected.agent.label). \(notesFile == nil ? "It will ask what is going on." : "It starts from your notes.")\n")
         fflush(stdout)
-        try launch(selected, arguments: arguments(model: model, promptFile: files.prompt), in: files.prompt.deletingLastPathComponent())
+        try launch(selected, arguments: arguments(model: model, promptFile: files.prompt, notesFile: notesFile),
+                   in: files.prompt.deletingLastPathComponent())
+    }
+
+    /// Opens Terminal on `StableBar triage` with `agent`, starting from `notes`. Terminal runs a `.command` file, so macOS
+    /// doesn't ask for Automation access.
+    static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let notesFile = folder.appending(path: "notes.md"), script = folder.appending(path: "triage.command")
+        try Data(notes.utf8).write(to: notesFile)
+        let command = [Bundle.main.executableURL!.path, "--config", configuration.path, "triage", "--agent", agent.rawValue,
+                       "--notes", notesFile.path]
+        try Data("#!/bin/sh\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8).write(to: script)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        NSWorkspace.shared.open(script)
     }
 
     /// The arguments of the copy of this command that writes the context: `StableBar --config PATH --triage-context`.
@@ -178,13 +197,15 @@ enum Triage {
     }
 
     /// The whole launch argument. The playbook stays in `prompt.md` so the command line stays one short line.
-    static func launchPrompt(promptFile: URL) -> String {
-        #"Read the file "\#(promptFile.path)" and follow its instructions exactly: it is your StableBar triage playbook, and it starts with asking the user what is going on."#
+    static func launchPrompt(promptFile: URL, notesFile: URL?) -> String {
+        let playbook = #"Read the file "\#(promptFile.path)" and follow its instructions exactly: it is your StableBar triage playbook"#
+        guard let notesFile else { return playbook + ", and it starts with asking the user what is going on." }
+        return playbook + #". The user already wrote what is going on in "\#(notesFile.path)": read it instead of asking, then ask only for what it leaves out."#
     }
 
     /// `claude` and `codex` both take `--model` and an opening prompt.
-    static func arguments(model: String?, promptFile: URL) -> [String] {
-        (model.map { ["--model", $0] } ?? []) + [launchPrompt(promptFile: promptFile)]
+    static func arguments(model: String?, promptFile: URL, notesFile: URL?) -> [String] {
+        (model.map { ["--model", $0] } ?? []) + [launchPrompt(promptFile: promptFile, notesFile: notesFile)]
     }
 
     static func seedPrompt(contextFile: URL) -> String {

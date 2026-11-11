@@ -85,8 +85,8 @@ struct StableBarApp {
                     exit(report.failures > 0 ? 1 : 0)
                 }
                 NSApplication.shared.run()
-            case let .triage(url, agent, model):
-                try Triage.run(configuration: url, agent: agent, model: model)
+            case let .triage(url, agent, model, notes):
+                try Triage.run(configuration: url, agent: agent, model: model, notes: notes)
             case let .triageContext(url):
                 print(try Triage.writeContext(configuration: url).path)
             case let .report(url):
@@ -501,6 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         addItem("Getting Started…", action: #selector(showSetup), to: menu)
         addItem("User Guide", action: #selector(showUserGuide), to: menu)
+        addItem("Send Feedback…", action: #selector(showFeedback), to: menu)
         if let update = store.update {
             menu.addItem(withTitle: "Check for Updates…", action: #selector(AppUpdate.checkForUpdates), keyEquivalent: "").target = update
         }
@@ -527,6 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showCustomization() { customization.show(store: store) }
     @objc private func showCrashes() { customization.showCrashes(store: store) }
+    @objc func showFeedback() { customization.showFeedback(store: store) }
     @objc func showStatus() { customization.show(store: store, section: .diagnostics) }
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func tryThemes() {

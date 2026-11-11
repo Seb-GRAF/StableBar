@@ -11,7 +11,7 @@ enum LaunchCommand {
     case buildSource(packages: URL, output: URL, previous: URL?, url: URL?, name: String?)
     case renderDocsImages(URL)
     case renderScenes(output: URL, scenes: [URL])
-    case triage(URL, agent: TriageAgent?, model: String?)
+    case triage(URL, agent: TriageAgent?, model: String?, notes: URL?)
     case triageContext(URL)
     case report(URL)
     case uninstall(removesConfiguration: Bool, showsMenuBar: Bool, confirmed: Bool)
@@ -37,7 +37,7 @@ enum LaunchCommand {
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
            StableBar [--config PATH] --enable-package ID VERSION [--persist]
            StableBar [--config PATH] --uninstall-package ID VERSION
-           StableBar [--config PATH] triage [--agent claude|codex] [--model MODEL]
+           StableBar [--config PATH] triage [--agent claude|codex] [--model MODEL] [--notes FILE]
            StableBar [--config PATH] --report
            StableBar --uninstall [--remove-config] [--show-menu-bar] [--yes]
            StableBar --help
@@ -155,12 +155,12 @@ enum LaunchCommand {
         }
     }
 
-    /// `--agent` and `--model`, each at most once, in any order.
+    /// `--agent`, `--model` and `--notes`, each at most once, in any order.
     private static func triage(_ url: URL, _ arguments: [String]) throws -> LaunchCommand {
         var options: [String: String] = [:]
         var rest = arguments[...]
         while let flag = rest.popFirst() {
-            guard ["--agent", "--model"].contains(flag), options[flag] == nil, let value = rest.popFirst() else {
+            guard ["--agent", "--model", "--notes"].contains(flag), options[flag] == nil, let value = rest.popFirst() else {
                 throw CommandFailure(message: Self.usage)
             }
             options[flag] = value
@@ -169,7 +169,7 @@ enum LaunchCommand {
             guard let agent = TriageAgent(rawValue: name) else { throw CommandFailure(message: "--agent takes claude or codex.") }
             return agent
         }
-        return .triage(url, agent: agent, model: options["--model"])
+        return .triage(url, agent: agent, model: options["--model"], notes: options["--notes"].map { URL(filePath: $0) })
     }
 
     /// `PACKAGES OUT`, then `--previous FILE`, `--url URL` and `--name NAME` in any order. A join link needs both `--url` and `--name`.

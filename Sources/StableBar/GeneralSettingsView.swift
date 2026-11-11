@@ -121,6 +121,9 @@ struct GeneralSettingsView: View {
                         SettingRow(title: "User guide") {
                             Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md")!) }
                         }
+                        SettingRow(title: "Send feedback", hint: "Report a problem or suggest an idea.") {
+                            Button("Open…", action: editor.showFeedback)
+                        }
                         SettingRow(title: "Star on GitHub", hint: "A star helps other people find StableBar.") {
                             Button("Open") { NSWorkspace.shared.open(StarRequest.repository) }
                         }
