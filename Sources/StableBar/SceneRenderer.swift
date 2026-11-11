@@ -226,6 +226,7 @@ enum SceneRenderer {
         system.calendarAccess = { setup.calendars ? .fullAccess : .notDetermined }
         system.defaults = defaults
         system.workspaceSource = { $0 ?? .spaces }
+        system.windowManagerRuns = { false }
         system.hasBattery = { setup.battery }
         system.hasNotchedDisplay = { setup.notch }
         system.isInApplications = { setup.inApplications }
