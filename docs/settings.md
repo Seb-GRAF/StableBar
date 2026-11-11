@@ -57,7 +57,7 @@ Opening Status does not resume a hidden provider. **Resume for testing** keeps a
 
 - **Open on GitHub…** fills in the issue form in your browser; nothing is sent until you submit it. When your answers are too long for the form's address, it turns off: post or copy them instead.
 - **Post as @account…** appears when the [GitHub CLI](https://cli.github.com) (`gh`) is installed and signed in. Once every question is answered and you confirm, it posts the issue as that account and links to it.
-- **Investigate with Claude Code…** or **Codex…** appears when that coding agent is on your `PATH`. It opens Terminal on [`StableBar triage`](command-line.md#triage), which starts from what you wrote, looks into the problem on your Mac and asks before posting anything.
+- **Investigate with Claude Code…** or **Codex…** appears when that coding agent is on your `PATH`. It opens [`StableBar triage`](command-line.md#triage) in your default terminal, which starts from what you wrote, looks into the problem on your Mac and asks before posting anything. That's the app macOS opens Unix executables with: Terminal, unless you chose another, for example with **Make iTerm2 Default Term** in iTerm2's menu.
 - **Copy** copies the title and answers as Markdown.
 
 What you write stays in Send feedback until StableBar quits, and clears once it's posted with the GitHub CLI.

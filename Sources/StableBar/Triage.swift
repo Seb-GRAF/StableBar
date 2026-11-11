@@ -102,18 +102,22 @@ enum Triage {
                    in: files.prompt.deletingLastPathComponent())
     }
 
-    /// Opens Terminal on `StableBar triage` with `agent`, starting from `notes`. Terminal runs a `.command` file, so macOS
-    /// doesn't ask for Automation access.
-    static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws {
+    /// Opens `StableBar triage` with `agent`, starting from `notes`, in the app that opens Unix executables, and returns
+    /// that app's name. Opening a file doesn't need Automation access. The script has no `.command` extension: making
+    /// iTerm the default terminal changes the app for Unix executables, while `.command` files stay with Terminal.
+    static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws -> String {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let id = UUID().uuidString
-        let notesFile = folder.appending(path: "notes-\(id).md"), script = folder.appending(path: "triage-\(id).command")
+        let notesFile = folder.appending(path: "notes-\(id).md"), script = folder.appending(path: "triage-\(id)")
         try Data(notes.utf8).write(to: notesFile)
         let command = [Bundle.main.executableURL!.path, "--config", configuration.path, "triage", "--agent", agent.rawValue,
                        "--notes", notesFile.path]
         try Data("#!/bin/sh\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        guard NSWorkspace.shared.open(script) else { throw CommandFailure(message: "macOS couldn't open \(script.path).") }
+        guard let terminal = NSWorkspace.shared.urlForApplication(toOpen: script), NSWorkspace.shared.open(script) else {
+            throw CommandFailure(message: "macOS couldn't open \(script.path).")
+        }
+        return terminal.deletingPathExtension().lastPathComponent
     }
 
     /// The arguments of the copy of this command that writes the context: `StableBar --config PATH --triage-context`.
