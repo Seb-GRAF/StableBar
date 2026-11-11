@@ -119,7 +119,7 @@ enum CommandLineTool {
         return values?.isRegularFile == true && FileManager.default.isExecutableFile(atPath: url.path)
     }
 
-    private static func quoted(_ text: String) -> String {
+    static func quoted(_ text: String) -> String {
         "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

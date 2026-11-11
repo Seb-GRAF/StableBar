@@ -227,7 +227,10 @@ struct DiagnosticsView: View {
                             reportNotice = "Bug report copied. Check it, then paste it into a GitHub issue."
                         }
                     }
-                    Button("Report on GitHub…") { makeReport { NSWorkspace.shared.open($0.issueURL()) } }
+                    Button("Send feedback…") {
+                        if !editor.postingFeedback { editor.feedback.kind = .bug }
+                        editor.showFeedback()
+                    }
                     if reportTask != nil { ProgressView().controlSize(.small) }
                 }
                 .disabled(reportTask != nil)
@@ -235,7 +238,7 @@ struct DiagnosticsView: View {
             } header: {
                 SettingsSectionTitle("Report a problem")
             } footer: {
-                Text("The report lists StableBar's version, macOS, your displays, access, theme, packages, problems and crashes from the last 30 days, with your home folder written as ~ and no configuration values. Report on GitHub opens the bug report form with it filled in, for you to check before submitting.")
+                Text("The report lists StableBar's version, macOS, your displays, access, theme, packages, problems and crashes from the last 30 days, with your home folder written as ~ and no configuration values. Send feedback adds it to a bug report for GitHub, for you to check before sending.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

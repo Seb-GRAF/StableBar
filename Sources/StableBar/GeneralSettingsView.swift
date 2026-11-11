@@ -118,18 +118,6 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .id(SettingsSearchResult.updates.id)
-                    SettingsGroup("Help") {
-                        SettingRow(title: "Run setup again") {
-                            Button("Open setup…") { NSApp.sendAction(#selector(AppDelegate.showSetup), to: NSApp.delegate, from: nil) }
-                        }
-                        SettingRow(title: "User guide") {
-                            Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md")!) }
-                        }
-                        SettingRow(title: "Star on GitHub", hint: "A star helps other people find StableBar.") {
-                            Button("Open") { NSWorkspace.shared.open(StarRequest.repository) }
-                        }
-                    }
-                    .id(SettingsSearchResult.help.id)
                     SettingsGroup("Uninstall") {
                         UninstallSettings(store: store)
                     }
