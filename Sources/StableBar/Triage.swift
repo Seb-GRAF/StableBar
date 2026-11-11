@@ -102,9 +102,8 @@ enum Triage {
                    in: files.prompt.deletingLastPathComponent())
     }
 
-    /// Opens `StableBar triage` with `agent`, starting from `notes`, in the app that opens Unix executables, and returns
-    /// that app's name. Opening a file doesn't need Automation access. The script has no `.command` extension: making
-    /// iTerm the default terminal changes the app for Unix executables, while `.command` files stay with Terminal.
+    /// Returns the name of the app that opened the script: the app for Unix executables, since `.command` files stay with
+    /// Terminal even when iTerm is the default terminal. Opening a file doesn't need Automation access.
     static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws -> String {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let id = UUID().uuidString
