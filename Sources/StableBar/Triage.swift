@@ -90,7 +90,7 @@ enum Triage {
 
             The triage prompt and the facts about this Mac were written to:
               \(files.prompt.path)
-              \(files.context.path)
+              \(files.context.path)\(notesFile.map { "\n  \($0.path)" } ?? "")
 
             Paste the prompt file into any coding agent to run triage by hand.
             """)
