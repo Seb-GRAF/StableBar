@@ -163,7 +163,7 @@ enum SceneRenderer {
             try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark,
                                 accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
         case .update:
-            store.update = AppUpdate.sample()
+            store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
                                 dark: dark, accessibilityDisplay: [], settle: settle, to: url)
@@ -209,6 +209,9 @@ enum SceneRenderer {
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+        case .accessibilityGuide:
+            try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
+                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),

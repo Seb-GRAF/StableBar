@@ -4,7 +4,7 @@ import Foundation
 /// `StableBar --render-scenes` reads these from `scenes/`, and scene.schema.json describes them. A scene
 /// runs nothing: commands, providers and window managers are replaced by the samples it gives.
 struct SceneFile: Decodable {
-    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup }
+    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages }
@@ -16,6 +16,17 @@ struct SceneFile: Decodable {
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
+    enum StarRequestLine: String, Decodable, CaseIterable {
+        case repository, gitHubCLI, thanked
+
+        var state: StarRequest.State {
+            switch self {
+            case .repository: .repository
+            case .gitHubCLI: .gitHubCLI(account: "octocat")
+            case .thanked: .thanked(account: "octocat")
+            }
+        }
+    }
     /// A setting in System Settings → Accessibility → Display.
     enum AccessibilityDisplay: String, Decodable, CaseIterable { case increaseContrast, reduceTransparency }
     /// The configuration inline, or the path of a configuration file relative to the scene file.
@@ -45,6 +56,8 @@ struct SceneFile: Decodable {
     var tab: Tab?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
+    /// The star request the update popup shows, for `update`.
+    var starRequest: StarRequestLine?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
     /// A move row outside Applications, for setup or Settings → General.
@@ -57,8 +70,9 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall,
-             setup, applicationMove, appearances, accessibilityDisplay, width, height
+        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
+             applicationMove, appearances,
+             accessibilityDisplay, width, height
     }
 
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
@@ -139,6 +153,7 @@ struct SceneFile: Decodable {
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
+        starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
         applicationMove = try values.decodeIfPresent(ApplicationMove.self, forKey: .applicationMove)
         if applicationMove != nil, draw != .setup && !(draw == .settings && section == .general) {
@@ -171,6 +186,9 @@ struct SceneFile: Decodable {
         }
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
+        }
+        if starRequest != nil, draw != .update {
+            throw DecodingError.dataCorruptedError(forKey: .starRequest, in: values, debugDescription: "starRequest belongs to an update scene.")
         }
         if setup != nil, draw != .setup {
             throw DecodingError.dataCorruptedError(forKey: .setup, in: values, debugDescription: "setup belongs to a setup scene.")

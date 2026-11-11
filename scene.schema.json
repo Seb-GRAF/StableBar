@@ -62,8 +62,8 @@
       }
     },
     "draw": {
-      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add.",
-      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup"]
+      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add. `accessibilityGuide` draws the panel that asks people to drag StableBar into the Accessibility list in System Settings.",
+      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup", "accessibilityGuide"]
     },
     "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
     "section": {
@@ -74,6 +74,10 @@
     "uninstall": {
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",
       "enum": ["confirm", "failed"]
+    },
+    "starRequest": {
+      "description": "For `update`: the popup's star request, opening the repository, starring through a signed-in GitHub CLI, or thanking for the star. Opening the repository by default.",
+      "enum": ["repository", "gitHubCLI", "thanked"]
     },
     "setup": {
       "description": "For `setup`: the step to draw, the choices made before it, and what setup reads from the Mac, pinned so the drawing doesn't depend on the Mac that draws it. Every key is optional.",

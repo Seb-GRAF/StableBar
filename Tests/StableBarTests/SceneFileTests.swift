@@ -107,6 +107,13 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(decoded.tab == .placement)
 }
 
+@Test func sceneDrawsTheUpdatePopupsStarRequest() throws {
+    #expect(try scene(#"{"configuration": {}, "draw": "update", "starRequest": "thanked"}"#).starRequest == .thanked)
+    #expect(try scene(#"{"configuration": {}, "draw": "update"}"#).starRequest == nil)
+    #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", "starRequest": "thanked"}"#) }
+    #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "update", "starRequest": "starred"}"#) }
+}
+
 @Test func sceneRejectsAnUnknownDraw() {
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "window"}"#) }
 }
@@ -172,6 +179,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(properties["tab"]) == Set(SceneFile.Tab.allCases.map(\.rawValue)))
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
     #expect(choices(properties["accessibilityDisplay"]) == Set(SceneFile.AccessibilityDisplay.allCases.map(\.rawValue)))
+    #expect(choices(properties["starRequest"]) == Set(SceneFile.StarRequestLine.allCases.map(\.rawValue)))
     #expect(choices(properties["applicationMove"]) == Set(SceneFile.ApplicationMove.allCases.map(\.rawValue)))
     guard case let .object(setup)? = properties["setup"], case let .object(setupProperties)? = setup["properties"] else {
         Issue.record("scene.schema.json describes no setup properties"); return
