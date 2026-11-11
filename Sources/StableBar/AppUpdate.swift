@@ -50,10 +50,10 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         updater = makeUpdater(self, self)
     }
 
-    /// StableBar 0.11.0 offered to 0.10.0, with its release notes and a due star request. It checks, loads
+    /// StableBar 0.11.0 offered to 0.10.0, with its release notes and the star request in `star`. It checks, loads
     /// and saves nothing: the scenes' sample.
-    static func sample() -> AppUpdate {
-        let update = AppUpdate(starRequest: StarRequest(start: .distantPast))
+    static func sample(star: StarRequest.State = .repository) -> AppUpdate {
+        let update = AppUpdate(starRequest: StarRequest(sample: star))
         let changes = ["show keyboard shortcuts in app menus",
                        "open the Apple menu, System Settings or the lock screen from the Apple logo",
                        "use the lighthouse logo across the app and website"]
@@ -183,6 +183,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
             reply(.install)
         } else {
             self.reply = reply
+            Task { await starRequest.refresh() }
         }
     }
 
@@ -290,7 +291,7 @@ struct UpdateDetails: View {
             }
             .foregroundStyle(.secondary)
             Divider()
-            if update.starRequest.isDue() {
+            if update.starRequest.isShown {
                 StarRequestLine(request: update.starRequest, appearance: appearance)
             }
             VStack(spacing: 8) {
@@ -332,6 +333,7 @@ struct UpdateDetails: View {
                 if !Task.isCancelled { notesError = "Earlier release notes could not be loaded." }
             }
         }
+        .task { await update.starRequest.refresh() }
     }
 }
 

@@ -41,6 +41,14 @@ extension Task {
     }
 }
 
+/// The first executable file called `name` in the directories of `path`, a `PATH` value.
+func executableFile(named name: String, path: String) -> URL? {
+    path.split(separator: ":").lazy.map { URL(filePath: String($0)).appending(path: name) }.first {
+        FileManager.default.isExecutableFile(atPath: $0.path)
+            && (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
+    }
+}
+
 struct CommandFailure: LocalizedError {
     let message: String
     var stdout = Data()

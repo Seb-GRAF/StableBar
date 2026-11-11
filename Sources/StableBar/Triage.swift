@@ -11,7 +11,7 @@ enum TriageAgent: String, CaseIterable, Sendable {
     /// The agents with an executable on `path`, a colon-separated search path.
     static func installed(path: String) -> [InstalledTriageAgent] {
         allCases.compactMap { agent in
-            Triage.executable(named: agent.rawValue, path: path).map { InstalledTriageAgent(agent: agent, executable: $0) }
+            executableFile(named: agent.rawValue, path: path).map { InstalledTriageAgent(agent: agent, executable: $0) }
         }
     }
 }
@@ -52,10 +52,10 @@ struct TriageFacts {
             system: MacFacts.system,
             mac: MacFacts.mac,
             displays: MacFacts.displays,
-            aerospace: Triage.executable(named: "aerospace", path: path)?.path,
-            yabai: Triage.executable(named: "yabai", path: path)?.path,
+            aerospace: executableFile(named: "aerospace", path: path)?.path,
+            yabai: executableFile(named: "yabai", path: path)?.path,
             omniwm: WorkspaceSource.omniwm.executable(path: path),
-            rift: Triage.executable(named: "rift-cli", path: path)?.path,
+            rift: executableFile(named: "rift-cli", path: path)?.path,
             processes: NSRunningApplication.runningApplications(withBundleIdentifier: "org.stablebar.app")
                 .filter { $0.processIdentifier != getpid() }
                 .map { "pid \($0.processIdentifier), \($0.bundleURL?.path ?? "unknown app")" },
@@ -156,13 +156,6 @@ enum Triage {
             }
             if let number = Int(answer), agents.indices.contains(number - 1) { return agents[number - 1] }
             if let agent = agents.first(where: { $0.rawValue == answer }) { return agent }
-        }
-    }
-
-    static func executable(named name: String, path: String) -> URL? {
-        path.split(separator: ":").lazy.map { URL(filePath: String($0)).appending(path: name) }.first {
-            FileManager.default.isExecutableFile(atPath: $0.path)
-                && (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
         }
     }
 

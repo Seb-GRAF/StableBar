@@ -1,0 +1,6 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "update",
+  "starRequest": "thanked"
+}
