@@ -242,7 +242,9 @@ private struct BarContextMenu: View {
         Button("Try Themes…") { store.onTryThemes?(display) }
         let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
         if error != nil || store.crashReports.note != nil { Divider() }
-        if let error { Text(error) }
+        if let error {
+            Button(AppDelegate.menuTitle(error: error)) { NSApp.sendAction(#selector(AppDelegate.showStatus), to: NSApp.delegate, from: nil) }
+        }
         if let note = store.crashReports.note { Button(note) { store.onShowCrashes?() } }
         Divider()
         Button("Settings…") { store.onCustomize?() }
