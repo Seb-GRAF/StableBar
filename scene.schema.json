@@ -119,6 +119,12 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "accessibilityDisplay": {
+      "description": "For `bar` and `popup`: the settings of System Settings → Accessibility → Display to draw with. The others are off, whatever the Mac that draws has. macOS turns on Reduce transparency with Increase contrast, so list both to draw what a Mac with Increase contrast shows.",
+      "type": "array",
+      "items": { "enum": ["increaseContrast", "reduceTransparency"] },
+      "uniqueItems": true
+    },
     "width": { "description": "The image's width in points.", "type": "number", "minimum": 100, "maximum": 4000 },
     "height": { "description": "The image's height in points.", "type": "number", "minimum": 20, "maximum": 4000 }
   }

@@ -1,0 +1,10 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "glass": { "enabled": true } },
+    "widgets": [{ "id": "clock", "type": "clock", "position": "right", "details": true }]
+  },
+  "accessibilityDisplay": ["increaseContrast", "reduceTransparency"],
+  "draw": "popup",
+  "widget": "clock"
+}

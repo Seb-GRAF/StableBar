@@ -226,7 +226,7 @@ struct BarEditSectionRow: View {
                                      groups: config.groups)
             ForEach(units) { unit in
                 let collapsed = editing.isCollapsed(unit.widgets[0].id, on: display.id, position: position)
-                BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
+                BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
                     ForEach(unit.widgets) { widget in
                         if let entry = entries.first(where: { $0.id == widget.id }) {
                             BarEditTile(store: store, display: display.id, kind: ScreenKind(display), entry: entry, config: config)

@@ -346,7 +346,7 @@ struct BarUnitView: View {
             Color.clear.frame(minWidth: unit.widgets[0].style.minWidth ?? 0,
                               idealWidth: unit.widgets[0].style.minWidth ?? 0, maxWidth: .infinity, minHeight: 1)
         } else {
-            BarUnitSurface(style: unit.style ?? WidgetStyle(), spacing: config.bar.spacing) {
+            BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
                 ForEach(unit.widgets) { widget in
                     WidgetView(widget: widget, defaults: config.defaults, popupDefaults: config.popupDefaults, store: store,
                                monitor: display, defaultAnimation: config.bar.animation, defaultTransition: config.bar.motion.transition)
@@ -361,8 +361,10 @@ struct BarUnitView: View {
 /// The same group spacing and surface wrap normal widgets and their edit decorations.
 struct BarUnitSurface<Content: View>: View {
     let style: WidgetStyle
+    let defaults: WidgetStyle
     let spacing: Double
     @ViewBuilder let content: () -> Content
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         let surface = HStack(spacing: style.spacing ?? spacing, content: content)
@@ -374,11 +376,21 @@ struct BarUnitSurface<Content: View>: View {
         if let flare = style.flare {
             surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
         } else {
+            let outlined = contrast == .increased && style.background != nil
+            let appearance = WidgetAppearance(WidgetStyle(), defaults: defaults)
             surface
                 .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
                 .overlay {
-                    RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
-                        .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                    if outlined {
+                        // As in WidgetView, a RoundedRectangle's border would get stray marks at the ends of a pill offscreen.
+                        let radius = style.cornerRadius ?? 0
+                        UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius,
+                                               topTrailingRadius: radius)
+                            .strokeBorder(appearance.foreground, lineWidth: max(style.borderWidth ?? 1, 1))
+                    } else {
+                        RoundedRectangle(cornerRadius: style.cornerRadius ?? 0)
+                            .strokeBorder(style.borderColor?.color ?? .clear, lineWidth: style.borderWidth ?? 0)
+                    }
                 }
         }
     }
@@ -435,6 +447,7 @@ struct WidgetView: View {
     @State private var hovered = false
     @State private var popupAnchor = NSView()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
@@ -641,8 +654,16 @@ struct WidgetView: View {
         .modifier(GlassBackground(fill: style.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.widgets,
                                   shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {
-            RoundedRectangle(cornerRadius: appearance.cornerRadius)
-                .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            if contrast == .increased && style.background != nil {
+                // SwiftUI draws a RoundedRectangle's border as a layer border, which drawing offscreen, as the scenes do, gives
+                // stray marks at the ends of a pill.
+                let radius = appearance.cornerRadius
+                UnevenRoundedRectangle(topLeadingRadius: radius, bottomLeadingRadius: radius, bottomTrailingRadius: radius, topTrailingRadius: radius)
+                    .strokeBorder(appearance.foreground, lineWidth: max(appearance.borderWidth, 1))
+            } else {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius)
+                    .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
+            }
         }
         .overlay(alignment: .topTrailing) {
             if let error = store.scripts[widget.id]?.error ?? store.actionErrors[widget.id] {
