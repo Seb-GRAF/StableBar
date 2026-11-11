@@ -79,12 +79,8 @@ struct SourcePermissionList: View {
 
 @MainActor
 func requestAccessibility() {
-    if UserDefaults.standard.bool(forKey: "promptedForAccessibility") {
-        openPrivacyPane("Privacy_Accessibility")
-    } else {
-        UserDefaults.standard.set(true, forKey: "promptedForAccessibility")
-        AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary)
-    }
+    openPrivacyPane("Privacy_Accessibility")
+    accessibilityGuide.show()
 }
 
 @MainActor
