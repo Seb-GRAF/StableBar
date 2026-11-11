@@ -157,7 +157,7 @@ struct FeedbackView: View {
             } header: {
                 SettingsSectionTitle("Send")
             } footer: {
-                Text("Open on GitHub fills in the issue form in your browser, and nothing is sent until you submit it. Post uses the GitHub CLI after you confirm. Investigate opens Terminal on StableBar triage: a coding agent looks into it and asks before posting anything.")
+                Text("Open on GitHub fills in the issue form in your browser, and nothing is sent until you submit it. Post uses the GitHub CLI after you confirm. Investigate opens StableBar triage in your default terminal: a coding agent looks into it and asks before posting anything.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             .disabled(editor.feedback.kind == .bug && editor.feedback.report == nil)
@@ -237,10 +237,10 @@ struct FeedbackView: View {
 
     private func investigate(_ agent: TriageAgent) {
         do {
-            try Triage.openInTerminal(agent, configuration: store.configurationURL, notes: editor.feedback.markdown)
-            notice = "\(agent.label) is starting in Terminal."
+            let terminal = try Triage.openInTerminal(agent, configuration: store.configurationURL, notes: editor.feedback.markdown)
+            notice = "\(agent.label) is starting in \(terminal)."
         } catch {
-            notice = "Couldn't open Terminal: \(error.localizedDescription)"
+            notice = "Couldn't open a terminal: \(error.localizedDescription)"
         }
     }
 }

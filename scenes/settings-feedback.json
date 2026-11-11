@@ -3,5 +3,5 @@
   "configuration": "../Resources/config.json",
   "draw": "settings",
   "section": "feedback",
-  "height": 1100
+  "height": 1260
 }

@@ -102,18 +102,23 @@ enum Triage {
                    in: files.prompt.deletingLastPathComponent())
     }
 
-    /// Opens Terminal on `StableBar triage` with `agent`, starting from `notes`. Terminal runs a `.command` file, so macOS
-    /// doesn't ask for Automation access.
-    static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws {
+    /// Returns the name of the app that opened the script: the app for Unix executables, since `.command` files stay with
+    /// Terminal even when iTerm is the default terminal. Opening a file doesn't need Automation access.
+    static func openInTerminal(_ agent: TriageAgent, configuration: URL, notes: String) throws -> String {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let id = UUID().uuidString
-        let notesFile = folder.appending(path: "notes-\(id).md"), script = folder.appending(path: "triage-\(id).command")
+        let notesFile = folder.appending(path: "notes-\(id).md"), script = folder.appending(path: "triage-\(id)")
         try Data(notes.utf8).write(to: notesFile)
         let command = [Bundle.main.executableURL!.path, "--config", configuration.path, "triage", "--agent", agent.rawValue,
                        "--notes", notesFile.path]
-        try Data("#!/bin/sh\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8).write(to: script)
+        // Some terminals run the script without a login shell. `zsh -l` gives the agent the environment
+        // `readLoginShellEnvironment` found it in.
+        try Data("#!/bin/zsh -l\nexec \(command.map(CommandLineTool.quoted).joined(separator: " "))\n".utf8).write(to: script)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
-        guard NSWorkspace.shared.open(script) else { throw CommandFailure(message: "macOS couldn't open \(script.path).") }
+        guard let terminal = NSWorkspace.shared.urlForApplication(toOpen: script), NSWorkspace.shared.open(script) else {
+            throw CommandFailure(message: "macOS couldn't open \(script.path).")
+        }
+        return terminal.deletingPathExtension().lastPathComponent
     }
 
     /// The arguments of the copy of this command that writes the context: `StableBar --config PATH --triage-context`.
