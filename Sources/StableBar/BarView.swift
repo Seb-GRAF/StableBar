@@ -237,19 +237,28 @@ private struct BarContextMenu: View {
     let display: Int
 
     var body: some View {
-        Text("StableBar")
-        if store.barEditing.isAvailable { Button(store.barEditing.menuTitle, action: store.barEditing.toggle) }
-        Button("Try Themes…") { store.onTryThemes?(display) }
-        let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
-        if error != nil || store.crashReports.note != nil { Divider() }
-        if let error {
-            Button(AppDelegate.menuTitle(error: error)) { NSApp.sendAction(#selector(AppDelegate.showStatus), to: NSApp.delegate, from: nil) }
+        Group {
+            Label { Text("StableBar") } icon: { if let heading = MenuIcon.heading { Image(nsImage: heading) } }
+            if store.barEditing.isAvailable { item(store.barEditing.menuTitle, store.barEditing.menuIcon, action: store.barEditing.toggle) }
+            item("Try Themes…", .themes) { store.onTryThemes?(display) }
+            let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
+            if error != nil || store.crashReports.note != nil { Divider() }
+            if let error {
+                item(AppDelegate.menuTitle(error: error), .problem) {
+                    NSApp.sendAction(#selector(AppDelegate.showStatus), to: NSApp.delegate, from: nil)
+                }
+            }
+            if let note = store.crashReports.note { item(note, .problem) { store.onShowCrashes?() } }
+            Divider()
+            item("Send Feedback…", .feedback) { NSApp.sendAction(#selector(AppDelegate.showFeedback), to: NSApp.delegate, from: nil) }
+            item("Settings…", .settings) { store.onCustomize?() }
+            item("Quit StableBar", .quit) { NSApp.terminate(nil) }
         }
-        if let note = store.crashReports.note { Button(note) { store.onShowCrashes?() } }
-        Divider()
-        Button("Send Feedback…") { NSApp.sendAction(#selector(AppDelegate.showFeedback), to: NSApp.delegate, from: nil) }
-        Button("Settings…") { store.onCustomize?() }
-        Button("Quit StableBar") { NSApp.terminate(nil) }
+        .labelStyle(.titleAndIcon)
+    }
+
+    private func item(_ title: String, _ icon: MenuIcon, action: @escaping () -> Void) -> some View {
+        Button(action: action) { Label { Text(title) } icon: { icon.menuImage } }
     }
 }
 

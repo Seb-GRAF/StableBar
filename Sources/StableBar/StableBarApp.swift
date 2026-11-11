@@ -507,33 +507,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuWillOpen(_ menu: NSMenu) {
         menu.removeAllItems()
-        menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "")
+        menu.addItem(withTitle: "StableBar", action: nil, keyEquivalent: "").image = MenuIcon.heading
         menu.addItem(.separator())
         if !panels.isEmpty {
-            if store.barEditing.isAvailable { addItem(store.barEditing.menuTitle, action: #selector(editBar), to: menu) }
-            addItem("Try Themes…", action: #selector(tryThemes), to: menu)
+            if store.barEditing.isAvailable {
+                addItem(store.barEditing.menuTitle, icon: store.barEditing.menuIcon, action: #selector(editBar), to: menu)
+            }
+            addItem("Try Themes…", icon: .themes, action: #selector(tryThemes), to: menu)
             menu.addItem(.separator())
         }
-        addItem("Getting Started…", action: #selector(showSetup), to: menu)
-        addItem("Help…", action: #selector(showHelp), to: menu)
-        addItem("Send Feedback…", action: #selector(showFeedback), to: menu)
+        addItem("Getting Started…", icon: .setup, action: #selector(showSetup), to: menu)
+        addItem("Help…", icon: .help, action: #selector(showHelp), to: menu)
+        addItem("Send Feedback…", icon: .feedback, action: #selector(showFeedback), to: menu)
         if let update = store.update {
-            menu.addItem(withTitle: "Check for Updates…", action: #selector(AppUpdate.checkForUpdates), keyEquivalent: "").target = update
+            addItem("Check for Updates…", icon: .updates, action: #selector(AppUpdate.checkForUpdates), to: menu).target = update
         }
         let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
         let note = store.crashReports.note
         if error != nil || note != nil { menu.addItem(.separator()) }
-        if let error { addItem(Self.menuTitle(error: error), action: #selector(showStatus), to: menu) }
-        if let note { addItem(note, action: #selector(showCrashes), to: menu) }
+        if let error { addItem(Self.menuTitle(error: error), icon: .problem, action: #selector(showStatus), to: menu) }
+        if let note { addItem(note, icon: .problem, action: #selector(showCrashes), to: menu) }
         Task { await store.crashReports.refresh() }
         menu.addItem(.separator())
-        addItem("Settings…", action: #selector(showCustomization), to: menu)
-        addItem("Quit StableBar", action: #selector(quit), to: menu)
+        addItem("Settings…", icon: .settings, action: #selector(showCustomization), to: menu)
+        addItem("Quit StableBar", icon: .quit, action: #selector(quit), to: menu)
     }
 
-    private func addItem(_ title: String, action: Selector, to menu: NSMenu) {
+    @discardableResult
+    private func addItem(_ title: String, icon: MenuIcon, action: Selector, to menu: NSMenu) -> NSMenuItem {
         let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
         item.target = self
+        item.image = icon.image
+        return item
     }
 
     /// Keeps an error's line near the width of the menus' other lines; Settings › Status shows all of it.

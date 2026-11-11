@@ -57,6 +57,7 @@ final class BarEditing {
     }
 
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
+    var menuIcon: MenuIcon { isActive ? .finishEditing : .editBar }
     var isAvailable: Bool { store?.configuration != nil && !setupIsOpen }
     var allowsWidgetActions: Bool { !isActive }
 
