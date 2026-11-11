@@ -1437,6 +1437,8 @@
                 "network",
                 "battery",
                 "audio",
+                "microphone",
+                "camera",
                 "calendar"
               ]
             },
@@ -1775,6 +1777,8 @@
                 "network",
                 "battery",
                 "audio",
+                "microphone",
+                "camera",
                 "calendar"
               ]
             },

@@ -749,6 +749,23 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(DataSourceType.audio.events == [.volumeChange, .outputDeviceChange])
 }
 
+@Test func microphoneAndCameraEventsFollowTheirUse() {
+    func microphone(_ volume: Double, muted: Bool = false, inUse: Bool) -> ScriptOutput {
+        var output = audio(volume, muted: muted, device: "MacBook Pro Microphone")
+        output.fields?["inUse"] = String(inUse)
+        return output
+    }
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: false), to: microphone(0.5, inUse: true))
+            == ["INFO": "50", "MUTED": "false", "IN_USE": "true"])
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: true), to: microphone(0.5, muted: true, inUse: true))
+            == ["INFO": "50", "MUTED": "true", "IN_USE": "true"])
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: true), to: microphone(0.5, inUse: true)) == nil)
+    let off = ScriptOutput(text: "Off", fields: ["inUse": "false"])
+    let on = ScriptOutput(text: "On", fields: ["inUse": "true"])
+    #expect(BuiltInEvent.cameraChange.variables(from: off, to: on) == ["INFO": "true"])
+    #expect(BuiltInEvent.cameraChange.variables(from: on, to: on) == nil)
+}
+
 @Test func theSpeakerShowsMoreWavesAsTheVolumeRises() {
     let levels: [(Double, String)] = [(0, "speaker"), (0.004, "speaker"), (0.01, "speaker.wave.1"), (0.33, "speaker.wave.1"),
                                       (0.34, "speaker.wave.2"), (0.66, "speaker.wave.2"), (0.67, "speaker.wave.3"), (1, "speaker.wave.3")]

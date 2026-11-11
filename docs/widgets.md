@@ -12,7 +12,7 @@
 | `text` | Static text and optional icon | `text` |
 | `script` | Output of a shell command | `command`, `interval` in seconds or `null` for event-only updates |
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
-| `system`, `network`, `battery`, `audio`, `calendar` | Native CPU and memory, network, battery, audio output or calendar data | — |
+| `system`, `network`, `battery`, `audio`, `microphone`, `camera`, `calendar` | Native CPU and memory, network, battery, audio output, microphone, camera or calendar data | — |
 
 **Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, Menu bar items, Battery, Sound, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. App menus, Control Center, Menu bar items and an Apple menu that opens the menu need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces); adding it picks the window manager [as setup does](getting-started.md#install-and-set-up), and macOS Spaces when none is running. Script starts with a clock command you can change through **More → Edit as JSON…**.
 
