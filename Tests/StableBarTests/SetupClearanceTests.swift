@@ -5,7 +5,7 @@ import Testing
 @Suite @MainActor
 struct SetupClearanceTests {
     @Test(arguments: [false, true])
-    func clearanceChoicesWaitUntilSetupFinishes(finish: Bool) throws {
+    func clearanceChoicesWaitUntilSetupFinishes(finish: Bool) async throws {
         let fixture = try ClearanceSetupFixture()
         defer { fixture.close() }
         let store = fixture.store
@@ -32,6 +32,7 @@ struct SetupClearanceTests {
             #expect(updates.last == [true, true])
         } else {
             session.cancel()
+            for _ in 0..<1000 where store.windowClearance.hold != nil { await Task.yield() }
             #expect(updates.allSatisfy { $0 == [false, false] })
             #expect(try Data(contentsOf: fixture.files.url) == saved)
         }
@@ -118,6 +119,23 @@ struct SetupClearanceTests {
             #expect(clearance() == before)
             #expect(updates.allSatisfy { $0 == before })
         }
+    }
+
+    @Test func skipReleasesClearanceOnlyOnceTheMenuBarIsRestored() async throws {
+        let fixture = try ClearanceSetupFixture(configuration: #"{"bar":{"keepWindowsClear":true},"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = fixture.store
+        let system = fixture.system
+        let session = SetupSession(store: store, system: system)
+        await session.place(.belowMenuBar)
+        #expect(!system.menuBarHides())
+        var menuBarHidesOnRelease: [Bool] = []
+        store.onConfigurationChange = { [weak store] in
+            if store?.windowClearance.hold == nil { menuBarHidesOnRelease.append(system.menuBarHides()) }
+        }
+        session.cancel()
+        for _ in 0..<1000 where store.windowClearance.hold != nil { await Task.yield() }
+        #expect(menuBarHidesOnRelease == [true])
     }
 
     @Test func failedFinishKeepsClearanceUnchangedUntilRetry() throws {

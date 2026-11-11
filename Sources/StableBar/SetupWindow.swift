@@ -550,10 +550,13 @@ final class SetupSession {
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
-        releaseClearanceConfiguration()
         // Setup has closed by the time the restore could fail, so nothing shows the error. Settings → General shows
-        // the menu bar setting as it is and changes it.
-        Task { try? await setMenuBarHidden(menuBarHidAtStart) }
+        // the menu bar setting as it is and changes it. Clearance waits for the restore, so it never places windows
+        // against the preview's menu bar.
+        Task {
+            try? await setMenuBarHidden(menuBarHidAtStart)
+            releaseClearanceConfiguration()
+        }
     }
 
     func finish() {
