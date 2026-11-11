@@ -45,6 +45,10 @@ struct PopupView: View {
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     store.appMenu.press(reference)
+                }, selectInputSource: { id in
+                    guard store.barEditing.allowsWidgetActions else { return }
+                    if popup.dismissOnAction { store.popup.close() }
+                    store.selectInputSource(id, widget: widget)
                 }, openSubmenu: { [screenKind] element, row in
                     store.appMenu.openSubmenu(element, beside: row) { submenu in
                         PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
@@ -156,6 +160,8 @@ struct BlockContext {
     /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
     var quit: (pid_t) -> Void = { _ in }
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
+    /// Selects a `selectInputSourceField` block's keyboard input source.
+    var selectInputSource: (String) -> Void = { _ in }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
     /// beside the block.
     var openSubmenu: (AXUIElement?, NSView) -> Void = { _, _ in }
@@ -306,6 +312,12 @@ struct PopupBlockView: View {
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let reference = block.openMenuBarItem {
                 Button { context.pressMenuBarItem(reference) } label: {
+                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
+            } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
+                Button { context.selectInputSource(id) } label: {
                     boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)

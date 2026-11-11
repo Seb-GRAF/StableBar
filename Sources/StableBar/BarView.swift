@@ -518,6 +518,9 @@ struct WidgetView: View {
         } else if let open = widget.open {
             let click = { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
+        } else if store.configuration?.providerType(of: widget) == DataSourceType.inputSource.name {
+            let click = { if store.barEditing.allowsWidgetActions { store.selectInputSource(nil, widget: widget) } }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if case let .appleMenu(appleClick) = widget.content, widget.layout != nil, !hasOwnClick {
             let click = { clickAppleLogo(appleClick, anchor: clickAnchor) }
             let button = Button(action: click) { tile }
@@ -922,6 +925,7 @@ struct WidgetBlocks: View {
                                                  fillsWidth: fillsWidth, open: { if store.barEditing.allowsWidgetActions { $0.open() } },
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
+                                                 selectInputSource: { if store.barEditing.allowsWidgetActions { store.selectInputSource($0, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }

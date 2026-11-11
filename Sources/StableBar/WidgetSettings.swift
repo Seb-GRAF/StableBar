@@ -26,6 +26,7 @@ enum WidgetClickChoice: String, CaseIterable {
         if widget.popup != nil || widget.popupName != nil { actions.append("opens a popup") }
         if widget.menu != nil || output?.menu != nil { actions.append("opens a menu") }
         if !actions.isEmpty { return "This widget \(actions.joined(separator: " and ")). Change it with Edit as JSON in the More menu." }
+        if widget.open == nil, widget.content == .provider(DataSourceType.inputSource.name) { return "Clicking it switches to the next input source." }
         if let open = widget.open, case .url(let url) = OpenTarget(open), !["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             return "This widget opens a link. Change it with Edit as JSON in the More menu."
         }
