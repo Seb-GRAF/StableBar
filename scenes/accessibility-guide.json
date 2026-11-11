@@ -1,0 +1,5 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "accessibilityGuide"
+}

@@ -206,6 +206,9 @@ enum SceneRenderer {
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+        case .accessibilityGuide:
+            try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
+                                              size: NSSize(width: 408, height: CGFloat(scene.height ?? 166)), dark: dark, settle: settle, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
