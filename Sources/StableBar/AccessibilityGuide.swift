@@ -84,7 +84,12 @@ struct AccessibilityGuideView: View {
             .padding(8)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             .overlay(AppBundleDragSource())
-            Text("Already in the list? Turn its switch on.").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Can't drag? Choose + below the list and open StableBar.")
+                Text("Already in the list? Turn its switch on.")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .padding(14)
         .frame(width: 360)
