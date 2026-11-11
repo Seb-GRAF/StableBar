@@ -204,10 +204,22 @@ func validatePackageComponent(_ value: String) throws {
 }
 
 func validatePackagePath(_ url: URL, inside directory: URL) throws {
-    let root = directory.standardizedFileURL.resolvingSymlinksInPath().path + "/"
-    guard url.standardizedFileURL.resolvingSymlinksInPath().path.hasPrefix(root) else {
+    let root = resolvingSymlinks(directory).path + "/"
+    guard resolvingSymlinks(url).path.hasPrefix(root) else {
         throw WidgetPackageError.outsidePackage(url.path)
     }
+}
+
+/// `resolvingSymlinksInPath()` for a path that may not exist yet, which Foundation leaves unresolved:
+/// resolves the nearest existing ancestor and appends the missing components.
+private func resolvingSymlinks(_ url: URL) -> URL {
+    var existing = url.standardizedFileURL
+    var missing: [String] = []
+    while existing.path != "/", (try? FileManager.default.attributesOfItem(atPath: existing.path)) == nil {
+        missing.insert(existing.lastPathComponent, at: 0)
+        existing.deleteLastPathComponent()
+    }
+    return missing.reduce(existing.resolvingSymlinksInPath()) { $0.appending(path: $1) }
 }
 
 func packageFile(_ path: String, inside directory: URL) throws -> URL {
