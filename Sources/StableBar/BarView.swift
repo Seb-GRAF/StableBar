@@ -247,6 +247,7 @@ private struct BarContextMenu: View {
         }
         if let note = store.crashReports.note { Button(note) { store.onShowCrashes?() } }
         Divider()
+        Button("Send Feedback…") { NSApp.sendAction(#selector(AppDelegate.showFeedback), to: NSApp.delegate, from: nil) }
         Button("Settings…") { store.onCustomize?() }
         Button("Quit StableBar") { NSApp.terminate(nil) }
     }

@@ -34,6 +34,15 @@ final class ConfigurationEditor {
     var selectedPackageID: String?
     /// What Status shows; nil is the overview of every widget.
     var diagnosticSelection: DiagnosticsSelection? = .overview
+    var helpSelection = HelpSelection.questions
+    /// The question whose answer Help shows open.
+    var expandedQuestion: String?
+    var feedback = Feedback()
+    /// Whether Send feedback is posting `feedback` through the GitHub CLI. The draft stays locked until it's done, and
+    /// lives here so that leaving the pane can't unlock it.
+    var postingFeedback = false
+    var postedIssue: URL?
+    var postFailure: String?
     var selectedProfileName: String?
     var search = ""
     var searchTarget: String?
@@ -103,6 +112,18 @@ final class ConfigurationEditor {
         searchTarget = nil
         diagnosticSelection = .crashes
         section = .diagnostics
+    }
+
+    func showFeedback() {
+        finishEditing()
+        searchTarget = nil
+        helpSelection = .feedback
+        section = .help
+    }
+
+    func showQuestion(_ id: String) {
+        expandedQuestion = id
+        helpSelection = .questions
     }
 
     func showProfile(_ name: String) {

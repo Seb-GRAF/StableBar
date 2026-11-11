@@ -196,11 +196,19 @@ enum SceneRenderer {
                 case .theme: editor.section = .appearance
                 case .profiles: editor.section = .profiles
                 case .packages: editor.section = .packages
+                case .help:
+                    editor.section = .help
+                    editor.expandedQuestion = HelpQuestion.all[0].id
+                case .feedback:
+                    editor.showFeedback()
+                    editor.feedback = feedbackDraft
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
-            try await OffscreenSnapshot.write(drawn(SettingsView(store: store, editor: editor)
-                .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor)), with: []),
+            let settings = SettingsView(store: store, editor: editor)
+                .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor))
+                .environment(\.feedbackSample, feedbackSample)
+            try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
                 !waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil })
@@ -318,6 +326,23 @@ enum SceneRenderer {
         view.environment(\._accessibilityReduceTransparency, settings.contains(.reduceTransparency))
             .environment(\._colorSchemeContrast, settings.contains(.increaseContrast) ? .increased : .standard)
     }
+
+    /// A bug as someone writes it in Send feedback.
+    private static let feedbackDraft = Feedback(
+        kind: .bug, title: "The clock disappears after waking from sleep",
+        answers: ["what-happens": "After the Mac wakes from sleep, the clock widget is gone from the bar until I reload the configuration.",
+                  "steps": "1. Put the Mac to sleep with an external display connected\n2. Wake it",
+                  "expected": "The clock shows the time again, as the other widgets do."])
+
+    /// Send feedback's sample Mac: signed in to the GitHub CLI, with Claude Code installed.
+    private static let feedbackSample = FeedbackSample(
+        report: BugReport(version: "0.11.0 (Stable, build 470)", system: "26.1 (25B78), arm64", mac: "Mac16,8, Apple M4 Pro",
+                          displays: ["Built-in Retina Display: built-in, 1512×982 points at 2x, notch, main"],
+                          configuration: "~/.config/stablebar/config.json, valid, 7 widgets in 1 file", theme: "default (bundled)",
+                          packages: [], workspaceTool: "macOS Spaces", crashes: [],
+                          live: BugReport.Live(access: ["Accessibility allowed", "Calendars allowed"], workspaces: "",
+                                               profiles: [], problems: [])),
+        account: "octocat", agents: [.claude])
 
     /// A Mac where StableBar changed everything Uninstall puts back: the sheet's sample.
     private static let uninstallSample = UninstallSnapshot(
