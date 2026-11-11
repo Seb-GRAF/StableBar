@@ -162,6 +162,10 @@ struct SetupSystem {
     var workspaceSource: (_ configured: WorkspaceSource?) -> WorkspaceSource = { configured in
         WorkspaceSource.detected(path: shellEnvironment.withLock { $0["PATH", default: ""] }, configured: configured)
     }
+    /// Whether a manager runs, even when Workspaces uses Spaces or the manager's command isn't on PATH.
+    var windowManagerRuns: () -> Bool = {
+        [WorkspaceSource.aerospace, .yabai, .omniwm, .rift].contains(where: \.isRunning)
+    }
 }
 
 /// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
@@ -184,6 +188,11 @@ final class SetupSession {
     private let clearanceHold: ClearanceHold
     let themes: [ThemeChoice]
     let workspaceSource: WorkspaceSource
+    /// Only setup recommends clearance without a manager, and only when no configuration layer sets it.
+    private let recommendsWindowClearance: Bool
+    var keepsWindowsClear: Bool {
+        preferences.keepWindowsClear ?? (base?.bar.keepWindowsClear == true || recommendsWindowClearance)
+    }
     /// Whether this Mac has an internal battery, which presets add Battery for.
     let hasBattery: Bool
     let currentThemeKey: String
@@ -257,6 +266,8 @@ final class SetupSession {
         let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
         let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
+        let bar = try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)
+        recommendsWindowClearance = workspaceSource == .spaces && !system.windowManagerRuns() && bar?["keepWindowsClear"] == nil
         sessionEdits = store.sessionEdits
         store.windowClearance.hold = clearanceHold
         preferences.workspaces = workspaceSource
@@ -327,6 +338,7 @@ final class SetupSession {
     /// the edits can't tell from an earlier setup's offset. The choices themselves keep them for a move to the top edge.
     private var applied: SetupPreferences {
         var applied = preferences
+        if applied.keepWindowsClear == nil && recommendsWindowClearance { applied.keepWindowsClear = true }
         if presetPlacement == .belowMenuBar { applied.widgetSets.removeAll { $0 == .menuBarItems } }
         return applied
     }

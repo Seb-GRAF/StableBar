@@ -4,6 +4,141 @@ import Testing
 
 @Suite @MainActor
 struct SetupClearanceTests {
+    @Test(arguments: [WorkspaceSource.spaces, .aerospace, .yabai, .omniwm, .rift])
+    func windowClearanceDefaultsToOnOnlyWithoutAManager(source: WorkspaceSource) throws {
+        let fixture = try ClearanceSetupFixture(workspaceSource: source)
+        defer { fixture.close() }
+        let saved = try Data(contentsOf: fixture.files.url)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == false)
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        #expect(session.keepsWindowsClear == (source == .spaces))
+        #expect(session.preferences.keepWindowsClear == nil)
+        #expect(!session.hasChanges)
+        #expect(fixture.store.clearanceConfiguration?.bar.keepWindowsClear == false)
+        #expect(try Data(contentsOf: fixture.files.url) == saved)
+        session.finish()
+        #expect(session.finished)
+        #expect(session.error == nil)
+        let bar = try fixture.files.document()["bar"]?.decoded([String: ConfigurationValue].self)
+        #expect(bar?["keepWindowsClear"] == (source == .spaces ? .bool(true) : nil))
+    }
+
+    @Test(arguments: [false, true])
+    func configuredSpacesStillChecksForARunningManager(windowManagerRuns: Bool) throws {
+        let fixture = try ClearanceSetupFixture(configuration: #"{"workspaceSource":"spaces","widgets":[]}"#,
+                                                windowManagerRuns: windowManagerRuns)
+        defer { fixture.close() }
+        fixture.system.defaults.set(true, forKey: SetupProgress.completedKey)
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        #expect(session.workspaceSource == .spaces)
+        #expect(session.keepsWindowsClear == !windowManagerRuns)
+        #expect(session.preferences.keepWindowsClear == nil)
+        session.finish()
+        #expect(session.finished)
+        #expect(session.error == nil)
+        let bar = try fixture.files.document()["bar"]?.decoded([String: ConfigurationValue].self)
+        #expect(bar?["keepWindowsClear"] == (windowManagerRuns ? nil : .bool(true)))
+    }
+
+    @Test(arguments: [false, true])
+    func firstLaunchSpacesStarterStillChecksForARunningManager(windowManagerRuns: Bool) throws {
+        let document: [String: ConfigurationValue] = [
+            "workspaceSource": .string("spaces"),
+            "widgets": .array(SetupPreferences.belowMenuBarStarter.map(ConfigurationValue.object))
+        ]
+        let configuration = String(decoding: try JSONEncoder().encode(document), as: UTF8.self)
+        let fixture = try ClearanceSetupFixture(configuration: configuration, windowManagerRuns: windowManagerRuns)
+        defer { fixture.close() }
+        #expect(SetupPreferences.isFirstLaunchSpacesStarter(try fixture.files.document()))
+        var system = fixture.system
+        system.workspaceSource = { configured in
+            #expect(configured == nil)
+            return .spaces
+        }
+        let session = SetupSession(store: fixture.store, system: system)
+        #expect(session.workspaceSource == .spaces)
+        #expect(session.keepsWindowsClear == !windowManagerRuns)
+        #expect(session.preferences.keepWindowsClear == nil)
+        session.finish()
+        #expect(session.finished)
+        #expect(session.error == nil)
+        let bar = try fixture.files.document()["bar"]?.decoded([String: ConfigurationValue].self)
+        #expect(bar?["keepWindowsClear"] == (windowManagerRuns ? nil : .bool(true)))
+    }
+
+    @Test(arguments: [WorkspaceSource.spaces, .aerospace, .yabai, .omniwm, .rift], [false, true])
+    func setupKeepsConfiguredWindowClearance(source: WorkspaceSource, enabled: Bool) throws {
+        let fixture = try ClearanceSetupFixture(configuration: #"{"bar":{"keepWindowsClear":\#(enabled)},"widgets":[]}"#,
+                                                workspaceSource: source)
+        defer { fixture.close() }
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        #expect(session.keepsWindowsClear == enabled)
+        #expect(session.preferences.keepWindowsClear == nil)
+        #expect(!session.hasChanges)
+        session.finish()
+        #expect(session.finished)
+        #expect(session.error == nil)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == enabled)
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func setupKeepsWindowClearanceFromIncludesAndProfiles(enabled: Bool, profile: Bool) throws {
+        let configuration = profile
+            ? #"{"profile":"mine","profiles":[{"name":"mine","configuration":{"bar":{"keepWindowsClear":\#(enabled)}}}],"widgets":[]}"#
+            : #"{"includes":["included.json"],"widgets":[]}"#
+        let fixture = try ClearanceSetupFixture(configuration: configuration,
+                                                included: profile ? nil : #"{"bar":{"keepWindowsClear":\#(enabled)}}"#)
+        defer { fixture.close() }
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        #expect(session.keepsWindowsClear == enabled)
+        #expect(session.preferences.keepWindowsClear == nil)
+        session.finish()
+        #expect(session.finished)
+        #expect(session.error == nil)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == enabled)
+        // Inherited choices stay in their own layer instead of being copied into the main file.
+        #expect(try fixture.files.document()["bar"] == nil)
+    }
+
+    @Test func changingOrDeselectingPresetsKeepsTheWindowClearanceDefault() throws {
+        let fixture = try ClearanceSetupFixture()
+        defer { fixture.close() }
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        for preset in SetupPreferences.Preset.allCases {
+            session.toggle(preset)
+            #expect(session.keepsWindowsClear)
+            #expect(session.preferences.keepWindowsClear == nil)
+            session.toggle(preset)
+            #expect(session.keepsWindowsClear)
+            #expect(session.preferences.keepWindowsClear == nil)
+        }
+    }
+
+    @Test(arguments: [Bool?.none, .some(false), .some(true)], [false, true])
+    func recommendedWindowClearanceOnlySavesWhenSetupFinishes(choice: Bool?, finish: Bool) throws {
+        let fixture = try ClearanceSetupFixture()
+        defer { fixture.close() }
+        let saved = try Data(contentsOf: fixture.files.url)
+        let session = SetupSession(store: fixture.store, system: fixture.system)
+        if let choice { session.preferences.keepWindowsClear = choice }
+        #expect(session.keepsWindowsClear == (choice ?? true))
+        #expect(session.hasChanges == (choice != nil))
+        #expect(fixture.store.clearanceConfiguration?.bar.keepWindowsClear == false)
+        #expect(try Data(contentsOf: fixture.files.url) == saved)
+        if finish {
+            session.finish()
+            #expect(session.finished)
+            #expect(session.error == nil)
+            let bar = try #require(fixture.files.document()["bar"]).decoded([String: ConfigurationValue].self)
+            #expect(bar["keepWindowsClear"] == .bool(choice ?? true))
+            #expect(fixture.store.clearanceConfiguration?.bar.keepWindowsClear == (choice ?? true))
+        } else {
+            session.cancel()
+            #expect(try Data(contentsOf: fixture.files.url) == saved)
+            #expect(fixture.store.configuration?.bar.keepWindowsClear == false)
+        }
+    }
+
     @Test(arguments: [false, true])
     func clearanceChoicesWaitUntilSetupFinishes(finish: Bool) throws {
         let fixture = try ClearanceSetupFixture()
@@ -172,7 +307,8 @@ struct SetupClearanceTests {
     let system: SetupSystem
     private let defaultsDomain = "StableBarTests.\(UUID().uuidString)"
 
-    init(configuration: String = #"{"widgets":[]}"#, included: String? = nil,
+    init(configuration: String = #"{"widgets":[]}"#, included: String? = nil, workspaceSource: WorkspaceSource = .spaces,
+         windowManagerRuns: Bool = false,
          isTrusted: @escaping () -> Bool = { true },
          setOpenAtLogin: @escaping (Bool) throws -> Void = { _ in Issue.record("Setup must not change real login items") }) throws {
         files = try ThemeGalleryFixture(configuration)
@@ -186,7 +322,7 @@ struct SetupClearanceTests {
                              hasBattery: { false }, isInApplications: { false }, loginStatus: { .notRegistered },
                              setOpenAtLogin: setOpenAtLogin,
                              defaults: try #require(UserDefaults(suiteName: defaultsDomain)),
-                             workspaceSource: { $0 ?? .spaces })
+                             workspaceSource: { $0 ?? workspaceSource }, windowManagerRuns: { windowManagerRuns })
     }
 
     func close() {

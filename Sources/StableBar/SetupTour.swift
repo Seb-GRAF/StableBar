@@ -770,7 +770,7 @@ struct SetupTourView: View {
             }
             hint("macwindow", "Keep windows clear of StableBar", "Moves and resizes ordinary windows. Fullscreen windows stay unchanged.") {
                 Toggle("Keep windows clear of StableBar", isOn: Binding(
-                    get: { session.preferences.keepWindowsClear ?? (session.base?.bar.keepWindowsClear == true) },
+                    get: { session.keepsWindowsClear },
                     set: { session.preferences.keepWindowsClear = $0 }))
                     .labelsHidden().toggleStyle(.switch).controlSize(.small)
             }
