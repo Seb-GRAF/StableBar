@@ -425,23 +425,12 @@ final class WorkspaceStore {
             snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows)
         case .yabai:
             let executable = try executable()
-            async let spaces = runCommand(executable, arguments: ["-m", "query", "--spaces"])
-            async let windows = runCommand(executable, arguments: ["-m", "query", "--windows"])
-            async let displays = runCommand(executable, arguments: ["-m", "query", "--displays"])
             let bundleIDs = NSWorkspace.shared.runningApplications.reduce(into: [Int32: String]()) { result, app in
                 result[app.processIdentifier] = app.bundleIdentifier
             }
-            snapshot = try await yabaiSnapshot(spaces: spaces, windows: windows, displays: displays,
-                                               screenIDs: screenIDs, bundleIDs: bundleIDs)
+            snapshot = try await readYabaiWorkspaces(executable, screenIDs: screenIDs, bundleIDs: bundleIDs)
         case .omniwm:
-            let executable = try executable()
-            async let spaces = omniwmCommand(executable, arguments: [
-                "query", "workspaces", "--fields", "raw-name,display-name,display,is-visible,is-current"
-            ])
-            async let windows = omniwmCommand(executable, arguments: [
-                "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad"
-            ])
-            snapshot = try await omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: screenIDs)
+            snapshot = try await readOmniWMWorkspaces(executable(), screenIDs: screenIDs)
         case .rift:
             snapshot = try await riftSnapshot(executable(), screenIDs: screenIDs)
         case .spaces:

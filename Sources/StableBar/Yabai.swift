@@ -26,6 +26,16 @@ private struct YabaiDisplay: Decodable {
     let index: Int
 }
 
+/// The same bounded, read-only snapshot for the running widget and setup's connection check.
+func readYabaiWorkspaces(_ executable: String, screenIDs: [UInt32], bundleIDs: [Int32: String],
+                         timeout: Double = 10) async throws -> [Workspace] {
+    async let spaces = runCommand(executable, arguments: ["-m", "query", "--spaces"], timeout: timeout)
+    async let windows = runCommand(executable, arguments: ["-m", "query", "--windows"], timeout: timeout)
+    async let displays = runCommand(executable, arguments: ["-m", "query", "--displays"], timeout: timeout)
+    return try await yabaiSnapshot(spaces: spaces, windows: windows, displays: displays,
+                                   screenIDs: screenIDs, bundleIDs: bundleIDs)
+}
+
 func yabaiSnapshot(spaces: Data, windows: Data, displays: Data,
                    screenIDs: [UInt32], bundleIDs: [Int32: String]) throws -> [Workspace] {
     let windows = try JSONDecoder().decode([YabaiWindow].self, from: windows)

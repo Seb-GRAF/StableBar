@@ -80,6 +80,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "workspaceCheck": {
+          "description": "A canned result for Finishing touches when the configuration has yabai or OmniWM Workspaces. Never contacts a window manager; defaults to signalsMissing for yabai and ipcOff for OmniWM.",
+          "enum": ["connected", "signalsMissing", "reloadYabai", "ipcOff", "couldntCheck"]
+        },
         "step": {
           "description": "The step of the tour: where the bar goes, its look, the finishing touches, the permissions, or Try your bar. placement by default.",
           "enum": ["placement", "look", "touches", "permissions", "tryIt"]

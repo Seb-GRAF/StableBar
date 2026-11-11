@@ -78,6 +78,22 @@ struct SceneFile: Decodable {
         var notch = true
         /// Whether StableBar runs from an Applications folder, which Open at login needs.
         var inApplications = true
+        /// A canned connection result; drawing setup never queries a window manager or reads its config.
+        var workspaceCheck: WorkspaceCheck?
+
+        enum WorkspaceCheck: String, Decodable, CaseIterable {
+            case connected, signalsMissing, reloadYabai, ipcOff, couldntCheck
+
+            var result: SetupWorkspaceResult {
+                switch self {
+                case .connected: .connected
+                case .signalsMissing: .signalsMissing(configuration: "~/.yabairc")
+                case .reloadYabai: .reloadYabai(configuration: "~/.yabairc")
+                case .ipcOff: .ipcOff
+                case .couldntCheck: .couldntCheck("Couldn’t check just now. Check that your window manager is running, then try again.")
+                }
+            }
+        }
     }
 
     /// An item of a sample menu, with the values Accessibility gives a menu item. An empty title is a separator.
@@ -171,7 +187,7 @@ struct SceneFile: Decodable {
 
 extension SceneFile.Setup: Decodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications, workspaceCheck
     }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
@@ -196,6 +212,7 @@ extension SceneFile.Setup: Decodable {
         battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
         notch = try values.decodeIfPresent(Bool.self, forKey: .notch) ?? true
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
+        workspaceCheck = try values.decodeIfPresent(WorkspaceCheck.self, forKey: .workspaceCheck)
     }
 }
 

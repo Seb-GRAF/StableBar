@@ -169,6 +169,11 @@ struct SetupSystem {
     var windowManagerRuns: () -> Bool = {
         [WorkspaceSource.aerospace, .yabai, .omniwm, .rift].contains(where: \.isRunning)
     }
+    /// Scenes and tests replace the read-only check so drawing setup never contacts a window manager.
+    var checkWorkspaces: @Sendable (WorkspaceSource, URL) async -> SetupWorkspaceResult = { source, configuration in
+        await SetupWorkspaceChecker(configurationURL: configuration).check(source)
+    }
+    var yabaiSignalScript: String?
 }
 
 /// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
@@ -214,6 +219,7 @@ final class SetupSession {
     var keepsWindowsClear: Bool {
         preferences.keepWindowsClear ?? (base?.bar.keepWindowsClear == true || recommendsWindowClearance)
     }
+    let workspaceConnection: SetupWorkspaceConnection
     /// Whether this Mac has an internal battery, which presets add Battery for.
     let hasBattery: Bool
     /// Whether a connected display has a notch, refreshed when the screens change while setup shows.
@@ -271,6 +277,9 @@ final class SetupSession {
         self.store = store
         clearanceHold = ClearanceHold(configuration: store.clearanceConfiguration)
         self.system = system
+        let check = system.checkWorkspaces
+        let configuration = store.configurationURL
+        workspaceConnection = SetupWorkspaceConnection { await check($0, configuration) }
         let loginStatus = system.loginStatus()
         self.loginStatus = loginStatus
         opensAtLoginAtStart = loginStatus == .enabled || loginStatus == .requiresApproval
@@ -334,6 +343,21 @@ final class SetupSession {
     /// The workspace source the finishing step's advice is about: the previewed Workspaces' source, or, on a bar
     /// without Workspaces, the manager setup detected.
     var adviceSource: WorkspaceSource { previewedWorkspaceSource ?? workspaceSource }
+
+    /// No connection check for a manager detected on a bar without Workspaces, or for sources needing no setup.
+    var workspaceCheckSource: WorkspaceSource? {
+        guard let source = previewedWorkspaceSource, source == .yabai || source == .omniwm else { return nil }
+        return source
+    }
+
+    var yabaiSignalScript: String {
+        if let script = system.yabaiSignalScript { return script }
+        guard system.isInApplications(), let executable = Bundle.main.executableURL?.path else {
+            // A DMG or translocated app path won't survive installation or a reboot.
+            return YabaiSetupSignals.script()
+        }
+        return YabaiSetupSignals.script(executable: executable)
+    }
 
     /// Whether the bar setup builds shows macOS Spaces in Workspaces, whose desktops switch through the Switch to
     /// Desktop shortcuts.
@@ -592,6 +616,7 @@ final class SetupSession {
     }
 
     func cancel() {
+        workspaceConnection.hide()
         // A placement still waiting on macOS no longer applies, and the restore below waits for its menu bar change.
         placementRequest += 1
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
@@ -630,6 +655,7 @@ final class SetupSession {
             system.defaults.set(true, forKey: SetupProgress.completedKey)
             error = nil
             finished = true
+            workspaceConnection.hide()
         } catch {
             self.error = (saved ? "Your bar settings were saved. " : "") + errorMessage(error)
             loginStatus = system.loginStatus()

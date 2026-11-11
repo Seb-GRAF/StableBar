@@ -89,7 +89,7 @@ Set the source at the top level of your configuration:
 
 StableBar reads spaces, windows and displays at startup. Space numbers, app icons, focus animations, `workspace` styling and `"display": "active"` use the same view as AeroSpace. Clicking a space runs `yabai -m space --focus NUMBER`.
 
-Add these [yabai signals](https://github.com/koekeishiya/yabai/blob/master/doc/yabai.asciidoc#signal) to `~/.yabairc` to refresh after changes:
+Add these [yabai signals](https://github.com/koekeishiya/yabai/blob/master/doc/yabai.asciidoc#signal) to your yabai configuration to refresh after changes. yabai uses the first file it finds: `$XDG_CONFIG_HOME/yabai/yabairc`, `~/.config/yabai/yabairc`, then `~/.yabairc` (or the file named by its `--config` option):
 
 ```sh
 for event in space_changed space_created space_destroyed display_changed display_added display_removed display_moved \
@@ -100,7 +100,7 @@ for event in space_changed space_created space_destroyed display_changed display
 done
 ```
 
-Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` if you use a different configuration. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
+Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` to target one StableBar configuration; without it, the event reaches every running bar. After saving the signals, run `yabai --restart-service` to load them. Setup’s **Finishing touches** checks the connection, reads the default config locations above without executing them, and checks that all of these signals are loaded for this StableBar configuration. It offers **Copy signals**, **Check Again** and a guide link; it never edits your yabai config. **Copy signals** uses the broadcast form above for every StableBar configuration, and the Applications path until you move the app there. If you start yabai with `--config`, verify that file’s signals yourself; setup reads the default locations. A config that sources another script may stay unverified too. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
 
 ## OmniWM workspaces
 
@@ -113,7 +113,7 @@ Adjust the app path if installed elsewhere, and include `--config PATH` before `
 }
 ```
 
-StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. If the widget says it can't reach OmniWM, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
+StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. Setup’s **Finishing touches** checks the same connection when your previewed bar uses OmniWM Workspaces. If OmniWM isn't running, setup asks you to open it first. If IPC is unavailable while it runs, setup offers **Check Again** after you turn on **Enable IPC**; you can still finish setup. If the widget says it can't reach OmniWM later, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
 
 ## Rift workspaces
 

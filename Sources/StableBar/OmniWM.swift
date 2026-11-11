@@ -17,6 +17,14 @@ struct OmniWMResponse<Payload: Decodable>: Decodable {
             ? "Can't reach OmniWM. Check that it's running and that Enable IPC is on in its menu."
             : "OmniWM: \(message ?? code ?? "request failed")"
     }
+
+    var failure: OmniWMFailure { OmniWMFailure(code: code, message: failureMessage) }
+}
+
+struct OmniWMFailure: LocalizedError {
+    let code: String?
+    let message: String
+    var errorDescription: String? { message }
 }
 
 /// Accepts any payload, for envelopes read only for their status.
@@ -55,21 +63,33 @@ private struct OmniWMWindows: Decodable {
 }
 
 /// Runs `omniwmctl` with JSON output. A request that changes nothing succeeds; other failures read as sentences.
-func omniwmCommand(_ executable: String, arguments: [String]) async throws -> Data {
+func omniwmCommand(_ executable: String, arguments: [String], timeout: Double = 10) async throws -> Data {
     do {
-        return try await runCommand(executable, arguments: arguments + ["--format", "json"])
+        return try await runCommand(executable, arguments: arguments + ["--format", "json"], timeout: timeout)
     } catch let failure as CommandFailure {
-        guard let response = try? JSONDecoder().decode(OmniWMResponse<OmniWMEmpty>.self, from: failure.stdout),
+        guard !failure.timedOut,
+              let response = try? JSONDecoder().decode(OmniWMResponse<OmniWMEmpty>.self, from: failure.stdout),
               !response.ok else { throw failure }
         if response.code == "no_change" { return failure.stdout }
-        throw CommandFailure(message: response.failureMessage)
+        throw response.failure
     }
 }
 
 private func omniwmPayload<Payload: Decodable>(_ type: Payload.Type, from data: Data) throws -> Payload {
     let response = try JSONDecoder().decode(OmniWMResponse<Payload>.self, from: data)
-    guard response.ok, let payload = response.result?.payload else { throw CommandFailure(message: response.failureMessage) }
+    guard response.ok, let payload = response.result?.payload else { throw response.failure }
     return payload
+}
+
+/// Setup checks IPC using the widget's queries and response decoding, without starting a subscription.
+func readOmniWMWorkspaces(_ executable: String, screenIDs: [UInt32], timeout: Double = 10) async throws -> [Workspace] {
+    async let spaces = omniwmCommand(executable, arguments: [
+        "query", "workspaces", "--fields", "raw-name,display-name,display,is-visible,is-current"
+    ], timeout: timeout)
+    async let windows = omniwmCommand(executable, arguments: [
+        "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad"
+    ], timeout: timeout)
+    return try await omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: screenIDs)
 }
 
 /// OmniWM's own order is the order of its workspace bar. Its current workspace is the focused one, as

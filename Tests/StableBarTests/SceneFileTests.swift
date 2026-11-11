@@ -167,6 +167,16 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(setupProperties["step"]) == Set(SetupSession.Step.allCases.map { "\($0)" }))
     #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar"])
     #expect(choices(setupProperties["preset"]) == Set(SetupPreferences.Preset.allCases.map { "\($0)" }))
+    #expect(choices(setupProperties["workspaceCheck"]) == Set(SceneFile.Setup.WorkspaceCheck.allCases.map(\.rawValue)))
+}
+
+@Test(arguments: SceneFile.Setup.WorkspaceCheck.allCases)
+func sceneStubsWorkspaceChecks(result: SceneFile.Setup.WorkspaceCheck) throws {
+    let decoded = try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "\#(result.rawValue)"}}"#)
+    #expect(decoded.setup?.workspaceCheck == result)
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "failed"}}"#)
+    }
 }
 
 @Test @MainActor func everySceneInTheRepositoryLoads() throws {
