@@ -199,8 +199,9 @@ struct SceneFile: Decodable {
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
         }
-        if starRequest != nil, draw != .update {
-            throw DecodingError.dataCorruptedError(forKey: .starRequest, in: values, debugDescription: "starRequest belongs to an update scene.")
+        if starRequest != nil, draw != .update, !(draw == .settings && section == .help) {
+            throw DecodingError.dataCorruptedError(forKey: .starRequest, in: values,
+                                                   debugDescription: "starRequest belongs to an update scene or to Help in Settings.")
         }
         if setup != nil, draw != .setup {
             throw DecodingError.dataCorruptedError(forKey: .setup, in: values, debugDescription: "setup belongs to a setup scene.")

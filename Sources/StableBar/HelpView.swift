@@ -5,9 +5,16 @@ enum HelpSelection: Hashable {
     case questions, feedback
 }
 
+extension EnvironmentValues {
+    /// What Star on GitHub shows instead of asking `gh`, so a scene draws the same sidebar everywhere.
+    @Entry var starRequestSample: StarRequest.State?
+}
+
 /// Settings › Help: the guide's questions, Send feedback, and links to the guide, setup and the repository.
 struct HelpView: View {
     @Bindable var editor: ConfigurationEditor
+    @Environment(\.starRequestSample) private var sample
+    @State private var starRequest = StarRequest(defaults: nil)
 
     var body: some View {
         HStack(spacing: 0) {
@@ -44,11 +51,20 @@ struct HelpView: View {
                     Label("Run setup again", systemImage: "sparkles")
                 }
                 Button {
-                    NSWorkspace.shared.open(StarRequest.repository)
+                    Task { await starRequest.star() }
                 } label: {
-                    Label("Star on GitHub", systemImage: "star")
+                    Label {
+                        Text(isStarred ? "Starred on GitHub" : "Star on GitHub")
+                    } icon: {
+                        if starRequest.isStarring {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: isStarred ? "star.fill" : "star")
+                        }
+                    }
                 }
-                .help("A star helps other people find StableBar.")
+                .disabled(starRequest.isStarring)
+                .help(starRequest.help)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
@@ -56,6 +72,21 @@ struct HelpView: View {
         .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(SettingsPalette.sidebar)
+        .task {
+            if let sample {
+                starRequest = StarRequest(sample: sample)
+            } else {
+                await starRequest.refresh()
+            }
+        }
+    }
+
+    /// A request without defaults is answered only by a star.
+    private var isStarred: Bool {
+        switch starRequest.state {
+        case .thanked, .answered: true
+        default: false
+        }
     }
 }
 
