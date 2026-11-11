@@ -59,7 +59,7 @@ enum WidgetStatus: Equatable {
 
 /// What Status shows: the overview of every widget, StableBar's recent crashes or one widget.
 enum DiagnosticsSelection: Hashable {
-    case overview, crashes, feedback, widget(String)
+    case overview, crashes, widget(String)
 }
 
 struct DiagnosticsView: View {
@@ -112,8 +112,6 @@ struct DiagnosticsView: View {
                 }
                 if editor.diagnosticSelection == .crashes {
                     CrashesView(crashes: store.crashReports)
-                } else if editor.diagnosticSelection == .feedback {
-                    FeedbackView(store: store, feedback: $editor.feedback)
                 } else if let widget = widgets.first(where: { $0.id == selectedID }) {
                     details(widget)
                 } else {
@@ -150,7 +148,6 @@ struct DiagnosticsView: View {
                 Image(systemName: "exclamationmark.octagon")
             }
             .tag(DiagnosticsSelection.crashes)
-            Label("Send feedback", systemImage: "text.bubble").foregroundStyle(.primary).tag(DiagnosticsSelection.feedback)
             ForEach(widgets.sorted { needingAttention.contains($0.id) && !needingAttention.contains($1.id) }) { widget in
                 let status = store.widgetStatus(for: widget)
                 Label {
@@ -230,7 +227,7 @@ struct DiagnosticsView: View {
                             reportNotice = "Bug report copied. Check it, then paste it into a GitHub issue."
                         }
                     }
-                    Button("Send feedback…") { editor.diagnosticSelection = .feedback }
+                    Button("Send feedback…", action: editor.showFeedback)
                     if reportTask != nil { ProgressView().controlSize(.small) }
                 }
                 .disabled(reportTask != nil)

@@ -195,6 +195,9 @@ enum SceneRenderer {
                 case .theme: editor.section = .appearance
                 case .profiles: editor.section = .profiles
                 case .packages: editor.section = .packages
+                case .help:
+                    editor.section = .help
+                    editor.expandedQuestion = HelpQuestion.all[0].id
                 case .feedback:
                     editor.showFeedback()
                     editor.feedback = feedbackDraft

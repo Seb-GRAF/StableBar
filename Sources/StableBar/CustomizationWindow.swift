@@ -63,7 +63,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 }
 
 enum CustomizationSection: String, CaseIterable, Identifiable {
-    case general = "General", widgets = "Bar", appearance = "Theme", profiles = "Profiles", packages = "Packages", diagnostics = "Status"
+    case general = "General", widgets = "Bar", appearance = "Theme", profiles = "Profiles", packages = "Packages", diagnostics = "Status", help = "Help"
 
     var id: Self { self }
 
@@ -85,6 +85,7 @@ enum CustomizationSection: String, CaseIterable, Identifiable {
         case .profiles: "switch.2"
         case .packages: "shippingbox"
         case .diagnostics: "waveform.path.ecg"
+        case .help: "questionmark.circle"
         }
     }
 }
@@ -111,6 +112,7 @@ struct SettingsView: View {
                     case .profiles: ProfilesView(editor: editor)
                     case .packages: PackagesView(store: store, selectedPackageID: editor.selectedPackageID, searchTarget: $editor.searchTarget)
                     case .diagnostics: DiagnosticsView(editor: editor)
+                    case .help: HelpView(editor: editor)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

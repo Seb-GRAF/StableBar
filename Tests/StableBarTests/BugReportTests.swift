@@ -112,10 +112,11 @@ private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
     \(example.markdown)
     """)
     #expect(feedback.markdown.hasPrefix("# The clock vanishes after sleep\n\n### What happens\n"))
-    #expect(!feedback.isComplete)
+    #expect(feedback.missing == ["Steps to reproduce"])
     feedback.answers["steps"] = " \n"
-    #expect(!feedback.isComplete)
-    #expect(bug.isComplete)
+    feedback.title = ""
+    #expect(feedback.missing == ["Title", "Steps to reproduce"])
+    #expect(bug.missing.isEmpty)
 }
 
 @Test func liveFactsDecodeFromABarOfAnotherVersion() throws {

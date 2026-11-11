@@ -31,9 +31,10 @@ struct Feedback {
     var report: BugReport?
     var crash: CrashReport?
 
-    var isComplete: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && kind.questions.allSatisfy { !answers[$0.id, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    /// The title and the questions still empty, which the form requires before it posts.
+    var missing: [String] {
+        (title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? ["Title"] : [])
+            + kind.questions.filter { answers[$0.id, default: ""].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.label)
     }
 
     func fields(listLimit: Int = .max, lineLimit: Int = .max, frameLimit: Int = 60,

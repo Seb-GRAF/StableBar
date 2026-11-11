@@ -6,8 +6,8 @@ import Foundation
 struct SceneFile: Decodable {
     enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
-    /// A Settings section, named as the toolbar names it, or `feedback` for Send feedback in Status.
-    enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, feedback }
+    /// A Settings section, named as the toolbar names it, or `feedback` for Send feedback in Help.
+    enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, help, feedback }
     /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (size, look, placement).
     enum Tab: String, Decodable, CaseIterable {
         case content, style, behavior, size, look, placement

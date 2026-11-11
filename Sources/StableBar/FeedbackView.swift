@@ -12,10 +12,9 @@ struct FeedbackSample {
     var agents: [TriageAgent]
 }
 
-/// Settings › Status › Send feedback: a bug or an idea, sent through GitHub's issue form, the GitHub CLI or a coding agent.
+/// Settings › Help › Send feedback: a bug or an idea, sent through GitHub's issue form, the GitHub CLI or a coding agent.
 struct FeedbackView: View {
-    let store: BarStore
-    @Binding var feedback: Feedback
+    @Bindable var editor: ConfigurationEditor
     @Environment(\.feedbackSample) private var sample
     @State private var account: String?
     @State private var agents: [TriageAgent] = []
@@ -27,28 +26,28 @@ struct FeedbackView: View {
     @State private var notice: String?
     @State private var showsReport = false
 
+    private var store: BarStore { editor.store }
+
     var body: some View {
+        let answers = HelpQuestion.answering(editor.feedback.title)
         Form {
             Section {
-                Picker("Kind", selection: $feedback.kind) {
+                Picker("Kind", selection: $editor.feedback.kind) {
                     Text("Something's wrong").tag(Feedback.Kind.bug)
                     Text("An idea").tag(Feedback.Kind.idea)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                TextField("Title", text: $feedback.title)
-                ForEach(feedback.kind.questions, id: \.id) { question in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(question.label)
-                        Text(question.hint).font(.caption).foregroundStyle(.secondary)
-                        TextEditor(text: Binding(get: { feedback.answers[question.id, default: ""] },
-                                                 set: { feedback.answers[question.id] = $0 }))
+                field("Title", hint: "One line that names the problem or idea.") {
+                    TextField("Title", text: $editor.feedback.title)
+                        .textFieldStyle(.plain).labelsHidden().multilineTextAlignment(.leading).padding(.horizontal, 5)
+                }
+                ForEach(editor.feedback.kind.questions, id: \.id) { question in
+                    field(question.label, hint: question.hint) {
+                        TextEditor(text: Binding(get: { editor.feedback.answers[question.id, default: ""] },
+                                                 set: { editor.feedback.answers[question.id] = $0 }))
                             .scrollContentBackground(.hidden)
-                            .padding(6)
-                            .frame(height: 72)
-                            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-                            .accessibilityLabel(question.label)
+                            .frame(height: 60)
                     }
                 }
             } header: {
@@ -57,11 +56,11 @@ struct FeedbackView: View {
                 Text("Keep it to one problem or idea. Your feedback becomes a public issue on GitHub once you send it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            if feedback.kind == .bug {
+            if editor.feedback.kind == .bug {
                 Section {
                     if !store.crashReports.reports.isEmpty {
-                        Picker("Crash", selection: Binding(get: { feedback.crash?.id }, set: { id in
-                            feedback.crash = store.crashReports.reports.first { $0.id == id }
+                        Picker("Crash", selection: Binding(get: { editor.feedback.crash?.id }, set: { id in
+                            editor.feedback.crash = store.crashReports.reports.first { $0.id == id }
                         })) {
                             Text("None").tag(String?.none)
                             ForEach(store.crashReports.reports) { report in
@@ -69,7 +68,7 @@ struct FeedbackView: View {
                             }
                         }
                     }
-                    if let report = feedback.report {
+                    if let report = editor.feedback.report {
                         DisclosureGroup("Bug report", isExpanded: $showsReport) {
                             ScrollView([.vertical, .horizontal]) {
                                 Text(report.markdown).font(.system(size: 11.5, design: .monospaced)).textSelection(.enabled)
@@ -92,9 +91,15 @@ struct FeedbackView: View {
                 }
             }
             Section {
+                if !answers.isEmpty {
+                    Text("These questions may answer it:").foregroundStyle(.secondary)
+                    ForEach(answers) { question in
+                        Button(question.question) { editor.showQuestion(question.id) }.buttonStyle(.link)
+                    }
+                }
                 HStack {
                     Button("Find similar issues", action: search)
-                        .disabled(feedback.title.trimmingCharacters(in: .whitespaces).isEmpty || searching)
+                        .disabled(editor.feedback.title.trimmingCharacters(in: .whitespaces).isEmpty || searching)
                     if searching { ProgressView().controlSize(.small) }
                 }
                 if let found {
@@ -114,19 +119,19 @@ struct FeedbackView: View {
             } header: {
                 SettingsSectionTitle("Similar issues")
             } footer: {
-                Text("If one of these is your problem or idea, comment on it or add a 👍 instead. The search sends only the title's words to GitHub.")
+                Text("Questions come from the user guide and match on your Mac. If an issue is your problem or idea, comment on it or add a 👍 instead. The search sends only the title's words to GitHub.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
                 HStack {
-                    Button("Open on GitHub…") { NSWorkspace.shared.open(feedback.issueURL()) }
+                    Button("Open on GitHub…") { NSWorkspace.shared.open(editor.feedback.issueURL()) }
                     if let account {
                         Button("Post as @\(account)…") { confirmsPost = true }
-                            .disabled(!feedback.isComplete || posting)
+                            .disabled(!editor.feedback.missing.isEmpty || posting)
                     }
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(feedback.markdown, forType: .string)
+                        NSPasteboard.general.setString(editor.feedback.markdown, forType: .string)
                         notice = "Copied."
                     }
                     if posting { ProgressView().controlSize(.small) }
@@ -138,6 +143,10 @@ struct FeedbackView: View {
                         }
                     }
                 }
+                if account != nil, !editor.feedback.missing.isEmpty {
+                    Text("To post, fill in \(ListFormatter.localizedString(byJoining: editor.feedback.missing)).")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
                 if let posted { Link("Posted \(posted.absoluteString)", destination: posted) }
                 if let notice { Text(notice).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             } header: {
@@ -146,7 +155,7 @@ struct FeedbackView: View {
                 Text("Open on GitHub fills in the issue form in your browser, and nothing is sent until you submit it. Post uses the GitHub CLI after you confirm. Investigate opens Terminal on StableBar triage: a coding agent looks into it and asks before posting anything.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            .disabled(feedback.kind == .bug && feedback.report == nil)
+            .disabled(editor.feedback.kind == .bug && editor.feedback.report == nil)
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
@@ -157,15 +166,32 @@ struct FeedbackView: View {
         }
         .task {
             if let sample {
-                feedback.report = sample.report
+                editor.feedback.report = sample.report
                 account = sample.account
                 agents = sample.agents
                 return
             }
             agents = TriageAgent.installed(path: shellEnvironment.withLock { $0["PATH", default: ""] }).map(\.agent)
             await store.crashReports.refresh()
-            feedback.report = await store.bugReport()
+            editor.feedback.report = await store.bugReport()
             account = await Feedback.gitHubAccount()
+        }
+    }
+
+    /// A field the issue form requires, with its label and description above it.
+    private func field(_ label: String, hint: String, @ViewBuilder input: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(label)
+                Spacer()
+                Text("Required").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(hint).font(.caption).foregroundStyle(.secondary)
+            input()
+                .padding(6)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
+                .accessibilityLabel(label)
         }
     }
 
@@ -173,7 +199,7 @@ struct FeedbackView: View {
         searching = true
         Task {
             do {
-                found = try await feedback.similarIssues()
+                found = try await editor.feedback.similarIssues()
                 notice = nil
             } catch {
                 found = nil
@@ -188,10 +214,10 @@ struct FeedbackView: View {
         notice = nil
         Task {
             do {
-                posted = try await feedback.post()
-                feedback.title = ""
-                feedback.answers = [:]
-                feedback.crash = nil
+                posted = try await editor.feedback.post()
+                editor.feedback.title = ""
+                editor.feedback.answers = [:]
+                editor.feedback.crash = nil
                 found = nil
             } catch {
                 notice = "Couldn't post: \(error.localizedDescription)"
@@ -202,7 +228,7 @@ struct FeedbackView: View {
 
     private func investigate(_ agent: TriageAgent) {
         do {
-            try Triage.openInTerminal(agent, configuration: store.configurationURL, notes: feedback.markdown)
+            try Triage.openInTerminal(agent, configuration: store.configurationURL, notes: editor.feedback.markdown)
             notice = "\(agent.label) is starting in Terminal."
         } catch {
             notice = "Couldn't open Terminal: \(error.localizedDescription)"

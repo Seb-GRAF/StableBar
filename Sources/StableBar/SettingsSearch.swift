@@ -22,7 +22,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .configuration: ("Configuration file", .general, "General", "json path reload finder temporary")
         case .commandLine: ("Install the stablebar command", .general, "General › Command line", "terminal shell path cli script usr local bin")
         case .updates: ("Updates", .general, "General", "version release beta stable automatic download about package notification")
-        case .help: ("Set up StableBar again", .general, "General", "onboarding setup guide help star github")
+        case .help: ("Help, questions and feedback", .help, "Help", "onboarding setup guide star github questions answers faq feedback bug idea issue report")
         case .uninstall: ("Uninstall StableBar", .general, "General › Uninstall", "remove delete trash app menu bar auto-hide restore login keychain homebrew")
         case .barSize: ("Bar height and corners", .widgets, "Bar › Bar › Size", "tall size px pt radius rounded inset spacing")
         case .barLook: ("Bar background and border", .widgets, "Bar › Bar › Look", "color fill gradient edges line")
@@ -46,7 +46,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .library: ("Installed packages", .packages, "Packages › Installed", "package version update uninstall settings credentials local folder built-in")
         case .store: ("Get widgets and themes from the Store", .packages, "Packages › Store", "store install download")
         case .packageSources: ("Package sources", .packages, "Packages › Sources", "private team company source repository index token gitlab github")
-        case .status: ("Status and troubleshooting", .diagnostics, "Status", "diagnostics error failed refresh snapshot event crash quit unexpectedly report bug issue feedback idea")
+        case .status: ("Status and troubleshooting", .diagnostics, "Status", "diagnostics error failed refresh snapshot event crash quit unexpectedly report bug issue")
         }
     }
 
