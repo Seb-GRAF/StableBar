@@ -76,7 +76,7 @@
       "enum": ["confirm", "failed"]
     },
     "starRequest": {
-      "description": "For `update`: the popup's star request, opening the repository, starring through a signed-in GitHub CLI, or thanking for the star. Opening the repository by default.",
+      "description": "For `update`, the popup's star request, and for Help in `settings`, Star on GitHub in the sidebar: opening the repository, starring through a signed-in GitHub CLI, or thanking for the star, which Help shows as Starred on GitHub. Opening the repository by default.",
       "enum": ["repository", "gitHubCLI", "thanked"]
     },
     "setup": {

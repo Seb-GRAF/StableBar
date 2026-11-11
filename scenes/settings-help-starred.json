@@ -1,0 +1,8 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "settings",
+  "section": "help",
+  "starRequest": "thanked",
+  "height": 520
+}

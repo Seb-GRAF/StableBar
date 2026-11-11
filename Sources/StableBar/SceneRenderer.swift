@@ -210,6 +210,7 @@ enum SceneRenderer {
             let settings = SettingsView(store: store, editor: editor, applicationMove: move)
                 .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor))
                 .environment(\.feedbackSample, feedbackSample)
+                .environment(\.starRequestSample, (scene.starRequest ?? .repository).state)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {

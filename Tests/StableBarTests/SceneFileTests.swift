@@ -118,10 +118,17 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(decoded.tab == .placement)
 }
 
-@Test func sceneDrawsTheUpdatePopupsStarRequest() throws {
+@Test func sceneDrawsTheStarRequest() throws {
     #expect(try scene(#"{"configuration": {}, "draw": "update", "starRequest": "thanked"}"#).starRequest == .thanked)
     #expect(try scene(#"{"configuration": {}, "draw": "update"}"#).starRequest == nil)
+    #expect(try scene(#"{"configuration": {}, "draw": "settings", "section": "help", "starRequest": "thanked"}"#).starRequest == .thanked)
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", "starRequest": "thanked"}"#) }
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "settings", "section": "general", "starRequest": "thanked"}"#)
+    }
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "settings", "widget": "clock", "section": "help", "starRequest": "thanked"}"#)
+    }
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "update", "starRequest": "starred"}"#) }
 }
 

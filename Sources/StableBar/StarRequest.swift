@@ -2,9 +2,9 @@ import AppKit
 import Foundation
 import SwiftUI
 
-/// The update popup's line asking for a star on GitHub. It shows until it's dismissed or GitHub says StableBar is
-/// starred. With the GitHub CLI signed in, a click stars StableBar through it, as the account the tooltip names;
-/// otherwise the click opens the repository, where people press Star themselves.
+/// A star on GitHub, asked for by the update popup's line and by Star on GitHub in Settings › Help. The line shows until
+/// it's dismissed or GitHub says StableBar is starred. With the GitHub CLI signed in, a click stars StableBar through
+/// it, as the account the tooltip names; otherwise the click opens the repository, where people press Star themselves.
 @MainActor @Observable
 final class StarRequest {
     nonisolated static let repositoryPath = "Seb-GRAF/StableBar"
@@ -30,8 +30,9 @@ final class StarRequest {
     @ObservationIgnored private let gitHub: GitHubStars?
     @ObservationIgnored private var isRefreshing = false
 
-    init(defaults: UserDefaults = .standard, gitHub: GitHubStars = .cli) {
-        state = defaults.bool(forKey: Self.answeredKey) ? .answered : .checking
+    /// Without `defaults`, the request remembers nothing and asks `gh` even after the popup's ×: Help's Star on GitHub.
+    init(defaults: UserDefaults? = .standard, gitHub: GitHubStars = .cli) {
+        state = defaults?.bool(forKey: Self.answeredKey) == true ? .answered : .checking
         self.defaults = defaults
         self.gitHub = gitHub
     }
@@ -47,6 +48,17 @@ final class StarRequest {
         switch state {
         case .checking, .answered: false
         case .repository, .gitHubCLI, .starring, .thanked: true
+        }
+    }
+
+    var isStarring: Bool {
+        if case .starring = state { true } else { false }
+    }
+
+    var help: String {
+        switch state {
+        case let .gitHubCLI(account), let .starring(account): "Stars StableBar as @\(account) with the GitHub CLI"
+        default: "Opens StableBar on GitHub"
         }
     }
 
@@ -168,7 +180,7 @@ struct StarRequestLine: View {
             } else {
                 Button { Task { await request.star() } } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        if case .starring = request.state {
+                        if request.isStarring {
                             ProgressView().controlSize(.mini)
                         } else {
                             Image(systemName: "star.fill").foregroundStyle(appearance.accent)
@@ -182,10 +194,10 @@ struct StarRequestLine: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(isStarring)
-                .help(help)
+                .disabled(request.isStarring)
+                .help(request.help)
                 .accessibilityLabel("Star StableBar on GitHub")
-                .accessibilityHint(help)
+                .accessibilityHint(request.help)
             }
             Spacer(minLength: 0)
             Button(action: request.dismiss) {
@@ -200,18 +212,7 @@ struct StarRequestLine: View {
         }
     }
 
-    private var isStarring: Bool {
-        if case .starring = request.state { true } else { false }
-    }
-
     private var isThanked: Bool {
         if case .thanked = request.state { true } else { false }
-    }
-
-    private var help: String {
-        switch request.state {
-        case let .gitHubCLI(account), let .starring(account): "Stars StableBar as @\(account) with the GitHub CLI"
-        default: "Opens StableBar on GitHub"
-        }
     }
 }
