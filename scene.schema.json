@@ -75,6 +75,10 @@
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",
       "enum": ["confirm", "failed"]
     },
+    "starRequest": {
+      "description": "For `update`: the popup's star request, opening the repository, starring through a signed-in GitHub CLI, or thanking for the star. Opening the repository by default.",
+      "enum": ["repository", "gitHubCLI", "thanked"]
+    },
     "setup": {
       "description": "For `setup`: the step to draw, the choices made before it, and what setup reads from the Mac, pinned so the drawing doesn't depend on the Mac that draws it. Every key is optional.",
       "type": "object",

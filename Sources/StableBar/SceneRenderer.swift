@@ -163,7 +163,7 @@ enum SceneRenderer {
             try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark,
                                 accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
         case .update:
-            store.update = AppUpdate.sample()
+            store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
                                 dark: dark, accessibilityDisplay: [], settle: settle, to: url)

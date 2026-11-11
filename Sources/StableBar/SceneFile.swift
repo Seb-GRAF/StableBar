@@ -16,6 +16,18 @@ struct SceneFile: Decodable {
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
+    /// The update popup's star request: opening the repository, starring through the GitHub CLI, or its thanks.
+    enum StarRequestLine: String, Decodable, CaseIterable {
+        case repository, gitHubCLI, thanked
+
+        var state: StarRequest.State {
+            switch self {
+            case .repository: .repository
+            case .gitHubCLI: .gitHubCLI(account: "octocat")
+            case .thanked: .thanked(account: "octocat")
+            }
+        }
+    }
     /// A setting in System Settings → Accessibility → Display.
     enum AccessibilityDisplay: String, Decodable, CaseIterable { case increaseContrast, reduceTransparency }
     /// The configuration inline, or the path of a configuration file relative to the scene file.
@@ -45,6 +57,8 @@ struct SceneFile: Decodable {
     var tab: Tab?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
+    /// The star request the update popup shows, for `update`.
+    var starRequest: StarRequestLine?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
     var appearances: [Appearance] = Appearance.allCases
@@ -54,7 +68,8 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, setup, appearances,
+        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
+             appearances,
              accessibilityDisplay, width, height
     }
 
@@ -136,6 +151,7 @@ struct SceneFile: Decodable {
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
+        starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {
@@ -163,6 +179,9 @@ struct SceneFile: Decodable {
         }
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")
+        }
+        if starRequest != nil, draw != .update {
+            throw DecodingError.dataCorruptedError(forKey: .starRequest, in: values, debugDescription: "starRequest belongs to an update scene.")
         }
         if setup != nil, draw != .setup {
             throw DecodingError.dataCorruptedError(forKey: .setup, in: values, debugDescription: "setup belongs to a setup scene.")

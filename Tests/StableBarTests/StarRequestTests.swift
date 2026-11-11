@@ -2,9 +2,6 @@ import Foundation
 import Testing
 @testable import StableBar
 
-private let day: TimeInterval = 24 * 60 * 60
-private let launch = Date(timeIntervalSinceReferenceDate: 815_000_000)
-
 /// A preferences domain of its own, and the call that removes it.
 private func preferences() -> (UserDefaults, () -> Void) {
     let suite = "star-\(UUID().uuidString)"
@@ -12,47 +9,122 @@ private func preferences() -> (UserDefaults, () -> Void) {
     return (defaults, { defaults.removePersistentDomain(forName: suite) })
 }
 
-@Test @MainActor func starRequestWaitsAWeekFromTheFirstLaunch() {
-    let (defaults, remove) = preferences()
-    defer { remove() }
-    let request = StarRequest(defaults: defaults, now: launch)
-    #expect(!request.isDue(at: launch))
-    #expect(!request.isDue(at: launch + 7 * day - 1))
-    #expect(request.isDue(at: launch + 7 * day))
+private let noCLI = GitHubStars(isInstalled: { false }, check: { nil }, star: { false })
+
+/// A GitHub CLI signed in as octocat, whose star is `starred` and whose star request `accepts` or fails.
+private func signedIn(starred: Bool = false, accepts: Bool = true) -> GitHubStars {
+    GitHubStars(isInstalled: { true }, check: { ("octocat", starred) }, star: { accepts })
 }
 
-@Test @MainActor func starRequestKeepsTheFirstLaunchAcrossLaunches() {
+@Test @MainActor func starRequestShowsAtOnceWithoutTheGitHubCLI() async {
     let (defaults, remove) = preferences()
     defer { remove() }
-    _ = StarRequest(defaults: defaults, now: launch)
-    let relaunched = StarRequest(defaults: defaults, now: launch + 6 * day)
-    #expect(relaunched.isDue(at: launch + 7 * day))
+    let request = StarRequest(defaults: defaults, gitHub: noCLI)
+    await request.refresh()
+    #expect(request.state == .repository)
+    #expect(request.isShown)
 }
 
-@Test @MainActor func starringOpensTheRepositoryAndStopsAsking() {
+@Test @MainActor func openingTheRepositoryKeepsAsking() async {
     let (defaults, remove) = preferences()
     defer { remove() }
-    let request = StarRequest(defaults: defaults, now: launch)
+    let request = StarRequest(defaults: defaults, gitHub: noCLI)
+    await request.refresh()
     var opened: [URL] = []
-    request.star { opened.append($0) }
+    await request.star { opened.append($0) }
     #expect(opened == [URL(string: "https://github.com/Seb-GRAF/StableBar")!])
-    #expect(!request.isDue(at: launch + 30 * day))
-    #expect(!StarRequest(defaults: defaults, now: launch).isDue(at: launch + 30 * day))
+    #expect(request.isShown)
+    let relaunched = StarRequest(defaults: defaults, gitHub: noCLI)
+    await relaunched.refresh()
+    #expect(relaunched.isShown)
 }
 
-@Test @MainActor func dismissingTheStarRequestStopsAsking() {
+@Test @MainActor func dismissingTheStarRequestStopsAsking() async {
     let (defaults, remove) = preferences()
     defer { remove() }
-    let request = StarRequest(defaults: defaults, now: launch)
+    let request = StarRequest(defaults: defaults, gitHub: noCLI)
+    await request.refresh()
     request.dismiss()
-    #expect(!request.isDue(at: launch + 30 * day))
-    #expect(!StarRequest(defaults: defaults, now: launch).isDue(at: launch + 30 * day))
+    #expect(!request.isShown)
+    let relaunched = StarRequest(defaults: defaults, gitHub: noCLI)
+    await relaunched.refresh()
+    #expect(!relaunched.isShown)
 }
 
-@Test @MainActor func sampleStarRequestIsDueAndSavesNothing() {
-    let request = StarRequest(start: .distantPast)
-    #expect(request.isDue(at: launch))
+@Test @MainActor func starRequestWaitsForTheGitHubCLIsFirstAnswer() {
+    let (defaults, remove) = preferences()
+    defer { remove() }
+    let request = StarRequest(defaults: defaults, gitHub: signedIn())
+    #expect(request.state == .checking)
+    #expect(!request.isShown)
+}
+
+@Test @MainActor func starringThroughTheGitHubCLIThanksThenStopsAsking() async {
+    let (defaults, remove) = preferences()
+    defer { remove() }
+    let request = StarRequest(defaults: defaults, gitHub: signedIn())
+    await request.refresh()
+    #expect(request.state == .gitHubCLI(account: "octocat"))
+    var opened: [URL] = []
+    await request.star { opened.append($0) }
+    #expect(opened.isEmpty)
+    #expect(request.state == .thanked(account: "octocat"))
+    #expect(request.isShown)
+    await request.refresh()
+    #expect(!request.isShown)
+    #expect(StarRequest(defaults: defaults, gitHub: signedIn()).state == .answered)
+}
+
+@Test @MainActor func starRequestStopsWhenTheGitHubCLISeesAStar() async {
+    let (defaults, remove) = preferences()
+    defer { remove() }
+    let request = StarRequest(defaults: defaults, gitHub: signedIn(starred: true))
+    await request.refresh()
+    #expect(!request.isShown)
+    #expect(StarRequest(defaults: defaults, gitHub: noCLI).state == .answered)
+}
+
+@Test @MainActor func starRequestOpensTheRepositoryWhenTheGitHubCLIFails() async {
+    let (defaults, remove) = preferences()
+    defer { remove() }
+    let signedOut = GitHubStars(isInstalled: { true }, check: { nil }, star: { false })
+    let request = StarRequest(defaults: defaults, gitHub: signedOut)
+    await request.refresh()
+    #expect(request.state == .repository)
+
+    let refused = StarRequest(defaults: defaults, gitHub: signedIn(accepts: false))
+    await refused.refresh()
+    var opened: [URL] = []
+    await refused.star { opened.append($0) }
+    #expect(opened == [StarRequest.repository])
+    #expect(refused.state == .repository)
+    #expect(StarRequest(defaults: defaults, gitHub: noCLI).state == .checking)
+}
+
+@Test @MainActor func dismissingWhileTheGitHubCLIAnswersStopsAsking() async {
+    let (defaults, remove) = preferences()
+    defer { remove() }
+    let (entered, enter) = AsyncStream.makeStream(of: Void.self)
+    let (released, release) = AsyncStream.makeStream(of: Void.self)
+    let slow = GitHubStars(isInstalled: { true }, check: {
+        enter.yield()
+        for await _ in released { break }
+        return ("octocat", false)
+    }, star: { true })
+    let request = StarRequest(defaults: defaults, gitHub: slow)
+    let refreshing = Task { await request.refresh() }
+    for await _ in entered { break }
     request.dismiss()
-    #expect(!request.isDue(at: launch))
-    #expect(StarRequest(start: .distantPast).isDue(at: launch))
+    release.yield()
+    await refreshing.value
+    #expect(request.state == .answered)
+}
+
+@Test @MainActor func sampleStarRequestRunsAndSavesNothing() async {
+    let request = StarRequest(sample: .gitHubCLI(account: "octocat"))
+    await request.refresh()
+    #expect(request.state == .gitHubCLI(account: "octocat"))
+    request.dismiss()
+    #expect(!request.isShown)
+    #expect(StarRequest(sample: .repository).isShown)
 }
