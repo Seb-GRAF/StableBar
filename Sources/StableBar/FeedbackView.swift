@@ -21,8 +21,6 @@ struct FeedbackView: View {
     @State private var found: [FoundIssue]?
     @State private var searching = false
     @State private var confirmsPost = false
-    @State private var posting = false
-    @State private var posted: URL?
     @State private var notice: String?
     @State private var showsReport = false
 
@@ -129,14 +127,14 @@ struct FeedbackView: View {
                         .disabled(formURL == nil)
                     if let account {
                         Button("Post as @\(account)…") { confirmsPost = true }
-                            .disabled(!editor.feedback.missing.isEmpty || posting)
+                            .disabled(!editor.feedback.missing.isEmpty)
                     }
                     Button("Copy") {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(editor.feedback.markdown, forType: .string)
                         notice = "Copied."
                     }
-                    if posting { ProgressView().controlSize(.small) }
+                    if editor.postingFeedback { ProgressView().controlSize(.small) }
                 }
                 if !agents.isEmpty {
                     HStack {
@@ -153,7 +151,7 @@ struct FeedbackView: View {
                     Text("To post, fill in \(ListFormatter.localizedString(byJoining: editor.feedback.missing)).")
                         .font(.callout).foregroundStyle(.secondary)
                 }
-                if let posted { Link("Posted \(posted.absoluteString)", destination: posted) }
+                if let posted = editor.postedIssue { Link("Posted \(posted.absoluteString)", destination: posted) }
                 if let notice { Text(notice).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
             } header: {
                 SettingsSectionTitle("Send")
@@ -165,6 +163,8 @@ struct FeedbackView: View {
         }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
+        .disabled(editor.postingFeedback)
+        .onChange(of: editor.feedback.title) { found = nil }
         .confirmationDialog("Post this issue on GitHub as @\(account ?? "")?", isPresented: $confirmsPost) {
             Button("Post", action: post)
         } message: {
@@ -216,23 +216,20 @@ struct FeedbackView: View {
         }
     }
 
-    /// Clears the draft before posting, so coming back to the pane while `gh` runs can't post it twice.
     private func post() {
-        let issue = editor.feedback
-        editor.feedback.title = ""
-        editor.feedback.answers = [:]
-        editor.feedback.crash = nil
-        posting = true
+        editor.postingFeedback = true
+        editor.postedIssue = nil
         notice = nil
-        found = nil
         Task {
             do {
-                posted = try await issue.post()
+                editor.postedIssue = try await editor.feedback.post()
+                editor.feedback.title = ""
+                editor.feedback.answers = [:]
+                editor.feedback.crash = nil
             } catch {
-                editor.feedback = issue
                 notice = "Couldn't post: \(error.localizedDescription)"
             }
-            posting = false
+            editor.postingFeedback = false
         }
     }
 

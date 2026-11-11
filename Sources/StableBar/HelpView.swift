@@ -115,7 +115,7 @@ private struct HelpAnswer: View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(Array(markdown.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, block in
                 if block.hasPrefix("```") {
-                    Text(block.split(separator: "\n").dropFirst().dropLast().joined(separator: "\n"))
+                    Text(block.split(separator: "\n").dropFirst().prefix { !$0.hasPrefix("```") }.joined(separator: "\n"))
                         .font(.system(size: 11.5, design: .monospaced))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)

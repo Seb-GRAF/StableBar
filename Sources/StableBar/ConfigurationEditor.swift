@@ -38,6 +38,10 @@ final class ConfigurationEditor {
     /// The question whose answer Help shows open.
     var expandedQuestion: String?
     var feedback = Feedback()
+    /// Whether Send feedback is posting `feedback` through the GitHub CLI. The draft stays locked until it's done, and
+    /// lives here so that leaving the pane can't unlock it.
+    var postingFeedback = false
+    var postedIssue: URL?
     var selectedProfileName: String?
     var search = ""
     var searchTarget: String?
