@@ -116,7 +116,7 @@ private struct BarEditSection: View {
 
     var body: some View {
         let state = editing.trayState(on: display.id, position: position)
-        let surface = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), config: config, colorScheme: colorScheme)
+        let surface = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme)
         let shape = RoundedRectangle(cornerRadius: 9)
         BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames, addSlot: addSlot) {
             BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
@@ -169,12 +169,12 @@ private struct BarEditTraySurface {
     /// Outlines and + use the widgets' text color when it reads on that surface.
     let ink: Color
 
-    init(barStyle: WidgetStyle, config: Configuration, colorScheme: ColorScheme) {
+    init(barStyle: WidgetStyle, look: BarEditLook, colorScheme: ColorScheme) {
         let resolve = { (color: HexColor) in colorScheme == .dark ? color.dark : color.light }
         // The strip's color as `BarSurface` paints it. Themes design their text for it, Liquid Glass or not.
-        let strip = resolve((barStyle.background ?? config.bar.background).firstColor)
+        let strip = resolve((barStyle.background ?? look.background).firstColor)
         // Widgets draw the text color in `defaults`, not the bar style's.
-        let text = config.defaults.foreground.map(resolve)
+        let text = look.defaults.foreground.map(resolve)
         isOwn = Double(strip & 0xff) / 255 < 0.85
         let scheme: ColorScheme = if isOwn {
             text.map { isLightText($0) ? .dark : .light } ?? colorScheme
@@ -259,7 +259,7 @@ struct BarEditSectionRow: View {
     }
 
     private var addSlot: some View {
-        let ink = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), config: config, colorScheme: colorScheme).ink
+        let ink = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme).ink
         return Button {
             store.barEditing.addPopover.show(store: store, displayID: display.id, position: position, anchor: anchor)
         } label: {
@@ -294,13 +294,23 @@ struct BarEditTile: View {
     let display: Int
     let kind: ScreenKind
     let entry: BarEditWidget
-    let config: Configuration
+    /// Not the whole `Configuration`: a screen with its own layout rebuilds it on every update, SwiftUI then
+    /// redraws the tile, and the redraw replaces the items of its open context menu, closing an open submenu.
+    let look: BarEditLook
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
     private var editing: BarEditing { store.barEditing }
     private var title: String { entry.name + (entry.visibility.isHidden ? ", Hidden" : "") }
+
+    init(store: BarStore, display: Int, kind: ScreenKind, entry: BarEditWidget, config: Configuration) {
+        self.store = store
+        self.display = display
+        self.kind = kind
+        self.entry = entry
+        look = BarEditLook(config)
+    }
 
     var body: some View {
         Group {
@@ -353,7 +363,7 @@ struct BarEditTile: View {
     }
 
     private var tile: some View {
-        let surface = BarEditTraySurface(barStyle: store.barStyle(on: kind), config: config, colorScheme: colorScheme)
+        let surface = BarEditTraySurface(barStyle: store.barStyle(on: kind), look: look, colorScheme: colorScheme)
         return Button { editing.select(entry.id) } label: {
             Group {
                 if entry.usesPlaceholder {
@@ -362,9 +372,9 @@ struct BarEditTile: View {
                         .padding(.horizontal, 5).frame(minHeight: 22).frame(maxWidth: 120)
                         .environment(\.colorScheme, surface.scheme)
                 } else {
-                    WidgetView(widget: entry.widget, defaults: config.defaults, popupDefaults: config.popupDefaults,
-                               store: store, monitor: display, defaultAnimation: config.bar.animation,
-                               defaultTransition: config.bar.motion.transition)
+                    WidgetView(widget: entry.widget, defaults: look.defaults, popupDefaults: look.popupDefaults,
+                               store: store, monitor: display, defaultAnimation: look.animation,
+                               defaultTransition: look.transition)
                         .accessibilityHidden(true).fixedSize()
                 }
             }
@@ -377,6 +387,23 @@ struct BarEditTile: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .accessibilityLabel("Edit \(title)")
+    }
+}
+
+/// What the edit bar's tiles and trays draw with from a screen's configuration.
+struct BarEditLook: Equatable {
+    let defaults: WidgetStyle
+    let popupDefaults: WidgetStyle
+    let background: BackgroundFill
+    let animation: WidgetAnimation
+    let transition: WidgetTransition
+
+    init(_ config: Configuration) {
+        defaults = config.defaults
+        popupDefaults = config.popupDefaults
+        background = config.bar.background
+        animation = config.bar.animation
+        transition = config.bar.motion.transition
     }
 }
 
