@@ -245,6 +245,8 @@ struct SetupTourView: View {
                 .opacity(leaving)
                 .blur(radius: 6 * (1 - leaving))
                 .offset(y: -10 * (1 - leaving))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("StableBar")
                 .position(x: size.width / 2, y: home - 118)
             Rectangle()
                 .fill(glow)
@@ -539,6 +541,7 @@ struct SetupTourView: View {
                             if selected { Image(systemName: "checkmark.circle.fill").font(.system(size: 15)) }
                         }
                         .frame(height: 20)
+                        .accessibilityHidden(true)
                         Text(preset.title).font(.system(size: 15, weight: .semibold)).padding(.top, 10)
                         Text(preset.detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).padding(.top, 2)
                         Spacer(minLength: 12)
@@ -566,11 +569,13 @@ struct SetupTourView: View {
                         .padding(.horizontal, 7)
                         .frame(height: 22)
                         .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
+                        .accessibilityHidden(true)
                     }
                     .padding(14)
                     .frame(minWidth: 0, maxWidth: .infinity, minHeight: 140, maxHeight: 140, alignment: .topLeading)
                 }
                 .help("Adds \(ListFormatter.localizedString(byJoining: sets.map(\.title))).")
+                .accessibilityLabel(preset.accessibilityLabel(widgetSets: sets, placement: session.presetPlacement))
             }
         }
     }
@@ -589,7 +594,13 @@ struct SetupTourView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(choices, id: \.key) { choice in
-                            themeTile(choice, appearance: appearance, selected: choice.key == selected)
+                            themeTile(choice, appearance: appearance, selected: choice.key == selected) { focused in
+                                if focused {
+                                    withAnimation(motion.movement(.smooth(duration: 0.3))) {
+                                        scroll.scrollTo(choice.key, anchor: .center)
+                                    }
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 24)
@@ -611,8 +622,9 @@ struct SetupTourView: View {
         }
     }
 
-    private func themeTile(_ choice: ThemeChoice, appearance: BarAppearance, selected: Bool) -> some View {
-        SetupTile(selected: selected) {
+    private func themeTile(_ choice: ThemeChoice, appearance: BarAppearance, selected: Bool,
+                           focusChanged: @escaping (Bool) -> Void) -> some View {
+        SetupTile(selected: selected, focusChanged: focusChanged) {
             choose(choice)
         } label: {
             VStack(alignment: .leading, spacing: 8) {
@@ -866,24 +878,24 @@ struct SetupTourView: View {
     @ViewBuilder private func permissionAction(_ permission: SetupPermission) -> some View {
         switch permission {
         case .accessibility:
-            permissionButton("Allow…") {
+            permissionButton(.allow, for: permission) {
                 lower()
                 session.store.windowClearance.requestAccess()
             }
         case .automation:
             if session.automationAccess == .denied {
-                permissionButton("Open Settings…") {
+                permissionButton(.openSettings, for: permission) {
                     lower()
                     MenuBarAutoHide.openAutomationSettings()
                 }
             } else {
-                permissionButton("Allow…") { Task { await session.allowAutomation() } }
+                permissionButton(.allow, for: permission) { Task { await session.allowAutomation() } }
             }
         case .calendars:
             if session.calendarAccess == .notDetermined {
-                permissionButton("Allow…") { Task { await session.requestCalendarAccess() } }
+                permissionButton(.allow, for: permission) { Task { await session.requestCalendarAccess() } }
             } else {
-                permissionButton("Open Settings…") {
+                permissionButton(.openSettings, for: permission) {
                     lower()
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
                 }
@@ -904,8 +916,17 @@ struct SetupTourView: View {
         Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
     }
 
-    private func permissionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action).buttonStyle(SetupButtonStyle(prominent: false))
+    private func permissionButton(_ kind: SetupPermission.Action, for permission: SetupPermission,
+                                  action: @escaping () -> Void) -> some View {
+        permissionButton(kind.title, accessibilityLabel: kind.accessibilityLabel(for: permission), action: action)
+    }
+
+    private func permissionButton(_ title: String, accessibilityLabel: String? = nil,
+                                  action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(SetupButtonStyle(prominent: false))
+            .accessibilityLabel(accessibilityLabel ?? title)
+            .accessibilityInputLabels([Text(title), Text(accessibilityLabel ?? title)])
     }
 
     private func escapeButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -1028,7 +1049,12 @@ struct SetupTourView: View {
         }
         .animation(motion.movement(.snappy), value: active)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(session.step + 1) of \(Self.pages.count)")
+        .accessibilityLabel(Self.progressLabel(step: phase == .tour ? session.step : nil, count: Self.pages.count))
+    }
+
+    /// The intro has its own dot, before the five numbered steps.
+    static func progressLabel(step: Int?, count: Int) -> String {
+        step.map { "Step \($0 + 1) of \(count)" } ?? "Introduction"
     }
 }
 
@@ -1071,17 +1097,25 @@ private struct SetupBackdrop: View {
     }
 }
 
-private struct SetupTile<Label: View>: View {
+struct SetupTile<Label: View>: View {
     let selected: Bool
+    var focusChanged: (Bool) -> Void = { _ in }
     let action: () -> Void
     @ViewBuilder let label: Label
     @State private var hovering = false
+    @State private var clearingFocus = false
+    @FocusState private var focused: Bool
+    @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var motion: SetupMotion { SetupMotion(reduceMotion: reduceMotion) }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            clearingFocus = true
+            focused = false
+            action()
+        } label: {
             label
                 .background(.white.opacity(selected ? 0.12 : hovering ? 0.09 : 0.05), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(selected ? 0.75 : 0.1), lineWidth: selected ? 1.5 : 1))
@@ -1090,9 +1124,32 @@ private struct SetupTile<Label: View>: View {
                 .contentShape(RoundedRectangle(cornerRadius: 14))
         }
         .buttonStyle(.plain)
+        .focusable(false)
+        .contentShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(.focusEffect, RoundedRectangle(cornerRadius: 14))
+        // Unrestricted focus includes Tab without macOS's Keyboard navigation setting, from macOS 14 on.
+        .focusable(isEnabled)
+        .focused($focused)
+        .focusEffectDisabled(false)
+        .task { focused = false }
+        .onChange(of: focused) {
+            // AppKit can assign mouse focus after the button's action; dismiss that ring too.
+            if clearingFocus {
+                focused = false
+                clearingFocus = false
+            }
+            focusChanged(focused)
+        }
+        .onKeyPress(keys: [.space], phases: .down) { _ in
+            guard isEnabled else { return .ignored }
+            action()
+            return .handled
+        }
         .onHover { hovering = $0 }
         .animation(motion.movement(.snappy(duration: 0.2)), value: hovering)
         .animation(motion.movement(.snappy(duration: 0.25)), value: selected)
+        .accessibilityAction { action() }
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

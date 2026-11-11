@@ -205,6 +205,20 @@ struct SetupPreferences: Equatable {
                 .filter { placement != .belowMenuBar || $0 != .menuBarItems }
         }
 
+        /// Names the tile's widget picture, including the starter's dimmed widgets, without reading symbol names.
+        func accessibilityLabel(widgetSets: [WidgetSet], placement: Placement) -> String {
+            let additions = widgetSets.filter { if case .workspaces = $0 { false } else { $0 != .menuBarItems } }
+            let names: [String]
+            if placement == .belowMenuBar {
+                names = ["Workspaces", "System"] + additions.filter { $0 != .system }.map(\.title)
+            } else {
+                let workspaces = widgetSets.filter { if case .workspaces = $0 { true } else { false } }
+                names = ["Apple menu"] + workspaces.map(\.title) + ["App menus"] + additions.map(\.title)
+                    + ["Clock"] + (widgetSets.contains(.menuBarItems) ? ["Menu bar items"] : [])
+            }
+            return "\(title). \(detail). Widgets: \(names.joined(separator: ", "))."
+        }
+
         private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
             switch self {
             case .minimal: SetupPreferences(placement: placement, theme: .builtIn, widgetSets: [.sound, .menuBarItems])

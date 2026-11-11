@@ -171,6 +171,24 @@ struct SetupSystem {
 enum SetupPermission: CaseIterable, Hashable {
     case accessibility, automation, calendars
 
+    enum Action {
+        case allow, openSettings
+
+        var title: String {
+            switch self {
+            case .allow: "Allow…"
+            case .openSettings: "Open Settings…"
+            }
+        }
+
+        func accessibilityLabel(for permission: SetupPermission) -> String {
+            switch self {
+            case .allow: "Allow \(permission.title)"
+            case .openSettings: "Open \(permission.title) Settings"
+            }
+        }
+    }
+
     var title: String {
         switch self {
         case .accessibility: "Accessibility"
@@ -665,7 +683,6 @@ struct SetupCardView: View {
         .padding(28)
         .frame(width: 460, height: 640)
         .background(SettingsPalette.background)
-        .focusEffectDisabled()
         .onChange(of: reduceMotion, initial: true) { motionChanged(SetupMotion(reduceMotion: reduceMotion)) }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
