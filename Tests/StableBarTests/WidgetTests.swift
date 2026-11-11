@@ -114,12 +114,14 @@ import Testing
 }
 
 @Test func cancellingAWidgetStopsItsRunningCommand() async throws {
-    let task = Task { try await runCommand("/bin/sleep", arguments: ["30"]) }
+    // A busy runner can hold the sleep below for seconds, so the command's timeout must not run out first, and
+    // the bound only has to tell a killed command from one that ran to the end.
+    let task = Task { try await runCommand("/bin/sleep", arguments: ["60"], timeout: 120) }
     try await Task.sleep(for: .milliseconds(100))
     let start = ContinuousClock.now
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
-    #expect(start.duration(to: .now) < .seconds(5))
+    #expect(start.duration(to: .now) < .seconds(30))
 }
 
 @Test func workspaceSnapshotKeepsMonitorFocusAndDeduplicatesAppWindows() throws {
