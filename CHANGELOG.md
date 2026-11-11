@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.13.0](https://github.com/Seb-GRAF/StableBar/compare/v0.12.0...v0.13.0) (2026-11-11)
+
+### Features
+
+* answer common questions and send feedback from a Help section ([#564](https://github.com/Seb-GRAF/StableBar/issues/564)) ([325083e](https://github.com/Seb-GRAF/StableBar/commit/325083e746547fed3bfea8b6a9b84548a4c5e334))
+* apply migrations to includes, packages and every screen setup's bar ([#539](https://github.com/Seb-GRAF/StableBar/issues/539)) ([6cc59f4](https://github.com/Seb-GRAF/StableBar/commit/6cc59f4b2b6a7fcf2319815b12541d5e8a451e74))
+* check in setup that Workspaces can reach yabai or OmniWM ([#552](https://github.com/Seb-GRAF/StableBar/issues/552)) ([3a9ef7e](https://github.com/Seb-GRAF/StableBar/commit/3a9ef7ec1460750c5aa93d139bfc2379d047a9a7)), closes [#463](https://github.com/Seb-GRAF/StableBar/issues/463)
+* check the Switch to Desktop shortcuts in setup and Settings ([#551](https://github.com/Seb-GRAF/StableBar/issues/551)) ([92c11e1](https://github.com/Seb-GRAF/StableBar/commit/92c11e153c736fb252571657ce1a21eed9ab56d4)), closes [#447](https://github.com/Seb-GRAF/StableBar/issues/447)
+* follow Reduce Transparency and Increase Contrast ([#542](https://github.com/Seb-GRAF/StableBar/issues/542)) ([3ea111b](https://github.com/Seb-GRAF/StableBar/commit/3ea111bf6c1a76e2e6963053dab83c93e758675a))
+* guide Accessibility access with a panel to drag StableBar into System Settings ([#559](https://github.com/Seb-GRAF/StableBar/issues/559)) ([29f000c](https://github.com/Seb-GRAF/StableBar/commit/29f000cd2b0ff3438df416670fe6395a36662a2f))
+* pause scripts and providers while the displays sleep or the screen is locked ([#538](https://github.com/Seb-GRAF/StableBar/issues/538)) ([a09513d](https://github.com/Seb-GRAF/StableBar/commit/a09513d4ba4c07bd59a8866376009878a4db0441))
+* sign updates with an EdDSA key as well as the Developer ID ([#540](https://github.com/Seb-GRAF/StableBar/issues/540)) ([7e34d56](https://github.com/Seb-GRAF/StableBar/commit/7e34d56d9d0071304970e664aaa325bd97da90d6))
+* turn on Keep windows clear in setup when no window manager runs ([#553](https://github.com/Seb-GRAF/StableBar/issues/553)) ([a80b001](https://github.com/Seb-GRAF/StableBar/commit/a80b001936bfd1cc56cc567989f1dff5727b9ddd)), closes [#466](https://github.com/Seb-GRAF/StableBar/issues/466) [#439](https://github.com/Seb-GRAF/StableBar/issues/439)
+
+### Bug Fixes
+
+* follow Reduce Motion in setup's steps, theme row and tiles ([9c3f0c4](https://github.com/Seb-GRAF/StableBar/commit/9c3f0c440f45d3bb7cdc3cf74776073d00c7265e)), closes [#465](https://github.com/Seb-GRAF/StableBar/issues/465)
+* install packages when the configuration folder is a symbolic link ([#531](https://github.com/Seb-GRAF/StableBar/issues/531)) ([7e4f88b](https://github.com/Seb-GRAF/StableBar/commit/7e4f88b28fc880404f8b9ec9b54c2f33951b95a2)), closes [#530](https://github.com/Seb-GRAF/StableBar/issues/530)
+* keep setup's later choices when the preset changes ([3318ae0](https://github.com/Seb-GRAF/StableBar/commit/3318ae023833967fc6c8a084d32107c5a479f2eb)), closes [#461](https://github.com/Seb-GRAF/StableBar/issues/461)
+* keep the website's Store review sheet inside its window ([9519645](https://github.com/Seb-GRAF/StableBar/commit/9519645bd505051766e4de87fba500c747848a44)), closes [#526](https://github.com/Seb-GRAF/StableBar/issues/526)
+* leave windows alone until setup finishes ([#547](https://github.com/Seb-GRAF/StableBar/issues/547)) ([c9b75cf](https://github.com/Seb-GRAF/StableBar/commit/c9b75cf803fac061ac313256d6674601b7df5540)), closes [#466](https://github.com/Seb-GRAF/StableBar/issues/466)
+* let a group wider than its tray scroll sideways while editing the bar in place ([#543](https://github.com/Seb-GRAF/StableBar/issues/543)) ([f6e6e25](https://github.com/Seb-GRAF/StableBar/commit/f6e6e257711b95f3e21aa49b758977509695df1f))
+* make setup's tiles, closing card and permission buttons work with the keyboard and VoiceOver ([#554](https://github.com/Seb-GRAF/StableBar/issues/554)) ([0944100](https://github.com/Seb-GRAF/StableBar/commit/094410067df7d46d7794958784c960abc2f4f889)), closes [#464](https://github.com/Seb-GRAF/StableBar/issues/464)
+* offer Keep notifications clear only on macOS 26 and later ([#550](https://github.com/Seb-GRAF/StableBar/issues/550)) ([5fd428a](https://github.com/Seb-GRAF/StableBar/commit/5fd428a158d263a1d9b4ca0e8ddd741704066a4f)), closes [#458](https://github.com/Seb-GRAF/StableBar/issues/458)
+* offer the Notch preset only on Macs with a notch ([#548](https://github.com/Seb-GRAF/StableBar/issues/548)) ([3fef60f](https://github.com/Seb-GRAF/StableBar/commit/3fef60f2a7842b3001ef7ee88453ea4f8cba60be)), closes [#457](https://github.com/Seb-GRAF/StableBar/issues/457)
+* open an app's own menu when Menu bar items can't draw its rows ([#541](https://github.com/Seb-GRAF/StableBar/issues/541)) ([24f16d7](https://github.com/Seb-GRAF/StableBar/commit/24f16d7cf5f2f7f266b635399b1f9fb977242743))
+* shorten long errors in the bar's menus and open Status from them ([#536](https://github.com/Seb-GRAF/StableBar/issues/536)) ([5710a3e](https://github.com/Seb-GRAF/StableBar/commit/5710a3e4ab44ff15b17d6f7afcc703e64633bc3e))
+
 ## [0.12.0](https://github.com/Seb-GRAF/StableBar/compare/v0.11.0...v0.12.0) (2026-11-10)
 
 ### Features
