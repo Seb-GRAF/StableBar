@@ -134,6 +134,11 @@
       "description": "Draw the Move to Applications row in setup or Settings General without touching any app: its button, confirmation, existing copy, failure, progress, or direction back to an open setup. A setup scene also needs setup.inApplications false.",
       "enum": ["ready", "replace", "useExisting", "failed", "moving", "setupOpen"]
     },
+    "macOSMajorVersion": {
+      "description": "The macOS major version for feature availability in setup and Settings. 26 by default, independently of the Mac that draws.",
+      "type": "integer",
+      "minimum": 14
+    },
     "appearances": {
       "description": "The appearances to draw, each to its own image. Both by default.",
       "type": "array",

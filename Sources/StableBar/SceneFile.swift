@@ -63,6 +63,8 @@ struct SceneFile: Decodable {
     /// A move row outside Applications, for setup or Settings → General.
     var applicationMove: ApplicationMove?
     enum ApplicationMove: String, Decodable, CaseIterable { case ready, replace, useExisting, failed, moving, setupOpen }
+    /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
+    var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
@@ -71,7 +73,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
-             applicationMove, appearances,
+             applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -164,6 +166,11 @@ struct SceneFile: Decodable {
         if applicationMove != nil, draw == .setup, setup?.inApplications != false {
             throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
                 debugDescription: "A setup scene draws applicationMove only with setup.inApplications false.")
+        }
+        macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
+        if macOSMajorVersion < 14 {
+            throw DecodingError.dataCorruptedError(forKey: .macOSMajorVersion, in: values,
+                                                   debugDescription: "A macOS major version is 14 or later.")
         }
         appearances = try values.decodeIfPresent([Appearance].self, forKey: .appearances) ?? Appearance.allCases
         if appearances.isEmpty || Set(appearances).count != appearances.count {

@@ -159,6 +159,7 @@ private final class SetupTourPanel: NSPanel {
 /// What setup reads from macOS and changes there; tests replace it so they never touch this Mac's settings.
 @MainActor
 struct SetupSystem {
+    var macOSVersion = MacOSVersion()
     var automationAccess: (_ asking: Bool) async -> MenuBarAutoHide.Access = { await MenuBarAutoHide.access(asking: $0) }
     var setMenuBarHidden: (_ hidden: Bool) async throws -> Void = { try await MenuBarAutoHide.set($0) }
     var menuBarHides: () -> Bool = { MenuBarAutoHide.isOn() }
