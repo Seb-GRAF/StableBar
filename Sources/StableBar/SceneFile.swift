@@ -72,6 +72,8 @@ struct SceneFile: Decodable {
         var calendars = true
         /// Whether the Mac has an internal battery, which presets add Battery for.
         var battery = true
+        /// Whether any connected display has a notch, which the Notch preset needs.
+        var notch = true
         /// Whether StableBar runs from an Applications folder, which Open at login needs.
         var inApplications = true
     }
@@ -162,7 +164,7 @@ struct SceneFile: Decodable {
 
 extension SceneFile.Setup: Decodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, inApplications
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications
     }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
@@ -185,6 +187,7 @@ extension SceneFile.Setup: Decodable {
         automation = try values.decodeIfPresent(Bool.self, forKey: .automation) ?? true
         calendars = try values.decodeIfPresent(Bool.self, forKey: .calendars) ?? true
         battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
+        notch = try values.decodeIfPresent(Bool.self, forKey: .notch) ?? true
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
     }
 }

@@ -107,6 +107,7 @@ struct SetupTourView: View {
         // setup's own change lands.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             currentMenuBarHeight = menuBarHeight()
+            session.refreshDisplays()
         }
         .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -525,7 +526,7 @@ struct SetupTourView: View {
 
     private var presets: some View {
         HStack(spacing: 12) {
-            ForEach(SetupPreferences.Preset.offered(on: session.placement, keeping: session.preset), id: \.self) { preset in
+            ForEach(session.offeredPresets, id: \.self) { preset in
                 let selected = session.preset == preset
                 let sets = session.shownWidgetSets(preset)
                 SetupTile(selected: selected) {

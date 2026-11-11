@@ -112,16 +112,16 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
       "configuration": { "widgets": [] },
       "draw": "setup",
       "setup": { "step": "permissions", "placement": "belowMenuBar", "preset": "developer", "menuBarHides": true,
-                 "accessibility": false, "automation": false, "calendars": false, "battery": false }
+                 "accessibility": false, "automation": false, "calendars": false, "battery": false, "notch": false }
     }
     """#)
     #expect(decoded.draw == .setup)
     #expect(decoded.setup == SceneFile.Setup(step: .permissions, placement: .belowMenuBar, preset: .developer, menuBarHides: true,
-                                             accessibility: false, automation: false, calendars: false, battery: false))
+                                             accessibility: false, automation: false, calendars: false, battery: false, notch: false))
     let plain = try scene(#"{"configuration": {"widgets": []}, "draw": "setup", "setup": {}}"#)
     #expect(plain.setup == SceneFile.Setup())
     #expect(SceneFile.Setup() == SceneFile.Setup(step: .placement, placement: nil, preset: nil, menuBarHides: false,
-                                                 accessibility: true, automation: true, calendars: true, battery: true))
+                                                 accessibility: true, automation: true, calendars: true, battery: true, notch: true))
     #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
 }
 

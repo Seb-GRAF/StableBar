@@ -227,6 +227,7 @@ enum SceneRenderer {
         system.defaults = defaults
         system.workspaceSource = { $0 ?? .spaces }
         system.hasBattery = { setup.battery }
+        system.hasNotchedDisplay = { setup.notch }
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
         let session = SetupSession(store: store, system: system)
