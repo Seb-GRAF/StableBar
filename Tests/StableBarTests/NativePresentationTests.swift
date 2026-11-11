@@ -437,6 +437,49 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     #expect(items.map(\.hasMenu) == [false, true])
 }
 
+/// CodexBar's SwiftUI menu shows Accessibility provider buttons without text, and only the usage card's history submenu.
+/// Tailscale's rows draw their text in child views.
+@Test func menuBarItemsOpenTheAppsOwnMenuWhenARowHasNeitherTitleNorText() async {
+    let tree = AccessibilityTree()
+    func app(_ pid: pid_t, rows: [AXUIElement]) {
+        let quit = tree.add(pid + 4000, role: kAXMenuItemRole, [kAXTitleAttribute: "Quit" as CFString])
+        let item = tree.add(pid + 2000, role: kAXMenuBarItemRole, children: [tree.add(pid + 3000, role: kAXMenuRole, children: rows + [quit])])
+        tree.add(pid, role: kAXApplicationRole, [kAXExtrasMenuBarAttribute: tree.add(pid + 1000, role: kAXMenuBarRole, children: [item])])
+    }
+    func text(_ pid: pid_t, _ value: String) -> AXUIElement { tree.add(pid, role: kAXStaticTextRole, [kAXValueAttribute: value as CFString]) }
+    app(950, rows: [tree.add(9000, role: kAXMenuItemRole, children: [tree.add(9001, role: kAXButtonRole), tree.add(9002, role: kAXButtonRole)])])
+    let history = tree.add(9011, role: kAXMenuRole, children: [tree.add(9012, role: kAXMenuItemRole, children: [text(9013, "Oct 27: $4.20")])])
+    app(951, rows: [tree.add(9010, role: kAXMenuItemRole, children: [history])])
+    app(952, rows: [tree.add(9020, role: kAXMenuItemRole, children: [tree.add(9021, role: kAXGroupRole, children: [text(9022, "Connected")])]),
+                    tree.add(9023, role: kAXMenuItemRole, [kAXTitleAttribute: "" as CFString])])
+
+    let items = await foundMenuBarItems(apps: [950, 951, 952], agent: nil, readAttribute: tree.read).sorted { $0.pid < $1.pid }
+    #expect(items.map(\.hasMenu) == [false, false, true])
+}
+
+/// A row's title comes from the text it draws, never from its submenu's rows.
+@Test @MainActor func appMenuRowsTakeNoTitleFromTheirSubmenu() {
+    let tree = AccessibilityTree()
+    func history(_ pid: pid_t) -> AXUIElement {
+        tree.add(pid, role: kAXMenuRole, children: [tree.add(pid + 1, role: kAXMenuItemRole, children: [
+            tree.add(pid + 2, role: kAXStaticTextRole, [kAXValueAttribute: "Oct 27: $4.20" as CFString]),
+        ])])
+    }
+    let session = tree.add(9001, role: kAXStaticTextRole, [kAXValueAttribute: "Session 42%" as CFString])
+    let item = tree.add(8000, role: kAXMenuBarItemRole, children: [tree.add(8001, role: kAXMenuRole, children: [
+        tree.add(9000, role: kAXMenuItemRole, children: [session, history(9100)]),
+        tree.add(9002, role: kAXMenuItemRole, children: [history(9200)]),
+        tree.add(9003, role: kAXMenuItemRole, [kAXTitleAttribute: "Quit" as CFString]),
+    ])])
+    let menu = AppMenu(checkAccess: { true }, readAttribute: tree.read, readAttributes: { names, element in names.map { tree.read($0, element) } })
+    guard case let .appMenu(entries) = menu.popup(forMenuBarItem: item).layout.content else {
+        Issue.record("The popup isn't an app menu")
+        return
+    }
+    #expect(entries.map(\.title) == ["Session 42%", "Quit"])
+    #expect(entries.map(\.hasSubmenu) == [true, false])
+}
+
 @Test func macOS27FallsBackToMenuBarAgentsOwnListWhenItsWindowsHoldNoItems() async {
     let tree = AccessibilityTree()
     let clock = tree.add(8001, role: kAXMenuBarItemRole, [kAXIdentifierAttribute: "com.apple.menuextra.clock" as CFString])
