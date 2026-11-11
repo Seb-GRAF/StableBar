@@ -63,7 +63,7 @@ struct HelpView: View {
                         }
                     }
                 }
-                .disabled(starRequest.isStarring)
+                .disabled(starRequest.isStarring || starRequest.state == .checking)
                 .help(starRequest.help)
             }
             .buttonStyle(.plain)

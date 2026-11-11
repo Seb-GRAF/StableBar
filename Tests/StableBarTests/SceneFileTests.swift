@@ -126,6 +126,9 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(throws: (any Error).self) {
         try scene(#"{"configuration": {}, "draw": "settings", "section": "general", "starRequest": "thanked"}"#)
     }
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "settings", "widget": "clock", "section": "help", "starRequest": "thanked"}"#)
+    }
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "update", "starRequest": "starred"}"#) }
 }
 
