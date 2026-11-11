@@ -730,6 +730,54 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     }
 }
 
+/// Every stored preference must be classified when a preset replaces its part of setup. All fields in this fixture
+/// differ from their defaults so resetting any of the person's choices fails, including an optional Bool becoming nil.
+@Test func setupPresetReplacementClassifiesEveryPreference() {
+    let choices = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour,
+                                   theme: .package(id: "slate", version: "1"), widgetSets: [.meetings], workspaces: .yabai,
+                                   keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true)
+    let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour, theme: .builtIn,
+                                        widgetSets: [.system], workspaces: .spaces,
+                                        keepWindowsClear: false, keepNotificationsClear: false)
+    let presetFields: Set<String> = ["appearance", "theme", "widgetSets"]
+    let otherFields: Set<String> = ["placement", "clock", "workspaces", "keepWindowsClear", "keepNotificationsClear", "deferMeetings"]
+    func fields(_ preferences: SetupPreferences) -> [String: String] {
+        Dictionary(uniqueKeysWithValues: Mirror(reflecting: preferences).children.map { ($0.label!, String(describing: $0.value)) })
+    }
+    let mine = fields(choices), preset = fields(replacement), initial = fields(SetupPreferences())
+    let merged = fields(choices.replacingPresetChoices(with: replacement))
+    #expect(Set(mine.keys) == presetFields.union(otherFields), "Classify the new preference here.")
+    for field in mine.keys {
+        #expect(mine[field] != initial[field] && mine[field] != preset[field],
+                "Give \(field) a value of its own in both fixtures.")
+        #expect(merged[field] == (presetFields.contains(field) ? preset : mine)[field],
+                "A preset change handles \(field) wrongly; update replacingPresetChoices.")
+    }
+    #expect(choices.replacingPresetChoices(with: SetupPreferences()) == SetupPreferences(
+        placement: .belowMenuBar, clock: .twelveHour, workspaces: .yabai,
+        keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true))
+}
+
+/// A clock choice and deferred Meetings survive a preset change but write nothing for widgets the new bar lacks.
+@Test(arguments: [false, true])
+func setupKeptChoicesIgnoreMissingWidgets(deselecting: Bool) throws {
+    var choices = SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    choices.clock = .twelveHour
+    choices.deferMeetings = true
+    let replacement = deselecting ? SetupPreferences()
+        : SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: .belowMenuBar)
+    let preferences = choices.replacingPresetChoices(with: replacement)
+    #expect(preferences.clock == .twelveHour)
+    #expect(preferences.deferMeetings)
+    let updated = try preferences.applying(to: bundledStarter)
+    let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
+    #expect(!configuration.widgets.contains { if case .clock = $0.content { true } else { false } })
+    #expect(!configuration.providers.values.contains { $0.type == "calendar" })
+    #expect(!configuration.widgets.contains { $0.id == "meeting" })
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
+    #expect(document["widgetOverrides"] == nil)
+}
+
 private let bundledStarter: Data = {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     return try! Data(contentsOf: repository.appending(path: "Resources/config.json"))
