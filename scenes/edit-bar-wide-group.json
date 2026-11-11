@@ -1,0 +1,19 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "height": 40, "offset": 0, "inset": 12, "spacing": 8 },
+    "groups": {
+      "status": { "style": { "background": "#8080802e", "cornerRadius": 8, "paddingHorizontal": 6, "spacing": 10 } }
+    },
+    "widgets": [
+      { "id": "apple", "type": "appleMenu", "position": "left" },
+      { "id": "app-menu", "type": "appMenu", "position": "left" },
+      { "id": "now-playing", "type": "text", "icon": "music.note", "text": "Clair de Lune", "position": "right", "group": "status", "style": { "width": 1500 } },
+      { "id": "battery", "type": "text", "icon": "battery.75percent", "text": "76%", "position": "right", "group": "status" },
+      { "id": "wifi", "type": "text", "icon": "wifi", "text": "Home", "position": "right", "group": "status" },
+      { "id": "timer", "type": "text", "icon": "timer", "text": "24:59", "position": "right" },
+      { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm" }
+    ]
+  },
+  "draw": "editBar"
+}

@@ -213,6 +213,9 @@ struct BarEditSectionRow: View {
     let config: Configuration
     let adding: Bool
     @State private var anchor = NSView()
+    /// How wide the rows are, and each unit's own width: a unit wider than its row scrolls sideways in it.
+    @State private var rowWidth = CGFloat.infinity
+    @State private var unitWidths: [String: CGFloat] = [:]
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -239,12 +242,15 @@ struct BarEditSectionRow: View {
                         }
                     }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { unitWidths[unit.id] = $0 }
+                .modifier(SidewaysScroll(scrolls: unitWidths[unit.id, default: 0] + config.bar.spacing > rowWidth))
                 .opacity(collapsed ? 0 : editing.opacity(for: unit.widgets[0].id))
                 .frame(width: collapsed ? 0 : nil)
                 .padding(leadingSlot ? .leading : .trailing, collapsed ? 0 : config.bar.spacing)
             }
             if !leadingSlot { addSlot }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
         .animation(reduceMotion ? nil : .reorder, value: editing.insertion)
         .frame(minHeight: BarEditTrayMetrics.slot)
         .fixedSize(horizontal: false, vertical: true)
@@ -376,4 +382,19 @@ struct BarEditTile: View {
 
 private extension Animation {
     static let reorder = Animation.spring(duration: 0.3, bounce: 0.15)
+}
+
+/// Scrolls a unit wider than its row sideways, unclipped so the − badges that overhang the tiles' corners still show.
+private struct SidewaysScroll: ViewModifier {
+    let scrolls: Bool
+
+    func body(content: Content) -> some View {
+        if scrolls {
+            ScrollView(.horizontal) { content }
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+        } else {
+            content
+        }
+    }
 }
