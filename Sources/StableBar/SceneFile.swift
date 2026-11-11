@@ -16,7 +16,6 @@ struct SceneFile: Decodable {
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
-    /// The update popup's star request: opening the repository, starring through the GitHub CLI, or its thanks.
     enum StarRequestLine: String, Decodable, CaseIterable {
         case repository, gitHubCLI, thanked
 

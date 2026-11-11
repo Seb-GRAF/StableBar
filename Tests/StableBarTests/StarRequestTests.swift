@@ -11,7 +11,6 @@ private func preferences() -> (UserDefaults, () -> Void) {
 
 private let noCLI = GitHubStars(isInstalled: { false }, check: { nil }, star: { false })
 
-/// A GitHub CLI signed in as octocat, whose star is `starred` and whose star request `accepts` or fails.
 private func signedIn(starred: Bool = false, accepts: Bool = true) -> GitHubStars {
     GitHubStars(isInstalled: { true }, check: { ("octocat", starred) }, star: { accepts })
 }

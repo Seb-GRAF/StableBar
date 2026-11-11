@@ -117,7 +117,6 @@ struct GitHubStars: Sendable {
     var isInstalled: @Sendable () -> Bool
     /// The signed-in account and whether it starred StableBar, or nil when `gh` is missing, signed out or failed.
     var check: @Sendable () async -> (account: String, starred: Bool)?
-    /// Whether GitHub took the star.
     var star: @Sendable () async -> Bool
 
     static let cli = GitHubStars(
