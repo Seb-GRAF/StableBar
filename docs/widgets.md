@@ -74,7 +74,7 @@ Both menu widgets use the configured hover background and keep their normal text
 }
 ```
 
-App menus and the Apple menu follow the app that owns the macOS menu bar, even while the menu bar is hidden. A background helper without menus, such as a device driver's agent, can come to the front without taking over the menu bar; the widgets then keep the previous app's menus, as macOS does. StableBar reads the titles through Accessibility when the menu bar moves to another app, when you wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks, submenus and keyboard shortcuts, which line up on the right as in the macOS menu bar, with 🌐 for fn. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Its first click shows the macOS prompt, and later clicks open that pane. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
+App menus and the Apple menu follow the app that owns the macOS menu bar, even while the menu bar is hidden. A background helper without menus, such as a device driver's agent, can come to the front without taking over the menu bar; the widgets then keep the previous app's menus, as macOS does. StableBar reads the titles through Accessibility when the menu bar moves to another app, when you wake or unlock your Mac, and when the pointer enters App menus or an Apple menu that opens the menu. If a read fails while an app is becoming ready, the widgets keep their last complete menus and retry for a few seconds. Each menu is read from the app when it opens, so it works while the macOS menu bar is hidden; choosing an item chooses it in the app. These menus show items, separators, checkmarks, submenus and keyboard shortcuts, which line up on the right as in the macOS menu bar, with 🌐 for fn. Allow StableBar in **System Settings → Privacy & Security → Accessibility**; until then App menus shows a warning, except while setup is open, and the Apple menu shows its logo. Clicking either opens that pane with the same panel as **Allow…** in setup, to drag StableBar into the list. While a StableBar window such as Settings is in front, the widgets keep the previous app's menus.
 
 ## yabai workspaces
 
@@ -89,7 +89,7 @@ Set the source at the top level of your configuration:
 
 StableBar reads spaces, windows and displays at startup. Space numbers, app icons, focus animations, `workspace` styling and `"display": "active"` use the same view as AeroSpace. Clicking a space runs `yabai -m space --focus NUMBER`.
 
-Add these [yabai signals](https://github.com/koekeishiya/yabai/blob/master/doc/yabai.asciidoc#signal) to `~/.yabairc` to refresh after changes:
+Add these [yabai signals](https://github.com/koekeishiya/yabai/blob/master/doc/yabai.asciidoc#signal) to your yabai configuration to refresh after changes. yabai uses the first file it finds: `$XDG_CONFIG_HOME/yabai/yabairc`, `~/.config/yabai/yabairc`, then `~/.yabairc` (or the file named by its `--config` option):
 
 ```sh
 for event in space_changed space_created space_destroyed display_changed display_added display_removed display_moved \
@@ -100,7 +100,7 @@ for event in space_changed space_created space_destroyed display_changed display
 done
 ```
 
-Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` if you use a different configuration. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
+Adjust the app path if installed elsewhere, and include `--config PATH` before `--trigger` to target one StableBar configuration; without it, the event reaches every running bar. After saving the signals, run `yabai --restart-service` to load them. Setup’s **Finishing touches** checks the connection, reads the default config locations above without executing them, and checks that all of these signals are loaded for this StableBar configuration. It offers **Copy signals**, **Check Again** and a guide link; it never edits your yabai config. **Copy signals** uses the broadcast form above for every StableBar configuration, and the Applications path until you move the app there. If you start yabai with `--config`, verify that file’s signals yourself; setup reads the default locations. A config that sources another script may stay unverified too. Run `StableBar --trigger yabai` to refresh manually, or use **Reconnect yabai** in the bar menu.
 
 ## OmniWM workspaces
 
@@ -113,7 +113,7 @@ Adjust the app path if installed elsewhere, and include `--config PATH` before `
 }
 ```
 
-StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. If the widget says it can't reach OmniWM, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
+StableBar runs `omniwmctl` from your login shell's `PATH`, or the copy inside OmniWM's app, so **Install CLI to PATH** is optional. It subscribes to workspace, window, focus and display changes, so OmniWM needs no signals, and it reconnects like the AeroSpace connection, at once when OmniWM launches. Cells keep OmniWM's workspace order and show each workspace's display name. The focused workspace is the active one on the display you're using, even when it is empty. Clicking a workspace runs `omniwmctl workspace focus-name NAME`, and clicking a window item focuses that window. Scratchpad windows aren't shown. Setup’s **Finishing touches** checks the same connection when your previewed bar uses OmniWM Workspaces. If OmniWM isn't running, setup asks you to open it first. If IPC is unavailable while it runs, setup offers **Check Again** after you turn on **Enable IPC**; you can still finish setup. If the widget says it can't reach OmniWM later, check that OmniWM is running with **Enable IPC** on, then choose **Reconnect** in **Settings → General → Workspaces**.
 
 ## Rift workspaces
 

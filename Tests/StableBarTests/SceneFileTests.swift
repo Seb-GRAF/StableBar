@@ -118,6 +118,13 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(decoded.tab == .placement)
 }
 
+@Test func sceneDrawsTheUpdatePopupsStarRequest() throws {
+    #expect(try scene(#"{"configuration": {}, "draw": "update", "starRequest": "thanked"}"#).starRequest == .thanked)
+    #expect(try scene(#"{"configuration": {}, "draw": "update"}"#).starRequest == nil)
+    #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", "starRequest": "thanked"}"#) }
+    #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "update", "starRequest": "starred"}"#) }
+}
+
 @Test func sceneRejectsAnUnknownDraw() {
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "window"}"#) }
 }
@@ -171,6 +178,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(properties["tab"]) == Set(SceneFile.Tab.allCases.map(\.rawValue)))
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
     #expect(choices(properties["accessibilityDisplay"]) == Set(SceneFile.AccessibilityDisplay.allCases.map(\.rawValue)))
+    #expect(choices(properties["starRequest"]) == Set(SceneFile.StarRequestLine.allCases.map(\.rawValue)))
     guard case let .object(setup)? = properties["setup"], case let .object(setupProperties)? = setup["properties"] else {
         Issue.record("scene.schema.json describes no setup properties"); return
     }
@@ -178,6 +186,16 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(setupProperties["step"]) == Set(SetupSession.Step.allCases.map { "\($0)" }))
     #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar"])
     #expect(choices(setupProperties["preset"]) == Set(SetupPreferences.Preset.allCases.map { "\($0)" }))
+    #expect(choices(setupProperties["workspaceCheck"]) == Set(SceneFile.Setup.WorkspaceCheck.allCases.map(\.rawValue)))
+}
+
+@Test(arguments: SceneFile.Setup.WorkspaceCheck.allCases)
+func sceneStubsWorkspaceChecks(result: SceneFile.Setup.WorkspaceCheck) throws {
+    let decoded = try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "\#(result.rawValue)"}}"#)
+    #expect(decoded.setup?.workspaceCheck == result)
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration": {}, "draw": "setup", "setup": {"workspaceCheck": "failed"}}"#)
+    }
 }
 
 @Test @MainActor func everySceneInTheRepositoryLoads() throws {

@@ -808,7 +808,7 @@ struct WidgetView: View {
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
                 AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
-                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to ask for access; later clicks open System Settings." : nil) {
+                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
@@ -1334,7 +1334,7 @@ struct AppMenuView: View {
                     Image(systemName: "exclamationmark.triangle").padding(padding).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to ask for access; later clicks open System Settings.")
+                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings and drag StableBar into the list.")
             }
             ForEach(Array(items.prefix(count).enumerated()), id: \.offset) { index, item in
                 let anchor = anchors[index].map(ObjectIdentifier.init)

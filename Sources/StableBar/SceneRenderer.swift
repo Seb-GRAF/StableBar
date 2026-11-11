@@ -164,7 +164,7 @@ enum SceneRenderer {
             try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark,
                                 accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
         case .update:
-            store.update = AppUpdate.sample()
+            store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
                                 dark: dark, accessibilityDisplay: [], settle: settle, to: url)
@@ -208,6 +208,9 @@ enum SceneRenderer {
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+        case .accessibilityGuide:
+            try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
+                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
@@ -241,7 +244,12 @@ enum SceneRenderer {
         system.hasNotchedDisplay = { setup.notch }
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
+        system.checkWorkspaces = { source, _ in
+            setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
+        }
+        system.yabaiSignalScript = YabaiSetupSignals.script()
         let session = SetupSession(store: store, system: system)
+        defer { session.workspaceConnection.hide() }
         session.step = setup.step.rawValue
         store.appMenu.hidesAccessWarning = true
         store.barEditing.setupIsOpen = true
@@ -256,7 +264,10 @@ enum SceneRenderer {
             if let preset = setup.preset { session.toggle(preset) }
             choices.made = true
         }
-        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: { choices.made }, to: url)
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: {
+            choices.made && (setup.step != .touches || session.workspaceCheckSource == nil
+                            || session.workspaceConnection.result != .checking)
+        }, to: url)
     }
 
     /// Whether a setup scene's choices are made, which its drawing waits for.

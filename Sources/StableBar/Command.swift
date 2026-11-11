@@ -41,10 +41,19 @@ extension Task {
     }
 }
 
+/// The first executable file called `name` in the directories of `path`, a `PATH` value.
+func executableFile(named name: String, path: String) -> URL? {
+    path.split(separator: ":").lazy.map { URL(filePath: String($0)).appending(path: name) }.first {
+        FileManager.default.isExecutableFile(atPath: $0.path)
+            && (try? $0.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory != true
+    }
+}
+
 struct CommandFailure: LocalizedError {
     let message: String
     var stdout = Data()
     var stderr = Data()
+    var timedOut = false
     var errorDescription: String? { message }
 }
 
@@ -234,7 +243,7 @@ private final class CommandProcess: @unchecked Sendable {
             timer.setEventHandler { [self] in
                 let message = timeout.map { "Command timed out after \($0) seconds." }
                     ?? "Provider exited while a child kept its output open."
-                terminate(CommandFailure(message: message))
+                terminate(CommandFailure(message: message, timedOut: timeout != nil))
             }
             self.timer = timer
             timer.resume()

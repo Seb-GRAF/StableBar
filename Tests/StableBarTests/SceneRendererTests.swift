@@ -266,6 +266,20 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(pixels(images[0]) == pixels(images[1]))
 }
 
+/// A configured manager needs no connection result while its check is off screen. Every setup step must still draw.
+@Test(arguments: ["placement", "look", "permissions", "tryIt"]) @MainActor
+func setupScenesOutsideFinishingTouchesDoNotWaitForAWorkspaceCheck(step: String) async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (_, store) = try await drawn(#"""
+    {"configuration": {"workspaceSource": "yabai", "widgets": [{"id": "spaces", "type": "workspaces", "position": "left"}]},
+     "draw": "setup", "setup": {"step": "\#(step)"}}
+    """#, in: directory)
+    defer { store.stop() }
+    #expect(!store.workspaceStore.isRunning)
+    #expect(store.scripts.isEmpty)
+}
+
 @Test @MainActor func popupSceneWithoutAPopupFails() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -395,12 +409,20 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     defer { store.stop() }
     let update = try #require(store.update)
     #expect(update.version != nil)
-    #expect(update.starRequest.isDue())
+    #expect(update.starRequest.state == .repository)
     #expect(image.pixelsWide == Int((2 * (360 + 48.0)).rounded()))
     #expect(image.pixelsHigh == Int((2 * (420 + 48.0)).rounded()))
     #expect(colors(image) > 10)
     try await Task.sleep(for: .milliseconds(500))
     #expect(RecordingURLProtocol.requests.isEmpty)
+}
+
+@Test @MainActor func updateSceneDrawsTheStarRequestItNames() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (_, store) = try await drawn(#"{"configuration": {"widgets": []}, "draw": "update", "starRequest": "thanked"}"#, in: directory)
+    defer { store.stop() }
+    #expect(try #require(store.update).starRequest.state == .thanked(account: "octocat"))
 }
 
 @Test @MainActor func sceneActiveAppComesFromItsBundle() throws {
