@@ -62,7 +62,8 @@ search first.
 
 - **Title:** the problem or capability in plain words, without a `[Bug]` prefix.
 - **Labels:** existing ones only (`gh label list --repo Seb-GRAF/StableBar`): usually one of `bug`,
-  `enhancement` or `documentation`, plus `accessibility` when it applies.
+  `enhancement` or `documentation`, plus `accessibility` when it applies. Only people with triage
+  access can set labels. GitHub drops them for anyone else, and a maintainer adds them in triage.
 - **Body sections:**
   - Bug: What happens, Steps to reproduce, Expected, Environment, Evidence, Diagnosis (code on main,
     with paths), Related (similar issues or PRs and how this differs).
@@ -81,9 +82,19 @@ EOF
 ```
 
 Verify the result with `gh issue view`. If posting fails or its outcome is unclear, list recent issues
-before retrying so nothing is posted twice. Without `gh` auth, give a prefilled
-`https://github.com/Seb-GRAF/StableBar/issues/new?title=…&body=…&labels=…` link instead. Remind the
-user to drag any screenshots into the issue after it exists.
+before retrying so nothing is posted twice.
+
+Without `gh` auth, give a link to the issue form with its fields filled in, so the form adds its
+labels. Don't add `labels=`: GitHub shows a 404 page to anyone without triage access. Name each field
+by its `id` and percent-encode each value, as `encodeURIComponent` does:
+
+- Bug: `https://github.com/Seb-GRAF/StableBar/issues/new?template=bug_report.yml&title=…`, then
+  `what-happens`, `steps`, `expected`, `environment`, `evidence` (Diagnosis at its end) and `related`
+  (ending with the `Triaged by` line).
+- Feature or docs: `…/issues/new?template=feature_request.yml&title=…`, then `problem`, `proposal`,
+  `possible-today` and `related`.
+
+Remind the user to drag any screenshots into the issue after it exists.
 
 ## 5. Report
 
