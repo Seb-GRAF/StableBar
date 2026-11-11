@@ -138,18 +138,27 @@ struct StableBarApp {
 }
 
 @MainActor
-class BarPanel: NSPanel {
+class BarPanel: NSPanel, Observable {
     var barGeometry: BarGeometry?
     var isEditingBar = false {
         didSet {
             guard oldValue, !isEditingBar, isKeyWindow else { return }
-            // Ordering out releases a nonactivating panel's keyboard grab and restores
-            // the previous app's focus. Ordering front again does not make it key.
-            let wasVisible = isVisible
-            orderOut(nil)
-            if wasVisible { orderFrontRegardless() }
+            releaseKeyboard()
         }
     }
+    /// From `StableBar --focus` until Escape or another window takes the keyboard: the arrow keys move between widgets.
+    /// The bar's view follows it, so that only then can its widgets take focus.
+    private(set) var focusesWidgets: Bool {
+        get {
+            observations.access(self, keyPath: \.focusesWidgets)
+            return widgetsFocused
+        }
+        set {
+            observations.withMutation(of: self, keyPath: \.focusesWidgets) { widgetsFocused = newValue }
+        }
+    }
+    private var widgetsFocused = false
+    private let observations = ObservationRegistrar()
     private(set) var decorationPanel: PassiveBarPanel?
     /// The workspace cell under the current drag, which the bar takes on its cells' behalf.
     weak var workspaceDropTarget: WorkspaceWindowDropTargetView?
@@ -165,9 +174,31 @@ class BarPanel: NSPanel {
         return CGRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height)
     }
 
-    override var canBecomeKey: Bool { isEditingBar }
+    override var canBecomeKey: Bool { isEditingBar || focusesWidgets }
     override var canBecomeMain: Bool { false }
     @objc var hasKeyAppearance: Bool { true }
+
+    func focusWidgets() {
+        focusesWidgets = true
+        makeKeyAndOrderFront(nil)
+    }
+
+    override func resignKey() {
+        super.resignKey()
+        focusesWidgets = false
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, event.keyCode == 53, focusesWidgets { releaseKeyboard() } else { super.sendEvent(event) }
+    }
+
+    /// Ordering out releases a nonactivating panel's keyboard grab and restores
+    /// the previous app's focus. Ordering front again does not make it key.
+    private func releaseKeyboard() {
+        let wasVisible = isVisible
+        orderOut(nil)
+        if wasVisible { orderFrontRegardless() }
+    }
 
     override var level: NSWindow.Level {
         didSet { decorationPanel?.level = level }

@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -465,6 +466,34 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(BarView.scrolls(width: 150, resting: 200, minimum: nil))
     #expect(!BarView.scrolls(width: 150, resting: 400, minimum: 120))
     #expect(BarView.scrolls(width: 100, resting: 400, minimum: 120))
+}
+
+/// The arrow keys move keyboard focus along the bar as it shows its widgets, not in the configuration's order, past
+/// spacers and widgets in More widgets, and wrap around at its ends.
+@Test @MainActor func arrowKeysMoveFocusAlongTheBar() throws {
+    let config = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"groups":{"stats":{"style":{}}},"widgets":[
+      {"id":"clock","type":"clock","position":"right"},
+      {"id":"apple","type":"appleMenu","position":"left"},
+      {"id":"gap","type":"spacer","position":"left"},
+      {"id":"cpu","type":"text","text":"CPU","position":"right","group":"stats"},
+      {"id":"ram","type":"text","text":"RAM","position":"right","group":"stats"},
+      {"id":"note","type":"text","text":"Note","position":"left"}
+    ]}
+    """#.utf8))
+    let units = BarUnit.make(widgets: config.widgets, groups: config.groups)
+    let placements = ["widget:apple": BarPlacement(x: 10, width: 20), "widget:gap": BarPlacement(x: 38, width: 300),
+                      "group:stats": BarPlacement(x: 700, width: 90), "widget:clock": BarPlacement(x: 800, width: 120)]
+    func target(_ id: String?, _ direction: MoveCommandDirection) -> String? {
+        BarView.focusTarget(from: id, moving: direction, units: units, placements: placements)
+    }
+    #expect(target(nil, .right) == "apple")
+    #expect(target("apple", .right) == "cpu")
+    #expect(target("cpu", .right) == "ram")
+    #expect(target("ram", .right) == "clock")
+    #expect(target("clock", .right) == "apple")
+    #expect(target("apple", .left) == "clock")
+    #expect(target("cpu", .up) == "cpu")
 }
 
 /// App menus that can't move into More widgets and don't fit even at their minimum get squeezed further, and then
