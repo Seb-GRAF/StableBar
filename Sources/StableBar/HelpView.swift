@@ -19,10 +19,12 @@ struct HelpView: View {
             }
         }
         .task(id: editor.searchTarget) {
-            if editor.searchTarget == SettingsSearchResult.help.id {
-                editor.helpSelection = .questions
-                editor.searchTarget = nil
+            switch editor.searchTarget {
+            case SettingsSearchResult.help.id: editor.helpSelection = .questions
+            case SettingsSearchResult.feedback.id: editor.helpSelection = .feedback
+            default: return
             }
+            editor.searchTarget = nil
         }
     }
 

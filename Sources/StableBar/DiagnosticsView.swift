@@ -227,7 +227,10 @@ struct DiagnosticsView: View {
                             reportNotice = "Bug report copied. Check it, then paste it into a GitHub issue."
                         }
                     }
-                    Button("Send feedback…", action: editor.showFeedback)
+                    Button("Send feedback…") {
+                        editor.feedback.kind = .bug
+                        editor.showFeedback()
+                    }
                     if reportTask != nil { ProgressView().controlSize(.small) }
                 }
                 .disabled(reportTask != nil)

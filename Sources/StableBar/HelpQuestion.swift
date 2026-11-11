@@ -21,9 +21,8 @@ struct HelpQuestion: Identifiable {
         query.split(whereSeparator: \.isWhitespace).allSatisfy { "\(question) \(answer)".localizedStandardContains($0) }
     }
 
-    /// The three questions that share the most of `title`'s longer words, among those sharing at least half of them.
-    static func answering(_ title: String) -> [HelpQuestion] {
-        let words: [Substring] = title.split { !$0.isLetter && !$0.isNumber }.filter { $0.count > 3 }
+    /// The three questions that share the most of `words`, among those sharing at least half of them.
+    static func answering(_ words: [Substring]) -> [HelpQuestion] {
         let shared: [(question: HelpQuestion, count: Int)] = all.map { question in
             let text = "\(question.question) \(question.answer)"
             return (question, words.filter { text.localizedStandardContains($0) }.count)

@@ -33,9 +33,9 @@ private func anchor(_ heading: Substring) -> String {
 }
 
 @Test func feedbackFindsTheQuestionsItsTitleIsAbout() {
-    #expect(HelpQuestion.answering("Windows go under the bar").map(\.question).contains("Why do windows go under the bar?"))
-    #expect(HelpQuestion.answering("StableBar crashes after sleep").map(\.question)
-        .contains("What do I do when StableBar crashes or something goes wrong?"))
-    #expect(HelpQuestion.answering("Zebra quantum xylophone").isEmpty)
-    #expect(HelpQuestion.answering("").isEmpty)
+    func answers(_ title: String) -> [String] { HelpQuestion.answering(Feedback(title: title).titleWords).map(\.question) }
+    #expect(answers("Windows go under the bar").contains("Why do windows go under the bar?"))
+    #expect(answers("StableBar crashes after sleep").contains("What do I do when StableBar crashes or something goes wrong?"))
+    #expect(answers("Zebra quantum xylophone").isEmpty)
+    #expect(answers("").isEmpty)
 }

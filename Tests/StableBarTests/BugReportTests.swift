@@ -63,8 +63,8 @@ private func formFields(_ url: URL) -> [String: String] {
 private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
                            answers: ["what-happens": "It's gone.", "steps": "1. Sleep\n2. Wake", "expected": "It's back."], report: example)
 
-@Test func feedbackFillsTheIssueFormOfItsKind() {
-    let url = bug.issueURL()
+@Test func feedbackFillsTheIssueFormOfItsKind() throws {
+    let url = try #require(bug.issueURL())
     #expect(url.absoluteString.hasPrefix("https://github.com/Seb-GRAF/StableBar/issues/new?"))
     #expect(formFields(url) == ["template": "bug_report.yml", "title": "The clock vanishes after sleep", "what-happens": "It's gone.",
                                 "steps": "1. Sleep\n2. Wake", "expected": "It's back.", "environment": example.markdown])
@@ -73,14 +73,14 @@ private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
     var idea = bug
     idea.kind = .idea
     idea.answers = ["problem": "No weather.", "proposal": "A weather widget."]
-    #expect(formFields(idea.issueURL()) == ["template": "feature_request.yml", "title": "The clock vanishes after sleep",
+    #expect(formFields(try #require(idea.issueURL())) == ["template": "feature_request.yml", "title": "The clock vanishes after sleep",
                                             "problem": "No weather.", "proposal": "A weather widget."])
 }
 
 @Test func feedbackIssueURLCutsTheReportToStayShort() throws {
     var noisy = bug
     noisy.report?.live?.problems = (0..<300).map { "Widget \($0): " + String(repeating: "e", count: 1000) }
-    let url = noisy.issueURL()
+    let url = try #require(noisy.issueURL())
     #expect(url.absoluteString.count <= 8000)
     let fields = formFields(url)
     #expect(fields["what-happens"] == "It's gone.")
@@ -88,7 +88,36 @@ private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
     #expect(environment.hasPrefix("- StableBar: 0.9.0 (Stable, build 421)\n"))
     #expect(environment.contains("- Problems:\n  - Widget 0: eee"))
     #expect(environment.contains(" more"))
-    #expect(noisy.body.contains("Widget 299: "), "A posted or copied issue keeps every problem")
+    #expect(noisy.body.contains("Widget 19: "))
+    #expect(noisy.body.contains("  - … 280 more"), "A posted issue stays far below GitHub's 65,536 characters")
+
+    var long = bug
+    long.answers["what-happens"] = String(repeating: "é ", count: 3000)
+    #expect(long.issueURL() == nil, "Answers too long for the address leave the form to Post or Copy")
+}
+
+@Test func feedbackSearchesForWhatTheTitleIsAbout() {
+    #expect(Feedback(title: "StableBar's clock is off by an hour").titleWords == ["clock", "hour"])
+    #expect(Feedback(title: "CPU fan bug").titleWords.isEmpty)
+}
+
+@Test func feedbackAsksWhatTheIssueFormsRequire() throws {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    for kind in [Feedback.Kind.bug, .idea] {
+        let form = try String(contentsOf: repository.appending(path: ".github/ISSUE_TEMPLATE/\(kind.template)"), encoding: .utf8)
+        let fields = form.components(separatedBy: "\n  - type: ").dropFirst().compactMap { block -> (id: String, label: String, hint: String, required: Bool)? in
+            func value(_ key: String) -> String? {
+                block.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.first { $0.hasPrefix("\(key): ") }
+                    .map { String($0.dropFirst(key.count + 2)) }
+            }
+            return value("id").map { ($0, value("label") ?? "", value("description") ?? "", block.contains("required: true")) }
+        }
+        let asked = fields.filter { $0.required && $0.id != "environment" }
+        #expect(asked.map(\.id) == kind.questions.map(\.id), "\(kind.template)")
+        #expect(asked.map(\.label) == kind.questions.map(\.label), "\(kind.template)")
+        #expect(asked.map(\.hint) == kind.questions.map(\.hint), "\(kind.template)")
+        if kind == .bug { #expect(Set(fields.map(\.id)).isSuperset(of: ["environment", "evidence"])) }
+    }
 }
 
 @Test func feedbackWritesTheIssueAsTheFormDoes() {

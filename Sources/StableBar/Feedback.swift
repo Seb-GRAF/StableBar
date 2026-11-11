@@ -48,16 +48,24 @@ struct Feedback {
         return fields
     }
 
-    /// The issue's text as the form writes it: each field under its label.
+    /// The title's words that say what it's about: longer than three letters, and not StableBar, which nearly every
+    /// issue and answer mentions.
+    var titleWords: [Substring] {
+        title.split { !$0.isLetter && !$0.isNumber }.filter { $0.count > 3 && $0.lowercased() != "stablebar" }
+    }
+
+    /// The issue's text as the form writes it: each field under its label. The report keeps 20 items a list and 300
+    /// characters an item, so a noisy report stays far below GitHub's 65,536 characters for an issue.
     var body: String {
-        fields().map { "### \($0.label)\n\n\($0.value.isEmpty ? "_No response_" : $0.value)" }.joined(separator: "\n\n")
+        fields(listLimit: 20, lineLimit: 300).map { "### \($0.label)\n\n\($0.value.isEmpty ? "_No response_" : $0.value)" }.joined(separator: "\n\n")
     }
 
     var markdown: String { "# \(title)\n\n\(body)" }
 
-    /// GitHub's issue form for this kind, filled in. Nothing is sent until the user submits the form. The crash, then
-    /// the report, are cut until the address fits in `limit` characters.
-    func issueURL(limit: Int = 8000) -> URL {
+    /// GitHub's issue form for this kind, filled in, or nil when the title and answers alone make the address longer
+    /// than `limit` characters. Nothing is sent until the user submits the form. The crash, then the report, are cut
+    /// until the address fits.
+    func issueURL(limit: Int = 8000) -> URL? {
         func url(_ lists: Int, _ lines: Int, _ frames: Int, _ message: Int) -> URL {
             let values = [("template", kind.template), ("title", title)]
                 + fields(listLimit: lists, lineLimit: lines, frameLimit: frames, messageLimit: message).map { ($0.id, $0.value) }
@@ -70,14 +78,14 @@ struct Feedback {
             if message > 200 { message /= 2 } else if frames > 0 { frames = frames * 2 / 3 } else if lines > 100 { lines /= 2 } else { lists /= 2 }
             result = url(lists, lines, frames, message)
         }
-        return result
+        return result.absoluteString.count <= limit ? result : nil
     }
 
     private static let unreserved = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")
 
     func post() async throws -> URL {
         guard let gh = Self.gitHubCLI() else { throw CommandFailure(message: "The GitHub CLI was not found.") }
-        let output = try await runCommand(gh.path, arguments: ["issue", "create", "--repo", "github.com/Seb-GRAF/StableBar",
+        let output = try await runCommand(gh.path, arguments: ["issue", "create", "--repo", "github.com/\(StarRequest.repositoryPath)",
                                                                "--title=\(title)", "--body=\(body)"], timeout: 60)
         guard let url = URL(string: String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw CommandFailure(message: "The GitHub CLI didn't give the new issue's address.")
@@ -98,12 +106,12 @@ struct Feedback {
         executableFile(named: "gh", path: shellEnvironment.withLock { $0["PATH", default: ""] })
     }
 
-    /// The five open or closed issues that best match any of the title's longer words, from GitHub's search, which
-    /// needs no sign-in. Only the search goes to GitHub.
+    /// The five open or closed issues that best match any of the title's words, from GitHub's search, which needs no
+    /// sign-in. Only the search goes to GitHub.
     func similarIssues() async throws -> [FoundIssue] {
-        let words = title.split { !$0.isLetter && !$0.isNumber }.filter { $0.count > 3 }.prefix(6)
         var components = URLComponents(string: "https://api.github.com/search/issues")!
-        components.queryItems = [URLQueryItem(name: "q", value: "repo:Seb-GRAF/StableBar is:issue " + words.joined(separator: " OR ")),
+        let words = titleWords.prefix(6).joined(separator: " OR ")
+        components.queryItems = [URLQueryItem(name: "q", value: "repo:\(StarRequest.repositoryPath) is:issue (\(words))"),
                                  URLQueryItem(name: "per_page", value: "5")]
         let (data, response) = try await URLSession.shared.data(from: components.url!)
         if let response = response as? HTTPURLResponse, response.statusCode != 200 {

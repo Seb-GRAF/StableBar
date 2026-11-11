@@ -29,7 +29,8 @@ struct FeedbackView: View {
     private var store: BarStore { editor.store }
 
     var body: some View {
-        let answers = HelpQuestion.answering(editor.feedback.title)
+        let answers = HelpQuestion.answering(editor.feedback.titleWords)
+        let formURL = editor.feedback.issueURL()
         Form {
             Section {
                 Picker("Kind", selection: $editor.feedback.kind) {
@@ -99,7 +100,7 @@ struct FeedbackView: View {
                 }
                 HStack {
                     Button("Find similar issues", action: search)
-                        .disabled(editor.feedback.title.trimmingCharacters(in: .whitespaces).isEmpty || searching)
+                        .disabled(editor.feedback.titleWords.isEmpty || searching)
                     if searching { ProgressView().controlSize(.small) }
                 }
                 if let found {
@@ -124,7 +125,8 @@ struct FeedbackView: View {
             }
             Section {
                 HStack {
-                    Button("Open on GitHub…") { NSWorkspace.shared.open(editor.feedback.issueURL()) }
+                    Button("Open on GitHub…") { NSWorkspace.shared.open(formURL!) }
+                        .disabled(formURL == nil)
                     if let account {
                         Button("Post as @\(account)…") { confirmsPost = true }
                             .disabled(!editor.feedback.missing.isEmpty || posting)
@@ -142,6 +144,10 @@ struct FeedbackView: View {
                             Button("Investigate with \(agent.label)…") { investigate(agent) }
                         }
                     }
+                }
+                if formURL == nil {
+                    Text("Your answers are too long for GitHub's form in the browser. Post or copy them instead.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
                 if account != nil, !editor.feedback.missing.isEmpty {
                     Text("To post, fill in \(ListFormatter.localizedString(byJoining: editor.feedback.missing)).")
@@ -172,9 +178,10 @@ struct FeedbackView: View {
                 return
             }
             agents = TriageAgent.installed(path: shellEnvironment.withLock { $0["PATH", default: ""] }).map(\.agent)
+            async let signedIn = Feedback.gitHubAccount()
             await store.crashReports.refresh()
             editor.feedback.report = await store.bugReport()
-            account = await Feedback.gitHubAccount()
+            account = await signedIn
         }
     }
 
@@ -209,17 +216,20 @@ struct FeedbackView: View {
         }
     }
 
+    /// Clears the draft before posting, so coming back to the pane while `gh` runs can't post it twice.
     private func post() {
+        let issue = editor.feedback
+        editor.feedback.title = ""
+        editor.feedback.answers = [:]
+        editor.feedback.crash = nil
         posting = true
         notice = nil
+        found = nil
         Task {
             do {
-                posted = try await editor.feedback.post()
-                editor.feedback.title = ""
-                editor.feedback.answers = [:]
-                editor.feedback.crash = nil
-                found = nil
+                posted = try await issue.post()
             } catch {
+                editor.feedback = issue
                 notice = "Couldn't post: \(error.localizedDescription)"
             }
             posting = false
