@@ -170,8 +170,7 @@ final class BarStore: NSObject {
             configurationError = errorMessage(error)
         }
         if let setup {
-            screenSetup = setup
-            configurationURL = barURL(for: setup)
+            prepareScreenSetup(setup)
         }
         reloadConfiguration()
         packageLibrary.startUpdateChecks()
@@ -381,6 +380,12 @@ final class BarStore: NSObject {
 
     func ownBarURL(for setup: ScreenSetup) -> URL {
         sharedConfigurationURL.deletingLastPathComponent().appending(path: setup.fileName)
+    }
+
+    /// Select the bar before launch can open Settings or setup, without starting its sources yet.
+    func prepareScreenSetup(_ setup: ScreenSetup) {
+        screenSetup = setup
+        configurationURL = barURL(for: setup)
     }
 
     private func barURL(for setup: ScreenSetup) -> URL {

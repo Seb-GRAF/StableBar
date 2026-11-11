@@ -149,6 +149,25 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
 }
 
+@Test(arguments: SceneFile.ApplicationMove.allCases)
+func sceneDecodesApplicationMoveRows(state: SceneFile.ApplicationMove) throws {
+    let setup = try scene(#"{"configuration":{},"draw":"setup","setup":{"inApplications":false},"applicationMove":"\#(state.rawValue)"}"#)
+    #expect(setup.applicationMove == state)
+    #expect(setup.setup?.inApplications == false)
+    let settings = try scene(#"{"configuration":{},"draw":"settings","section":"general","applicationMove":"\#(state.rawValue)"}"#)
+    #expect(settings.applicationMove == state)
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration":{},"draw":"bar","applicationMove":"\#(state.rawValue)"}"#)
+    }
+    // Setup in Applications has no move row to draw.
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration":{},"draw":"setup","applicationMove":"\#(state.rawValue)"}"#)
+    }
+    #expect(throws: (any Error).self) {
+        try scene(#"{"configuration":{},"draw":"setup","setup":{"step":"touches"},"applicationMove":"\#(state.rawValue)"}"#)
+    }
+}
+
 @Test(arguments: [
     #""draw": "setup", "setup": {"stage": "look"}"#,
     #""draw": "setup", "setup": {"step": "intro"}"#,
@@ -179,6 +198,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(choices(properties["appearances"]) == Set(SceneFile.Appearance.allCases.map(\.rawValue)))
     #expect(choices(properties["accessibilityDisplay"]) == Set(SceneFile.AccessibilityDisplay.allCases.map(\.rawValue)))
     #expect(choices(properties["starRequest"]) == Set(SceneFile.StarRequestLine.allCases.map(\.rawValue)))
+    #expect(choices(properties["applicationMove"]) == Set(SceneFile.ApplicationMove.allCases.map(\.rawValue)))
     guard case let .object(setup)? = properties["setup"], case let .object(setupProperties)? = setup["properties"] else {
         Issue.record("scene.schema.json describes no setup properties"); return
     }
@@ -227,4 +247,16 @@ func sceneRejectsEmptyOrRepeatedAppearances(appearances: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(#"{"configuration": {}, "draw": "bar", "appearances": \#(appearances)}"#) }
     #expect(errorMessage(try #require(error)).contains("ppearance"))
     #expect(try scene(#"{"configuration": {}, "draw": "bar", "appearances": ["light"]}"#).appearances == [.light])
+}
+
+@Test @MainActor func sceneSettingsKeepsExistingApplicationLocationBehaviour() throws {
+    for name in ["settings-general", "settings-general-spaces"] {
+        let scene = try SceneFile.read(repository.appending(path: "scenes/\(name).json"))
+        #expect(scene.applicationMove == nil)
+        #expect(SceneRenderer.settingsApplicationMove(for: scene) == nil)
+    }
+    let moveScene = try SceneFile.read(repository.appending(path: "scenes/settings-general-move.json"))
+    let move = try #require(SceneRenderer.settingsApplicationMove(for: moveScene))
+    #expect(!move.isInApplications)
+    #expect(move.canMoveFromSettings(setupIsOpen: false))
 }

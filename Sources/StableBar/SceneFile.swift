@@ -60,6 +60,9 @@ struct SceneFile: Decodable {
     var starRequest: StarRequestLine?
     /// The step setup shows and the Mac it shows it on, for `setup`.
     var setup: Setup?
+    /// A move row outside Applications, for setup or Settings → General.
+    var applicationMove: ApplicationMove?
+    enum ApplicationMove: String, Decodable, CaseIterable { case ready, replace, useExisting, failed, moving, setupOpen }
     /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
     var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
@@ -70,7 +73,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
-             macOSMajorVersion, appearances,
+             applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -154,6 +157,16 @@ struct SceneFile: Decodable {
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
+        applicationMove = try values.decodeIfPresent(ApplicationMove.self, forKey: .applicationMove)
+        if applicationMove != nil, draw != .setup && !(draw == .settings && section == .general) {
+            throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
+                debugDescription: "applicationMove draws a setup row or Settings General.")
+        }
+        // Setup shows the move row only outside Applications, and a setup scene is in Applications by default.
+        if applicationMove != nil, draw == .setup, setup?.inApplications != false {
+            throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
+                debugDescription: "A setup scene draws applicationMove only with setup.inApplications false.")
+        }
         macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
         if macOSMajorVersion < 14 {
             throw DecodingError.dataCorruptedError(forKey: .macOSMajorVersion, in: values,

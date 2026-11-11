@@ -205,7 +205,9 @@ enum SceneRenderer {
                 }
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
-            let settings = SettingsView(store: store, editor: editor)
+            let move = settingsApplicationMove(for: scene)
+            store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
+            let settings = SettingsView(store: store, editor: editor, applicationMove: move)
                 .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor))
                 .environment(\.feedbackSample, feedbackSample)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
@@ -220,10 +222,15 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
                                               size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
         case .setup:
-            try await drawSetup(scene.setup ?? SceneFile.Setup(), store: store, macOSVersion: macOSVersion,
+            try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
                                 dark: dark, settle: settle, to: url)
         }
+    }
+
+    /// Existing scenes keep reading the app location as before; only move scenes override their controls.
+    static func settingsApplicationMove(for scene: SceneFile) -> ApplicationMoveController? {
+        scene.applicationMove.map { ApplicationMoveController.sample($0) }
     }
 
     /// The sample display's macOS menu bar height in setup scenes.
@@ -232,8 +239,8 @@ enum SceneRenderer {
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
     /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
     /// bar hide or show.
-    private static func drawSetup(_ setup: SceneFile.Setup, store: BarStore, macOSVersion: MacOSVersion, size: NSSize,
-                                  dark: Bool, settle: Duration, to url: URL) async throws {
+    private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
+                                  macOSVersion: MacOSVersion, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
@@ -256,7 +263,8 @@ enum SceneRenderer {
             setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
         }
         system.yabaiSignalScript = YabaiSetupSignals.script()
-        let session = SetupSession(store: store, system: system)
+        let session = SetupSession(store: store, system: system,
+                                   applicationMove: .sample(move, inApplications: setup.inApplications))
         defer { session.workspaceConnection.hide() }
         session.step = setup.step.rawValue
         store.appMenu.hidesAccessWarning = true

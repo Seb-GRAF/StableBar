@@ -106,6 +106,9 @@ struct StableBarApp {
             case let .finishUninstall(bar):
                 Task { exit(await UninstallSystem.finish(after: bar)) }
                 dispatchMain()
+            case let .finishApplicationMove(plan, bar):
+                Task { exit(await ApplicationMoveRelaunch.finish(planURL: plan, parent: bar)) }
+                dispatchMain()
             case .help:
                 print(LaunchCommand.usage)
             case let .run(url):
@@ -263,8 +266,9 @@ class BarPanel: NSPanel, Observable {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store: BarStore
-    private let setup = SetupWindow()
-    private let customization = CustomizationWindow()
+    private let applicationMoveResume = ApplicationMoveLaunchResume()
+    private lazy var setup = SetupWindow(launchResume: applicationMoveResume)
+    private lazy var customization = CustomizationWindow(launchResume: applicationMoveResume)
     private let themeTrial = ThemeTrialPanel()
     private let editingControls = BarEditControls()
     private let editingKeyboard = BarEditingKeyboard()
@@ -285,6 +289,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Read the small defaults record before the menu or runtime control can open either window.
+        store.prepareScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
+        applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -347,8 +354,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             systemContext = SystemContext { [store] in store.refreshContext() }
             systemContext!.start()
-            if SetupProgress.opensAtLaunch(in: .standard) { showSetup() }
+            if let kind = applicationMoveResume.pendingKind {
+                switch kind {
+                case .setup: showSetup()
+                case .settings: customization.show(store: store, section: .general)
+                }
+            } else if !applicationMoveResume.wasResuming, SetupProgress.opensAtLaunch(in: .standard) { showSetup() }
             await store.crashReports.refresh()
+            if appIsInApplications() {
+                Task.detached { await ApplicationMover.cleanUpPreviousCopies(using: ApplicationMoveSystem()) }
+            }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)

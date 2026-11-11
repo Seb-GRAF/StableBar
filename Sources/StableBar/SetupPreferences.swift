@@ -1,23 +1,23 @@
 import Foundation
 
-struct SetupPreferences: Equatable {
-    enum Appearance: String, CaseIterable {
+struct SetupPreferences: Equatable, Codable, Sendable {
+    enum Appearance: String, CaseIterable, Codable, Sendable {
         case current = "Keep current", automatic = "Automatic", light = "Light", dark = "Dark"
     }
 
-    enum Placement: String, CaseIterable {
+    enum Placement: String, CaseIterable, Codable, Sendable {
         case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar"
     }
 
-    enum Clock: String, CaseIterable {
+    enum Clock: String, CaseIterable, Codable, Sendable {
         case current = "Keep current", twentyFourHour = "24-hour", twelveHour = "12-hour"
     }
 
-    enum Theme: Hashable {
+    enum Theme: Hashable, Codable, Sendable {
         case current, builtIn, package(id: String, version: String?)
     }
 
-    enum WidgetSet: Hashable {
+    enum WidgetSet: Hashable, Codable, Sendable {
         case system, meetings, workspaces(WorkspaceSource), battery, sound, menuBarItems
 
         enum State {
@@ -149,7 +149,7 @@ struct SetupPreferences: Equatable {
         }
     }
 
-    enum Preset: CaseIterable {
+    enum Preset: String, CaseIterable, Codable, Sendable {
         case minimal, developer, workday, notch, everything
 
         var title: String {

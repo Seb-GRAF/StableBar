@@ -54,6 +54,8 @@ struct CommandFailure: LocalizedError {
     var stdout = Data()
     var stderr = Data()
     var timedOut = false
+    /// Only a completed, unsuccessful exit is definitive; a timeout or signal leaves the outcome unknown.
+    var exitStatus: Int32?
     var errorDescription: String? { message }
 }
 
@@ -287,7 +289,8 @@ private final class CommandProcess: @unchecked Sendable {
                 ? "Command exited with status \(exitStatus >> 8)."
                 : "Command terminated by signal \(exitStatus & 0x7f)."
             continuation.resume(throwing: CommandFailure(message: message.isEmpty ? status : message,
-                                                       stdout: onLine == nil ? stdout : lastLine, stderr: stderr))
+                                                       stdout: onLine == nil ? stdout : lastLine, stderr: stderr,
+                                                       exitStatus: exitStatus & 0x7f == 0 ? exitStatus >> 8 : nil))
         } else {
             if let onLine, !stdout.isEmpty {
                 onLine(CommandResult(stdout: stdout, stderr: stderr, cpuTime: cpuTime))

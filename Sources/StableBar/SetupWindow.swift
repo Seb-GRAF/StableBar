@@ -6,11 +6,23 @@ import SwiftUI
 @MainActor
 final class SetupWindow: NSObject, NSWindowDelegate {
     private var session: SetupSession?
+    private let launchResume: ApplicationMoveLaunchResume
     private var tour: SetupTourPanel?
     private var card: NSWindow?
     private var arrangeBar: (() -> Void)?
     private var customizeWidgets: (() -> Void)?
     private var showProfile: ((String) -> Void)?
+
+    init(launchResume: ApplicationMoveLaunchResume = ApplicationMoveLaunchResume()) {
+        self.launchResume = launchResume
+    }
+
+    func prepareSession(store: BarStore, system: SetupSystem = SetupSystem()) -> SetupSession {
+        if let session { return session }
+        let session = SetupSession(store: store, system: system, resume: launchResume.take(for: .setup))
+        self.session = session
+        return session
+    }
 
     func show(store: BarStore, arrangeBar: (() -> Void)? = nil, customizeWidgets: (() -> Void)? = nil,
               showProfile: ((String) -> Void)? = nil) {
@@ -23,9 +35,11 @@ final class SetupWindow: NSObject, NSWindowDelegate {
         self.customizeWidgets = customizeWidgets
         self.showProfile = showProfile
         store.barEditing.setupIsOpen = true
-        session = SetupSession(store: store)
+        let resuming = launchResume.pendingKind == .setup
+        _ = prepareSession(store: store)
         store.appMenu.hidesAccessWarning = true
-        showTour(intro: SetupProgress.playsIntro(in: .standard, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
+        showTour(intro: !resuming && SetupProgress.playsIntro(in: .standard,
+            reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion))
     }
 
     /// The height the Dock takes at the bottom of a screen, 0 when it sits on a side or another screen.
@@ -226,6 +240,7 @@ final class SetupSession {
     /// Whether a connected display has a notch, refreshed when the screens change while setup shows.
     private(set) var hasNotchedDisplay: Bool
     let currentThemeKey: String
+    let applicationMove: ApplicationMoveController
     var step = 0
     private(set) var finished = false
     var preset: SetupPreferences.Preset?
@@ -271,24 +286,28 @@ final class SetupSession {
     var error: String?
     private(set) var base: Configuration?
     private let sessionEdits: [ConfigurationEdit]
+    /// Later command-line edits append after the preview; the handoff keeps them without duplicating its choices.
+    private var previewEditCount = 0
     /// The choices setup opened with, to tell whether skipping would lose any.
     @ObservationIgnored private var initialPreferences = SetupPreferences()
 
-    init(store: BarStore, system: SetupSystem = SetupSystem()) {
+    init(store: BarStore, system: SetupSystem = SetupSystem(), resume: ApplicationMoveResume? = nil,
+         applicationMove: ApplicationMoveController? = nil) {
         self.store = store
         clearanceHold = ClearanceHold(configuration: store.clearanceConfiguration)
         self.system = system
         let check = system.checkWorkspaces
         let configuration = store.configurationURL
         workspaceConnection = SetupWorkspaceConnection { await check($0, configuration) }
+        self.applicationMove = applicationMove ?? ApplicationMoveController(error: resume?.failure)
         let loginStatus = system.loginStatus()
         self.loginStatus = loginStatus
-        opensAtLoginAtStart = loginStatus == .enabled || loginStatus == .requiresApproval
+        opensAtLoginAtStart = resume?.setup?.opensAtLoginAtStart ?? (loginStatus == .enabled || loginStatus == .requiresApproval)
         calendarAccess = system.calendarAccess()
         let menuBarHides = system.menuBarHides()
         self.menuBarHides = menuBarHides
-        menuBarHidAtStart = menuBarHides
-        stableBarHidMenuBarAtStart = MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
+        menuBarHidAtStart = resume?.setup?.menuBarHidAtStart ?? menuBarHides
+        stableBarHidMenuBarAtStart = resume?.setup?.stableBarHidMenuBarAtStart ?? MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
         hasNotchedDisplay = system.hasNotchedDisplay()
@@ -302,11 +321,32 @@ final class SetupSession {
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         let bar = try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)
         recommendsWindowClearance = workspaceSource == .spaces && !system.windowManagerRuns() && bar?["keepWindowsClear"] == nil
-        sessionEdits = store.sessionEdits
+        sessionEdits = resume.map { $0.edits.map(\.restored) } ?? store.sessionEdits
+        previewEditCount = sessionEdits.count
+        // Restoring preferences can preview them immediately, so clearance must already be held.
         store.windowClearance.hold = clearanceHold
         preferences.workspaces = workspaceSource
         initialPreferences = preferences
+        if let saved = resume?.setup {
+            step = saved.step
+            preset = saved.preset
+            placementChoice = saved.placementChoice
+            placementAwaitingAccess = saved.placementAwaitingAccess
+            openAtLogin = system.isInApplications() ? saved.openAtLogin : nil
+            preferences = saved.preferences
+        }
         preview()
+    }
+
+    /// Moving is for Open at login, but registering it still waits for Finish setup, just like the switch.
+    func resumeAfterMoving() -> ApplicationMoveResume {
+        ApplicationMoveResume(kind: .setup, configuration: store.sharedConfigurationURL.standardizedFileURL,
+            barConfiguration: store.configurationURL.standardizedFileURL,
+            setup: .init(step: step, preferences: preferences, preset: preset, openAtLogin: true,
+                         placementChoice: placementChoice, placementAwaitingAccess: placementAwaitingAccess,
+                         menuBarHidAtStart: menuBarHidAtStart, stableBarHidMenuBarAtStart: stableBarHidMenuBarAtStart,
+                         opensAtLoginAtStart: opensAtLoginAtStart),
+            edits: (sessionEdits + store.sessionEdits.dropFirst(previewEditCount)).map(ApplicationMoveResume.Edit.init))
     }
 
     /// Chooses `preset`, as its tile does, or the current bar again when it's the chosen one. On a Mac without an
@@ -496,7 +536,9 @@ final class SetupSession {
             var loader = ConfigurationLoader()
             let base = try loader.load(store.configurationURL, context: store.context)
             let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
-            try store.setSessionEdits(sessionEdits + shown.edits(in: base, document: document))
+            let edits = try sessionEdits + shown.edits(in: base, document: document)
+            try store.setSessionEdits(edits)
+            previewEditCount = edits.count
             self.base = base
             error = nil
         } catch {
@@ -649,7 +691,7 @@ final class SetupSession {
             // A choice changes it, and so does the recommendation while it applies.
             let status = system.loginStatus()
             let enabled = status == .enabled || status == .requiresApproval
-            if let wanted = openAtLogin ?? (recommendationApplies(enabled: enabled) ? true : nil), wanted != enabled {
+            if system.isInApplications(), let wanted = openAtLogin ?? (recommendationApplies(enabled: enabled) ? true : nil), wanted != enabled {
                 try system.setOpenAtLogin(wanted)
             }
             loginStatus = system.loginStatus()
