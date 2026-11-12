@@ -42,6 +42,8 @@ struct WidgetPackageManifest: Codable, Sendable {
     let kind: Kind?
     let entry: String
     let settings: [String: WidgetPackageSetting]
+    /// The names of `settings` in the order package.json lists them, which `WidgetPackageStore.manifest(at:)` reads.
+    var settingNames: [String] = []
     let description: String?
     let author: String?
     let repository: URL?
@@ -245,12 +247,44 @@ struct WidgetPackageStore: Sendable {
     }
 
     func manifest(at source: URL) throws -> WidgetPackageManifest {
-        let file = try packageFile("package.json", inside: source)
+        let data = try Data(contentsOf: packageFile("package.json", inside: source))
         // A manifest is what installing reviewed, such as permissions, so it stays strict even in a configuration
         // written for a newer release: skipping a property could drop a restriction.
-        return try NewerConfiguration.$current.withValue(nil) {
-            try JSONDecoder().decode(WidgetPackageManifest.self, from: Data(contentsOf: file))
+        var manifest = try NewerConfiguration.$current.withValue(nil) {
+            try JSONDecoder().decode(WidgetPackageManifest.self, from: data)
         }
+        manifest.settingNames = try settingNames(in: data)
+        return manifest
+    }
+
+    /// The keys of the top-level `settings` object of `data`, a manifest that decoded, in the file's order, which
+    /// decoding into a dictionary loses. A string followed by a colon is a key.
+    private func settingNames(in data: Data) throws -> [String] {
+        let bytes = [UInt8](data)
+        var names: [String] = [], key = "", depth = 0, inSettings = false, index = 0
+        while index < bytes.count {
+            let byte = bytes[index]
+            index += 1
+            switch byte {
+            case UInt8(ascii: "\""):
+                let start = index - 1
+                while bytes[index] != UInt8(ascii: "\"") { index += bytes[index] == UInt8(ascii: "\\") ? 2 : 1 }
+                index += 1
+                var next = index
+                while [0x20, 0x09, 0x0A, 0x0D].contains(bytes[next]) { next += 1 }
+                guard bytes[next] == UInt8(ascii: ":") else { continue }
+                let name = try JSONDecoder().decode(String.self, from: Data(bytes[start..<index]))
+                if depth == 1 { key = name } else if depth == 2 && inSettings { names.append(name) }
+            case UInt8(ascii: "{"), UInt8(ascii: "["):
+                depth += 1
+                if depth == 2 { inSettings = key == "settings" }
+            case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                depth -= 1
+            default:
+                break
+            }
+        }
+        return names
     }
 
     func validateContents(at source: URL) throws {

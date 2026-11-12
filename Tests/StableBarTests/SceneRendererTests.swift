@@ -233,6 +233,20 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     #expect(store.crashReports.reports.map(\.versionName) == ["0.11.0", "development build"])
 }
 
+@Test @MainActor func settingsSceneDrawsTheSettingsOfAPackageItInstalls() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let (_, store) = try await drawn(#"""
+    {"configuration": {"packages": [{"id": "system-monitor", "version": "1.1.0"}]},
+     "packages": ["\#(repository.appending(path: "examples/packages/system-monitor").path)"],
+     "draw": "settings", "section": "packages", "package": "system-monitor"}
+    """#, in: directory)
+    defer { store.stop() }
+    let draft = try #require(store.packageLibrary.draft)
+    #expect(store.packageLibrary.isActive(draft))
+    #expect(draft.inspection.manifest.settingNames == ["interval", "processes", "sortBy", "cpuWarning", "memoryWarning"])
+}
+
 /// The pixels of `image`, to compare two drawings.
 private func pixels(_ image: NSBitmapImageRep) -> Data? {
     image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }

@@ -781,6 +781,22 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
 }
 
+@Test func packageSettingsKeepTheManifestsOrder() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    // Keys inside a setting, in other objects and in strings are not settings.
+    try writePackageFile(#"""
+    {"id": "weather", "name": "Weather \"settings\": {", "version": "1", "entry": "config.json", "requires": ["jq"],
+     "settings": {
+       "zone": {"type": "string", "description": "A \"key\": value [{", "default": "UTC"},
+       "units": {"type": "string", "choices": ["metric", "imperial"], "default": "metric"},
+       "\u0061rea": {"type": "number", "default": 2}
+     },
+     "permissions": ["location"]}
+    """#, to: directory.appending(path: "package.json"))
+    #expect(try WidgetPackageStore(directory: directory).manifest(at: directory).settingNames == ["zone", "units", "area"])
+}
+
 @Test func packagesThatNeedANewerStableBarFailReviewAndInstall() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
