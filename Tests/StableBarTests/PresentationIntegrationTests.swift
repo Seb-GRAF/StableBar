@@ -603,8 +603,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     #expect(store.presentations[widget.id]?.popupAnchor == nil)
 }
 
-/// A widget drawn in the tiles of the bar being edited in place has an anchor in no window. Hovering it as editing ends
-/// shows nothing.
+/// A widget drawn in the tiles of the bar being edited in place has an anchor in no window.
 @Test @MainActor func hoverOnAnAnchorOutsideAnyWindowShowsNothing() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"battery","type":"text","text":"Battery","position":"right"}]}
@@ -620,6 +619,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.hover(true, store: store, anchor: anchor) {
         popup.showTooltip("Charging", widget: widget, defaults: configuration.defaults, store: store, anchor: anchor)
     }
+    try await clock.waitForSleepers()
     await letPass(.milliseconds(500), on: clock)
     #expect(presentations == 0)
 }
