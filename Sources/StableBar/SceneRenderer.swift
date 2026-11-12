@@ -69,6 +69,7 @@ enum SceneRenderer {
             store.workspaceStore.workspaces = try workspaceSnapshot(workspaces: JSONEncoder().encode(workspaces),
                                                                     windows: JSONEncoder().encode(scene.windows ?? []))
         }
+        store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
         // Crashes and Send feedback read these samples, never the crash reports of the Mac that draws.

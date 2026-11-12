@@ -944,6 +944,14 @@ private struct RelayProbe {
         #expect(registry.permissions(for: try configuration(#"""
         {"workspaceSource":"\#(source)","widgets":[{"id":"spaces","type":"workspaces","position":"left"}]}
         """#)).isEmpty)
+        // Dock badges are read through Accessibility, whatever lists the workspaces.
+        #expect(registry.permissions(for: try configuration(#"""
+        {"workspaceSource":"\#(source)","widgets":[{"id":"spaces","type":"workspaces","position":"left","workspace":{"badges":"dot"}}]}
+        """#)) == [.accessibility])
+        #expect(registry.permissions(for: try configuration(#"""
+        {"workspaceSource":"\#(source)","widgets":[{"id":"spaces","type":"workspaces","position":"left",
+                                                   "workspace":{"badges":"dot","showApps":false}}]}
+        """#)).isEmpty)
     }
     #expect(registry.permissions(for: nil).isEmpty)
     #expect(DataSourceRegistry.builtIn.permissions(for: try configuration(#"""

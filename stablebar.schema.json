@@ -1400,6 +1400,10 @@
         },
         "magnification": {
           "anyOf": [{"type": "number", "minimum": 1}, {"$ref": "#/definitions/reference"}, {"type": "null"}]
+        },
+        "badges": {
+          "anyOf": [{"enum": ["dot", "count"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}],
+          "description": "Marks each app icon whose app has a Dock badge: a dot, or the badge's count or text. Off when omitted."
         }
       }
     },

@@ -1,0 +1,26 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "aerospace",
+    "widgets": [
+      { "id": "count", "type": "workspaces", "position": "left", "workspace": { "badges": "count" } },
+      { "id": "dot", "type": "workspaces", "position": "center", "workspace": { "badges": "dot" } },
+      { "id": "windows", "type": "workspaces", "position": "right",
+        "workspace": { "badges": "count", "windows": true, "appStyle": { "width": 20, "height": 20 } } }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "windows": [
+    { "window-id": 1, "window-title": "Inbox", "workspace": "1", "app-name": "Mail", "app-bundle-id": "com.apple.mail" },
+    { "window-id": 2, "window-title": "Safari", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 3, "window-title": "Messages", "workspace": "2", "app-name": "Messages", "app-bundle-id": "com.apple.MobileSMS" },
+    { "window-id": 4, "window-title": "Reminders", "workspace": "2", "app-name": "Reminders", "app-bundle-id": "com.apple.reminders" },
+    { "window-id": 5, "window-title": "Terminal", "workspace": "2", "app-name": "Terminal", "app-bundle-id": "com.apple.Terminal" }
+  ],
+  "dockBadges": { "com.apple.mail": "3", "com.apple.MobileSMS": "128", "com.apple.reminders": "•" },
+  "draw": "bar",
+  "width": 900
+}

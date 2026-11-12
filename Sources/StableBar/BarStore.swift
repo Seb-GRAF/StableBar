@@ -956,6 +956,7 @@ final class BarStore: NSObject {
     }
 
     private func updateSuspension() {
+        workspaceStore.dockBadges.isWatching = managesConnections && pauses.isEmpty && configuration?.showsDockBadges == true
         var visible = visibleWidgets.values.reduce(into: Set<String>()) { $0.formUnion($1) }
         if let popupWidgetID { visible.insert(popupWidgetID) }
         if inspectorOpen, let inspectedWidgetID { visible.insert(inspectedWidgetID) }
@@ -1219,6 +1220,7 @@ final class BarStore: NSObject {
         reloadTask?.cancel()
         configurationWatcher.stop()
         workspaceStore.stop()
+        workspaceStore.dockBadges.isWatching = false
         for script in scripts.values { script.stop() }
         for provider in providers.values { provider.stop() }
         providers.removeAll()

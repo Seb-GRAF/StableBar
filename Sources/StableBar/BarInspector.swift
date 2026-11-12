@@ -508,6 +508,16 @@ struct BarInspector: View {
                             }
                         }
                     }
+                    SettingRow(title: "Dock badges", hint: "Mark the apps whose Dock icon has a badge, such as unread messages") {
+                        Picker("Dock badges", selection: Binding(get: { widget.workspace?.badges?.rawValue ?? "" }, set: {
+                            editor.set(["workspace": .object(["badges": $0.isEmpty ? .null : .string($0)])], for: widget.id)
+                        })) {
+                            Text("Off").tag("")
+                            Text("Dot").tag(DockBadgeStyle.dot.rawValue)
+                            Text("Count").tag(DockBadgeStyle.count.rawValue)
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
                     SettingRow(title: "Hide apps", hint: "Bundle IDs or app names, separated by commas") {
                         NameListField(title: "Hide apps", prompt: "com.1password.1password, Raycast", names: widget.workspace?.hideApps ?? []) {
                             editor.set(["workspace": .object(["hideApps": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])], for: widget.id)
