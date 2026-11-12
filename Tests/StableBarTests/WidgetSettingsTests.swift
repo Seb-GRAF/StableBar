@@ -63,12 +63,12 @@ final class WidgetSettingsTests: XCTestCase {
         defer { store.stop() }
         let editor = ConfigurationEditor(store: store)
         let before = try fixture.document()
-        XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], source: "percent"), .custom)
+        XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], sources: ["percent"]), .custom)
         for choice in [WidgetMetricDisplay.graph, .icon, .meter, .value, .standard] {
-            editor.set(["layout": try XCTUnwrap(choice.layout(for: "percent"))], for: "power")
+            editor.set(["layout": try XCTUnwrap(choice.layout(for: ["percent"]))], for: "power")
             try editor.history.flush()
             XCTAssertNil(editor.error)
-            XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], source: "percent"), choice)
+            XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "power")["layout"], sources: ["percent"]), choice)
             XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
             XCTAssertEqual(store.configuration?.widgets.first?.open, "com.apple.systempreferences")
         }
@@ -77,9 +77,14 @@ final class WidgetSettingsTests: XCTestCase {
     }
 
     func testSystemStartsWithItsGraphAndKeepsIconAndValueAsAChoice() {
-        XCTAssertEqual(WidgetMetricDisplay.current(nil, source: "cpu"), .graph)
-        for choice in WidgetMetricDisplay.choices(for: "cpu") where choice != .custom {
-            XCTAssertEqual(WidgetMetricDisplay.current(choice.layout(for: "cpu"), source: "cpu"), choice)
+        XCTAssertEqual(WidgetMetricDisplay.current(nil, sources: ["cpu"]), .graph)
+        XCTAssertEqual(WidgetSystemMetrics.current(nil), .cpu)
+        for metrics in WidgetSystemMetrics.allCases {
+            for choice in WidgetMetricDisplay.choices(for: "cpu") where choice != .custom {
+                let layout = choice.layout(for: metrics.sources)
+                XCTAssertEqual(WidgetSystemMetrics.current(layout), metrics)
+                XCTAssertEqual(WidgetMetricDisplay.current(layout, sources: metrics.sources), choice)
+            }
         }
     }
 
@@ -92,12 +97,12 @@ final class WidgetSettingsTests: XCTestCase {
         let before = try fixture.document()
         XCTAssertEqual(WidgetMetricDisplay.choices(for: "volume").first, .changes)
         XCTAssertFalse(WidgetMetricDisplay.choices(for: "percent").contains(.changes), "Battery has no value on change")
-        XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "sound")["layout"], source: "volume"), .changes)
+        XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "sound")["layout"], sources: ["volume"]), .changes)
         for choice in [WidgetMetricDisplay.standard, .graph, .icon, .meter, .value, .changes] {
-            editor.set(["layout": try XCTUnwrap(choice.layout(for: "volume"))], for: "sound")
+            editor.set(["layout": try XCTUnwrap(choice.layout(for: ["volume"]))], for: "sound")
             try editor.history.flush()
             XCTAssertNil(editor.error)
-            XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "sound")["layout"], source: "volume"), choice)
+            XCTAssertEqual(WidgetMetricDisplay.current(editor.properties(for: "sound")["layout"], sources: ["volume"]), choice)
         }
         XCTAssertNil(store.configuration?.widgets.first?.layout, "Value on change is the default layout")
         for _ in 0..<6 { editor.undo() }

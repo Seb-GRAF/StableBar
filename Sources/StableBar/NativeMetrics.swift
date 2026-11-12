@@ -208,6 +208,8 @@ actor CalendarMetrics {
 @MainActor
 final class NativeMetrics {
     private var cpu: CPUTicks?
+    private var cpuHistory: [Double] = []
+    private var memoryHistory: [Double] = []
     private var network: [String: NetworkCounters] = [:]
     private var networkTime: ContinuousClock.Instant?
 
@@ -259,6 +261,8 @@ final class NativeMetrics {
         let percent = { (fraction: Double) in String(Int(fraction * 100)) }
         let bytes = { (count: Double) in ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .memory) }
         let uptime = Duration.seconds(Date.now.timeIntervalSince1970 - Double(boot.tv_sec))
+        cpuHistory = Array((cpuHistory + [usage]).suffix(60))
+        memoryHistory = Array((memoryHistory + [used / total]).suffix(60))
         var output = ScriptOutput(text: "\(Int(usage * 100))%", icon: "cpu", value: usage,
                             fields: ["cpu": percent(usage), "cpuUser": percent(split.user), "cpuSystem": percent(split.system),
                                      "memory": percent(used / total), "memoryUsed": bytes(used), "memoryCompressed": bytes(compressed),
@@ -266,7 +270,8 @@ final class NativeMetrics {
                                      "load": averages.map { String(format: "%.2f", $0) }.joined(separator: " "), "thermal": thermal,
                                      "uptime": uptime.formatted(.units(allowed: [.days, .hours, .minutes], width: .narrow, maximumUnitCount: 2))],
                             values: ["cpu": usage, "cpuUser": split.user, "cpuSystem": split.system, "memory": used / total,
-                                     "memoryUsed": used, "memoryTotal": total])
+                                     "memoryUsed": used, "memoryTotal": total],
+                            series: ["cpu": cpuHistory, "memory": memoryHistory])
         if let gpu = gpuUsage() {
             output.fields!["gpu"] = String(Int((gpu * 100).rounded()))
             output.values!["gpu"] = gpu

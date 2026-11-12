@@ -91,13 +91,13 @@ private func battery(_ extra: [String: Any] = [:]) -> [String: Any] {
 
 @Test func batteryDisplayStartsWithTheBatteryAloneAndUsesItAsTheIcon() {
     #expect(WidgetMetricDisplay.choices(for: "percent") == [.icon, .standard, .value, .meter, .graph, .custom])
-    #expect(WidgetMetricDisplay.icon.layout(for: "percent") == .null)
-    #expect(WidgetMetricDisplay.current(nil, source: "percent") == .icon)
+    #expect(WidgetMetricDisplay.icon.layout(for: ["percent"]) == .null)
+    #expect(WidgetMetricDisplay.current(nil, sources: ["percent"]) == .icon)
     let battery: ConfigurationValue = .object(["type": .string("battery")])
     let text: ConfigurationValue = .object(["type": .string("field"), "field": .string("text")])
-    #expect(WidgetMetricDisplay.standard.layout(for: "percent") == .object(["type": .string("row"), "children": .array([battery, text])]))
+    #expect(WidgetMetricDisplay.standard.layout(for: ["percent"]) == .object(["type": .string("row"), "children": .array([battery, text])]))
     for choice in WidgetMetricDisplay.choices(for: "percent") where choice != .custom {
-        #expect(WidgetMetricDisplay.current(choice.layout(for: "percent"), source: "percent") == choice)
+        #expect(WidgetMetricDisplay.current(choice.layout(for: ["percent"]), sources: ["percent"]) == choice)
     }
 }
 
