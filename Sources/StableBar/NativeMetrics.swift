@@ -268,7 +268,7 @@ final class NativeMetrics {
                             values: ["cpu": usage, "cpuUser": split.user, "cpuSystem": split.system, "memory": used / total,
                                      "memoryUsed": used, "memoryTotal": total])
         if let gpu = gpuUsage() {
-            output.fields!["gpu"] = percent(gpu)
+            output.fields!["gpu"] = String(Int((gpu * 100).rounded()))
             output.values!["gpu"] = gpu
         }
         return output
