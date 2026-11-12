@@ -211,7 +211,7 @@ func sceneRejectsASetupItCannotDraw(json: String) {
     }
     #expect(Set(setupProperties.keys) == Set(SceneFile.Setup.CodingKeys.allCases.map(\.stringValue)))
     #expect(choices(setupProperties["step"]) == Set(SetupSession.Step.allCases.map { "\($0)" }))
-    #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar"])
+    #expect(choices(setupProperties["placement"]) == ["top", "belowMenuBar", "bottom"])
     #expect(choices(setupProperties["preset"]) == Set(SetupPreferences.Preset.allCases.map { "\($0)" }))
     #expect(choices(setupProperties["workspaceCheck"]) == Set(SceneFile.Setup.WorkspaceCheck.allCases.map(\.rawValue)))
 }

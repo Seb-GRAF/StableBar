@@ -242,7 +242,7 @@ extension SceneFile.Setup: Decodable {
             return value
         }
         step = try named(.step, among: SetupSession.Step.allCases) ?? .placement
-        placement = try named(.placement, among: [SetupPreferences.Placement.top, .belowMenuBar])
+        placement = try named(.placement, among: [SetupPreferences.Placement.top, .belowMenuBar, .bottom])
         preset = try named(.preset, among: SetupPreferences.Preset.allCases)
         menuBarHides = try values.decodeIfPresent(Bool.self, forKey: .menuBarHides) ?? false
         accessibility = try values.decodeIfPresent(Bool.self, forKey: .accessibility) ?? true

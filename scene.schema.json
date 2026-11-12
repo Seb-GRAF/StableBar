@@ -93,8 +93,8 @@
           "enum": ["placement", "look", "touches", "permissions", "tryIt"]
         },
         "placement": {
-          "description": "The first step's choice, made before drawing: Replace the menu bar (top) or Keep the menu bar (belowMenuBar). Without it, neither is picked.",
-          "enum": ["top", "belowMenuBar"]
+          "description": "The first step's choice, made before drawing: Replace the menu bar (top), Keep the menu bar (belowMenuBar) or Put it at the bottom (bottom). Without it, none is picked.",
+          "enum": ["top", "belowMenuBar", "bottom"]
         },
         "preset": {
           "description": "The preset picked on the second step.",

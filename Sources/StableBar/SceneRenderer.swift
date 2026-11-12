@@ -320,9 +320,13 @@ enum SceneRenderer {
 
         var body: some View {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
-            let top = store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: menuBar) } ?? 0
+            let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                bar(store).padding(.top, top)
+                if let settings, settings.position == .bottom {
+                    bar(store).padding(.bottom, settings.offset)
+                } else {
+                    bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)
+                }
                 if !session.menuBarHides {
                     Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
                 }
