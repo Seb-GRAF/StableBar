@@ -7,7 +7,7 @@
 
 Open **Settings…** from the menu-bar icon or by right-clicking the bar, reopen the running app, or run `StableBar --customize`. Its tabs are **General**, **Bar**, **Theme**, **Profiles**, **Packages**, **Status** and **Help**, with General selected on first opening. **Search settings** finds controls by their purpose, including login, permissions, clock format, displays and widget appearance, and jumps to the matching section.
 
-While Settings is open, StableBar appears in the Dock and the ⌘Tab app switcher so you can return after switching apps. Closing Settings removes its Dock icon; the bar keeps running.
+While Settings is open, StableBar appears in the Dock and the ⌘Tab app switcher so you can return after switching apps. Closing Settings, with its close button or ⌘W, removes its Dock icon; the bar keeps running.
 
 Right-click a widget and choose **Edit Widget…** to open its settings directly. Opening or selecting a widget starts on **Content**, and reopening Settings returns the widget inspector to Content. Searches for Style or Behavior still open that tab. Widgets with a custom `actions.rightClick` command keep running it; use **Settings → Bar** or **Edit Bar in Place** to edit those widgets.
 

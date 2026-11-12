@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class PopupPanel: NSPanel {
-    /// Closes a pinned popup, which no event monitor watches, on Escape.
+    /// Closes a pinned popup, which no event monitor watches, on Escape and ⌘W.
     var onEscape: (() -> Void)?
     let size = PopupSize()
     /// Opens above its anchor, from a bar at the bottom of the display: it grows and resizes from its top.
@@ -16,6 +16,15 @@ final class PopupPanel: NSPanel {
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == 53, let onEscape { onEscape() } else { super.sendEvent(event) }
+    }
+
+    /// AppKit turns Close off for a window without a title-bar close button.
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem.action == #selector(performClose(_:)) ? onEscape != nil : super.validateMenuItem(menuItem)
+    }
+
+    override func performClose(_ sender: Any?) {
+        if let onEscape { onEscape() } else { super.performClose(sender) }
     }
 }
 
