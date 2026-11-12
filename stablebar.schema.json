@@ -1375,6 +1375,14 @@
             }
           ]
         },
+        "hideApps": {
+          "$ref": "#/definitions/strings",
+          "description": "App bundle IDs or app names to leave out, matched like appGlyphs keys."
+        },
+        "hideWorkspaces": {
+          "$ref": "#/definitions/strings",
+          "description": "Workspace names to leave out unless focused."
+        },
         "showEmpty": {
           "$ref": "#/definitions/boolean"
         },
