@@ -518,7 +518,7 @@ struct WidgetView: View {
         } else if let open = widget.open {
             let click = { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
-        } else if store.configuration?.providerType(of: widget) == DataSourceType.inputSource.name {
+        } else if store.configuration?.providerType(of: widget) == DataSourceType.inputSource.name, !hasOwnClick {
             let click = { if store.barEditing.allowsWidgetActions { store.selectInputSource(nil, widget: widget) } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if case let .appleMenu(appleClick) = widget.content, widget.layout != nil, !hasOwnClick {
