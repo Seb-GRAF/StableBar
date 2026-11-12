@@ -622,8 +622,12 @@ struct WidgetView: View {
         let style = resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let animation = output?.animation ?? widget.animation ?? defaultAnimation
-        let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: 0,
-                                 bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: 0)
+        let leading = style.paddingLeading ?? appearance.paddingHorizontal
+        let trailing = style.paddingTrailing ?? appearance.paddingHorizontal
+        // The Apple logo's button takes the side padding too, so the whole tile takes its click.
+        let isAppleLogo = if case .appleMenu = widget.content { widget.layout == nil } else { false }
+        let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: isAppleLogo ? leading : 0,
+                                 bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: isAppleLogo ? trailing : 0)
         // Workspace and menu buttons include vertical padding so their selection fills the tile.
         let hasCells = switch widget.content {
         case .workspaces, .appMenu, .appleMenu: widget.layout == nil
@@ -651,8 +655,8 @@ struct WidgetView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.leading, style.paddingLeading ?? appearance.paddingHorizontal)
-            .padding(.trailing, style.paddingTrailing ?? appearance.paddingHorizontal)
+            .padding(.leading, isAppleLogo ? 0 : leading)
+            .padding(.trailing, isAppleLogo ? 0 : trailing)
             .padding(.top, hasCells ? 0 : padding.top)
             .padding(.bottom, hasCells ? 0 : padding.bottom)
             .frame(width: appearance.width, height: style.height.map { CGFloat($0) })
