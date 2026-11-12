@@ -723,20 +723,29 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
     #expect(geometry.visibleRect(width: 300) == CGRect(x: 3, y: 3, width: 294, height: 32))
     let rect = belowBarIndicatorRect(cell: CGRect(x: -10, y: 5, width: 50, height: 22),
         widget: CGRect(x: -20, y: 0, width: 300, height: 38), viewport: CGRect(x: 12, y: 0, width: 25, height: 38),
-        visibleBar: CGRect(x: 0, y: 0, width: 300, height: 38),
+        visibleBar: CGRect(x: 0, y: 0, width: 300, height: 38), position: .top,
         style: WidgetStyle(height: 2, offsetY: 3), scale: 1, pixelsPerPoint: 2)
     #expect(rect == CGRect(x: 12, y: 41, width: 25, height: 2))
+    let above = belowBarIndicatorRect(cell: CGRect(x: -10, y: 5, width: 50, height: 22),
+        widget: CGRect(x: -20, y: 0, width: 300, height: 38), viewport: CGRect(x: 12, y: 0, width: 25, height: 38),
+        visibleBar: CGRect(x: 0, y: 0, width: 300, height: 38), position: .bottom,
+        style: WidgetStyle(height: 2, offsetY: 3), scale: 1, pixelsPerPoint: 2)
+    #expect(above == CGRect(x: 12, y: -5, width: 25, height: 2))
     let offscreen = belowBarIndicatorRect(cell: CGRect(x: -50, y: 5, width: 20, height: 22),
         widget: CGRect(x: -60, y: 0, width: 300, height: 38), viewport: CGRect(x: 12, y: 0, width: 25, height: 38),
-        visibleBar: CGRect(x: 0, y: 0, width: 300, height: 38), style: WidgetStyle(), scale: 1, pixelsPerPoint: 1)
+        visibleBar: CGRect(x: 0, y: 0, width: 300, height: 38), position: .top, style: WidgetStyle(), scale: 1, pixelsPerPoint: 1)
     #expect(offscreen == nil)
-    #expect(popupAttachmentTop(anchor: CGRect(x: -1000, y: 800, width: 40, height: 22),
-        window: CGRect(x: -1500, y: 780, width: 1512, height: 44), geometry: geometry) == 780)
-    #expect(popupAttachmentTop(anchor: CGRect(x: 100, y: 1700, width: 40, height: 22),
-        window: CGRect(x: 0, y: 1680, width: 2560, height: 44), geometry: geometry) == 1680)
-    #expect(popupAttachmentTop(anchor: CGRect(x: 100, y: 1690, width: 40, height: 22),
+    #expect(popupAttachmentEdge(anchor: CGRect(x: -1000, y: 800, width: 40, height: 22),
+        window: CGRect(x: -1500, y: 780, width: 1512, height: 44), geometry: geometry, position: .top) == 780)
+    #expect(popupAttachmentEdge(anchor: CGRect(x: 100, y: 1700, width: 40, height: 22),
+        window: CGRect(x: 0, y: 1680, width: 2560, height: 44), geometry: geometry, position: .top) == 1680)
+    #expect(popupAttachmentEdge(anchor: CGRect(x: 100, y: 1690, width: 40, height: 22),
         window: CGRect(x: 0, y: 1682, width: 2560, height: 38),
-        geometry: BarGeometry(layoutHeight: 38, margin: 3, outsideExtent: 0)) == 1685)
+        geometry: BarGeometry(layoutHeight: 38, margin: 3, outsideExtent: 0), position: .top) == 1685)
+    #expect(popupAttachmentEdge(anchor: CGRect(x: 100, y: 8, width: 40, height: 22),
+        window: CGRect(x: 0, y: 0, width: 2560, height: 44), geometry: geometry, position: .bottom) == 44)
+    #expect(popupAttachmentEdge(anchor: CGRect(x: 100, y: 500, width: 40, height: 22),
+        window: CGRect(x: 0, y: 400, width: 360, height: 300), geometry: nil, position: .bottom) == 522)
 }
 
 @Test @MainActor func nativeConstrainedWorkspaceClipsItsDecorationAndScrollingRemovesOffscreenSelection() async throws {

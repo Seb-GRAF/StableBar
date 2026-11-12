@@ -39,7 +39,7 @@ struct GeneralSettingsView: View {
                             set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
                             unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
                         bar.toggle("Keep windows clear of the bar", "keepWindowsClear", default: false,
-                                   hint: "Moves ordinary windows below the bar. Leave it off when AeroSpace, yabai, OmniWM or Rift sets gaps.")
+                                   hint: "Moves ordinary windows out from under the bar. Leave it off when AeroSpace, yabai, OmniWM or Rift sets gaps.")
                         NotificationClearanceSettings(bar: bar, macOSVersion: macOSVersion)
                     }
                     .id(SettingsSearchResult.windows.id)

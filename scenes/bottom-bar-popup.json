@@ -1,0 +1,23 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "position": "bottom", "height": 36 },
+    "workspaceDefaults": {
+      "indicator": "underline",
+      "indicatorStyle": { "placement": "belowBar", "height": 3, "offsetY": 2, "background": "#0a84ff" }
+    },
+    "widgets": [
+      { "id": "workspaces", "type": "workspaces", "position": "left" },
+      { "id": "time", "type": "clock", "format": "EEE d MMM  HH:mm", "position": "center", "details": true }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "3", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "draw": "bar",
+  "widget": "time",
+  "width": 900,
+  "height": 560
+}

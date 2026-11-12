@@ -65,17 +65,24 @@ struct SetupTourView: View {
         _menuBarQuestion = State(initialValue: intro && !session.menuBarHides)
     }
 
-    /// Where the bar sits on a display `width` points wide.
-    private func barFrame(width: Double) -> CGRect {
+    /// Where the bar sits on a display of `size`, measured down from its top.
+    private func barFrame(in size: CGSize) -> CGRect {
         guard let configuration = session.store.configuration else { return .zero }
-        return CGRect(x: 0, y: configuration.onScreen(ScreenKind(display)).bar.top(menuBar: currentMenuBarHeight),
-                      width: width, height: configuration.barGeometry(for: display).layoutHeight)
+        let frame = configuration.onScreen(ScreenKind(display)).bar.frame(height: configuration.barGeometry(for: display).layoutHeight,
+                                                                           on: CGRect(origin: .zero, size: size), menuBar: currentMenuBarHeight)
+        return CGRect(x: 0, y: size.height - frame.maxY, width: size.width, height: frame.height)
+    }
+
+    private var barAtBottom: Bool {
+        session.store.configuration?.onScreen(ScreenKind(display)).bar.position == .bottom
     }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let bar = barFrame(width: size.width)
+            let bar = barFrame(in: size)
+            // A bar at the bottom, and the pointer above it, push the step's footer up.
+            let bottom = barAtBottom ? max(dock, size.height - bar.minY + 40) : dock
             ZStack {
                 Color.black
                 SetupBackdrop(size: size)
@@ -87,19 +94,19 @@ struct SetupTourView: View {
                 }
                 if phase == .tour {
                     pointer
-                        .position(x: size.width / 2, y: bar.maxY + 30)
+                        .position(x: size.width / 2, y: barAtBottom ? bar.minY - 30 : bar.maxY + 30)
                         .transition(.opacity)
                 }
-                tour(size: size)
+                tour(size: size, bottom: bottom)
                     .disabled(confirmingSkip || session.applicationMove.isBusy)
                 ZStack {
                     if phase == .tour {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
                     }
                 }
-                .position(x: size.width / 2, y: size.height - dock - 89)
+                .position(x: size.width / 2, y: size.height - bottom - 89)
                 .disabled(session.applicationMove.isBusy)
-                dots.position(x: size.width / 2, y: size.height - dock - 44)
+                dots.position(x: size.width / 2, y: size.height - bottom - 44)
                 if confirmingSkip {
                     skipConfirmation.transition(.opacity)
                 }
@@ -393,7 +400,7 @@ struct SetupTourView: View {
 
     private var pointer: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrow.up")
+            Image(systemName: barAtBottom ? "arrow.down" : "arrow.up")
             Text(session.step == Self.pages.count - 1 ? "Try it on your bar" : "Live on your bar")
                 .contentTransition(.opacity)
         }
@@ -408,9 +415,9 @@ struct SetupTourView: View {
         } animation: { _ in .easeInOut(duration: 1) }
     }
 
-    private func tour(size: CGSize) -> some View {
+    private func tour(size: CGSize, bottom: Double) -> some View {
         let page = Self.pages[session.step]
-        let layout = SetupTourLayout(height: size.height, dock: dock)
+        let layout = SetupTourLayout(height: size.height, dock: bottom)
         return VStack(spacing: 16) {
             ScrollView(.vertical) {
             VStack(spacing: 12) {
@@ -712,6 +719,21 @@ struct SetupTourView: View {
                     .padding(10)
                     .frame(width: 488)
                 }
+                SetupTile(selected: session.placementChoice == .bottom) {
+                    Task { await session.place(.bottom) }
+                } label: {
+                    HStack(spacing: 14) {
+                        placementPicture(.bottom, width: 84, height: 46)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Put it at the bottom").font(.system(size: 13, weight: .semibold))
+                            Text("StableBar sits on the bottom edge, and the menu bar stays at the top.")
+                                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(10)
+                    .frame(width: 488)
+                }
             }
             menuBarAccessNotice
             // A profile that places the bar keeps it where it is, whichever choice this step saves.
@@ -727,16 +749,18 @@ struct SetupTourView: View {
         }
     }
 
-    /// A small screen with the bar on the top edge, or under a menu bar.
+    /// A small screen with the bar on the top edge, under a menu bar, or on the bottom edge under one.
     private func placementPicture(_ placement: SetupPreferences.Placement, width: Double, height: Double) -> some View {
         VStack(spacing: 3) {
-            if placement == .belowMenuBar {
+            if placement != .top {
                 Rectangle().fill(.white.opacity(0.4)).frame(height: 6)
             }
+            if placement == .bottom { Spacer() }
             RoundedRectangle(cornerRadius: 3).fill(.black.opacity(0.8)).frame(height: 10)
                 .padding(.horizontal, 4)
-            Spacer()
+            if placement != .bottom { Spacer() }
         }
+        .padding(.bottom, placement == .bottom ? 3 : 0)
         .frame(width: width, height: height)
         .background { Wallpaper() }
         .clipShape(RoundedRectangle(cornerRadius: 8))
@@ -830,7 +854,7 @@ struct SetupTourView: View {
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             let source = session.adviceSource
             if source != .spaces {
-                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
+                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.\(barAtBottom ? "bottom" : "top") in \(source.title) to leave room for the bar.")")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
             if let source = session.workspaceCheckSource {

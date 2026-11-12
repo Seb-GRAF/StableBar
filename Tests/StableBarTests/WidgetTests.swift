@@ -715,6 +715,16 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(document["bar"] == .object(["offset": .number(0)]))
 }
 
+@Test func setupMovesTheBarToTheBottomEdgeAndBack() throws {
+    let data = Data(#"{"bar": {"belowMenuBar": true, "offset": 6}, "widgets": []}"#.utf8)
+    let bottom = try SetupPreferences(placement: .bottom).applying(to: data)
+    let bar = try JSONDecoder().decode(Configuration.self, from: bottom).bar
+    #expect(bar.position == .bottom)
+    #expect(bar.offset == 0)
+    #expect(!bar.belowMenuBar)
+    #expect(try JSONDecoder().decode(Configuration.self, from: SetupPreferences(placement: .top).applying(to: bottom)).bar.position == .top)
+}
+
 @Test(arguments: SetupPreferences.Preset.allCases)
 func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

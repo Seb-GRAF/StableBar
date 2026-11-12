@@ -46,6 +46,6 @@ import Testing
     #expect(decorated.panelHeight == 57)
     let rect = belowBarIndicatorRect(cell: CGRect(x: 12, y: 0, width: 36, height: 22),
         widget: CGRect(x: 12, y: 0, width: 36, height: 55), viewport: CGRect(x: 12, y: 0, width: 36, height: 55),
-        visibleBar: CGRect(x: 0, y: 0, width: 100, height: 50 * 1.1), style: WidgetStyle(height: 2), scale: 1, pixelsPerPoint: 2)
+        visibleBar: CGRect(x: 0, y: 0, width: 100, height: 50 * 1.1), position: .top, style: WidgetStyle(height: 2), scale: 1, pixelsPerPoint: 2)
     #expect(rect?.minY == 55)
 }
