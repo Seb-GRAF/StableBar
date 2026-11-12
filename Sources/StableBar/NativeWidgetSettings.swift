@@ -45,6 +45,15 @@ struct NativeWidgetSettings: View {
                     number("Upcoming warning", "soon", Double(provider.soon), in: 1...120, unit: "min")
                     number("Starting warning", "now", Double(provider.now), in: 0...60, unit: "min")
                 }
+            case "privacy":
+                SettingsGroup("Microphone & camera") {
+                    SettingRow(title: "Hide when not in use", hint: "Shows only what is in use") {
+                        Toggle("Hide when not in use", isOn: Binding(get: { widget.hideWhenIdle }, set: {
+                            editor.set(["hideWhenIdle": .bool($0)], for: widget.id)
+                        }))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
+                }
             default: EmptyView()
             }
             if ["system", "network", "calendar"].contains(provider.type),

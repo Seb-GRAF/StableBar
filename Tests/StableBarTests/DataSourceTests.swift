@@ -749,6 +749,40 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(DataSourceType.audio.events == [.volumeChange, .outputDeviceChange])
 }
 
+@Test func microphoneAndCameraEventsFollowTheirUse() {
+    func microphone(_ volume: Double, muted: Bool = false, inUse: Bool) -> ScriptOutput {
+        var output = audio(volume, muted: muted, device: "MacBook Pro Microphone")
+        output.fields?["inUse"] = String(inUse)
+        return output
+    }
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: false), to: microphone(0.5, inUse: true))
+            == ["INFO": "50", "MUTED": "false", "IN_USE": "true"])
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: true), to: microphone(0.5, muted: true, inUse: true))
+            == ["INFO": "50", "MUTED": "true", "IN_USE": "true"])
+    #expect(BuiltInEvent.microphoneChange.variables(from: microphone(0.5, inUse: true), to: microphone(0.5, inUse: true)) == nil)
+    func privacy(microphone: Bool, camera: Bool, muted: Bool = false) -> ScriptOutput {
+        ScriptOutput(text: "", fields: ["microphone": String(microphone), "camera": String(camera), "muted": String(muted)])
+    }
+    #expect(BuiltInEvent.privacyChange.variables(from: privacy(microphone: false, camera: false), to: privacy(microphone: false, camera: true))
+            == ["INFO": "true", "MICROPHONE": "false", "CAMERA": "true", "MUTED": "false"])
+    #expect(BuiltInEvent.privacyChange.variables(from: privacy(microphone: true, camera: false), to: privacy(microphone: true, camera: false, muted: true))
+            == ["INFO": "true", "MICROPHONE": "true", "CAMERA": "false", "MUTED": "true"])
+    #expect(BuiltInEvent.privacyChange.variables(from: privacy(microphone: true, camera: true), to: privacy(microphone: true, camera: true)) == nil)
+}
+
+@Test func thePrivacyWidgetHidesWhatIsNotInUseWhenAsked() throws {
+    func icons(hideWhenIdle: Bool, microphone: Bool, camera: Bool) throws -> Int {
+        let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(#"{"id":"p","type":"privacy","position":"right","hideWhenIdle":\#(hideWhenIdle)}"#.utf8))
+        let output = ScriptOutput(text: "", fields: ["microphone": String(microphone), "camera": String(camera)])
+        let layout = widget.defaultLayout(widget.label(output: output, activeApp: nil, date: .now), output: output, appIcon: false)
+        guard case let .row(children)? = layout?.content else { return -1 }
+        return children.count
+    }
+    #expect(try icons(hideWhenIdle: false, microphone: false, camera: false) == 2)
+    #expect(try icons(hideWhenIdle: true, microphone: false, camera: true) == 1)
+    #expect(try icons(hideWhenIdle: true, microphone: false, camera: false) == 0)
+}
+
 @Test func theSpeakerShowsMoreWavesAsTheVolumeRises() {
     let levels: [(Double, String)] = [(0, "speaker"), (0.004, "speaker"), (0.01, "speaker.wave.1"), (0.33, "speaker.wave.1"),
                                       (0.34, "speaker.wave.2"), (0.66, "speaker.wave.2"), (0.67, "speaker.wave.3"), (1, "speaker.wave.3")]

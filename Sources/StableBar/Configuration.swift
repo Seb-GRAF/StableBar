@@ -396,6 +396,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let icon: String?
     let tooltip: String?
     let details: Bool
+    let hideWhenIdle: Bool
     let timeZone: String?
     let onClick: String?
     let open: String?
@@ -426,7 +427,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, timeZone, click, background, popupBackground, tooltipBackground
+        case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
     }
 
     var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
@@ -441,6 +442,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
         tooltip = try values.decodeIfPresent(String.self, forKey: .tooltip)
         details = try values.decodeIfPresent(Bool.self, forKey: .details) ?? false
+        hideWhenIdle = try values.decodeIfPresent(Bool.self, forKey: .hideWhenIdle) ?? false
         timeZone = try values.decodeIfPresent(String.self, forKey: .timeZone)
         if let timeZone, TimeZone(identifier: timeZone) == nil {
             throw DecodingError.dataCorruptedError(forKey: .timeZone, in: values, debugDescription: "Use a time zone identifier such as Europe/Zurich or America/New_York.")

@@ -1412,6 +1412,11 @@
           "description": "Show the built-in details popup for Clock, Battery, System monitor, Network or Calendar. Custom popups and click actions take precedence.",
           "$ref": "#/definitions/boolean"
         },
+        "hideWhenIdle": {
+          "default": false,
+          "description": "For a privacy widget, show only the microphone or camera while it is in use, and hide the widget while neither is.",
+          "$ref": "#/definitions/boolean"
+        },
         "timeZone": {
           "description": "Clock time zone identifier. Omit to follow the Mac.",
           "$ref": "#/definitions/string"
@@ -1450,6 +1455,8 @@
                 "battery",
                 "audio",
                 "inputSource",
+                "microphone",
+                "privacy",
                 "calendar"
               ]
             },
@@ -1789,6 +1796,8 @@
                 "battery",
                 "audio",
                 "inputSource",
+                "microphone",
+                "privacy",
                 "calendar"
               ]
             },

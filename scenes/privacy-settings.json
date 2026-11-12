@@ -1,0 +1,34 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "privacy",
+        "type": "privacy",
+        "position": "right",
+        "hideWhenIdle": true
+      },
+      {
+        "id": "time",
+        "type": "clock",
+        "format": "HH:mm",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "privacy": {
+      "text": "",
+      "tooltip": "Camera in use",
+      "fields": {
+        "microphone": "false",
+        "camera": "true",
+        "muted": "false"
+      }
+    }
+  },
+  "draw": "settings",
+  "section": "bar",
+  "widget": "privacy",
+  "tab": "content"
+}

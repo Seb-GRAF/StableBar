@@ -134,7 +134,7 @@ final class WidgetSetupTests: XCTestCase {
         let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: fixture.directory.appending(path: "missing.json")))
         await setup.load()
         XCTAssertTrue(setup.storeUnavailable)
-        XCTAssertEqual(setup.choices.count, 17)
+        XCTAssertEqual(setup.choices.count, 18)
         let before = try Data(contentsOf: fixture.url)
         let text = try XCTUnwrap(setup.choices.first { $0.id == "text" })
         let addedLeft = await setup.add(text, to: WidgetPlacement.destination(selectedID: "left", widgets: store.configuration!.widgets))

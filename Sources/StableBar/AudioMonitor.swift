@@ -2,14 +2,16 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
-/// The default output device's volume, mute state and name from CoreAudio. Its listeners follow the
-/// default output device and the device list, and the default device's volume and mute state.
+/// The default output device's, or with `input` the default input device's, volume, mute state and
+/// name from CoreAudio, and for input whether any app records from it. Its listeners follow the
+/// default device and the device list, and the default device's volume, mute state and use.
 final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     /// The `temporary` field that holds the volume, such as `62%`, for a moment after it changes.
     static let changedVolumeField = "changedVolume"
     /// How long the volume shows after a change, in seconds.
     static let changedVolumeDuration = 1.5
 
+    private let input: Bool
     private let relay = MainQueueRelay()
     private let queue = DispatchQueue(label: "StableBar.AudioMonitor")
     /// The last output read, which the next read compares with. Only touched on the main actor, where
@@ -20,21 +22,46 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     private var device = AudioObjectID(kAudioObjectUnknown)
     private var deviceListener: AudioObjectPropertyListenerBlock?
     private var deviceAddresses: [AudioObjectPropertyAddress] = []
+    private var processes: [AudioObjectID] = []
+    private var processListener: AudioObjectPropertyListenerBlock?
 
-    private static var systemAddresses: [AudioObjectPropertyAddress] {
-        [kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices].map {
+    init(input: Bool = false) {
+        self.input = input
+    }
+
+    private var scope: AudioObjectPropertyScope { input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput }
+
+    /// Whether it tells recording from playback by the processes using the device. A duplex device
+    /// runs for playback alone, and macOS 14.2 added the process objects that tell them apart.
+    private var readsProcesses: Bool {
+        if #available(macOS 14.2, *) { input } else { false }
+    }
+
+    private var systemAddresses: [AudioObjectPropertyAddress] {
+        ([input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices]
+            + (readsProcesses ? [kAudioHardwarePropertyProcessObjectList] : [])).map {
             AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         }
     }
 
-    private static var volumeAddresses: [AudioObjectPropertyAddress] {
+    private var deviceProperties: [AudioObjectPropertyAddress] {
         [0, 1, 2].map {
-            AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyVolumeScalar, mScope: kAudioDevicePropertyScopeOutput, mElement: $0)
-        } + [AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: kAudioDevicePropertyScopeOutput,
-                                        mElement: kAudioObjectPropertyElementMain)]
+            AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyVolumeScalar, mScope: scope, mElement: $0)
+        } + [AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)]
+            + (input && !readsProcesses ? [Self.runningAddress] : [])
     }
 
+    private static let runningAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+                                                                   mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let processListAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
+                                                                       mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let recordingAddress = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyIsRunningInput,
+                                                                     mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let inputDevicesAddress = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyDevices,
+                                                                        mScope: kAudioObjectPropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
+
     func read() throws -> ScriptOutput {
+        if input { return try readDevice() }
         let output = Self.showingChange(to: try readDevice(), from: previous)
         previous = output
         return output
@@ -69,16 +96,16 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     }
 
     private func readDevice() throws -> ScriptOutput {
-        let device = try Self.defaultDevice()
+        let device = try Self.defaultDevice(input: input)
         guard device != kAudioObjectUnknown else {
-            return ScriptOutput(text: "No output", icon: "speaker.slash", fields: ["volumeAvailable": "false"], lists: ["devices": []])
+            return ScriptOutput(text: input ? "No input" : "No output", icon: input ? "mic.slash" : "speaker.slash",
+                                fields: ["volumeAvailable": "false"], lists: ["devices": []])
         }
         // A device that is being unplugged may not tell its name; the next change reads it again.
         let name = (try? Self.name(of: device)) ?? ""
         var volumes: [Float32] = []
         for channel: UInt32 in [0, 1, 2] {
-            var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyVolumeScalar,
-                                                     mScope: kAudioDevicePropertyScopeOutput, mElement: channel)
+            var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyVolumeScalar, mScope: scope, mElement: channel)
             if AudioObjectHasProperty(device, &address) {
                 var value: Float32 = 0
                 var size = UInt32(MemoryLayout<Float32>.size)
@@ -89,15 +116,28 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             }
         }
         let volume = volumes.isEmpty ? nil : Double(volumes.reduce(0, +) / Float32(volumes.count))
-        var muteAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute,
-                                                    mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+        var muteAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         var muted: UInt32 = 0
         var muteSize = UInt32(MemoryLayout<UInt32>.size)
         let muteStatus = AudioObjectGetPropertyData(device, &muteAddress, 0, nil, &muteSize, &muted)
         var fields = ["device": name, "deviceID": String(device), "volumeAvailable": String(volume != nil)]
         if muteStatus == noErr { fields["muted"] = String(muted != 0) }
-        return ScriptOutput(text: volume.map { "\(Int(($0 * 100).rounded()))%" } ?? name, icon: Self.icon(volume: volume, muted: muted != 0),
-                            value: volume, fields: fields, lists: ["devices": try Self.outputDevices()], values: volume.map { ["volume": $0] })
+        var icon = Self.icon(volume: volume, muted: muted != 0)
+        if input {
+            let inUse = isRecording(from: device)
+            fields["inUse"] = String(inUse)
+            icon = muted != 0 ? "mic.slash" : inUse ? "mic.fill" : "mic"
+        }
+        return ScriptOutput(text: volume.map { "\(Int(($0 * 100).rounded()))%" } ?? name, icon: icon,
+                            value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope)], values: volume.map { ["volume": $0] })
+    }
+
+    /// Whether any process records from `device`, or before macOS 14.2 whether any uses it at all.
+    private func isRecording(from device: AudioDeviceID) -> Bool {
+        guard readsProcesses else { return Self.flag(of: device, at: Self.runningAddress) }
+        return Self.objects(of: AudioObjectID(kAudioObjectSystemObject), at: Self.processListAddress).contains { process in
+            Self.flag(of: process, at: Self.recordingAddress) && Self.objects(of: process, at: Self.inputDevicesAddress).contains(device)
+        }
     }
 
     /// Calls `changed` on the main actor, so a change never runs between a refresh's read and its
@@ -108,7 +148,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             relay.start(changed)
             let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.systemChanged() }
             systemListener = listener
-            for var address in Self.systemAddresses {
+            for var address in systemAddresses {
                 let status = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, listener)
                 guard status == noErr else {
                     removeListeners()
@@ -117,6 +157,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
                 }
             }
             watchDefaultDevice()
+            watchProcesses()
         }
     }
 
@@ -127,14 +168,15 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
 
     /// On `queue`: the default device or the device list changed.
     private func systemChanged() {
-        let current = (try? Self.defaultDevice()) ?? AudioObjectID(kAudioObjectUnknown)
-        if !Self.covers(device: current, properties: Self.properties(of: current), watched: device, addresses: deviceAddresses) {
+        let current = (try? Self.defaultDevice(input: input)) ?? AudioObjectID(kAudioObjectUnknown)
+        if !Self.covers(device: current, properties: properties(of: current), watched: device, addresses: deviceAddresses) {
             watchDefaultDevice()
         }
+        watchProcesses()
         relay.notify()
     }
 
-    /// Whether the volume and mute listener, on `watched` at `addresses`, already covers `device` and
+    /// Whether the device listener, on `watched` at `addresses`, already covers `device` and
     /// each of its `properties`. A device can publish a property late, such as a Bluetooth device's
     /// volume, and a listener can fail to register, so the next device-list change registers again.
     static func covers(device: AudioObjectID, properties: [AudioObjectPropertyAddress],
@@ -144,13 +186,13 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         }
     }
 
-    /// On `queue`: moves the volume and mute listener to the current default output device.
+    /// On `queue`: moves the device listener to the current default device.
     private func watchDefaultDevice() {
         unwatchDevice()
-        guard systemListener != nil, let device = try? Self.defaultDevice(), device != kAudioObjectUnknown else { return }
+        guard systemListener != nil, let device = try? Self.defaultDevice(input: input), device != kAudioObjectUnknown else { return }
         let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.relay.notify() }
         var watched: [AudioObjectPropertyAddress] = []
-        for var address in Self.properties(of: device) {
+        for var address in properties(of: device) {
             if AudioObjectAddPropertyListenerBlock(device, &address, queue, listener) == noErr { watched.append(address) }
         }
         self.device = device
@@ -170,11 +212,39 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         deviceAddresses = []
     }
 
+    /// On `queue`: moves the recording listener to the current processes.
+    private func watchProcesses() {
+        unwatchProcesses()
+        guard systemListener != nil, readsProcesses else { return }
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.relay.notify() }
+        processes = Self.objects(of: AudioObjectID(kAudioObjectSystemObject), at: Self.processListAddress)
+        for process in processes {
+            for var address in [Self.recordingAddress, Self.inputDevicesAddress] {
+                AudioObjectAddPropertyListenerBlock(process, &address, queue, listener)
+            }
+        }
+        processListener = listener
+    }
+
+    /// On `queue`.
+    private func unwatchProcesses() {
+        if let processListener {
+            for process in processes {
+                for var address in [Self.recordingAddress, Self.inputDevicesAddress] {
+                    AudioObjectRemovePropertyListenerBlock(process, &address, queue, processListener)
+                }
+            }
+        }
+        processes = []
+        processListener = nil
+    }
+
     /// On `queue`.
     private func removeListeners() {
+        unwatchProcesses()
         unwatchDevice()
         if let systemListener {
-            for var address in Self.systemAddresses {
+            for var address in systemAddresses {
                 AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, systemListener)
             }
         }
@@ -184,7 +254,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     /// Sets the default output device's volume to `volume`, 0–1, keeping its balance, and unmutes it
     /// for a volume above zero, as the Sound menu's slider does.
     static func setVolume(_ volume: Double) throws {
-        let device = try defaultDevice()
+        let device = try defaultDevice(input: false)
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
                                                  mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
         guard device != kAudioObjectUnknown, AudioObjectHasProperty(device, &address) else {
@@ -201,23 +271,40 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         }
     }
 
-    private static func defaultDevice() throws -> AudioDeviceID {
-        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+    private static func defaultDevice(input: Bool) throws -> AudioDeviceID {
+        var address = AudioObjectPropertyAddress(mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var device = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
-        guard status == noErr else { throw CommandFailure(message: "Could not read the audio output device (\(status)).") }
+        guard status == noErr else { throw CommandFailure(message: "Could not read the audio \(input ? "input" : "output") device (\(status)).") }
         return device
     }
 
-    /// The volume and mute properties that `device` has.
-    private static func properties(of device: AudioDeviceID) -> [AudioObjectPropertyAddress] {
+    /// The volume, mute and use properties that `device` has.
+    private func properties(of device: AudioDeviceID) -> [AudioObjectPropertyAddress] {
         guard device != kAudioObjectUnknown else { return [] }
-        return volumeAddresses.filter { address in
+        return deviceProperties.filter { address in
             var address = address
             return AudioObjectHasProperty(device, &address)
         }
+    }
+
+    private static func flag(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> Bool {
+        var address = address
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr && value != 0
+    }
+
+    /// The objects that `object` lists at `address`, none when it can't tell.
+    private static func objects(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> [AudioObjectID] {
+        var address = address
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(object, &address, 0, nil, &size) == noErr else { return [] }
+        var objects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &objects) == noErr else { return [] }
+        return Array(objects.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
     private static func name(of device: AudioDeviceID) throws -> String {
@@ -230,7 +317,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         return name.takeRetainedValue() as String
     }
 
-    private static func outputDevices() throws -> [[String: String]] {
+    private static func devices(scope: AudioObjectPropertyScope) throws -> [[String: String]] {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
@@ -239,7 +326,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         var devices = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
         let readStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devices)
         guard readStatus == noErr else { throw CommandFailure(message: "Could not read audio devices (\(readStatus)).") }
-        return deviceRows(devices.filter(hasOutput), name: name(of:))
+        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, name: name(of:))
     }
 
     /// A row for each of `devices` whose name can be read. A device that is being unplugged may no
@@ -248,9 +335,8 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         devices.compactMap { device in (try? name(device)).map { ["id": String(device), "name": $0] } }
     }
 
-    private static func hasOutput(_ device: AudioDeviceID) -> Bool {
-        var streams = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams,
-                                                mScope: kAudioDevicePropertyScopeOutput, mElement: kAudioObjectPropertyElementMain)
+    private static func hasStreams(_ device: AudioDeviceID, scope: AudioObjectPropertyScope) -> Bool {
+        var streams = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
         return AudioObjectGetPropertyDataSize(device, &streams, 0, nil, &size) == noErr && size > 0
     }
