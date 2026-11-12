@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.14.0](https://github.com/Seb-GRAF/StableBar/compare/v0.13.0...v0.14.0) (2026-11-12)
+
+### Features
+
+* add a StableBar widget that opens Settings in one click ([#599](https://github.com/Seb-GRAF/StableBar/issues/599)) ([c5db47a](https://github.com/Seb-GRAF/StableBar/commit/c5db47a1337cf9c5aa84968d858436f02d439a1f))
+* add GPU usage to the system provider ([#584](https://github.com/Seb-GRAF/StableBar/issues/584)) ([afa382a](https://github.com/Seb-GRAF/StableBar/commit/afa382a46e311c356e9351efbd93448f762c0bb0))
+* build quick chats in popups with growing inputs, Markdown blocks, presets and resizing ([#573](https://github.com/Seb-GRAF/StableBar/issues/573)) ([fab85bd](https://github.com/Seb-GRAF/StableBar/commit/fab85bd172d0e0f401712f5d1bdeb2a0e46e440a))
+* choose CPU, memory or both in the System monitor widget ([#598](https://github.com/Seb-GRAF/StableBar/issues/598)) ([51d9b67](https://github.com/Seb-GRAF/StableBar/commit/51d9b679daed62de1749ead7a9053387f3e8bbc2))
+* hide chosen apps and workspaces from the workspace widget ([#593](https://github.com/Seb-GRAF/StableBar/issues/593)) ([ce1d74b](https://github.com/Seb-GRAF/StableBar/commit/ce1d74b9dfbfcc282659b6a69062bdb988e16d76))
+* move StableBar to Applications from setup and pick up where setup was ([#555](https://github.com/Seb-GRAF/StableBar/issues/555)) ([6088f6d](https://github.com/Seb-GRAF/StableBar/commit/6088f6d63a108cd94ab00527399374dcb2235662)), closes [#506](https://github.com/Seb-GRAF/StableBar/issues/506)
+* open triage from Send feedback in the default terminal ([#568](https://github.com/Seb-GRAF/StableBar/issues/568)) ([71f2543](https://github.com/Seb-GRAF/StableBar/commit/71f2543012cba796353ec41f0504080f7b188307))
+* place the bar at the bottom of the screen ([#594](https://github.com/Seb-GRAF/StableBar/issues/594)) ([e41e127](https://github.com/Seb-GRAF/StableBar/commit/e41e127983db38e5727ca8dca38a98e0986f46f3))
+* show icons beside the commands in StableBar's menus ([098d61f](https://github.com/Seb-GRAF/StableBar/commit/098d61f4cea41c74a3ff137e0433b8ca948f4317)), closes [#570](https://github.com/Seb-GRAF/StableBar/issues/570)
+* show icons beside the commands in StableBar's menus ([#571](https://github.com/Seb-GRAF/StableBar/issues/571)) ([41b6ad0](https://github.com/Seb-GRAF/StableBar/commit/41b6ad0de2ac5c61d19a159288e599241df7eae4)), closes [#570](https://github.com/Seb-GRAF/StableBar/issues/570)
+* show the keyboard input source and switch it on click ([#585](https://github.com/Seb-GRAF/StableBar/issues/585)) ([285e3f3](https://github.com/Seb-GRAF/StableBar/commit/285e3f36dcb0da79fddf67a998ee9d35572dfa67))
+* show whether the microphone or camera is in use ([#592](https://github.com/Seb-GRAF/StableBar/issues/592)) ([3e2a1aa](https://github.com/Seb-GRAF/StableBar/commit/3e2a1aaf6b71e24f7bd3cea8a42a7fb71f706919))
+* star StableBar through a signed-in GitHub CLI from Help ([#569](https://github.com/Seb-GRAF/StableBar/issues/569)) ([2f09934](https://github.com/Seb-GRAF/StableBar/commit/2f099347c3ae790d094d750a94663d93e86d287a))
+
+### Bug Fixes
+
+* close Settings, setup and pinned popups with ⌘W ([#597](https://github.com/Seb-GRAF/StableBar/issues/597)) ([42da105](https://github.com/Seb-GRAF/StableBar/commit/42da10517b82f51720307559fa0391f339827cdc))
+* keep a widget's submenus open while editing the bar in place ([#583](https://github.com/Seb-GRAF/StableBar/issues/583)) ([d856942](https://github.com/Seb-GRAF/StableBar/commit/d8569429de8fef59f965ea50f53b225da8b92877)), closes [#582](https://github.com/Seb-GRAF/StableBar/issues/582)
+* leave launches dyld stopped out of Crashes and name development builds ([#577](https://github.com/Seb-GRAF/StableBar/issues/577)) ([09f1ab1](https://github.com/Seb-GRAF/StableBar/commit/09f1ab1bd7847bc0aef2a81bc3beaa6a0b6b8c6d)), closes [#576](https://github.com/Seb-GRAF/StableBar/issues/576)
+* let the Apple logo's whole tile take its click ([#575](https://github.com/Seb-GRAF/StableBar/issues/575)) ([913b920](https://github.com/Seb-GRAF/StableBar/commit/913b920cf8d91b8c55de76a82e5eb14d048936b0))
+* list package settings in their manifest's order, each with a label ([#602](https://github.com/Seb-GRAF/StableBar/issues/602)) ([f210a21](https://github.com/Seb-GRAF/StableBar/commit/f210a216b13ec6a4e003cea619bf504b2a41bad1))
+* stop hover tooltips crashing StableBar after editing the bar in place ([#596](https://github.com/Seb-GRAF/StableBar/issues/596)) ([adcba36](https://github.com/Seb-GRAF/StableBar/commit/adcba361039d45e6f2b9e46b51491807f52b28f9))
+
 ## [0.13.0](https://github.com/Seb-GRAF/StableBar/compare/v0.12.0...v0.13.0) (2026-11-11)
 
 ### Features
