@@ -102,13 +102,12 @@ final class BarEditAddPopover: NSObject {
         self.visibleFrame = visibleFrame
         self.displayID = displayID
         self.position = position
-        opensUpward = bar.barGeometry!.position == .bottom
-        let top = bar.barGeometry!.position == .top
-        let room = top ? bar.frame.minY - visibleFrame.minY : visibleFrame.maxY - bar.frame.maxY
+        opensUpward = bar.barGeometry?.position == .bottom
+        let room = opensUpward ? visibleFrame.maxY - bar.frame.maxY : bar.frame.minY - visibleFrame.minY
         panel.contentView = NSHostingView(rootView: AnyView(WidgetAddPopoverView(model: model, store: store,
             availableSize: CGSize(width: max(0, visibleFrame.width - 16), height: max(0, room - 16)),
             changed: { [weak self] in self?.contentChanged() })
-            .padding(top ? .top : .bottom, 9)
+            .padding(opensUpward ? .bottom : .top, 9)
             .background(BarEditPopoverSurface(popover: self))))
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSWindow.didMoveNotification, object: bar)
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSWindow.didResizeNotification, object: bar)
@@ -130,7 +129,7 @@ final class BarEditAddPopover: NSObject {
     @objc func reposition() {
         guard let panel, let bar, let anchor, let host = panel.contentView else { return }
         let rect = bar.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        let placement = BarEditAddPlacement(size: host.fittingSize, anchor: rect, bar: bar.frame, position: bar.barGeometry!.position,
+        let placement = BarEditAddPlacement(size: host.fittingSize, anchor: rect, bar: bar.frame, position: opensUpward ? .bottom : .top,
                                             visibleFrame: visibleFrame)
         arrowX = placement.arrowX
         panel.setFrame(placement.frame, display: true)
