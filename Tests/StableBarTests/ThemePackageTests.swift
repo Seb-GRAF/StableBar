@@ -781,6 +781,34 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
 }
 
+@Test func packageSettingsKeepTheManifestsOrder() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    // Keys inside a setting, in other objects and in strings are not settings.
+    try writePackageFile(#"""
+    {"id": "weather", "name": "Weather \"settings\": {", "version": "1", "entry": "config.json", "requires": ["jq"],
+     "settings": {
+       "zone": {"type": "string", "description": "A \"key\": value [{", "default": "UTC"},
+       "units": {"type": "string", "choices": ["metric", "imperial"], "default": "metric"},
+       "\u0061rea": {"type": "number", "default": 2}
+     },
+     "permissions": ["location"]}
+    """#, to: directory.appending(path: "package.json"))
+    #expect(try WidgetPackageStore(directory: directory).manifest(at: directory).settingNames == ["zone", "units", "area"])
+    // A repeated key or settings object keeps its first value, as JSONDecoder does, and names each setting once.
+    try writePackageFile(#"""
+    {"id":"weather","name":"Weather","version":"1","entry":"config.json",
+     "settings":{"zone":{"type":"string","default":"UTC"},"units":{"type":"number","default":1},"zone":{"type":"bool","default":true}},
+     "settings":{"extra":{"type":"bool","default":true}}}
+    """#, to: directory.appending(path: "package.json"))
+    #expect(try WidgetPackageStore(directory: directory).manifest(at: directory).settingNames == ["zone", "units"])
+    // A manifest in UTF-16 lists its settings in key order; a 0x22 byte in it, as in Ģ, is no quote.
+    let utf16 = #"{"id":"weather","name":"Ģ","version":"1","entry":"config.json","settings":{"zone":{"type":"string","default":"UTC"},"#
+        + #""area":{"type":"number","default":2}}}"#
+    try utf16.data(using: .utf16LittleEndian)!.write(to: directory.appending(path: "package.json"))
+    #expect(try WidgetPackageStore(directory: directory).manifest(at: directory).settingNames == ["area", "zone"])
+}
+
 @Test func packagesThatNeedANewerStableBarFailReviewAndInstall() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

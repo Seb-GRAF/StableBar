@@ -1,0 +1,10 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "packages": [{ "id": "system-monitor", "version": "1.1.0" }]
+  },
+  "packages": ["../examples/packages/system-monitor"],
+  "draw": "settings",
+  "section": "packages",
+  "package": "system-monitor"
+}

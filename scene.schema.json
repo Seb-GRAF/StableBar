@@ -11,6 +11,11 @@
       "description": "A StableBar configuration, or the path of one relative to this file.",
       "oneOf": [{ "type": "object" }, { "type": "string" }]
     },
+    "packages": {
+      "description": "Package folders, relative to this file, installed as --install-package installs them. Packages are read from beside the configuration, so a scene with packages gives its configuration inline, and it's written to the scene's work folder.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "outputs": {
       "description": "Script outputs by widget id or provider name: an object as a script prints it, or plain text.",
       "type": "object",
@@ -70,6 +75,7 @@
       "description": "The Settings section to draw when no widget is named. `help` opens the first answer of its Questions; `feedback` draws Send feedback in Help, with a sample bug, bug report, GitHub account and coding agent; `crashes` draws Crashes in Status, with sample crash reports of a release, of a development build and of a launch that dyld stopped, which Crashes leaves out.",
       "enum": ["general", "bar", "theme", "profiles", "packages", "help", "feedback", "crashes"]
     },
+    "package": { "description": "With section packages, the installed package whose settings to draw.", "type": "string" },
     "tab": { "description": "The tab of the widget's Settings page: content, style or behavior. With section bar and no widget, the tab of the bar's settings: size, look or placement.", "enum": ["content", "style", "behavior", "size", "look", "placement"] },
     "uninstall": {
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",

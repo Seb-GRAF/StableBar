@@ -528,9 +528,9 @@ struct PackageSettingsFields: View {
     let set: (String, ConfigurationValue) -> Void
 
     var body: some View {
-        ForEach(draft.inspection.manifest.settings.keys.filter {
+        ForEach(draft.inspection.manifest.settingNames.filter {
             includesCredentials || draft.inspection.manifest.settings[$0]!.type != "secret"
-        }.sorted(), id: \.self) { name in
+        }, id: \.self) { name in
             let setting = draft.inspection.manifest.settings[name]!
             let title = setting.title ?? name
             VStack(alignment: .leading, spacing: 4) {
@@ -606,9 +606,13 @@ private struct PackageSettingField: View {
     var body: some View {
         switch value {
         case let .string(text):
-            TextField(title, text: Binding(get: { text }, set: { value = .string($0) }))
+            LabeledContent(title) {
+                TextField(title, text: Binding(get: { text }, set: { value = .string($0) })).labelsHidden()
+            }
         case let .number(number):
-            TextField(title, value: Binding(get: { number }, set: { value = .number($0) }), format: .number)
+            LabeledContent(title) {
+                TextField(title, value: Binding(get: { number }, set: { value = .number($0) }), format: .number).labelsHidden()
+            }
         case let .bool(enabled):
             Toggle(title, isOn: Binding(get: { enabled }, set: { value = .bool($0) }))
         default:

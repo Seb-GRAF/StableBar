@@ -11,7 +11,8 @@ enum SceneRenderer {
     /// A store showing `scene` in `appearance`, which runs nothing. `directory` holds the local Store
     /// index. A configuration path is relative to `sceneURL`, and an inline configuration reads as if it
     /// were `<scene>.configuration.json` beside it, so its includes resolve there and Settings shows the
-    /// same path on every run.
+    /// same path on every run. A scene's packages are installed in `directory`, and since packages are read
+    /// from beside the configuration, its inline configuration is then written there.
     static func store(for scene: SceneFile, at sceneURL: URL, in directory: URL, themes: URL?,
                       appearance: SceneFile.Appearance = .light) throws -> BarStore {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -20,11 +21,23 @@ enum SceneRenderer {
         let data: Data?
         switch scene.configuration {
         case let .inline(document):
-            configurationURL = folder.appending(path: "\(sceneURL.deletingPathExtension().lastPathComponent).configuration.json")
-            data = try JSONEncoder().encode(document)
+            let name = "\(sceneURL.deletingPathExtension().lastPathComponent).configuration.json"
+            let encoded = try JSONEncoder().encode(document)
+            if scene.packages.isEmpty {
+                configurationURL = folder.appending(path: name)
+            } else {
+                // A package's settings are read from the configuration file.
+                configurationURL = directory.appending(path: name)
+                try encoded.write(to: configurationURL)
+            }
+            data = encoded
         case let .file(path):
             configurationURL = URL(filePath: path, relativeTo: folder).standardizedFileURL
             data = nil
+        }
+        let packages = WidgetPackageStore(directory: directory.appending(path: "packages"))
+        for path in scene.packages {
+            _ = try packages.install(URL(filePath: path, relativeTo: folder).standardizedFileURL)
         }
         let store = BarStore(configurationURL: configurationURL, themesDirectory: themes)
         var loader = ConfigurationLoader()
@@ -209,7 +222,9 @@ enum SceneRenderer {
                 case .bar: editor.section = .widgets
                 case .theme: editor.section = .appearance
                 case .profiles: editor.section = .profiles
-                case .packages: editor.section = .packages
+                case .packages:
+                    editor.section = .packages
+                    editor.selectedPackageID = scene.package
                 case .help:
                     editor.section = .help
                     editor.expandedQuestion = HelpQuestion.all[0].id
@@ -222,6 +237,7 @@ enum SceneRenderer {
             }
             let waitsForThemes = scene.widget == nil && scene.section == .theme
             let waitsForCrashes = scene.widget == nil && scene.section == .crashes
+            let library = store.packageLibrary
             let move = settingsApplicationMove(for: scene)
             store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
             let settings = SettingsView(store: store, editor: editor, applicationMove: move)
@@ -234,6 +250,7 @@ enum SceneRenderer {
                 (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
                     // Crashes marks what it shows as seen once it has read the reports.
                     && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
+                    && (scene.package == nil || library.draft?.inspection.manifest.id == scene.package)
             }, to: url)
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
