@@ -22,6 +22,8 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
     private var device = AudioObjectID(kAudioObjectUnknown)
     private var deviceListener: AudioObjectPropertyListenerBlock?
     private var deviceAddresses: [AudioObjectPropertyAddress] = []
+    private var processes: [AudioObjectID] = []
+    private var processListener: AudioObjectPropertyListenerBlock?
 
     init(input: Bool = false) {
         self.input = input
@@ -29,8 +31,15 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
 
     private var scope: AudioObjectPropertyScope { input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput }
 
+    /// Whether it tells recording from playback by the processes using the device. A duplex device
+    /// runs for playback alone, and macOS 14.2 added the process objects that tell them apart.
+    private var readsProcesses: Bool {
+        if #available(macOS 14.2, *) { input } else { false }
+    }
+
     private var systemAddresses: [AudioObjectPropertyAddress] {
-        [input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices].map {
+        ([input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice, kAudioHardwarePropertyDevices]
+            + (readsProcesses ? [kAudioHardwarePropertyProcessObjectList] : [])).map {
             AudioObjectPropertyAddress(mSelector: $0, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         }
     }
@@ -39,11 +48,17 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         [0, 1, 2].map {
             AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyVolumeScalar, mScope: scope, mElement: $0)
         } + [AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)]
-            + (input ? [Self.runningAddress] : [])
+            + (input && !readsProcesses ? [Self.runningAddress] : [])
     }
 
     private static let runningAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
                                                                    mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let processListAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyProcessObjectList,
+                                                                       mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let recordingAddress = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyIsRunningInput,
+                                                                     mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    private static let inputDevicesAddress = AudioObjectPropertyAddress(mSelector: kAudioProcessPropertyDevices,
+                                                                        mScope: kAudioObjectPropertyScopeInput, mElement: kAudioObjectPropertyElementMain)
 
     func read() throws -> ScriptOutput {
         if input { return try readDevice() }
@@ -109,15 +124,20 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         if muteStatus == noErr { fields["muted"] = String(muted != 0) }
         var icon = Self.icon(volume: volume, muted: muted != 0)
         if input {
-            var runningAddress = Self.runningAddress
-            var running: UInt32 = 0
-            var runningSize = UInt32(MemoryLayout<UInt32>.size)
-            AudioObjectGetPropertyData(device, &runningAddress, 0, nil, &runningSize, &running)
-            fields["inUse"] = String(running != 0)
-            icon = muted != 0 ? "mic.slash" : running != 0 ? "mic.fill" : "mic"
+            let inUse = isRecording(from: device)
+            fields["inUse"] = String(inUse)
+            icon = muted != 0 ? "mic.slash" : inUse ? "mic.fill" : "mic"
         }
         return ScriptOutput(text: volume.map { "\(Int(($0 * 100).rounded()))%" } ?? name, icon: icon,
                             value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope)], values: volume.map { ["volume": $0] })
+    }
+
+    /// Whether any process records from `device`, or before macOS 14.2 whether any uses it at all.
+    private func isRecording(from device: AudioDeviceID) -> Bool {
+        guard readsProcesses else { return Self.flag(of: device, at: Self.runningAddress) }
+        return Self.objects(of: AudioObjectID(kAudioObjectSystemObject), at: Self.processListAddress).contains { process in
+            Self.flag(of: process, at: Self.recordingAddress) && Self.objects(of: process, at: Self.inputDevicesAddress).contains(device)
+        }
     }
 
     /// Calls `changed` on the main actor, so a change never runs between a refresh's read and its
@@ -137,6 +157,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
                 }
             }
             watchDefaultDevice()
+            watchProcesses()
         }
     }
 
@@ -151,6 +172,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         if !Self.covers(device: current, properties: properties(of: current), watched: device, addresses: deviceAddresses) {
             watchDefaultDevice()
         }
+        watchProcesses()
         relay.notify()
     }
 
@@ -190,8 +212,36 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         deviceAddresses = []
     }
 
+    /// On `queue`: moves the recording listener to the current processes.
+    private func watchProcesses() {
+        unwatchProcesses()
+        guard systemListener != nil, readsProcesses else { return }
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.relay.notify() }
+        processes = Self.objects(of: AudioObjectID(kAudioObjectSystemObject), at: Self.processListAddress)
+        for process in processes {
+            for var address in [Self.recordingAddress, Self.inputDevicesAddress] {
+                AudioObjectAddPropertyListenerBlock(process, &address, queue, listener)
+            }
+        }
+        processListener = listener
+    }
+
+    /// On `queue`.
+    private func unwatchProcesses() {
+        if let processListener {
+            for process in processes {
+                for var address in [Self.recordingAddress, Self.inputDevicesAddress] {
+                    AudioObjectRemovePropertyListenerBlock(process, &address, queue, processListener)
+                }
+            }
+        }
+        processes = []
+        processListener = nil
+    }
+
     /// On `queue`.
     private func removeListeners() {
+        unwatchProcesses()
         unwatchDevice()
         if let systemListener {
             for var address in systemAddresses {
@@ -238,6 +288,23 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             var address = address
             return AudioObjectHasProperty(device, &address)
         }
+    }
+
+    private static func flag(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> Bool {
+        var address = address
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr && value != 0
+    }
+
+    /// The objects that `object` lists at `address`, none when it can't tell.
+    private static func objects(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> [AudioObjectID] {
+        var address = address
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(object, &address, 0, nil, &size) == noErr else { return [] }
+        var objects = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &objects) == noErr else { return [] }
+        return Array(objects.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
     private static func name(of device: AudioDeviceID) throws -> String {
