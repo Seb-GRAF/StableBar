@@ -324,7 +324,7 @@ final class WidgetPopup {
                     // A wait that ran out while the main thread was busy resumes after a later cancel.
                     try Task.checkCancellation()
                 } catch { return }
-                guard store.barEditing.allowsWidgetActions else { return }
+                guard store.barEditing.allowsWidgetActions, anchor.window != nil else { return }
                 await show()
             }
         } else if hoveredAnchor === anchor {
