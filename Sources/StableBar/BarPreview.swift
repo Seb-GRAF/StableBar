@@ -15,7 +15,8 @@ struct BarPreview: View {
     var body: some View {
         GeometryReader { geometry in
             let screen = kind.display
-            let notch = screen.notch.map { $0.upperBound - $0.lowerBound }
+            let bar = store.configuration?.onScreen(kind).bar
+            let notch = bar?.notch(on: screen).map { $0.upperBound - $0.lowerBound }
             let display = BarDisplay(id: screen.id, isBuiltIn: screen.isBuiltIn, isMain: screen.isMain,
                                      notch: notch.map { (geometry.size.width - $0) / 2...(geometry.size.width + $0) / 2 },
                                      isPortrait: screen.isPortrait)
@@ -57,7 +58,7 @@ struct BarPreview: View {
                             }
                         }
                     }
-                    .padding(.top, min(store.configuration?.onScreen(kind).bar.top(menuBar: kind.screens.first?.menuBarHeight ?? 0) ?? 0,
+                    .padding(.top, min(bar.map { $0.position == .top ? $0.top(menuBar: kind.screens.first?.menuBarHeight ?? 0) : 0 } ?? 0,
                                        max(0, geometry.size.height - height)))
                 if let notch {
                     UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)

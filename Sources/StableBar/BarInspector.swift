@@ -250,10 +250,20 @@ struct BarInspector: View {
             }
         case .placement:
             SettingsGroup("Position") {
-                bar.toggle("Below the menu bar", "belowMenuBar", default: false,
-                           hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
-                bar.number("Offset from top", "offset", default: 0, in: 0...200,
-                           hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
+                let position = (target.map { store.configuration?.bar(on: $0) } ?? store.configuration?.bar)?.position ?? .top
+                bar.row("Edge", "position") { _ in
+                    SettingsSegments(selection: bar.stringBinding("position", default: BarPosition.top.rawValue),
+                                     options: BarPosition.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
+                }
+                if position == .top {
+                    bar.toggle("Below the menu bar", "belowMenuBar", default: false,
+                               hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
+                    bar.number("Offset from top", "offset", default: 0, in: 0...200,
+                               hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
+                } else {
+                    bar.number("Offset from bottom", "offset", default: 0, in: 0...200,
+                               hint: "Counts from the bottom edge of the display, under the Dock if it shows there.")
+                }
                 bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
             SettingsGroup("Size on each screen") {

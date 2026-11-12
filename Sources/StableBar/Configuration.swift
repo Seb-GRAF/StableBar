@@ -651,7 +651,7 @@ struct BarSettings: Decodable, Sendable {
 }
 
 struct ScreenConfiguration: Decodable, Sendable {
-    static let barKeys: Set<String> = ["height", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "fillNotch", "style",
+    static let barKeys: Set<String> = ["height", "position", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "fillNotch", "style",
                                        "glass", "appearance", "motion", "popupTransition", "morphPopups"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?

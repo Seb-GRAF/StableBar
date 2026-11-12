@@ -48,7 +48,7 @@ struct SceneFile: Decodable {
     /// The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one.
     var menu: [MenuItem]?
     var draw: Draw
-    /// The widget whose popup or Settings page to draw.
+    /// The widget whose popup or Settings page to draw, or whose popup the bar shows open.
     var widget: String?
     /// The Settings section to draw when no widget is named.
     var section: Section?

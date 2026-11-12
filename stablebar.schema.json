@@ -2112,6 +2112,9 @@
             "height": {
               "$ref": "#/definitions/bar/properties/height"
             },
+            "position": {
+              "$ref": "#/definitions/bar/properties/position"
+            },
             "offset": {
               "$ref": "#/definitions/bar/properties/offset"
             },
