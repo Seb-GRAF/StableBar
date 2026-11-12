@@ -142,6 +142,13 @@ final class WidgetSettingsTests: XCTestCase {
         }
     }
 
+    func testTheStableBarWidgetOpensSettingsUnlessItHasItsOwnClick() throws {
+        XCTAssertEqual(WidgetClickChoice.control(for: try widget(["type": .string("stableBar")])), .explanation("Clicking it opens Settings."))
+        let command = try widget(["type": .string("stableBar"), "onClick": .string("echo keep")])
+        XCTAssertEqual(WidgetClickChoice.control(for: command), .explanation("This widget runs a command. Change it with Edit as JSON in the More menu."))
+        XCTAssertEqual(WidgetClickChoice.control(for: try widget(["type": .string("stableBar"), "open": .string("https://example.com")])), .choices)
+    }
+
     @MainActor func testTheAppleMenuSavesTheClickChosenInSettings() throws {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"apple","type":"appleMenu","position":"left"}]}"#)
         defer { fixture.close() }

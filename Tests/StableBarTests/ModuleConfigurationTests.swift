@@ -592,7 +592,7 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
     }
     let registry = DataSourceRegistry.builtIn
     #expect(typeNames("provider") == Set(registry.types.map(\.name)))
-    #expect(typeNames("widget") == Set(["aerospace", "workspaces", "activeApp", "appMenu", "appleMenu", "controlCenter", "menuBarItems", "clock", "text", "script", "provider", "spacer"]
+    #expect(typeNames("widget") == Set(["aerospace", "workspaces", "activeApp", "appMenu", "appleMenu", "controlCenter", "stableBar", "menuBarItems", "clock", "text", "script", "provider", "spacer"]
         + registry.types.filter(\.isNative).map(\.name)))
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
