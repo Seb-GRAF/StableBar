@@ -253,13 +253,18 @@ struct WidgetPackageStore: Sendable {
         var manifest = try NewerConfiguration.$current.withValue(nil) {
             try JSONDecoder().decode(WidgetPackageManifest.self, from: data)
         }
-        manifest.settingNames = try settingNames(in: data)
+        // The scan reads UTF-8, so it misses the names in a manifest in UTF-16 or UTF-32, which JSONDecoder reads too, and
+        // it finds the names of a repeated key whose later values JSONDecoder drops. The decoded settings decide what shows.
+        for name in settingNames(in: data) + manifest.settings.keys.sorted()
+        where manifest.settings[name] != nil && !manifest.settingNames.contains(name) {
+            manifest.settingNames.append(name)
+        }
         return manifest
     }
 
-    /// The keys of the top-level `settings` object of `data`, a manifest that decoded, in the file's order, which
+    /// The keys of the top-level `settings` objects of `data`, a manifest that decoded, in the file's order, which
     /// decoding into a dictionary loses. A string followed by a colon is a key.
-    private func settingNames(in data: Data) throws -> [String] {
+    private func settingNames(in data: Data) -> [String] {
         let bytes = [UInt8](data)
         var names: [String] = [], key = "", depth = 0, inSettings = false, index = 0
         while index < bytes.count {
@@ -268,12 +273,12 @@ struct WidgetPackageStore: Sendable {
             switch byte {
             case UInt8(ascii: "\""):
                 let start = index - 1
-                while bytes[index] != UInt8(ascii: "\"") { index += bytes[index] == UInt8(ascii: "\\") ? 2 : 1 }
+                while index < bytes.count && bytes[index] != UInt8(ascii: "\"") { index += bytes[index] == UInt8(ascii: "\\") ? 2 : 1 }
                 index += 1
                 var next = index
-                while [0x20, 0x09, 0x0A, 0x0D].contains(bytes[next]) { next += 1 }
-                guard bytes[next] == UInt8(ascii: ":") else { continue }
-                let name = try JSONDecoder().decode(String.self, from: Data(bytes[start..<index]))
+                while next < bytes.count && [0x20, 0x09, 0x0A, 0x0D].contains(bytes[next]) { next += 1 }
+                guard next < bytes.count, bytes[next] == UInt8(ascii: ":"),
+                      let name = try? JSONDecoder().decode(String.self, from: Data(bytes[start..<index])) else { continue }
                 if depth == 1 { key = name } else if depth == 2 && inSettings { names.append(name) }
             case UInt8(ascii: "{"), UInt8(ascii: "["):
                 depth += 1
