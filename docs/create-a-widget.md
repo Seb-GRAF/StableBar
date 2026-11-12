@@ -59,11 +59,12 @@ Add `events` to a script widget to refresh it on named events, alongside its int
 | `powerSourceChange` | The Mac switches between its power adapter and battery | `ac` or `battery` |
 | `volumeChange` | The default output device's volume or mute state changes | The volume as a whole percentage, empty without a volume control; `MUTED` is `true` or `false` |
 | `outputDeviceChange` | The default output device changes | The device's name, empty when there is none |
+| `inputSourceChange` | The keyboard input source changes | The source's ID, such as `com.apple.keylayout.ABC` |
 | `microphoneChange` | The default input device's volume or mute state changes, or an app starts or stops recording from it | The volume as a whole percentage, empty without a volume control; `MUTED` and `IN_USE` are `true` or `false` |
 | `inputDeviceChange` | The default input device changes | The device's name, empty when there is none |
 | `privacyChange` | An app starts or stops using the microphone or a camera, or the microphone's mute state changes | `true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false` |
 
-`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, and `privacyChange` from the `privacy` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
+`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, and `privacyChange` from the `privacy` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
 
 External hooks can trigger an event without launching another bar:
 

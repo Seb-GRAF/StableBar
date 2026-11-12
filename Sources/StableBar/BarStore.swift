@@ -239,6 +239,16 @@ final class BarStore: NSObject {
         }
     }
 
+    /// Selects the keyboard input source with `id`, or without one, the next, for a click on `widget`.
+    func selectInputSource(_ id: String?, widget: WidgetConfiguration) {
+        do {
+            try InputSourceMonitor.select(id)
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
     func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
         var nextWithSameApp = next
         nextWithSameApp.app = context.app

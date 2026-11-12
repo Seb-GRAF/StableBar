@@ -91,7 +91,8 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .microphone, .privacy, .calendar])
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .inputSource, .microphone, .privacy,
+                                                    .calendar])
 }
 
 extension DataSourceType {
@@ -134,6 +135,11 @@ extension DataSourceType {
     static let audio = DataSourceType(name: "audio", isNative: true, symbol: "speaker.wave.2", settings: [], continuous: true,
                                       events: [.volumeChange, .outputDeviceChange]) { _, _ in
         PushSource(monitor: AudioMonitor())
+    }
+
+    static let inputSource = DataSourceType(name: "inputSource", isNative: true, symbol: "keyboard", settings: [], continuous: true,
+                                            events: [.inputSourceChange]) { _, _ in
+        PushSource(monitor: InputSourceMonitor())
     }
 
     static let microphone = DataSourceType(name: "microphone", isNative: true, symbol: "mic", settings: [], continuous: true,

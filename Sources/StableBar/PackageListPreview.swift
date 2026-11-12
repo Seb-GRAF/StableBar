@@ -61,6 +61,7 @@ struct WidgetSample: View {
         switch widget.providerName {
         case "battery": ScriptOutput(text: "82%", icon: "battery.75percent", value: 0.82, fields: ["state": "battery"], values: ["percent": 0.82])
         case "audio": ScriptOutput(text: "45%", icon: "speaker.wave.2", value: 0.45)
+        case "inputSource": ScriptOutput(text: "FR", icon: "keyboard")
         case "system": ScriptOutput(text: "24%", icon: "cpu", value: 0.24)
         case "network": ScriptOutput(text: "↓ 1.2 MB/s  ↑ 80 KB/s", icon: "network")
         case "calendar": ScriptOutput(text: "Team meeting", icon: "calendar")

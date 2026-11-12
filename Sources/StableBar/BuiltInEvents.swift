@@ -2,8 +2,8 @@
 /// distributed notification names. docs/create-a-widget.md lists the same events, in the same order,
 /// in the table under "Script events"; `builtInEventsMatchTheGuideTable` checks it.
 enum BuiltInEvent: String, CaseIterable, Sendable {
-    case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange, microphoneChange,
-         inputDeviceChange, privacyChange
+    case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange, inputSourceChange,
+         microphoneChange, inputDeviceChange, privacyChange
 
     /// When StableBar sends the event: the table's "Sent when" column.
     var trigger: String {
@@ -16,6 +16,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .powerSourceChange: "The Mac switches between its power adapter and battery"
         case .volumeChange: "The default output device's volume or mute state changes"
         case .outputDeviceChange: "The default output device changes"
+        case .inputSourceChange: "The keyboard input source changes"
         case .microphoneChange: "The default input device's volume or mute state changes, or an app starts or stops recording from it"
         case .inputDeviceChange: "The default input device changes"
         case .privacyChange: "An app starts or stops using the microphone or a camera, or the microphone's mute state changes"
@@ -33,6 +34,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .powerSourceChange: "`ac` or `battery`"
         case .volumeChange: "The volume as a whole percentage, empty without a volume control; `MUTED` is `true` or `false`"
         case .outputDeviceChange, .inputDeviceChange: "The device's name, empty when there is none"
+        case .inputSourceChange: "The source's ID, such as `com.apple.keylayout.ABC`"
         case .microphoneChange: "The volume as a whole percentage, empty without a volume control; `MUTED` and `IN_USE` are `true` or `false`"
         case .privacyChange: "`true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false`"
         }
@@ -58,6 +60,8 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
                     "MUTED": output.fields?["muted"] ?? "false", "IN_USE": output.fields?["inUse"] ?? "false"]
         case .outputDeviceChange, .inputDeviceChange:
             return previous.fields?["deviceID"] == output.fields?["deviceID"] ? nil : ["INFO": output.fields?["device"] ?? ""]
+        case .inputSourceChange:
+            return previous.fields?["id"] == output.fields?["id"] ? nil : ["INFO": output.fields?["id"] ?? ""]
         case .privacyChange:
             guard ["microphone", "camera", "muted"].contains(where: { previous.fields?[$0] != output.fields?[$0] }) else { return nil }
             return ["INFO": String(output.fields?["microphone"] == "true" || output.fields?["camera"] == "true"),

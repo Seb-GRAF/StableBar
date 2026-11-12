@@ -1078,6 +1078,9 @@
         "quitField": {
           "$ref": "#/definitions/string"
         },
+        "selectInputSourceField": {
+          "$ref": "#/definitions/string"
+        },
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },
@@ -1451,6 +1454,7 @@
                 "network",
                 "battery",
                 "audio",
+                "inputSource",
                 "microphone",
                 "privacy",
                 "calendar"
@@ -1791,6 +1795,7 @@
                 "network",
                 "battery",
                 "audio",
+                "inputSource",
                 "microphone",
                 "privacy",
                 "calendar"
