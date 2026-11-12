@@ -531,6 +531,9 @@ struct WidgetView: View {
         } else if widget.content == .controlCenter {
             let click = { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } }
             pressable(Button(action: click) { tile }.buttonStyle(MouseDownButtonStyle()), click: click)
+        } else if widget.content == .stableBar, !hasOwnClick {
+            let click = { if store.barEditing.allowsWidgetActions { store.onCustomize?() } }
+            pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if case let .menuBarItems(_, _, hidden) = widget.content, !widget.drawsMenuBarItems {
             let click = { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
@@ -830,6 +833,17 @@ struct WidgetView: View {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
+                }
+            }
+        case .stableBar where widget.layout == nil:
+            if let image = NSImage(named: "StatusBarIconTemplate") {
+                let appearance = WidgetAppearance(resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: open),
+                                                  defaults: WidgetStyle())
+                ZStack {
+                    Text(" ").hidden()
+                    Image(nsImage: image).resizable().scaledToFit().frame(height: appearance.iconSize)
+                        .accessibilityLabel(accessibilityName)
+                        .foregroundStyle(appearance.foreground)
                 }
             }
         case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:

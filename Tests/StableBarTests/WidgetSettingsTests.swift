@@ -1,3 +1,4 @@
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -223,4 +224,13 @@ final class WidgetSettingsTests: XCTestCase {
     private func widget(_ properties: [String: ConfigurationValue] = [:]) throws -> WidgetConfiguration {
         try ConfigurationValue.object(["id": .string("test"), "type": .string("text"), "text": .string("Test"), "position": .string("left")].merging(properties) { $1 }).decoded(WidgetConfiguration.self)
     }
+}
+
+@Test func theStableBarWidgetOpensSettingsUnlessItHasItsOwnClick() throws {
+    func stableBar(_ properties: [String: ConfigurationValue] = [:]) throws -> WidgetConfiguration {
+        try ConfigurationValue.object(["id": .string("test"), "type": .string("stableBar"), "position": .string("left")].merging(properties) { $1 }).decoded(WidgetConfiguration.self)
+    }
+    #expect(WidgetClickChoice.control(for: try stableBar()) == .explanation("Clicking it opens Settings."))
+    #expect(WidgetClickChoice.control(for: try stableBar(["onClick": .string("echo keep")])) == .explanation("This widget runs a command. Change it with Edit as JSON in the More menu."))
+    #expect(WidgetClickChoice.control(for: try stableBar(["open": .string("https://example.com")])) == .choices)
 }

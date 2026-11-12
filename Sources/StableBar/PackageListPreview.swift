@@ -40,6 +40,7 @@ struct WidgetSample: View {
             case .workspaces:
                 HStack(spacing: 12) { Text("1").foregroundStyle(Color.accentColor); Text("2"); Text("3") }
             case .appleMenu: Image(systemName: "apple.logo")
+            case .stableBar: if let image = NSImage(named: "StatusBarIconTemplate") { Image(nsImage: image) }
             case .appMenu: Text("File   Edit   View")
             case .spacer: Label("Space", systemImage: "arrow.left.and.right")
             default:

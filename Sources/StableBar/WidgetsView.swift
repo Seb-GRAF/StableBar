@@ -12,7 +12,7 @@ extension WidgetConfiguration {
 extension WidgetContent {
     var drawsOwnView: Bool {
         switch self {
-        case .workspaces, .appMenu, .appleMenu, .spacer: true
+        case .workspaces, .appMenu, .appleMenu, .stableBar, .spacer: true
         default: false
         }
     }
@@ -26,6 +26,7 @@ extension WidgetContent {
         case .appMenu: "menubar.rectangle"
         case .appleMenu: "apple.logo"
         case .controlCenter: "switch.2"
+        case .stableBar: "gearshape"
         case .menuBarItems: "square.grid.2x2"
         case .clock: "clock"
         case .text: "textformat"

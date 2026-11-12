@@ -30,6 +30,7 @@ enum WidgetClickChoice: String, CaseIterable {
         if let open = widget.open, case .url(let url) = OpenTarget(open), !["http", "https"].contains(url.scheme?.lowercased() ?? "") {
             return "This widget opens a link. Change it with Edit as JSON in the More menu."
         }
+        if widget.content == .stableBar, widget.open == nil { return "Clicking it opens Settings." }
         return nil
     }
 
