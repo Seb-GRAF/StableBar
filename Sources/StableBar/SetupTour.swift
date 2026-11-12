@@ -854,7 +854,7 @@ struct SetupTourView: View {
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             let source = session.adviceSource
             if source != .spaces {
-                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.top in \(source.title) to leave room for the bar.")")
+                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.\(barAtBottom ? "bottom" : "top") in \(source.title) to leave room for the bar.")")
                     .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
             }
             if let source = session.workspaceCheckSource {
