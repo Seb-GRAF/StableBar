@@ -6,21 +6,23 @@ struct WindowClearanceDisplay: Equatable {
     let frame: CGRect
     let visibleFrame: CGRect
     let barFrame: CGRect
+    let position: BarPosition
 
     init(frame: CGRect, visibleFrame: CGRect, configuration: Configuration, display: BarDisplay, desktopTop: CGFloat) {
         let geometry = configuration.barGeometry(for: display)
-        let top = frame.maxY - configuration.onScreen(ScreenKind(display)).bar.top(menuBar: menuBarHeight(frame: frame, visibleFrame: visibleFrame))
+        let bar = configuration.onScreen(ScreenKind(display)).bar
         self.init(frame: frame, visibleFrame: visibleFrame,
-                  barFrame: CGRect(x: frame.minX, y: top - geometry.panelHeight, width: frame.width, height: geometry.panelHeight),
-                  desktopTop: desktopTop)
+                  barFrame: bar.frame(height: geometry.panelHeight, on: frame, menuBar: menuBarHeight(frame: frame, visibleFrame: visibleFrame)),
+                  position: bar.position, desktopTop: desktopTop)
     }
 
-    init(frame: CGRect, visibleFrame: CGRect, barFrame: CGRect, desktopTop: CGFloat) {
+    init(frame: CGRect, visibleFrame: CGRect, barFrame: CGRect, position: BarPosition, desktopTop: CGFloat) {
         self.frame = CGRect(x: frame.minX, y: desktopTop - frame.maxY, width: frame.width, height: frame.height)
         self.visibleFrame = CGRect(x: visibleFrame.minX, y: desktopTop - visibleFrame.maxY,
                                    width: visibleFrame.width, height: visibleFrame.height)
         self.barFrame = CGRect(x: barFrame.minX, y: desktopTop - barFrame.maxY,
                                width: barFrame.width, height: barFrame.height)
+        self.position = position
     }
 }
 
@@ -36,8 +38,15 @@ private func barDisplay(for frame: CGRect, in displays: [WindowClearanceDisplay]
     return display
 }
 
-func frameBelowBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGRect? {
+/// `frame` moved below a bar at the top, or above a bar at the bottom, and made shorter when the room left is.
+func frameClearOfBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGRect? {
     guard let display = barDisplay(for: frame, in: displays) else { return nil }
+    if display.position == .bottom {
+        let bottom = min(display.visibleFrame.maxY, display.barFrame.minY)
+        let height = min(frame.height, bottom - display.visibleFrame.minY)
+        guard frame.maxY > bottom, height > 0 else { return nil }
+        return CGRect(x: frame.minX, y: bottom - height, width: frame.width, height: height)
+    }
     let top = max(display.visibleFrame.minY, display.barFrame.maxY)
     let height = min(frame.height, display.visibleFrame.maxY - top)
     guard frame.minY < top, height > 0 else { return nil }
@@ -45,7 +54,7 @@ func frameBelowBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGRec
 }
 
 func originBelowBar(_ window: CGRect, bannerTop: CGFloat, displays: [WindowClearanceDisplay]) -> CGPoint? {
-    guard let display = barDisplay(for: window, in: displays), window.origin == display.frame.origin else { return nil }
+    guard let display = barDisplay(for: window, in: displays), display.position == .top, window.origin == display.frame.origin else { return nil }
     let bannerMargin = 16.0
     let offset = display.barFrame.maxY + bannerMargin - bannerTop
     guard offset > 0 else { return nil }
@@ -270,7 +279,7 @@ final class WindowClearance: NSObject {
                   attribute(kAXMinimizedAttribute, of: window) as? Bool == false,
                   attribute("AXFullScreen", of: window) as? Bool != true,
                   let frame = windowFrame(window), frame != application.adjustedFrames[window],
-                  let target = frameBelowBar(frame, displays: displays) else { continue }
+                  let target = frameClearOfBar(frame, displays: displays) else { continue }
             var movable: DarwinBoolean = false
             guard AXUIElementIsAttributeSettable(window, kAXPositionAttribute as CFString, &movable) == .success,
                   movable.boolValue else { continue }

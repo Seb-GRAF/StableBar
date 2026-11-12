@@ -453,3 +453,42 @@ final class BarEditViewTests: XCTestCase {
     }
     #expect(removedLast, "A click on the scrolled-in member's − badge removes it")
 }
+
+
+@Test @MainActor func aTileOnAScreenWithItsOwnLayoutIsNotRedrawnWhenTheRestOfTheEditBarIs() async throws {
+    let fixture = try ThemeGalleryFixture(#"""
+    {"widgets":[{"id":"hi","type":"text","text":"Hi","position":"right"}],"screens":{"monitor":{"layout":{"left":["hi"]}}}}
+    """#)
+    defer { fixture.close() }
+    let store = try fixture.store()
+    defer { store.stop() }
+    store.barEditing.begin()
+    let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
+    let host = NSHostingView(rootView: BarView(store: store, display: display))
+    host.sizingOptions = []
+    host.frame = CGRect(x: 0, y: 0, width: 1512, height: 100)
+    func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
+        view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
+    }
+    var tile: BarEditDragSourceView?
+    for _ in 0..<100 {
+        host.layoutSubtreeIfNeeded()
+        tile = descendants(host, of: BarEditDragSourceView.self).first
+        if tile != nil { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    let source = try #require(tile)
+    // A tile redraw runs the drag source's `updateNSView`, which sets this name back to the widget's.
+    source.name = "Not redrawn"
+    // The edit bar redraws when anything it reads changes, such as which workspace has focus.
+    for focused in [true, false, true] {
+        store.workspaceStore.workspaces = [Workspace(name: "1", isFocused: focused, isVisible: true, monitor: display.id)]
+        for _ in 0..<5 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+    // A drag source SwiftUI replaced would keep the name without having been left alone.
+    #expect(descendants(host, of: BarEditDragSourceView.self).first === source)
+    #expect(source.name == "Not redrawn")
+}

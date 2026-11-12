@@ -2,6 +2,7 @@ import AppKit
 import Darwin
 import EventKit
 import Foundation
+import IOKit
 
 func systemWarning(_ output: ScriptOutput, provider: ProviderConfiguration) -> String? {
     guard let values = output.values else { return nil }
@@ -258,7 +259,7 @@ final class NativeMetrics {
         let percent = { (fraction: Double) in String(Int(fraction * 100)) }
         let bytes = { (count: Double) in ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .memory) }
         let uptime = Duration.seconds(Date.now.timeIntervalSince1970 - Double(boot.tv_sec))
-        return ScriptOutput(text: "\(Int(usage * 100))%", icon: "cpu", value: usage,
+        var output = ScriptOutput(text: "\(Int(usage * 100))%", icon: "cpu", value: usage,
                             fields: ["cpu": percent(usage), "cpuUser": percent(split.user), "cpuSystem": percent(split.system),
                                      "memory": percent(used / total), "memoryUsed": bytes(used), "memoryCompressed": bytes(compressed),
                                      "swap": bytes(Double(swap.xsu_used)), "pressure": pressure == 4 ? "critical" : pressure == 2 ? "warning" : "normal",
@@ -266,6 +267,28 @@ final class NativeMetrics {
                                      "uptime": uptime.formatted(.units(allowed: [.days, .hours, .minutes], width: .narrow, maximumUnitCount: 2))],
                             values: ["cpu": usage, "cpuUser": split.user, "cpuSystem": split.system, "memory": used / total,
                                      "memoryUsed": used, "memoryTotal": total])
+        if let gpu = gpuUsage() {
+            output.fields!["gpu"] = String(Int((gpu * 100).rounded()))
+            output.values!["gpu"] = gpu
+        }
+        return output
+    }
+
+    /// The busiest GPU's utilization, so an idle integrated GPU doesn't hide a busy discrete one.
+    private func gpuUsage() -> Double? {
+        var services: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &services) == KERN_SUCCESS else { return nil }
+        defer { IOObjectRelease(services) }
+        var usage: Double?
+        var service = IOIteratorNext(services)
+        while service != 0 {
+            let statistics = IORegistryEntryCreateCFProperty(service, "PerformanceStatistics" as CFString, kCFAllocatorDefault, 0)?
+                .takeRetainedValue() as? [String: Any]
+            if let percent = statistics?["Device Utilization %"] as? Double { usage = max(usage ?? 0, percent / 100) }
+            IOObjectRelease(service)
+            service = IOIteratorNext(services)
+        }
+        return usage
     }
 
     func networkRates(units: NetworkUnits = .bytes) throws -> ScriptOutput {

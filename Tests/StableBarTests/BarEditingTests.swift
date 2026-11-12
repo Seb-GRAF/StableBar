@@ -630,7 +630,7 @@ final class BarEditingTests: XCTestCase {
             XCTAssertEqual(during.barFrame.minY, 2062 - frame.maxY + config.bar.offset)
             // A window below the normal bar must not be moved by the taller editing controls.
             let window = CGRect(x: frame.minX + 10, y: during.barFrame.maxY + 1, width: 300, height: 200)
-            XCTAssertNil(frameBelowBar(window, displays: [during]))
+            XCTAssertNil(frameClearOfBar(window, displays: [during]))
             store.barEditing.end()
             XCTAssertEqual(clearance(), before)
         }

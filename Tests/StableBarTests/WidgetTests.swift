@@ -114,12 +114,16 @@ import Testing
 }
 
 @Test func cancellingAWidgetStopsItsRunningCommand() async throws {
-    let task = Task { try await runCommand("/bin/sleep", arguments: ["30"]) }
-    try await Task.sleep(for: .milliseconds(100))
-    let start = ContinuousClock.now
+    let pidFile = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: pidFile) }
+    let task = Task {
+        try await runCommand("/bin/sh", arguments: ["-c", #"echo $$ > "$0"; exec /bin/sleep 300"#, pidFile.path], timeout: 120)
+    }
+    try await awaitCondition { (try? String(contentsOf: pidFile, encoding: .utf8))?.hasSuffix("\n") == true }
+    let pid = try #require(pid_t(String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .newlines)))
     task.cancel()
+    try await awaitCondition { kill(pid, 0) == -1 }
     await #expect(throws: CancellationError.self) { try await task.value }
-    #expect(start.duration(to: .now) < .seconds(5))
 }
 
 @Test func workspaceSnapshotKeepsMonitorFocusAndDeduplicatesAppWindows() throws {
@@ -450,6 +454,26 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(workspaceStore.workspaces(on: 1, showEmpty: false).map(\.name) == ["1"])
 }
 
+@Test @MainActor func hiddenAppsAndWorkspacesLeaveTheDisplayedWorkspaces() {
+    let workspaceStore = WorkspaceStore()
+    let finder = WorkspaceApp(workspace: "1", name: "Finder", bundleID: "com.apple.finder")
+    let photoshop = WorkspaceApp(workspace: "1", name: "Adobe Photoshop 2026", bundleID: "com.adobe.Photoshop")
+    let password = WorkspaceApp(workspace: "2", name: "1Password", bundleID: "com.1password.1password")
+    workspaceStore.workspaces = [
+        Workspace(name: "1", isFocused: false, isVisible: false, monitor: 1, apps: [finder, photoshop],
+                  windows: [WorkspaceWindow(id: 1, title: "Home", app: finder), WorkspaceWindow(id: 2, title: "Untitled", app: photoshop)]),
+        Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1, apps: [password]),
+        Workspace(name: "S", isFocused: false, isVisible: false, monitor: 1, apps: [finder]),
+        Workspace(name: "T", isFocused: true, isVisible: true, monitor: 1, apps: [finder])
+    ]
+    let hidden = ["Adobe Photoshop*", "com.1password.1password"]
+    let shown = workspaceStore.workspaces(on: 1, showEmpty: false, hideApps: hidden, hideWorkspaces: ["S", "T"])
+    #expect(shown.map(\.name) == ["1", "T"])
+    #expect(shown[0].apps == [finder])
+    #expect(shown[0].windows.map(\.id) == [1])
+    #expect(workspaceStore.workspaces(on: 1, showEmpty: true, hideApps: hidden).map(\.name) == ["1", "2", "S", "T"])
+}
+
 @Test @MainActor func workspaceRowGrowsWhenAnEmptyWorkspaceAppears() throws {
     let workspaceStore = WorkspaceStore()
     workspaceStore.workspaces = [
@@ -709,6 +733,16 @@ private func calls(_ log: URL) -> [Substring] {
     let document = try JSONDecoder().decode([String: ConfigurationValue].self,
                                             from: SetupPreferences(placement: .top).applying(to: edge))
     #expect(document["bar"] == .object(["offset": .number(0)]))
+}
+
+@Test func setupMovesTheBarToTheBottomEdgeAndBack() throws {
+    let data = Data(#"{"bar": {"belowMenuBar": true, "offset": 6}, "widgets": []}"#.utf8)
+    let bottom = try SetupPreferences(placement: .bottom).applying(to: data)
+    let bar = try JSONDecoder().decode(Configuration.self, from: bottom).bar
+    #expect(bar.position == .bottom)
+    #expect(bar.offset == 0)
+    #expect(!bar.belowMenuBar)
+    #expect(try JSONDecoder().decode(Configuration.self, from: SetupPreferences(placement: .top).applying(to: bottom)).bar.position == .top)
 }
 
 @Test(arguments: SetupPreferences.Preset.allCases)

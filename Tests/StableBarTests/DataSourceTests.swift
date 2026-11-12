@@ -94,7 +94,7 @@ private final class FakeSources {
 
 /// Waits up to two seconds for `condition`, then requires it.
 @MainActor
-private func awaitCondition(_ condition: () -> Bool) async throws {
+func awaitCondition(_ condition: () -> Bool) async throws {
     for _ in 0..<100 {
         if condition() { return }
         try await Task.sleep(for: .milliseconds(20))

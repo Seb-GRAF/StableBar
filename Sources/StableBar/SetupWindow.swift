@@ -422,6 +422,7 @@ final class SetupSession {
     var placement: SetupPreferences.Placement {
         if preferences.placement != .current { return preferences.placement }
         guard let bar = base?.bar else { return .current }
+        if bar.position == .bottom { return bar.offset == 0 ? .bottom : .current }
         if bar.belowMenuBar { return bar.offset == 0 ? .belowMenuBar : .current }
         return bar.offset == 0 ? .top : bar.offset == earlierBelowMenuBarOffset ? .belowMenuBar : .current
     }
@@ -456,7 +457,7 @@ final class SetupSession {
     private var placementChangesMenuBar: Bool {
         switch placement {
         case .top: !menuBarHides
-        case .belowMenuBar: menuBarHides
+        case .belowMenuBar, .bottom: menuBarHides
         default: false
         }
     }
@@ -554,7 +555,7 @@ final class SetupSession {
         placementRequest += 1
         let request = placementRequest
         placementAwaitingAccess = nil
-        if placement == .belowMenuBar { preferences.placement = placement }
+        if placement != .top { preferences.placement = placement }
         let changes = (placement == .top) != menuBarHides
         if changes {
             let access = await menuBarAccess()

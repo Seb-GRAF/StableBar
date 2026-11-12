@@ -47,6 +47,8 @@ struct HelpQuestion: Identifiable {
     - OmniWM: `gaps.outer.top` in its `settings.toml`
     - Rift: `top` under `[settings.layout.gaps.outer]` in `~/.config/rift/config.toml`
 
+    For a bar at the bottom of the screen, give it a bottom gap instead, such as `gaps.outer.bottom` in AeroSpace.
+
     Fullscreen windows, minimized windows and dialogs stay where they are, and a few apps don't let StableBar move their windows. See [Keeping windows clear of the bar](getting-started.md#keeping-windows-clear-of-the-bar).
 
     ## How do I hide the macOS menu bar, or keep it?

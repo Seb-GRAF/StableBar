@@ -65,7 +65,7 @@
       "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add. `accessibilityGuide` draws the panel that asks people to drag StableBar into the Accessibility list in System Settings.",
       "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup", "accessibilityGuide"]
     },
-    "widget": { "description": "The widget whose popup or Settings page to draw.", "type": "string" },
+    "widget": { "description": "The widget whose popup or Settings page to draw. With `bar`, the bar is drawn with that widget's popup open, below the bar or above a bar at the bottom.", "type": "string" },
     "section": {
       "description": "The Settings section to draw when no widget is named. `help` opens the first answer of its Questions; `feedback` draws Send feedback in Help, with a sample bug, bug report, GitHub account and coding agent; `crashes` draws Crashes in Status, with sample crash reports of a release, of a development build and of a launch that dyld stopped, which Crashes leaves out.",
       "enum": ["general", "bar", "theme", "profiles", "packages", "help", "feedback", "crashes"]
@@ -93,8 +93,8 @@
           "enum": ["placement", "look", "touches", "permissions", "tryIt"]
         },
         "placement": {
-          "description": "The first step's choice, made before drawing: Replace the menu bar (top) or Keep the menu bar (belowMenuBar). Without it, neither is picked.",
-          "enum": ["top", "belowMenuBar"]
+          "description": "The first step's choice, made before drawing: Replace the menu bar (top), Keep the menu bar (belowMenuBar) or Put it at the bottom (bottom). Without it, none is picked.",
+          "enum": ["top", "belowMenuBar", "bottom"]
         },
         "preset": {
           "description": "The preset picked on the second step.",

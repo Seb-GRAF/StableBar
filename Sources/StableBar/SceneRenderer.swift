@@ -153,7 +153,12 @@ enum SceneRenderer {
         switch scene.draw {
         case .bar:
             let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
-            try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
+            let view = if let id = scene.widget {
+                AnyView(try barWithPopup(of: id, store: store))
+            } else {
+                AnyView(bar(store))
+            }
+            try await OffscreenSnapshot.write(drawn(view.background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .editBar:
             store.barEditing.begin()
@@ -315,14 +320,49 @@ enum SceneRenderer {
 
         var body: some View {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
-            let top = store.configuration.map { $0.onScreen(ScreenKind(display)).bar.top(menuBar: menuBar) } ?? 0
+            let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                bar(store).padding(.top, top)
+                if let settings, settings.position == .bottom {
+                    bar(store).padding(.bottom, settings.offset)
+                } else {
+                    bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)
+                }
                 if !session.menuBarHides {
                     Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
                 }
             }
         }
+    }
+
+    /// The bar on the edge it sits on, with the popup of the widget `id` open under it, or above it at the bottom.
+    private static func barWithPopup(of id: String, store: BarStore) throws -> some View {
+        let configuration = store.configuration!
+        let look = configuration.look(on: .monitor)
+        guard let widget = look.widgets.first(where: { $0.id == id }) else {
+            throw CommandFailure(message: "widget: The configuration has no widget \(id).")
+        }
+        guard let popup = widgetPopup(widget, store: store) else { throw CommandFailure(message: "widget: \(id) has no popup.") }
+        let geometry = configuration.barGeometry(for: display)
+        let upward = look.bar.position == .bottom
+        let edge = upward ? geometry.panelHeight - geometry.drawingBottom - popup.offset : geometry.drawingBottom + popup.offset
+        return BarView(store: store, display: display)
+            .environment(\.screenKind, .monitor)
+            .frame(height: geometry.panelHeight)
+            .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
+                GeometryReader { proxy in
+                    if let anchor = anchors.widgets[id] {
+                        PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
+                                  store: store, widget: widget)
+                            .environment(\.screenKind, .monitor)
+                            .frame(width: CGFloat(popup.style.width ?? 360))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
+                            .frame(width: 0, height: 0, alignment: upward ? .bottom : .top)
+                            .offset(x: proxy[anchor.bounds].midX, y: edge)
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: upward ? .bottom : .top)
     }
 
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
