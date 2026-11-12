@@ -114,12 +114,16 @@ import Testing
 }
 
 @Test func cancellingAWidgetStopsItsRunningCommand() async throws {
-    let task = Task { try await runCommand("/bin/sleep", arguments: ["30"]) }
-    try await Task.sleep(for: .milliseconds(100))
-    let start = ContinuousClock.now
+    let pidFile = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: pidFile) }
+    let task = Task {
+        try await runCommand("/bin/sh", arguments: ["-c", #"echo $$ > "$0"; exec /bin/sleep 300"#, pidFile.path], timeout: 120)
+    }
+    try await awaitCondition { (try? String(contentsOf: pidFile, encoding: .utf8))?.hasSuffix("\n") == true }
+    let pid = try #require(pid_t(String(contentsOf: pidFile, encoding: .utf8).trimmingCharacters(in: .newlines)))
     task.cancel()
+    try await awaitCondition { kill(pid, 0) == -1 }
     await #expect(throws: CancellationError.self) { try await task.value }
-    #expect(start.duration(to: .now) < .seconds(5))
 }
 
 @Test func workspaceSnapshotKeepsMonitorFocusAndDeduplicatesAppWindows() throws {
