@@ -410,11 +410,26 @@ struct BarInspector: View {
     @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
         if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
            let source = ["battery": "percent", "audio": "volume", "system": "cpu"][type] {
-            let current = WidgetMetricDisplay.current(editor.properties(for: widget.id)["layout"], source: source)
+            let layout = editor.properties(for: widget.id)["layout"]
+            let metrics = type == "system" ? WidgetSystemMetrics.current(layout) : nil
+            let sources = metrics?.sources ?? [source]
+            let current = WidgetMetricDisplay.current(layout, sources: sources)
             SettingsGroup("Display") {
+                if let metrics, current != .custom {
+                    SettingRow(title: "Shows") {
+                        Picker("Shows", selection: Binding(get: { metrics }, set: { metrics in
+                            editor.set(["layout": current.layout(for: metrics.sources)!], for: widget.id)
+                        })) {
+                            ForEach(WidgetSystemMetrics.allCases, id: \.self) { metrics in
+                                Text(metrics.title).tag(metrics)
+                            }
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
+                }
                 SettingRow(title: "Show") {
                     Picker("Show", selection: Binding(get: { current }, set: { choice in
-                        if let layout = choice.layout(for: source) { editor.set(["layout": layout], for: widget.id) }
+                        if let layout = choice.layout(for: sources) { editor.set(["layout": layout], for: widget.id) }
                     })) {
                         ForEach(WidgetMetricDisplay.choices(for: source).filter { $0 != .custom || current == .custom }, id: \.self) { choice in
                             Text(choice.title).tag(choice)

@@ -140,8 +140,9 @@ struct WidgetClockFormat {
     }
 }
 
-/// How a battery, sound or system widget shows its value. `source` names the value: `percent` for
-/// battery, whose icon is its battery block, `volume` for sound, `cpu` for system.
+/// How a battery, sound or system widget shows its values. `sources` names them: `percent` for
+/// battery, whose icon is its battery block, `volume` for sound, and `cpu`, `memory` or both, in
+/// order, for system.
 enum WidgetMetricDisplay: String, CaseIterable {
     case standard, changes, icon, value, meter, graph, custom
 
@@ -164,39 +165,82 @@ enum WidgetMetricDisplay: String, CaseIterable {
         switch source {
         case "percent": [.icon] + allCases.filter { $0 != .changes && $0 != .icon }
         case "volume": [.changes] + allCases.filter { $0 != .changes }
-        case "cpu": [.graph] + allCases.filter { $0 != .changes && $0 != .graph }
+        case "cpu", "memory": [.graph] + allCases.filter { $0 != .changes && $0 != .graph }
         default: allCases.filter { $0 != .changes }
         }
     }
 
     /// The `layout` that shows this choice, `null` for the default layout, or nil for a custom one.
-    func layout(for source: String) -> ConfigurationValue? {
-        let icon: ConfigurationValue = source == "percent" ? .object(["type": .string("battery")])
-            : .object(["type": .string("symbol"), "source": .string("icon")])
-        let text: ConfigurationValue = .object(["type": .string("field"), "field": .string("text")])
+    func layout(for sources: [String]) -> ConfigurationValue? {
         switch self {
-        case .standard: return .object(["type": .string("row"), "children": .array([icon, text])])
         case .changes: return .null
-        case .graph where source == "cpu": return .null
-        case .icon where source == "percent": return .null
-        case .icon: return .object(["type": .string("row"), "children": .array([icon])])
-        case .value: return .object(["type": .string("row"), "children": .array([text])])
-        case .meter, .graph:
-            let meter: ConfigurationValue = self == .meter
-                ? .object(["type": .string("progress"), "source": .string(source), "height": .number(4),
-                           "style": .object(["width": .number(40)])])
-                : .object(["type": .string("graph"), "height": .number(16), "style": .object(["width": .number(40)])])
-            return .object(["type": .string("row"), "children": .array([meter, icon, text])])
+        case .graph where sources == ["cpu"]: return .null
+        case .icon where sources == ["percent"]: return .null
         case .custom: return nil
+        default: return .object(["type": .string("row"), "children": .array(sources.flatMap(blocks))])
         }
     }
 
-    static func current(_ layout: ConfigurationValue?, source: String) -> Self {
-        if layout == nil || layout == .null { return choices(for: source)[0] }
+    private func blocks(for source: String) -> [ConfigurationValue] {
+        let icon: ConfigurationValue = switch source {
+        case "percent": .object(["type": .string("battery")])
+        case "memory": .object(["type": .string("symbol"), "name": .string("memorychip")])
+        default: .object(["type": .string("symbol"), "source": .string("icon")])
+        }
+        let text: ConfigurationValue = source == "memory"
+            ? .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
+                .object(["type": .string("field"), "field": .string("memory")]), .object(["type": .string("text"), "text": .string("%")])
+            ])])
+            : .object(["type": .string("field"), "field": .string("text")])
+        switch self {
+        case .icon: return [icon]
+        case .value: return [text]
+        case .meter:
+            return [.object(["type": .string("progress"), "source": .string(source), "height": .number(4),
+                             "style": .object(["width": .number(40)])]), icon, text]
+        case .graph:
+            var graph: [String: ConfigurationValue] = ["type": .string("graph"), "height": .number(16), "style": .object(["width": .number(40)])]
+            // A graph without a source draws the history of the provider's `value`, which is CPU for system.
+            if source == "memory" { graph["source"] = .string(source) }
+            return [.object(graph), icon, text]
+        default: return [icon, text]
+        }
+    }
+
+    static func current(_ layout: ConfigurationValue?, sources: [String]) -> Self {
+        if layout == nil || layout == .null { return choices(for: sources[0])[0] }
         guard case let .object(properties) = layout, properties["type"] == .string("row") else { return .custom }
-        return choices(for: source).first {
-            guard case let .object(candidate)? = $0.layout(for: source) else { return false }
+        return choices(for: sources[0]).first {
+            guard case let .object(candidate)? = $0.layout(for: sources) else { return false }
             return candidate["children"] == properties["children"]
         } ?? .custom
+    }
+}
+
+/// What a System monitor widget shows, in order.
+enum WidgetSystemMetrics: CaseIterable {
+    case cpu, memory, cpuAndMemory, memoryAndCPU
+
+    var title: String {
+        switch self {
+        case .cpu: "CPU"
+        case .memory: "Memory"
+        case .cpuAndMemory: "CPU and memory"
+        case .memoryAndCPU: "Memory and CPU"
+        }
+    }
+
+    var sources: [String] {
+        switch self {
+        case .cpu: ["cpu"]
+        case .memory: ["memory"]
+        case .cpuAndMemory: ["cpu", "memory"]
+        case .memoryAndCPU: ["memory", "cpu"]
+        }
+    }
+
+    /// The metrics whose display choices include `layout`, CPU for a custom one.
+    static func current(_ layout: ConfigurationValue?) -> Self {
+        allCases.first { WidgetMetricDisplay.current(layout, sources: $0.sources) != .custom } ?? .cpu
     }
 }

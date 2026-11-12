@@ -155,7 +155,7 @@ private enum FrontmostApp {
             let plain = try draw(PopupBlockView(block: expected, inheritedStyle: WidgetStyle(), fields: label.fields, context: context))
             #expect(drawn.width == plain.width)
             #expect(drawn.difference(from: plain) <= tolerance)
-            let graph = try #require(WidgetMetricDisplay.graph.layout(for: source)).decoded(PopupBlock.self)
+            let graph = try #require(WidgetMetricDisplay.graph.layout(for: [source])).decoded(PopupBlock.self)
             let withGraph = try draw(PopupBlockView(block: graph, inheritedStyle: WidgetStyle(), fields: label.fields, context: context))
             #expect(withGraph.width > drawn.width)
         }
