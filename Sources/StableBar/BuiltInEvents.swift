@@ -2,7 +2,7 @@
 /// distributed notification names. docs/create-a-widget.md lists the same events, in the same order,
 /// in the table under "Script events"; `builtInEventsMatchTheGuideTable` checks it.
 enum BuiltInEvent: String, CaseIterable, Sendable {
-    case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange
+    case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange, inputSourceChange
 
     /// When StableBar sends the event: the table's "Sent when" column.
     var trigger: String {
@@ -15,6 +15,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .powerSourceChange: "The Mac switches between its power adapter and battery"
         case .volumeChange: "The default output device's volume or mute state changes"
         case .outputDeviceChange: "The default output device changes"
+        case .inputSourceChange: "The keyboard input source changes"
         }
     }
 
@@ -29,6 +30,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .powerSourceChange: "`ac` or `battery`"
         case .volumeChange: "The volume as a whole percentage, empty without a volume control; `MUTED` is `true` or `false`"
         case .outputDeviceChange: "The device's name, empty when there is none"
+        case .inputSourceChange: "The source's ID, such as `com.apple.keylayout.ABC`"
         }
     }
 
@@ -47,6 +49,8 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
                     "MUTED": output.fields?["muted"] ?? "false"]
         case .outputDeviceChange:
             return previous.fields?["deviceID"] == output.fields?["deviceID"] ? nil : ["INFO": output.fields?["device"] ?? ""]
+        case .inputSourceChange:
+            return previous.fields?["id"] == output.fields?["id"] ? nil : ["INFO": output.fields?["id"] ?? ""]
         default:
             return nil
         }

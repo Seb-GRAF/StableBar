@@ -1,0 +1,37 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "keyboard",
+        "type": "inputSource",
+        "position": "right",
+        "popup": {
+          "style": { "width": 220 },
+          "layout": {
+            "type": "list",
+            "source": "sources",
+            "row": { "type": "field", "field": "name", "selectInputSourceField": "id" }
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "inputSource": {
+      "text": "FR",
+      "icon": "keyboard",
+      "fields": { "name": "Swiss French", "id": "com.apple.keylayout.SwissFrench", "language": "fr" },
+      "lists": {
+        "sources": [
+          { "id": "com.apple.keylayout.ABC", "name": "ABC" },
+          { "id": "com.apple.keylayout.SwissFrench", "name": "Swiss French" },
+          { "id": "com.apple.keylayout.German", "name": "German" }
+        ]
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "keyboard",
+  "height": 128
+}

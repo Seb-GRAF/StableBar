@@ -33,7 +33,7 @@ final class WidgetAddPopoverTests: XCTestCase {
         XCTAssertLessThan(frames[0].midX, frames[1].midX)
         XCTAssertGreaterThan(frames[2].midY, frames[0].midY)
         XCTAssertEqual(frames[0].minX, frames[2].minX, accuracy: 1)
-        XCTAssertEqual(model.rowCount, 8)
+        XCTAssertEqual(model.rowCount, 9)
         XCTAssertLessThanOrEqual(host.fittingSize.width, 340)
         XCTAssertLessThan(host.fittingSize.height, 560)
         model.search = "CPU"

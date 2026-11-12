@@ -59,8 +59,9 @@ Add `events` to a script widget to refresh it on named events, alongside its int
 | `powerSourceChange` | The Mac switches between its power adapter and battery | `ac` or `battery` |
 | `volumeChange` | The default output device's volume or mute state changes | The volume as a whole percentage, empty without a volume control; `MUTED` is `true` or `false` |
 | `outputDeviceChange` | The default output device changes | The device's name, empty when there is none |
+| `inputSourceChange` | The keyboard input source changes | The source's ID, such as `com.apple.keylayout.ABC` |
 
-`powerSourceChange` comes from the `battery` data source, and `volumeChange` and `outputDeviceChange` from the `audio` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named `battery` or `audio`, such as your own stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
+`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, and `inputSourceChange` from the `inputSource` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named `battery`, `audio` or `inputSource`, such as your own stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
 
 External hooks can trigger an event without launching another bar:
 
