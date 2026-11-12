@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -1287,4 +1288,32 @@ final class PackagesViewTests: XCTestCase {
     @MainActor private func tables(in view: NSView) -> [NSTableView] {
         (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap(tables)
     }
+}
+
+@Test @MainActor func aPackageChoiceShowsItsImageAndChangesTheBarAtOnce() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let source = fixture.directory.appending(path: "greeting")
+    try fixture.write(#"""
+    {"id":"greeting","name":"Greeting","version":"1","kind":"widgets","entry":"config.json",
+     "settings":{"text":{"type":"string","choices":[{"value":"Hello","title":"Friendly","image":"hello.png"},
+                                                    {"value":"Good day","title":"Formal","image":"good-day.png"}],"default":"Hello"}}}
+    """#, to: source.appending(path: "package.json"))
+    try fixture.write(#"{"widgets":[{"id":"greeting","type":"text","position":"right","text":"@setting.text"}]}"#,
+                      to: source.appending(path: "config.json"))
+    try fixture.write("hello", to: source.appending(path: "hello.png"))
+    try fixture.write("good day", to: source.appending(path: "good-day.png"))
+    let installed = try fixture.packages.install(source)
+    let store = try fixture.store()
+    defer { store.stop() }
+    _ = try WidgetSetup(store: store).enable(installed, settings: [:], position: .right)
+    let library = store.packageLibrary
+    await library.loadInstalled()
+    await library.selectInstalled(installed.manifest)
+    let draft = try #require(library.draft)
+    #expect(draft.choiceImages == ["hello.png": Data("hello".utf8), "good-day.png": Data("good day".utf8)])
+    library.setSetting("text", value: .string("Good day"), in: draft)
+    #expect(store.configuration?.widgets.first { $0.id == "greeting" }?.content == .text("Good day"))
+    try store.customizationHistory.flush()
+    draft.inspectionTask?.cancel()
 }

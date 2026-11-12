@@ -733,7 +733,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(#"{"theme":{"id":"monitor","version":"1"}}"#.utf8)) }
 }
 
-@Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
+@Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirImagesInside() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let source = directory.appending(path: "source")
@@ -741,11 +741,13 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let manifest = #"""
     {"id":"weather","name":"Weather","version":"1","entry":"config.json","description":"Current conditions.","author":"StableBar",
      "repository":"https://github.com/Seb-GRAF/stablebar-packages","screenshot":"screenshot.png","minimumVersion":"0.6.0",
-     "requires":["jq","gh","brew"],"permissions":["location"],"hosts":["wttr.in"]}
+     "requires":["jq","gh","brew"],"permissions":["location"],"hosts":["wttr.in"],
+     "settings":{"layout":{"type":"string","choices":[{"value":"wide","image":"previews/wide.png"},"narrow"],"default":"wide"}}}
     """#
     try writePackageFile(manifest, to: source.appending(path: "package.json"))
     try writePackageFile(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
     try writePackageFile("image", to: source.appending(path: "screenshot.png"))
+    try writePackageFile("image", to: source.appending(path: "previews/wide.png"))
     try writePackageFile("image", to: directory.appending(path: "outside.png"))
     let inspection = try store.inspect(source)
     #expect(inspection.manifest.description == "Current conditions.")
@@ -755,12 +757,14 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(inspection.manifest.permissions == [.location])
     #expect(inspection.manifest.hosts == ["wttr.in"])
     #expect(inspection.screenshot?.path == source.appending(path: "screenshot.png").path)
+    #expect(inspection.choiceImages.mapValues(\.path) == ["previews/wide.png": source.appending(path: "previews/wide.png").path])
     let tools = directory.appending(path: "bin")
     try writePackageFile("#!/bin/sh\n", to: tools.appending(path: "jq"))
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tools.appending(path: "jq").path)
     try writePackageFile("", to: tools.appending(path: "gh"))
     #expect(inspection.manifest.missingTools(path: "/missing:\(tools.path)") == ["gh", "brew"])
-    for (value, replacement) in [("screenshot.png", "../outside.png"), (#"["location"]"#, #"["camera"]"#), ("https://github.com", "http://github.com")] {
+    for (value, replacement) in [("screenshot.png", "../outside.png"), ("previews/wide.png", "../outside.png"), ("previews/wide.png", "previews/narrow.png"),
+                                 (#"["location"]"#, #"["camera"]"#), ("https://github.com", "http://github.com")] {
         try writePackageFile(manifest.replacingOccurrences(of: value, with: replacement), to: source.appending(path: "package.json"))
         #expect(throws: (any Error).self) { try store.inspect(source) }
     }
@@ -778,6 +782,23 @@ private func writePackageFile(_ text: String, to url: URL) throws {
         manifest.replacingOccurrences(of: #""type":"string""#, with: #""type":"number""#)
     ] {
         #expect(throws: (any Error).self) { try decoder.decode(WidgetPackageManifest.self, from: Data(invalid.utf8)) }
+    }
+    // A choice is a plain string or an object, and is printed back in the form it was written.
+    let objects = manifest.replacingOccurrences(of: #"["metric","imperial"]"#,
+                                                with: #"[{"value":"metric","title":"Metric","image":"metric.png"},"imperial"]"#)
+    let units = try #require(try decoder.decode(WidgetPackageManifest.self, from: Data(objects.utf8)).settings["units"])
+    #expect(units.choices?.map(\.value) == ["metric", "imperial"])
+    #expect(units.choices?.map(\.title) == ["Metric", nil])
+    #expect(units.choices?.map(\.image) == ["metric.png", nil])
+    #expect(units.accepts(.string("imperial")))
+    #expect(!units.accepts(.string("Metric")))
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    #expect(String(decoding: try encoder.encode(units.choices), as: UTF8.self)
+            == #"[{"image":"metric.png","title":"Metric","value":"metric"},"imperial"]"#)
+    for invalid in [#"[{"title":"Metric"}]"#, #"[{"value":"metric","label":"Metric"}]"#, #"[{"value":1}]"#, "[1]"] {
+        let replaced = manifest.replacingOccurrences(of: #"["metric","imperial"]"#, with: invalid)
+        #expect(throws: (any Error).self, "\(invalid)") { try decoder.decode(WidgetPackageManifest.self, from: Data(replaced.utf8)) }
     }
 }
 

@@ -31,6 +31,22 @@ A package is a folder containing `package.json`, its configuration, and any scri
 
 Settings support `string`, `number`, `bool` and `secret`. The first three need a matching `default`. Settings lists them in the order `package.json` gives them, each with its `title`, or its name without one. An optional `description` explains a field in the interface. String settings can declare a nonempty `choices` array to show a picker; both the default and supplied values must be among those choices. [package.schema.json](../package.schema.json) describes the manifest and setting fields; StableBar also validates their types and allowed values. Reference a setting as a whole value, such as `"fontSize": "@setting.fontSize"` or `"environment": { "FORMAT": "@setting.format" }`. Put settings needed by shell commands in environment variables and quote them normally in the script.
 
+A choice is a string, or an object with the `value` the setting takes, a `title` that Settings shows in its place, and an `image`: a path inside the package to a PNG or JPEG of what the choice does, checked like `screenshot`. Strings and objects can be mixed. When every choice of a setting has an image, Settings shows the choices as images, each with its title under it and the selected one outlined; a click picks one, and for a package on your bar the bar changes at once.
+
+```json
+"layout": {
+  "type": "string",
+  "title": "Layout",
+  "choices": [
+    { "value": "stacked", "title": "Stacked", "image": "previews/stacked.png" },
+    { "value": "inline", "title": "Inline", "image": "previews/inline.png" }
+  ],
+  "default": "stacked"
+}
+```
+
+StableBar 0.13.0 and earlier can't read a choice written as an object and reject the whole manifest, so a package that uses them sets `"minimumVersion": "0.14.0"`: an older StableBar then says which version the package needs instead of failing to read it.
+
 A `secret` setting, such as `"token": { "type": "secret", "title": "GitHub token" }`, holds an API token and has no `default` or `choices`. Reference it only as a whole value in the `environment` of a widget or provider the package defines, such as `"environment": { "GITHUB_TOKEN": "@setting.token" }`; templates, profiles and the top-level `environment` cannot use it. Type it in **Settings → Packages**; **Open package** in a widget's Content inspector opens that package page. For an active package, choose **Save credentials**; ordinary setting changes do not save credentials. For a package being added, **Add to bar** applies its configuration and then saves the credentials. An error stays visible if the credential write fails. The field shows whether a token is saved without revealing it. StableBar keeps it in the login Keychain, never in a configuration file, and `--query` and Settings show `@secret.<package id>/<setting>` in its place. Commands receive the token when they start, or an empty value when none is saved. **Remove** next to a saved token schedules its deletion for the next credential save or add operation. The token belongs to the package ID, so a new version keeps it, and a package selection cannot set it in `settings`. Builds that are not signed with a Developer ID, which includes current releases and local builds, change their signature with every update, so macOS asks whether StableBar may use its Keychain item the first time a command needs the token after an update; choose **Always Allow** to stop the question until the next update.
 
 A secret keeps the token out of configuration files, `--query` and Settings. It does not protect it from other packages: a package that runs commands can still reach a secret through StableBar, for example by overriding another package's widget. Install packages with commands only from sources you trust. A command that prints its token still shows it in its output and in Status, and programs running under your account can reach a secret through StableBar too, since they can edit your configuration.

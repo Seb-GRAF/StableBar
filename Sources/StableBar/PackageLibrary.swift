@@ -14,6 +14,8 @@ final class PackageDraft {
     var secrets: [String: String] = [:]
     var savedSecrets: Set<String>?
     var screenshotData: Data?
+    /// The choices' images, by the path the manifest gives.
+    var choiceImages: [String: Data] = [:]
     var themePreview: ThemePreview?
     var error: String?
     var credentialsError: String?
@@ -552,6 +554,7 @@ final class PackageLibrary {
             let preview = try await preview(reviewed)
             draft.screenshotData = preview.screenshot
             draft.themePreview = preview.theme
+            draft.choiceImages = try await client.choiceImageData(for: reviewed)
             guard request == selectionRequest else { return }
             await show(draft)
         } catch {

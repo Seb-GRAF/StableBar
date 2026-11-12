@@ -545,8 +545,12 @@ struct PackageSettingsFields: View {
                         }
                     }
                 } else if let choices = setting.choices, case let .string(text) = draft.settings[name]! {
-                    Picker(title, selection: Binding(get: { text }, set: { set(name, .string($0)) })) {
-                        ForEach(choices, id: \.self) { Text($0).tag($0) }
+                    if choices.allSatisfy({ $0.image != nil }) {
+                        PackageChoiceTiles(title: title, choices: choices, images: draft.choiceImages, selection: text) { set(name, .string($0)) }
+                    } else {
+                        Picker(title, selection: Binding(get: { text }, set: { set(name, .string($0)) })) {
+                            ForEach(choices, id: \.value) { Text($0.title ?? $0.value).tag($0.value) }
+                        }
                     }
                 } else {
                     PackageSettingField(title: title, value: Binding(get: { draft.settings[name]! }, set: { set(name, $0) }))
@@ -596,6 +600,45 @@ struct WidgetPackageSettings: View {
             await library.selectPackage(packageID)
         }
         .onChange(of: store.effectiveDocument) { library.configurationChanged() }
+    }
+}
+
+private struct PackageChoiceTiles: View {
+    let title: String
+    let choices: [WidgetPackageChoice]
+    let images: [String: Data]
+    let selection: String
+    let select: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 14, alignment: .top)], alignment: .leading, spacing: 12) {
+                ForEach(choices, id: \.value) { choice in
+                    let selected = choice.value == selection
+                    Button { select(choice.value) } label: {
+                        VStack(spacing: 6) {
+                            Group {
+                                if let image = images[choice.image!].flatMap(NSImage.init(data:)) {
+                                    Image(nsImage: image).resizable().scaledToFit()
+                                }
+                            }
+                            .frame(height: 44).frame(maxWidth: .infinity)
+                            .padding(5)
+                            .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 8))
+                            .overlay(RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(selected ? Color.accentColor : SettingsPalette.groupBorder, lineWidth: selected ? 3 : 1))
+                            Text(choice.title ?? choice.value).font(.system(size: 12, weight: selected ? .semibold : .regular))
+                                .foregroundStyle(selected ? .primary : .secondary).lineLimit(1)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(choice.title ?? choice.value)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+        }
     }
 }
 

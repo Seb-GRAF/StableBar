@@ -1,0 +1,10 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "packages": [{ "id": "clock-styles", "version": "1.0.0", "settings": { "format": "EEE d MMM  HH:mm" } }]
+  },
+  "packages": [".packages/clock-styles"],
+  "draw": "settings",
+  "widget": "clock-styles",
+  "height": 1100
+}

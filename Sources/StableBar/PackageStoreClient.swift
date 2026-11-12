@@ -243,6 +243,10 @@ actor PackageStoreClient {
         try inspection.screenshot.map { try Data(contentsOf: $0) }
     }
 
+    func choiceImageData(for inspection: WidgetPackageInspection) throws -> [String: Data] {
+        try inspection.choiceImages.mapValues { try Data(contentsOf: $0) }
+    }
+
     func saveSecrets(_ values: [String: String], for manifest: WidgetPackageManifest) throws {
         for (name, value) in values {
             try savePackageSecret(value, account: "\(manifest.id)/\(name)")

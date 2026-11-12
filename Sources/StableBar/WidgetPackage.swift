@@ -1,11 +1,48 @@
 import CryptoKit
 import Foundation
 
+/// A string setting's choice: its value alone, or with the title Settings shows for it and an image of what it does.
+struct WidgetPackageChoice: Codable, Sendable {
+    let value: String
+    let title: String?
+    /// A path inside the package.
+    let image: String?
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case value, title, image }
+
+    init(from decoder: Decoder) throws {
+        if let value = try? decoder.singleValueContainer().decode(String.self) {
+            self.value = value
+            title = nil
+            image = nil
+            return
+        }
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        value = try values.decode(String.self, forKey: .value)
+        title = try values.decodeIfPresent(String.self, forKey: .title)
+        image = try values.decodeIfPresent(String.self, forKey: .image)
+    }
+
+    /// A choice with only a value is written as a plain string, as packages for older releases write it.
+    func encode(to encoder: Encoder) throws {
+        if title == nil && image == nil {
+            var container = encoder.singleValueContainer()
+            try container.encode(value)
+        } else {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(value, forKey: .value)
+            try container.encodeIfPresent(title, forKey: .title)
+            try container.encodeIfPresent(image, forKey: .image)
+        }
+    }
+}
+
 struct WidgetPackageSetting: Codable, Sendable {
     let type: String
     let title: String?
     let description: String?
-    let choices: [String]?
+    let choices: [WidgetPackageChoice]?
     let `default`: ConfigurationValue?
 
     enum CodingKeys: String, CodingKey, CaseIterable { case type, title, description, choices, `default` }
@@ -16,7 +53,7 @@ struct WidgetPackageSetting: Codable, Sendable {
         type = try values.decode(String.self, forKey: .type)
         title = try values.decodeIfPresent(String.self, forKey: .title)
         description = try values.decodeIfPresent(String.self, forKey: .description)
-        choices = try values.decodeIfPresent([String].self, forKey: .choices)
+        choices = try values.decodeIfPresent([WidgetPackageChoice].self, forKey: .choices)
         `default` = try values.decodeIfPresent(ConfigurationValue.self, forKey: .default)
         if let choices, type != "string" || choices.isEmpty {
             throw DecodingError.dataCorruptedError(forKey: .choices, in: values, debugDescription: "Choices need a string setting and at least one value.")
@@ -25,7 +62,7 @@ struct WidgetPackageSetting: Codable, Sendable {
 
     func accepts(_ value: ConfigurationValue?) -> Bool {
         switch (type, value) {
-        case let ("string", .string(text)?): return choices?.contains(text) ?? true
+        case let ("string", .string(text)?): return choices?.contains { $0.value == text } ?? true
         case ("number", .number?), ("bool", .bool?), ("secret", nil): return true
         default: return false
         }
@@ -132,6 +169,8 @@ struct WidgetPackageInspection: Sendable {
     let directory: URL
     let commands: [String]
     let screenshot: URL?
+    /// The files of the choices' images, by the path the manifest gives.
+    let choiceImages: [String: URL]
     let widgets: [WidgetConfiguration]
 
     var requiresReview: Bool {
@@ -370,6 +409,10 @@ struct WidgetPackageStore: Sendable {
         }
         try validateContents(at: source)
         let screenshot = try manifest.screenshot.map { try packageFile($0, inside: source) }
+        var choiceImages: [String: URL] = [:]
+        for setting in manifest.settings.values {
+            for case let image? in (setting.choices ?? []).map(\.image) { choiceImages[image] = try packageFile(image, inside: source) }
+        }
         var loader = ConfigurationLoader()
         let layer = try loader.readPackage(at: source, manifest: manifest, settings: settings)
         let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? []
@@ -388,7 +431,8 @@ struct WidgetPackageStore: Sendable {
             widgets.append(contentsOf: configuration.widgets.filter { widget in !widgets.contains { $0.id == widget.id } })
             commands.formUnion(packageCommands(.object(document)))
         }
-        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot, widgets: widgets)
+        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot,
+                                        choiceImages: choiceImages, widgets: widgets)
     }
 
     /// `record` is the source the package comes from, `.local` for a folder; `requestedName` names it in a refusal.

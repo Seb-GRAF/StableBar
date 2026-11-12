@@ -1,0 +1,12 @@
+{
+  "widgets": [
+    {
+      "id": "clock-styles",
+      "type": "clock",
+      "position": "right",
+      "format": "@setting.format",
+      "tooltip": "@setting.label",
+      "style": { "fontWeight": "@setting.weight" }
+    }
+  ]
+}

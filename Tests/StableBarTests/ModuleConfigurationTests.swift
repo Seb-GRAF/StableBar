@@ -478,8 +478,9 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         .appending(path: "package.schema.json")
     let schema = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
     #expect(try schemaProperties(.object(schema)) == Set(WidgetPackageManifest.CodingKeys.allCases.map(\.stringValue)))
-    let setting = try schema["definitions"]?.decoded([String: ConfigurationValue].self)["setting"]
-    #expect(try schemaProperties(setting) == Set(WidgetPackageSetting.CodingKeys.allCases.map(\.stringValue)))
+    let definitions = try schema["definitions"]?.decoded([String: ConfigurationValue].self)
+    #expect(try schemaProperties(definitions?["setting"]) == Set(WidgetPackageSetting.CodingKeys.allCases.map(\.stringValue)))
+    #expect(try schemaProperties(definitions?["choice"]) == Set(WidgetPackageChoice.CodingKeys.allCases.map(\.stringValue)))
 }
 
 @Test func menuBarItemsOpenOnHoverUnlessSetToOpenOnClick() throws {

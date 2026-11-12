@@ -1,0 +1,28 @@
+{
+  "id": "clock-styles",
+  "name": "Clock styles",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json",
+  "description": "A clock for the scenes, whose settings show choices with titles and images.",
+  "settings": {
+    "format": {
+      "type": "string",
+      "title": "Style",
+      "description": "What the clock shows.",
+      "choices": [
+        { "value": "HH:mm", "title": "Time", "image": "previews/time.png" },
+        { "value": "EEE HH:mm", "title": "Day and time", "image": "previews/day.png" },
+        { "value": "EEE d MMM  HH:mm", "title": "Date and time", "image": "previews/date.png" }
+      ],
+      "default": "EEE HH:mm"
+    },
+    "weight": {
+      "type": "string",
+      "title": "Weight",
+      "choices": [{ "value": "regular", "title": "Regular" }, { "value": "semibold", "title": "Semibold" }],
+      "default": "regular"
+    },
+    "label": { "type": "string", "title": "Tooltip", "default": "Local time" }
+  }
+}

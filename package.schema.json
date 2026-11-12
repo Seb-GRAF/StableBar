@@ -27,6 +27,19 @@
     }
   },
   "definitions": {
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value"],
+      "properties": {
+        "value": { "description": "What the setting is set to.", "type": "string" },
+        "title": { "description": "What Settings shows in place of the value.", "type": "string" },
+        "image": {
+          "description": "Path inside the package to a PNG or JPEG of what the choice does. When every choice has one, Settings shows the choices as images.",
+          "type": "string"
+        }
+      }
+    },
     "setting": {
       "type": "object",
       "additionalProperties": false,
@@ -35,7 +48,12 @@
         "type": { "enum": ["string", "number", "bool", "secret"] },
         "title": { "type": "string" },
         "description": { "type": "string" },
-        "choices": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "choices": {
+          "description": "The values a string setting accepts: plain strings, or objects with a title and an image. Objects need StableBar 0.14.0 or later, so set minimumVersion.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "anyOf": [{ "type": "string" }, { "$ref": "#/definitions/choice" }] }
+        },
         "default": {}
       },
       "allOf": [
