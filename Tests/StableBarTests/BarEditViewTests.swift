@@ -471,12 +471,18 @@ final class BarEditViewTests: XCTestCase {
         view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
     }
     var tile: BarEditDragSourceView?
+    var settled = 0
     for _ in 0..<100 {
         host.layoutSubtreeIfNeeded()
-        tile = descendants(host, of: BarEditDragSourceView.self).first
-        if tile != nil { break }
+        if let current = descendants(host, of: BarEditDragSourceView.self).first {
+            if current === tile, current.name == "Not redrawn" { settled += 1 } else { settled = 0 }
+            tile = current
+            current.name = "Not redrawn"
+            if settled == 3 { break }
+        }
         try await Task.sleep(for: .milliseconds(10))
     }
+    try #require(settled == 3)
     let source = try #require(tile)
     // A tile redraw runs the drag source's `updateNSView`, which sets this name back to the widget's.
     source.name = "Not redrawn"
