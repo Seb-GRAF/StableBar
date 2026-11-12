@@ -79,7 +79,7 @@ final class ThemeTrialPanel {
     func reposition() {
         guard let panel, let bar, let screen, let host = panel.contentView else { return }
         panel.setFrame(ThemeTrialPlacement.frame(size: host.fittingSize, bar: bar.frame, geometry: bar.barGeometry,
-                                                 position: bar.barGeometry!.position, visibleFrame: screen.visibleFrame), display: true)
+                                                 position: bar.barGeometry?.position ?? .top, visibleFrame: screen.visibleFrame), display: true)
     }
 
     private func synchronize() {
