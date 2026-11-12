@@ -91,7 +91,7 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .microphone, .camera, .calendar])
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .microphone, .privacy, .calendar])
 }
 
 extension DataSourceType {
@@ -141,9 +141,9 @@ extension DataSourceType {
         PushSource(monitor: AudioMonitor(input: true))
     }
 
-    static let camera = DataSourceType(name: "camera", isNative: true, symbol: "video", settings: [], continuous: true,
-                                       events: [.cameraChange]) { _, _ in
-        PushSource(monitor: CameraMonitor())
+    static let privacy = DataSourceType(name: "privacy", isNative: true, symbol: "hand.raised", settings: [], continuous: true,
+                                        events: [.privacyChange]) { _, _ in
+        PushSource(monitor: PrivacyMonitor())
     }
 
     /// Its output sets its own `interval`, so the runner reads it again at the next minute or phase

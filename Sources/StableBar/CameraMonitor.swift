@@ -1,9 +1,10 @@
 import CoreMediaIO
 import Foundation
 
-/// Whether any app uses a camera, from CoreMediaIO. Its listeners follow the camera list and each
-/// camera's use. It reads properties only and opens no stream, so macOS doesn't ask for Camera access.
-final class CameraMonitor: ChangeMonitor, @unchecked Sendable {
+/// Whether any app uses a camera, from CoreMediaIO, for `PrivacyMonitor`. Its listeners follow the
+/// camera list and each camera's use. It reads properties only and opens no stream, so macOS doesn't
+/// ask for Camera access.
+final class CameraMonitor: @unchecked Sendable {
     private let relay = MainQueueRelay()
     private let queue = DispatchQueue(label: "StableBar.CameraMonitor")
     // The listener state below is only touched on `queue`, where CoreMediaIO delivers the listeners.
@@ -18,14 +19,13 @@ final class CameraMonitor: ChangeMonitor, @unchecked Sendable {
                                                                   mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
                                                                   mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain))
 
-    func read() throws -> ScriptOutput {
-        let inUse = try Self.devices().contains { camera in
+    func inUse() throws -> Bool {
+        try Self.devices().contains { camera in
             var address = Self.runningAddress
             var running: UInt32 = 0
             var size = UInt32(MemoryLayout<UInt32>.size)
             return CMIOObjectGetPropertyData(camera, &address, 0, nil, size, &size, &running) == noErr && running != 0
         }
-        return ScriptOutput(text: inUse ? "On" : "Off", icon: inUse ? "video.fill" : "video", fields: ["inUse": String(inUse)])
     }
 
     /// Calls `changed` on the main actor, as `AudioMonitor.start` does.

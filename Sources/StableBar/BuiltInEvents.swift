@@ -3,7 +3,7 @@
 /// in the table under "Script events"; `builtInEventsMatchTheGuideTable` checks it.
 enum BuiltInEvent: String, CaseIterable, Sendable {
     case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange, microphoneChange,
-         inputDeviceChange, cameraChange
+         inputDeviceChange, privacyChange
 
     /// When StableBar sends the event: the table's "Sent when" column.
     var trigger: String {
@@ -18,7 +18,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .outputDeviceChange: "The default output device changes"
         case .microphoneChange: "The default input device's volume or mute state changes, or an app starts or stops recording from it"
         case .inputDeviceChange: "The default input device changes"
-        case .cameraChange: "An app starts or stops using a camera"
+        case .privacyChange: "An app starts or stops using the microphone or a camera, or the microphone's mute state changes"
         }
     }
 
@@ -34,7 +34,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .volumeChange: "The volume as a whole percentage, empty without a volume control; `MUTED` is `true` or `false`"
         case .outputDeviceChange, .inputDeviceChange: "The device's name, empty when there is none"
         case .microphoneChange: "The volume as a whole percentage, empty without a volume control; `MUTED` and `IN_USE` are `true` or `false`"
-        case .cameraChange: "`true` while a camera is in use, else `false`"
+        case .privacyChange: "`true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false`"
         }
     }
 
@@ -58,8 +58,11 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
                     "MUTED": output.fields?["muted"] ?? "false", "IN_USE": output.fields?["inUse"] ?? "false"]
         case .outputDeviceChange, .inputDeviceChange:
             return previous.fields?["deviceID"] == output.fields?["deviceID"] ? nil : ["INFO": output.fields?["device"] ?? ""]
-        case .cameraChange:
-            return previous.fields?["inUse"] == output.fields?["inUse"] ? nil : ["INFO": output.fields?["inUse"] ?? "false"]
+        case .privacyChange:
+            guard ["microphone", "camera", "muted"].contains(where: { previous.fields?[$0] != output.fields?[$0] }) else { return nil }
+            return ["INFO": String(output.fields?["microphone"] == "true" || output.fields?["camera"] == "true"),
+                    "MICROPHONE": output.fields?["microphone"] ?? "false", "CAMERA": output.fields?["camera"] ?? "false",
+                    "MUTED": output.fields?["muted"] ?? "false"]
         default:
             return nil
         }

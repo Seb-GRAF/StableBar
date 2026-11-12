@@ -51,12 +51,17 @@ extension BarStore {
 }
 
 extension WidgetConfiguration {
+    /// The colors of macOS's own privacy indicators, which the privacy widget lights its icons with.
+    private static let microphoneColor = HexColor(light: 0xff9500ff, dark: 0xff9f0aff)
+    private static let cameraColor = HexColor(light: 0x34c759ff, dark: 0x30d158ff)
+
     /// The blocks a widget without `layout` draws, matching the look built-in widgets had before
     /// they were drawn through blocks: its icon and text in a row at least a line of text tall, after
     /// a 40 × 16 graph for output with a `value`, or after the app's icon for the active app.
     /// `providerType` is the type of the widget's provider, else its name is. Battery draws only its
     /// battery, its percentage left to the tooltip, or its icon and text on a Mac without one; sound
-    /// (`audio`) draws its icon, with the volume only while a change shows it. `appIcon` says whether
+    /// (`audio`) draws its icon, with the volume only while a change shows it; privacy its microphone and camera, lit while
+    /// in use and dimmed otherwise, or with `hideWhenIdle` only those in use. `appIcon` says whether
     /// the frontmost app has one. Workspaces, spacers and scripts without output have none.
     func defaultLayout(_ label: WidgetLabel, output: ScriptOutput?, appIcon: Bool, providerType: String? = nil) -> PopupBlock? {
         let icon = label.icon.map { _ in PopupBlock(content: .symbol(name: "", source: "icon")) }
@@ -76,6 +81,16 @@ extension WidgetConfiguration {
             let volume = PopupBlock(content: .field(field), hideWhenEmpty: field, transition: transition == nil ? .numeric : nil)
             let speaker = label.icon.map { _ in PopupBlock(content: .symbol(name: "", source: "icon"), widestSymbol: AudioMonitor.widestIcon) }
             return PopupBlock(content: .row([speaker, volume].compactMap { $0 }), keepsLineHeight: true)
+        case .provider where (providerType ?? providerName) == DataSourceType.privacy.name:
+            guard let output else { return nil }
+            let muted = output.fields?["muted"] == "true"
+            let icons = [("microphone", muted ? "mic.slash" : "mic", Self.microphoneColor), ("camera", "video", Self.cameraColor)]
+                .compactMap { field, symbol, color -> PopupBlock? in
+                    let inUse = output.fields?[field] == "true"
+                    guard inUse || !hideWhenIdle else { return nil }
+                    return PopupBlock(content: .symbol(name: symbol, source: nil), style: inUse ? WidgetStyle(foreground: color) : WidgetStyle(opacity: 0.5))
+                }
+            return PopupBlock(content: .row(icons), keepsLineHeight: true)
         case .provider where (providerType ?? providerName) == DataSourceType.battery.name && output?.fields?["present"] != "false":
             guard output != nil else { return nil }
             return PopupBlock(content: .row([PopupBlock(content: .battery(source: "percent"))]), keepsLineHeight: true)
