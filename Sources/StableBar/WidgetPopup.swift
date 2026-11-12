@@ -878,6 +878,7 @@ final class WidgetPopup {
 
     func closePinned(_ id: String) {
         let popup = pinnedPopups.removeValue(forKey: id)!
+        popup.panel.onEscape = nil
         pins.ids.remove(id)
         spots[id] = (popup.panel.frame, true)
         pins.resized.remove(id)
