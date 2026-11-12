@@ -33,6 +33,10 @@ struct SceneFile: Decodable {
     enum Configuration: Equatable { case inline([String: ConfigurationValue]), file(String) }
 
     var configuration: Configuration
+    /// Package folders, relative to the scene file, installed as `--install-package` installs them. Packages are read
+    /// from beside the configuration, so a scene with packages gives its configuration inline, and it's written to the
+    /// scene's work folder.
+    var packages: [String] = []
     /// Script outputs keyed by widget id or provider name: an object as a script prints it, or plain text.
     var outputs: [String: ConfigurationValue] = [:]
     /// Graph samples keyed by widget id or provider name.
@@ -54,6 +58,8 @@ struct SceneFile: Decodable {
     var section: Section?
     /// The tab of the widget's Settings page, or of the bar's when the scene opens the Bar section without a widget.
     var tab: Tab?
+    /// The installed package whose settings the Packages section shows.
+    var package: String?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
     /// The star request the update popup shows, for `update`.
@@ -72,8 +78,8 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, uninstall, starRequest, setup,
-             applicationMove, macOSMajorVersion, appearances,
+        case configuration, packages, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
+             starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -139,6 +145,10 @@ struct SceneFile: Decodable {
         } else {
             configuration = .inline(try values.decode([String: ConfigurationValue].self, forKey: .configuration))
         }
+        packages = try values.decodeIfPresent([String].self, forKey: .packages) ?? []
+        if !packages.isEmpty, case .file = configuration {
+            throw DecodingError.dataCorruptedError(forKey: .packages, in: values, debugDescription: "A scene with packages gives its configuration inline.")
+        }
         outputs = try values.decodeIfPresent([String: ConfigurationValue].self, forKey: .outputs) ?? [:]
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
@@ -154,6 +164,7 @@ struct SceneFile: Decodable {
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
+        package = try values.decodeIfPresent(String.self, forKey: .package)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
@@ -192,6 +203,9 @@ struct SceneFile: Decodable {
         if draw == .settings, widget == nil, section == nil {
             throw DecodingError.dataCorruptedError(forKey: .section, in: values,
                                                    debugDescription: "A settings scene names a widget or a section.")
+        }
+        if package != nil, draw != .settings || widget != nil || section != .packages {
+            throw DecodingError.dataCorruptedError(forKey: .package, in: values, debugDescription: "package belongs to the packages section of Settings.")
         }
         if menu != nil, draw != .popup {
             throw DecodingError.dataCorruptedError(forKey: .menu, in: values, debugDescription: "A menu belongs to a popup scene.")

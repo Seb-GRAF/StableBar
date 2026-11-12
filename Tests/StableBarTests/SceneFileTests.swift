@@ -105,7 +105,9 @@ func sceneRejectsUnsupportedMacOSVersions(version: Int) throws {
      "menu.0.modifiers"),
     (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [0]}"#, "desktopShortcuts"),
     (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [17]}"#, "desktopShortcuts"),
-    (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [1, 1]}"#, "desktopShortcuts")
+    (#"{"configuration": {}, "draw": "setup", "desktopShortcuts": [1, 1]}"#, "desktopShortcuts"),
+    (#"{"configuration": "config.json", "packages": ["clock"], "draw": "bar"}"#, "packages"),
+    (#"{"configuration": {}, "draw": "settings", "section": "theme", "package": "clock"}"#, "package")
 ])
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }
