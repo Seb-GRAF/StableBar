@@ -31,7 +31,9 @@ extension WidgetConfiguration {
         case .script, .provider:
             text = output?.text ?? "…"
             icon = output?.icon ?? icon
-        case .workspaces, .appMenu, .appleMenu, .stableBar, .spacer:
+        case .stableBar:
+            text = ""
+        case .workspaces, .appMenu, .appleMenu, .spacer:
             return WidgetLabel(text: "", icon: icon, fields: output?.fields ?? [:])
         }
         var fields = output?.fields ?? [:]
