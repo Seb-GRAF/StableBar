@@ -80,6 +80,18 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(frameClearOfBar(CGRect(x: 1600, y: 0, width: 500, height: 400), displays: [display]) == nil)
 }
 
+@Test func windowClearanceKeepsWindowsAboveABarAtTheBottomAndLeavesBannersAlone() {
+    let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 872),
+        barFrame: CGRect(x: 0, y: 6, width: 1440, height: 40), desktopTop: 900)
+    #expect(frameClearOfBar(CGRect(x: 150, y: 500, width: 600, height: 400), displays: [display])
+            == CGRect(x: 150, y: 454, width: 600, height: 400))
+    #expect(frameClearOfBar(CGRect(x: 0, y: 28, width: 1440, height: 872), displays: [display])
+            == CGRect(x: 0, y: 28, width: 1440, height: 826))
+    #expect(frameClearOfBar(CGRect(x: 150, y: 100, width: 600, height: 400), displays: [display]) == nil)
+    #expect(originBelowBar(CGRect(x: 0, y: 0, width: 1440, height: 900), bannerTop: 16, displays: [display]) == nil)
+}
+
 @Test func windowClearanceUsesTheDisplayWithMostOfTheWindowAndKeepsItsHorizontalPosition() {
     let main = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 60, width: 1440, height: 802),
@@ -388,6 +400,15 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(try placement(#"{"offset": 12}"#) == "12 pt from top")
     #expect(try placement(#"{"belowMenuBar": true}"#) == "below the menu bar")
     #expect(try placement(#"{"belowMenuBar": true, "offset": 6}"#) == "6 pt below the menu bar")
+    #expect(try placement(#"{"position": "bottom"}"#) == "on the bottom edge")
+    #expect(try placement(#"{"position": "bottom", "belowMenuBar": true, "offset": 6}"#) == "6 pt from bottom")
+}
+
+@Test func aBarAtTheBottomSitsItsOffsetAboveTheBottomEdgeAndMeetsNoNotch() throws {
+    let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"position": "bottom", "belowMenuBar": true, "offset": 6}"#.utf8))
+    #expect(bar.frame(height: 40, on: CGRect(x: -1440, y: 0, width: 1440, height: 900), menuBar: 30)
+            == CGRect(x: -1440, y: 6, width: 1440, height: 40))
+    #expect(bar.notch(on: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 660...850)) == nil)
 }
 
 @MainActor @Test func aKindOfScreenCanPutItsBarBelowTheMenuBar() throws {
