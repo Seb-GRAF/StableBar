@@ -1877,7 +1877,7 @@
         },
         "offset": {
           "$ref": "#/definitions/number",
-          "description": "Moves the bar away from its edge, in points: from the top or bottom edge, or from the bottom of the menu bar with belowMenuBar."
+          "description": "Moves the bar away from its edge, in points: from the top edge, or from the bottom of the menu bar with belowMenuBar, which only applies to a top bar. At the bottom, it counts up from the display's bottom edge."
         },
         "belowMenuBar": {
           "$ref": "#/definitions/boolean",

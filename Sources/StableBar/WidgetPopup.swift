@@ -356,6 +356,7 @@ final class WidgetPopup {
         var point = mouseLocation()
         while popupHoverTriangleContains(point, from: hoverOrigin, to: frame) {
             try await clock.sleep(for: .milliseconds(200))
+            try Task.checkCancellation()
             let next = mouseLocation()
             guard panel!.opensUpward ? next.y > point.y : next.y < point.y else { return }
             point = next

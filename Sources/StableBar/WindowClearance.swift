@@ -6,24 +6,24 @@ struct WindowClearanceDisplay: Equatable {
     let frame: CGRect
     let visibleFrame: CGRect
     let barFrame: CGRect
+    let position: BarPosition
 
     init(frame: CGRect, visibleFrame: CGRect, configuration: Configuration, display: BarDisplay, desktopTop: CGFloat) {
         let geometry = configuration.barGeometry(for: display)
         let bar = configuration.onScreen(ScreenKind(display)).bar
         self.init(frame: frame, visibleFrame: visibleFrame,
                   barFrame: bar.frame(height: geometry.panelHeight, on: frame, menuBar: menuBarHeight(frame: frame, visibleFrame: visibleFrame)),
-                  desktopTop: desktopTop)
+                  position: bar.position, desktopTop: desktopTop)
     }
 
-    init(frame: CGRect, visibleFrame: CGRect, barFrame: CGRect, desktopTop: CGFloat) {
+    init(frame: CGRect, visibleFrame: CGRect, barFrame: CGRect, position: BarPosition, desktopTop: CGFloat) {
         self.frame = CGRect(x: frame.minX, y: desktopTop - frame.maxY, width: frame.width, height: frame.height)
         self.visibleFrame = CGRect(x: visibleFrame.minX, y: desktopTop - visibleFrame.maxY,
                                    width: visibleFrame.width, height: visibleFrame.height)
         self.barFrame = CGRect(x: barFrame.minX, y: desktopTop - barFrame.maxY,
                                width: barFrame.width, height: barFrame.height)
+        self.position = position
     }
-
-    var barAtBottom: Bool { barFrame.midY > frame.midY }
 }
 
 private let notificationCenterIdentifier = "com.apple.notificationcenterui"
@@ -41,7 +41,7 @@ private func barDisplay(for frame: CGRect, in displays: [WindowClearanceDisplay]
 /// `frame` moved below a bar at the top, or above a bar at the bottom, and made shorter when the room left is.
 func frameClearOfBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGRect? {
     guard let display = barDisplay(for: frame, in: displays) else { return nil }
-    if display.barAtBottom {
+    if display.position == .bottom {
         let bottom = min(display.visibleFrame.maxY, display.barFrame.minY)
         let height = min(frame.height, bottom - display.visibleFrame.minY)
         guard frame.maxY > bottom, height > 0 else { return nil }
@@ -54,7 +54,7 @@ func frameClearOfBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGR
 }
 
 func originBelowBar(_ window: CGRect, bannerTop: CGFloat, displays: [WindowClearanceDisplay]) -> CGPoint? {
-    guard let display = barDisplay(for: window, in: displays), !display.barAtBottom, window.origin == display.frame.origin else { return nil }
+    guard let display = barDisplay(for: window, in: displays), display.position == .top, window.origin == display.frame.origin else { return nil }
     let bannerMargin = 16.0
     let offset = display.barFrame.maxY + bannerMargin - bannerTop
     guard offset > 0 else { return nil }

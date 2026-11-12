@@ -209,7 +209,7 @@ struct BarView: View {
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
         .focusEffectDisabled(!store.barEditing.isActive)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: store.configuration?.bar(on: ScreenKind(display)).position == .bottom ? .bottom : .top)
         .allowsHitTesting(!preview)
         .accessibilityHidden(preview)
         .onDisappear { if !preview { store.setVisibleWidgets(ids: [], displayID: display.id) } }
