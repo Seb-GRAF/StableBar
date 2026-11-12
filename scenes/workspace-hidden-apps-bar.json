@@ -1,0 +1,31 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "aerospace",
+    "widgets": [
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left",
+        "workspace": { "hideApps": ["1Pass*", "com.apple.Music"], "hideWorkspaces": ["S"] }
+      },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "3", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "S", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "windows": [
+    { "window-id": 1, "window-title": "Safari", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 2, "window-title": "1Password", "workspace": "1", "app-name": "1Password", "app-bundle-id": "com.1password.1password" },
+    { "window-id": 3, "window-title": "Terminal", "workspace": "2", "app-name": "Terminal", "app-bundle-id": "com.apple.Terminal" },
+    { "window-id": 4, "window-title": "1Password", "workspace": "2", "app-name": "1Password", "app-bundle-id": "com.1password.1password" },
+    { "window-id": 5, "window-title": "Music", "workspace": "3", "app-name": "Music", "app-bundle-id": "com.apple.Music" },
+    { "window-id": 6, "window-title": "Finder", "workspace": "S", "app-name": "Finder", "app-bundle-id": "com.apple.finder" }
+  ],
+  "draw": "bar",
+  "width": 600
+}

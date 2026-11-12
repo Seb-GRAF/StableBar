@@ -250,10 +250,20 @@ struct BarInspector: View {
             }
         case .placement:
             SettingsGroup("Position") {
-                bar.toggle("Below the menu bar", "belowMenuBar", default: false,
-                           hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
-                bar.number("Offset from top", "offset", default: 0, in: 0...200,
-                           hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
+                let position = (target.map { store.configuration?.bar(on: $0) } ?? store.configuration?.bar)?.position ?? .top
+                bar.row("Edge", "position") { _ in
+                    SettingsSegments(selection: bar.stringBinding("position", default: BarPosition.top.rawValue),
+                                     options: BarPosition.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
+                }
+                if position == .top {
+                    bar.toggle("Below the menu bar", "belowMenuBar", default: false,
+                               hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
+                    bar.number("Offset from top", "offset", default: 0, in: 0...200,
+                               hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
+                } else {
+                    bar.number("Offset from bottom", "offset", default: 0, in: 0...200,
+                               hint: "Counts from the bottom edge of the display, under the Dock if it shows there.")
+                }
                 bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
             SettingsGroup("Size on each screen") {
@@ -481,6 +491,17 @@ struct BarInspector: View {
                             SettingRow(title: "Magnification", scrub: Scrub(value: percent, range: 110...200, step: 5)) {
                                 NumberField(title: "Magnification", value: percent, range: 110...200, step: 5, unit: "%", slider: true)
                             }
+                        }
+                    }
+                    SettingRow(title: "Hide apps", hint: "Bundle IDs or app names, separated by commas") {
+                        NameListField(title: "Hide apps", prompt: "com.1password.1password, Raycast", names: widget.workspace?.hideApps ?? []) {
+                            editor.set(["workspace": .object(["hideApps": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])], for: widget.id)
+                        }
+                    }
+                    SettingRow(title: "Hide workspaces", hint: "Names, separated by commas. The focused workspace still shows.") {
+                        NameListField(title: "Hide workspaces", prompt: "S, scratch", names: widget.workspace?.hideWorkspaces ?? []) {
+                            editor.set(["workspace": .object(["hideWorkspaces": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])],
+                                       for: widget.id)
                         }
                     }
                     if widget.workspace?.windows == true {
@@ -890,6 +911,33 @@ private struct BoxModel: View {
         }
         .padding(4)
         .help(title)
+    }
+}
+
+/// Saves when editing ends rather than as you type, so a comma typed before the next name stays in the field.
+private struct NameListField: View {
+    let title: String
+    let prompt: String
+    let names: [String]
+    let save: ([String]) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField(title, text: $text, prompt: Text(prompt))
+            .labelsHidden()
+            .frame(width: 220)
+            .focused($focused)
+            .onSubmit(commit)
+            .onAppear { text = names.joined(separator: ", ") }
+            .onChange(of: names) { if !focused { text = names.joined(separator: ", ") } }
+            .onChange(of: focused) { if !focused { commit() } }
+    }
+
+    private func commit() {
+        guard text != names.joined(separator: ", ") else { return }
+        let typed = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if typed != names { save(typed) }
     }
 }
 

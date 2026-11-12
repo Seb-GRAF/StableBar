@@ -62,7 +62,7 @@ struct BarView: View {
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
-                let notch = display.notch.map { range in
+                let notch = config.bar.notch(on: display).map { range in
                     let range: ClosedRange<CGFloat> = ((range.lowerBound - config.bar.margin) / scale)...((range.upperBound - config.bar.margin) / scale)
                     return config.bar.notchWidth.map { width in
                         let center = (range.lowerBound + range.upperBound) / 2
@@ -178,7 +178,7 @@ struct BarView: View {
                     .scaleEffect(scale, anchor: .topLeading)
                 }
                 .background(alignment: .topLeading) {
-                    if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = display.notch {
+                    if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = config.bar.notch(on: display) {
                         UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)
                             .fill(.black)
                             .frame(width: notch.upperBound - notch.lowerBound, height: display.notchHeight)
@@ -199,7 +199,8 @@ struct BarView: View {
                 .padding(config.bar.margin)
                 .frame(height: barGeometry.layoutHeight)
                 .modifier(BarDecorationLayer(geometry: barGeometry, scale: scale, native: nativeDecorations))
-                .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight, alignment: .top)
+                .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight,
+                       alignment: config.bar.position == .top ? .top : .bottom)
                 .transition(.opacity)
             }
         }
@@ -208,7 +209,7 @@ struct BarView: View {
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
         .focusEffectDisabled(!store.barEditing.isActive)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: store.configuration?.bar(on: ScreenKind(display)).position == .bottom ? .bottom : .top)
         .allowsHitTesting(!preview)
         .accessibilityHidden(preview)
         .onDisappear { if !preview { store.setVisibleWidgets(ids: [], displayID: display.id) } }
@@ -625,8 +626,12 @@ struct WidgetView: View {
         let style = resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let animation = output?.animation ?? widget.animation ?? defaultAnimation
-        let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: 0,
-                                 bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: 0)
+        let leading = style.paddingLeading ?? appearance.paddingHorizontal
+        let trailing = style.paddingTrailing ?? appearance.paddingHorizontal
+        // The Apple logo's button takes the side padding too, so the whole tile takes its click.
+        let isAppleLogo = if case .appleMenu = widget.content { widget.layout == nil } else { false }
+        let padding = EdgeInsets(top: style.paddingTop ?? appearance.paddingVertical, leading: isAppleLogo ? leading : 0,
+                                 bottom: style.paddingBottom ?? appearance.paddingVertical, trailing: isAppleLogo ? trailing : 0)
         // Workspace and menu buttons include vertical padding so their selection fills the tile.
         let hasCells = switch widget.content {
         case .workspaces, .appMenu, .appleMenu: widget.layout == nil
@@ -654,8 +659,8 @@ struct WidgetView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.leading, style.paddingLeading ?? appearance.paddingHorizontal)
-            .padding(.trailing, style.paddingTrailing ?? appearance.paddingHorizontal)
+            .padding(.leading, isAppleLogo ? 0 : leading)
+            .padding(.trailing, isAppleLogo ? 0 : trailing)
             .padding(.top, hasCells ? 0 : padding.top)
             .padding(.bottom, hasCells ? 0 : padding.bottom)
             .frame(width: appearance.width, height: style.height.map { CGFloat($0) })
@@ -969,7 +974,8 @@ struct WorkspaceView: View {
     var body: some View {
         let workspaces = workspaceStore.workspaces(on: monitor,
             showEmpty: configuration?.showEmpty == true
-                || (workspaceStore.source.supportsWindowMoves && workspaceStore.windowDrag.active != nil))
+                || (workspaceStore.source.supportsWindowMoves && workspaceStore.windowDrag.active != nil),
+            hideApps: configuration?.hideApps ?? [], hideWorkspaces: configuration?.hideWorkspaces ?? [])
         let indicator = configuration?.indicator ?? .background
         HStack(spacing: appearance.spacing) {
             ForEach(workspaces) { workspace in
@@ -1522,5 +1528,10 @@ struct MenuAnchor: NSViewRepresentable {
 
 func appGlyph(for app: WorkspaceApp, in glyphs: [String: String]) -> String? {
     if let glyph = glyphs[app.bundleID] ?? glyphs[app.name] { return glyph }
-    return glyphs.filter { $0.key.hasSuffix("*") && app.name.hasPrefix($0.key.dropLast()) }.max { $0.key.count < $1.key.count }?.value
+    return glyphs.filter { $0.key.hasSuffix("*") && appMatches(app, key: $0.key) }.max { $0.key.count < $1.key.count }?.value
+}
+
+/// Whether an `appGlyphs` or `hideApps` key names the app: its bundle ID, its name, or a name prefix followed by `*`.
+func appMatches(_ app: WorkspaceApp, key: String) -> Bool {
+    key == app.bundleID || key == app.name || key.hasSuffix("*") && app.name.hasPrefix(key.dropLast())
 }

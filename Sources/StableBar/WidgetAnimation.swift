@@ -177,6 +177,8 @@ struct WorkspaceConfiguration: Decodable, Sendable {
 
     var indicator: Indicator?
     var appGlyphs: [String: String]?
+    var hideApps: [String]?
+    var hideWorkspaces: [String]?
     var showEmpty: Bool?
     var showApps: Bool?
     var windows: Bool?
@@ -189,7 +191,7 @@ struct WorkspaceConfiguration: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case indicator, indicatorStyle, style, focusedStyle, visibleStyle, emptyStyle, appStyle, focusedAppStyle, visibleAppStyle
-        case appGlyphs, showEmpty, showApps, windows, titleLength, magnification
+        case appGlyphs, hideApps, hideWorkspaces, showEmpty, showApps, windows, titleLength, magnification
     }
 
     init(from decoder: Decoder) throws {
@@ -197,6 +199,8 @@ struct WorkspaceConfiguration: Decodable, Sendable {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         indicator = try values.decodeIfPresent(Indicator.self, forKey: .indicator)
         appGlyphs = try values.decodeIfPresent([String: String].self, forKey: .appGlyphs)
+        hideApps = try values.decodeIfPresent([String].self, forKey: .hideApps)
+        hideWorkspaces = try values.decodeIfPresent([String].self, forKey: .hideWorkspaces)
         showEmpty = try values.decodeIfPresent(Bool.self, forKey: .showEmpty)
         showApps = try values.decodeIfPresent(Bool.self, forKey: .showApps)
         windows = try values.decodeIfPresent(Bool.self, forKey: .windows)

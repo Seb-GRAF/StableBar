@@ -1012,7 +1012,8 @@ final class BarStore: NSObject {
             guard let bar = barPanel(activeID),
                   let widget = barEditing.widgets(on: BarDisplay(screen: bar.screen!)).first(where: { $0.id == id }),
                   let anchor = find(id, in: bar.contentView!)
-                    ?? find(BarView.moreWidgetsID(widget.position, notched: BarDisplay(screen: bar.screen!).notch != nil), in: bar.contentView!) else {
+                    ?? find(BarView.moreWidgetsID(widget.position, notched: configuration!.bar(on: ScreenKind(BarDisplay(screen: bar.screen!)))
+                        .notch(on: BarDisplay(screen: bar.screen!)) != nil), in: bar.contentView!) else {
                 throw CommandFailure(message: "Widget \(id) is not on the bar of the active display.")
             }
             guard let content = widgetPopup(widget, store: self) else {

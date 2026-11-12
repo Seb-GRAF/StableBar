@@ -69,40 +69,52 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
 @Test func windowClearanceMovesOnlyOverlappingWindowsAndShrinksToTheDock() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 60, width: 1440, height: 812),
-        barFrame: CGRect(x: 0, y: 832, width: 1440, height: 40), desktopTop: 900)
+        barFrame: CGRect(x: 0, y: 832, width: 1440, height: 40), position: .top, desktopTop: 900)
     let small = CGRect(x: 150, y: 28, width: 600, height: 400)
     let moved = CGRect(x: 150, y: 68, width: 600, height: 400)
-    #expect(frameBelowBar(small, displays: [display]) == moved)
-    #expect(frameBelowBar(moved, displays: [display]) == nil)
-    #expect(frameBelowBar(CGRect(x: 0, y: 28, width: 1440, height: 812), displays: [display])
+    #expect(frameClearOfBar(small, displays: [display]) == moved)
+    #expect(frameClearOfBar(moved, displays: [display]) == nil)
+    #expect(frameClearOfBar(CGRect(x: 0, y: 28, width: 1440, height: 812), displays: [display])
             == CGRect(x: 0, y: 68, width: 1440, height: 772))
-    #expect(frameBelowBar(CGRect(x: 100, y: 150, width: 700, height: 800), displays: [display]) == nil)
-    #expect(frameBelowBar(CGRect(x: 1600, y: 0, width: 500, height: 400), displays: [display]) == nil)
+    #expect(frameClearOfBar(CGRect(x: 100, y: 150, width: 700, height: 800), displays: [display]) == nil)
+    #expect(frameClearOfBar(CGRect(x: 1600, y: 0, width: 500, height: 400), displays: [display]) == nil)
+}
+
+@Test func windowClearanceKeepsWindowsAboveABarAtTheBottomAndLeavesBannersAlone() {
+    let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 872),
+        barFrame: CGRect(x: 0, y: 6, width: 1440, height: 40), position: .bottom, desktopTop: 900)
+    #expect(frameClearOfBar(CGRect(x: 150, y: 500, width: 600, height: 400), displays: [display])
+            == CGRect(x: 150, y: 454, width: 600, height: 400))
+    #expect(frameClearOfBar(CGRect(x: 0, y: 28, width: 1440, height: 872), displays: [display])
+            == CGRect(x: 0, y: 28, width: 1440, height: 826))
+    #expect(frameClearOfBar(CGRect(x: 150, y: 100, width: 600, height: 400), displays: [display]) == nil)
+    #expect(originBelowBar(CGRect(x: 0, y: 0, width: 1440, height: 900), bannerTop: 16, displays: [display]) == nil)
 }
 
 @Test func windowClearanceUsesTheDisplayWithMostOfTheWindowAndKeepsItsHorizontalPosition() {
     let main = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 60, width: 1440, height: 802),
-        barFrame: CGRect(x: 0, y: 822, width: 1440, height: 40), desktopTop: 900)
+        barFrame: CGRect(x: 0, y: 822, width: 1440, height: 40), position: .top, desktopTop: 900)
     let left = WindowClearanceDisplay(frame: CGRect(x: -1920, y: -180, width: 1920, height: 1080),
         visibleFrame: CGRect(x: -1870, y: -180, width: 1870, height: 1052),
-        barFrame: CGRect(x: -1920, y: 812, width: 1920, height: 60), desktopTop: 900)
-    #expect(frameBelowBar(CGRect(x: -500, y: 28, width: 800, height: 700), displays: [main, left])
+        barFrame: CGRect(x: -1920, y: 812, width: 1920, height: 60), position: .top, desktopTop: 900)
+    #expect(frameClearOfBar(CGRect(x: -500, y: 28, width: 800, height: 700), displays: [main, left])
             == CGRect(x: -500, y: 88, width: 800, height: 700))
-    #expect(frameBelowBar(CGRect(x: -200, y: 38, width: 800, height: 802), displays: [main, left])
+    #expect(frameClearOfBar(CGRect(x: -200, y: 38, width: 800, height: 802), displays: [main, left])
             == CGRect(x: -200, y: 78, width: 800, height: 762))
 }
 
 @Test func windowClearanceHandlesDisplaysAboveAndBelowThePrimaryDisplay() {
     let above = WindowClearanceDisplay(frame: CGRect(x: 0, y: 900, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 900, width: 1440, height: 872),
-        barFrame: CGRect(x: 0, y: 1732, width: 1440, height: 40), desktopTop: 900)
+        barFrame: CGRect(x: 0, y: 1732, width: 1440, height: 40), position: .top, desktopTop: 900)
     let below = WindowClearanceDisplay(frame: CGRect(x: 0, y: -900, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: -900, width: 1440, height: 872),
-        barFrame: CGRect(x: 0, y: -68, width: 1440, height: 40), desktopTop: 900)
-    #expect(frameBelowBar(CGRect(x: 100, y: -872, width: 800, height: 872), displays: [above, below])
+        barFrame: CGRect(x: 0, y: -68, width: 1440, height: 40), position: .top, desktopTop: 900)
+    #expect(frameClearOfBar(CGRect(x: 100, y: -872, width: 800, height: 872), displays: [above, below])
             == CGRect(x: 100, y: -832, width: 800, height: 832))
-    #expect(frameBelowBar(CGRect(x: 100, y: 928, width: 800, height: 872), displays: [above, below])
+    #expect(frameClearOfBar(CGRect(x: 100, y: 928, width: 800, height: 872), displays: [above, below])
             == CGRect(x: 100, y: 968, width: 800, height: 832))
 }
 
@@ -113,16 +125,16 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     for bar in [CGRect(x: 0, y: 878, width: 1440, height: 22),
                 CGRect(x: 0, y: -40, width: 1440, height: 40),
                 CGRect(x: 0, y: 20, width: 1440, height: 40)] {
-        #expect(frameBelowBar(window, displays: [WindowClearanceDisplay(frame: screen, visibleFrame: visible,
-            barFrame: bar, desktopTop: 900)]) == nil)
+        #expect(frameClearOfBar(window, displays: [WindowClearanceDisplay(frame: screen, visibleFrame: visible,
+            barFrame: bar, position: .top, desktopTop: 900)]) == nil)
     }
-    #expect(frameBelowBar(window, displays: []) == nil)
+    #expect(frameClearOfBar(window, displays: []) == nil)
 }
 
 @Test func notificationClearanceMovesBannerWindowsBelowTheBarOnce() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1800, height: 1169),
         visibleFrame: CGRect(x: 0, y: 0, width: 1800, height: 1131),
-        barFrame: CGRect(x: 0, y: 1129, width: 1800, height: 40), desktopTop: 1169)
+        barFrame: CGRect(x: 0, y: 1129, width: 1800, height: 40), position: .top, desktopTop: 1169)
     let window = CGRect(x: 0, y: 0, width: 1800, height: 1169)
     #expect(originBelowBar(window, bannerTop: 16, displays: [display]) == CGPoint(x: 0, y: 40))
     #expect(originBelowBar(window.offsetBy(dx: 0, dy: 40), bannerTop: 56, displays: [display]) == nil)
@@ -130,17 +142,17 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(originBelowBar(window, bannerTop: 56, displays: [display]) == nil)
     let belowMenuBar = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1800, height: 1169),
         visibleFrame: CGRect(x: 0, y: 0, width: 1800, height: 1131),
-        barFrame: CGRect(x: 0, y: 1091, width: 1800, height: 40), desktopTop: 1169)
+        barFrame: CGRect(x: 0, y: 1091, width: 1800, height: 40), position: .top, desktopTop: 1169)
     #expect(originBelowBar(window, bannerTop: 54, displays: [belowMenuBar]) == CGPoint(x: 0, y: 40))
 }
 
 @Test func notificationClearanceUsesTheBarOfTheBannersDisplay() {
     let main = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         visibleFrame: CGRect(x: 0, y: 60, width: 1440, height: 802),
-        barFrame: CGRect(x: 0, y: 822, width: 1440, height: 40), desktopTop: 900)
+        barFrame: CGRect(x: 0, y: 822, width: 1440, height: 40), position: .top, desktopTop: 900)
     let left = WindowClearanceDisplay(frame: CGRect(x: -1920, y: -180, width: 1920, height: 1080),
         visibleFrame: CGRect(x: -1870, y: -180, width: 1870, height: 1052),
-        barFrame: CGRect(x: -1920, y: 840, width: 1920, height: 60), desktopTop: 900)
+        barFrame: CGRect(x: -1920, y: 840, width: 1920, height: 60), position: .top, desktopTop: 900)
     #expect(originBelowBar(CGRect(x: -1920, y: 0, width: 1920, height: 1080), bannerTop: 16, displays: [main, left])
             == CGPoint(x: -1920, y: 60))
     #expect(originBelowBar(CGRect(x: 0, y: 0, width: 1440, height: 900), bannerTop: 16, displays: [main, left])
@@ -388,6 +400,15 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(try placement(#"{"offset": 12}"#) == "12 pt from top")
     #expect(try placement(#"{"belowMenuBar": true}"#) == "below the menu bar")
     #expect(try placement(#"{"belowMenuBar": true, "offset": 6}"#) == "6 pt below the menu bar")
+    #expect(try placement(#"{"position": "bottom"}"#) == "on the bottom edge")
+    #expect(try placement(#"{"position": "bottom", "belowMenuBar": true, "offset": 6}"#) == "6 pt from bottom")
+}
+
+@Test func aBarAtTheBottomSitsItsOffsetAboveTheBottomEdgeAndMeetsNoNotch() throws {
+    let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"position": "bottom", "belowMenuBar": true, "offset": 6}"#.utf8))
+    #expect(bar.frame(height: 40, on: CGRect(x: -1440, y: 0, width: 1440, height: 900), menuBar: 30)
+            == CGRect(x: -1440, y: 6, width: 1440, height: 40))
+    #expect(bar.notch(on: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 660...850)) == nil)
 }
 
 @MainActor @Test func aKindOfScreenCanPutItsBarBelowTheMenuBar() throws {

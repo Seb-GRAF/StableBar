@@ -6,7 +6,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     }
 
     enum Placement: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar"
+        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar", bottom = "Bottom edge"
     }
 
     enum Clock: String, CaseIterable, Codable, Sendable {
@@ -501,6 +501,11 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             } else if configuration.bar.belowMenuBar {
                 properties["belowMenuBar"] = .bool(false)
             }
+            if placement == .bottom {
+                properties["position"] = .string("bottom")
+            } else if configuration.bar.position == .bottom {
+                properties["position"] = .string("top")
+            }
             edits.append(ConfigurationEdit(action: .bar, properties: properties))
         }
         if let keepWindowsClear {
@@ -580,7 +585,7 @@ struct ProfileControlledSetting: Identifiable {
     var id: String { "\(title)\n\(origin.profile ?? "")" }
 
     /// Placement counts both the offset and `belowMenuBar`, so a profile that sets either one is named.
-    private static let placementPaths = ["bar.offset", "bar.belowMenuBar"]
+    private static let placementPaths = ["bar.position", "bar.offset", "bar.belowMenuBar"]
 
     /// The settings setup saves that active profiles control, once for each profile.
     static func all(in configuration: Configuration?, origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {

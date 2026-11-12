@@ -1,0 +1,17 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "aerospace",
+    "widgets": [
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left",
+        "workspace": { "hideApps": ["1Pass*", "com.apple.Music"], "hideWorkspaces": ["S"] }
+      }
+    ]
+  },
+  "draw": "settings",
+  "widget": "workspaces",
+  "tab": "content"
+}

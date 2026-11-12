@@ -174,7 +174,8 @@ class BarPanel: NSPanel, Observable {
     var drawingFrame: CGRect {
         guard barGeometry?.outsideExtent ?? 0 > 0 else { return frame }
         let height = barGeometry?.panelHeight ?? frame.height
-        return CGRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height)
+        let y = barGeometry?.position == .bottom ? frame.minY : frame.maxY - height
+        return CGRect(x: frame.minX, y: y, width: frame.width, height: height)
     }
 
     override var canBecomeKey: Bool { isEditingBar || focusesWidgets }
@@ -457,7 +458,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let host = panel.contentView as! NSHostingView<BarView>
             host.sizingOptions = []
             host.rootView = BarView(store: store, display: BarDisplay(screen: screen), nativeDecorations: true)
-            let top = screen.frame.maxY
             let geometry = store.barEditing.geometry(for: BarDisplay(screen: screen))!
             let wasEditing = panel.isEditingBar
             panel.isEditingBar = store.barEditing.isActive
@@ -465,7 +465,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.barGeometry = geometry
             let height = geometry.inputHeight
             let bar = config.onScreen(ScreenKind(BarDisplay(screen: screen))).bar
-            let frame = NSRect(x: screen.frame.minX, y: top - bar.top(menuBar: screen.menuBarHeight) - height, width: screen.frame.width, height: height)
+            let frame = bar.frame(height: height, on: screen.frame, menuBar: screen.menuBarHeight)
             if wasEditing && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = bar.animation.duration

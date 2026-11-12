@@ -125,7 +125,9 @@ final class BarEditing {
         if !(presentation?.display ?? widget.display).includes(display, activeID: activeID) { reasons.append(.display) }
         if presentation?.hidden == true { reasons.append(.output) }
         if widget.content == .workspaces && widget.layout == nil && store.workspaceStore.error == nil
-            && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true).isEmpty {
+            && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true,
+                                               hideApps: widget.workspace?.hideApps ?? [],
+                                               hideWorkspaces: widget.workspace?.hideWorkspaces ?? []).isEmpty {
             reasons.append(.workspaces)
         }
         return BarWidgetVisibility(reasons: reasons)
@@ -170,7 +172,7 @@ final class BarEditing {
         guard let config = store?.configuration?.onScreen(ScreenKind(display)) else { return nil }
         guard isActive, let height = measuredHeights[display.id] else { return config.barGeometry(for: display) }
         return BarGeometry(layoutHeight: max(config.bar.height * CGFloat(config.bar.scale(for: display)), height + 2 * config.bar.margin),
-                           margin: config.bar.margin, outsideExtent: 0)
+                           margin: config.bar.margin, outsideExtent: 0, position: config.bar.position)
     }
 
     func trayState(on displayID: Int, position: WidgetPosition) -> BarEditTrayState {
@@ -385,7 +387,7 @@ struct BarEditLayout {
         let scale = CGFloat(bar.scale(for: display))
         let inset = max(6, CGFloat(bar.inset) * scale)
         let spacing: CGFloat = 6 * scale
-        let notch = display.notch.map { range in
+        let notch = bar.notch(on: display).map { range in
             let center: CGFloat = (range.lowerBound + range.upperBound) / 2 - CGFloat(bar.margin)
             let half: CGFloat = bar.notchWidth.map { CGFloat($0) * scale / 2 } ?? (range.upperBound - range.lowerBound) / 2
             return (center - half)...(center + half)

@@ -48,7 +48,7 @@ struct SceneFile: Decodable {
     /// The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one.
     var menu: [MenuItem]?
     var draw: Draw
-    /// The widget whose popup or Settings page to draw.
+    /// The widget whose popup or Settings page to draw, or whose popup the bar shows open.
     var widget: String?
     /// The Settings section to draw when no widget is named.
     var section: Section?
@@ -242,7 +242,7 @@ extension SceneFile.Setup: Decodable {
             return value
         }
         step = try named(.step, among: SetupSession.Step.allCases) ?? .placement
-        placement = try named(.placement, among: [SetupPreferences.Placement.top, .belowMenuBar])
+        placement = try named(.placement, among: [SetupPreferences.Placement.top, .belowMenuBar, .bottom])
         preset = try named(.preset, among: SetupPreferences.Preset.allCases)
         menuBarHides = try values.decodeIfPresent(Bool.self, forKey: .menuBarHides) ?? false
         accessibility = try values.decodeIfPresent(Bool.self, forKey: .accessibility) ?? true

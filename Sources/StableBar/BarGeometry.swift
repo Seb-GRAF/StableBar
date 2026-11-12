@@ -1,12 +1,14 @@
 import SwiftUI
 
-/// Screen points down from the bar's top. Layout and input retain the visible strip's bounds;
-/// the passive decoration panel alone extends beyond the existing bottom margin.
+/// Screen points from the bar's edge of the display: down from the bar's top, or up from its bottom at the bottom.
+/// Layout and input retain the visible strip's bounds; the passive decoration panel alone extends beyond the
+/// existing margin on the display's side.
 struct BarGeometry: Equatable {
     let layoutHeight: CGFloat
     let margin: CGFloat
     let outsideExtent: CGFloat
     var outsideHeight: CGFloat = 0
+    var position = BarPosition.top
 
     var visibleBottom: CGFloat { layoutHeight - margin }
     /// Opt-out setups retain the original native height, including fractional display scales.
@@ -40,7 +42,7 @@ extension Configuration {
         }
         return BarGeometry(layoutHeight: bar.height * scale, margin: bar.margin,
                            outsideExtent: bounds.map { ($0.gap + $0.height) * scale } ?? 0,
-                           outsideHeight: bounds.map { $0.height * scale } ?? 0)
+                           outsideHeight: bounds.map { $0.height * scale } ?? 0, position: bar.position)
     }
 }
 
@@ -73,7 +75,7 @@ extension WidgetStyle {
 
 /// Pixel-aligned drawing bounds. Intersect with the actual widget and its scrolling/group
 /// viewport, never the hidden measurement copy or the widget's unconstrained ideal width.
-func belowBarIndicatorRect(cell: CGRect, widget: CGRect, viewport: CGRect, visibleBar: CGRect,
+func belowBarIndicatorRect(cell: CGRect, widget: CGRect, viewport: CGRect, visibleBar: CGRect, position: BarPosition,
                            style: WidgetStyle, scale: CGFloat, pixelsPerPoint: CGFloat) -> CGRect? {
     let left = max(widget.minX, viewport.minX, visibleBar.minX)
     let right = min(widget.maxX, viewport.maxX, visibleBar.maxX)
@@ -87,8 +89,10 @@ func belowBarIndicatorRect(cell: CGRect, widget: CGRect, viewport: CGRect, visib
     // Round horizontal edges inward so no partial pixel crosses the owning viewport.
     let minX = roundedEdge(start * pixels, .up) / pixels
     let maxX = roundedEdge(end * pixels, .down) / pixels
-    let y = roundedEdge((visibleBar.maxY + (style.offsetY ?? 0) * scale) * pixels, .up) / pixels
+    let gap = (style.offsetY ?? 0) * scale
     let height = (max(0, style.height ?? 2) * scale * pixels).rounded() / pixels
+    let y = position == .top ? roundedEdge((visibleBar.maxY + gap) * pixels, .up) / pixels
+        : roundedEdge((visibleBar.minY - gap) * pixels, .down) / pixels - height
     guard maxX > minX, height > 0 else { return nil }
     return CGRect(x: minX, y: y, width: maxX - minX, height: height)
 }
@@ -186,8 +190,11 @@ struct BarDecorations: View {
                 guard let underline = anchors.underlines[id], let widget = anchors.widgets[underline.widget],
                       let rect = belowBarIndicatorRect(cell: proxy[underline.cell], widget: proxy[widget.bounds],
                           viewport: anchors.viewports[widget.unit].map { proxy[$0] } ?? visible,
-                          visibleBar: visible, style: underline.style, scale: scale, pixelsPerPoint: pixelsPerPoint) else { return nil }
-                return WorkspaceUnderline(id: id, selection: underline.selection, rect: rect, style: underline.style,
+                          visibleBar: visible, position: geometry.position, style: underline.style, scale: scale,
+                          pixelsPerPoint: pixelsPerPoint) else { return nil }
+                // The decoration panel of a bar at the bottom reaches above the bar's own panel.
+                let shift = native && geometry.position == .bottom ? geometry.panelHeight - geometry.inputHeight : 0
+                return WorkspaceUnderline(id: id, selection: underline.selection, rect: rect.offsetBy(dx: 0, dy: shift), style: underline.style,
                                           color: underline.color, animation: underline.animation, scale: scale)
             }
             if native {
@@ -218,8 +225,13 @@ struct BarDecorationLayer: ViewModifier {
     }
 }
 
+/// The edge a popup opens from: below a top bar's drawing or the anchor, or above a bottom bar's drawing or the anchor.
 /// The opening instance supplies both its anchor and window; never use NSScreen.main here.
-func popupAttachmentTop(anchor: CGRect, window: CGRect, geometry: BarGeometry?) -> CGFloat {
-    guard let geometry else { return anchor.minY }
-    return window.maxY - geometry.drawingBottom
+func popupAttachmentEdge(anchor: CGRect, window: CGRect, geometry: BarGeometry?, position: BarPosition) -> CGFloat {
+    switch (geometry, position) {
+    case (nil, .top): anchor.minY
+    case (nil, .bottom): anchor.maxY
+    case (let geometry?, .top): window.maxY - geometry.drawingBottom
+    case (let geometry?, .bottom): window.minY + geometry.drawingBottom
+    }
 }
