@@ -829,11 +829,12 @@ struct WidgetView: View {
             }
         case .stableBar where widget.layout == nil:
             if let image = NSImage(named: "StatusBarIconTemplate") {
-                let appearance = WidgetAppearance(resolution.style(hovered: hovered, open: open), defaults: WidgetStyle())
+                let appearance = WidgetAppearance(resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: open),
+                                                  defaults: WidgetStyle())
                 ZStack {
                     Text(" ").hidden()
                     Image(nsImage: image).resizable().scaledToFit().frame(height: appearance.iconSize)
-                        .accessibilityLabel("StableBar")
+                        .accessibilityLabel(accessibilityName)
                         .foregroundStyle(appearance.foreground)
                 }
             }
