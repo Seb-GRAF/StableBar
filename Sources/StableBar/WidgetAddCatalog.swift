@@ -38,6 +38,7 @@ enum WidgetAddCatalog {
         .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "Opens the Apple menu or System Settings, or locks the Mac. The menu needs Accessibility access.", properties: ["type": .string("appleMenu")]),
         .init(id: "appMenu", name: "App menus", symbol: "menubar.rectangle", description: "The frontmost app’s menus. Needs Accessibility access.", properties: ["type": .string("appMenu")]),
         .init(id: "controlCenter", name: "Control Center", symbol: "switch.2", description: "Opens macOS Control Center. Needs Accessibility access.", properties: ["type": .string("controlCenter")]),
+        .init(id: "stableBar", name: "StableBar", symbol: "gearshape", description: "StableBar’s menu bar icon. Clicking it opens Settings.", properties: ["type": .string("stableBar")]),
         .init(id: "menuBarItems", name: "Menu bar items", symbol: "square.grid.2x2", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")]),
         .init(id: "battery", name: "Battery", symbol: "battery.100percent", description: "The native battery indicator, with charge, power and health details.", properties: ["type": .string("battery"), "details": .bool(true)], replacesPackage: "battery-status"),
         .init(id: "audio", name: "Sound", symbol: "speaker.wave.2", description: "The volume and current audio output.", properties: ["type": .string("audio")]),

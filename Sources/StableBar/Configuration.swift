@@ -381,6 +381,7 @@ enum WidgetContent: Equatable, Sendable {
     case appMenu(expandOnHover: Bool)
     case appleMenu(click: AppleMenuClick)
     case controlCenter
+    case stableBar
     case menuBarItems(openOnHover: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
     case clock(format: String)
     case text(String)
@@ -488,6 +489,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "appMenu": content = .appMenu(expandOnHover: try values.decodeIfPresent(Bool.self, forKey: .expandOnHover) ?? false)
         case "appleMenu": content = .appleMenu(click: try values.decodeIfPresent(AppleMenuClick.self, forKey: .click) ?? .menu)
         case "controlCenter": content = .controlCenter
+        case "stableBar": content = .stableBar
         case "menuBarItems":
             content = .menuBarItems(openOnHover: try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? true,
                                     shown: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .shown) ?? [],

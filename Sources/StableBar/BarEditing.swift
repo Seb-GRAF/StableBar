@@ -160,7 +160,7 @@ final class BarEditing {
                                                            appIcon: widget.content == .activeApp && store.activeApp?.icon != nil,
                                                            providerType: store.configuration?.providerType(of: widget))
         let drawsCells = switch widget.content {
-        case .workspaces, .appMenu, .appleMenu: true
+        case .workspaces, .appMenu, .appleMenu, .stableBar: true
         default: false
         }
         return drawsCells && widget.layout == nil

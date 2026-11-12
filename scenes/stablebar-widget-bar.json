@@ -1,0 +1,13 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "apple", "type": "appleMenu", "position": "left" },
+      { "id": "stablebar", "type": "stableBar", "position": "right" },
+      { "id": "control", "type": "controlCenter", "position": "right" },
+      { "id": "clock", "type": "clock", "position": "right" }
+    ]
+  },
+  "draw": "bar",
+  "width": 400
+}
