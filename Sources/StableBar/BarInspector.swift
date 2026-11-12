@@ -925,6 +925,7 @@ private struct NameListField: View {
     }
 
     private func commit() {
+        guard text != names.joined(separator: ", ") else { return }
         let typed = text.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if typed != names { save(typed) }
     }
