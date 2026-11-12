@@ -843,6 +843,7 @@ final class WidgetPopup {
     /// Moves a pinned popup back under its widget, where it closes like any open popup.
     func unpin(_ id: String) {
         let popup = pinnedPopups.removeValue(forKey: id)!
+        popup.panel.onEscape = nil
         pins.ids.remove(id)
         spots[id] = (popup.panel.frame, false)
         close()
@@ -854,7 +855,6 @@ final class WidgetPopup {
             return
         }
         popup.panel.resizeEdges?.resizable = [.leading, .trailing, popup.panel.opensUpward ? .top : .bottom]
-        popup.panel.onEscape = nil
         panel = popup.panel
         shadowWindow = popup.shadow
         shown = popup.shown
