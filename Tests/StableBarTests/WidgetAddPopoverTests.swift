@@ -284,11 +284,16 @@ final class WidgetAddPopoverTests: XCTestCase {
         let bar = CGRect(x: -800, y: 850, width: 800, height: 50)
         for x in [-780.0, -400, -38] {
             let anchor = CGRect(x: x, y: 863, width: 22, height: 22)
-            let placement = BarEditAddPlacement(size: CGSize(width: 340, height: 400), anchor: anchor, bar: bar, visibleFrame: screen)
+            let placement = BarEditAddPlacement(size: CGSize(width: 340, height: 400), anchor: anchor, bar: bar, position: .top, visibleFrame: screen)
             XCTAssertEqual(placement.frame.maxY, bar.minY)
             XCTAssertTrue(screen.contains(placement.frame))
             XCTAssertEqual(placement.frame.minX + placement.arrowX, anchor.midX, accuracy: 8)
         }
+        let bottomBar = CGRect(x: -800, y: 0, width: 800, height: 50)
+        let above = BarEditAddPlacement(size: CGSize(width: 340, height: 400), anchor: CGRect(x: -400, y: 13, width: 22, height: 22),
+                                        bar: bottomBar, position: .bottom, visibleFrame: screen)
+        XCTAssertEqual(above.frame.minY, bottomBar.maxY)
+        XCTAssertTrue(screen.contains(above.frame))
     }
 
     @MainActor func testEscapeClosesPopoverBeforeEditingAndOutsideClicksAndReloadCloseIt() throws {

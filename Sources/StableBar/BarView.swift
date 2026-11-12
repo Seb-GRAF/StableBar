@@ -62,7 +62,7 @@ struct BarView: View {
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
-                let notch = display.notch.map { range in
+                let notch = config.bar.notch(on: display).map { range in
                     let range: ClosedRange<CGFloat> = ((range.lowerBound - config.bar.margin) / scale)...((range.upperBound - config.bar.margin) / scale)
                     return config.bar.notchWidth.map { width in
                         let center = (range.lowerBound + range.upperBound) / 2
@@ -178,7 +178,7 @@ struct BarView: View {
                     .scaleEffect(scale, anchor: .topLeading)
                 }
                 .background(alignment: .topLeading) {
-                    if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = display.notch {
+                    if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = config.bar.notch(on: display) {
                         UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)
                             .fill(.black)
                             .frame(width: notch.upperBound - notch.lowerBound, height: display.notchHeight)
@@ -199,7 +199,8 @@ struct BarView: View {
                 .padding(config.bar.margin)
                 .frame(height: barGeometry.layoutHeight)
                 .modifier(BarDecorationLayer(geometry: barGeometry, scale: scale, native: nativeDecorations))
-                .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight, alignment: .top)
+                .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight,
+                       alignment: config.bar.position == .top ? .top : .bottom)
                 .transition(.opacity)
             }
         }

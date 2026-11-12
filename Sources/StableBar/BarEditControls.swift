@@ -66,10 +66,11 @@ final class BarEditControls: NSObject {
             let fittingSize = host.fittingSize
             let size = CGSize(width: min(fittingSize.width, max(0, visibleFrame.width - 16)), height: fittingSize.height)
             let height = bar.barGeometry!.inputHeight
-            // Keep the established gap below the edit bar window.
-            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: CGRect(x: bar.frame.minX, y: bar.frame.maxY - height,
+            let position = bar.barGeometry!.position
+            // Keep the established gap from the edit bar window.
+            entry.panel.setFrame(ThemeTrialPlacement.frame(size: size, bar: CGRect(x: bar.frame.minX, y: position == .top ? bar.frame.maxY - height : bar.frame.minY,
                                                                                     width: bar.frame.width, height: height),
-                                                          geometry: nil, visibleFrame: visibleFrame), display: true)
+                                                          geometry: nil, position: position, visibleFrame: visibleFrame), display: true)
             entry.panel.invalidateShadow()
             if entry.hasSheet || entry.hasPopover { entry.panel.orderOut(nil) }
             else { entry.panel.orderFrontRegardless() }

@@ -1861,9 +1861,23 @@
             }
           }
         },
+        "position": {
+          "anyOf": [
+            {
+              "enum": [
+                "top",
+                "bottom"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            }
+          ],
+          "description": "The edge of each display the bar sits on: top by default, or bottom. At the bottom, popups open upward, notch positions sit as on a display without a notch, and belowMenuBar has no effect."
+        },
         "offset": {
           "$ref": "#/definitions/number",
-          "description": "Moves the bar down, in points: from the top edge, or from the bottom of the menu bar with belowMenuBar."
+          "description": "Moves the bar away from its edge, in points: from the top or bottom edge, or from the bottom of the menu bar with belowMenuBar."
         },
         "belowMenuBar": {
           "$ref": "#/definitions/boolean",

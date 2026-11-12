@@ -545,9 +545,14 @@ enum BarAppearance: String, Decodable, Sendable {
     var colorScheme: ColorScheme { self == .dark ? .dark : .light }
 }
 
+enum BarPosition: String, Decodable, Sendable, CaseIterable {
+    case top, bottom
+}
+
 struct BarSettings: Decodable, Sendable {
     var height = 40.0
     var displayScale: [String: Double] = [:]
+    var position = BarPosition.top
     var offset = 0.0
     var belowMenuBar = false
     var margin = 0.0
@@ -572,7 +577,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
+        case height, displayScale, position, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
     }
 
     init() {}
@@ -585,6 +590,7 @@ struct BarSettings: Decodable, Sendable {
         guard displayScale.allSatisfy({ ["builtIn", "external"].contains($0.key) && $0.value > 0 && $0.value.isFinite }) else {
             throw DecodingError.dataCorruptedError(forKey: .displayScale, in: values, debugDescription: "Use builtIn or external with a positive number.")
         }
+        position = try values.decodeIfPresent(BarPosition.self, forKey: .position) ?? position
         offset = try values.decodeIfPresent(Double.self, forKey: .offset) ?? offset
         belowMenuBar = try values.decodeIfPresent(Bool.self, forKey: .belowMenuBar) ?? belowMenuBar
         margin = try values.decodeIfPresent(Double.self, forKey: .margin) ?? margin
@@ -613,17 +619,28 @@ struct BarSettings: Decodable, Sendable {
         displayScale[display.isBuiltIn ? "builtIn" : "external"] ?? 1
     }
 
-    /// Where the bar sits, in words: "on the top edge", "12 pt from top" or "6 pt below the menu bar".
-    var placementDescription: String {
-        let distance = offset == 0 ? "" : "\(offset.formatted()) pt "
-        if belowMenuBar { return distance + "below the menu bar" }
-        return offset == 0 ? "on the top edge" : distance + "from top"
+    /// The display's notch, which only a bar at the top meets.
+    func notch(on display: BarDisplay) -> ClosedRange<CGFloat>? {
+        position == .top ? display.notch : nil
     }
 
-    /// How far below the top of a display the bar starts, on a display whose menu bar is `menuBar` points tall:
+    /// Where the bar sits, in words: "on the top edge", "12 pt from bottom" or "6 pt below the menu bar".
+    var placementDescription: String {
+        let distance = offset == 0 ? "" : "\(offset.formatted()) pt "
+        if belowMenuBar && position == .top { return distance + "below the menu bar" }
+        return offset == 0 ? "on the \(position.rawValue) edge" : distance + "from \(position.rawValue)"
+    }
+
+    /// How far below the top of a display a top bar starts, on a display whose menu bar is `menuBar` points tall:
     /// `offset`, measured from the bottom of the menu bar when the bar sits below it.
     func top(menuBar: Double) -> Double {
         offset + (belowMenuBar ? menuBar : 0)
+    }
+
+    /// The bar's frame, `height` points tall, on a display whose frame is `screen` in AppKit's coordinates.
+    func frame(height: Double, on screen: CGRect, menuBar: Double) -> CGRect {
+        let y = position == .bottom ? screen.minY + offset : screen.maxY - top(menuBar: menuBar) - height
+        return CGRect(x: screen.minX, y: y, width: screen.width, height: height)
     }
 
     var animation: WidgetAnimation {

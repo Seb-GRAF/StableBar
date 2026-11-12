@@ -26,12 +26,17 @@ struct BarEditAddPlacement {
     let frame: CGRect
     let arrowX: CGFloat
 
-    init(size: CGSize, anchor: CGRect, bar: CGRect, visibleFrame: CGRect) {
+    init(size: CGSize, anchor: CGRect, bar: CGRect, position: BarPosition, visibleFrame: CGRect) {
         let width = min(size.width, max(0, visibleFrame.width - 16))
-        let top = min(anchor.minY, bar.minY)
-        let height = min(size.height, max(0, top - visibleFrame.minY - 8))
         let x = min(max(anchor.midX - width / 2, visibleFrame.minX + 8), visibleFrame.maxX - width - 8)
-        frame = CGRect(x: x, y: top - height, width: width, height: height)
+        if position == .top {
+            let top = min(anchor.minY, bar.minY)
+            let height = min(size.height, max(0, top - visibleFrame.minY - 8))
+            frame = CGRect(x: x, y: top - height, width: width, height: height)
+        } else {
+            let bottom = max(anchor.maxY, bar.maxY)
+            frame = CGRect(x: x, y: bottom, width: width, height: min(size.height, max(0, visibleFrame.maxY - bottom - 8)))
+        }
         arrowX = min(max(anchor.midX - x, 16), width - 16)
     }
 }
@@ -43,6 +48,8 @@ final class BarEditAddPopover: NSObject {
     private(set) var displayID: Int?
     private(set) var position: WidgetPosition?
     private(set) var arrowX: CGFloat = 170
+    /// Opens above a bar at the bottom of the display, with its arrow at its bottom.
+    private(set) var opensUpward = false
     @ObservationIgnored private var panel: BarEditAddPanel?
     @ObservationIgnored private var model: WidgetAddPopoverModel?
     @ObservationIgnored private weak var bar: BarPanel?
@@ -95,10 +102,13 @@ final class BarEditAddPopover: NSObject {
         self.visibleFrame = visibleFrame
         self.displayID = displayID
         self.position = position
+        opensUpward = bar.barGeometry!.position == .bottom
+        let top = bar.barGeometry!.position == .top
+        let room = top ? bar.frame.minY - visibleFrame.minY : visibleFrame.maxY - bar.frame.maxY
         panel.contentView = NSHostingView(rootView: AnyView(WidgetAddPopoverView(model: model, store: store,
-            availableSize: CGSize(width: max(0, visibleFrame.width - 16), height: max(0, bar.frame.minY - visibleFrame.minY - 16)),
+            availableSize: CGSize(width: max(0, visibleFrame.width - 16), height: max(0, room - 16)),
             changed: { [weak self] in self?.contentChanged() })
-            .padding(.top, 9)
+            .padding(top ? .top : .bottom, 9)
             .background(BarEditPopoverSurface(popover: self))))
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSWindow.didMoveNotification, object: bar)
         NotificationCenter.default.addObserver(self, selector: #selector(reposition), name: NSWindow.didResizeNotification, object: bar)
@@ -120,7 +130,8 @@ final class BarEditAddPopover: NSObject {
     @objc func reposition() {
         guard let panel, let bar, let anchor, let host = panel.contentView else { return }
         let rect = bar.convertToScreen(anchor.convert(anchor.bounds, to: nil))
-        let placement = BarEditAddPlacement(size: host.fittingSize, anchor: rect, bar: bar.frame, visibleFrame: visibleFrame)
+        let placement = BarEditAddPlacement(size: host.fittingSize, anchor: rect, bar: bar.frame, position: bar.barGeometry!.position,
+                                            visibleFrame: visibleFrame)
         arrowX = placement.arrowX
         panel.setFrame(placement.frame, display: true)
         panel.invalidateShadow()
@@ -204,6 +215,7 @@ private struct BarEditPopoverSurface: View {
         let shape = BarEditPopoverShape(arrowX: popover.arrowX)
         shape.fill(.regularMaterial)
             .overlay { shape.stroke(colorScheme == .dark ? Color.white.opacity(0.18) : .black.opacity(0.12), lineWidth: 0.5) }
+            .scaleEffect(y: popover.opensUpward ? -1 : 1)
     }
 }
 

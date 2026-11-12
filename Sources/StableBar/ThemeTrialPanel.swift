@@ -10,12 +10,11 @@ enum ThemeTrialPlacement {
         } ?? available.first { $0 == mainIndex } ?? available.first
     }
 
-    static func frame(size: CGSize, bar: CGRect, geometry: BarGeometry?, visibleFrame: CGRect) -> CGRect {
-        let bottom = bar.maxY - (geometry?.visibleBottom ?? bar.height)
-        let anchor = CGRect(x: bar.minX, y: bottom, width: bar.width, height: 0)
-        let top = popupAttachmentTop(anchor: anchor, window: bar, geometry: geometry)
+    static func frame(size: CGSize, bar: CGRect, geometry: BarGeometry?, position: BarPosition, visibleFrame: CGRect) -> CGRect {
+        let edge = popupAttachmentEdge(anchor: bar, window: bar, geometry: geometry, position: position)
         let x = min(max(bar.midX - size.width / 2, visibleFrame.minX + 8), visibleFrame.maxX - size.width - 8)
-        return CGRect(x: x, y: max(visibleFrame.minY + 8, top - size.height - 8), width: size.width, height: size.height)
+        let y = position == .top ? max(visibleFrame.minY + 8, edge - size.height - 8) : min(visibleFrame.maxY - size.height - 8, edge + 8)
+        return CGRect(x: x, y: y, width: size.width, height: size.height)
     }
 }
 
@@ -80,7 +79,7 @@ final class ThemeTrialPanel {
     func reposition() {
         guard let panel, let bar, let screen, let host = panel.contentView else { return }
         panel.setFrame(ThemeTrialPlacement.frame(size: host.fittingSize, bar: bar.frame, geometry: bar.barGeometry,
-                                                 visibleFrame: screen.visibleFrame), display: true)
+                                                 position: bar.barGeometry!.position, visibleFrame: screen.visibleFrame), display: true)
     }
 
     private func synchronize() {
