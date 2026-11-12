@@ -31,6 +31,8 @@ extension WidgetConfiguration {
         case .script, .provider:
             text = output?.text ?? "…"
             icon = output?.icon ?? icon
+        case .stableBar:
+            text = ""
         case .workspaces, .appMenu, .appleMenu, .spacer:
             return WidgetLabel(text: "", icon: icon, fields: output?.fields ?? [:])
         }
@@ -93,7 +95,7 @@ extension WidgetConfiguration {
                 : PopupBlock(content: .graph(height: 16, source: nil, lineWidth: 1.2), style: WidgetStyle(width: 40))
             let label = PopupBlock(content: .row([icon, text].compactMap { $0 }), keepsLineHeight: true)
             return PopupBlock(content: .row([graph, label].compactMap { $0 }))
-        case .workspaces, .appMenu, .appleMenu, .spacer:
+        case .workspaces, .appMenu, .appleMenu, .stableBar, .spacer:
             return nil
         }
     }
