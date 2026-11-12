@@ -15,7 +15,7 @@
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
 | `system`, `network`, `battery`, `audio`, `microphone`, `calendar` | Native CPU and memory, network, battery, audio output, microphone or calendar data | — |
 | `inputSource` | The keyboard input source, such as `FR`; clicking it switches to the next enabled one, unless it has its own `onClick`, `open`, popup or menu | — |
-| `privacy` | A microphone and a camera, lit orange and green while an app uses them, as macOS's privacy indicators show | `hideWhenIdle`: show only what is in use, and hide while nothing is (default `false`) |
+| `privacy` | A microphone and a camera, lit orange and green while an app records from the default input device or uses a camera, as macOS's privacy indicators show; see [`privacy`](providers.md) for macOS 14.0 and 14.1 | `hideWhenIdle`: show only what is in use, and hide while nothing is (default `false`) |
 
 **Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, StableBar, Menu bar items, Battery, Sound, Input source, Microphone & camera, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. App menus, Control Center, Menu bar items and an Apple menu that opens the menu need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces); adding it picks the window manager [as setup does](getting-started.md#install-and-set-up), and macOS Spaces when none is running. Script starts with a clock command you can change through **More → Edit as JSON…**.
 
