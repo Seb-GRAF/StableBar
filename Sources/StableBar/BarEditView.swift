@@ -86,8 +86,9 @@ struct BarEditView: View {
                                     }
                                 }
                                 .fixedSize()
-                                // A widget not measured yet grows in from nothing.
-                                .scaleEffect(widths[unit.id] == nil ? 0 : 1)
+                                // A widget not measured yet grows in from almost nothing. AppKit aborts laying out
+                                // a tile's hosting view at a scale of 0, which it can't invert.
+                                .scaleEffect(widths[unit.id] == nil ? 0.01 : 1)
                                 .opacity(lifted ? 0 : 1)
                             }
                             .frame(width: frame.width, height: height)

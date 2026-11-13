@@ -393,3 +393,53 @@ final class BarEditViewTests: XCTestCase {
     #expect(descendants(host, of: BarEditDragSourceView.self).first === source)
     #expect(source.name == "Not redrawn")
 }
+
+@Test @MainActor func aWidgetDroppedOnOneDisplayComesBackOnTheOtherDisplaysEditBar() async throws {
+    _ = NSApplication.shared
+    let fixture = try ThemeGalleryFixture(#"""
+    {"widgets":[{"id":"a","type":"text","text":"A","position":"right","style":{"width":40,"height":20}},
+    {"id":"b","type":"text","text":"B","position":"right","style":{"width":60,"height":20}}]}
+    """#)
+    defer { fixture.close() }
+    let store = try fixture.store()
+    defer { store.stop() }
+    let editing = store.barEditing
+    editing.begin()
+    let displays = [BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil),
+                    BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)]
+    let hosts = displays.map { display in
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 1000, height: 40), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: BarView(store: store, display: display))
+        host.sizingOptions = []
+        window.contentView = host
+        return host
+    }
+    defer { hosts.forEach { $0.window?.close() } }
+    func descendants<T: NSView>(_ view: NSView, of type: T.Type) -> [T] {
+        view.subviews.flatMap { child in (child as? T).map { [$0] } ?? descendants(child, of: type) }
+    }
+    /// The widgets the other display's edit bar shows, once it has caught up with `condition`.
+    func tiles(until condition: (Set<String>) -> Bool) async throws -> Set<String> {
+        var tiles: Set<String> = []
+        for _ in 0..<100 {
+            hosts.forEach { $0.layoutSubtreeIfNeeded() }
+            tiles = Set(descendants(hosts[1], of: BarEditDragSourceView.self).map(\.widgetID))
+            if condition(tiles) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        return tiles
+    }
+    #expect(try await tiles { $0 == ["a", "b"] } == ["a", "b"])
+    // While the widget is over the first display, the other display's edit bar leaves it out.
+    let payload = editing.dragSession.begin("a")
+    let target = BarEditInsertion(displayID: 1, position: .left, before: nil, index: 0, x: 0)
+    editing.insertion = target
+    #expect(try await tiles { $0 == ["b"] } == ["b"])
+    #expect(editing.drop(payload, at: target))
+    editing.finishDrop()
+    // Saved, it comes back there before the edit bar has measured it, and grows in.
+    #expect(try await tiles { $0 == ["a", "b"] } == ["a", "b"])
+    #expect(store.configuration?.widgets.first { $0.id == "a" }?.position == .left)
+}
