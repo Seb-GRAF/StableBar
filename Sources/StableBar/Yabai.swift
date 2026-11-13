@@ -19,6 +19,12 @@ private struct YabaiWindow: Decodable {
     let pid: Int32
     let app: String
     let space: Int
+    let hasFocus: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, pid, app, space
+        case hasFocus = "has-focus"
+    }
 }
 
 private struct YabaiDisplay: Decodable {
@@ -52,7 +58,7 @@ func yabaiSnapshot(spaces: Data, windows: Data, displays: Data,
             for window in windows where window.space == space.index {
                 let bundleID = bundleIDs[window.pid] ?? window.app
                 let app = WorkspaceApp(workspace: name, name: window.app, bundleID: bundleID)
-                workspaceWindows.append(WorkspaceWindow(id: window.id, title: window.title, app: app))
+                workspaceWindows.append(WorkspaceWindow(id: window.id, title: window.title, app: app, isFocused: window.hasFocus == true))
                 if seen.insert(bundleID).inserted {
                     apps.append(app)
                 }

@@ -129,7 +129,7 @@ import Testing
 @Test func workspaceSnapshotKeepsMonitorFocusAndDeduplicatesAppWindows() throws {
     let spaces = Data(#"[{"workspace":"10","workspace-is-focused":false,"workspace-is-visible":false,"monitor-appkit-nsscreen-screens-id":2},{"workspace":"2","workspace-is-focused":false,"workspace-is-visible":true,"monitor-appkit-nsscreen-screens-id":2},{"workspace":"1","workspace-is-focused":true,"workspace-is-visible":true,"monitor-appkit-nsscreen-screens-id":1}]"#.utf8)
     let windows = Data(#"[{"workspace":"1","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":1,"window-title":"Window 1"},{"workspace":"1","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":2,"window-title":"Window 2"},{"workspace":"2","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":3,"window-title":"Window 3"}]"#.utf8)
-    let snapshot = try workspaceSnapshot(workspaces: spaces, windows: windows)
+    let snapshot = try workspaceSnapshot(workspaces: spaces, windows: windows, focusedWindow: 2)
     #expect(snapshot.map(\.name) == ["1", "2", "10"])
     #expect(snapshot[0].isFocused)
     #expect(!snapshot[1].isFocused)
@@ -137,6 +137,7 @@ import Testing
     #expect(snapshot[1].monitor == 2)
     #expect(snapshot[0].windows.map(\.id) == [1, 2])
     #expect(snapshot[0].windows.map(\.title) == ["Window 1", "Window 2"])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true])
     #expect(snapshot[1].windows.map(\.id) == [3])
     #expect(snapshot[2].windows.isEmpty)
     #expect(snapshot[0].apps.count == 1)
@@ -146,7 +147,7 @@ import Testing
 
 @Test func yabaiSnapshotMapsDisplaysAndAppWindowsToWorkspaces() throws {
     let spaces = Data(#"[{"index":10,"display":1,"has-focus":false,"is-visible":false},{"index":2,"display":1,"has-focus":true,"is-visible":true},{"index":1,"display":2,"has-focus":false,"is-visible":true}]"#.utf8)
-    let windows = Data(#"[{"pid":41,"app":"Safari","space":1,"id":1,"title":"Window 1"},{"pid":42,"app":"Finder","space":1,"id":2,"title":"Window 2"},{"pid":43,"app":"Safari","space":1,"id":3,"title":"Window 3"},{"pid":41,"app":"Safari","space":2,"id":4,"title":"Window 4"}]"#.utf8)
+    let windows = Data(#"[{"pid":41,"app":"Safari","space":1,"id":1,"title":"Window 1"},{"pid":42,"app":"Finder","space":1,"id":2,"title":"Window 2","has-focus":true},{"pid":43,"app":"Safari","space":1,"id":3,"title":"Window 3"},{"pid":41,"app":"Safari","space":2,"id":4,"title":"Window 4"}]"#.utf8)
     let displays = Data(#"[{"id":80,"index":1},{"id":90,"index":2}]"#.utf8)
     let snapshot = try yabaiSnapshot(spaces: spaces, windows: windows, displays: displays, screenIDs: [90, 80],
                                      bundleIDs: [41: "com.apple.Safari", 42: "com.apple.finder", 43: "com.apple.Safari"])
@@ -156,6 +157,7 @@ import Testing
     #expect(snapshot[0].isVisible)
     #expect(snapshot[0].windows.map(\.id) == [1, 2, 3])
     #expect(snapshot[0].windows.map(\.title) == ["Window 1", "Window 2", "Window 3"])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true, false])
     #expect(snapshot[0].windows.map(\.app.bundleID) == ["com.apple.Safari", "com.apple.finder", "com.apple.Safari"])
     #expect(snapshot[1].windows.map(\.id) == [4])
     #expect(snapshot[2].windows.isEmpty)
@@ -179,7 +181,7 @@ import Testing
     let windows = Data(#"""
     {"ok":true,"kind":"query","status":"success","result":{"kind":"windows","payload":{"windows":[
       {"id":"ow_a","windowId":11,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Safari","bundleId":"com.apple.Safari"},"title":"Docs","isScratchpad":false},
-      {"id":"ow_b","windowId":12,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Ghostty"},"isScratchpad":false},
+      {"id":"ow_b","windowId":12,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Ghostty"},"isScratchpad":false,"isFocused":true},
       {"id":"ow_c","windowId":13,"workspace":{"id":"u1","rawName":"1","displayName":"Web","number":1},"app":{"name":"Safari","bundleId":"com.apple.Safari"},"title":"Mail","isScratchpad":false},
       {"id":"ow_d","windowId":14,"workspace":{"id":"u2","rawName":"2","displayName":"2","number":2},"app":{"name":"Notes","bundleId":"com.apple.Notes"},"title":"Scratch","isScratchpad":true},
       {"id":"ow_e","windowId":15,"app":{"name":"Finder","bundleId":"com.apple.finder"},"title":"Unassigned","isScratchpad":false}]}}}
@@ -193,6 +195,7 @@ import Testing
     #expect(snapshot[0].windows.map(\.id) == [11, 12, 13])
     #expect(snapshot[0].windows.map(\.reference) == ["ow_a", "ow_b", "ow_c"])
     #expect(snapshot[0].windows.map(\.title) == ["Docs", "", "Mail"])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true, false])
     #expect(snapshot[0].windows.map(\.app.bundleID) == ["com.apple.Safari", "Ghostty", "com.apple.Safari"])
     #expect(snapshot[0].apps.map(\.name) == ["Ghostty", "Safari"])
     #expect(snapshot[1].windows.isEmpty)
@@ -292,7 +295,7 @@ private func calls(_ log: URL) -> [Substring] {
     // The refresh after the failed focus fails here too, so the focus failure stays.
     #expect(fixture.store.error == "OmniWM: not_found")
     #expect(calls(fixture.log).sorted() == [
-        "query windows --fields id,window-id,workspace,app,title,is-scratchpad --format json",
+        "query windows --fields id,window-id,workspace,app,title,is-scratchpad,is-focused --format json",
         "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json",
         "window focus ow_a --format json", "workspace focus-name 1 --format json"
     ])
@@ -324,7 +327,7 @@ private func calls(_ log: URL) -> [Substring] {
     let made = calls(fixture.log)
     #expect(made.contains("subscribe active-workspace,focused-monitor,focus,windows-changed,layout-changed,display-changed --no-send-initial --format ndjson"))
     #expect(made.filter { $0 == "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json" }.count == 2)
-    #expect(made.contains("query windows --fields id,window-id,workspace,app,title,is-scratchpad --format json"))
+    #expect(made.contains("query windows --fields id,window-id,workspace,app,title,is-scratchpad,is-focused --format json"))
     #expect(fixture.store.error == nil)
     #expect(fixture.store.isRunning)
 }
@@ -346,7 +349,7 @@ private func calls(_ log: URL) -> [Substring] {
     let fixture = try omniwmFixture("""
     case "$1 $2 $4" in
       "query displays ") printf '%s\\n' '[{"uuid":"A","screen_id":80,"is_active_space":true,"is_active_context":true},{"uuid":"B","screen_id":90,"is_active_space":true,"is_active_context":false},{"uuid":"C","screen_id":70,"is_active_space":false,"is_active_context":false}]' ;;
-      "query workspaces A") printf '%s\\n' '[{"id":"a0","index":0,"name":"first","is_active":true,"windows":[{"id":{"pid":7,"idx":11},"title":"Docs","bundle_id":"com.apple.Safari","app_name":"Safari"},{"id":{"pid":8,"idx":12},"title":"","bundle_id":null,"app_name":"Ghostty"}]},{"id":"a1","index":1,"name":"second","is_active":false,"windows":[{"id":{"pid":9,"idx":13},"title":"List","bundle_id":"com.apple.Notes","app_name":"Notes"}]}]' ;;
+      "query workspaces A") printf '%s\\n' '[{"id":"a0","index":0,"name":"first","is_active":true,"windows":[{"id":{"pid":7,"idx":11},"title":"Docs","bundle_id":"com.apple.Safari","app_name":"Safari"},{"id":{"pid":8,"idx":12},"title":"","bundle_id":null,"app_name":"Ghostty","is_focused":true}]},{"id":"a1","index":1,"name":"second","is_active":false,"windows":[{"id":{"pid":9,"idx":13},"title":"List","bundle_id":"com.apple.Notes","app_name":"Notes"}]}]' ;;
       "query workspaces B") printf '%s\\n' '[{"id":"b0","index":0,"name":"first","is_active":true,"windows":[]},{"id":"b1","index":1,"name":"second","is_active":false,"windows":[]}]' ;;
     esac
     """)
@@ -359,6 +362,7 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(snapshot.map(\.isVisible) == [true, false, true, false])
     #expect(snapshot[0].windows.map(\.id) == [11, 12])
     #expect(snapshot[0].windows.map(\.reference) == [#"{"pid":7,"idx":11}"#, #"{"pid":8,"idx":12}"#])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true])
     #expect(snapshot[0].apps.map(\.bundleID) == ["Ghostty", "com.apple.Safari"])
     fixture.store.source = .rift
     fixture.store.workspaces = snapshot

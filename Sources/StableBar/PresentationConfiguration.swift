@@ -9,7 +9,7 @@ enum PresentationRole: String, Decodable, CaseIterable, Sendable {
 struct WorkspaceDefaults: Decodable, Sendable {
     let properties: [String: ConfigurationValue]
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case indicator, indicatorStyle, style, appStyle }
+    enum CodingKeys: String, CodingKey, CaseIterable { case indicator, indicatorStyle, style, appStyle, focusedWindowStyle }
 
     init() { properties = [:] }
 
@@ -17,7 +17,7 @@ struct WorkspaceDefaults: Decodable, Sendable {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         _ = try values.decodeIfPresent(WorkspaceConfiguration.Indicator.self, forKey: .indicator)
-        for key in [CodingKeys.indicatorStyle, .style, .appStyle] {
+        for key in [CodingKeys.indicatorStyle, .style, .appStyle, .focusedWindowStyle] {
             _ = try values.decodeIfPresent(WidgetStyle.self, forKey: key)
         }
         properties = try decoder.singleValueContainer().decode([String: ConfigurationValue].self)

@@ -295,7 +295,7 @@ private struct WorkspaceCheckFixture: Sendable {
         #expect(await fixture.checker().check(.omniwm) == .connected)
         #expect(Set(fixture.log) == [
             "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json",
-            "query windows --fields id,window-id,workspace,app,title,is-scratchpad --format json"
+            "query windows --fields id,window-id,workspace,app,title,is-scratchpad,is-focused --format json"
         ])
     }
 

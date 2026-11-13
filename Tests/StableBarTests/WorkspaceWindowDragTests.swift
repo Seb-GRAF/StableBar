@@ -26,7 +26,7 @@ func workspaceWindowDropMovesCapturedWindowsAndRefreshes(source: WorkspaceSource
             ? "<move-node-to-workspace><--window-id><\(id)><--><\(fixture.destination)>"
             : "<-m><window><\(id)><--space><\(fixture.destination)>"))
     }
-    #expect(commands.count == count + (source == .aerospace ? 2 : 3))
+    #expect(commands.count == count + 3)
 }
 
 @Test(arguments: [WorkspaceSource.aerospace, .yabai]) @MainActor
@@ -83,7 +83,7 @@ func workspaceWindowFocusRefreshesAndKeepsTheFailureOfAListedWindow(source: Work
     #expect(fixture.store.error == "Window no longer exists")
     let commands = try fixture.commands()
     #expect(commands.contains(source == .aerospace ? "<focus><--window-id><73>" : "<-m><window><--focus><73>"))
-    #expect(commands.count == (source == .aerospace ? 3 : 4), "The workspaces are read again after the failure")
+    #expect(commands.count == 4, "The workspaces are read again after the failure")
 }
 
 @Test @MainActor func workspaceWindowDropRejectsStaleForeignAndUnsupportedMoves() throws {

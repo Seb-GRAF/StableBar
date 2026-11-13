@@ -56,6 +56,7 @@ private struct OmniWMWindows: Decodable {
         let app: App?
         let title: String?
         let isScratchpad: Bool?
+        let isFocused: Bool?
     }
 
     struct Workspace: Decodable { let rawName: String }
@@ -87,7 +88,7 @@ func readOmniWMWorkspaces(_ executable: String, screenIDs: [UInt32], timeout: Do
         "query", "workspaces", "--fields", "raw-name,display-name,display,is-visible,is-current"
     ], timeout: timeout)
     async let windows = omniwmCommand(executable, arguments: [
-        "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad"
+        "query", "windows", "--fields", "id,window-id,workspace,app,title,is-scratchpad,is-focused"
     ], timeout: timeout)
     return try await omniwmSnapshot(workspaces: spaces, windows: windows, screenIDs: screenIDs)
 }
@@ -105,7 +106,8 @@ func omniwmSnapshot(workspaces: Data, windows: Data, screenIDs: [UInt32]) throws
             let name = window.app?.name ?? ""
             let app = WorkspaceApp(workspace: space.rawName, name: name, bundleID: window.app?.bundleId ?? name)
             if seen.insert(app.bundleID).inserted { apps.append(app) }
-            return WorkspaceWindow(id: window.windowId, title: window.title ?? "", app: app, reference: window.id)
+            return WorkspaceWindow(id: window.windowId, title: window.title ?? "", app: app, reference: window.id,
+                                   isFocused: window.isFocused == true)
         }
         return Workspace(name: space.rawName, isFocused: space.isCurrent, isVisible: space.isVisible, monitor: monitor + 1,
                          apps: apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending },

@@ -211,7 +211,7 @@ final class ConfigurationEditor {
         if case let .object(changes) = properties["workspace"] {
             var workspace = (try? store.configuration?.workspaceDefaults.mergedProperties(current["workspace"])) ?? [:]
             for (key, change) in changes {
-                if case let .object(nested) = change {
+                if case let .object(nested) = change, !nested.isEmpty {
                     var values = (try? workspace[key]?.decoded([String: ConfigurationValue].self)) ?? [:]
                     for name in nested.keys {
                         let property = store.propertySources(path: "widgets.\(id).workspace.\(key)", key: name,

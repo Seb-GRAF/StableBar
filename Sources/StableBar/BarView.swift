@@ -1000,6 +1000,11 @@ struct WorkspaceView: View {
                 let style = styles.label(hovered: hovered)
                 let glyph = styles.glyph(hovered: hovered)
                 let zoomedBelow = magnification.map { (glyph.height ?? 14) * ($0 - 1) } ?? 0
+                let textColor = style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground)
+                let highlight = configuration?.focusedWindowStyle
+                    .map { $0.resolved(for: StyleStates(workspace: WorkspaceState(workspace), mode: mode, hover: hovered)) }
+                    .map { FocusedWindowHighlight(style: $0, color: textColor, magnifying: magnifier.isActive,
+                                                  cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
                         Text(workspace.label)
@@ -1013,7 +1018,8 @@ struct WorkspaceView: View {
                             ForEach(workspace.windows) { window in
                                 windowButton(windows: [window], below: zoomedBelow, action: { workspaceStore.focus(window) }) {
                                     HStack(spacing: style.spacing ?? 4) {
-                                        appIcon(window.app, style: glyph, spacing: style.spacing ?? 4)
+                                        appIcon(window.app, style: glyph, spacing: style.spacing ?? 4,
+                                                highlight: window.isFocused ? highlight : nil)
                                         if let length = configuration?.titleLength, length > 0 {
                                             Text(String(window.title.prefix(length))).magnified(.label, by: magnifier, upTo: magnification)
                                         }
@@ -1021,23 +1027,27 @@ struct WorkspaceView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .help(magnification == nil ? window.title : "")
-                                .accessibilityLabel("\(window.app.name): \(window.title)")
+                                .accessibilityLabel("\(window.app.name): \(window.title)\(window.isFocused ? ", focused" : "")")
+                                .accessibilityAddTraits(window.isFocused ? .isSelected : [])
                                 .accessibilityValue(badgeValue(for: window.app))
                             }
                         } else {
                             ForEach(workspace.apps) { app in
-                                windowButton(windows: workspace.windows.filter { $0.app.bundleID == app.bundleID }, below: zoomedBelow,
-                                             action: { workspaceStore.select(workspace) }) {
-                                    appIcon(app, style: glyph, spacing: style.spacing ?? 4)
+                                let windows = workspace.windows.filter { $0.app.bundleID == app.bundleID }
+                                let focused = windows.contains(where: \.isFocused)
+                                windowButton(windows: windows, below: zoomedBelow, action: { workspaceStore.select(workspace) }) {
+                                    appIcon(app, style: glyph, spacing: style.spacing ?? 4, highlight: focused ? highlight : nil)
                                 }
                                 .help(magnification == nil ? app.name : "")
                                 .accessibilityValue(badgeValue(for: app))
+                                .accessibilityLabel("\(app.name)\(focused ? ", focused" : "")")
+                                .accessibilityAddTraits(focused ? .isSelected : [])
                             }
                         }
                     }
                 }
                 .font(WidgetAppearance(style, defaults: defaults).font)
-                .foregroundStyle(style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground))
+                .foregroundStyle(textColor)
                 .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 7)
                 .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 7)
                 .frame(width: style.width.map { CGFloat($0) }, height: style.height.map { CGFloat($0) })
@@ -1131,8 +1141,10 @@ struct WorkspaceView: View {
         return "Badge \(label)"
     }
 
-    @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, spacing: CGFloat) -> some View {
+    @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, spacing: CGFloat,
+                                      highlight: FocusedWindowHighlight? = nil) -> some View {
         let zoom = magnification ?? 1
+        let style = highlight.map { $0.style.inheriting(style) } ?? style
         let icon = Group {
             if let glyphs = configuration?.appGlyphs, let text = appGlyph(for: app, in: glyphs) {
                 Text(text)
@@ -1148,6 +1160,8 @@ struct WorkspaceView: View {
                     .frame(width: style.width ?? 14, height: style.height ?? 14)
             }
         }
+        // Inside the icon, so magnification zooms and slides the highlight with it.
+        .background { highlight }
         .overlay(alignment: .topTrailing) {
             if let badges = configuration?.badges, let label = workspaceStore.dockBadges.labels[app.bundleID] {
                 DockBadge(style: badges, label: label, iconHeight: style.height ?? 14)
@@ -1160,6 +1174,26 @@ struct WorkspaceView: View {
         } else {
             icon
         }
+    }
+}
+
+/// The focused window's highlight, drawn outside the icon's frame so focus moving doesn't shift the icons.
+private struct FocusedWindowHighlight: View {
+    let style: WidgetStyle
+    let color: Color
+    /// Scaled with a magnified icon, so it hugs the icon then to stay small and below the bar's top edge.
+    let magnifying: Bool
+    let cornerRadius: Double
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(color.opacity(0.22)))
+            .overlay {
+                if let border = style.borderColor { shape.strokeBorder(border.color, lineWidth: style.borderWidth ?? 1) }
+            }
+            .padding(.horizontal, magnifying ? -2 : -3)
+            .padding(.vertical, magnifying ? 0 : -2)
+            .allowsHitTesting(false)
     }
 }
 

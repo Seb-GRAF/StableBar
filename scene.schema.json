@@ -47,6 +47,7 @@
       "type": "object",
       "additionalProperties": { "type": "string" }
     },
+    "focusedWindow": { "description": "The window-id of the window the window manager reports as focused.", "type": "integer" },
     "activeApp": { "description": "The active app's bundle identifier. Finder by default.", "type": "string" },
     "menu": {
       "description": "The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one: its items, with the values Accessibility gives a menu item.",

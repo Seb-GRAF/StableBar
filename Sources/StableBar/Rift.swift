@@ -19,6 +19,7 @@ private struct RiftWorkspace: Decodable {
         let title: String
         let bundleId: String?
         let appName: String?
+        let isFocused: Bool?
     }
 
     struct ID: Decodable { let pid: Int32; let idx: UInt32 }
@@ -40,7 +41,8 @@ func riftSnapshot(_ executable: String, screenIDs: [UInt32]) async throws -> [Wo
                 let app = WorkspaceApp(workspace: space.id, name: appName, bundleID: window.bundleId ?? appName)
                 if seen.insert(app.bundleID).inserted { apps.append(app) }
                 return WorkspaceWindow(id: Int(window.id.idx), title: window.title, app: app,
-                                       reference: #"{"pid":\#(window.id.pid),"idx":\#(window.id.idx)}"#)
+                                       reference: #"{"pid":\#(window.id.pid),"idx":\#(window.id.idx)}"#,
+                                       isFocused: window.isFocused == true)
             }
             return Workspace(name: space.id, isFocused: space.isActive && display.isActiveContext, isVisible: space.isActive, monitor: monitor + 1,
                              apps: apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending },
