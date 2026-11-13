@@ -240,9 +240,14 @@ private struct SettingsHeader: View {
     @Bindable var editor: ConfigurationEditor
     @Environment(BarStore.self) private var store
     @FocusState private var searching: Bool
+    private static let searchWidth: CGFloat = 170
 
     var body: some View {
-        ZStack {
+        HStack(spacing: 0) {
+            // Mirrors the search field and its spacing so the tabs center in the window, and gives its width
+            // up when a tiling window manager shrinks the window below its minimum size.
+            Color.clear.frame(maxWidth: Self.searchWidth + 8)
+            Spacer(minLength: 8)
             HStack(spacing: 2) {
                 ForEach(CustomizationSection.allCases) { section in
                     SettingsTab(section: section, selected: (editor.section ?? .general) == section,
@@ -251,8 +256,9 @@ private struct SettingsHeader: View {
                     }
                 }
             }
-            HStack {
-                Spacer()
+            .layoutPriority(1)
+            Spacer(minLength: 8)
+            HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
                     TextField("Search settings", text: $editor.search)
@@ -267,7 +273,7 @@ private struct SettingsHeader: View {
                         .accessibilityLabel("Search settings")
                 }
                 .padding(.horizontal, 8)
-                .frame(width: 170, height: 26)
+                .frame(width: Self.searchWidth, height: 26)
                 .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(searching ? Color.accentColor : SettingsPalette.groupBorder,
                                                                          lineWidth: searching ? 2 : 1))

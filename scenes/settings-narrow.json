@@ -1,0 +1,8 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Resources/config.json",
+  "draw": "settings",
+  "section": "feedback",
+  "width": 732,
+  "height": 400
+}
