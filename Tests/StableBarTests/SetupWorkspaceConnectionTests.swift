@@ -376,6 +376,7 @@ private struct WorkspaceCheckFixture: Sendable {
         let task = Task { result = await checker.check(.yabai) }
         defer { lookup.release(); task.cancel() }
         try await waitFor { lookup.entered && clock.sleeping == 1 }
+        #expect(!lookup.ranOnSwiftPool)
         clock.advance(by: .seconds(3))
         try await waitFor { result != nil }
         guard case .couldntCheck? = result else { Issue.record("Expected couldn't check at the deadline"); return }
@@ -528,11 +529,13 @@ private actor WorkspaceCheckGate {
 private final class BlockedWorkspaceLookup: @unchecked Sendable {
     private let lock = NSLock()
     private let gate = DispatchSemaphore(value: 0)
-    private var state = (entered: false, returned: false)
+    private var state = (entered: false, returned: false, onSwiftPool: false)
     var entered: Bool { lock.withLock { state.entered } }
     var returned: Bool { lock.withLock { state.returned } }
+    var ranOnSwiftPool: Bool { lock.withLock { state.onSwiftPool } }
     func find() -> String? {
-        lock.withLock { state.entered = true }
+        let onSwiftPool = isOnSwiftPool()
+        lock.withLock { state.entered = true; state.onSwiftPool = onSwiftPool }
         gate.wait()
         lock.withLock { state.returned = true }
         return nil

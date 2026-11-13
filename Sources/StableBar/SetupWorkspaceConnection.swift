@@ -101,7 +101,8 @@ struct SetupWorkspaceChecker: Sendable {
             return .couldntCheck("OmniWM isn’t running. Open OmniWM, then check again.")
         }
         let variables = environment()
-        guard let executable = executable(source, variables["PATH", default: ""]) else {
+        let path = variables["PATH", default: ""]
+        guard let executable = try await BlockingWork.run({ self.executable(source, path) }) else {
             return .couldntCheck("\(source == .omniwm ? "omniwmctl" : source.title) isn’t available yet. Check your login shell’s PATH, then try again.")
         }
         try Task.checkCancellation()
