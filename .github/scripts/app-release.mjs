@@ -38,9 +38,10 @@ export async function analyzeCommits(_config, context) {
 
 export async function generateNotes(config, context) {
   const commits = await Promise.all(context.commits.map(async commit => {
-    const response = await fetch(`https://api.github.com/repos/${context.env.GITHUB_REPOSITORY}/commits/${commit.hash}`,
-      { headers: { Authorization: `Bearer ${context.env.GITHUB_TOKEN}` } });
-    const { author } = await response.json();
+    const { author } = await fetch(`https://api.github.com/repos/${context.env.GITHUB_REPOSITORY}/commits/${commit.hash}`,
+      { headers: { Authorization: `Bearer ${context.env.GITHUB_TOKEN}` } })
+      .then(response => response.json())
+      .catch(() => ({}));
     return author ? { ...commit, message: commit.message.replace(/^.*/, `$& by @${author.login}`) } : commit;
   }));
   return writeNotes(config, { ...context, commits });
