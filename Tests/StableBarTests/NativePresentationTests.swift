@@ -403,20 +403,22 @@ private final class AccessibilityTree: @unchecked Sendable {
     let wifi = tree.add(8011, role: kAXMenuBarItemRole, wifiValues)
     let raycast = tree.add(955, role: kAXButtonRole)
     let timesheet = tree.add(981, role: kAXButtonRole, [kAXDescriptionAttribute: "Timesheet" as CFString])
+    let timeMachine = tree.add(762, role: kAXUnknownRole)
     let inactive = tree.add(5001, role: kAXWindowRole, children: [
         slot(6001, holding: tree.add(957, role: kAXApplicationRole)),
         slot(6002, holding: hosted(7002, tree.add(8002, role: kAXMenuBarItemRole, wifiValues))),
     ])
     let active = tree.add(5002, role: kAXWindowRole, children: [
         slot(6011, holding: hosted(7011, wifi)), slot(6012, holding: raycast), slot(6013, holding: timesheet), tree.add(6014, role: kAXGroupRole),
+        slot(6015, holding: timeMachine),
     ])
     tree.add(721, role: kAXApplicationRole, [kAXWindowsAttribute: [tree.add(5000, role: kAXWindowRole), inactive, active] as CFArray])
 
-    let items = await foundMenuBarItems(apps: [721, 955, 981], agent: 721, readAttribute: tree.read).sorted { $0.pid < $1.pid }
-    #expect(items.map(\.pid) == [721, 955, 981])
-    #expect(items.map(\.element) == [wifi, raycast, timesheet])
-    #expect(items.map(\.identifier) == ["com.apple.menuextra.wifi", nil, nil])
-    #expect(items.map(\.description) == ["Wi‑Fi", nil, "Timesheet"])
+    let items = await foundMenuBarItems(apps: [721, 762, 955, 981], agent: 721, readAttribute: tree.read).sorted { $0.pid < $1.pid }
+    #expect(items.map(\.pid) == [721, 762, 955, 981])
+    #expect(items.map(\.element) == [wifi, timeMachine, raycast, timesheet])
+    #expect(items.map(\.identifier) == ["com.apple.menuextra.wifi", nil, nil, nil])
+    #expect(items.map(\.description) == ["Wi‑Fi", nil, nil, "Timesheet"])
 }
 
 @Test(arguments: [false, true])

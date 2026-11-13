@@ -238,10 +238,13 @@ final class AppMenu: NSObject {
                                             readAttribute: readAttribute)
         menuBarItems = items.sorted { $0.frame.midX < $1.frame.midX }.compactMap { item in
             guard let app = menuBarItemApp(pid: item.pid, in: apps), let display = menuBarDisplay(of: item.frame) else { return nil }
-            return MenuBarItem(entry: AppMenuEntry(title: item.description ?? app.localizedName ?? "", element: item.element, isEnabled: true,
-                                                   isChecked: false, hasSubmenu: item.hasMenu, icon: menuBarIcon(identifier: item.identifier, app: app),
-                                                   menuBarDisplay: display),
-                               bundleID: app.bundleIdentifier, appName: app.localizedName ?? "", identifier: item.identifier)
+            // Time Machine's item has neither an identifier nor a description, and SystemUIServer, which draws it, has no other such item.
+            let timeMachine = app.bundleIdentifier == "com.apple.systemuiserver" && item.identifier == nil && item.description == nil
+            let identifier = timeMachine ? "com.apple.menuextra.TimeMachine" : item.identifier
+            let title = timeMachine ? "Time Machine" : item.description ?? app.localizedName ?? ""
+            return MenuBarItem(entry: AppMenuEntry(title: title, element: item.element, isEnabled: true, isChecked: false, hasSubmenu: item.hasMenu,
+                                                   icon: menuBarIcon(identifier: identifier, app: app), menuBarDisplay: display),
+                               bundleID: app.bundleIdentifier, appName: app.localizedName ?? "", identifier: identifier)
         }
         return true
     }
@@ -544,6 +547,7 @@ func menuBarAgentItems(agent: pid_t, readAttribute: @escaping @Sendable (String,
 }
 
 /// The item in one of MenuBarAgent's slots: one of macOS's own items inside its hosting view, or another app's button.
+/// Time Machine's item, which SystemUIServer draws, reports its role as unknown.
 private func menuBarAgentItem(in slot: AXUIElement, agent: pid_t, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> FoundMenuBarItem? {
     AXUIElementSetMessagingTimeout(slot, 0.1)
     guard let child = (readAttribute(kAXChildrenAttribute, slot) as? [AXUIElement])?.first else { return nil }
@@ -551,7 +555,7 @@ private func menuBarAgentItem(in slot: AXUIElement, agent: pid_t, _ readAttribut
     switch readAttribute(kAXRoleAttribute, element) as? String {
     case kAXMenuBarItemRole:
         return FoundMenuBarItem(element, pid: agent, readAttribute)
-    case kAXButtonRole:
+    case kAXButtonRole, kAXUnknownRole:
         var pid: pid_t = 0
         AXUIElementGetPid(element, &pid)
         return FoundMenuBarItem(element, pid: pid, readAttribute)
