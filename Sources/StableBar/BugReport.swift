@@ -170,7 +170,7 @@ enum MacFacts {
         }
     }
 
-    private static func sysctl(_ name: String) -> String {
+    static func sysctl(_ name: String) -> String {
         var size = 0
         guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return "unknown" }
         var value = [UInt8](repeating: 0, count: size)

@@ -2,6 +2,7 @@ import AppKit
 @preconcurrency import ApplicationServices
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct AppMenuItem: Hashable {
     let title: String
@@ -136,10 +137,10 @@ final class AppMenu: NSObject {
 
     /// What a menu's entries show, read from each item in one call: every Accessibility call is a round trip to the
     /// app, and Chromium apps answer slowly. Chrome's File menu took 16 ms to read with four separate reads per item,
-    /// and 13 ms with these eight in one call.
+    /// and 13 ms with them in one call.
     private static let entryAttributes = [
         kAXTitleAttribute, kAXEnabledAttribute, kAXMenuItemMarkCharAttribute, kAXChildrenAttribute, kAXMenuItemCmdCharAttribute,
-        kAXMenuItemCmdVirtualKeyAttribute, kAXMenuItemCmdGlyphAttribute, kAXMenuItemCmdModifiersAttribute,
+        kAXMenuItemCmdVirtualKeyAttribute, kAXMenuItemCmdGlyphAttribute, kAXMenuItemCmdModifiersAttribute, kAXIdentifierAttribute,
     ]
 
     private func entries(of element: AXUIElement) -> [AppMenuEntry] {
@@ -151,14 +152,27 @@ final class AppMenu: NSObject {
             guard values.count == Self.entryAttributes.count,
                   let title = values[0] as? String ?? text(in: child, readAttribute),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
+            let submenu = submenu(among: values[3] as? [AXUIElement] ?? [])
             entries.append(AppMenuEntry(title: title, element: child, isEnabled: values[1] as? Bool == true,
                                         isChecked: values[2] as? String != nil,
-                                        hasSubmenu: submenu(among: values[3] as? [AXUIElement] ?? []) != nil,
+                                        hasSubmenu: submenu != nil,
                                         shortcut: MenuShortcut(character: values[4] as? String, virtualKey: values[5] as? Int,
-                                                               glyph: values[6] as? Int, modifiers: values[7] as? Int ?? 0)))
+                                                               glyph: values[6] as? Int, modifiers: values[7] as? Int ?? 0),
+                                        icon: icon(identifier: values[8] as? String, submenu: submenu)))
         }
         if entries.last?.title.isEmpty == true { entries.removeLast() }
         return entries
+    }
+
+    /// The icon macOS 27 shows beside an item. Accessibility gives no images, but an item without an identifier of its own
+    /// reports its action as one. Move & Resize and Full Screen Tile report none, so they go by the first action in their
+    /// submenu, which follows a Halves heading in Move & Resize.
+    private func icon(identifier: String?, submenu: AXUIElement?) -> NSImage? {
+        guard #available(macOS 27, *) else { return nil }
+        if let identifier { return appMenuIcon(identifier: identifier) }
+        guard let submenu else { return nil }
+        let action = children(of: submenu).prefix(2).lazy.compactMap { self.attribute(kAXIdentifierAttribute, of: $0) as? String }.first
+        return action.flatMap { windowSubmenuSymbols[$0] }.map { NSImage(systemSymbolName: $0, accessibilityDescription: nil)! }
     }
 
     private func submenu(of element: AXUIElement) -> AXUIElement? {
@@ -593,6 +607,71 @@ let menuBarSymbols = [
     "com.apple.menuextra.wwan": "antenna.radiowaves.left.and.right", "com.apple.Spotlight": "magnifyingglass",
     "com.apple.campo": "magnifyingglass", "com.apple.TextInputMenuAgent": "keyboard",
 ]
+
+/// The actions whose default icon macOS 27 still shows in menus; it hides the others. `NSMenuItem` gives each its icon.
+let shownMenuActions: Set<String> = [
+    "print:", "printDocument:", "runPageLayout:", "showHelp:", "startDictation:", "orderFrontCharacterPalette:", "orderFrontFontPanel:",
+    "orderFrontColorPanel:", "orderFrontPreferencesPanel:", "orderFrontListPanel:", "orderFrontTablePanel:", "alignLeft:", "alignCenter:",
+    "alignRight:", "alignJustified:", "_handleInsertFromContactsCommand:", "_handleInsertFromPasswordsCommand:",
+    "_handleInsertFromCreditCardsCommand:", "_openFeedbackAssistant:", "_searchWithGoogleFromMenu:",
+]
+
+/// The symbols macOS 27 shows on the items it adds to apps' menus, by identifier: the Apple menu, the Window menu's
+/// tiling, display and window items, and Edit's AutoFill.
+let systemMenuSymbols: [String: String] = {
+    var symbols = [
+        "_systemSettingsRequested:": "gear", "_appStoreRequested:": "appstore", "_NSMenuItemAutoFillIdentifier": "rectangle.and.pencil.and.ellipsis",
+        "_zoomLeft:": "inset.filled.lefthalf.rectangle", "_zoomRight:": "inset.filled.righthalf.rectangle",
+        "_zoomTop:": "inset.filled.tophalf.rectangle", "_zoomBottom:": "inset.filled.bottomhalf.rectangle",
+        "_zoomTopLeft:": "inset.filled.topleft.rectangle", "_zoomTopRight:": "inset.filled.topright.rectangle",
+        "_zoomBottomLeft:": "inset.filled.bottomleft.rectangle", "_zoomBottomRight:": "inset.filled.bottomright.rectangle",
+        "_zoomLeftAndRight:": "inset.filled.lefthalf.righthalf.rectangle", "_zoomRightAndLeft:": "inset.filled.righthalf.lefthalf.rectangle",
+        "_zoomLeftThreeUp:": "inset.filled.lefthalf.topright.bottomright.rectangle",
+        "_zoomRightThreeUp:": "inset.filled.topleft.bottomleft.righthalf.rectangle",
+        "_zoomTopAndBottom:": "inset.filled.tophalf.bottomhalf.rectangle", "_zoomBottomAndTop:": "inset.filled.bottomhalf.tophalf.rectangle",
+        "_zoomTopThreeUp:": "inset.filled.tophalf.bottomleft.bottomright.rectangle",
+        "_zoomBottomThreeUp:": "inset.filled.topleft.topright.bottomhalf.rectangle",
+        "_zoomQuarters:": "inset.filled.topleft.topright.bottomleft.bottomright.rectangle",
+        "_tileLeft:": "inset.filled.lefthalf.rectangle", "_tileRight:": "inset.filled.righthalf.rectangle",
+        "_moveToDisplay:": "display", "_moveAllToDisplay:": "display", "makeKeyAndOrderFront:": "interface.window",
+    ]
+    if let mac = macSymbol() {
+        symbols["_aboutThisMacRequested:"] = mac
+        symbols["_systemInformationRequested:"] = mac
+    }
+    return symbols
+}()
+
+/// The symbols of Move & Resize and Full Screen Tile, by the first action in their submenu.
+let windowSubmenuSymbols = ["_zoomLeft:": "inset.filled.trailinghalf.arrowtriangle.forward.rectangle", "_tileLeft:": "rectangle.split.2x1"]
+
+/// The icon macOS 27 shows beside a menu item with the Accessibility identifier `identifier`, or `nil` when it shows none.
+@MainActor func appMenuIcon(identifier: String) -> NSImage? {
+    if let symbol = systemMenuSymbols[identifier] {
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? PrivateAPI.privateSymbol(symbol)
+    }
+    return shownMenuActions.contains(identifier) ? NSMenuItem(title: "", action: NSSelectorFromString(identifier), keyEquivalent: "").image : nil
+}
+
+/// The symbol macOS draws for this Mac, such as `macbook.gen2`: the one declared by the first type with a symbol on the way
+/// from its model's type through each type's first parent. A MacBook Pro conforms to both notched and notchless laptops
+/// through different parents, so the first parent decides. `UTTypeCopyDeclaration` leaves symbols out, so they come
+/// from CoreTypes, which declares the families of Macs that have one.
+private func macSymbol() -> String? {
+    let declarations = Bundle(path: "/System/Library/CoreServices/CoreTypes.bundle")?.infoDictionary?["UTExportedTypeDeclarations"] as? [[String: Any]]
+    var symbols: [String: String] = [:]
+    for declaration in declarations ?? [] {
+        if let identifier = declaration["UTTypeIdentifier"] as? String,
+           let symbol = (declaration["UTTypeIcons"] as? [String: Any])?["UTTypeSymbolName"] as? String { symbols[identifier] = symbol }
+    }
+    var identifier = UTType(tag: MacFacts.sysctl("hw.model"), tagClass: UTTagClass(rawValue: "com.apple.device-model-code"), conformingTo: nil)?.identifier
+    while let type = identifier {
+        if let symbol = symbols[type] { return symbol }
+        let parents = (UTTypeCopyDeclaration(type as CFString)?.takeRetainedValue() as? [String: Any])?["UTTypeConformsTo"]
+        identifier = parents as? String ?? (parents as? [String])?.first
+    }
+    return nil
+}
 
 /// The icon the Menu bar items row shows: a symbol for macOS's own items, otherwise the icon of the app the item's process
 /// belongs to. A process without an icon of its own, such as a system agent, gets a menu bar symbol instead of macOS's

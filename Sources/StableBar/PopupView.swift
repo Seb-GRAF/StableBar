@@ -1390,12 +1390,15 @@ struct AppMenuList: View {
 
     var body: some View {
         let checks = entries.contains(where: \.isChecked)
+        let iconColumns = iconColumns
+        let iconWidth = entries.compactMap(\.icon).map(\.size.width).max() ?? 0
         VStack(spacing: 0) {
             ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
                 if entry.title.isEmpty {
                     Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1).padding(.vertical, 4)
                 } else {
-                    AppMenuRow(entry: entry, checks: checks, keyWidth: keyWidth, appearance: appearance, open: submenu == index) { row in
+                    AppMenuRow(entry: entry, checks: checks, iconColumn: iconColumns.contains(index), iconWidth: iconWidth, keyWidth: keyWidth,
+                               appearance: appearance, open: submenu == index) { row in
                         guard submenu != index else { return }
                         let opens = entry.hasSubmenu && entry.isEnabled
                         submenu = opens ? index : nil
@@ -1407,6 +1410,17 @@ struct AppMenuList: View {
             }
         }
         .onPreferenceChange(MenuKeyWidth.self) { keyWidth = $0 }
+    }
+
+    /// The entries whose titles line up after an icon column. As in macOS 27 menus, a section, the entries between two
+    /// separators, gets the column when more than half of its entries have an icon; otherwise titles without one start
+    /// where icons do.
+    private var iconColumns: Set<Int> {
+        var indices = Set<Int>()
+        for section in entries.split(whereSeparator: { $0.title.isEmpty }) where section.filter({ $0.icon != nil }).count * 2 > section.count {
+            indices.formUnion(section.indices)
+        }
+        return indices
     }
 }
 
@@ -1422,6 +1436,8 @@ private struct MenuKeyWidth: PreferenceKey {
 private struct AppMenuRow: View {
     let entry: AppMenuEntry
     let checks: Bool
+    let iconColumn: Bool
+    let iconWidth: CGFloat
     let keyWidth: CGFloat
     let appearance: WidgetAppearance
     let open: Bool
@@ -1437,7 +1453,16 @@ private struct AppMenuRow: View {
         } label: {
             HStack(spacing: 4) {
                 if checks {
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).frame(width: 14).opacity(entry.isChecked ? 1 : 0)
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: .semibold)).frame(width: 15, alignment: .leading)
+                        .opacity(entry.isChecked ? 1 : 0)
+                }
+                // As in macOS 27 menus: icons centered in a slot as wide as the menu's widest, which starts 2.5 points
+                // before titles without an icon and ends 5 points before titles with one.
+                if entry.icon != nil || iconColumn {
+                    ZStack { if let icon = entry.icon { Image(nsImage: icon) } }
+                        .frame(width: iconWidth)
+                        .padding(.leading, -2.5)
+                        .padding(.trailing, 1)
                 }
                 Text(entry.title).lineLimit(1)
                 Spacer(minLength: 8)
@@ -1447,7 +1472,7 @@ private struct AppMenuRow: View {
                         .fixedSize()
                         .layoutPriority(1)
                 }
-                if entry.hasSubmenu { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)) }
+                if entry.hasSubmenu { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).frame(minWidth: keyWidth) }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
@@ -1467,8 +1492,8 @@ private struct AppMenuRow: View {
     }
 }
 
-/// A shortcut as macOS menus show it: 🌐 for fn and the modifiers, then the key in a column as wide as the menu's
-/// widest key, so the modifiers end at the same place on every row and the keys line up on their leading edge.
+/// A shortcut as macOS menus show it: 🌐 for fn and the modifiers, then the key centered in a column as wide as the
+/// menu's widest key, so the modifiers end at the same place on every row. Submenu chevrons center in the same column.
 private struct MenuShortcutLabel: View {
     let shortcut: MenuShortcut
     let keyWidth: CGFloat
@@ -1479,7 +1504,7 @@ private struct MenuShortcutLabel: View {
             Text(shortcut.modifiers)
             key
                 .background(GeometryReader { Color.clear.preference(key: MenuKeyWidth.self, value: $0.size.width) })
-                .frame(minWidth: keyWidth, alignment: .leading)
+                .frame(minWidth: keyWidth)
         }
     }
 
