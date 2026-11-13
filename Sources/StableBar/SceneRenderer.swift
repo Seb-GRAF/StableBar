@@ -258,7 +258,9 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
         case .accessibilityGuide:
-            try await OffscreenSnapshot.write(AccessibilityGuideView {}.padding(24).background(Color(nsColor: .windowBackgroundColor)),
+            let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:))
+            try await OffscreenSnapshot.write(AccessibilityGuideView(icon: icon ?? NSApp.applicationIconImage) {}
+                .padding(24).background(Color(nsColor: .windowBackgroundColor)),
                                               size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
