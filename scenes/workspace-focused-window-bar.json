@@ -3,8 +3,8 @@
   "configuration": {
     "workspaceSource": "omniwm",
     "widgets": [
-      { "id": "windows", "type": "workspaces", "position": "left", "workspace": { "windows": true } },
-      { "id": "apps", "type": "workspaces", "position": "center" },
+      { "id": "windows", "type": "workspaces", "position": "left", "workspace": { "windows": true, "focusedWindowStyle": {} } },
+      { "id": "apps", "type": "workspaces", "position": "center", "workspace": { "focusedWindowStyle": {} } },
       { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
     ]
   },

@@ -129,7 +129,7 @@ import Testing
 @Test func workspaceSnapshotKeepsMonitorFocusAndDeduplicatesAppWindows() throws {
     let spaces = Data(#"[{"workspace":"10","workspace-is-focused":false,"workspace-is-visible":false,"monitor-appkit-nsscreen-screens-id":2},{"workspace":"2","workspace-is-focused":false,"workspace-is-visible":true,"monitor-appkit-nsscreen-screens-id":2},{"workspace":"1","workspace-is-focused":true,"workspace-is-visible":true,"monitor-appkit-nsscreen-screens-id":1}]"#.utf8)
     let windows = Data(#"[{"workspace":"1","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":1,"window-title":"Window 1"},{"workspace":"1","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":2,"window-title":"Window 2"},{"workspace":"2","app-name":"Finder","app-bundle-id":"com.apple.finder","window-id":3,"window-title":"Window 3"}]"#.utf8)
-    let snapshot = try workspaceSnapshot(workspaces: spaces, windows: windows)
+    let snapshot = try workspaceSnapshot(workspaces: spaces, windows: windows, focusedWindow: 2)
     #expect(snapshot.map(\.name) == ["1", "2", "10"])
     #expect(snapshot[0].isFocused)
     #expect(!snapshot[1].isFocused)
@@ -137,6 +137,7 @@ import Testing
     #expect(snapshot[1].monitor == 2)
     #expect(snapshot[0].windows.map(\.id) == [1, 2])
     #expect(snapshot[0].windows.map(\.title) == ["Window 1", "Window 2"])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true])
     #expect(snapshot[1].windows.map(\.id) == [3])
     #expect(snapshot[2].windows.isEmpty)
     #expect(snapshot[0].apps.count == 1)
@@ -348,7 +349,7 @@ private func calls(_ log: URL) -> [Substring] {
     let fixture = try omniwmFixture("""
     case "$1 $2 $4" in
       "query displays ") printf '%s\\n' '[{"uuid":"A","screen_id":80,"is_active_space":true,"is_active_context":true},{"uuid":"B","screen_id":90,"is_active_space":true,"is_active_context":false},{"uuid":"C","screen_id":70,"is_active_space":false,"is_active_context":false}]' ;;
-      "query workspaces A") printf '%s\\n' '[{"id":"a0","index":0,"name":"first","is_active":true,"windows":[{"id":{"pid":7,"idx":11},"title":"Docs","bundle_id":"com.apple.Safari","app_name":"Safari"},{"id":{"pid":8,"idx":12},"title":"","bundle_id":null,"app_name":"Ghostty"}]},{"id":"a1","index":1,"name":"second","is_active":false,"windows":[{"id":{"pid":9,"idx":13},"title":"List","bundle_id":"com.apple.Notes","app_name":"Notes"}]}]' ;;
+      "query workspaces A") printf '%s\\n' '[{"id":"a0","index":0,"name":"first","is_active":true,"windows":[{"id":{"pid":7,"idx":11},"title":"Docs","bundle_id":"com.apple.Safari","app_name":"Safari"},{"id":{"pid":8,"idx":12},"title":"","bundle_id":null,"app_name":"Ghostty","is_focused":true}]},{"id":"a1","index":1,"name":"second","is_active":false,"windows":[{"id":{"pid":9,"idx":13},"title":"List","bundle_id":"com.apple.Notes","app_name":"Notes"}]}]' ;;
       "query workspaces B") printf '%s\\n' '[{"id":"b0","index":0,"name":"first","is_active":true,"windows":[]},{"id":"b1","index":1,"name":"second","is_active":false,"windows":[]}]' ;;
     esac
     """)
@@ -361,6 +362,7 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(snapshot.map(\.isVisible) == [true, false, true, false])
     #expect(snapshot[0].windows.map(\.id) == [11, 12])
     #expect(snapshot[0].windows.map(\.reference) == [#"{"pid":7,"idx":11}"#, #"{"pid":8,"idx":12}"#])
+    #expect(snapshot[0].windows.map(\.isFocused) == [false, true])
     #expect(snapshot[0].apps.map(\.bundleID) == ["Ghostty", "com.apple.Safari"])
     fixture.store.source = .rift
     fixture.store.workspaces = snapshot

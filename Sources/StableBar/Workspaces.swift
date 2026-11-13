@@ -152,8 +152,9 @@ func userProcessIsRunning(named name: String) -> Bool {
     }
 }
 
-func workspaceSnapshot(workspaces: Data, windows: Data) throws -> [Workspace] {
-    let windows = try JSONDecoder().decode([WorkspaceWindow].self, from: windows)
+func workspaceSnapshot(workspaces: Data, windows: Data, focusedWindow: Int? = nil) throws -> [Workspace] {
+    var windows = try JSONDecoder().decode([WorkspaceWindow].self, from: windows)
+    for index in windows.indices { windows[index].isFocused = windows[index].id == focusedWindow }
     return try JSONDecoder().decode([Workspace].self, from: workspaces)
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         .map { workspace in
@@ -430,7 +431,12 @@ final class WorkspaceStore {
             async let windows = runCommand(executable, arguments: [
                 "list-windows", "--all", "--format", "%{workspace} %{app-name} %{app-bundle-id} %{window-id} %{window-title}", "--json"
             ])
-            snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows)
+            // AeroSpace fails --focused when no window has focus, as on an empty workspace.
+            async let focused = try? runCommand(executable, arguments: [
+                "list-windows", "--focused", "--format", "%{window-id}", "--json"
+            ])
+            let focusedWindow = await focused.flatMap { try? JSONDecoder().decode([[String: Int]].self, from: $0).first?["window-id"] }
+            snapshot = try await workspaceSnapshot(workspaces: spaces, windows: windows, focusedWindow: focusedWindow)
         case .yabai:
             let executable = try executable()
             let bundleIDs = NSWorkspace.shared.runningApplications.reduce(into: [Int32: String]()) { result, app in

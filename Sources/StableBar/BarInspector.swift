@@ -492,6 +492,12 @@ struct BarInspector: View {
                         }).animation(.snappy(duration: 0.2)))
                         .toggleStyle(.switch).labelsHidden().controlSize(.small)
                     }
+                    SettingRow(title: "Mark the focused window", hint: "Works with AeroSpace, OmniWM, Rift and yabai") {
+                        Toggle("Mark the focused window", isOn: Binding(get: { widget.workspace?.focusedWindowStyle != nil }, set: {
+                            editor.set(["workspace": .object(["focusedWindowStyle": $0 ? .object([:]) : .null])], for: widget.id)
+                        }).animation(.snappy(duration: 0.2)))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
                     SettingRow(title: "Magnify on hover", hint: "Zoom app icons like the Dock and show the app’s name below the bar") {
                         Toggle("Magnify on hover", isOn: Binding(get: { widget.workspace?.magnification != nil }, set: {
                             editor.set(["workspace": .object(["magnification": $0 ? .number(1.5) : .null])], for: widget.id)

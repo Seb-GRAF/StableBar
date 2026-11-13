@@ -67,13 +67,8 @@ enum SceneRenderer {
         })
         if let workspaces = scene.workspaces {
             store.workspaceStore.workspaces = try workspaceSnapshot(workspaces: JSONEncoder().encode(workspaces),
-                                                                    windows: JSONEncoder().encode(scene.windows ?? [])).map { workspace in
-                var workspace = workspace
-                for index in workspace.windows.indices {
-                    workspace.windows[index].isFocused = workspace.windows[index].id == scene.focusedWindow
-                }
-                return workspace
-            }
+                                                                    windows: JSONEncoder().encode(scene.windows ?? []),
+                                                                    focusedWindow: scene.focusedWindow)
         }
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()

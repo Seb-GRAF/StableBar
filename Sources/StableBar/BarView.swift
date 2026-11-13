@@ -1001,11 +1001,10 @@ struct WorkspaceView: View {
                 let glyph = styles.glyph(hovered: hovered)
                 let zoomedBelow = magnification.map { (glyph.height ?? 14) * ($0 - 1) } ?? 0
                 let textColor = style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground)
-                let focusStyle = configuration?.focusedWindowStyle
-                    .resolved(for: StyleStates(workspace: WorkspaceState(workspace), mode: mode, hover: hovered)) ?? WidgetStyle()
-                let highlight = FocusedWindowHighlight(
-                    style: focusStyle, color: textColor, fillsByDefault: indicator != .none,
-                    cornerRadius: focusStyle.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
+                let highlight = configuration?.focusedWindowStyle
+                    .map { $0.resolved(for: StyleStates(workspace: WorkspaceState(workspace), mode: mode, hover: hovered)) }
+                    .map { FocusedWindowHighlight(style: $0, color: textColor, magnifying: magnifier.isActive,
+                                                  cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
                         Text(workspace.label)
@@ -1019,8 +1018,8 @@ struct WorkspaceView: View {
                             ForEach(workspace.windows) { window in
                                 windowButton(windows: [window], below: zoomedBelow, action: { workspaceStore.focus(window) }) {
                                     HStack(spacing: style.spacing ?? 4) {
-                                        appIcon(window.app, style: window.isFocused ? focusStyle.inheriting(glyph) : glyph,
-                                                spacing: style.spacing ?? 4, highlight: window.isFocused ? highlight : nil)
+                                        appIcon(window.app, style: glyph, spacing: style.spacing ?? 4,
+                                                highlight: window.isFocused ? highlight : nil)
                                         if let length = configuration?.titleLength, length > 0 {
                                             Text(String(window.title.prefix(length))).magnified(.label, by: magnifier, upTo: magnification)
                                         }
@@ -1037,8 +1036,7 @@ struct WorkspaceView: View {
                                 let windows = workspace.windows.filter { $0.app.bundleID == app.bundleID }
                                 let focused = windows.contains(where: \.isFocused)
                                 windowButton(windows: windows, below: zoomedBelow, action: { workspaceStore.select(workspace) }) {
-                                    appIcon(app, style: focused ? focusStyle.inheriting(glyph) : glyph, spacing: style.spacing ?? 4,
-                                            highlight: focused ? highlight : nil)
+                                    appIcon(app, style: glyph, spacing: style.spacing ?? 4, highlight: focused ? highlight : nil)
                                 }
                                 .help(magnification == nil ? app.name : "")
                                 .accessibilityValue(badgeValue(for: app))
@@ -1146,6 +1144,7 @@ struct WorkspaceView: View {
     @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, spacing: CGFloat,
                                       highlight: FocusedWindowHighlight? = nil) -> some View {
         let zoom = magnification ?? 1
+        let style = highlight.map { $0.style.inheriting(style) } ?? style
         let icon = Group {
             if let glyphs = configuration?.appGlyphs, let text = appGlyph(for: app, in: glyphs) {
                 Text(text)
@@ -1182,18 +1181,18 @@ struct WorkspaceView: View {
 private struct FocusedWindowHighlight: View {
     let style: WidgetStyle
     let color: Color
-    /// A workspace widget without an indicator, such as a text-only theme's, draws only a configured fill.
-    let fillsByDefault: Bool
+    /// Scaled with a magnified icon, so it hugs the icon then to stay small and below the bar's top edge.
+    let magnifying: Bool
     let cornerRadius: Double
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
-        shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(fillsByDefault ? color.opacity(0.22) : .clear))
+        shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(color.opacity(0.22)))
             .overlay {
                 if let border = style.borderColor { shape.strokeBorder(border.color, lineWidth: style.borderWidth ?? 1) }
             }
-            .padding(.horizontal, -3)
-            .padding(.vertical, -2)
+            .padding(.horizontal, magnifying ? -2 : -3)
+            .padding(.vertical, magnifying ? 0 : -2)
             .allowsHitTesting(false)
     }
 }

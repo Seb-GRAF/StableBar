@@ -187,8 +187,8 @@ struct WorkspaceConfiguration: Decodable, Sendable {
     var badges: DockBadgeStyle?
     var style = WidgetStyle()
     var appStyle = WidgetStyle()
-    /// The focused window's item, or the focused app's in per-app mode, over its app style.
-    var focusedWindowStyle = WidgetStyle()
+    /// The focused window's icon, or the focused app's in per-app mode, over its app style. Unset draws no highlight.
+    var focusedWindowStyle: WidgetStyle?
     var indicatorStyle = WidgetStyle()
     private var cells: [WorkspaceState?: WorkspaceCellStyle] = [:]
 
@@ -224,7 +224,7 @@ struct WorkspaceConfiguration: Decodable, Sendable {
         let app = (try values.decodeIfPresent(WidgetStyle.self, forKey: .appStyle) ?? WidgetStyle())
             .addingStates(["focused": focusedApp, "visible": visibleApp].compactMapValues { $0 })
         let underline = try values.decodeIfPresent(WidgetStyle.self, forKey: .indicatorStyle) ?? WidgetStyle()
-        focusedWindowStyle = try values.decodeIfPresent(WidgetStyle.self, forKey: .focusedWindowStyle) ?? WidgetStyle()
+        focusedWindowStyle = try values.decodeIfPresent(WidgetStyle.self, forKey: .focusedWindowStyle)
         style = cell
         appStyle = app
         indicatorStyle = underline
