@@ -492,6 +492,18 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
     #expect(items.map(\.identifier) == ["com.apple.menuextra.clock"])
 }
 
+@Test func runningAppsByPIDKeepsTheFirstAppOfADuplicatedPID() {
+    let first = MenuApplication(pid: 955)
+    let relaunched = MenuApplication(pid: 955)
+    let own = MenuApplication(pid: 100)
+    let other = MenuApplication(pid: 981)
+    let apps = runningAppsByPID([own, first, other, relaunched], leavingOut: 100)
+    #expect(apps.count == 2)
+    #expect(apps[955] === first)
+    #expect(apps[981] === other)
+    #expect(apps[100] == nil)
+}
+
 @Test func macOS27KeepsMacOSOwnMenuBarItemsUnderControlCenter() {
     let agent = MenuApplication(pid: 721, bundleID: "com.apple.MenuBarAgent")
     let controlCenter = MenuApplication(pid: 724, bundleID: "com.apple.controlcenter")
