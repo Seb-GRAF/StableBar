@@ -114,7 +114,7 @@ struct HelpQuestion: Identifiable {
 
     For a whole different bar when you dock, give that screen setup its own bar: in **Settings → Bar**, open the menu beside the screen thumbnails and choose **Give it its own bar**. StableBar then switches bars when you connect or disconnect a screen.
 
-    **Settings → Bar** can also scale the bar down on the laptop only (`bar.displayScale`). See [Screen setups](layout.md#screen-setups).
+    **Settings → Bar** can also give each kind of screen its own bar height. See [Screen setups](layout.md#screen-setups).
 
     ## Will the notch hide my widgets?
 

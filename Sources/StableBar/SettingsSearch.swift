@@ -27,8 +27,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .uninstall: ("Uninstall StableBar", .general, "General › Uninstall", "remove delete trash app menu bar auto-hide restore login keychain homebrew")
         case .barSize: ("Bar height and corners", .widgets, "Bar › Bar › Size", "tall size px pt radius rounded inset spacing")
         case .barLook: ("Bar background and border", .widgets, "Bar › Bar › Look", "color fill gradient edges line")
-        case .barPlacement: ("Below the menu bar, offset, margin and size on each screen", .widgets, "Bar › Bar › Placement",
-                             "position floating scale laptop monitor display")
+        case .barPlacement: ("Below the menu bar, offset and margin", .widgets, "Bar › Bar › Placement", "position floating display")
         case .screenSetups: ("Own bar for these screens", .widgets, "Bar › Screens", "screen setup monitor laptop vertical shared external")
         case .everyWidget: ("Look of every widget", .widgets, "Bar › Every widget", "defaults font size color padding corners shadow px pt")
         case .widgetContent: ("Widget content", .widgets, "Bar › Widget › Content", "text icon clock date format package settings location units")

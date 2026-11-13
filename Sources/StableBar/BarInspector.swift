@@ -266,10 +266,6 @@ struct BarInspector: View {
                 }
                 bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
-            SettingsGroup("Size on each screen") {
-                scale("Laptop", key: "builtIn")
-                scale("Monitors", key: "external")
-            }
             if let setup = store.screenSetup {
                 let ownsBar = store.configurationURL != store.sharedConfigurationURL
                 let screens = kinds.map(\.name).joined(separator: " + ")
@@ -287,24 +283,6 @@ struct BarInspector: View {
                             }
                     }
                 }
-            }
-        }
-    }
-
-    private func scale(_ title: String, key: String) -> some View {
-        let values = store.configuration?.bar.displayScale.mapValues(ConfigurationValue.number) ?? [:]
-        let property = store.propertySources(path: "bar.displayScale", key: key, values: values)
-        let value = if case let .number(value) = property.editingValue { value * 100 } else { 100.0 }
-        let binding = Binding(get: { value }, set: { percent in
-            if percent != value {
-                editor.change(ConfigurationEdit(action: .bar, properties: ["displayScale": .object([key: .number(percent / 100)])]))
-            }
-        })
-        return NumberDraft(value: binding) { binding in
-            SettingRow(title: title, property: property, source: store.propertySourceText(property),
-                       reset: property.saved.map { source in { reset(source) } },
-                       scrub: Scrub(value: binding, range: 25...300, step: 5)) {
-                NumberField(title: title, value: binding, range: 25...300, step: 5, unit: "%", slider: true)
             }
         }
     }
@@ -837,11 +815,6 @@ struct BarInspector: View {
 
     private func unset(_ properties: [String: ConfigurationValue]) {
         editor.change(ConfigurationEdit(action: .unset, properties: properties))
-    }
-
-    private func reset(_ source: PropertyValueSource) {
-        do { try store.removePropertySource(source) }
-        catch { store.customizationHistory.error = errorMessage(error) }
     }
 }
 
