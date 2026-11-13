@@ -176,6 +176,7 @@ final class WorkspaceStore {
         }
     }
     let windowDrag = WorkspaceWindowDragSession()
+    let dockBadges = DockBadges()
     var desktopShortcuts = DesktopShortcuts()
     /// Tests supply desktops without reading this Mac's Spaces.
     var readSpaces: () throws -> [Workspace] = { try currentSpaces() }

@@ -45,6 +45,8 @@ struct SceneFile: Decodable {
     var workspaces: [ConfigurationValue]?
     /// AeroSpace's `list-windows --json` objects.
     var windows: [ConfigurationValue]?
+    /// Dock badge labels by bundle identifier.
+    var dockBadges: [String: String] = [:]
     /// Switch to Desktop shortcuts enabled on the stand-in Mac, for setup and Settings. All are off by default.
     var desktopShortcuts: [Int] = []
     /// The bundle identifier of the active app, Finder by default.
@@ -78,7 +80,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
+        case configuration, packages, outputs, history, workspaces, windows, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
              starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -153,6 +155,7 @@ struct SceneFile: Decodable {
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
         windows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .windows)
+        dockBadges = try values.decodeIfPresent([String: String].self, forKey: .dockBadges) ?? [:]
         desktopShortcuts = try values.decodeIfPresent([Int].self, forKey: .desktopShortcuts) ?? []
         if desktopShortcuts.contains(where: { !DesktopShortcuts.desktops.contains($0) }) || Set(desktopShortcuts).count != desktopShortcuts.count {
             throw DecodingError.dataCorruptedError(forKey: .desktopShortcuts, in: values,

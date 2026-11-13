@@ -184,6 +184,7 @@ struct WorkspaceConfiguration: Decodable, Sendable {
     var windows: Bool?
     var titleLength: Int?
     var magnification: Double?
+    var badges: DockBadgeStyle?
     var style = WidgetStyle()
     var appStyle = WidgetStyle()
     var indicatorStyle = WidgetStyle()
@@ -191,7 +192,7 @@ struct WorkspaceConfiguration: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case indicator, indicatorStyle, style, focusedStyle, visibleStyle, emptyStyle, appStyle, focusedAppStyle, visibleAppStyle
-        case appGlyphs, hideApps, hideWorkspaces, showEmpty, showApps, windows, titleLength, magnification
+        case appGlyphs, hideApps, hideWorkspaces, showEmpty, showApps, windows, titleLength, magnification, badges
     }
 
     init(from decoder: Decoder) throws {
@@ -206,6 +207,7 @@ struct WorkspaceConfiguration: Decodable, Sendable {
         windows = try values.decodeIfPresent(Bool.self, forKey: .windows)
         titleLength = try values.decodeIfPresent(Int.self, forKey: .titleLength)
         magnification = try values.decodeIfPresent(Double.self, forKey: .magnification)
+        badges = try values.decodeIfPresent(DockBadgeStyle.self, forKey: .badges)
         if let titleLength, titleLength < 0 {
             throw DecodingError.dataCorruptedError(forKey: .titleLength, in: values, debugDescription: "Window title length must be nonnegative.")
         }

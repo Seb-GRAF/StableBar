@@ -52,7 +52,7 @@ extension SourcePermission {
                                             detail: "Calendar widgets show your next meeting and today's agenda. macOS asks for access the first time one updates.",
                                             symbol: "calendar", privacyPane: "Privacy_Calendars")
     static let accessibility = SourcePermission(title: "Accessibility",
-                                                detail: "App menus and the Apple menu read the frontmost app's menus and open them. Control Center and Menu bar items open items in the macOS menu bar. Workspaces switches macOS desktops.",
+                                                detail: "App menus and the Apple menu read the frontmost app's menus and open them. Control Center and Menu bar items open items in the macOS menu bar. Workspaces switches macOS desktops and reads Dock badges.",
                                                 symbol: "accessibility", privacyPane: "Privacy_Accessibility")
 }
 
@@ -66,10 +66,22 @@ extension WidgetContent {
 }
 
 extension WidgetConfiguration {
-    /// The access the widget needs: its content's, or Accessibility for Workspaces on macOS Spaces, which switches
-    /// desktops by pressing their shortcuts. Window managers switch workspaces themselves.
+    /// The access the widget needs: its content's, or Accessibility for Workspaces that shows Dock badges, or on
+    /// macOS Spaces, which switches desktops by pressing their shortcuts. Window managers switch workspaces themselves.
     func permissions(source: WorkspaceSource) -> [SourcePermission] {
-        content == .workspaces && source == .spaces ? [.accessibility] : content.permissions
+        content == .workspaces && (source == .spaces || showsDockBadges) ? [.accessibility] : content.permissions
+    }
+
+    /// Whether the widget draws its apps' Dock badges.
+    var showsDockBadges: Bool {
+        content == .workspaces && workspace?.badges != nil && workspace?.showApps != false
+    }
+}
+
+extension Configuration {
+    /// Whether a widget draws Dock badges on any screen: a screen's own look can turn them on by itself.
+    var showsDockBadges: Bool {
+        ([self] + screenLooks.values).contains { $0.widgets.contains { $0.enabled && $0.showsDockBadges } }
     }
 }
 

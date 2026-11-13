@@ -1022,6 +1022,7 @@ struct WorkspaceView: View {
                                 }
                                 .help(magnification == nil ? window.title : "")
                                 .accessibilityLabel("\(window.app.name): \(window.title)")
+                                .accessibilityValue(badgeValue(for: window.app))
                             }
                         } else {
                             ForEach(workspace.apps) { app in
@@ -1030,6 +1031,7 @@ struct WorkspaceView: View {
                                     appIcon(app, style: glyph, spacing: style.spacing ?? 4)
                                 }
                                 .help(magnification == nil ? app.name : "")
+                                .accessibilityValue(badgeValue(for: app))
                             }
                         }
                     }
@@ -1124,6 +1126,11 @@ struct WorkspaceView: View {
         }
     }
 
+    private func badgeValue(for app: WorkspaceApp) -> String {
+        guard configuration?.badges != nil, let label = workspaceStore.dockBadges.labels[app.bundleID] else { return "" }
+        return "Badge \(label)"
+    }
+
     @ViewBuilder private func appIcon(_ app: WorkspaceApp, style: WidgetStyle, spacing: CGFloat) -> some View {
         let zoom = magnification ?? 1
         let icon = Group {
@@ -1139,6 +1146,11 @@ struct WorkspaceView: View {
                     .resizable()
                     .interpolation(.high)
                     .frame(width: style.width ?? 14, height: style.height ?? 14)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let badges = configuration?.badges, let label = workspaceStore.dockBadges.labels[app.bundleID] {
+                DockBadge(style: badges, label: label, iconHeight: style.height ?? 14)
             }
         }
         if let magnification {

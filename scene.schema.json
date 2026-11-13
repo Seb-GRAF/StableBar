@@ -42,6 +42,11 @@
       "type": "array",
       "items": { "type": "object" }
     },
+    "dockBadges": {
+      "description": "Dock badge labels by bundle identifier, for a Workspaces widget that shows badges.",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
     "activeApp": { "description": "The active app's bundle identifier. Finder by default.", "type": "string" },
     "menu": {
       "description": "The menu a popup scene shows in place of the widget's popup, as an app menu widget opens one: its items, with the values Accessibility gives a menu item.",
