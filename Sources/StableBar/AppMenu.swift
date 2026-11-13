@@ -287,7 +287,7 @@ final class AppMenu: NSObject {
         let top = CGDisplayBounds(display).minY
         let readAttribute = readAttribute, sleep = sleep
         Task {
-            if await Task.detached(operation: { frame(of: item, readAttribute).minY >= top }).value {
+            if await Task.detached(operation: { menuBarShows(on: display) }).value {
                 Task.detached { AXUIElementPerformAction(item, kAXPressAction as CFString) }
                 return
             }
@@ -298,16 +298,16 @@ final class AppMenu: NSObject {
             setMenuBarShown(true, on: display)
             await Task.detached {
                 for _ in 0..<25 {
-                    if frame(of: item, readAttribute).minY >= top { break }
+                    if menuBarShows(on: display), frame(of: item, readAttribute).minY >= top { break }
                     try? await sleep(.milliseconds(20))
                 }
                 AXUIElementPerformAction(item, kAXPressAction as CFString)
             }.value
             setMenuBarShown(false, on: display)
             await Task.detached {
-                while true {
-                    let itemFrame = frame(of: item, readAttribute)
-                    if itemFrame.height == 0 || itemFrame.maxY <= top { break }
+                var hiddenChecks = 0
+                while hiddenChecks < 2 {
+                    hiddenChecks = menuBarShows(on: display) ? 0 : hiddenChecks + 1
                     try? await sleep(.milliseconds(100))
                 }
             }.value
