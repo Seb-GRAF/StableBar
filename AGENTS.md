@@ -36,6 +36,7 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 - New tests use Swift Testing; existing XCTest files can stay as they are.
 - Most tests run on the main actor, in parallel, on a busy CI runner. Never bound main-actor work with wall-clock time (short sleeps, deadline loops, short timeouts): wait by counting polls, as `awaitCondition` does. A sleep that only checks that nothing happens is fine.
+- Never block a thread of Swift's shared pool, such as with a semaphore wait in a stub that async code calls. CI's runner has three, and the run hangs once all three wait for work that needs one. App code that blocks goes through `BlockingWork.run`, so its tests can block it safely; `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` narrows the pool to one thread to check.
 - A fixture that runs git, or a script that runs git, needs a timeout of 60 seconds or more.
 - CI's Macs always show scroll bars (17 points); run a layout test with `-AppleShowScrollBars Always` to see what CI sees.
 - A purely visual fix is proven with before/after images, not with a UI test.
