@@ -122,6 +122,8 @@ struct BarEditView: View {
                     .animation(reduceMotion ? nil : .reorder, value: opened)
                     // A widget the bar didn't show, or one just added, slides in.
                     .animation(reduceMotion ? nil : .reorder, value: Set(widths.keys))
+                    // A crowded side's zone runs wider than the bar; the hosting view would center it.
+                    .frame(width: proxy.size.width / scale, height: height, alignment: .topLeading)
                 }
                 .overlay {
                     HStack(spacing: 0) {

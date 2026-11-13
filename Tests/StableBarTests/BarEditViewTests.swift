@@ -109,6 +109,22 @@ final class BarEditViewTests: XCTestCase {
                        "Scrolled to its end, a side ends where the bar puts it")
     }
 
+    @MainActor func testACrowdedBarWithoutANotchDrawsItsWidgetsWhereItPlacesThem() async throws {
+        let widgets = [#"{"id":"first","type":"text","text":"L","position":"left","style":{"width":60,"height":20}}"#]
+            + (0..<18).map { #"{"id":"right-\#($0)","type":"text","text":"R","position":"right","style":{"width":60,"height":20}}"# }
+        let fixture = try ThemeGalleryFixture("{\"widgets\":[\(widgets.joined(separator: ","))]}")
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        let (window, bar) = try await editBar(store, on: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 1100)
+        defer { window.close() }
+        XCTAssertFalse(bar.scrolling.isEmpty)
+        let source = try XCTUnwrap(descendants(bar, of: BarEditDragSourceView.self).first { $0.widgetID == "first" })
+        XCTAssertEqual(source.convert(source.bounds, to: bar).minX, try XCTUnwrap(bar.frames["first"]).minX, accuracy: 0.5,
+                       "A zone wider than the bar must not move what the bar draws")
+    }
+
     @MainActor func testANotchWiderThanTheBarLeavesTheEditBarStanding() async throws {
         let fixture = try ThemeGalleryFixture(#"{"bar":{"notchWidth":1600},"widgets":[{"id":"a","type":"text","text":"A","position":"left"}]}"#)
         defer { fixture.close() }
