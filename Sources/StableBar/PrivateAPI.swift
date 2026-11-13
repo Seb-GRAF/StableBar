@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Darwin
 
@@ -34,4 +35,9 @@ enum PrivateAPI {
         }
         return symbol("SACLockScreenImmediate", in: login, as: (@convention(c) () -> Int32).self)
     }()
+
+    /// A symbol macOS keeps for its own menus, such as the Apple menu's App Store one, from the bundle AppKit loads it from.
+    static func privateSymbol(_ name: String) -> NSImage? {
+        Bundle(path: "/System/Library/CoreServices/CoreGlyphsPrivate.bundle").flatMap { NSImage(symbolName: name, bundle: $0, variableValue: 1) }
+    }
 }

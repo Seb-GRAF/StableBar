@@ -61,8 +61,8 @@ extension MenuShortcut {
         121: "F11", 122: "F12", 135: "F13", 136: "F14", 137: "F15", 140: "⏏", 143: "F16", 144: "F17", 145: "F18", 146: "F19",
     ]
 
-    /// Glyphs a menu draws as a picture rather than a character: 150 is dictation's microphone.
-    private static let glyphSymbols: [Int: String] = [150: "mic.fill"]
+    /// Glyphs a menu draws as a picture rather than a character: 149 is Emoji & Symbols' 🌐 and 150 dictation's microphone.
+    private static let glyphSymbols: [Int: String] = [149: "globe", 150: "mic.fill"]
 
     /// Keys without a character by virtual key code, as Carbon's Events.h numbers them.
     private static let virtualKeys: [Int: String] = [

@@ -62,9 +62,11 @@ func menuShortcutNamesAKeyFromItsVirtualKeyAlone(virtualKey: Int, key: String) {
     #expect(MenuShortcut(character: ",", virtualKey: nil, glyph: nil, modifiers: 0) == MenuShortcut(modifiers: "⌘", key: ","))
 }
 
-@Test func menuShortcutShowsDictationAsAMicrophone() {
+@Test func menuShortcutShowsDictationAndEmojiKeysAsSymbols() {
     #expect(MenuShortcut(character: "🎤", virtualKey: 128, glyph: 150, modifiers: 8)
         == MenuShortcut(modifiers: "", key: "🎤", keySymbol: "mic.fill"))
+    #expect(MenuShortcut(character: "🌐", virtualKey: 128, glyph: 149, modifiers: 8)
+        == MenuShortcut(modifiers: "", key: "🌐", keySymbol: "globe"))
 }
 
 @Test(arguments: [
