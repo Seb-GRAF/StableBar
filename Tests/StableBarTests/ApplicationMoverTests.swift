@@ -568,11 +568,13 @@ func applicationMoveCapturesSessionEditsAfterCopying(setup: Bool) async throws {
     let session = setup ? SetupSession(store: store, system: system) : nil
     defer { session?.cancel() }
     let copyStarted = OSAllocatedUnfairLock(initialState: false)
+    let copiedOnSwiftPool = OSAllocatedUnfairLock(initialState: false)
     let releaseCopy = DispatchSemaphore(value: 0)
     var mover = fixture.mover()
     let copy = mover.system.copy
     mover.system.copy = { from, to in
         try copy(from, to)
+        copiedOnSwiftPool.withLock { $0 = isOnSwiftPool() }
         copyStarted.withLock { $0 = true }
         releaseCopy.wait()
     }
@@ -598,6 +600,7 @@ func applicationMoveCapturesSessionEditsAfterCopying(setup: Bool) async throws {
     }
     releaseCopy.signal()
     await moving.value
+    #expect(!copiedOnSwiftPool.withLock { $0 })
     #expect(controller.error == nil)
     #expect(quit)
     #expect(captured.withLock { $0?.edits.count } == 2)

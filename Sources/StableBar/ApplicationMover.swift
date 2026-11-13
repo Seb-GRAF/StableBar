@@ -286,10 +286,12 @@ struct ApplicationMover: Sendable {
         let candidate = staging.appending(path: "StableBar.app")
         let copyOnly = try offer.source.pathComponents.contains("AppTranslocation") || system.isReadOnly(offer.source)
         // Copy before touching either original. A full disk or bad signature leaves both as they were.
-        try system.copy(offer.source, candidate)
-        try verifyIdentity(candidate, identity: offer.current)
-        try system.validateCopySignature(candidate)
-        try system.removeQuarantine(candidate)
+        try await BlockingWork.run {
+            try system.copy(offer.source, candidate)
+            try verifyIdentity(candidate, identity: offer.current)
+            try system.validateCopySignature(candidate)
+            try system.removeQuarantine(candidate)
+        }
         let existing = try existingIdentity(at: offer.destination)
         guard existing == offer.existing else {
             throw CommandFailure(message: "The copy in Applications changed. Try again to review it.")
