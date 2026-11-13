@@ -65,6 +65,7 @@ private func largestWindow(of pid: pid_t) -> CGRect? {
 }
 
 struct AccessibilityGuideView: View {
+    var icon: NSImage = NSApp.applicationIconImage
     let close: () -> Void
 
     var body: some View {
@@ -77,7 +78,7 @@ struct AccessibilityGuideView: View {
                     .accessibilityLabel("Close")
             }
             HStack(spacing: 8) {
-                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 24, height: 24)
+                Image(nsImage: icon).resizable().frame(width: 24, height: 24)
                 Text("StableBar")
                 Spacer()
             }
