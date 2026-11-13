@@ -1003,7 +1003,7 @@ struct WorkspaceView: View {
                 let textColor = style.foreground?.color ?? (workspace.isFocused ? appearance.accentText : appearance.foreground)
                 let highlight = configuration?.focusedWindowStyle
                     .map { $0.resolved(for: StyleStates(workspace: WorkspaceState(workspace), mode: mode, hover: hovered)) }
-                    .map { FocusedWindowHighlight(style: $0, color: textColor, magnifying: magnifier.isActive,
+                    .map { FocusedWindowHighlight(style: $0, color: textColor, magnifying: magnifying,
                                                   cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
@@ -1118,6 +1118,9 @@ struct WorkspaceView: View {
     }
 
     private var magnification: CGFloat? { configuration?.magnification.map { CGFloat($0) } }
+
+    /// The magnifier tracks the pointer even with magnification off, when nothing zooms.
+    private var magnifying: Bool { magnification != nil && magnifier.isActive }
 
     private var canDragWindows: Bool {
         allowsWindowDragging && !measuring && workspaceStore.source.supportsWindowMoves
