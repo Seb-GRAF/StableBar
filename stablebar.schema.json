@@ -1904,7 +1904,7 @@
         "displayScale": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Scale factors for the bar on each display type.",
+          "description": "Retired: scale factors for the bar on each display type, still applied to files that set them. Use screens to size the bar on one kind of screen.",
           "properties": {
             "builtIn": {
               "$ref": "#/definitions/number"
