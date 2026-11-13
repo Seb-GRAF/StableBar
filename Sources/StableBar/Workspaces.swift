@@ -43,17 +43,20 @@ struct WorkspaceWindow: Decodable, Identifiable, Sendable, Equatable {
     let app: WorkspaceApp
     /// OmniWM's session-scoped window ID or Rift's window ID, which their focus commands take instead of `id`.
     var reference: String?
+    /// Whether the window manager reports this window as focused. Sources that don't report it leave it false.
+    var isFocused = false
 
     enum CodingKeys: String, CodingKey {
         case id = "window-id"
         case title = "window-title"
     }
 
-    init(id: Int, title: String, app: WorkspaceApp, reference: String? = nil) {
+    init(id: Int, title: String, app: WorkspaceApp, reference: String? = nil, isFocused: Bool = false) {
         self.id = id
         self.title = title
         self.app = app
         self.reference = reference
+        self.isFocused = isFocused
     }
 
     init(from decoder: Decoder) throws {

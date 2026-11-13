@@ -92,9 +92,11 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     let config = try presentationConfiguration(##"""
     {"workspaceDefaults":{"indicator":"underline","indicatorStyle":{"placement":"belowBar","height":2,"background":"#111111"},
       "style":{"fontSize":13,"states":{"focused":{"foreground":"#222222","fontWeight":"medium"}}},
-      "appStyle":{"fontSize":14,"states":{"focused":{"foreground":"#444444"}}}},"widgets":[
+      "appStyle":{"fontSize":14,"states":{"focused":{"foreground":"#444444"}}},
+      "focusedWindowStyle":{"background":"#777777","cornerRadius":5}},"widgets":[
       {"id":"spaces","type":"workspaces","position":"left","workspace":{"showApps":false,"appGlyphs":{"Finder":"F"},
-        "indicatorStyle":{"background":null},"focusedStyle":{"foreground":"#333333"},"focusedAppStyle":{"fontSize":15}}},
+        "indicatorStyle":{"background":null},"focusedStyle":{"foreground":"#333333"},"focusedAppStyle":{"fontSize":15},
+        "focusedWindowStyle":{"cornerRadius":7}}},
       {"id":"explicit","type":"workspaces","position":"right","workspace":{"indicator":"none","focusedStyle":{"foreground":"#555555"},
         "style":{"states":{"focused":{"foreground":"#666666"}}}}}]}
     """##)
@@ -106,6 +108,8 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     #expect(space.cellStyle(.focused).resting.fontWeight == "medium")
     #expect(space.cellStyle(.focused).app.fontSize == 15)
     #expect(space.cellStyle(.focused).app.foreground == HexColor(0x444444ff))
+    #expect(space.focusedWindowStyle.background == .color(HexColor(0x777777ff)))
+    #expect(space.focusedWindowStyle.cornerRadius == 7)
     #expect(space.appGlyphs == ["Finder":"F"])
     #expect(space.showApps == false)
     #expect(config.widgets[1].workspace?.indicator == WorkspaceConfiguration.Indicator.none)

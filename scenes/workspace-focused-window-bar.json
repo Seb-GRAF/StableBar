@@ -1,0 +1,24 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "omniwm",
+    "widgets": [
+      { "id": "windows", "type": "workspaces", "position": "left", "workspace": { "windows": true } },
+      { "id": "apps", "type": "workspaces", "position": "center" },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "workspaces": [
+    { "workspace": "1", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
+    { "workspace": "2", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
+  ],
+  "windows": [
+    { "window-id": 1, "window-title": "Docs", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 2, "window-title": "Terminal", "workspace": "1", "app-name": "Terminal", "app-bundle-id": "com.apple.Terminal" },
+    { "window-id": 3, "window-title": "Mail", "workspace": "1", "app-name": "Safari", "app-bundle-id": "com.apple.Safari" },
+    { "window-id": 4, "window-title": "Music", "workspace": "2", "app-name": "Music", "app-bundle-id": "com.apple.Music" }
+  ],
+  "focusedWindow": 2,
+  "draw": "bar",
+  "width": 600
+}

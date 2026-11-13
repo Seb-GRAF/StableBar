@@ -448,3 +448,10 @@ private func rules(_ json: String) throws -> [StyleRule] {
     #expect(menu.text.hoverBackground == .color(HexColor(0x123456ff)))
     #expect(menu.text.cornerRadius == 0)
 }
+
+@Test func focusedWindowStyleDecodesOnItsOwn() throws {
+    let configuration = try workspace(##"{"focusedWindowStyle":{"background":"#123456","cornerRadius":6}}"##)
+    #expect(configuration.focusedWindowStyle.background == .color(HexColor(0x123456ff)))
+    #expect(configuration.focusedWindowStyle.cornerRadius == 6)
+    #expect(configuration.cellStyle(.focused).glyph(hovered: false).background == nil)
+}

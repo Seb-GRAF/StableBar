@@ -47,6 +47,8 @@ struct SceneFile: Decodable {
     var windows: [ConfigurationValue]?
     /// Dock badge labels by bundle identifier.
     var dockBadges: [String: String] = [:]
+    /// The `window-id` of the window the stand-in window manager reports as focused.
+    var focusedWindow: Int?
     /// Switch to Desktop shortcuts enabled on the stand-in Mac, for setup and Settings. All are off by default.
     var desktopShortcuts: [Int] = []
     /// The bundle identifier of the active app, Finder by default.
@@ -80,7 +82,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
+        case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
              starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -161,6 +163,7 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .desktopShortcuts, in: values,
                                                    debugDescription: "Desktop shortcuts name desktops 1 to 16, each once.")
         }
+        focusedWindow = try values.decodeIfPresent(Int.self, forKey: .focusedWindow)
         activeApp = try values.decodeIfPresent(String.self, forKey: .activeApp)
         menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
         draw = try values.decode(Draw.self, forKey: .draw)

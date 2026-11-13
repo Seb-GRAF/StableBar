@@ -373,6 +373,19 @@
               "type": "null"
             }
           ]
+        },
+        "focusedWindowStyle": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/style"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -1353,6 +1366,19 @@
           ]
         },
         "visibleAppStyle": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/style"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "focusedWindowStyle": {
           "anyOf": [
             {
               "$ref": "#/definitions/style"
