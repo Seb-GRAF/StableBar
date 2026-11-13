@@ -292,6 +292,8 @@ import Testing
         let steps = editor.undoSteps.count
         editor.set(["workspace": .object(["style": .object(["fontSize": .number(12)])])], for: "spaces.main")
         #expect(editor.undoSteps.count == steps)
+        editor.set(["workspace": .object(["focusedWindowStyle": .object([:])])], for: "spaces.main")
+        #expect(store.configuration?.widgets[0].workspace?.focusedWindowStyle != nil)
     }
 }
 
