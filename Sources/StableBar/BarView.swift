@@ -1187,12 +1187,13 @@ private struct FocusedWindowHighlight: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let horizontal = style.paddingHorizontal ?? 3
         shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(color.opacity(0.22)))
             .overlay {
                 if let border = style.borderColor { shape.strokeBorder(border.color, lineWidth: style.borderWidth ?? 1) }
             }
-            .padding(.horizontal, magnifying ? -2 : -3)
-            .padding(.vertical, magnifying ? 0 : -2)
+            .padding(.horizontal, -(magnifying ? min(horizontal, 2) : horizontal))
+            .padding(.vertical, magnifying ? 0 : -(style.paddingVertical ?? 2))
             .allowsHitTesting(false)
     }
 }
