@@ -54,9 +54,9 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     /// and saves nothing: the scenes' sample.
     static func sample(star: StarRequest.State = .repository) -> AppUpdate {
         let update = AppUpdate(starRequest: StarRequest(sample: star))
-        let changes = ["show keyboard shortcuts in app menus",
-                       "open the Apple menu, System Settings or the lock screen from the Apple logo",
-                       "use the lighthouse logo across the app and website"]
+        let changes = ["show keyboard shortcuts in app menus by @Seb-GRAF",
+                       "open the Apple menu, System Settings or the lock screen from the Apple logo by @M4n0x",
+                       "use the lighthouse logo across the app and website by @Seb-GRAF"]
         update.installedVersion = "0.10.0"
         update.version = "0.11.0"
         update.changes = changes
@@ -155,12 +155,12 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     @objc func checkForUpdates() { updater.checkForUpdates() }
 
     /// The changes a release's notes list: their bullet points up to GitHub's list of new contributors,
-    /// without the author and pull request that GitHub's generated notes end each one with.
+    /// without the pull request link that GitHub's generated notes end each one with.
     static func changes(in notes: String) -> [String] {
         notes.split(whereSeparator: \.isNewline)
             .prefix { !$0.hasPrefix("## New Contributors") }
             .filter { $0.hasPrefix("* ") || $0.hasPrefix("- ") }
-            .map { String($0.dropFirst(2)).replacing(/\s+by @\S+ in \S+$/, with: "") }
+            .map { String($0.dropFirst(2)).replacing(/(\s+by @\S+) in \S+$/) { $0.output.1 } }
     }
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> {

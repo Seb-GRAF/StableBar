@@ -252,7 +252,7 @@ func unchangedAppRejectsCommitsThatCanChangeTheApp(message: String, path: String
         * @M4n0x made their first contribution in https://github.com/Seb-GRAF/StableBar/pull/59
 
         **Full Changelog**: https://github.com/Seb-GRAF/StableBar/compare/v0.5.0-beta.84...v0.5.0-beta.85
-        """) == ["fix: ignore unchanged settings selections"])
+        """) == ["fix: ignore unchanged settings selections by @M4n0x"])
     #expect(AppUpdate.changes(in: """
         ## [0.4.0](https://github.com/Seb-GRAF/StableBar/compare/v0.3.0...v0.4.0) (2026-10-15)
 

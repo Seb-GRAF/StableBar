@@ -1,8 +1,7 @@
 {
   "branches": ["main"],
   "plugins": [
-    "./.github/scripts/app-release.mjs",
-    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    ["./.github/scripts/app-release.mjs", { "preset": "conventionalcommits" }],
     ["@semantic-release/changelog", { "changelogTitle": "# Changelog" }],
     [
       "@semantic-release/exec",
