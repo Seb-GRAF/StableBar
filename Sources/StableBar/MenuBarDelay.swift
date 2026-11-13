@@ -15,6 +15,11 @@ func setMenuBarShown(_ shown: Bool, on display: CGDirectDisplayID) {
     _ = set(connection, display, shown)
 }
 
+func menuBarShows(on display: CGDirectDisplayID) -> Bool {
+    let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+    return MenuBarStripState(windows: windows, displays: [display: CGDisplayBounds(display)]).showsMenuBar(on: display)
+}
+
 struct MenuBarHover {
     /// Points below the top edge where the pointer waits. macOS 27 reveals the menu bar from
     /// anywhere within 4 points of the edge and tracks the pointer down to 5.
