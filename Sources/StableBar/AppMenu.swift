@@ -230,9 +230,7 @@ final class AppMenu: NSObject {
             return false
         }
         guard revealedPresses == 0 else { return true }
-        let apps = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications
-            .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
-            .map { ($0.processIdentifier, $0) })
+        let apps = runningAppsByPID(NSWorkspace.shared.runningApplications, leavingOut: ProcessInfo.processInfo.processIdentifier)
         let items = await foundMenuBarItems(apps: Array(apps.keys),
                                             agent: apps.values.first { $0.bundleIdentifier == menuBarAgentID }?.processIdentifier,
                                             readAttribute: readAttribute)
@@ -562,6 +560,11 @@ private func menuBarAgentItem(in slot: AXUIElement, agent: pid_t, _ readAttribut
 
 /// The app a menu bar item belongs to. MenuBarAgent draws macOS's own items, which Control Center drew before macOS 27,
 /// so they stay under Control Center, as the configuration names them.
+/// `runningApplications` can list the same PID twice.
+func runningAppsByPID(_ apps: [NSRunningApplication], leavingOut ownPID: pid_t) -> [pid_t: NSRunningApplication] {
+    Dictionary(apps.filter { $0.processIdentifier != ownPID }.map { ($0.processIdentifier, $0) }) { first, _ in first }
+}
+
 func menuBarItemApp(pid: pid_t, in apps: [pid_t: NSRunningApplication]) -> NSRunningApplication? {
     guard let app = apps[pid] else { return nil }
     guard app.bundleIdentifier == menuBarAgentID else { return app }

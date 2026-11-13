@@ -115,7 +115,7 @@ actor ProcessMetrics {
                 if let previous = times[sample.pid], sample.cpuTime >= previous { cpu[sample.pid] = Double(sample.cpuTime - previous) / elapsed }
             }
         }
-        times = Dictionary(uniqueKeysWithValues: samples.map { ($0.pid, $0.cpuTime) })
+        times = Dictionary(samples.map { ($0.pid, $0.cpuTime) }) { first, _ in first }
         time = now
         let apps = Dictionary(NSWorkspace.shared.runningApplications.compactMap { app in
             app.bundleURL.map { ($0.resolvingSymlinksInPath().path, (pid: app.processIdentifier, name: app.localizedName ?? $0.deletingPathExtension().lastPathComponent)) }
