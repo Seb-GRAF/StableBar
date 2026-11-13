@@ -197,7 +197,7 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     #expect(colors(image) > 10)
 }
 
-@Test @MainActor func editBarSceneFitsItsLayoutHeight() async throws {
+@Test @MainActor func editBarSceneKeepsTheBarsHeight() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let (image, store) = try await drawn(#"""
@@ -209,9 +209,7 @@ private func colors(_ image: NSBitmapImageRep) -> Int {
     """#, in: directory)
     defer { store.stop() }
     #expect(store.barEditing.isActive)
-    let height = try #require(store.barEditing.geometry(for: display)).layoutHeight
-    #expect(image.pixelsHigh == Int((2 * height).rounded()))
-    #expect(height >= (try #require(store.configuration).barGeometry(for: display).panelHeight))
+    #expect(image.pixelsHigh == Int((2 * (try #require(store.configuration).barGeometry(for: display).panelHeight)).rounded()))
 }
 
 @Test @MainActor func settingsSceneDrawsTheThemeSection() async throws {

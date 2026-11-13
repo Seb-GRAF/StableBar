@@ -537,3 +537,18 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(BarView.minimumWidth(resting: 120, narrowest: 120) == nil)
     #expect(BarView.minimumWidth(resting: 400, narrowest: nil) == nil)
 }
+
+@Test func adaptiveLayoutCanScrollACrowdedSegmentAtFullWidthsInsteadOfShrinkingIt() {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600, scrolls: true).plan(width: 1000, items: [
+        BarLayoutItem(id: "left", position: .left, width: 100, canOverflow: false),
+        BarLayoutItem(id: "near", position: .notchRight, width: 200, canOverflow: false),
+        BarLayoutItem(id: "far", position: .right, width: 250, canOverflow: false)
+    ])
+    #expect(plan.segments == [
+        BarSegment(positions: [.left, .notchLeft], span: 10...380, atEnd: true),
+        BarSegment(positions: [.notchRight, .center, .right], span: 620...990, atEnd: false, overflow: 88)
+    ])
+    #expect(plan.placements["left"] == BarPlacement(x: 10, width: 100))
+    #expect(plan.placements["near"] == BarPlacement(x: 620, width: 200))
+    #expect(plan.placements["far"] == BarPlacement(x: 828, width: 250))
+}

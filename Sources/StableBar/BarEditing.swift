@@ -41,7 +41,6 @@ final class BarEditing {
     private var slidingIn = false
     var error: String?
     private(set) var errorDisplayID: Int?
-    private var measuredHeights: [Int: CGFloat] = [:]
     private var queuedEdits = 0
     @ObservationIgnored private(set) var editTask: Task<Void, Never>?
 
@@ -71,7 +70,6 @@ final class BarEditing {
         store.popup.close()
         error = nil
         errorDisplayID = nil
-        measuredHeights = [:]
         isActive = true
         store.onConfigurationChange?()
     }
@@ -86,7 +84,6 @@ final class BarEditing {
         isActive = false
         error = nil
         errorDisplayID = nil
-        measuredHeights = [:]
         store?.onConfigurationChange?()
     }
 
@@ -168,19 +165,6 @@ final class BarEditing {
                                                       menu: output?.menu ?? widget.menu ?? []) } == true
     }
 
-    func geometry(for display: BarDisplay) -> BarGeometry? {
-        guard let config = store?.configuration?.onScreen(ScreenKind(display)) else { return nil }
-        guard isActive, let height = measuredHeights[display.id] else { return config.barGeometry(for: display) }
-        return BarGeometry(layoutHeight: max(config.bar.height * CGFloat(config.bar.scale(for: display)), height + 2 * config.bar.margin),
-                           margin: config.bar.margin, outsideExtent: 0, position: config.bar.position)
-    }
-
-    func trayState(on displayID: Int, position: WidgetPosition) -> BarEditTrayState {
-        let dragging = dragSession.active != nil
-        return BarEditTrayState(showsName: dragging, showsBadges: !dragging,
-                                isTarget: dragging && insertion?.displayID == displayID && insertion?.position == position)
-    }
-
     func isMoving(_ id: String) -> Bool {
         guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store?.configuration?.widgets,
               let moving = widgets.first(where: { $0.id == movingID }),
@@ -203,33 +187,21 @@ final class BarEditing {
                             at: tray.firstIndex { $0.id == drop.target.before } ?? tray.endIndex)
             }
         }
-        guard let insertion = previewInsertion, insertion.displayID == displayID, insertion.position == position else { return tray }
+        guard let insertion = previewInsertion else { return tray }
         var arranged = tray.filter { !isMoving($0.id) }
-        arranged.insert(contentsOf: entries.filter { isMoving($0.id) },
-                        at: arranged.firstIndex { $0.id == insertion.before } ?? arranged.endIndex)
+        if insertion.displayID == displayID, insertion.position == position {
+            arranged.insert(contentsOf: entries.filter { isMoving($0.id) },
+                            at: arranged.firstIndex { $0.id == insertion.before } ?? arranged.endIndex)
+        }
         return arranged
     }
 
-    func isCollapsed(_ id: String, on displayID: Int, position: WidgetPosition) -> Bool {
-        guard let insertion = previewInsertion else { return false }
-        return isMoving(id) && (insertion.displayID != displayID || insertion.position != position)
-    }
-
-    func measure(height: CGFloat, on displayID: Int) {
-        guard isActive, height.isFinite, height > 0 else { return }
-        let height = ceil(height)
-        guard measuredHeights[displayID] != height else { return }
-        measuredHeights[displayID] = height
-        store?.onConfigurationChange?()
-    }
-
-    /// Frames and pointer share the section viewport's coordinates, including its scroll offset.
     /// Groups are one insertion target, even when a member's frame is missing.
-    func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
-                    frames: [String: CGRect], addSlot: CGRect? = nil) -> BarEditInsertion? {
+    func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat,
+                    frames: [String: CGRect]) -> BarEditInsertion? {
         guard isActive, let shared = store?.configuration else { return nil }
         let configuration = screenKind(displayID).map(shared.onScreen) ?? shared
-        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, y: y, frames: frames, addSlot: addSlot,
+        return WidgetPlacement.dropTarget(id, on: displayID, position: position, x: x, frames: frames,
                                           widgets: configuration.widgets, groups: configuration.groups)
     }
 
@@ -354,85 +326,6 @@ private enum BarEditContent {
             return output?.lists?[source]?.contains { hasContent(row, fields: $0, output: output, menu: menu) } == true
         case .menu: return !menu.isEmpty
         default: return true
-        }
-    }
-}
-
-enum BarEditTrayMetrics {
-    static let slot: CGFloat = 22
-    static let horizontalPadding: CGFloat = 7
-    static let verticalPadding: CGFloat = 6
-    /// Between the rows of a tray that wraps, enough for the − badges that overlap a widget's top-left corner.
-    static let rowSpacing: CGFloat = 6
-    static let emptyWidth = slot + 2 * horizontalPadding
-
-    static func chipWidth(for position: WidgetPosition) -> CGFloat {
-        ceil((position.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 9, weight: .bold)]).width) + 18
-    }
-}
-
-struct BarEditTrayState: Equatable {
-    let showsName: Bool
-    let showsBadges: Bool
-    let isTarget: Bool
-    var showsAddSlot: Bool { !isTarget }
-}
-
-/// The normal planner supplies screen order and centering. Only trays wider than
-/// their share of the available space wrap onto more rows.
-struct BarEditLayout {
-    let sections: [WidgetPosition: BarPlacement]
-
-    init(width: CGFloat, display: BarDisplay, bar: BarSettings, preferredWidths: [WidgetPosition: CGFloat] = [:]) {
-        let scale = CGFloat(bar.scale(for: display))
-        let inset = max(6, CGFloat(bar.inset) * scale)
-        let spacing: CGFloat = 6 * scale
-        let notch = bar.notch(on: display).map { range in
-            let center: CGFloat = (range.lowerBound + range.upperBound) / 2 - CGFloat(bar.margin)
-            let half: CGFloat = bar.notchWidth.map { CGFloat($0) * scale / 2 } ?? (range.upperBound - range.lowerBound) / 2
-            return (center - half)...(center + half)
-        }
-        let content = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
-            ($0, max(1, preferredWidths[$0] ?? BarEditTrayMetrics.emptyWidth * scale))
-        })
-        let preferred = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map {
-            ($0, max(content[$0]!, BarEditTrayMetrics.chipWidth(for: $0) * scale))
-        })
-        var widths = preferred
-        let notchSpacing = CGFloat(bar.notchSpacing) * scale
-        if let notch {
-            Self.fit([.left, .notchLeft], capacity: max(inset, notch.lowerBound - notchSpacing) - inset - spacing,
-                     content: content, widths: &widths)
-            Self.fit([.notchRight, .center, .right],
-                     capacity: width - inset - min(width - inset, notch.upperBound + notchSpacing) - 2 * spacing,
-                     content: content, widths: &widths)
-        } else {
-            Self.fit(WidgetPosition.allCases, capacity: width - 2 * inset - 4 * spacing, content: content, widths: &widths)
-        }
-        let items = WidgetPosition.allCases.map { position in
-            BarLayoutItem(id: position.rawValue, position: position,
-                          width: widths[position]!, canOverflow: false)
-        }
-        let plan = AdaptiveBarPlanner(inset: inset, spacing: spacing, notchSpacing: notchSpacing, notch: notch)
-            .plan(width: width, items: items)
-        sections = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.compactMap { position in
-            plan.placements[position.rawValue].map { (position, $0) }
-        })
-    }
-
-    private static func fit(_ positions: [WidgetPosition], capacity: CGFloat, content: [WidgetPosition: CGFloat],
-                            widths: inout [WidgetPosition: CGFloat]) {
-        // Shorten a drag chip before wrapping content that would otherwise fit.
-        let excess = max(0, positions.reduce(CGFloat.zero) { $0 + widths[$1]! } - max(0, capacity))
-        let slack = positions.reduce(CGFloat.zero) { $0 + max(0, widths[$1]! - content[$1]!) }
-        if slack > 0 {
-            for position in positions { widths[position]! -= (widths[position]! - content[position]!) * min(1, excess / slack) }
-        }
-        var remaining = max(0, capacity)
-        for (index, position) in positions.sorted(by: { widths[$0]! < widths[$1]! }).enumerated() {
-            let width = min(widths[position]!, remaining / CGFloat(positions.count - index))
-            widths[position] = width
-            remaining -= width
         }
     }
 }

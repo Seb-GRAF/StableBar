@@ -1,53 +1,141 @@
 import SwiftUI
 
+/// Edit mode lays the bar out with the bar's own planner, each position in a zone that ends in its + slot. A side too
+/// crowded for its widgets scrolls instead of moving any to More widgets. Starting to edit draws every widget where
+/// it was, then opens the + slots.
 struct BarEditView: View {
     let store: BarStore
     let display: BarDisplay
-    /// Each position's row as one line, from the measuring copy: what the layout gives room to.
-    @State private var measuredSizes: [WidgetPosition: CGSize] = [:]
-    /// Each tray's height at its width, once it has laid its widgets out on as many rows as they need.
-    @State private var trayHeights: [WidgetPosition: CGFloat] = [:]
+    /// Each unit's width, from the measuring copy.
+    @State private var widths: [String: CGFloat]
+    /// How far each crowded side has scrolled its widgets to the left, by the side's first position.
+    @State private var shifts: [WidgetPosition: CGFloat] = [:]
+    /// False until the bar is on screen, so the + slots open when editing starts.
+    @State private var opened = false
+    /// An arrow's scroll in progress. SwiftUI doesn't animate where the tiles' drag views sit, so it steps itself.
+    @State private var glide: Task<Void, Never>?
+    @State private var anchors = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { ($0, NSView()) })
+    @State private var zoneAnchors = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { ($0, NSView()) })
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
+    private static let slot: CGFloat = 22
+    private static let arrow: CGFloat = 24
+
+    init(store: BarStore, display: BarDisplay, widths: [String: CGFloat]) {
+        self.store = store
+        self.display = display
+        _widths = State(initialValue: widths)
+    }
 
     var body: some View {
-        if let config = store.configuration?.onScreen(ScreenKind(display)), let geometry = store.barEditing.geometry(for: display) {
-            let entries = store.barEditing.entries(on: display)
+        if let config = store.configuration?.onScreen(ScreenKind(display)) {
+            let editing = store.barEditing
+            let entries = editing.entries(on: display)
             let scale = CGFloat(config.bar.scale(for: display))
-            // Trays sit centered on the bar's line, as they do on one row; a tray that wraps grows down from there,
-            // and the bar grows to the bottom of the lowest tray.
-            let line: CGFloat = max(config.bar.height * scale - 2 * config.bar.margin,
-                                    (measuredSizes.values.map(\.height).max() ?? 0) * scale) / scale
-            let tops = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { position in
-                (position, max(0, (line - (measuredSizes[position]?.height ?? line)) / 2))
-            })
-            let heights = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { position -> (WidgetPosition, CGFloat) in
-                (position, max(trayHeights[position] ?? 0, measuredSizes[position]?.height ?? line))
-            })
-            let bottom = WidgetPosition.allCases.map { tops[$0]! + heights[$0]! }.max() ?? 0
+            // A dragged widget is arranged in the position it would land in, before the configuration says so.
+            let units = BarUnit.make(widgets: WidgetPosition.allCases.flatMap { position in
+                editing.arranged(entries, on: display.id, position: position).map { entry in
+                    var widget = entry.widget
+                    widget.position = position
+                    return widget
+                }
+            }, groups: config.groups)
+            let dragging = editing.dragSession.active != nil
+            let named = dragging && editing.insertion?.displayID == display.id ? editing.insertion?.position : nil
+            let surface = BarEditSurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme)
             GeometryReader { proxy in
-                let widths = measuredSizes.mapValues { $0.width * scale }
-                let layout = BarEditLayout(width: proxy.size.width, display: display, bar: config.bar, preferredWidths: widths)
-                ZStack(alignment: .topLeading) {
-                    ForEach(WidgetPosition.allCases, id: \.self) { position in
-                        if let section = layout.sections[position] {
-                            BarEditSection(store: store, display: display, position: position, entries: entries, config: config,
-                                           adding: store.barEditing.addPopover.displayID == display.id
-                                               && store.barEditing.addPopover.position == position) { trayHeights[position] = $0 }
-                            .frame(width: section.width / scale, height: heights[position]!)
-                            .offset(x: section.x / scale, y: tops[position]!)
+                let height = proxy.size.height / scale
+                let layout = layout(units: units, width: proxy.size.width / scale, height: height, config: config)
+                BarEditDropTarget(editing: editing, displayID: display.id, spans: layout.spans,
+                                  frames: Dictionary(uniqueKeysWithValues: units.flatMap { unit in
+                                      unit.widgets.map { ($0.id, layout.frames[unit.id]!) }
+                                  }),
+                                  scrolling: layout.scrolling, scroll: { scroll($0, by: $1, animated: false) }) {
+                    ZStack(alignment: .topLeading) {
+                        // Catches drags over a see-through bar too, which macOS otherwise passes to the windows below.
+                        Color.black.opacity(0.01)
+                        ForEach(WidgetPosition.allCases, id: \.self) { position in
+                            let span = layout.spans[position]!
+                            let target = dragging && editing.insertion?.displayID == display.id && editing.insertion?.position == position
+                            let shape = RoundedRectangle(cornerRadius: 8)
+                            shape.fill(.ultraThinMaterial)
+                                .overlay { shape.fill(target ? Color.accentColor.opacity(0.16) : .clear) }
+                                .overlay { shape.strokeBorder(target ? Color.accentColor : surface.ink.opacity(0.18), lineWidth: target ? 1.5 : 0.5) }
+                                .environment(\.colorScheme, surface.scheme)
+                                .frame(width: span.upperBound - span.lowerBound + 8, height: height - 4)
+                                .background { BarEditAddAnchor(view: zoneAnchors[position]!) }
+                                .modifier(BarEditClip(side: layout.sides[position]!, x: span.lowerBound - 4, height: height))
+                                .help(position.title)
+                                .offset(x: span.lowerBound - 4, y: 2)
+                                .accessibilityHidden(true)
+                        }
+                        ForEach(units) { unit in
+                            let frame = layout.frames[unit.id]!
+                            let lifted = editing.opacity(for: unit.widgets[0].id) == 0
+                            let shape = RoundedRectangle(cornerRadius: 6)
+                            ZStack {
+                                // Where the dragged widget lands.
+                                shape.fill(Color.accentColor.opacity(0.22))
+                                    .overlay { shape.strokeBorder(Color.accentColor, lineWidth: 1.5) }
+                                    .frame(width: frame.width, height: Self.slot)
+                                    .opacity(lifted ? 1 : 0)
+                                BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
+                                    ForEach(unit.widgets) { widget in
+                                        BarEditTile(store: store, display: display.id, kind: ScreenKind(display),
+                                                    entry: entries.first { $0.id == widget.id }!, config: config)
+                                    }
+                                }
+                                .fixedSize()
+                                // A widget not measured yet grows in from nothing.
+                                .scaleEffect(widths[unit.id] == nil ? 0 : 1)
+                                .opacity(lifted ? 0 : 1)
+                            }
+                            .frame(width: frame.width, height: height)
+                            .modifier(BarEditClip(side: layout.sides[unit.position]!, x: frame.minX, height: height))
+                            .allowsHitTesting(layout.sides[unit.position]!.span.overlaps(frame.minX...frame.maxX))
+                            .offset(x: frame.minX)
+                        }
+                        ForEach(WidgetPosition.allCases, id: \.self) { position in
+                            let frame = layout.frames[Self.addID(position)]!
+                            addButton(position, ink: surface.ink, shown: opened && !dragging)
+                                .frame(width: frame.width, height: height)
+                                .modifier(BarEditClip(side: layout.sides[position]!, x: frame.minX, height: height))
+                                .offset(x: frame.minX)
+                        }
+                        ForEach(layout.scrolling, id: \.id) { side in
+                            let page = 0.7 * (side.visible.upperBound - side.visible.lowerBound)
+                            if side.fadesLeading {
+                                arrow(leading: true, ink: surface.ink) { scroll(side, by: -page, animated: true) }
+                                    .frame(height: height)
+                                    .offset(x: side.visible.lowerBound + 2)
+                            }
+                            if side.fadesTrailing {
+                                arrow(leading: false, ink: surface.ink) { scroll(side, by: page, animated: true) }
+                                    .frame(height: height)
+                                    .offset(x: side.visible.upperBound - Self.arrow - 2)
+                            }
                         }
                     }
+                    // The drop target hosts its content in a view of its own, which the transactions of this one don't
+                    // reach, so its animations follow values instead.
+                    .animation(reduceMotion ? nil : .reorder, value: units.map { [$0.position.rawValue, $0.id] })
+                    .animation(reduceMotion ? nil : .reorder, value: opened)
+                    // A widget the bar didn't show, or one just added, slides in.
+                    .animation(reduceMotion ? nil : .reorder, value: Set(widths.keys))
                 }
-                .animation(reduceMotion || store.barEditing.dragSession.active == nil ? nil : .reorder, value: measuredSizes)
                 .overlay {
                     HStack(spacing: 0) {
-                        ForEach(WidgetPosition.allCases, id: \.self) { position in
-                            BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
-                                              adding: false)
+                        ForEach(units) { unit in
+                            BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
+                                ForEach(unit.widgets) { widget in
+                                    BarEditTile(store: store, display: display.id, kind: ScreenKind(display),
+                                                entry: entries.first { $0.id == widget.id }!, config: config)
+                                }
+                            }
                             .fixedSize()
                             .background {
                                 GeometryReader { measurement in
-                                    Color.clear.preference(key: BarEditSizes.self, value: [position: measurement.size])
+                                    Color.clear.preference(key: BarEditWidths.self, value: [unit.id: measurement.size.width])
                                 }
                             }
                         }
@@ -55,13 +143,23 @@ struct BarEditView: View {
                     .fixedSize().hidden().allowsHitTesting(false).accessibilityHidden(true)
                     .modifier(MeasuringCopy())
                 }
-                .onPreferenceChange(BarEditSizes.self) { measuredSizes = $0 }
-                .frame(width: proxy.size.width / scale, height: proxy.size.height / scale, alignment: .topLeading)
+                .onPreferenceChange(BarEditWidths.self) { widths = $0 }
+                .frame(width: proxy.size.width / scale, height: height, alignment: .topLeading)
                 .scaleEffect(scale, anchor: .topLeading)
             }
             .modifier(BarSurface(store: store, settings: config.bar, kind: ScreenKind(display)))
             .padding(config.bar.margin)
-            .frame(height: geometry.layoutHeight)
+            .frame(height: config.barGeometry(for: display).layoutHeight)
+            .onAppear { opened = true }
+            // macOS shows no tooltips during a drag, so the zone under a dragged widget names itself.
+            .onChange(of: named) { _, position in
+                guard let position, let widget = config.widgets.first(where: { $0.id == editing.dragSession.active?.widgetID }) else {
+                    store.popup.close()
+                    return
+                }
+                store.popup.showTooltip(position.title, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
+                                        store: store, anchor: zoneAnchors[position]!)
+            }
             .alert("Couldn’t change widget", isPresented: Binding(get: {
                 store.barEditing.error != nil && store.barEditing.errorDisplayID == display.id
             }, set: {
@@ -72,101 +170,174 @@ struct BarEditView: View {
             .onChange(of: Set(entries.map(\.id)), initial: true) { _, ids in
                 store.setVisibleWidgets(ids: ids, displayID: display.id)
             }
-            .onChange(of: bottom * scale, initial: true) { _, height in
-                store.barEditing.measure(height: height, on: display.id)
+        }
+    }
+
+    private static func addID(_ position: WidgetPosition) -> String { "add:\(position.rawValue)" }
+
+    /// Where the edit bar draws each unit and + slot, and the span of each position, after a crowded side's scroll.
+    private struct Layout {
+        var frames: [String: CGRect] = [:]
+        var spans: [WidgetPosition: ClosedRange<CGFloat>] = [:]
+        /// The side of the bar each position is on.
+        var sides: [WidgetPosition: BarEditSide] = [:]
+        /// The sides too crowded for their widgets.
+        var scrolling: [BarEditSide] = []
+    }
+
+    private func layout(units: [BarUnit], width: CGFloat, height: CGFloat, config: Configuration) -> Layout {
+        // New widgets go where the + sits: first on the right and left of the notch, last elsewhere.
+        let items = WidgetPosition.allCases.flatMap { position in
+            let slot = BarLayoutItem(id: Self.addID(position), position: position, width: opened ? Self.slot : 0, canOverflow: false)
+            let widgets = units.filter { $0.position == position }.map { unit in
+                BarLayoutItem(id: unit.id, position: position, width: widths[unit.id] ?? 0, canOverflow: false, isSpacer: unit.isSpacer)
+            }
+            return [.right, .notchLeft].contains(position) ? [slot] + widgets : widgets + [slot]
+        }
+        let notch = config.bar.layoutNotch(on: display)
+        let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing, notchSpacing: config.bar.notchSpacing,
+                                      notch: notch, scrolls: true, positionSpacing: 10)
+            .plan(width: width, items: items)
+        var layout = Layout()
+        for segment in plan.segments {
+            // A theme's notch spacing can reach into the notch, where nothing shows.
+            let visible = notch.map { notch in
+                segment.atEnd ? segment.span.lowerBound...min(segment.span.upperBound, notch.lowerBound)
+                    : max(segment.span.lowerBound, notch.upperBound)...segment.span.upperBound
+            } ?? segment.span
+            // At rest, a side shows the end that its More widgets button would leave in place.
+            let rest = segment.atEnd ? 0 : segment.overflow
+            let side = BarEditSide(id: segment.positions[0], span: segment.span, visible: visible, overflow: segment.overflow,
+                                   shift: min(max(shifts[segment.positions[0]] ?? rest, 0), segment.overflow))
+            let shift = side.shift
+            if side.scrolls { layout.scrolling.append(side) }
+            for position in segment.positions {
+                layout.sides[position] = side
+                let frames = items.filter { $0.position == position }.map { item in
+                    let placement = plan.placements[item.id]!
+                    return CGRect(x: placement.x - shift, y: 0, width: placement.width, height: height)
+                }
+                for (item, frame) in zip(items.filter { $0.position == position }, frames) { layout.frames[item.id] = frame }
+                layout.spans[position] = frames.map(\.minX).min()!...frames.map(\.maxX).max()!
+            }
+        }
+        return layout
+    }
+
+    private func scroll(_ side: BarEditSide, by delta: CGFloat, animated: Bool) {
+        glide?.cancel()
+        let start = shifts[side.id] ?? side.shift
+        let end = min(max(start + delta, 0), side.overflow)
+        guard animated, !reduceMotion else { shifts[side.id] = end; return }
+        glide = Task {
+            let began = ContinuousClock.now
+            while !Task.isCancelled {
+                let progress = min((ContinuousClock.now - began) / .milliseconds(450), 1)
+                shifts[side.id] = start + (end - start) * (1 - pow(1 - progress, 3))
+                if progress == 1 { return }
+                try? await Task.sleep(for: .milliseconds(8))
             }
         }
     }
-}
 
-private struct BarEditSizes: PreferenceKey {
-    static let defaultValue: [WidgetPosition: CGSize] = [:]
-    static func reduce(value: inout [WidgetPosition: CGSize], nextValue: () -> [WidgetPosition: CGSize]) { value.merge(nextValue()) { $1 } }
-}
-
-private struct BarEditFrames: PreferenceKey {
-    static let defaultValue: [String: CGRect] = [:]
-    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) { value.merge(nextValue()) { $1 } }
-}
-
-private struct BarEditAddSlotFrame: PreferenceKey {
-    static let defaultValue = CGRect.null
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = value.union(nextValue()) }
-}
-
-private struct BarEditRowHeight: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
-}
-
-private struct BarEditSection: View {
-    let store: BarStore
-    let display: BarDisplay
-    let position: WidgetPosition
-    let entries: [BarEditWidget]
-    let config: Configuration
-    let adding: Bool
-    /// Reports the tray's height at the width it was given.
-    let measured: (CGFloat) -> Void
-    @State private var frames: [String: CGRect] = [:]
-    @State private var addSlot = CGRect.null
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var editing: BarEditing { store.barEditing }
-
-    var body: some View {
-        let state = editing.trayState(on: display.id, position: position)
-        let surface = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme)
-        let shape = RoundedRectangle(cornerRadius: 9)
-        BarEditDropTarget(editing: editing, displayID: display.id, position: position, frames: frames, addSlot: addSlot) {
-            BarEditSectionRow(store: store, display: display, position: position, entries: entries, config: config,
-                              adding: adding)
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear.preference(key: BarEditRowHeight.self, value: proxy.size.height)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .clipped()
-                .background(surface.tint, in: shape)
-                .background(state.isTarget ? Color.accentColor.opacity(0.16) : .clear, in: shape)
-                .background(surface.backing, in: shape)
+    private func addButton(_ position: WidgetPosition, ink: Color, shown: Bool) -> some View {
+        let addPopover = store.barEditing.addPopover
+        let adding = addPopover.displayID == display.id && addPopover.position == position
+        return Button {
+            addPopover.show(store: store, displayID: display.id, position: position, anchor: anchors[position]!)
+        } label: {
+            Image(systemName: "plus").font(.system(size: 12, weight: .medium))
+                .frame(width: Self.slot, height: Self.slot)
+                .foregroundStyle(adding ? Color.white : ink)
+                .background(adding ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5))
                 .overlay {
-                    shape.strokeBorder(state.isTarget ? Color.accentColor : surface.hairline, lineWidth: state.isTarget ? 2 : 0.5)
+                    RoundedRectangle(cornerRadius: 5).strokeBorder(ink.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
                 }
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state.isTarget)
-                .coordinateSpace(name: "editSection")
-                .onPreferenceChange(BarEditFrames.self) { frames = $0 }
-                .onPreferenceChange(BarEditAddSlotFrame.self) { addSlot = $0 }
-                .onPreferenceChange(BarEditRowHeight.self) { if $0 > 0 { measured($0) } }
+                .contentShape(Rectangle())
         }
-        .overlay(alignment: .topLeading) {
-            Text(position.title).font(.system(size: 9, weight: .bold)).lineLimit(1)
-                .foregroundStyle(state.isTarget ? Color.white : Color.primary)
-                .padding(.horizontal, 4).padding(.vertical, 1)
-                .background(state.isTarget ? Color.accentColor : surface.tint, in: Capsule())
-                .background(.regularMaterial, in: Capsule())
-                .overlay { Capsule().strokeBorder(surface.neutral.opacity(0.15), lineWidth: 0.5) }
-                .environment(\.colorScheme, surface.scheme)
-                .padding(.leading, 5)
-                .opacity(state.showsName ? 1 : 0)
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: state.showsName)
-                .allowsHitTesting(false)
-                .accessibilityHidden(!state.showsName)
+        .buttonStyle(.plain)
+        .onHover { $0 ? NSCursor.pointingHand.push() : NSCursor.pop() }
+        .background { BarEditAddAnchor(view: anchors[position]!) }
+        .opacity(shown ? 1 : 0)
+        .allowsHitTesting(shown)
+        .accessibilityHidden(!shown)
+        .help("Add a widget to \(position.title)")
+        .accessibilityLabel("Add a widget to \(position.title)")
+    }
+
+    private func arrow(leading: Bool, ink: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: leading ? "chevron.left" : "chevron.right").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(ink)
+                .frame(width: Self.arrow, height: Self.arrow)
+                .background(.regularMaterial, in: Circle())
+                .overlay { Circle().strokeBorder(ink.opacity(0.2), lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                .contentShape(Circle())
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(position.title)
+        .buttonStyle(.plain)
+        .onHover { $0 ? NSCursor.pointingHand.push() : NSCursor.pop() }
+        .help(leading ? "Show the widgets to the left" : "Show the widgets to the right")
+        .accessibilityLabel(leading ? "Scroll left" : "Scroll right")
     }
 }
 
-/// Trays and their chrome follow the surface they sit on. A tray tints the theme's strip when the
-/// strip's color is nearly opaque. A see-through strip, as tile themes such as Built-in leave it, would
-/// put trays on the wallpaper, so each tray brings a backing that the widgets' text reads on.
-private struct BarEditTraySurface {
-    let isOwn: Bool
-    /// The shade of the tray's surface: the strip's, or its own backing's.
+/// The part of the bar on one side of the notch, or all of it, and how far a side too crowded for its widgets scrolls.
+struct BarEditSide {
+    /// The side's first position, which names it.
+    let id: WidgetPosition
+    /// Where its widgets go, as on the bar.
+    let span: ClosedRange<CGFloat>
+    /// The part of `span` clear of the notch, where a side that scrolls fades and shows its arrows.
+    let visible: ClosedRange<CGFloat>
+    let overflow: CGFloat
+    /// How far its widgets have moved left.
+    let shift: CGFloat
+    var scrolls: Bool { overflow > 0 }
+    var fadesLeading: Bool { shift > 0 }
+    var fadesTrailing: Bool { shift < overflow }
+}
+
+/// Clips what a crowded side scrolls past its edges, which fade where more widgets lie beyond, clear under the arrow.
+/// An edge with nothing beyond leaves `reach` for zones and − badges that overhang it.
+private struct BarEditClip: ViewModifier {
+    let side: BarEditSide
+    /// Where the clipped view sits on the bar.
+    let x: CGFloat
+    let height: CGFloat
+    private let reach: CGFloat = 6
+    private let clear: CGFloat = 28
+    private let fade: CGFloat = 72
+
+    func body(content: Content) -> some View {
+        let start = side.fadesLeading ? side.visible.lowerBound : side.span.lowerBound - reach
+        let width = (side.fadesTrailing ? side.visible.upperBound : side.span.upperBound + reach) - start
+        content.mask(alignment: .topLeading) {
+            LinearGradient(stops: [
+                .init(color: side.fadesLeading ? .clear : .black, location: 0),
+                .init(color: side.fadesLeading ? .clear : .black, location: side.fadesLeading ? clear / width : 0),
+                .init(color: .black, location: side.fadesLeading ? fade / width : 0),
+                .init(color: .black, location: side.fadesTrailing ? 1 - fade / width : 1),
+                .init(color: side.fadesTrailing ? .clear : .black, location: side.fadesTrailing ? 1 - clear / width : 1),
+                .init(color: side.fadesTrailing ? .clear : .black, location: 1)
+            ], startPoint: .leading, endPoint: .trailing)
+            .frame(width: width, height: height + 2 * reach)
+            .offset(x: start - x, y: -reach)
+        }
+    }
+}
+
+private struct BarEditWidths: PreferenceKey {
+    static let defaultValue: [String: CGFloat] = [:]
+    static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) { value.merge(nextValue()) { $1 } }
+}
+
+/// Edit marks follow the surface they sit on: a strip whose color is nearly opaque, or, on a see-through strip,
+/// as tile themes such as Built-in leave it, the wallpaper that the widgets' own text color is made to read on.
+private struct BarEditSurface {
+    /// The shade of the surface.
     let scheme: ColorScheme
-    /// Outlines and + use the widgets' text color when it reads on that surface.
+    /// Outlines and slots use the widgets' text color when it reads on that surface.
     let ink: Color
 
     init(barStyle: WidgetStyle, look: BarEditLook, colorScheme: ColorScheme) {
@@ -175,8 +346,7 @@ private struct BarEditTraySurface {
         let strip = resolve((barStyle.background ?? look.background).firstColor)
         // Widgets draw the text color in `defaults`, not the bar style's.
         let text = look.defaults.foreground.map(resolve)
-        isOwn = Double(strip & 0xff) / 255 < 0.85
-        let scheme: ColorScheme = if isOwn {
+        let scheme: ColorScheme = if Double(strip & 0xff) / 255 < 0.85 {
             text.map { isLightText($0) ? .dark : .light } ?? colorScheme
         } else {
             // On a strip above a relative luminance of about 0.18, black ink contrasts more than white.
@@ -186,14 +356,9 @@ private struct BarEditTraySurface {
         ink = text.flatMap { isLightText($0) == (scheme == .dark) ? HexColor($0).color : nil }
             ?? (scheme == .dark ? Color.white : .black).opacity(0.85)
     }
-
-    var neutral: Color { scheme == .dark ? .white : .black }
-    var tint: Color { neutral.opacity(scheme == .dark ? 0.07 : 0.05) }
-    var hairline: Color { neutral.opacity(scheme == .dark ? 0.10 : 0.08) }
-    var backing: Color { isOwn ? Color(white: scheme == .dark ? 0.17 : 0.97) : .clear }
 }
 
-/// Above a relative luminance of about 0.24, text contrasts more with the dark tray backing than the light one.
+/// Above a relative luminance of about 0.24, text contrasts more with a dark surface than a light one.
 private func isLightText(_ rgba: UInt32) -> Bool { luminance(rgba) > 0.24 }
 
 /// WCAG relative luminance of an RGBA color.
@@ -203,90 +368,6 @@ private func luminance(_ rgba: UInt32) -> Double {
         return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
     }
     return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-}
-
-struct BarEditSectionRow: View {
-    let store: BarStore
-    let display: BarDisplay
-    let position: WidgetPosition
-    let entries: [BarEditWidget]
-    let config: Configuration
-    let adding: Bool
-    @State private var anchor = NSView()
-    /// How wide the rows are, and each unit's own width: a unit wider than its row scrolls sideways in it.
-    @State private var rowWidth = CGFloat.infinity
-    @State private var unitWidths: [String: CGFloat] = [:]
-    @Environment(\.measuringBarWidths) private var measuring
-    @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let editing = store.barEditing
-        let leadingSlot = position == .right || position == .notchLeft
-        BarEditFlow(rowSpacing: BarEditTrayMetrics.rowSpacing) {
-            if leadingSlot { addSlot }
-            let units = BarUnit.make(widgets: editing.arranged(entries, on: display.id, position: position).map(\.widget),
-                                     groups: config.groups)
-            ForEach(units) { unit in
-                let collapsed = editing.isCollapsed(unit.widgets[0].id, on: display.id, position: position)
-                BarUnitSurface(style: unit.style ?? WidgetStyle(), defaults: config.defaults, spacing: config.bar.spacing) {
-                    ForEach(unit.widgets) { widget in
-                        if let entry = entries.first(where: { $0.id == widget.id }) {
-                            BarEditTile(store: store, display: display.id, kind: ScreenKind(display), entry: entry, config: config)
-                                .background {
-                                    GeometryReader { proxy in
-                                        Color.clear.preference(key: BarEditFrames.self,
-                                            value: [entry.id: proxy.frame(in: .named("editSection"))])
-                                    }
-                                }
-                        }
-                    }
-                }
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { unitWidths[unit.id] = $0 }
-                .modifier(SidewaysScroll(scrolls: unitWidths[unit.id, default: 0] + config.bar.spacing > rowWidth))
-                .opacity(collapsed ? 0 : editing.opacity(for: unit.widgets[0].id))
-                .frame(width: collapsed ? 0 : nil)
-                .padding(leadingSlot ? .leading : .trailing, collapsed ? 0 : config.bar.spacing)
-            }
-            if !leadingSlot { addSlot }
-        }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-        .animation(reduceMotion ? nil : .reorder, value: editing.insertion)
-        .frame(minHeight: BarEditTrayMetrics.slot)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, BarEditTrayMetrics.horizontalPadding)
-        .padding(.vertical, BarEditTrayMetrics.verticalPadding)
-    }
-
-    private var addSlot: some View {
-        let ink = BarEditTraySurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme).ink
-        return Button {
-            store.barEditing.addPopover.show(store: store, displayID: display.id, position: position, anchor: anchor)
-        } label: {
-            Image(systemName: "plus").font(.system(size: 12, weight: .medium))
-                .frame(width: BarEditTrayMetrics.slot, height: BarEditTrayMetrics.slot)
-                .foregroundStyle(adding ? Color.white : ink)
-                .background(adding ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 5).strokeBorder(ink.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [3, 2]))
-                }
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .opacity(store.barEditing.trayState(on: display.id, position: position).showsAddSlot ? 1 : 0)
-        .allowsHitTesting(store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
-        .accessibilityHidden(!store.barEditing.trayState(on: display.id, position: position).showsAddSlot)
-        .background {
-            if !measuring {
-                BarEditAddAnchor(view: anchor)
-                GeometryReader { proxy in
-                    Color.clear.preference(key: BarEditAddSlotFrame.self, value: proxy.frame(in: .named("editSection")))
-                }
-            }
-        }
-        .help("Add a widget to \(position.title)")
-        .accessibilityLabel("Add a widget to \(position.title)")
-    }
 }
 
 struct BarEditTile: View {
@@ -301,6 +382,8 @@ struct BarEditTile: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
+    /// False until the tile is on screen, so its − badge pops in when editing starts.
+    @State private var appeared = false
     private var editing: BarEditing { store.barEditing }
     private var title: String { entry.name + (entry.visibility.isHidden ? ", Hidden" : "") }
 
@@ -326,21 +409,25 @@ struct BarEditTile: View {
         .accessibilityAction(named: Text("Move left")) { editing.move(entry.id, by: -1, on: display) }
         .accessibilityAction(named: Text("Move right")) { editing.move(entry.id, by: 1, on: display) }
         .overlay(alignment: .topLeading) {
-            let showsBadges = editing.trayState(on: display, position: entry.widget.position).showsBadges
+            let showsBadges = appeared && editing.dragSession.active == nil
             Button { editing.remove(entry.id, on: display) } label: {
-                Image(systemName: "minus").font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white).frame(width: 14, height: 14)
+                Image(systemName: "minus").font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.white).frame(width: 12, height: 12)
                     .background(HexColor(0x6e6e73ff).color, in: Circle())
             }
             .buttonStyle(.plain)
+            .onHover { $0 ? NSCursor.pointingHand.push() : NSCursor.pop() }
             .help("Remove \(entry.name)")
             .accessibilityLabel("Remove \(entry.name)")
-            .offset(x: -5, y: -5)
+            .scaleEffect(showsBadges ? 1 : 0.4)
+            // Stays inside a bar barely taller than its widgets, which clips what overhangs it.
+            .offset(x: -4, y: -3)
             .opacity(showsBadges ? 1 : 0)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: showsBadges)
+            .animation(reduceMotion ? nil : .spring(duration: 0.25, bounce: 0.3), value: showsBadges)
             .allowsHitTesting(showsBadges)
             .accessibilityHidden(!showsBadges)
         }
+        .onAppear { appeared = true }
         .help("\(title). Click to change its settings, or drag to move it.")
         .contextMenu {
             Button("Edit Widget…") { editing.select(entry.id) }
@@ -363,19 +450,22 @@ struct BarEditTile: View {
     }
 
     private var tile: some View {
-        let surface = BarEditTraySurface(barStyle: store.barStyle(on: kind), look: look, colorScheme: colorScheme)
+        let surface = BarEditSurface(barStyle: store.barStyle(on: kind), look: look, colorScheme: colorScheme)
         return Button { editing.select(entry.id) } label: {
             Group {
                 if entry.usesPlaceholder {
                     Label(entry.name, systemImage: entry.visibility.isHidden ? "eye.slash" : entry.widget.content.symbol)
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        .padding(.horizontal, 5).frame(minHeight: 22).frame(maxWidth: 120)
+                        .padding(.horizontal, 6).frame(height: 22).frame(maxWidth: 140)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
                         .environment(\.colorScheme, surface.scheme)
                 } else {
+                    // The widget itself stays still while editing: no hover looks, expansions or tooltips of its own.
                     WidgetView(widget: entry.widget, defaults: look.defaults, popupDefaults: look.popupDefaults,
                                store: store, monitor: display, defaultAnimation: look.animation,
                                defaultTransition: look.transition)
                         .accessibilityHidden(true).fixedSize()
+                        .allowsHitTesting(false)
                 }
             }
             .background {
@@ -390,7 +480,7 @@ struct BarEditTile: View {
     }
 }
 
-/// What the edit bar's tiles and trays draw with from a screen's configuration.
+/// What the edit bar's tiles draw with from a screen's configuration.
 struct BarEditLook: Equatable {
     let defaults: WidgetStyle
     let popupDefaults: WidgetStyle
@@ -409,19 +499,4 @@ struct BarEditLook: Equatable {
 
 private extension Animation {
     static let reorder = Animation.spring(duration: 0.3, bounce: 0.15)
-}
-
-/// Scrolls a unit wider than its row sideways, unclipped so the − badges that overhang the tiles' corners still show.
-private struct SidewaysScroll: ViewModifier {
-    let scrolls: Bool
-
-    func body(content: Content) -> some View {
-        if scrolls {
-            ScrollView(.horizontal) { content }
-                .scrollIndicators(.hidden)
-                .scrollClipDisabled()
-        } else {
-            content
-        }
-    }
 }

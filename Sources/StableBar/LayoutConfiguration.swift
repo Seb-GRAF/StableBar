@@ -86,10 +86,20 @@ struct BarOverflow: Equatable {
     let ids: [String]
 }
 
+/// The part of the bar on one side of the notch, or all of it without one. With `scrolls`, the items that don't fit
+/// run `overflow` points past its `span`; they would go to More widgets on that side's `atEnd`.
+struct BarSegment: Equatable {
+    let positions: [WidgetPosition]
+    let span: ClosedRange<CGFloat>
+    let atEnd: Bool
+    var overflow: CGFloat = 0
+}
+
 struct AdaptiveBarPlan {
     var placements: [String: BarPlacement] = [:]
     var overflow: [BarOverflow] = []
     var cramped: Set<String> = []
+    var segments: [BarSegment] = []
 }
 
 struct AdaptiveBarPlanner {
@@ -98,6 +108,10 @@ struct AdaptiveBarPlanner {
     let notchSpacing: CGFloat
     let notch: ClosedRange<CGFloat>?
     var overflowWidth: CGFloat = 30
+    /// Items that don't fit run past their segment at full width, to scroll, instead of shrinking.
+    var scrolls = false
+    /// Room between positions beyond `spacing`.
+    var positionSpacing: CGFloat = 0
 
     func plan(width: CGFloat, items: [BarLayoutItem]) -> AdaptiveBarPlan {
         var result = AdaptiveBarPlan()
@@ -137,7 +151,7 @@ struct AdaptiveBarPlanner {
             }
         }
         place(visible, start: buttonAtEnd ? start : start + reserve, end: buttonAtEnd ? end - reserve : end,
-              positions: positions, result: &result)
+              positions: positions, atEnd: buttonAtEnd, result: &result)
         guard overflows else { return }
         let hidden = positions.flatMap { position in
             items.filter { item in item.position == position && !visible.contains { $0.id == item.id } }
@@ -193,26 +207,30 @@ struct AdaptiveBarPlanner {
     }
 
     private func place(_ items: [BarLayoutItem], start: CGFloat, end: CGFloat,
-                       positions: [WidgetPosition], result: inout AdaptiveBarPlan) {
+                       positions: [WidgetPosition], atEnd: Bool, result: inout AdaptiveBarPlan) {
         let capacity = max(end - start, 0)
         let ordered = positions.flatMap { position in items.filter { $0.position == position } }
-        let gaps = min(spacing, capacity / CGFloat(max(ordered.count - 1, 1)))
+        let gaps = scrolls ? spacing : min(spacing, capacity / CGFloat(max(ordered.count - 1, 1)))
+        let between = gaps + positionSpacing
+        let buckets = positions.map { position in ordered.filter { $0.position == position } }
+        let filled = buckets.filter { !$0.isEmpty }.count
         let contentWidth = ordered.reduce(CGFloat.zero) { $0 + $1.width }
-        let availableWidth = max(capacity - CGFloat(max(ordered.count - 1, 0)) * gaps, 0)
-        let scale = contentWidth > availableWidth ? availableWidth / contentWidth : 1
+        let availableWidth = max(capacity - CGFloat(max(ordered.count - 1, 0)) * gaps - CGFloat(max(filled - 1, 0)) * positionSpacing, 0)
+        let overflow = scrolls ? max(contentWidth - availableWidth, 0) : 0
+        result.segments.append(BarSegment(positions: positions, span: start...max(start, end), atEnd: atEnd, overflow: overflow))
+        let scale = overflow == 0 && contentWidth > availableWidth ? availableWidth / contentWidth : 1
         let spacerCount = ordered.filter(\.isSpacer).count
         let extra = spacerCount == 0 ? 0 : max(availableWidth - contentWidth, 0) / CGFloat(spacerCount)
         let widths = Dictionary(uniqueKeysWithValues: ordered.map { ($0.id, $0.width * scale + ($0.isSpacer ? extra : 0)) })
-        let buckets = positions.map { position in ordered.filter { $0.position == position } }
         let sizes = buckets.map { bucket in bucket.reduce(CGFloat.zero) { $0 + widths[$1.id]! } + CGFloat(max(bucket.count - 1, 0)) * gaps }
         var origins = [CGFloat](repeating: start, count: buckets.count)
         if positions.count == 5 {
-            origins = BarLayout(inset: 0, spacing: gaps, notchSpacing: 0, notch: nil)
+            origins = BarLayout(inset: 0, spacing: between, notchSpacing: 0, notch: nil)
                 .origins(width: capacity, sizes: sizes).map { $0 + start }
             let middle = (1...3).filter { !buckets[$0].isEmpty }
-            let middleWidth = middle.reduce(CGFloat.zero) { $0 + sizes[$1] } + CGFloat(max(middle.count - 1, 0)) * gaps
-            let lower = start + sizes[0] + (buckets[0].isEmpty || middle.isEmpty ? 0 : gaps)
-            let upper = end - sizes[4] - middleWidth - (buckets[4].isEmpty || middle.isEmpty ? 0 : gaps)
+            let middleWidth = middle.reduce(CGFloat.zero) { $0 + sizes[$1] } + CGFloat(max(middle.count - 1, 0)) * between
+            let lower = start + sizes[0] + (buckets[0].isEmpty || middle.isEmpty ? 0 : between)
+            let upper = end - sizes[4] - middleWidth - (buckets[4].isEmpty || middle.isEmpty ? 0 : between)
             if let first = middle.first {
                 let x = min(max(origins[first], lower), max(lower, upper))
                 let shift = x - origins[first]
@@ -223,7 +241,14 @@ struct AdaptiveBarPlanner {
             for index in buckets.indices.reversed() where index > 0 && !buckets[index].isEmpty {
                 trailingX -= sizes[index]
                 origins[index] = trailingX
-                trailingX -= gaps
+                trailingX -= between
+            }
+        }
+        if overflow > 0 {
+            var x = start
+            for index in buckets.indices where !buckets[index].isEmpty {
+                origins[index] = x
+                x += sizes[index] + between
             }
         }
         for index in buckets.indices {

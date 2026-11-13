@@ -177,8 +177,7 @@ enum SceneRenderer {
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .editBar:
             store.barEditing.begin()
-            var height = CGFloat(scene.height ?? 0)
-            if scene.height == nil { height = try await editBarHeight(store, width: width) }
+            let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
             try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: []),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .popup:
@@ -503,46 +502,6 @@ enum SceneRenderer {
         BarView(store: store, display: display)
             .environment(\.screenKind, .monitor)
             .frame(maxHeight: .infinity, alignment: .top)
-    }
-
-    /// The edit bar's height once its layout settles: edit mode measures its trays after the first
-    /// layout, and a crowded tray reports its extra rows after the next, so the strip grows to fit them.
-    /// Lays the bar out offscreen until every widget has a frame and the height holds for a few passes,
-    /// as BarEditViewTests does.
-    private static func editBarHeight(_ store: BarStore, width: CGFloat) async throws -> CGFloat {
-        guard var height = store.barEditing.geometry(for: display)?.layoutHeight else {
-            throw CommandFailure(message: "draw: Edit mode needs a configuration.")
-        }
-        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: width, height: height), styleMask: [.borderless],
-                              backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close() }
-        let host = NSHostingView(rootView: drawn(BarView(store: store, display: display).environment(\.screenKind, .monitor)
-            .environment(\.fixedDate, DocsImages.date), with: []))
-        host.sizingOptions = []
-        window.contentView = host
-        let expected = Set(store.barEditing.entries(on: display).map(\.id))
-        var settled = 0
-        for _ in 0..<100 {
-            host.layoutSubtreeIfNeeded()
-            let measured = store.barEditing.geometry(for: display)?.layoutHeight ?? height
-            if measured != height {
-                height = measured
-                settled = 0
-                window.setContentSize(CGSize(width: width, height: height))
-            } else if expected.isSubset(of: dropTargets(in: host).flatMap(\.frames.keys)) {
-                settled += 1
-                if settled == 3 { break }
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        return height
-    }
-
-    private static func dropTargets(in view: NSView) -> [BarEditDropTargetView] {
-        view.subviews.flatMap { subview in
-            (subview as? BarEditDropTargetView).map { [$0] + dropTargets(in: $0) } ?? dropTargets(in: subview)
-        }
     }
 
     /// A script that never runs, showing the scene's output and history for the first of `keys` that

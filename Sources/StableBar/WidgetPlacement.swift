@@ -12,30 +12,21 @@ enum WidgetPlacement {
         }
     }
 
-    /// Where a widget dropped at `x` lands among `frames`. With `y`, the tray may wrap onto several rows:
-    /// the row nearest the pointer decides, and past its last widget comes the next row's first. Rows come
-    /// from every tile in `frames`, the dragged widget's preview too, so a row that only the preview fills
-    /// keeps it at the end; the dragged widget is never an anchor. The tray's + in `addSlot` can take a row
-    /// of its own, so it shapes rows too without being an anchor.
-    static func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat, y: CGFloat? = nil,
-                           frames: [String: CGRect], addSlot: CGRect? = nil, widgets: [WidgetConfiguration],
+    /// Where a widget dropped at `x` lands among `frames`; the dragged widget is never an anchor.
+    static func dropTarget(_ id: String, on displayID: Int, position: WidgetPosition, x: CGFloat,
+                           frames: [String: CGRect], widgets: [WidgetConfiguration],
                            groups: [String: WidgetGroupConfiguration]) -> BarEditInsertion? {
         guard let moving = widgets.first(where: { $0.id == id }) else { return nil }
         let remaining = widgets.filter {
             $0.position == position && $0.id != id && (moving.group == nil || $0.group != moving.group)
         }
         let units = BarUnit.make(widgets: remaining, groups: groups)
-        let bands = y == nil ? [] : rows(of: Array(frames.values) + [addSlot].compactMap { $0 })
-        let pointer = y.flatMap { y in
-            bands.indices.min { distance(from: y, to: bands[$0]) < distance(from: y, to: bands[$1]) }
-        }
         var index = 0
         var end: CGFloat = 8
         for unit in units {
             let bounds = unit.widgets.compactMap { frames[$0.id] }.reduce(CGRect.null) { $0.union($1) }
             guard !bounds.isNull else { index += unit.widgets.count; continue }
-            let row = pointer.map { pointer in (bands.firstIndex { $0.contains(bounds.midY) } ?? pointer) - pointer } ?? 0
-            if row > 0 || row == 0 && x < bounds.midX {
+            if x < bounds.midX {
                 return BarEditInsertion(displayID: displayID, position: position, before: unit.widgets[0].id,
                                         index: index, x: bounds.minX - 3)
             }
@@ -45,19 +36,13 @@ enum WidgetPlacement {
         return BarEditInsertion(displayID: displayID, position: position, before: nil, index: remaining.count, x: end)
     }
 
-    /// The rows that `frames` cover, top to bottom: frames that overlap vertically share a row.
-    private static func rows(of frames: [CGRect]) -> [ClosedRange<CGFloat>] {
-        frames.filter { !$0.isNull }.sorted { $0.minY < $1.minY }.reduce(into: []) { rows, frame in
-            if let last = rows.last, frame.minY < last.upperBound {
-                rows[rows.count - 1] = last.lowerBound...max(last.upperBound, frame.maxY)
-            } else {
-                rows.append(frame.minY...frame.maxY)
-            }
-        }
+    /// The position whose span on the bar is nearest to `x`.
+    static func position(at x: CGFloat, in spans: [WidgetPosition: ClosedRange<CGFloat>]) -> WidgetPosition? {
+        spans.min { distance(from: x, to: $0.value) < distance(from: x, to: $1.value) }?.key
     }
 
-    private static func distance(from y: CGFloat, to row: ClosedRange<CGFloat>) -> CGFloat {
-        max(row.lowerBound - y, y - row.upperBound, 0)
+    private static func distance(from x: CGFloat, to span: ClosedRange<CGFloat>) -> CGFloat {
+        max(span.lowerBound - x, x - span.upperBound, 0)
     }
 
     static func destination(selectedID: String?, widgets: [WidgetConfiguration]) -> WidgetPosition {
