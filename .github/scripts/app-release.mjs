@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { analyzeCommits as analyze } from "@semantic-release/commit-analyzer";
+import { generateNotes as writeNotes } from "@semantic-release/release-notes-generator";
 
 const appPaths = readFileSync(new URL("../app-paths", import.meta.url), "utf8").trim().split("\n");
 const releases = { feat: "minor", fix: "patch", perf: "patch", refactor: "patch" };
@@ -33,4 +34,14 @@ export async function analyzeCommits(_config, context) {
   }
 
   return analyze(options, { ...context, commits });
+}
+
+export async function generateNotes(config, context) {
+  const commits = await Promise.all(context.commits.map(async commit => {
+    const response = await fetch(`https://api.github.com/repos/${context.env.GITHUB_REPOSITORY}/commits/${commit.hash}`,
+      { headers: { Authorization: `Bearer ${context.env.GITHUB_TOKEN}` } });
+    const { author } = await response.json();
+    return author ? { ...commit, message: commit.message.replace(/^.*/, `$& by @${author.login}`) } : commit;
+  }));
+  return writeNotes(config, { ...context, commits });
 }
