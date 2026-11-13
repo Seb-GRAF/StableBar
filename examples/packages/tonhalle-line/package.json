@@ -1,7 +1,7 @@
 {
   "id": "tonhalle-line",
   "name": "Tonhalle Line",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "kind": "theme",
   "description": "A Helvetica strip in forest ink and warm paper, with semantic roles, below-bar workspace lines and a brass command-mode outline.",
   "entry": "config.json"

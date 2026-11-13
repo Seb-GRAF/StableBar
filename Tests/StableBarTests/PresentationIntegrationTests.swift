@@ -893,7 +893,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     defer { try? FileManager.default.removeItem(at: directory) }
     let packages = WidgetPackageStore(directory: directory.appending(path: "packages"))
     let inspection = try packages.install(repository.appending(path: "examples/packages/tonhalle-line"))
-    #expect(inspection.manifest.version == "1.1.0")
+    #expect(inspection.manifest.version == "1.1.1")
     #expect(inspection.commands.isEmpty)
     let source = PresentationFixtureSource(output: try ScriptOutput.read(Data(contentsOf: directory.appending(path: "sample.json"))))
     var command = DataSourceType.command

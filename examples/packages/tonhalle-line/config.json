@@ -218,6 +218,11 @@
           "foreground": "@token.text"
         }
       }
+    },
+    "focusedWindowStyle": {
+      "cornerRadius": 4,
+      "paddingHorizontal": 2,
+      "paddingVertical": 1
     }
   }
 }
