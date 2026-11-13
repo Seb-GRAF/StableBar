@@ -278,8 +278,12 @@ final class WindowClearance: NSObject {
             guard attribute(kAXSubroleAttribute, of: window) as? String == kAXStandardWindowSubrole,
                   attribute(kAXMinimizedAttribute, of: window) as? Bool == false,
                   attribute("AXFullScreen", of: window) as? Bool != true,
-                  let frame = windowFrame(window), frame != application.adjustedFrames[window],
-                  let target = frameClearOfBar(frame, displays: displays) else { continue }
+                  let frame = windowFrame(window) else { continue }
+            guard let target = frameClearOfBar(frame, displays: displays) else {
+                application.adjustedFrames.removeValue(forKey: window)
+                continue
+            }
+            guard frame != application.adjustedFrames[window] else { continue }
             var movable: DarwinBoolean = false
             guard AXUIElementIsAttributeSettable(window, kAXPositionAttribute as CFString, &movable) == .success,
                   movable.boolValue else { continue }
