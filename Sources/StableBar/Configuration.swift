@@ -628,6 +628,18 @@ struct BarSettings: Decodable, Sendable {
         position == .top ? display.notch : nil
     }
 
+    /// The notch where the bar lays out its widgets: inside the margin, before scaling, `notchWidth` wide when set.
+    func layoutNotch(on display: BarDisplay) -> ClosedRange<CGFloat>? {
+        let scale = CGFloat(scale(for: display))
+        return notch(on: display).map { range in
+            let range: ClosedRange<CGFloat> = ((range.lowerBound - margin) / scale)...((range.upperBound - margin) / scale)
+            return notchWidth.map { width in
+                let center = (range.lowerBound + range.upperBound) / 2
+                return (center - width / 2)...(center + width / 2)
+            } ?? range
+        }
+    }
+
     /// Where the bar sits, in words: "on the top edge", "12 pt from bottom" or "6 pt below the menu bar".
     var placementDescription: String {
         let distance = offset == 0 ? "" : "\(offset.formatted()) pt "

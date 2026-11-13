@@ -56,19 +56,13 @@ struct BarView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            // The edit bar starts from the widths this bar measured, so switching draws every widget where it was.
             if store.barEditing.isActive && !preview {
-                BarEditView(store: store, display: display)
-                    .transition(.opacity)
+                BarEditView(store: store, display: display, widths: restingWidths)
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
-                let notch = config.bar.notch(on: display).map { range in
-                    let range: ClosedRange<CGFloat> = ((range.lowerBound - config.bar.margin) / scale)...((range.upperBound - config.bar.margin) / scale)
-                    return config.bar.notchWidth.map { width in
-                        let center = (range.lowerBound + range.upperBound) / 2
-                        return (center - width / 2)...(center + width / 2)
-                    } ?? range
-                }
+                let notch = config.bar.layoutNotch(on: display)
                 let widgets = store.barEditing.widgets(on: display)
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 GeometryReader { geometry in
@@ -201,11 +195,8 @@ struct BarView: View {
                 .modifier(BarDecorationLayer(geometry: barGeometry, scale: scale, native: nativeDecorations))
                 .frame(height: nativeDecorations ? barGeometry.layoutHeight : barGeometry.panelHeight,
                        alignment: config.bar.position == .top ? .top : .bottom)
-                .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : store.configuration.map { .easeOut(duration: $0.bar(on: ScreenKind(display)).animation.duration) },
-                   value: store.barEditing.isActive && !preview)
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
         .focusEffectDisabled(!store.barEditing.isActive)

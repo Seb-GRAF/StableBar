@@ -458,7 +458,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let host = panel.contentView as! NSHostingView<BarView>
             host.sizingOptions = []
             host.rootView = BarView(store: store, display: BarDisplay(screen: screen), nativeDecorations: true)
-            let geometry = store.barEditing.geometry(for: BarDisplay(screen: screen))!
+            let geometry = config.onScreen(ScreenKind(BarDisplay(screen: screen))).barGeometry(for: BarDisplay(screen: screen))
             let wasEditing = panel.isEditingBar
             panel.isEditingBar = store.barEditing.isActive
             if panel.isEditingBar { panel.setDecorations(nil) }

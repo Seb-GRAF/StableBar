@@ -84,166 +84,19 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(store.barEditing.widgets(on: external).contains { $0.id == "script" })
     }
 
-    func testAllFiveSectionsIncludeEmptyPositionsAndMatchEachDisplaysPhysicalOrder() throws {
-        let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"inset":8}"#.utf8))
-        let widths: [WidgetPosition: CGFloat] = [.left: 180, .notchLeft: 140, .center: 150, .notchRight: 130, .right: 170]
-        for display in [laptop, external] {
-            let layout = BarEditLayout(width: 1512, display: display, bar: bar, preferredWidths: widths)
-            XCTAssertEqual(Set(layout.sections.keys), Set(WidgetPosition.allCases))
-            let ordered = layout.sections.sorted { $0.value.x < $1.value.x }
-            XCTAssertEqual(ordered.map(\.key), display.notch == nil
-                           ? [.left, .notchLeft, .center, .notchRight, .right] : [.left, .notchLeft, .notchRight, .center, .right])
-            for (index, item) in ordered.enumerated() {
-                XCTAssertGreaterThan(item.value.width, 0)
-                XCTAssertGreaterThanOrEqual(item.value.x, 0)
-                XCTAssertLessThanOrEqual(item.value.x + item.value.width, 1512 - 8)
-                if index > 0 { XCTAssertGreaterThan(item.value.x, ordered[index - 1].value.x + ordered[index - 1].value.width) }
-                if let notch = display.notch {
-                    XCTAssertTrue(item.value.x + item.value.width <= notch.lowerBound || item.value.x >= notch.upperBound)
-                }
-            }
-            if display.notch == nil {
-                let first = try XCTUnwrap(layout.sections[.notchLeft])
-                let last = try XCTUnwrap(layout.sections[.notchRight])
-                XCTAssertEqual((first.x + last.x + last.width) / 2, 1512 / 2, accuracy: 0.01)
-            }
-        }
-    }
-
-    func testCrowdedSectionsStayAvailableWithoutOverflowAndRespectScaledNotchOverrides() throws {
-        let bar = try JSONDecoder().decode(BarSettings.self, from: Data(#"{"margin":4,"notchWidth":200,"displayScale":{"builtIn":1.2}}"#.utf8))
-        let layout = BarEditLayout(width: 1504, display: laptop, bar: bar,
-                                   preferredWidths: Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { ($0, 2000) }))
-        XCTAssertEqual(layout.sections.count, 5)
-        for (position, frame) in layout.sections {
-            XCTAssertGreaterThan(frame.width, 0)
-            if [.left, .notchLeft].contains(position) { XCTAssertLessThanOrEqual(frame.x + frame.width, 632) }
-            else { XCTAssertGreaterThanOrEqual(frame.x, 872) }
-        }
-    }
-
-    func testMeasuredSectionsThatFitABusyNotchedBarKeepTheirWidthWithoutWrapping() throws {
-        for rightWidth: CGFloat in [350, 450] {
-            let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: rightWidth]
-            let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
-            for position in WidgetPosition.allCases {
-                let frame = try XCTUnwrap(layout.sections[position])
-                XCTAssertEqual(frame.width, try XCTUnwrap(widths[position]), accuracy: 0.01,
-                               "Measured sections that fit must retain their content width")
-                XCTAssertLessThanOrEqual(frame.x + frame.width, 1512 - 12)
-                XCTAssertTrue(frame.x + frame.width <= 661 || frame.x >= 851)
-            }
-            let right = try XCTUnwrap(layout.sections[.right])
-            XCTAssertEqual(right.x + right.width, 1512 - 12, accuracy: 0.01)
-        }
-    }
-
-    func testOnlyTheSectionThatCannotFitWrapsAndSectionsReachTheRightInset() throws {
-        let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 86, .center: 50, .notchRight: 86, .right: 2000]
-        for (width, display) in [(CGFloat(800), external), (1512, laptop)] {
-            let layout = BarEditLayout(width: width, display: display, bar: BarSettings(), preferredWidths: widths)
-            let right = try XCTUnwrap(layout.sections[.right])
-            XCTAssertLessThan(right.width, 2000, "Only the crowded section gets less room than its widgets need")
-            XCTAssertEqual(right.x + right.width, width - 12, accuracy: 0.01)
-            let ordered = layout.sections.values.sorted { $0.x < $1.x }
-            for (index, frame) in ordered.enumerated() {
-                XCTAssertGreaterThan(frame.width, 0)
-                XCTAssertLessThanOrEqual(frame.x + frame.width, width - 12 + 0.01)
-                if index > 0 { XCTAssertGreaterThanOrEqual(frame.x, ordered[index - 1].x + ordered[index - 1].width + 5.99) }
-            }
-            for position in WidgetPosition.allCases where position != .right {
-                XCTAssertEqual(try XCTUnwrap(layout.sections[position]).width, try XCTUnwrap(widths[position]), accuracy: 0.01)
-            }
-        }
-    }
-
-    func testEmptyTraysHoldOnlyTheirDragChipWithoutOverlappingOtherTraysOrTheNotch() throws {
-        for display in [laptop, external] {
-            let layout = BarEditLayout(width: 1512, display: display, bar: BarSettings())
-            let ordered = layout.sections.sorted { $0.value.x < $1.value.x }
-            for (index, entry) in ordered.enumerated() {
-                XCTAssertEqual(entry.value.width, max(36, BarEditTrayMetrics.chipWidth(for: entry.key)))
-                if index > 0 {
-                    XCTAssertGreaterThan(entry.value.x, ordered[index - 1].value.x + ordered[index - 1].value.width)
-                }
-                if let notch = display.notch {
-                    XCTAssertTrue(entry.value.x + entry.value.width <= notch.lowerBound || entry.value.x >= notch.upperBound)
-                }
-            }
-        }
-    }
-
-    func testDragLabelsYieldSpaceBeforeFittingWidgetsHaveToWrap() throws {
-        let widths: [WidgetPosition: CGFloat] = [.left: 50, .notchLeft: 36, .notchRight: 36, .center: 36, .right: 530]
-        let layout = BarEditLayout(width: 1512, display: laptop, bar: BarSettings(), preferredWidths: widths)
-        XCTAssertEqual(try XCTUnwrap(layout.sections[.right]).width, 530, accuracy: 0.01)
-    }
-
-    @MainActor func testMeasuredRowsIncludeOnlyWidgetsSlotSpacingAndTrayPadding() throws {
-        let fixture = try ThemeGalleryFixture(##"{"bar":{"height":38,"spacing":8},"defaults":{"height":34},"groups":{"pair":{"style":{"paddingHorizontal":10,"paddingVertical":2,"spacing":12,"borderWidth":2,"background":"#123456"}}},"widgets":[{"id":"a","type":"text","text":"One","position":"left","group":"pair"},{"id":"b","type":"text","text":"Two","position":"left","group":"pair"}]}"##)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        store.barEditing.begin()
-        let config = try XCTUnwrap(store.configuration)
-        let units = BarUnit.make(widgets: config.widgets, groups: config.groups)
-        let unit = NSHostingView(rootView: BarUnitView(unit: units[0], config: config, store: store, display: laptop.id)
-            .fixedSize().modifier(MeasuringCopy()))
-        let row = NSHostingView(rootView: BarEditSectionRow(store: store, display: laptop, position: .left,
-            entries: store.barEditing.entries(on: laptop), config: config, adding: false).modifier(MeasuringCopy()))
-        XCTAssertEqual(row.fittingSize.width, unit.fittingSize.width + 22 + 8 + 14, accuracy: 0.5)
-        XCTAssertEqual(row.fittingSize.height, 50, accuracy: 0.5)
-        store.barEditing.measure(height: row.fittingSize.height, on: laptop.id)
-        XCTAssertEqual(store.barEditing.geometry(for: laptop)?.layoutHeight, 50)
-        let empty = NSHostingView(rootView: BarEditSectionRow(store: store, display: laptop, position: .right,
-            entries: [], config: config, adding: false).modifier(MeasuringCopy()))
-        XCTAssertEqual(empty.fittingSize.width, 36, accuracy: 0.01)
-        XCTAssertEqual(empty.fittingSize.height, 34, accuracy: 0.01)
-    }
-
-    @MainActor func testTrayNamesTargetsBadgesAndGroupedSourceOpacityFollowTheDragSession() throws {
+    @MainActor func testGroupedSourceOpacityFollowsTheDragSession() throws {
         let fixture = try ThemeGalleryFixture(#"{"groups":{"pair":{}},"widgets":[{"id":"a","type":"clock","position":"left","group":"pair"},{"id":"b","type":"clock","position":"left","group":"pair"}]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
         let editing = store.barEditing
         editing.begin()
-        XCTAssertFalse(editing.trayState(on: 1, position: .left).showsName)
-        XCTAssertTrue(editing.trayState(on: 1, position: .left).showsBadges)
-        XCTAssertTrue(editing.trayState(on: 1, position: .left).showsAddSlot)
         let payload = editing.dragSession.begin("a")
         editing.insertion = editing.dropTarget("a", on: 2, position: .right, x: 100, frames: [:])
-        for position in WidgetPosition.allCases {
-            XCTAssertTrue(editing.trayState(on: 1, position: position).showsName)
-            XCTAssertFalse(editing.trayState(on: 1, position: position).showsBadges)
-            XCTAssertFalse(editing.trayState(on: 1, position: position).isTarget)
-            XCTAssertEqual(editing.trayState(on: 2, position: position).isTarget, position == .right)
-            XCTAssertTrue(editing.trayState(on: 1, position: position).showsAddSlot)
-            XCTAssertEqual(editing.trayState(on: 2, position: position).showsAddSlot, position != .right)
-        }
         XCTAssertEqual(editing.opacity(for: "a"), 0)
         XCTAssertEqual(editing.opacity(for: "b"), 0)
         editing.dragSession.end(payload)
-        XCTAssertFalse(editing.trayState(on: 2, position: .right).isTarget)
-        XCTAssertTrue(editing.trayState(on: 2, position: .right).showsAddSlot)
-        XCTAssertTrue(editing.trayState(on: 1, position: .left).showsBadges)
         XCTAssertEqual(editing.opacity(for: "b"), 1)
-    }
-
-    @MainActor func testEditHeightFollowsMeasuredContentPerDisplayAndClearsOnExit() throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        store.barEditing.begin()
-        store.barEditing.measure(height: 63.2, on: laptop.id)
-        store.barEditing.measure(height: 92, on: external.id)
-        XCTAssertEqual(store.barEditing.geometry(for: laptop)?.layoutHeight, 64)
-        XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, 92)
-        store.barEditing.end()
-        XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, CGFloat(try XCTUnwrap(store.configuration).bar.height))
-        store.barEditing.begin()
-        XCTAssertEqual(store.barEditing.geometry(for: external)?.layoutHeight, CGFloat(try XCTUnwrap(store.configuration).bar.height))
     }
 
     @MainActor func testDropIndexUsesFrameMidpointsAndNeverSplitsOrTargetsTheMovingGroup() throws {
@@ -278,61 +131,12 @@ final class BarEditingTests: XCTestCase {
         XCTAssertNil(editing.dropTarget("missing", on: 2, position: .left, x: 0, frames: frames))
     }
 
-    @MainActor func testDropTargetsInAWrappedTrayFollowTheRowUnderThePointer() throws {
-        let fixture = try ThemeGalleryFixture(#"""
-        {"widgets":[{"id":"a","type":"clock","position":"right"},{"id":"b","type":"clock","position":"right"},
-        {"id":"c","type":"clock","position":"right"},{"id":"d","type":"clock","position":"right"},
-        {"id":"moving","type":"clock","position":"left"}]}
-        """#)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        let editing = store.barEditing
-        editing.begin()
-        let frames = ["a": CGRect(x: 10, y: 6, width: 40, height: 22), "b": CGRect(x: 60, y: 6, width: 40, height: 22),
-                      "c": CGRect(x: 10, y: 34, width: 40, height: 22), "d": CGRect(x: 60, y: 34, width: 40, height: 22)]
-        let target = { (x: CGFloat, y: CGFloat) in editing.dropTarget("moving", on: 2, position: .right, x: x, y: y, frames: frames) }
-        XCTAssertEqual(target(5, 15)?.before, "a")
-        XCTAssertEqual(target(90, 15)?.before, "c", "Past the end of the first row inserts before the second row")
-        XCTAssertEqual(target(90, 15)?.index, 2)
-        XCTAssertEqual(target(5, 45)?.before, "c")
-        XCTAssertEqual(target(70, 45)?.before, "d")
-        XCTAssertNil(try XCTUnwrap(target(150, 45)).before, "Past the last widget appends")
-        XCTAssertEqual(target(5, 32)?.before, "c", "Between rows, the nearer row counts")
-        XCTAssertEqual(target(5, 30)?.before, "a")
-        XCTAssertEqual(target(70, 0)?.before, "b", "Above the first row counts as the first row")
-        XCTAssertEqual(target(5, 80)?.before, "c", "Below the last row counts as the last row")
-        var preview = frames
-        preview["moving"] = CGRect(x: 10, y: 62, width: 40, height: 22)
-        XCTAssertNil(try XCTUnwrap(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 70, frames: preview)).before,
-                     "A row that only the dragged widget's preview fills keeps it at the end")
-        XCTAssertEqual(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 45, frames: preview)?.before, "c")
-        let trailingSlot = CGRect(x: 10, y: 62, width: 22, height: 22)
-        XCTAssertNil(try XCTUnwrap(editing.dropTarget("moving", on: 2, position: .right, x: 12, y: 70, frames: frames,
-                                                      addSlot: trailingSlot)).before,
-                     "The row that only + fills comes after the last widget")
-        let leading = ["a": CGRect(x: 10, y: 34, width: 40, height: 22), "b": CGRect(x: 60, y: 34, width: 40, height: 22)]
-        XCTAssertEqual(editing.dropTarget("moving", on: 2, position: .right, x: 90, y: 15, frames: leading,
-                                          addSlot: CGRect(x: 10, y: 6, width: 22, height: 22))?.before, "a",
-                       "The row that only + fills comes before the first widget")
-    }
-
-    func testFlowRowsContinueOnTheNextRowOnlyWhenTheNextItemDoesNotFit() {
-        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: nil), [0..<3])
-        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: 300), [0..<3])
-        XCTAssertEqual(BarEditFlow.rows([100, 100, 100], fitting: 250), [0..<2, 2..<3])
-        XCTAssertEqual(BarEditFlow.rows([300, 50, 50], fitting: 200), [0..<1, 1..<3], "An item wider than the tray gets a row of its own")
-        XCTAssertEqual(BarEditFlow.rows([100, 0, 100], fitting: 100), [0..<2, 2..<3], "A collapsed item never starts a row")
-        XCTAssertEqual(BarEditFlow.rows([], fitting: 100), [])
-    }
-
-    @MainActor func testFlowLayoutWrapsAtTheProposedWidthAndStaysOneRowWhenUnconstrained() {
-        let items = BarEditFlow(rowSpacing: 4) {
-            ForEach(0..<3, id: \.self) { _ in Color.clear.frame(width: 100, height: 20) }
-        }
-        XCTAssertEqual(NSHostingView(rootView: items).fittingSize, CGSize(width: 300, height: 20))
-        let wrapped = NSHostingView(rootView: items.frame(width: 250).fixedSize(horizontal: false, vertical: true))
-        XCTAssertEqual(wrapped.fittingSize, CGSize(width: 250, height: 44))
+    func testADragGoesToTheNearestPositionOnTheBar() {
+        let spans: [WidgetPosition: ClosedRange<CGFloat>] = [.left: 8...200, .center: 500...522, .right: 900...1200]
+        XCTAssertEqual(WidgetPlacement.position(at: 100, in: spans), .left)
+        XCTAssertEqual(WidgetPlacement.position(at: 300, in: spans), .left, "Between positions, the nearer one")
+        XCTAssertEqual(WidgetPlacement.position(at: 420, in: spans), .center)
+        XCTAssertEqual(WidgetPlacement.position(at: 1300, in: spans), .right)
     }
 
     @MainActor func testDropMovesTheWholeGroupOnceAcrossDisplaysAndPositionsAndUndoKeepsEditing() async throws {
@@ -347,13 +151,11 @@ final class BarEditingTests: XCTestCase {
         let payload = editing.dragSession.begin("b")
         let entries = editing.entries(on: external)
         XCTAssertEqual(editing.arranged(entries, on: 2, position: .left).map(\.id), ["a", "b"])
-        XCTAssertFalse(editing.isCollapsed("a", on: 2, position: .left))
         let target = try XCTUnwrap(editing.dropTarget("b", on: 2, position: .notchRight, x: 0, frames: [:]))
         editing.insertion = target
-        XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"])
-        XCTAssertTrue(editing.isCollapsed("a", on: 2, position: .left))
-        XCTAssertTrue(editing.isCollapsed("b", on: 1, position: .left))
-        XCTAssertFalse(editing.isCollapsed("c", on: 2, position: .right))
+        XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"], "The group opens a gap where it lands")
+        XCTAssertTrue(editing.arranged(entries, on: 2, position: .left).isEmpty, "and leaves its place")
+        XCTAssertTrue(editing.arranged(editing.entries(on: laptop), on: 1, position: .left).isEmpty, "on every display")
         editing.insertion = try XCTUnwrap(editing.dropTarget("b", on: 2, position: .right, x: 0,
                                                              frames: ["c": CGRect(x: 10, y: 0, width: 40, height: 30)]))
         XCTAssertEqual(editing.arranged(entries, on: 2, position: .right).map(\.id), ["a", "b", "c"])
@@ -545,11 +347,8 @@ final class BarEditingTests: XCTestCase {
             defer { fixture.close() }
             let store = try fixture.store()
             defer { store.stop() }
-            let normal = try XCTUnwrap(store.barEditing.geometry(for: laptop))
             store.barEditing.begin()
-            store.barEditing.measure(height: 80, on: laptop.id)
             XCTAssertEqual(store.barEditing.widgets(on: external).count, 1)
-            XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: laptop)).layoutHeight, normal.layoutHeight)
             let payload = store.barEditing.dragSession.begin("hidden")
             store.barEditing.insertion = store.barEditing.dropTarget("hidden", on: 1, position: .left, x: 0, frames: [:])
             XCTAssertFalse(store.barEditing.handleKey(36))
@@ -566,7 +365,6 @@ final class BarEditingTests: XCTestCase {
             XCTAssertTrue(store.barEditing.widgets(on: external).isEmpty, exit)
             XCTAssertNil(store.barEditing.insertion, exit)
             XCTAssertFalse(store.barEditing.dragSession.accepts(payload), exit)
-            XCTAssertEqual(store.barEditing.geometry(for: laptop), normal, exit)
             XCTAssertFalse(store.barEditing.handleKey(53))
         }
     }
@@ -622,13 +420,10 @@ final class BarEditingTests: XCTestCase {
             let clearance = { app.clearanceDisplay(frame: frame, visibleFrame: frame, display: display, desktopTop: 2062) }
             let before = try XCTUnwrap(clearance())
             store.barEditing.begin()
-            store.barEditing.measure(height: 80, on: display.id)
-            XCTAssertGreaterThan(try XCTUnwrap(store.barEditing.geometry(for: display)).panelHeight, normal.panelHeight)
             let during = try XCTUnwrap(clearance())
             XCTAssertEqual(during, before)
             XCTAssertEqual(during.barFrame.height, normal.panelHeight)
             XCTAssertEqual(during.barFrame.minY, 2062 - frame.maxY + config.bar.offset)
-            // A window below the normal bar must not be moved by the taller editing controls.
             let window = CGRect(x: frame.minX + 10, y: during.barFrame.maxY + 1, width: 300, height: 200)
             XCTAssertNil(frameClearOfBar(window, displays: [during]))
             store.barEditing.end()

@@ -86,6 +86,7 @@ final class BarEditDragSourceView: WidgetDragSourceView {
     override func didEndWidgetDrag() { editing?.insertion = nil }
 
     override func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        NSCursor.arrow.set()
         super.draggingSession(session, endedAt: screenPoint, operation: operation)
         editing?.finishDrop()
     }
@@ -94,10 +95,12 @@ final class BarEditDragSourceView: WidgetDragSourceView {
 struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     let editing: BarEditing
     let displayID: Int
-    let position: WidgetPosition
+    /// Where drags aim at each position, empty ones included, within the position's side.
+    let spans: [WidgetPosition: ClosedRange<CGFloat>]
     let frames: [String: CGRect]
-    /// The tray's +, which shapes its rows.
-    let addSlot: CGRect
+    /// The sides too crowded for their widgets, which scroll by `scroll`.
+    let scrolling: [BarEditSide]
+    let scroll: (BarEditSide, CGFloat) -> Void
     @ViewBuilder let content: () -> Content
 
     func makeNSView(context: Context) -> BarEditDropTargetView {
@@ -110,9 +113,10 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
         view.rootView = AnyView(content())
         view.editing = editing
         view.displayID = displayID
-        view.position = position
+        view.spans = spans
         view.frames = frames
-        view.addSlot = addSlot.isNull ? nil : addSlot
+        view.scrolling = scrolling
+        view.scroll = scroll
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: BarEditDropTargetView, context: Context) -> CGSize? {
@@ -120,31 +124,44 @@ struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     }
 }
 
-/// A tray takes the size the edit bar's layout gives it. Its widgets on one row are often wider, so
-/// neither the tray nor its content reports their size to Auto Layout, which would otherwise stretch
-/// the tray past the screen's edge.
+/// The edit bar takes the size of the bar. A crowded side's widgets at full size are wider, so neither the
+/// bar nor its content reports their size to Auto Layout, which would otherwise stretch it past the screen's edge.
 final class BarEditDropTargetView: WidgetHostingView {
     override var isFlipped: Bool { true }
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric) }
     weak var editing: BarEditing?
     var displayID = 0
-    var position = WidgetPosition.left
+    var spans: [WidgetPosition: ClosedRange<CGFloat>] = [:]
     var frames: [String: CGRect] = [:]
-    var addSlot: CGRect?
+    var scrolling: [BarEditSide] = []
+    var scroll: (BarEditSide, CGFloat) -> Void = { _, _ in }
+
+    override func scrollWheel(with event: NSEvent) {
+        let x = convert(event.locationInWindow, from: nil).x
+        guard let side = scrolling.first(where: { $0.visible.contains(x) }) else { return super.scrollWheel(with: event) }
+        // A mouse wheel turns the side too, a line at a time.
+        let delta = abs(event.scrollingDeltaX) >= abs(event.scrollingDeltaY) ? event.scrollingDeltaX : event.scrollingDeltaY
+        scroll(side, -delta * (event.hasPreciseScrollingDeltas ? 1 : 10))
+    }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        guard let payload = acceptedPayload(sender), let target = target(sender, payload: payload) else { return [] }
-        if editing?.insertion != target {
-            editing?.insertion = target
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        guard let payload = acceptedPayload(sender) else { return [] }
+        // Holding a widget near a crowded side's edge scrolls that side; AppKit repeats this while the pointer rests.
+        let x = convert(sender.draggingLocation, from: nil).x
+        if let side = scrolling.first(where: { $0.visible.contains(x) }) {
+            if x < side.visible.lowerBound + 32 { scroll(side, -6) } else if x > side.visible.upperBound - 32 { scroll(side, 6) }
         }
+        guard let target = target(sender, payload: payload) else { return [] }
+        if editing?.insertion != target { editing?.insertion = target }
+        // AppKit shows the arrow during a drag; over the bar, the hand keeps holding the widget.
+        NSCursor.closedHand.set()
         return .move
     }
 
     override func draggingExited(_ sender: (any NSDraggingInfo)?) {
-        if editing?.insertion?.displayID == displayID, editing?.insertion?.position == position { editing?.insertion = nil }
+        if editing?.insertion?.displayID == displayID { editing?.insertion = nil }
     }
 
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
@@ -168,9 +185,9 @@ final class BarEditDropTargetView: WidgetHostingView {
     }
 
     private func target(_ sender: any NSDraggingInfo, payload: WidgetDragSession.Payload) -> BarEditInsertion? {
-        let location = convert(sender.draggingLocation, from: nil)
-        return editing?.dropTarget(payload.widgetID, on: displayID, position: position, x: location.x, y: location.y,
-                                   frames: frames, addSlot: addSlot)
+        let x = convert(sender.draggingLocation, from: nil).x
+        guard let position = WidgetPlacement.position(at: x, in: spans) else { return nil }
+        return editing?.dropTarget(payload.widgetID, on: displayID, position: position, x: x, frames: frames)
     }
 
     private func acceptedPayload(_ sender: any NSDraggingInfo) -> WidgetDragSession.Payload? {
