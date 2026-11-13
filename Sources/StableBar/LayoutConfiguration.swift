@@ -215,8 +215,9 @@ struct AdaptiveBarPlanner {
         let buckets = positions.map { position in ordered.filter { $0.position == position } }
         let filled = buckets.filter { !$0.isEmpty }.count
         let contentWidth = ordered.reduce(CGFloat.zero) { $0 + $1.width }
-        let availableWidth = max(capacity - CGFloat(max(ordered.count - 1, 0)) * gaps - CGFloat(max(filled - 1, 0)) * positionSpacing, 0)
-        let overflow = scrolls ? max(contentWidth - availableWidth, 0) : 0
+        let gapWidth = CGFloat(max(ordered.count - 1, 0)) * gaps + CGFloat(max(filled - 1, 0)) * positionSpacing
+        let availableWidth = max(capacity - gapWidth, 0)
+        let overflow = scrolls ? max(contentWidth + gapWidth - capacity, 0) : 0
         result.segments.append(BarSegment(positions: positions, span: start...max(start, end), atEnd: atEnd, overflow: overflow))
         let scale = overflow == 0 && contentWidth > availableWidth ? availableWidth / contentWidth : 1
         let spacerCount = ordered.filter(\.isSpacer).count

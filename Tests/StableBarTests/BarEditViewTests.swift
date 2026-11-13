@@ -94,15 +94,30 @@ final class BarEditViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(try XCTUnwrap(right.last).maxX, bar.bounds.width, "At rest the side shows its end")
         XCTAssertLessThan(try XCTUnwrap(right.first).minX, notch.upperBound, "and scrolls to its start")
         XCTAssertEqual(bar.scrolling.map(\.id), [.left, .notchRight])
+        XCTAssertNil(bar.spans[.notchRight], "A position scrolled out of its side takes no drops")
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(bar.spans[.right]).lowerBound, notch.upperBound - 20 - 0.01,
+                                    "Drags aim at a position only within its side")
+        let left = try XCTUnwrap(bar.frames["left-0"])
         bar.scroll(bar.scrolling[1], -100)
         var scrolled = try await settled(window, store: store, display: display)
         XCTAssertEqual(try XCTUnwrap(scrolled.frames["right-0"]).minX, try XCTUnwrap(right.first).minX + 100, accuracy: 0.01)
-        XCTAssertEqual(scrolled.frames["left-0"], bar.frames["left-0"], "The other side stays")
+        XCTAssertEqual(scrolled.frames["left-0"], left, "The other side stays")
         XCTAssertEqual(scrolled.scrolling[0].visible.upperBound, notch.lowerBound, "Arrows and fades stay clear of the notch")
         scrolled.scroll(scrolled.scrolling[0], 10_000)
         scrolled = try await settled(window, store: store, display: display)
         XCTAssertEqual(try XCTUnwrap(scrolled.spans[.notchLeft]).upperBound, notch.lowerBound + 20, accuracy: 0.01,
                        "Scrolled to its end, a side ends where the bar puts it")
+    }
+
+    @MainActor func testANotchWiderThanTheBarLeavesTheEditBarStanding() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"bar":{"notchWidth":1600},"widgets":[{"id":"a","type":"text","text":"A","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.barEditing.begin()
+        let (window, bar) = try await editBar(store, on: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851))
+        defer { window.close() }
+        XCTAssertNotNil(bar.frames["a"])
     }
 
     @MainActor func testADraggedWidgetOpensItsGapInThePositionItWouldLandIn() async throws {
@@ -203,7 +218,7 @@ final class BarEditViewTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(10))
             }
             let bar = try XCTUnwrap(descendants(host, of: BarEditDropTargetView.self).first)
-            XCTAssertEqual(Set(bar.spans.keys), Set(WidgetPosition.allCases))
+            XCTAssertNotNil(bar.spans[.left])
             let sources = descendants(host, of: BarEditDragSourceView.self)
             XCTAssertEqual(Set(sources.map(\.widgetID)), ["a", "b", "c", "d", "e", "f"])
             XCTAssertTrue(sources.allSatisfy { !$0.name.isEmpty })

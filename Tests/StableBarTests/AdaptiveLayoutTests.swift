@@ -551,4 +551,9 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(plan.placements["left"] == BarPlacement(x: 10, width: 100))
     #expect(plan.placements["near"] == BarPlacement(x: 620, width: 200))
     #expect(plan.placements["far"] == BarPlacement(x: 828, width: 250))
+    let tiny = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 20, notch: 400...600, scrolls: true).plan(width: 1000, items: (0..<50).map {
+        BarLayoutItem(id: "\($0)", position: .right, width: 18, canOverflow: false)
+    })
+    // 50 items of 18 pt and 49 gaps of 8 pt in 370 pt: the gaps alone outgrow the segment.
+    #expect(tiny.segments[1].overflow == 922)
 }

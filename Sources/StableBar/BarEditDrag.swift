@@ -95,7 +95,7 @@ final class BarEditDragSourceView: WidgetDragSourceView {
 struct BarEditDropTarget<Content: View>: NSViewRepresentable {
     let editing: BarEditing
     let displayID: Int
-    /// Where each position spans on the bar, empty ones included.
+    /// Where drags aim at each position, empty ones included, within the position's side.
     let spans: [WidgetPosition: ClosedRange<CGFloat>]
     let frames: [String: CGRect]
     /// The sides too crowded for their widgets, which scroll by `scroll`.

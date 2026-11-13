@@ -46,7 +46,7 @@ struct BarEditView: View {
             GeometryReader { proxy in
                 let height = proxy.size.height / scale
                 let layout = layout(units: units, width: proxy.size.width / scale, height: height, config: config)
-                BarEditDropTarget(editing: editing, displayID: display.id, spans: layout.spans,
+                BarEditDropTarget(editing: editing, displayID: display.id, spans: layout.targets,
                                   frames: Dictionary(uniqueKeysWithValues: units.flatMap { unit in
                                       unit.widgets.map { ($0.id, layout.frames[unit.id]!) }
                                   }),
@@ -179,6 +179,8 @@ struct BarEditView: View {
     private struct Layout {
         var frames: [String: CGRect] = [:]
         var spans: [WidgetPosition: ClosedRange<CGFloat>] = [:]
+        /// Each position's span within its side, which drags aim at. A position scrolled out of its side has none.
+        var targets: [WidgetPosition: ClosedRange<CGFloat>] = [:]
         /// The side of the bar each position is on.
         var sides: [WidgetPosition: BarEditSide] = [:]
         /// The sides too crowded for their widgets.
@@ -200,11 +202,11 @@ struct BarEditView: View {
             .plan(width: width, items: items)
         var layout = Layout()
         for segment in plan.segments {
-            // A theme's notch spacing can reach into the notch, where nothing shows.
-            let visible = notch.map { notch in
-                segment.atEnd ? segment.span.lowerBound...min(segment.span.upperBound, notch.lowerBound)
-                    : max(segment.span.lowerBound, notch.upperBound)...segment.span.upperBound
-            } ?? segment.span
+            // A theme's notch spacing can reach into the notch, where nothing shows. A side all under the notch,
+            // such as one a `notchWidth` wider than the bar leaves, keeps its span.
+            let lower = notch.map { segment.atEnd ? segment.span.lowerBound : max(segment.span.lowerBound, $0.upperBound) } ?? segment.span.lowerBound
+            let upper = notch.map { segment.atEnd ? min(segment.span.upperBound, $0.lowerBound) : segment.span.upperBound } ?? segment.span.upperBound
+            let visible = lower < upper ? lower...upper : segment.span
             // At rest, a side shows the end that its More widgets button would leave in place.
             let rest = segment.atEnd ? 0 : segment.overflow
             let side = BarEditSide(id: segment.positions[0], span: segment.span, visible: visible, overflow: segment.overflow,
@@ -218,7 +220,11 @@ struct BarEditView: View {
                     return CGRect(x: placement.x - shift, y: 0, width: placement.width, height: height)
                 }
                 for (item, frame) in zip(items.filter { $0.position == position }, frames) { layout.frames[item.id] = frame }
-                layout.spans[position] = frames.map(\.minX).min()!...frames.map(\.maxX).max()!
+                let span = frames.map(\.minX).min()!...frames.map(\.maxX).max()!
+                layout.spans[position] = span
+                if span.overlaps(segment.span) {
+                    layout.targets[position] = max(span.lowerBound, segment.span.lowerBound)...min(span.upperBound, segment.span.upperBound)
+                }
             }
         }
         return layout
