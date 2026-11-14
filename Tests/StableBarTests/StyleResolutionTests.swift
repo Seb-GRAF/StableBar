@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -454,4 +455,33 @@ private func rules(_ json: String) throws -> [StyleRule] {
     #expect(configuration.focusedWindowStyle?.background == .color(HexColor(0x123456ff)))
     #expect(configuration.focusedWindowStyle?.cornerRadius == 6)
     #expect(configuration.cellStyle(.focused).glyph(hovered: false).background == nil)
+}
+
+@Test func symbolVariantsReadSFSymbolsVariantNames() throws {
+    #expect(try style(#"{"symbolVariant":"fill"}"#).symbolVariant?.variants == .fill)
+    #expect(try style(#"{"symbolVariant":"circle.fill"}"#).symbolVariant?.variants == .circle.fill)
+    #expect(try style(#"{"symbolVariant":"slash"}"#).symbolVariant?.variants == .slash)
+    #expect(try style(#"{"symbolVariant":"none"}"#).symbolVariant?.variants == SymbolVariants.none)
+    #expect(try style(#"{"symbolVariant":"circle.fill"}"#).configurationValue == .object(["symbolVariant": .string("circle.fill")]))
+    for invalid in ["filled", "", "fill.fill", "circle.square", "none.fill", "fill."] {
+        #expect(throws: DecodingError.self) { try style(#"{"symbolVariant":"\#(invalid)"}"#) }
+    }
+}
+
+@Test func aSymbolVariantInAStateFillsTheSymbolWhileTheStateIsActive() throws {
+    let leaf = try JSONDecoder().decode(PopupBlock.self, from: Data(##"""
+    {"type":"symbol","name":"leaf","style":{"iconSize":16,"states":{"open":{"symbolVariant":"fill"}}}}
+    """##.utf8))
+    let inherited = try style(##"{"foreground":"#ffffff"}"##)
+    #expect(leaf.resolvedStyle(inherited: inherited, styles: [:], fields: [:], states: StyleStates()).text.symbolVariant == nil)
+    #expect(leaf.resolvedStyle(inherited: inherited, styles: [:], fields: [:], states: StyleStates(open: true)).text.symbolVariant?.variants
+        == .fill)
+    let row = try JSONDecoder().decode(PopupBlock.self, from: Data(##"""
+    {"type":"row","style":{"states":{"hover":{"symbolVariant":"fill"}}},"children":[{"type":"symbol","name":"leaf"}]}
+    """##.utf8))
+    let children = row.resolvedStyle(inherited: inherited, styles: [:], fields: [:], states: StyleStates()).inherited
+    let symbol = PopupBlock(content: .symbol(name: "leaf", source: nil))
+    #expect(symbol.resolvedStyle(inherited: children, styles: [:], fields: [:], states: StyleStates(hover: true)).text.symbolVariant?.variants
+        == .fill)
+    #expect(try style(##"{"symbolVariant":"fill","paddingTop":2}"##).inheritedByBlocks == WidgetStyle(symbolVariant: SymbolVariant(rawValue: "fill")))
 }

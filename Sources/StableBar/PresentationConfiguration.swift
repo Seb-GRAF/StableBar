@@ -113,7 +113,7 @@ extension WidgetStyle {
             if let number { value[key] = .number(number) }
         }
         for (key, text) in [("fontName", fontName), ("fontWeight", fontWeight), ("borderEdges", borderEdges?.rawValue),
-                            ("placement", placement?.rawValue)] {
+                            ("placement", placement?.rawValue), ("symbolVariant", symbolVariant?.rawValue)] {
             if let text { value[key] = .string(text) }
         }
         if let states { value["states"] = .object(states.mapValues(\.configurationValue)) }
@@ -124,7 +124,7 @@ extension WidgetStyle {
     /// (including their nested states) propagate into its children.
     var inheritedByBlocks: WidgetStyle {
         WidgetStyle(foreground: foreground, accent: accent, accentText: accentText, fontName: fontName,
-                    fontSize: fontSize, fontWeight: fontWeight, iconSize: iconSize, spacing: spacing,
+                    fontSize: fontSize, fontWeight: fontWeight, iconSize: iconSize, symbolVariant: symbolVariant, spacing: spacing,
                     states: states?.mapValues(\.inheritedByBlocks))
     }
 }

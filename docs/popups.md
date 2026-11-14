@@ -63,7 +63,7 @@ Layout blocks:
 | `menu` | — | The widget's script or configured menu entries, with their existing actions |
 | `divider` | — | A horizontal rule |
 | `image` | `path` or `source` | Local path, `file://`, or HTTP(S) image; `source` reads a path from `fields`. A local app or program shows its Finder icon. `fit` is `fit` or `fill`; size defaults to 52 × 52. |
-| `symbol` | `name` or `source` | SF Symbol; `source` reads its name from `fields`. `style.iconSize` sets its size. |
+| `symbol` | `name` or `source` | SF Symbol; `source` reads its name from `fields`. `style.iconSize` sets its size and [`style.symbolVariant`](styling.md#widget-styles) its variant, such as `fill`. |
 | `progress` | `source`, `height` | A rule using `values[source]`, optionally moving toward `targets[source]`. `style.accent` is the fill and `style.background` the track. |
 | `equalizer` | — | Four bars that bounce in the text color while `source` is on, for `"true"`/`"1"` in fields or 1 in values, and settle low when it's off; without `source` they always bounce. `height` defaults to 12. Reduce Motion keeps them still. |
 | `battery` | — | A battery like the one in the macOS menu bar, sized by `style.iconSize` and drawn in the text color. Its fill shows `values[source]`, or a 0–1 number in `fields[source]`; `source` defaults to `percent`. A `state` field of `charging` adds a bolt and `charged` a plug, and a `health` field of `service` adds an orange badge. On battery power the fill turns red at 10 % or less. |

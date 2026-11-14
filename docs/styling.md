@@ -10,6 +10,15 @@ Each widget can override any of these styles:
 
 Styles also accept `hoverForeground`, `height`, `paddingLeading`, `paddingTrailing`, `paddingTop`, `paddingBottom`, `offsetX`, `offsetY` and `opacity`. Side-specific padding overrides horizontal/vertical padding. `ultralight`, `thin` and `light` font weights are available too. Offsets move the drawing without moving its neighbours.
 
+`symbolVariant` draws SF Symbols in one of their variants: `fill`, `slash`, `circle`, `square` or `rectangle`, or several joined by dots, such as `circle.fill`, so `bell` draws as `bell.fill`. A symbol without that variant keeps its own look. `none` draws symbols as named, undoing a variant set in a lower layer. Like `iconSize`, it reaches a layout's blocks. Set it in a state to change a symbol while the state is active, such as a leaf that fills while the Apple menu is open:
+
+```json
+{
+  "id": "apple", "type": "appleMenu", "position": "left",
+  "layout": { "type": "symbol", "name": "leaf", "style": { "states": { "open": { "symbolVariant": "fill" } } } }
+}
+```
+
 ## States
 
 Any style can have `states`: styles that apply over it while a state is active. A state needs only the properties that change:
@@ -31,11 +40,11 @@ Any style can have `states`: styles that apply over it while a state is active. 
 
 `hover` is active while the pointer is over a bar widget, a workspace cell or a layout block, on that display only. The `open` state is active on a bar widget, its layout and its overlay while its popup shows, on the instance that opened it: not on its copies on other displays, and not when the popup opened from the More widgets popup. A block's own background, border, padding, size, offset and opacity change for `open` only through that block's own `states`. Workspace cells also have a workspace state; see [Workspace appearance](widgets.md#workspace-appearance). Script and provider widgets can have a data state; see [Data states](#data-states). States apply in a fixed order, later ones winning: the data state, the workspace state, `mode`, `mode.<alias>`, `hover`, then `open`, so an `open` style stays visible while the pointer rests on its widget. A state's style can have its own `states`, which refine later states while both are active: `states.focused.states.hover` styles the focused workspace under the pointer. `bar.style` consumes mode states; group states remain inactive.
 
-`hoverBackground` and `hoverForeground` are shorthand for `states.hover.background` and `states.hover.foreground`. In each style, such as `defaults` or a widget's `style`, the two are compared after includes, packages, themes, templates, widget overrides and profiles merge, so a `states.hover.background` from any layer wins over `hoverBackground` from any layer, and likewise for the foreground; to override a lower layer's hover state, set `states.hover.background`. The **Hover background** rows in Settings handle this for you: they set `hoverBackground` and set `states.hover.background` to `null` beside it, so the color you pick wins over a lower layer's hover state but not over an active profile's `hoverBackground`. A hover without a background keeps the background. In a widget's `layout` and `overlay` and in popups, `hover` changes a block's text color and its own background, border, padding, size, offset and opacity. A widget without `layout` draws its default layout with all of its `hover` and `open` styles.
+`hoverBackground` and `hoverForeground` are shorthand for `states.hover.background` and `states.hover.foreground`. In each style, such as `defaults` or a widget's `style`, the two are compared after includes, packages, themes, templates, widget overrides and profiles merge, so a `states.hover.background` from any layer wins over `hoverBackground` from any layer, and likewise for the foreground; to override a lower layer's hover state, set `states.hover.background`. The **Hover background** rows in Settings handle this for you: they set `hoverBackground` and set `states.hover.background` to `null` beside it, so the color you pick wins over a lower layer's hover state but not over an active profile's `hoverBackground`. A hover without a background keeps the background. In a widget's `layout` and `overlay` and in popups, `hover` changes a block's text color, its symbol variant and its own background, border, padding, size, offset and opacity. A widget without `layout` draws its default layout with all of its `hover` and `open` styles.
 
 A widget's states merge with those in `defaults`, and every style's states merge through includes, templates, profiles and widget overrides one state and property at a time: a widget's `states.hover.foreground` keeps the theme's `states.hover.background`. Set a state to `null` in a later layer to remove it at the same place: in `defaults` through includes, profiles and packages, and in a widget's `style` through its templates, widget overrides and package widgets. A hover set with `hoverBackground` or `hoverForeground` comes back from the shorthand, so set those to `null` too. Nothing set on a widget (its `style`, a template, a widget override or script output) can remove a state set in `defaults`. A state wins over the base style, so a theme's states also show on widgets that set their own colors.
 
-The bar measures widths without `hover` and `open`, so use them for colors, borders, opacity and offsets rather than sizes.
+The bar measures widths without `hover` and `open`, so use them for colors, borders, opacity, offsets and symbol variants rather than sizes.
 
 With `workspaceSource: "aerospace"`, `mode` is active while connected in any binding mode other than `main`. Map your local mode names to semantic aliases in your configuration; themes own the matching appearance:
 

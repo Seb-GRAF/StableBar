@@ -663,6 +663,7 @@ struct WidgetView: View {
         clickable(tile, output: output, isOpen: isOpen)
         .font(appearance.font)
         .foregroundStyle(appearance.foreground)
+        .styledSymbolVariant(style.symbolVariant)
         .modifier(GlassBackground(fill: style.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.widgets,
                                   shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
         .overlay {

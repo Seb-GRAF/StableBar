@@ -186,6 +186,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var fontSize: Double?
     var fontWeight: String?
     var iconSize: Double?
+    var symbolVariant: SymbolVariant?
     var paddingHorizontal: Double?
     var paddingVertical: Double?
     var spacing: Double?
@@ -209,7 +210,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius, flare
-        case fontName, fontSize, fontWeight, iconSize, paddingHorizontal, paddingVertical, spacing, width
+        case fontName, fontSize, fontWeight, iconSize, symbolVariant, paddingHorizontal, paddingVertical, spacing, width
         case minWidth, maxWidth, shadowRadius, shadowColor, height, paddingLeading, paddingTrailing, paddingTop
         case paddingBottom, offsetX, offsetY, opacity, placement, hoverForeground, states
     }
@@ -232,6 +233,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             fontSize: fontSize ?? defaults.fontSize,
             fontWeight: fontWeight ?? defaults.fontWeight,
             iconSize: iconSize ?? defaults.iconSize,
+            symbolVariant: symbolVariant ?? defaults.symbolVariant,
             paddingHorizontal: paddingHorizontal ?? defaults.paddingHorizontal,
             paddingVertical: paddingVertical ?? defaults.paddingVertical,
             spacing: spacing ?? defaults.spacing,
@@ -283,6 +285,7 @@ extension WidgetStyle {
         fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize)
         fontWeight = try values.decodeIfPresent(String.self, forKey: .fontWeight)
         iconSize = try values.decodeIfPresent(Double.self, forKey: .iconSize)
+        symbolVariant = try values.decodeIfPresent(SymbolVariant.self, forKey: .symbolVariant)
         paddingHorizontal = try values.decodeIfPresent(Double.self, forKey: .paddingHorizontal)
         paddingVertical = try values.decodeIfPresent(Double.self, forKey: .paddingVertical)
         spacing = try values.decodeIfPresent(Double.self, forKey: .spacing)
@@ -307,6 +310,52 @@ extension WidgetStyle {
         if hoverForeground != nil || hoverBackground != nil {
             self = addingStates(["hover": WidgetStyle(foreground: hoverForeground, background: hoverBackground)])
         }
+    }
+}
+
+/// The SF Symbols variant a style draws its symbols in, such as `fill` or `circle.fill`. A symbol without that variant
+/// keeps its own look, and `none` draws each symbol as named, undoing a variant set below it.
+struct SymbolVariant: Decodable, Equatable, Sendable {
+    let rawValue: String
+
+    private static let shapes: Set<Substring> = ["circle", "square", "rectangle"]
+
+    init?(rawValue: String) {
+        if rawValue != "none" {
+            let parts = rawValue.split(separator: ".", omittingEmptySubsequences: false)
+            let known = parts.allSatisfy { Self.shapes.contains($0) || $0 == "fill" || $0 == "slash" }
+            guard known, Set(parts).count == parts.count, parts.count(where: Self.shapes.contains) <= 1 else { return nil }
+        }
+        self.rawValue = rawValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard let variant = Self(rawValue: try container.decode(String.self)) else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription:
+                "Use fill, slash, circle, square or rectangle, or several joined by dots such as circle.fill, or none.")
+        }
+        self = variant
+    }
+
+    var variants: SymbolVariants {
+        rawValue.split(separator: ".").reduce(SymbolVariants.none) { variants, part in
+            switch part {
+            case "fill": variants.fill
+            case "slash": variants.slash
+            case "circle": variants.circle
+            case "square": variants.square
+            case "rectangle": variants.rectangle
+            default: variants
+            }
+        }
+    }
+}
+
+extension View {
+    /// Draws this view's symbols in `variant`; without one, they keep the variant set above.
+    func styledSymbolVariant(_ variant: SymbolVariant?) -> some View {
+        transformEnvironment(\.symbolVariants) { if let variant { $0 = variant.variants } }
     }
 }
 
