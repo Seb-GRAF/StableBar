@@ -655,6 +655,48 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
 /// A display whose visible frame stops below its top, for the menu bar: AppKit moves windows only out of that strip.
 @MainActor private var menuBarScreen: NSScreen? { NSScreen.screens.first { $0.visibleFrame.maxY < $0.frame.maxY } }
 
+/// Hover controls, a menu bar items row and the More widgets tray take the pointer, and their window reaches over the
+/// widget by the margin it keeps for the shadow. A click there still reaches the widget, as it does around a popup.
+@Test(.serialized, arguments: ["controls", "row", "widgets"]) @MainActor
+func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"bar":{"motion":"none"},"popupDefaults":{"shadowColor":"#00000080","shadowRadius":24},
+     "widgets":[{"id":"sound","type":"text","text":"Sound","position":"right"}]}
+    """#.utf8))
+    var presented: PopupPanel?
+    let popup = WidgetPopup(present: { panel, _ in presented = panel })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let widget = configuration.widgets[0]
+    let anchor = try #require(bar.anchors(widget.id).first)
+    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    switch kind {
+    case "controls": popup.showControls(widget: widget, defaults: defaults, store: store, anchor: anchor) { _ in Text("Volume") }
+    case "row": popup.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor) { Text("Items") }
+    default: popup.showWidgets(defaults: defaults, store: store, anchor: anchor) { Text("Widgets") }
+    }
+    defer { popup.close() }
+    let panel = try #require(presented)
+    let widgetFrame = anchor.window!.convertToScreen(anchor.convert(anchor.bounds, to: nil))
+    let point = NSPoint(x: widgetFrame.midX, y: widgetFrame.minY + 1)
+    try #require(panel.frame.contains(point))
+    // The window server hit-tests only windows on screen, a moment after they're ordered; one this faint stays out of sight.
+    panel.alphaValue = 0.01
+    panel.orderFrontRegardless()
+    for _ in 0..<500 {
+        let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(panel.windowNumber)) as? [[String: Any]]
+        if info?.first?[kCGWindowIsOnscreen as String] as? Bool == true { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0) != panel.windowNumber)
+}
+
 @Test(arguments: [false, true], [false, true]) @MainActor
 func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, animated: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data("""

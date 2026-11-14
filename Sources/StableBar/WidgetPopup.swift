@@ -498,7 +498,9 @@ final class WidgetPopup {
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
-        panel.ignoresMouseEvents = ignoresMouseEvents
+        // Left unset, the window passes clicks through where it's transparent, such as the margin kept for the shadow, which
+        // reaches over the widget. Set to false, it takes every click in its frame.
+        if ignoresMouseEvents { panel.ignoresMouseEvents = true }
         panel.animationBehavior = .none
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
