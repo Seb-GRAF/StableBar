@@ -17,8 +17,8 @@ enum OffscreenSnapshot {
     }
 
     /// Draws `content` at twice `size` in an offscreen window below the desktop icons and writes it to
-    /// `url` as PNG. It waits for `ready`, at most a minute, then runs `prepare` and lets the views
-    /// settle for `settle` before drawing.
+    /// `url` as PNG. It checks `ready` every tenth of a second, at most 600 times, then runs `prepare`
+    /// and lets the views settle for `settle` before drawing.
     static func write(_ content: some View, size: NSSize, dark: Bool, settle: Duration, ready: () -> Bool = { true },
                       prepare: () -> Void = {}, to url: URL) async throws {
         let view = NSHostingView(rootView: content
@@ -39,11 +39,13 @@ enum OffscreenSnapshot {
         window.contentView = view
         window.orderFrontRegardless()
         defer { window.orderOut(nil) }
-        let deadline = ContinuousClock.now + .seconds(60)
+        // Counted, not timed: the views get ready on the main actor, so whatever else holds it delays them as much.
+        var checks = 0
         while !ready() {
-            guard ContinuousClock.now < deadline else {
+            guard checks < 600 else {
                 throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): the views weren't ready after a minute.")
             }
+            checks += 1
             try await Task.sleep(for: .milliseconds(100))
         }
         prepare()
