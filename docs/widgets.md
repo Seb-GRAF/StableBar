@@ -218,14 +218,16 @@ The grid symbol moves the same way: drag it to either end of **On the bar** or b
 
 On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click an item on the bar for the same commands as in Settings.
 
+An item on the bar shows its app's icon. To see what the item itself shows, such as MeetingBar's next meeting, select it in **Content** and choose **As in the menu bar** under **Show**. The bar then draws a copy of the item as macOS draws it, updated every two seconds; an item drawn in one color takes your bar's text color. This needs macOS 27 or later and Screen Recording access, which StableBar asks for when you choose it. Until then, and while macOS folds the item behind **«** in its menu bar, the item shows its icon.
+
 Items on the bar open as they do in the row: a click opens the item's menu or panel, and while one of their menus is open, moving the pointer to another item switches to its menu. Rest the pointer on an item to see its name. An item disappears from the bar while its app isn't running, and comes back when the app launches. The grid symbol lists the items that are neither on the bar nor hidden.
 
-In JSON, `shown` lists the items on the bar, in order, and `hidden` the items left out of the row. Each entry names an `app` by its bundle ID or name, which covers every item of that app; add `item`, an Accessibility identifier or title, to name one item of an app that has several, such as Control Center. A shown item can set `icon` to an SF Symbol that replaces its icon. The entry `"symbol"` places the grid symbol in `shown`, or leaves it out in `hidden`; without it, the grid symbol comes after the items. The widget's own `icon` replaces the grid symbol.
+In JSON, `shown` lists the items on the bar, in order, and `hidden` the items left out of the row. Each entry names an `app` by its bundle ID or name, which covers every item of that app; add `item`, an Accessibility identifier or title, to name one item of an app that has several, such as Control Center. A shown item can set `icon` to an SF Symbol that replaces its icon, and `display` to `"live"` to draw as in the menu bar. The entry `"symbol"` places the grid symbol in `shown`, or leaves it out in `hidden`; without it, the grid symbol comes after the items. The widget's own `icon` replaces the grid symbol.
 
 ```json
 {
   "id": "menu-bar-items", "type": "menuBarItems", "position": "right",
-  "shown": ["symbol", { "app": "Granola" }, { "app": "com.apple.controlcenter", "item": "com.apple.menuextra.wifi", "icon": "wifi" }],
+  "shown": ["symbol", { "app": "Granola", "display": "live" }, { "app": "com.apple.controlcenter", "item": "com.apple.menuextra.wifi", "icon": "wifi" }],
   "hidden": [{ "app": "com.docker.docker" }]
 }
 ```

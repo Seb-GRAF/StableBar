@@ -133,12 +133,20 @@ struct MenuBarItemsSettings: View {
                         TextField("Symbol", text: symbol, prompt: Text(widget.content.symbol)).labelsHidden().frame(width: 160)
                     }
                 }
-            } else if case let .shown(position) = cell.source, case var .item(reference) = shown[position] {
+            } else if case let .shown(position) = cell.source, case let .item(reference) = shown[position] {
+                SettingRow(title: "Show", hint: "As in the menu bar needs macOS 27 and Screen Recording; until then, its icon") {
+                    SettingsSegments(selection: Binding(get: { reference.display ?? .icon }, set: { display in
+                        var next = reference
+                        next.display = display == .icon ? nil : display
+                        set(next, at: position)
+                        if display == .live, !CGPreflightScreenCaptureAccess() { requestScreenRecording() }
+                    }), options: [(.icon, "Icon"), (.live, "As in the menu bar")], stretches: false)
+                        .fixedSize()
+                }
                 TextDraft(text: Binding(get: { reference.icon ?? "" }, set: { symbol in
-                    var next = shown
-                    reference.icon = symbol.isEmpty ? nil : symbol
-                    next[position] = .item(reference)
-                    editor.set(["shown": .array(next.map(\.configurationValue))], for: widget.id)
+                    var next = reference
+                    next.icon = symbol.isEmpty ? nil : symbol
+                    set(next, at: position)
                 })) { symbol in
                     SettingRow(title: "Symbol", hint: "An SF Symbol in place of its icon") {
                         TextField("Symbol", text: symbol, prompt: Text("Its own icon")).labelsHidden().frame(width: 160)
@@ -146,6 +154,12 @@ struct MenuBarItemsSettings: View {
                 }
             }
         }
+    }
+
+    private func set(_ reference: MenuBarItemReference, at position: Int) {
+        var next = shown
+        next[position] = .item(reference)
+        editor.set(["shown": .array(next.map(\.configurationValue))], for: widget.id)
     }
 
     private func trayID(_ placement: MenuBarItemPlacement) -> String {
@@ -177,7 +191,7 @@ private struct MenuBarItemSettingsCell {
 
 extension MenuBarItemSettingsCell {
     init(item: MenuBarItem, symbol: String?, source: MenuBarItemSource) {
-        self.init(id: "\(item.bundleID ?? item.appName) \(item.identifier ?? item.entry.title)", title: item.entry.title,
+        self.init(id: item.key, title: item.entry.title,
                   app: item.bundleID ?? item.appName, icon: item.entry.icon, symbol: symbol, running: true, isSymbol: false, source: source)
     }
 }

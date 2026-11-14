@@ -537,6 +537,15 @@ extension WidgetConfiguration {
 }
 
 extension Configuration {
+    /// The menu bar items a bar draws as macOS does, on any screen.
+    var liveMenuBarItems: [MenuBarItemReference] {
+        ([self] + screenLooks.values).flatMap { look in
+            look.widgets.filter { $0.enabled && $0.drawsMenuBarItems }.flatMap { $0.shownMenuBarItems.references.filter { $0.display == .live } }
+        }
+    }
+}
+
+extension Configuration {
     /// The type of the provider `widget` shows, such as `audio` for the Sound widget.
     func providerType(of widget: WidgetConfiguration) -> String? {
         widget.providerName.flatMap { providers[$0]?.type }

@@ -54,11 +54,15 @@ extension SourcePermission {
     static let accessibility = SourcePermission(title: "Accessibility",
                                                 detail: "App menus and the Apple menu read the frontmost app's menus and open them. Control Center and Menu bar items open items in the macOS menu bar. Workspaces switches macOS desktops and reads Dock badges.",
                                                 symbol: "accessibility", privacyPane: "Privacy_Accessibility")
+    static let screenRecording = SourcePermission(title: "Screen Recording",
+                                                  detail: "Menu bar items shown as in the menu bar are copied from it. StableBar records nothing else.",
+                                                  symbol: "rectangle.dashed.badge.record", privacyPane: "Privacy_ScreenCapture")
 }
 
 extension WidgetContent {
     var permissions: [SourcePermission] {
         switch self {
+        case let .menuBarItems(_, shown, _) where shown.references.contains { $0.display == .live }: [.accessibility, .screenRecording]
         case .appMenu, .appleMenu(click: .menu), .controlCenter, .menuBarItems: [.accessibility]
         default: []
         }
@@ -93,13 +97,14 @@ struct DataSourceRegistry: Sendable {
     }
 
     /// The permissions that the sources a configuration runs need, in registry order, then those its
-    /// enabled widgets need, each once.
+    /// enabled widgets need, each once. A screen's own look can show menu bar items live by itself.
     func permissions(for configuration: Configuration?) -> [SourcePermission] {
         guard let configuration else { return [] }
         let running = Set(configuration.activeProviders.compactMap { configuration.providers[$0]?.type })
         var listed = Set<SourcePermission>()
         return (types.filter { running.contains($0.name) }.compactMap(\.permission)
-                + configuration.widgets.filter(\.enabled).flatMap { $0.permissions(source: configuration.workspaceSource) })
+                + configuration.widgets.filter(\.enabled).flatMap { $0.permissions(source: configuration.workspaceSource) }
+                + (configuration.liveMenuBarItems.isEmpty ? [] : [.accessibility, .screenRecording]))
             .filter { listed.insert($0).inserted }
     }
 
