@@ -14,6 +14,10 @@ final class PopupPanel: NSPanel {
     override var canBecomeMain: Bool { false }
     @objc var hasKeyAppearance: Bool { true }
 
+    /// Under a bar at the top of the display, the margin left for the popup's shadow reaches into the menu bar, and AppKit
+    /// would move the window, popup and all, down out of it.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, event.keyCode == 53, let onEscape { onEscape() } else { super.sendEvent(event) }
     }
@@ -26,6 +30,11 @@ final class PopupPanel: NSPanel {
     override func performClose(_ sender: Any?) {
         if let onEscape { onEscape() } else { super.performClose(sender) }
     }
+}
+
+/// The window behind a popup's that draws its shadow, kept where it's placed like the popup's.
+final class PopupShadowPanel: NSPanel {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
 @MainActor
@@ -964,7 +973,7 @@ final class WidgetPopup {
     private func makeShadowWindow(behind panel: PopupPanel, style: WidgetStyle, inset: CGFloat) -> NSPanel? {
         guard style.shadowColor.map({ $0.light & 0xff > 0 || $0.dark & 0xff > 0 }) == true else { return nil }
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-        let window = NSPanel(contentRect: panel.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let window = PopupShadowPanel(contentRect: panel.frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         window.title = "\(panel.title) shadow"
         window.isOpaque = false
         window.backgroundColor = .clear
