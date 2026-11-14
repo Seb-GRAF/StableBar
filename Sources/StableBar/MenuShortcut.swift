@@ -39,7 +39,7 @@ extension MenuShortcut {
     /// The flags of `AXMenuItemCmdModifiers`, which hold ⌘ unless they say otherwise. The headers name the first four
     /// as `kAXMenuItemModifierShift` and so on, which Swift doesn't import. They don't name fn, but menus give 16
     /// with it: Finder's Window → Fill reads 28, which its menu shows as 🌐⌃F.
-    private enum Modifier {
+    enum Modifier {
         static let shift = 1, option = 2, control = 4, noCommand = 8, function = 16
     }
 

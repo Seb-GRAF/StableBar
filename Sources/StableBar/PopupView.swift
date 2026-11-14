@@ -1398,13 +1398,16 @@ struct AppMenuList: View {
     let press: (AppMenuEntry) -> Void
     @State private var submenu: Int?
     @State private var keyWidth: CGFloat = 0
+    @State private var optionHeld = false
+    @State private var flagsMonitor: Any?
 
     var body: some View {
-        let checks = entries.contains(where: \.isChecked)
-        let iconColumns = iconColumns
-        let iconWidth = entries.compactMap(\.icon).map(\.size.width).max() ?? 0
+        let rows = rows
+        let checks = rows.contains(where: \.isChecked)
+        let iconColumns = iconColumns(rows)
+        let iconWidth = rows.compactMap(\.icon).map(\.size.width).max() ?? 0
         VStack(spacing: 0) {
-            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, entry in
                 if entry.title.isEmpty {
                     Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1).padding(.vertical, 4)
                 } else {
@@ -1421,14 +1424,37 @@ struct AppMenuList: View {
             }
         }
         .onPreferenceChange(MenuKeyWidth.self) { keyWidth = $0 }
+        .onAppear {
+            optionHeld = NSEvent.modifierFlags.contains(.option)
+            flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                optionHeld = event.modifierFlags.contains(.option)
+                return event
+            }
+        }
+        .onDisappear {
+            if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
+        }
+    }
+
+    /// The entries the menu shows: each alternate takes the place of the entry before it while Option is held.
+    private var rows: [AppMenuEntry] {
+        var rows: [AppMenuEntry] = []
+        for entry in entries {
+            if !entry.isAlternate {
+                rows.append(entry)
+            } else if optionHeld {
+                rows[rows.count - 1] = entry
+            }
+        }
+        return rows
     }
 
     /// The entries whose titles line up after an icon column. As in macOS 27 menus, a section, the entries between two
     /// separators, gets the column when more than half of its entries have an icon; otherwise titles without one start
     /// where icons do.
-    private var iconColumns: Set<Int> {
+    private func iconColumns(_ rows: [AppMenuEntry]) -> Set<Int> {
         var indices = Set<Int>()
-        for section in entries.split(whereSeparator: { $0.title.isEmpty }) where section.filter({ $0.icon != nil }).count * 2 > section.count {
+        for section in rows.split(whereSeparator: { $0.title.isEmpty }) where section.filter({ $0.icon != nil }).count * 2 > section.count {
             indices.formUnion(section.indices)
         }
         return indices
