@@ -35,13 +35,18 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     @ObservationIgnored private var receivedLength: UInt64 = 0
     @ObservationIgnored private var checkTimer: Timer?
     @ObservationIgnored private var foundUpdate = false
-    /// Sparkle dismisses an offer answered at once like any other, but the tile keeps showing it.
-    @ObservationIgnored private var answeringOffer = false
+    /// Set while Sparkle ends a session whose dismissal leaves the offer on show: an offer answered at once, or a
+    /// check for updates that failed without saying whether an update is left.
+    @ObservationIgnored private var keepingOffer = false
     let starRequest: StarRequest
     /// The version the popup lists changes since, and where it reads their release notes.
     @ObservationIgnored private(set) var installedVersion = AppVersion().version ?? ""
     @ObservationIgnored private(set) var loadHistory: @Sendable (_ installed: String, _ offered: String) async throws -> [UpdateRelease] = {
         try await UpdateRelease.load(after: $0, through: $1)
+    }
+    @ObservationIgnored var presentError: (any Error) -> Void = { error in
+        NSApp.activate(ignoringOtherApps: true)
+        NSAlert(error: error).runModal()
     }
 
     init(starRequest: StarRequest = StarRequest(),
@@ -99,7 +104,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        answeringOffer = false
+        keepingOffer = false
         if downloadCheck == .waiting {
             downloadCheck = .checking
             updater.checkForUpdates()
@@ -201,7 +206,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         } else if stage == .available {
             // Download checks again anyway, and an unanswered offer holds Sparkle's session, which pauses every
             // later check.
-            answeringOffer = true
+            keepingOffer = true
             reply(.dismiss)
         } else {
             self.reply = reply
@@ -217,6 +222,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
+        if downloadCheck == nil, stage == .available { keepingOffer = true }
         alert(error, then: acknowledgement)
     }
 
@@ -259,14 +265,13 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     func dismissUpdateInstallation() {
         reply = nil
-        if answeringOffer { return }
+        if keepingOffer { return }
         version = nil
         downloadCheck = nil
     }
 
     private func alert(_ error: any Error, then acknowledgement: () -> Void) {
-        NSApp.activate(ignoringOtherApps: true)
-        NSAlert(error: error).runModal()
+        presentError(error)
         acknowledgement()
     }
 }

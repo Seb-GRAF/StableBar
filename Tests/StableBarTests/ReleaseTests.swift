@@ -495,10 +495,36 @@ private func appcastItem(_ version: String, notes: String = "") throws -> SUAppc
     #expect(polledUpdater.userChecks == 0)
 }
 
+@Test @MainActor func failedChecksForUpdatesKeepTheWaitingOffer() throws {
+    let (update, updater) = updateProbe()
+    var errors = 0
+    update.presentError = { _ in errors += 1 }
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.checkForUpdates()
+    update.showUpdaterError(URLError(.notConnectedToInternet)) {}
+    update.dismissUpdateInstallation()
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updates, error: URLError(.notConnectedToInternet))
+    #expect(errors == 1)
+    #expect(update.version == "0.16.0-beta.1")
+    #expect(update.canProceed)
+
+    update.checkForUpdates()
+    let noUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue))
+    update.showUpdateNotFoundWithError(noUpdate) {}
+    update.dismissUpdateInstallation()
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updates, error: noUpdate)
+    #expect(errors == 2)
+    #expect(update.version == nil)
+}
+
 @Test @MainActor func failedDownloadChecksDoNotDownloadALaterOffer() throws {
     let (update, updater) = updateProbe()
+    update.presentError = { _ in }
     try offer("0.16.0-beta.1", to: update, updater)
     update.proceed()
+    update.showUpdaterError(URLError(.notConnectedToInternet)) {}
     update.dismissUpdateInstallation()
     updater.busy = false
     update.updater(updater, didFinishUpdateCycleFor: .updates, error: URLError(.notConnectedToInternet))
