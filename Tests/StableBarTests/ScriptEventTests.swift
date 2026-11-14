@@ -41,6 +41,7 @@ import Testing
         script.stop()
         try? FileManager.default.removeItem(at: directory)
     }
+    // The startup command runs until the test releases it, which other tests can delay for seconds.
     script.start(command: """
         printf 'begin:%s:%s\n' "$SENDER" "$INFO" >> "$LOG"
         if [ "$SENDER" = startup ]; then
@@ -49,7 +50,7 @@ import Testing
         fi
         printf 'end:%s:%s\n' "$SENDER" "$INFO" >> "$LOG"
         printf '%s:%s' "$SENDER" "$INFO"
-        """, interval: nil, timeout: 4,
+        """, interval: nil, timeout: 120,
         environment: ["LOG": log.path, "STARTED": started.path, "RELEASE": release.path, "INFO": "initial"])
     for _ in 0..<100 {
         if FileManager.default.fileExists(atPath: started.path) { break }
@@ -259,7 +260,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         "environment": ["LOG": log.path, "STARTED": started.path, "RELEASE": release.path],
         "widgets": [
             // The first action runs until the test releases it, which other tests can delay for seconds.
-            ["id": "volume", "type": "text", "position": "right", "text": "Volume", "timeout": 60],
+            ["id": "volume", "type": "text", "position": "right", "text": "Volume", "timeout": 120],
             ["id": "other", "type": "text", "position": "left", "text": "Other", "timeout": 4]
         ]
     ]
