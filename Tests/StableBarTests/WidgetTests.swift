@@ -422,17 +422,15 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(WorkspaceSource.rift.executable(path: path) == directory.appending(path: "rift-cli").path)
 }
 
-@Test func yabaiCountsAsRunningOnlyWhileItsProcessRunsForThisUser() throws {
-    let name = "sb-" + UUID().uuidString.prefix(8).lowercased()
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let executable = directory.appending(path: name)
-    try FileManager.default.copyItem(at: URL(filePath: "/bin/sleep"), to: executable)
-    #expect(!userProcessIsRunning(named: name))
-    let process = try Process.run(executable, arguments: ["30"])
+@Test func aProcessCountsAsRunningOnlyWhileItRunsForThisUser() throws {
+    // Runs the system's own sleep rather than a renamed copy: launching a copied binary and deleting it while
+    // Gatekeeper still scans it crashes syspolicyd on macOS 27, which can deadlock it with tccd and hang the Mac.
+    #expect(!userProcessIsRunning(named: "sb-" + UUID().uuidString.prefix(8).lowercased()))
+    let process = try Process.run(URL(filePath: "/bin/sleep"), arguments: ["30"])
     defer { process.terminate(); process.waitUntilExit() }
-    #expect(userProcessIsRunning(named: name))
+    #expect(userProcessIsRunning(named: "sleep"))
+    // launchd runs as root only, so it never counts for another user.
+    if getuid() != 0 { #expect(!userProcessIsRunning(named: "launchd")) }
 }
 
 @Test @MainActor func workspaceWindowTitlesUseTheConfiguredCharacterLimit() throws {
