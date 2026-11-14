@@ -144,18 +144,22 @@ final class AppMenu: NSObject {
     private static let entryAttributes = [
         kAXTitleAttribute, kAXEnabledAttribute, kAXMenuItemMarkCharAttribute, kAXChildrenAttribute, kAXMenuItemCmdCharAttribute,
         kAXMenuItemCmdVirtualKeyAttribute, kAXMenuItemCmdGlyphAttribute, kAXMenuItemCmdModifiersAttribute, kAXIdentifierAttribute,
-        kAXMenuItemPrimaryUIElementAttribute,
     ]
 
     private func entries(of element: AXUIElement) -> [AppMenuEntry] {
         guard let menu = submenu(of: element) else { return [] }
         var entries: [AppMenuEntry] = []
+        var previous: MenuItemKey?
         for child in children(of: menu) {
             AXUIElementSetMessagingTimeout(child, 0.1)
             let values = readAttributes(Self.entryAttributes, child)
-            // An item with a primary item is that item's Option-key alternate, which macOS shows only while Option is held.
-            guard values.count == Self.entryAttributes.count, values[9] == nil,
-                  let title = values[0] as? String ?? text(in: child, readAttribute),
+            guard values.count == Self.entryAttributes.count else { continue }
+            let key = MenuItemKey(character: values[4] as? String, virtualKey: values[5] as? Int, glyph: values[6] as? Int,
+                                  modifiers: values[7] as? Int ?? 0)
+            // macOS shows an alternate only while its modifier is held; the item before it stays the one compared against.
+            if let previous, key.isAlternate(of: previous) { continue }
+            previous = key
+            guard let title = values[0] as? String ?? text(in: child, readAttribute),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
             let submenu = submenu(among: values[3] as? [AXUIElement] ?? [])
             entries.append(AppMenuEntry(title: title, element: child, isEnabled: values[1] as? Bool == true,
@@ -797,5 +801,23 @@ private func menuBarDisplay(of frame: CGRect) -> CGDirectDisplayID? {
     return displays.prefix(Int(count)).first {
         let bounds = CGDisplayBounds($0)
         return bounds.minX <= frame.midX && frame.midX < bounds.maxX && abs(frame.midY - bounds.minY) < frame.height * 2
+    }
+}
+
+/// A menu item's shortcut as Accessibility reports it, to tell an item's alternate from the next item. Accessibility marks
+/// no alternates, but AppKit only shows one in place of the item right before it, with the same key and more modifiers:
+/// Restart and Log Out without their dialogs add Option, Force Quit Terminal adds Shift.
+struct MenuItemKey: Equatable {
+    var character: String?
+    var virtualKey: Int?
+    var glyph: Int?
+    /// Accessibility's modifier bits: 1 Shift, 2 Option, 4 Control, 8 no Command.
+    var modifiers: Int
+
+    func isAlternate(of item: MenuItemKey) -> Bool {
+        guard character == item.character, virtualKey == item.virtualKey, glyph == item.glyph else { return false }
+        // Without a key the no-Command bit says nothing, so only Shift, Option and Control count.
+        let held = modifiers & 7, itemHeld = item.modifiers & 7
+        return held != itemHeld && held & itemHeld == itemHeld
     }
 }
