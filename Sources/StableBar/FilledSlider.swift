@@ -140,7 +140,8 @@ struct FilledSlider: View {
                 .onChanged { drag in move(to: track.stop(at: drag.location.x, from: shown)) }
                 .onEnded { _ in finish() })
         }
-        .frame(minWidth: FilledSliderTrack.minimumWidth(height: height, endStop: endStop != nil), maxWidth: .infinity)
+        // An ideal width rather than a minimum, which would clamp an explicit narrower width before the track sees it.
+        .frame(idealWidth: FilledSliderTrack.minimumWidth(height: height, endStop: endStop != nil), maxWidth: .infinity)
         .frame(height: height)
         .focusable(interactions: .activate)
         .modifier(FocusHighlight(appearance: appearance))
