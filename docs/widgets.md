@@ -216,7 +216,7 @@ Items you use all day can sit on the bar beside the grid symbol, as they do in t
 
 The grid symbol moves the same way: drag it to either end of **On the bar** or between items, or into **Hidden** to leave it out. Select it to choose another SF Symbol for it. Without the grid symbol, the bar has no way to open the row; the items in it stay listed in Settings.
 
-On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click an item on the bar for the same commands as in Settings.
+On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click an item or the grid symbol on the bar for the same commands as in Settings, followed by **Edit Widget…** and the bar's menu.
 
 An item on the bar shows its app's icon. To see what the item itself shows, such as MeetingBar's next meeting, select it in **Content** and choose **As in the menu bar** under **Show**. The bar then draws a copy of the item as macOS draws it, updated every two seconds; an item drawn in one color takes your bar's text color. This needs macOS 27 or later and Screen Recording access, which StableBar asks for when you choose it. Until then, and while macOS folds the item behind **«** in its menu bar, the item shows its icon.
 

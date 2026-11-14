@@ -254,6 +254,25 @@ private struct BarContextMenu: View {
     }
 }
 
+/// Edit Widget… and the bar's menu, unless the widget's `rightClick` action takes the click.
+private struct WidgetContextMenu: View {
+    let widget: WidgetConfiguration
+    let store: BarStore
+    let display: Int
+    /// For a menu that lists other commands first.
+    var dividerAbove = false
+
+    var body: some View {
+        if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
+           store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
+            if dividerAbove { Divider() }
+            Button("Edit Widget…") { store.onCustomizeWidget?(widget.id) }
+            Divider()
+            BarContextMenu(store: store, display: display)
+        }
+    }
+}
+
 private struct MoreWidgetsButton: View {
     let units: [BarUnit]
     let config: Configuration
@@ -715,14 +734,7 @@ struct WidgetView: View {
         .animation(reduceMotion ? nil : animation.value, value: widget.content == .activeApp ? store.activeApp : nil)
         .accessibilityHint(tooltip ?? "")
         .accessibilityIdentifier(widget.id)
-        .contextMenu {
-            if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
-               store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
-                Button("Edit Widget…") { store.onCustomizeWidget?(widget.id) }
-                Divider()
-                BarContextMenu(store: store, display: monitor)
-            }
-        }
+        .contextMenu { WidgetContextMenu(widget: widget, store: store, display: monitor) }
     }
 
     private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
@@ -840,7 +852,7 @@ struct WidgetView: View {
             }
         case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
             let leftOut = widget.shownMenuBarItems.references + hidden.references
-            MenuBarItemsView(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults),
+            MenuBarItemsView(widget: widget, store: store, display: monitor, defaults: popupDefaults.inheriting(defaults),
                              appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                              padding: padding, symbol: store.label(for: widget).icon!) { anchor in
                 toggleMenuBarItems(leavingOut: leftOut, anchor: anchor)
@@ -1196,6 +1208,7 @@ private struct FocusedWindowHighlight: View {
 private struct MenuBarItemsView: View {
     let widget: WidgetConfiguration
     let store: BarStore
+    let display: Int
     let defaults: WidgetStyle
     let appearance: WidgetAppearance
     let padding: EdgeInsets
@@ -1255,10 +1268,12 @@ private struct MenuBarItemsView: View {
         .accessibilityLabel(item.entry.title)
     }
 
-    private func commands(_ position: Int, count: Int, isSymbol: Bool) -> some View {
+    /// A cell's menu takes the place of the widget's, so it ends with the widget's commands.
+    @ViewBuilder private func commands(_ position: Int, count: Int, isSymbol: Bool) -> some View {
         MenuBarItemCommands(source: .shown(position), shownCount: count, isSymbol: isSymbol) { placement, index in
             store.move(.shown(position), to: placement, before: index, in: widget)
         }
+        WidgetContextMenu(widget: widget, store: store, display: display, dividerAbove: true)
     }
 
     private func switches(to anchor: NSView) -> Bool {
