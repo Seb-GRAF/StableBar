@@ -660,7 +660,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
 @Test(.serialized, arguments: ["controls", "row", "widgets"]) @MainActor
 func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
-    {"bar":{"motion":"none"},"popupDefaults":{"shadowColor":"#00000080","shadowRadius":24},
+    {"bar":{"motion":"none"},"popupDefaults":{"background":"#202020","shadowColor":"#00000080","shadowRadius":24},
      "widgets":[{"id":"sound","type":"text","text":"Sound","position":"right"}]}
     """#.utf8))
     var presented: PopupPanel?
@@ -686,14 +686,21 @@ func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async 
     let widgetFrame = anchor.window!.convertToScreen(anchor.convert(anchor.bounds, to: nil))
     let point = NSPoint(x: widgetFrame.midX, y: widgetFrame.minY + 1)
     try #require(panel.frame.contains(point))
-    // The window server hit-tests only windows on screen, a moment after they're ordered; one this faint stays out of sight.
-    panel.alphaValue = 0.01
+    // The window server hit-tests only windows on screen, a moment after they're ordered. One this faint stays nearly out
+    // of sight and still takes clicks where it draws; below 5% it takes none.
+    panel.alphaValue = 0.05
     panel.orderFrontRegardless()
+    var onScreen = false
     for _ in 0..<500 {
         let info = CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(panel.windowNumber)) as? [[String: Any]]
-        if info?.first?[kCGWindowIsOnscreen as String] as? Bool == true { break }
+        onScreen = info?.first?[kCGWindowIsOnscreen as String] as? Bool == true
+        if onScreen { break }
         try await Task.sleep(for: .milliseconds(10))
     }
+    try #require(onScreen)
+    let box = panel.frame.insetBy(dx: 50, dy: 50)
+    #expect(NSWindow.windowNumber(at: NSPoint(x: box.midX, y: box.midY), belowWindowWithWindowNumber: 0) == panel.windowNumber,
+            "The \(kind) take clicks where they draw")
     #expect(NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0) != panel.windowNumber)
 }
 
