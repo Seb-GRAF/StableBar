@@ -368,34 +368,94 @@ private func updateState(_ stage: SPUUserUpdateStage = .notDownloaded) throws ->
     return try #require(SPUUserUpdateState(coder: decoder))
 }
 
-@Test @MainActor func downloadingAPendingUpdateChecksAgainAndInstallsOnlyTheNewOffer() throws {
-    let (update, updater) = updateProbe()
-    var oldChoices: [SPUUserUpdateChoice] = []
-    update.showUpdateFound(with: .empty(), state: try updateState()) { oldChoices.append($0) }
-    let offeredVersion = update.version
-    updater.busy = true
-    updater.checksAutomatically = false
+private func appcastItem(_ version: String, notes: String = "") throws -> SUAppcastItem {
+    let encoder = NSKeyedArchiver(requiringSecureCoding: true)
+    encoder.encode(version, forKey: "displayVersionString")
+    encoder.encode(version, forKey: "versionString")
+    encoder.encode(notes, forKey: "itemDescription")
+    encoder.encode(URL(string: "https://example.com/StableBar.zip")! as NSURL, forKey: "fileURL")
+    encoder.encode("application", forKey: "SUAppcastItemInstallationType")
+    encoder.encode([String: String]() as NSDictionary, forKey: "propertiesDictionary")
+    encoder.finishEncoding()
+    let decoder = try NSKeyedUnarchiver(forReadingFrom: encoder.encodedData)
+    defer { decoder.finishDecoding() }
+    return try #require(SUAppcastItem(coder: decoder))
+}
 
-    update.proceed()
-    #expect(oldChoices == [.dismiss])
-    #expect(updater.userChecks == 0)
-    #expect(!update.canProceed)
-    #expect(update.action == "Checking…")
+/// An offer of `version` found in the background, as Sparkle ends its session once the offer is answered.
+@MainActor private func offer(_ version: String, notes: String = "", to update: AppUpdate, _ updater: ProbeUpdater) throws {
+    update.showUpdateFound(with: try appcastItem(version, notes: notes), state: try updateState()) { _ in }
     update.dismissUpdateInstallation()
-    #expect(update.version == offeredVersion)
-
     updater.busy = false
     update.updater(updater, didFinishUpdateCycleFor: .updatesInBackground, error: nil)
+}
+
+@Test @MainActor func waitingOffersLetLaterUpdatePollsReplaceThem() throws {
+    let (update, updater) = updateProbe()
+    var choices: [SPUUserUpdateChoice] = []
+    update.showUpdateFound(with: try appcastItem("0.16.0-beta.1", notes: "* add a clock"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.dismiss])
+    update.dismissUpdateInstallation()
+    update.updater(updater, didFinishUpdateCycleFor: .updatesInBackground, error: nil)
+    #expect(update.version == "0.16.0-beta.1")
+    #expect(update.changes == ["add a clock"])
+    #expect(update.canProceed)
+
+    update.checkForUpdateInformation()
+    update.updater(updater, didFindValidUpdate: .empty())
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updateInformation, error: nil)
+    #expect(updater.backgroundChecks == 1)
+    update.showUpdateFound(with: try appcastItem("0.16.0-beta.2", notes: "* add a calendar"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.dismiss, .dismiss])
+    #expect(update.version == "0.16.0-beta.2")
+    #expect(update.changes == ["add a calendar"])
+    #expect(update.stage == .available)
+    #expect(update.canProceed)
+}
+
+@Test @MainActor func checkForUpdatesReplacesAWaitingOffer() throws {
+    let (update, updater) = updateProbe()
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.checkForUpdates()
+    #expect(updater.userChecks == 1)
+    var choices: [SPUUserUpdateChoice] = []
+    update.showUpdateFound(with: try appcastItem("0.16.0-beta.2"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.dismiss])
+    #expect(update.version == "0.16.0-beta.2")
+    #expect(update.canProceed)
+}
+
+@Test @MainActor func updatePollsRemoveAnOfferOnlyWhenNoUpdateIsLeft() throws {
+    let (update, updater) = updateProbe()
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.checkForUpdateInformation()
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updateInformation, error: URLError(.notConnectedToInternet))
+    #expect(update.version == "0.16.0-beta.1")
+
+    update.checkForUpdateInformation()
+    updater.busy = false
+    let noUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue))
+    update.updater(updater, didFinishUpdateCycleFor: .updateInformation, error: noUpdate)
+    #expect(update.version == nil)
+}
+
+@Test @MainActor func downloadingAWaitingOfferChecksAgainAndInstallsOnlyTheNewOffer() throws {
+    let (update, updater) = updateProbe()
+    try offer("0.16.0-beta.1", to: update, updater)
+
+    update.proceed()
     #expect(updater.userChecks == 1)
     #expect(!update.canProceed)
+    #expect(update.action == "Checking…")
 
-    var newChoices: [SPUUserUpdateChoice] = []
-    update.showUpdateFound(with: .empty(), state: try updateState()) { newChoices.append($0) }
-    #expect(oldChoices == [.dismiss])
-    #expect(newChoices == [.install])
+    var choices: [SPUUserUpdateChoice] = []
+    update.showUpdateFound(with: try appcastItem("0.16.0-beta.2"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.install])
+    #expect(update.version == "0.16.0-beta.2")
     #expect(update.stage == .downloading)
     #expect(!update.canProceed)
-    updater.checksAutomatically = true
     update.checkForUpdateInformation()
     #expect(updater.probes == 0)
 
@@ -406,12 +466,39 @@ private func updateState(_ stage: SPUUserUpdateStage = .notDownloaded) throws ->
     #expect(updater.userChecks == 1)
 }
 
+@Test @MainActor func downloadDuringAnUpdatePollWaitsForIt() throws {
+    let (update, updater) = updateProbe()
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.checkForUpdateInformation()
+    update.updater(updater, didFindValidUpdate: .empty())
+    update.proceed()
+    #expect(updater.userChecks == 0)
+    #expect(!update.canProceed)
+    #expect(update.action == "Checking…")
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updateInformation, error: nil)
+    #expect(updater.userChecks == 1)
+    #expect(updater.backgroundChecks == 0)
+
+    let (polled, polledUpdater) = updateProbe()
+    try offer("0.16.0-beta.1", to: polled, polledUpdater)
+    polled.checkForUpdateInformation()
+    polled.updater(polledUpdater, didFindValidUpdate: .empty())
+    polledUpdater.busy = false
+    polled.updater(polledUpdater, didFinishUpdateCycleFor: .updateInformation, error: nil)
+    polled.proceed()
+    var choices: [SPUUserUpdateChoice] = []
+    polled.showUpdateFound(with: try appcastItem("0.16.0-beta.2"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.install])
+    #expect(polled.version == "0.16.0-beta.2")
+    #expect(polled.stage == .downloading)
+    #expect(polledUpdater.userChecks == 0)
+}
+
 @Test @MainActor func failedDownloadChecksDoNotDownloadALaterOffer() throws {
     let (update, updater) = updateProbe()
-    update.showUpdateFound(with: .empty(), state: try updateState()) { _ in }
+    try offer("0.16.0-beta.1", to: update, updater)
     update.proceed()
-    update.dismissUpdateInstallation()
-    update.updater(updater, didFinishUpdateCycleFor: .updates, error: nil)
     update.dismissUpdateInstallation()
     updater.busy = false
     update.updater(updater, didFinishUpdateCycleFor: .updates, error: URLError(.notConnectedToInternet))
@@ -419,8 +506,8 @@ private func updateState(_ stage: SPUUserUpdateStage = .notDownloaded) throws ->
     #expect(updater.userChecks == 1)
 
     var choices: [SPUUserUpdateChoice] = []
-    update.showUpdateFound(with: .empty(), state: try updateState()) { choices.append($0) }
-    #expect(choices.isEmpty)
+    update.showUpdateFound(with: try appcastItem("0.16.0-beta.2"), state: try updateState()) { choices.append($0) }
+    #expect(choices == [.dismiss])
     #expect(update.canProceed)
     #expect(update.action == "Download")
 }
@@ -429,6 +516,7 @@ private func updateState(_ stage: SPUUserUpdateStage = .notDownloaded) throws ->
     let (update, updater) = updateProbe()
     var choices: [SPUUserUpdateChoice] = []
     update.showUpdateFound(with: .empty(), state: try updateState(.downloaded)) { choices.append($0) }
+    #expect(choices.isEmpty)
     update.proceed()
     #expect(choices == [.install])
     #expect(updater.userChecks == 0)

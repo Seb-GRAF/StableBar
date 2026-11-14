@@ -11,7 +11,8 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     private enum DownloadCheck {
-        case dismissing, checking
+        /// Download was clicked during another check, and checks once it ends.
+        case waiting, checking
     }
 
     nonisolated static let widgetID = "stablebar.update"
@@ -34,6 +35,8 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     @ObservationIgnored private var receivedLength: UInt64 = 0
     @ObservationIgnored private var checkTimer: Timer?
     @ObservationIgnored private var foundUpdate = false
+    /// Sparkle dismisses an offer answered at once like any other, but the tile keeps showing it.
+    @ObservationIgnored private var answeringOffer = false
     let starRequest: StarRequest
     /// The version the popup lists changes since, and where it reads their release notes.
     @ObservationIgnored private(set) var installedVersion = AppVersion().version ?? ""
@@ -96,12 +99,17 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        if downloadCheck == .dismissing {
+        answeringOffer = false
+        if downloadCheck == .waiting {
             downloadCheck = .checking
             updater.checkForUpdates()
             return
         }
         downloadCheck = nil
+        if updateCheck == .updateInformation, version != nil, stage == .available, let error = error as NSError?,
+           error.domain == SUSparkleErrorDomain, error.code == Int(SUError.noUpdateError.rawValue) {
+            version = nil
+        }
         guard updateCheck == .updateInformation, error == nil, foundUpdate, updater.automaticallyChecksForUpdates else { return }
         foundUpdate = false
         updater.checkForUpdatesInBackground()
@@ -140,14 +148,18 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     var canProceed: Bool { downloadCheck == nil && (stage == .available || stage == .ready) }
 
-    /// Downloads the update, or installs it and relaunches StableBar once it's downloaded.
+    /// Checks again and downloads the newest update, or installs it and relaunches StableBar once it's downloaded.
     func proceed() {
-        let reply = reply
-        self.reply = nil
         if stage == .available {
-            downloadCheck = .dismissing
-            reply?(.dismiss)
+            if updater.sessionInProgress {
+                downloadCheck = .waiting
+            } else {
+                downloadCheck = .checking
+                updater.checkForUpdates()
+            }
         } else {
+            let reply = reply
+            self.reply = nil
             reply?(.install)
         }
     }
@@ -174,16 +186,25 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
 
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) {
-        version = appcastItem.displayVersionString
-        changes = Self.changes(in: appcastItem.itemDescription ?? "")
-        stage = state.stage == .notDownloaded ? .available : .ready
-        if downloadCheck == .checking {
+        if version != appcastItem.displayVersionString {
+            version = appcastItem.displayVersionString
+            Task { await starRequest.refresh() }
+        }
+        let changes = Self.changes(in: appcastItem.itemDescription ?? "")
+        if self.changes != changes { self.changes = changes }
+        let stage = state.stage == .notDownloaded ? Stage.available : .ready
+        if self.stage != stage { self.stage = stage }
+        if downloadCheck != nil {
             downloadCheck = nil
-            stage = .downloading
+            self.stage = .downloading
             reply(.install)
+        } else if stage == .available {
+            // Download checks again anyway, and an unanswered offer holds Sparkle's session, which pauses every
+            // later check.
+            answeringOffer = true
+            reply(.dismiss)
         } else {
             self.reply = reply
-            Task { await starRequest.refresh() }
         }
     }
 
@@ -238,7 +259,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     func dismissUpdateInstallation() {
         reply = nil
-        if downloadCheck == .dismissing { return }
+        if answeringOffer { return }
         version = nil
         downloadCheck = nil
     }
