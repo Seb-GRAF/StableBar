@@ -228,7 +228,9 @@ final class PackageLibrary {
             throw NativeWidgetPluginLoaderError.notTrusted
         }
         _ = try JSONEncoder().encode(settings)
-        var supplied = active.selection.settings
+        let persisted = try store.editedMainDocument(replaying: store.customizationEdits)["packages"]?
+            .decoded([WidgetPackageSelection].self).first(where: { $0.id == packageID })
+        var supplied = persisted?.settings ?? [:]
         supplied.merge(settings) { _, new in new }
         let validated = try inspection.manifest.values(supplied)
         try store.customizationHistory.changePackageSettings(ConfigurationEdit(action: .package, properties: [

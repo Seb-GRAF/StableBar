@@ -90,7 +90,7 @@ struct NativeWidgetView: NSViewRepresentable {
             .appending(path: "packages"))
         let runtime = PackageLibraryNativeWidgetPluginRuntime(library: store.packageLibrary, packages: packages)
         return Coordinator(packageID: packageID, widget: widget, defaults: defaults, popupDefaults: popupDefaults,
-                           store: store, anchor: anchor, runtime: runtime)
+                           store: store, anchor: anchor, runtime: runtime, packageSelections: packageSelections)
     }
 
     @MainActor func makeNSView(context: Context) -> NativeWidgetContainerView {
@@ -137,11 +137,13 @@ struct NativeWidgetView: NSViewRepresentable {
         private var settingsRefresh: Task<Void, Never>?
         private var observedSelections: ConfigurationValue?
         private var latestSelections: ConfigurationValue?
+        private var failedSelections: ConfigurationValue?
         private var currentSettings: [String: ConfigurationValue]?
         private var stopped = false
 
         init(packageID: String, widget: WidgetConfiguration, defaults: WidgetStyle, popupDefaults: WidgetStyle,
-             store: BarStore, anchor: NSView, runtime: any NativeWidgetPluginRuntime) {
+             store: BarStore, anchor: NSView, runtime: any NativeWidgetPluginRuntime,
+             packageSelections: ConfigurationValue? = nil) {
             self.packageID = packageID
             self.widget = widget
             self.runtime = runtime
@@ -149,6 +151,7 @@ struct NativeWidgetView: NSViewRepresentable {
             self.popupDefaults = popupDefaults
             self.store = store
             self.anchor = anchor
+            latestSelections = packageSelections
         }
 
         func attach(to container: NativeWidgetContainerView) {
@@ -161,6 +164,10 @@ struct NativeWidgetView: NSViewRepresentable {
             self.popupDefaults = popupDefaults
             self.anchor = anchor
             latestSelections = packageSelections
+            if plugin == nil {
+                if failedSelections != latestSelections { startIfNeeded() }
+                return
+            }
             refreshSettingsIfNeeded()
         }
 
@@ -184,8 +191,14 @@ struct NativeWidgetView: NSViewRepresentable {
 
         func startIfNeeded() {
             guard !stopped, loadTask == nil, plugin == nil, let store else { return }
+            let attemptedSelections = latestSelections
+            container?.clear()
             loadTask = Task { @MainActor [weak self] in
                 guard let self else { return }
+                defer {
+                    loadTask = nil
+                    if !stopped, plugin == nil, latestSelections != failedSelections { startIfNeeded() }
+                }
                 do {
                     guard let session = try await runtime.loadActivePlugin(packageID: packageID) else {
                         throw NativeWidgetViewError.pluginNotActive
@@ -216,15 +229,16 @@ struct NativeWidgetView: NSViewRepresentable {
                     }
                     pluginView = view
                     container.install(view)
+                    failedSelections = nil
                     refreshSettingsIfNeeded()
                 } catch is CancellationError {
                     return
                 } catch {
                     guard !stopped else { return }
+                    failedSelections = attemptedSelections
                     container?.showError(error.localizedDescription)
                     stopPlugin()
                 }
-                loadTask = nil
             }
         }
 
