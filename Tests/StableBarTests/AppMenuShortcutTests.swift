@@ -174,3 +174,12 @@ private func item(_ title: String, key: String? = nil, virtualKey: Int? = nil, g
     #expect(tree.rowsReadTogether == [50, 51, 52])
     #expect(tree.rowsReadOneAttributeAtATime.isEmpty)
 }
+
+// macOS hides an item's Option-key alternate (Restart without "…", Log Out without the dialog, System Information
+// under About This Mac) until Option is held. Accessibility lists it anyway, marked by the primary item it stands in for.
+@Test @MainActor func appMenuLeavesOutOptionKeyAlternates() throws {
+    var restartNow = item("Restart")
+    restartNow[kAXMenuItemPrimaryUIElementAttribute] = AXUIElementCreateApplication(50)
+    let tree = MenuTree(items: [item("Restart…"), restartNow, item("Shut Down…")])
+    #expect(try entries(tree).map(\.title) == ["Restart…", "Shut Down…"])
+}

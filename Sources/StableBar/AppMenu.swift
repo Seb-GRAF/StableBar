@@ -144,6 +144,7 @@ final class AppMenu: NSObject {
     private static let entryAttributes = [
         kAXTitleAttribute, kAXEnabledAttribute, kAXMenuItemMarkCharAttribute, kAXChildrenAttribute, kAXMenuItemCmdCharAttribute,
         kAXMenuItemCmdVirtualKeyAttribute, kAXMenuItemCmdGlyphAttribute, kAXMenuItemCmdModifiersAttribute, kAXIdentifierAttribute,
+        kAXMenuItemPrimaryUIElementAttribute,
     ]
 
     private func entries(of element: AXUIElement) -> [AppMenuEntry] {
@@ -152,7 +153,8 @@ final class AppMenu: NSObject {
         for child in children(of: menu) {
             AXUIElementSetMessagingTimeout(child, 0.1)
             let values = readAttributes(Self.entryAttributes, child)
-            guard values.count == Self.entryAttributes.count,
+            // An item with a primary item is that item's Option-key alternate, which macOS shows only while Option is held.
+            guard values.count == Self.entryAttributes.count, values[9] == nil,
                   let title = values[0] as? String ?? text(in: child, readAttribute),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
             let submenu = submenu(among: values[3] as? [AXUIElement] ?? [])
