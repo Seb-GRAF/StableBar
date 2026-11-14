@@ -49,8 +49,12 @@ private let bar = FilledSliderTrack(width: 288, height: 40, minimum: 0, maximum:
     #expect(bar.fillWidth(for: .value(0.5)) == 164)
     #expect(bar.fillWidth(for: .value(-3)) == 40, "Values below the range sit at its start")
     #expect(bar.fillWidth(for: .value(7)) == 288, "Values past the range fill the bar")
-    #expect(FilledSliderTrack(width: 30, height: 40, minimum: 0, maximum: 1, step: 0.01).fillWidth(for: .value(0)) == 30,
-            "A bar narrower than it is tall is filled, not overrun")
+    let narrow = FilledSliderTrack(width: 30, height: 40, minimum: 0, maximum: 1, step: 0.01)
+    #expect(narrow.cap == 15, "A bar narrower than it is tall halves its width between the cap and the steps")
+    #expect(narrow.fillWidth(for: .value(0)) == 15)
+    #expect(narrow.fillWidth(for: .value(1)) == 30)
+    #expect(FilledSliderTrack(width: 70, height: 40, minimum: 0, maximum: 1, step: 0.01).cap == 35,
+            "Below twice its height the cap narrows too")
 }
 
 @Test func aPointerSetsTheValueWhoseFillEndsUnderIt() {

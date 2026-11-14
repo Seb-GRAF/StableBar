@@ -22,12 +22,11 @@ struct FilledSliderTrack: Equatable {
         endStop ? height * 3 + EndStopSliderTrack.notch + EndStopSliderTrack.stopPadding : height * 2
     }
 
-    /// As wide as the bar is tall, unless an end stop would then leave the steps less travel than the cap's width:
-    /// below `minimumWidth`, as an explicit `width` can make it, the cap narrows, so every step still moves the fill.
+    /// As wide as the bar is tall, unless the steps would then get less travel than the cap's width, as below
+    /// `minimumWidth`, which an explicit `width` can make it: then the cap narrows, so every step still moves the fill.
     var cap: Double {
-        let full = min(height, width)
-        guard endStop else { return full }
-        return max(min(full, (width - EndStopSliderTrack.notch - EndStopSliderTrack.stopPadding) / 3), 0)
+        let room = endStop ? (width - EndStopSliderTrack.notch - EndStopSliderTrack.stopPadding) / 3 : width / 2
+        return max(min(height, room), 0)
     }
     private var stops: EndStopSliderTrack {
         EndStopSliderTrack(width: width, knobWidth: cap, minimum: minimum, maximum: maximum, step: step)
