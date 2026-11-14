@@ -430,6 +430,7 @@ struct WidgetPackageStore: Sendable {
         try validateContents(at: source)
         let screenshot = try manifest.screenshot.map { try packageFile($0, inside: source) }
         let nativePluginBundle = try manifest.nativeBundle.map { path -> NativePluginBundle in
+            guard !path.split(separator: "/").contains("..") else { throw WidgetPackageError.outsidePackage(path) }
             let url = try packageFile(path, inside: source)
             let metadata = try NativeWidgetPluginMetadata.read(at: url)
             guard metadata.bundleID == manifest.id else { throw NativeWidgetPluginLoaderError.pluginIDMismatch }

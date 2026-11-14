@@ -75,7 +75,7 @@ private struct NativePluginPackageFixture {
     let error = #expect(throws: WidgetPackageError.self) {
         _ = try fixture.fixture.packages.inspect(fixture.directory)
     }
-    #expect(error?.localizedDescription.contains("escapes") == true)
+    #expect(error?.localizedDescription.contains("escapes") == true, "Actual error: \(String(describing: error))")
 }
 
 @Test func nativeBundlesRequireReviewAndEveryVersionUpgradeAddsItsSigningDetails() throws {
