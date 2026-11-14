@@ -5,5 +5,6 @@
   "kind": "widgets",
   "entry": "config.json",
   "nativeBundle": "build/StableBarNativeDemo.bundle",
+  "settings": {"tapCount": {"type": "number", "default": 0}},
   "description": "Demonstrates the StableBar native widget plugin ABI."
 }

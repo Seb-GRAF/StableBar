@@ -44,10 +44,10 @@ private struct NativePluginSignatureFixture {
     }
 }
 
-@Test func nativePluginSignatureRejectsUnsignedBundles() throws {
+@Test func nativePluginSignatureRejectsUnsignedBundles() async throws {
     let fixture = NativePluginSignatureFixture()
     defer { fixture.close() }
-    try fixture.createUnsignedBundle()
+    try await BlockingWork.run { try fixture.createUnsignedBundle() }
 
     let error = #expect(throws: NativePluginSignatureError.self) {
         try NativePluginSignature.verify(at: fixture.bundle)
@@ -55,11 +55,10 @@ private struct NativePluginSignatureFixture {
     #expect(error == .invalidSignature)
 }
 
-@Test func nativePluginSignatureRejectsAdHocSignedBundles() throws {
+@Test func nativePluginSignatureRejectsAdHocSignedBundles() async throws {
     let fixture = NativePluginSignatureFixture()
     defer { fixture.close() }
-    try fixture.createUnsignedBundle()
-    try fixture.signAdHoc()
+    try await BlockingWork.run { try fixture.createUnsignedBundle(); try fixture.signAdHoc() }
 
     let error = #expect(throws: NativePluginSignatureError.self) {
         try NativePluginSignature.verify(at: fixture.bundle)
@@ -67,11 +66,10 @@ private struct NativePluginSignatureFixture {
     #expect(error == .unsignedOrAdHoc)
 }
 
-@Test func nativePluginSignatureRejectsTamperedBundles() throws {
+@Test func nativePluginSignatureRejectsTamperedBundles() async throws {
     let fixture = NativePluginSignatureFixture()
     defer { fixture.close() }
-    try fixture.createUnsignedBundle()
-    try fixture.signAdHoc()
+    try await BlockingWork.run { try fixture.createUnsignedBundle(); try fixture.signAdHoc() }
     try Data("tampered".utf8).write(to: fixture.executable)
 
     let error = #expect(throws: NativePluginSignatureError.self) {

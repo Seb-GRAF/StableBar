@@ -178,12 +178,14 @@ private final class LoaderTestPlugin: NSObject, StableBarNativeWidgetPlugin {
     }
 }
 
-@Test @MainActor func nativeWidgetPluginInstanceForwardsEventsAndStopsWhenReleased() throws {
+@Test @MainActor func nativeWidgetPluginInstanceForwardsEventsAndStopsExplicitly() throws {
     let plugin = LoaderTestPlugin()
     var instance: NativeWidgetPluginInstance? = NativeWidgetPluginInstance(bundle: .main, plugin: plugin)
     instance?.sendEvent(name: "host.ready", payload: ["source": "test"])
     #expect(plugin.lastEvent == "host.ready")
     instance?.start(host: LoaderTestHost(), settings: [:])
+    instance?.stop()
+    instance?.stop()
     instance = nil
     #expect(plugin.stopCount == 1)
 }

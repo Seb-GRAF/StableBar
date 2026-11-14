@@ -39,6 +39,8 @@ final class PackageLibrary {
     private let client: PackageStoreClient
     private let packages: WidgetPackageStore
     let nativeWidgetEvents = NativeWidgetEvents()
+    var nativeWidgetWidths: [Int: [String: CGFloat]] = [:]
+    @ObservationIgnored var nativeWidgetSaveTails: [String: Task<Void, Never>] = [:]
     private let reviewing: Bool
     private let preferences: UserDefaults
     private var dismissedUpdates: Set<String>

@@ -129,10 +129,6 @@ final class NativeWidgetPluginInstance {
         self.stagingDirectory = stagingDirectory
     }
 
-    deinit {
-        if isStarted { plugin.stop() }
-    }
-
     func start(host: any StableBarNativeWidgetHost, settings: [String: Any]) {
         guard !isStarted else { return }
         isStarted = true

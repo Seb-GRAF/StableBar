@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import StableBar
 
+@Test func nativeDemoDeclaresItsSavedTapCount() throws {
+    let data = try Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appending(path: "examples/native-plugin/package.json"))
+    let manifest = try JSONDecoder().decode(WidgetPackageManifest.self, from: data)
+    #expect(try manifest.values(["tapCount": .number(2)])["tapCount"] == .number(2))
+}
+
 private struct NativePluginPackageFixture {
     let fixture = try! ThemeGalleryFixture()
     var directory: URL { fixture.directory.appending(path: "source") }
@@ -58,11 +64,11 @@ private struct NativePluginPackageFixture {
     }
 }
 
-@Test func packageInspectionRejectsAnUnsignedNativeBundle() throws {
+@Test func packageInspectionRejectsAnUnsignedNativeBundle() async throws {
     let fixture = NativePluginPackageFixture()
     defer { fixture.close() }
     try fixture.writePackage()
-    try fixture.makeUnsignedBundle()
+    try await BlockingWork.run { try fixture.makeUnsignedBundle() }
 
     #expect(throws: NativePluginSignatureError.self) { _ = try fixture.fixture.packages.inspect(fixture.directory) }
 }

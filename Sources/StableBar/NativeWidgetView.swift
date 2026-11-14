@@ -73,6 +73,8 @@ struct NativeWidgetView: NSViewRepresentable {
     let popupDefaults: WidgetStyle
     let store: BarStore
     let anchor: NSView
+    let packageSelections: ConfigurationValue?
+    let displayID: Int
 
     static var isSwiftUIPreview: Bool {
         ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
@@ -93,13 +95,20 @@ struct NativeWidgetView: NSViewRepresentable {
 
     @MainActor func makeNSView(context: Context) -> NativeWidgetContainerView {
         let view = NativeWidgetContainerView()
+        view.widthDidChange = { [weak store] width in
+            Task { @MainActor in
+                guard let store, store.packageLibrary.nativeWidgetWidths[displayID]?[widget.id] != width else { return }
+                store.packageLibrary.nativeWidgetWidths[displayID, default: [:]][widget.id] = width
+            }
+        }
         context.coordinator.attach(to: view)
         context.coordinator.startIfNeeded()
         return view
     }
 
     @MainActor func updateNSView(_ nsView: NativeWidgetContainerView, context: Context) {
-        context.coordinator.update(defaults: defaults, popupDefaults: popupDefaults, anchor: anchor)
+        context.coordinator.update(defaults: defaults, popupDefaults: popupDefaults, anchor: anchor,
+                                   packageSelections: packageSelections)
     }
 
     @MainActor static func dismantleNSView(_ nsView: NativeWidgetContainerView, coordinator: Coordinator) {
@@ -123,6 +132,9 @@ struct NativeWidgetView: NSViewRepresentable {
         private var eventToken: UUID?
         private var loadTask: Task<Void, Never>?
         private var operationTasks: [UUID: Task<Void, Never>] = [:]
+        private var settingsRefresh: Task<Void, Never>?
+        private var observedSelections: ConfigurationValue?
+        private var currentSettings: [String: ConfigurationValue]?
         private var stopped = false
 
         init(packageID: String, widget: WidgetConfiguration, defaults: WidgetStyle, popupDefaults: WidgetStyle,
@@ -140,10 +152,26 @@ struct NativeWidgetView: NSViewRepresentable {
             self.container = container
         }
 
-        func update(defaults: WidgetStyle, popupDefaults: WidgetStyle, anchor: NSView) {
+        func update(defaults: WidgetStyle, popupDefaults: WidgetStyle, anchor: NSView,
+                    packageSelections: ConfigurationValue? = nil) {
             self.defaults = defaults
             self.popupDefaults = popupDefaults
             self.anchor = anchor
+            guard observedSelections != packageSelections else { return }
+            observedSelections = packageSelections
+            settingsRefresh?.cancel()
+            settingsRefresh = Task { @MainActor [weak self] in
+                guard let self, let plugin, let bundle else { return }
+                do {
+                    let settings = try await runtime.validateActivePlugin(packageID: packageID, expected: bundle)
+                    try Task.checkCancellation()
+                    guard !stopped, self.plugin === plugin, currentSettings != settings else { return }
+                    currentSettings = settings
+                    plugin.settingsDidChange(try NativeWidgetSettingsBridge.foundationDictionary(from: settings))
+                } catch is CancellationError {} catch {
+                    container?.showOperationError(error.localizedDescription)
+                }
+            }
         }
 
         func startIfNeeded() {
@@ -167,6 +195,7 @@ struct NativeWidgetView: NSViewRepresentable {
                         instance?.sendEvent(name: name, payload: payload.mapValues { $0 as Any })
                     }
                     let foundationSettings = try NativeWidgetSettingsBridge.foundationDictionary(from: session.settings)
+                    currentSettings = session.settings
                     instance.start(host: host, settings: foundationSettings)
                     try Task.checkCancellation()
                     guard let container, !stopped else {
@@ -197,6 +226,8 @@ struct NativeWidgetView: NSViewRepresentable {
             loadTask = nil
             operationTasks.values.forEach { $0.cancel() }
             operationTasks.removeAll()
+            settingsRefresh?.cancel()
+            settingsRefresh = nil
             if let store { store.popup.close(widgetID: widget.id) }
             stopPlugin()
             pluginView?.removeFromSuperview()
@@ -259,8 +290,9 @@ struct NativeWidgetView: NSViewRepresentable {
         }
 
         private func saveSettings(_ settings: [String: Any]) {
-            guard !stopped else { return }
-            performOperation { coordinator in
+            guard !stopped, let store else { return }
+            let previous = store.packageLibrary.nativeWidgetSaveTails[packageID]
+            let task = performOperation(after: previous) { coordinator in
                 do {
                     let (_, plugin, bundle) = try await coordinator.verifyActivePlugin()
                     let values = try NativeWidgetSettingsBridge.configurationValues(from: settings)
@@ -268,6 +300,7 @@ struct NativeWidgetView: NSViewRepresentable {
                                                                             expected: bundle, settings: values)
                     try Task.checkCancellation()
                     guard !coordinator.stopped, coordinator.plugin === plugin, coordinator.bundle == bundle else { return }
+                    coordinator.currentSettings = updated
                     plugin.settingsDidChange(try NativeWidgetSettingsBridge.foundationDictionary(from: updated))
                     coordinator.container?.clearOperationError()
                 } catch is CancellationError {
@@ -276,17 +309,23 @@ struct NativeWidgetView: NSViewRepresentable {
                     coordinator.container?.showOperationError(error.localizedDescription)
                 }
             }
+            store.packageLibrary.nativeWidgetSaveTails[packageID] = task
         }
 
-        private func performOperation(_ operation: @escaping @MainActor (Coordinator) async -> Void) {
-            guard !stopped else { return }
+        @discardableResult
+        private func performOperation(after previous: Task<Void, Never>? = nil,
+                                      _ operation: @escaping @MainActor (Coordinator) async -> Void) -> Task<Void, Never>? {
+            guard !stopped else { return nil }
             let id = UUID()
             let task = Task { @MainActor [weak self] in
                 guard let self else { return }
                 defer { operationTasks.removeValue(forKey: id) }
+                await previous?.value
+                guard !Task.isCancelled else { return }
                 await operation(self)
             }
             operationTasks[id] = task
+            return task
         }
     }
 }
@@ -295,6 +334,17 @@ struct NativeWidgetView: NSViewRepresentable {
 final class NativeWidgetContainerView: NSView {
     private var contentView: NSView?
     private var errorView: NSImageView?
+    var widthDidChange: ((CGFloat) -> Void)?
+
+    override func layout() {
+        super.layout()
+        reportWidth()
+    }
+
+    private func reportWidth() {
+        guard let width = contentView?.fittingSize.width, width.isFinite, width > 0 else { return }
+        widthDidChange?(width)
+    }
 
     override var intrinsicContentSize: NSSize {
         contentView?.intrinsicContentSize ?? NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
@@ -307,6 +357,7 @@ final class NativeWidgetContainerView: NSView {
         view.autoresizingMask = [.width, .height]
         addSubview(view)
         invalidateIntrinsicContentSize()
+        reportWidth()
     }
 
     func showError(_ message: String) {

@@ -25,13 +25,15 @@ final class PackagesViewTests: XCTestCase {
         }
 
         let captured = try XCTUnwrap(try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self).first)
+        var gate: CheckedContinuation<Void, Never>?
         let delayedInspectionResult = Task { @MainActor in
-            try await Task.sleep(for: .milliseconds(30)) // Models the package inspection suspension.
+            await withCheckedContinuation { gate = $0 }
             return try library.revalidatedActiveSelection(packageID: "clock", matching: captured)
         }
-        try await Task.sleep(for: .milliseconds(5))
+        try await awaitCondition { gate != nil }
         try fixture.write(#"{"packages":[{"id":"clock","version":"1","enabled":false}],"widgets":[]}"#, to: fixture.url)
         store.reloadConfiguration()
+        gate?.resume()
         let selectionAfterSuspension = try await delayedInspectionResult.value
         XCTAssertNil(selectionAfterSuspension, "A disable during inspection must invalidate the captured selection.")
         do {

@@ -795,11 +795,14 @@ struct WidgetView: View {
                                                  executionAllowed: nativeWidgetExecutionAllowed,
                                                  isPreview: NativeWidgetView.isSwiftUIPreview) {
                 NativeWidgetView(packageID: packageID, widget: widget, defaults: defaults,
-                                 popupDefaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
+                                 popupDefaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor,
+                                 packageSelections: store.effectiveDocument["packages"], displayID: monitor)
+                    .id(packageID)
             } else {
                 Image(systemName: "puzzlepiece.extension")
                     .font(.system(size: appearance.iconSize))
                     .foregroundStyle(appearance.foreground)
+                    .frame(width: measuring ? store.packageLibrary.nativeWidgetWidths[monitor]?[widget.id] : nil)
                     .padding(padding)
                     .accessibilityLabel(accessibilityName)
             }

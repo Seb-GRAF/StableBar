@@ -42,9 +42,7 @@ private final class FixedSizePopupView: NSView {
     popup.close(widgetID: "other")
     #expect(popup.isOpen)
     popup.close(widgetID: widget.id)
-    for _ in 0..<20 where content.superview != nil {
-        try await Task.sleep(for: .milliseconds(10))
-    }
+    try await awaitCondition { content.superview == nil }
 
     #expect(!popup.isOpen)
     #expect(store.presentations[widget.id]?.popupAnchor == nil)

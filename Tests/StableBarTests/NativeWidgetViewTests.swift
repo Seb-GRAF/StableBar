@@ -1,8 +1,26 @@
 import AppKit
 import Foundation
 import NativeWidgetPluginABI
+import SwiftUI
 import Testing
 @testable import StableBar
+
+@Test @MainActor func nativeWidgetReportsItsPreferredWidth() {
+    final class SizedView: NSView {
+        override var fittingSize: NSSize { NSSize(width: 200, height: 20) }
+    }
+    let container = NativeWidgetContainerView()
+    var width: CGFloat?
+    container.widthDidChange = { width = $0 }
+    container.install(SizedView())
+    #expect(width == 200)
+}
+
+@Test @MainActor func nativeWidgetPackagePreviewRendersWithoutLoadingCode() throws {
+    let widget = try JSONDecoder().decode(StableBar.WidgetConfiguration.self, from: Data(#"{"id":"native","type":"nativePlugin","plugin":"native","position":"right"}"#.utf8))
+    let view = NSHostingView(rootView: WidgetSample(widget: widget))
+    #expect(view.fittingSize.width > 0)
+}
 
 @Test func nativeWidgetSettingsBridgePreservesJSONValuesAndRejectsNonJSONValues() throws {
     let settings: [String: ConfigurationValue] = [
@@ -54,6 +72,7 @@ private final class NativeWidgetRuntimeFixture: NativeWidgetPluginRuntime {
     var validationCount = 0
     var savedSettings: [String: ConfigurationValue]?
     var validationError: Error?
+    var currentSettings: [String: ConfigurationValue]?
     var pauseNextSave = false
     var saveInProgress = false
     private var saveContinuation: CheckedContinuation<Void, Never>?
@@ -65,7 +84,7 @@ private final class NativeWidgetRuntimeFixture: NativeWidgetPluginRuntime {
     func validateActivePlugin(packageID: String, expected: NativePluginBundle) async throws -> [String: ConfigurationValue] {
         validationCount += 1
         if let validationError { throw validationError }
-        return session.settings
+        return currentSettings ?? session.settings
     }
 
     func saveSettings(packageID: String, expected: NativePluginBundle,
@@ -84,6 +103,39 @@ private final class NativeWidgetRuntimeFixture: NativeWidgetPluginRuntime {
         saveContinuation?.resume()
         saveContinuation = nil
     }
+}
+
+@Test @MainActor func nativeWidgetSettingsChangesReachBothDisplays() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"{"widgets":[{"id":"native","type":"nativePlugin","plugin":"native","position":"right"}]}"#.utf8))
+    let store = BarStore()
+    store.configuration = configuration
+    let widget = configuration.widgets[0]
+    let signature = NativePluginSignature(identifier: "native", teamIdentifier: "TEAM", cdhash: "hash")
+    let bundle = NativePluginBundle(packageID: "native", version: "1", path: "Native.bundle", url: Bundle.main.bundleURL,
+                                    bundleID: "native", apiMajor: 1, signature: signature)
+    let first = NativeWidgetLifecyclePlugin(), second = NativeWidgetLifecyclePlugin()
+    let firstRuntime = NativeWidgetRuntimeFixture(session: NativeWidgetPluginSession(bundle: bundle, settings: [:], instance: NativeWidgetPluginInstance(bundle: .main, plugin: first)))
+    let secondRuntime = NativeWidgetRuntimeFixture(session: NativeWidgetPluginSession(bundle: bundle, settings: [:], instance: NativeWidgetPluginInstance(bundle: .main, plugin: second)))
+    let anchor = NSView(), firstContainer = NativeWidgetContainerView(), secondContainer = NativeWidgetContainerView()
+    let a = NativeWidgetView.Coordinator(packageID: "native", widget: widget, defaults: configuration.defaults, popupDefaults: configuration.defaults, store: store, anchor: anchor, runtime: firstRuntime)
+    let b = NativeWidgetView.Coordinator(packageID: "native", widget: widget, defaults: configuration.defaults, popupDefaults: configuration.defaults, store: store, anchor: anchor, runtime: secondRuntime)
+    defer { a.stop(); b.stop(); store.stop() }
+    a.attach(to: firstContainer); b.attach(to: secondContainer)
+    a.startIfNeeded(); b.startIfNeeded()
+    try await awaitCondition { first.startCount == 1 && second.startCount == 1 }
+    firstRuntime.pauseNextSave = true
+    first.host?.saveSettings(["title": "First"])
+    try await awaitCondition { firstRuntime.saveInProgress }
+    second.host?.saveSettings(["title": "Second"])
+    for _ in 0..<100 { await Task.yield() }
+    #expect(secondRuntime.savedSettings == nil)
+    firstRuntime.resumeSave()
+    try await awaitCondition { secondRuntime.savedSettings == ["title": .string("Second")] }
+    firstRuntime.currentSettings = ["title": .string("Updated")]
+    secondRuntime.currentSettings = firstRuntime.currentSettings
+    a.update(defaults: configuration.defaults, popupDefaults: configuration.defaults, anchor: anchor, packageSelections: .string("updated"))
+    b.update(defaults: configuration.defaults, popupDefaults: configuration.defaults, anchor: anchor, packageSelections: .string("updated"))
+    try await awaitCondition { first.changedSettings?["title"] as? String == "Updated" && second.changedSettings?["title"] as? String == "Updated" }
 }
 
 @Test @MainActor func nativeWidgetCoordinatorStartsHostsCallbacksAndStopsItsPlugin() async throws {
@@ -119,11 +171,16 @@ private final class NativeWidgetRuntimeFixture: NativeWidgetPluginRuntime {
     let container = NativeWidgetContainerView()
     coordinator.attach(to: container)
     coordinator.startIfNeeded()
-    for _ in 0..<100 where plugin.startCount == 0 { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { plugin.startCount != 0 }
 
     #expect(plugin.startCount == 1)
     #expect(plugin.widgetView.superview === container)
     #expect(plugin.host != nil)
+
+    runtime.currentSettings = ["title": .string("External")]
+    coordinator.update(defaults: configuration.defaults, popupDefaults: configuration.defaults, anchor: anchor,
+                       packageSelections: .string("changed"))
+    try await awaitCondition { plugin.changedSettings?["title"] as? String == "External" }
 
     store.packageLibrary.nativeWidgetEvents.send("widget.ready", environment: ["source": "test"], to: [widget.id])
     #expect(plugin.receivedEvent?.0 == "widget.ready")
@@ -131,36 +188,47 @@ private final class NativeWidgetRuntimeFixture: NativeWidgetPluginRuntime {
 
     runtime.validationError = CocoaError(.userCancelled)
     plugin.host?.requestPopup()
-    for _ in 0..<100 where container.toolTip == nil { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { container.toolTip != nil }
     #expect(container.toolTip != nil)
     #expect(plugin.widgetView.superview === container)
     #expect(plugin.stopCount == 0)
 
     runtime.validationError = nil
     plugin.host?.requestPopup()
-    for _ in 0..<100 where !popup.isOpen { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { popup.isOpen }
     #expect(popup.isOpen)
     #expect(runtime.validationCount > 0)
     #expect(panels.count == 1)
 
     plugin.host?.saveSettings(["unsupported": Date()])
-    for _ in 0..<100 where container.toolTip == nil { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { container.toolTip != nil }
     #expect(plugin.widgetView.superview === container)
     #expect(plugin.stopCount == 0)
 
     plugin.host?.saveSettings(["title": "Changed"])
-    for _ in 0..<100 where runtime.savedSettings == nil { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { runtime.savedSettings != nil }
     #expect(runtime.savedSettings == ["title": .string("Changed")])
     #expect(plugin.changedSettings?["title"] as? String == "Changed")
+
+    runtime.savedSettings = nil
+    runtime.pauseNextSave = true
+    plugin.host?.saveSettings(["title": "First"])
+    try await awaitCondition { runtime.saveInProgress }
+    plugin.host?.saveSettings(["title": "Second"])
+    for _ in 0..<100 { await Task.yield() }
+    #expect(runtime.savedSettings == nil)
+    runtime.resumeSave()
+    try await awaitCondition { runtime.savedSettings == ["title": .string("Second")] }
+    #expect(plugin.changedSettings?["title"] as? String == "Second")
 
     plugin.changedSettings = nil
     runtime.pauseNextSave = true
     plugin.host?.saveSettings(["title": "Late"])
-    for _ in 0..<100 where !runtime.saveInProgress { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { runtime.saveInProgress }
     #expect(runtime.saveInProgress)
     coordinator.stop()
     runtime.resumeSave()
-    for _ in 0..<20 where runtime.saveInProgress { try await Task.sleep(for: .milliseconds(10)) }
+    try await awaitCondition { !runtime.saveInProgress }
     #expect(plugin.stopCount == 1)
     #expect(plugin.widgetView.superview == nil)
     #expect(!popup.isOpen)

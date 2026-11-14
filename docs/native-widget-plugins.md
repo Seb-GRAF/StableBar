@@ -1,7 +1,7 @@
 # Native widget plugins
 
 This document describes the current API v1 contract and the demo in `examples/native-plugin`.
-The loader and package checks exist, but StableBar does not yet create plugin instances from bar widgets.
+StableBar connects enabled native widgets to the loader, subject to signature and trust checks.
 The demo harness loads a bundle directly. It does not test the complete StableBar install, consent, and display flow.
 
 ## Package format
@@ -124,15 +124,13 @@ It does nothing when called a second time while started. `settingsDidChange(_:)`
 `sendEvent(name:payload:)` forwards an event when the plugin implements the optional event selector.
 The current bridge accepts string-keyed dictionaries. The demo uses an integer setting named `tapCount` and a string event name.
 
-When the plugin calls `saveSettings`, the host should validate and persist the values before sending `settingsDidChange` with the effective settings.
-When it calls `requestPopup`, the host should create the popup view on demand and place it in the host's popup container.
-These host callback policies are guidance for integration. The current StableBar UI does not yet provide this runtime bridge.
+When a plugin calls `saveSettings`, the host validates and persists its settings, then notifies active instances of the same package. `requestPopup` creates a view on demand in StableBar’s popup container.
 
 StableBar's `BarStore` already selects enabled native widgets that subscribe to an event and emits their widget IDs, event name, and string environment values through `NativeWidgetEvents`.
-The loader's `sendEvent(name:payload:)` is not yet connected to that event source.
+The host forwards subscribed events to running plugin instances.
 API v1 does not define a richer event payload or a stable list of event names.
 
-The host calls `stop()` when it deactivates an instance. The loader makes `stop()` idempotent and also calls it when a started instance is released.
+The host calls `stop()` when it deactivates an instance. The host calls `stop()` explicitly during teardown; repeated calls have no effect.
 The instance retains its `Bundle` while it exists. Stop does not unload executable code from the process.
 Keep plugin work and callbacks on the main actor. Release views and other references when stopping.
 
@@ -150,9 +148,7 @@ The loader checks bundle metadata, API major, signature identity, and the exact 
 It checks the principal class and the plugin's reported API version after loading.
 This order prevents an untrusted bundle from executing through the loader. It does not sandbox trusted code.
 
-The package inspector reports native code as a review item. Current code does not yet connect a user consent screen to `NativePluginTrustStore.grant` or to the runtime loader.
-Do not interpret package review or a successful signature check as an automatic trust grant.
-The app integration must show the package identity, version, Team ID, and signature change to the user, then store explicit consent before loading.
+The package review shows native code and its signing details. The host records explicit consent before loading and requires a new review when the version or signature changes.
 
 ## Hardened Runtime and process limits
 
@@ -173,5 +169,5 @@ Use an out-of-process XPC design if the product needs fault isolation. That desi
 - StableBar configuration accepts `type: "nativePlugin"`, and package inspection recognizes `nativeBundle`.
 - The loader and trust-store checks are implemented and have targeted tests.
 - The standalone demo harness has loaded the ad-hoc signed demo and exercised its protocol callbacks.
-- StableBar does not yet connect `BarView` to `NativeWidgetPluginLoader`, render the native view, present its popup, forward settings, or route `NativeWidgetEvents` to plugin instances.
+- Native widget views, popups, settings and events are connected to the bar. Measuring copies and offline previews do not execute plugin code.
 - End-to-end installation, consent, signing under the production identity, Hardened Runtime loading, and crash behavior have not been verified.
