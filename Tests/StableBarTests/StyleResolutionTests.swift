@@ -461,9 +461,10 @@ private func rules(_ json: String) throws -> [StyleRule] {
     #expect(try style(#"{"symbolVariant":"fill"}"#).symbolVariant?.variants == .fill)
     #expect(try style(#"{"symbolVariant":"circle.fill"}"#).symbolVariant?.variants == .circle.fill)
     #expect(try style(#"{"symbolVariant":"slash"}"#).symbolVariant?.variants == .slash)
+    #expect(try style(#"{"symbolVariant":"slash.circle.fill"}"#).symbolVariant?.variants == .slash.circle.fill)
     #expect(try style(#"{"symbolVariant":"none"}"#).symbolVariant?.variants == SymbolVariants.none)
     #expect(try style(#"{"symbolVariant":"circle.fill"}"#).configurationValue == .object(["symbolVariant": .string("circle.fill")]))
-    for invalid in ["filled", "", "fill.fill", "circle.square", "none.fill", "fill."] {
+    for invalid in ["filled", "", "fill.fill", "circle.square", "none.fill", "fill.", "fill.circle", "circle.slash"] {
         #expect(throws: DecodingError.self) { try style(#"{"symbolVariant":"\#(invalid)"}"#) }
     }
 }
@@ -484,4 +485,19 @@ private func rules(_ json: String) throws -> [StyleRule] {
     #expect(symbol.resolvedStyle(inherited: children, styles: [:], fields: [:], states: StyleStates(hover: true)).text.symbolVariant?.variants
         == .fill)
     #expect(try style(##"{"symbolVariant":"fill","paddingTop":2}"##).inheritedByBlocks == WidgetStyle(symbolVariant: SymbolVariant(rawValue: "fill")))
+}
+
+@Test func theSchemaAcceptsTheSymbolVariantsTheDecoderAccepts() throws {
+    let url = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "stablebar.schema.json")
+    let schema = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    let style = (schema["definitions"] as! [String: Any])["style"] as! [String: Any]
+    let property = (style["properties"] as! [String: Any])["symbolVariant"] as! [String: Any]
+    let pattern = try NSRegularExpression(pattern: ((property["anyOf"] as! [[String: Any]])[0])["pattern"] as! String)
+    let parts = ["slash", "circle", "square", "rectangle", "fill", "none", "x"]
+    let names = parts.flatMap { a in [a] + parts.flatMap { b in ["\(a).\(b)"] + parts.map { "\(a).\(b).\($0)" } } } + ["", "fill."]
+    for name in names {
+        let matches = pattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
+        #expect(matches == (SymbolVariant(rawValue: name) != nil), "\(name)")
+    }
 }

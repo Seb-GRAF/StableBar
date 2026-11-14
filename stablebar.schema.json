@@ -714,7 +714,7 @@
           "anyOf": [
             {
               "type": "string",
-              "pattern": "^(none|(circle|square|rectangle|fill|slash)(\\.(circle|square|rectangle|fill|slash)){0,2})$"
+              "pattern": "^(none|fill|(circle|square|rectangle)(\\.fill)?|slash(\\.(circle|square|rectangle))?(\\.fill)?)$"
             },
             {
               "$ref": "#/definitions/reference"
@@ -723,7 +723,7 @@
               "type": "null"
             }
           ],
-          "description": "The SF Symbols variant to draw symbols in, such as fill, slash or circle.fill. A symbol without it keeps its own look; none draws symbols as named."
+          "description": "The SF Symbols variant to draw symbols in, such as fill, slash or circle.fill: slash, then at most one shape, then fill, as SF Symbols names them. A symbol without it keeps its own look; none draws symbols as named."
         },
         "paddingHorizontal": {
           "$ref": "#/definitions/number"

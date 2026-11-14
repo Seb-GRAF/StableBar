@@ -10,7 +10,7 @@ Each widget can override any of these styles:
 
 Styles also accept `hoverForeground`, `height`, `paddingLeading`, `paddingTrailing`, `paddingTop`, `paddingBottom`, `offsetX`, `offsetY` and `opacity`. Side-specific padding overrides horizontal/vertical padding. `ultralight`, `thin` and `light` font weights are available too. Offsets move the drawing without moving its neighbours.
 
-`symbolVariant` draws SF Symbols in one of their variants: `fill`, `slash`, `circle`, `square` or `rectangle`, or several joined by dots, such as `circle.fill`, so `bell` draws as `bell.fill`. A symbol without that variant keeps its own look. `none` draws symbols as named, undoing a variant set in a lower layer. Like `iconSize`, it reaches a layout's blocks. Set it in a state to change a symbol while the state is active, such as a leaf that fills while the Apple menu is open:
+`symbolVariant` draws SF Symbols in one of their variants, so `bell` with `fill` draws as `bell.fill`: `fill`, `slash`, `circle`, `square` or `rectangle`, or several joined by dots in the order SF Symbols names them (slash, then one shape, then fill), such as `circle.fill` or `slash.circle.fill`. A symbol without that variant keeps its own look. `none` draws symbols as named, undoing a variant set in a lower layer. Like `iconSize`, it reaches a layout's blocks. Set it in a state to change a symbol while the state is active, such as a leaf that fills while the Apple menu is open:
 
 ```json
 {

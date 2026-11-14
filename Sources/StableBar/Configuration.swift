@@ -318,13 +318,15 @@ extension WidgetStyle {
 struct SymbolVariant: Decodable, Equatable, Sendable {
     let rawValue: String
 
-    private static let shapes: Set<Substring> = ["circle", "square", "rectangle"]
+    /// Each part's place in a name: SF Symbols names put slash, then at most one shape, then fill, as in
+    /// `bell.slash.circle.fill`. The schema's pattern accepts the same names.
+    private static let places: [Substring: Int] = ["slash": 0, "circle": 1, "square": 1, "rectangle": 1, "fill": 2]
 
     init?(rawValue: String) {
         if rawValue != "none" {
             let parts = rawValue.split(separator: ".", omittingEmptySubsequences: false)
-            let known = parts.allSatisfy { Self.shapes.contains($0) || $0 == "fill" || $0 == "slash" }
-            guard known, Set(parts).count == parts.count, parts.count(where: Self.shapes.contains) <= 1 else { return nil }
+            let places = parts.compactMap { Self.places[$0] }
+            guard places.count == parts.count, zip(places, places.dropFirst()).allSatisfy(<) else { return nil }
         }
         self.rawValue = rawValue
     }
@@ -333,7 +335,7 @@ struct SymbolVariant: Decodable, Equatable, Sendable {
         let container = try decoder.singleValueContainer()
         guard let variant = Self(rawValue: try container.decode(String.self)) else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription:
-                "Use fill, slash, circle, square or rectangle, or several joined by dots such as circle.fill, or none.")
+                "Use fill, slash, circle, square or rectangle, joined by dots in the order SF Symbols names them, such as circle.fill or slash.circle.fill, or none.")
         }
         self = variant
     }
