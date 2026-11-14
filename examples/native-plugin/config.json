@@ -1,0 +1,10 @@
+{
+  "widgets": [
+    {
+      "id": "native-demo",
+      "type": "nativePlugin",
+      "plugin": "org.stablebar.example.native-demo",
+      "position": "right"
+    }
+  ]
+}

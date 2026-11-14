@@ -1153,6 +1153,13 @@ final class BarStore: NSObject {
                 script.refresh(ScriptEvent(sender: event, environment: environment))
             }
         }
+        let nativeWidgets = Set((configuration?.widgets ?? []).compactMap { widget -> String? in
+            guard widget.enabled, widget.events.contains(event), case .nativePlugin = widget.content else { return nil }
+            return widget.id
+        })
+        if !nativeWidgets.isEmpty {
+            packageLibrary.nativeWidgetEvents.send(event, environment: environment, to: nativeWidgets)
+        }
     }
 
     @discardableResult

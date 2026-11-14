@@ -31,6 +31,7 @@ extension WidgetContent {
         case .clock: "clock"
         case .text: "textformat"
         case .script: "terminal"
+        case .nativePlugin: "puzzlepiece.extension"
         }
     }
 }

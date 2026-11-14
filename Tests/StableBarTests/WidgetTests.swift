@@ -93,6 +93,22 @@ import Testing
     }
 }
 
+@Test func nativePluginWidgetRequiresAValidPackageID() throws {
+    func decode(_ json: String) throws -> StableBar.WidgetConfiguration {
+        try JSONDecoder().decode(StableBar.WidgetConfiguration.self, from: Data(json.utf8))
+    }
+
+    #expect(try decode(#"{"id":"plugin","type":"nativePlugin","position":"right","plugin":"com.example.clock"}"#).content == .nativePlugin(packageID: "com.example.clock"))
+    #expect(throws: Error.self) { try decode(#"{"id":"plugin","type":"nativePlugin","position":"right"}"#) }
+    #expect(throws: Error.self) { try decode(#"{"id":"plugin","type":"nativePlugin","position":"right","plugin":"../clock"}"#) }
+}
+
+@Test func nativePluginWidgetRejectsUnknownProperties() {
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(StableBar.WidgetConfiguration.self, from: Data(#"{"id":"plugin","type":"nativePlugin","position":"right","plugin":"clock","unexpected":true}"#.utf8))
+    }
+}
+
 @Test func zeroIntervalCannotStartABusyLoop() {
     #expect(throws: CommandFailure.self) {
         try JSONDecoder().decode(Configuration.self, from: Data(#"{"widgets":[{"id":"test","type":"script","position":"left","command":"date","interval":0}]}"#.utf8))

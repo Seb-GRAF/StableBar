@@ -103,9 +103,14 @@ struct PackagesView: View {
                 searchTarget = nil
             }
         }
-        .confirmationDialog("Review additional access", isPresented: Binding(get: { library.pendingUpdate != nil }, set: { if !$0 { library.pendingUpdate = nil } }),
+        .confirmationDialog("Review additional access", isPresented: Binding(get: { library.pendingUpdate != nil }, set: {
+            if !$0 { library.pendingUpdate?.reviewedNativePlugin = nil; library.pendingUpdate = nil }
+        }),
                             presenting: library.pendingUpdate) { draft in
-            Button("Update package") { Task { await library.confirmUpdate(draft) } }
+            Button("Update package") {
+                let review = draft.reviewedNativePlugin
+                Task { await library.confirmUpdate(draft, reviewedNativePlugin: review) }
+            }
         } message: { _ in
             Text("This version adds:\n\(library.updateAdditions.joined(separator: "\n"))")
         }

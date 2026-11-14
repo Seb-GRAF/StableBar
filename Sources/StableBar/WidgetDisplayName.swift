@@ -16,6 +16,7 @@ enum WidgetDisplayName {
         case .text: type = "text"
         case .spacer: type = "spacer"
         case .script: type = "script"
+        case .nativePlugin: return "Native plugin"
         }
         return WidgetAddCatalog.builtIns.first { $0.id == type }?.name ?? "Custom widget"
     }

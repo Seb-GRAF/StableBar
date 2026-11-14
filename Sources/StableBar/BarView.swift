@@ -199,6 +199,7 @@ struct BarView: View {
         }
         .environment(\.colorScheme, store.configuration?.bar(on: ScreenKind(display)).appearance?.colorScheme ?? colorScheme)
         .environment(\.screenKind, ScreenKind(display))
+        .environment(\.nativeWidgetExecutionAllowed, !preview)
         .focusEffectDisabled(!store.barEditing.isActive)
         .frame(maxHeight: .infinity, alignment: store.configuration?.bar(on: ScreenKind(display)).position == .bottom ? .bottom : .top)
         .allowsHitTesting(!preview)
@@ -453,6 +454,8 @@ struct WidgetView: View {
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.barUnitID) private var unitID
     @Environment(\.screenKind) private var screenKind
+    @Environment(\.offline) private var offline
+    @Environment(\.nativeWidgetExecutionAllowed) private var nativeWidgetExecutionAllowed
     @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor
     @Environment(\.barExpansion) private var barExpansion
     @Environment(\.fixedDate) private var fixedDate
@@ -482,6 +485,8 @@ struct WidgetView: View {
     @ViewBuilder private func clickable(_ tile: some View, output: ScriptOutput?, isOpen: Bool) -> some View {
         if store.barEditing.isActive {
             tile
+        } else if case .nativePlugin = widget.content {
+            pressable(tile)
         } else if widget.id == PackageLibrary.updateWidgetID {
             let buttons = HStack(spacing: 0) {
                 Button(action: store.packageLibrary.openUpdates) { tile }
@@ -783,6 +788,21 @@ struct WidgetView: View {
     @ViewBuilder
     private func content(_ resolution: ResolvedWidgetStyle, open: Bool, padding: EdgeInsets) -> some View {
         switch widget.content {
+        case let .nativePlugin(packageID):
+            let appearance = WidgetAppearance(resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id,
+                                                               open: open), defaults: WidgetStyle())
+            if NativeWidgetView.shouldLoadPlugin(measuring: measuring, offline: offline,
+                                                 executionAllowed: nativeWidgetExecutionAllowed,
+                                                 isPreview: NativeWidgetView.isSwiftUIPreview) {
+                NativeWidgetView(packageID: packageID, widget: widget, defaults: defaults,
+                                 popupDefaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
+            } else {
+                Image(systemName: "puzzlepiece.extension")
+                    .font(.system(size: appearance.iconSize))
+                    .foregroundStyle(appearance.foreground)
+                    .padding(padding)
+                    .accessibilityLabel(accessibilityName)
+            }
         case .workspaces where widget.layout == nil:
             WorkspaceView(workspaceStore: store.workspaceStore, monitor: monitor,
                           appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),

@@ -1478,6 +1478,7 @@
                 "clock",
                 "text",
                 "script",
+                "nativePlugin",
                 "provider",
                 "spacer",
                 "system",
@@ -1497,6 +1498,11 @@
               "type": "null"
             }
           ]
+        },
+        "plugin": {
+          "type": "string",
+          "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9._-]+$",
+          "description": "ID of the installed native widget package."
         },
         "icon": {
           "$ref": "#/definitions/string",
@@ -1726,7 +1732,12 @@
           },
           "description": "Data states from script or provider output. The first matching rule sets the state."
         }
-      }
+      },
+      "if": {
+        "properties": { "type": { "const": "nativePlugin" } },
+        "required": ["type"]
+      },
+      "then": { "required": ["plugin"] }
     },
     "rule": {
       "type": "object",
