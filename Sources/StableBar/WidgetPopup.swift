@@ -51,6 +51,13 @@ final class PopupRevealView: NSView {
     required init?(coder: NSCoder) { fatalError("PopupRevealView is created programmatically.") }
 }
 
+private struct PopupNativeContent: NSViewRepresentable {
+    let view: NSView
+
+    func makeNSView(context: Context) -> NSView { view }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
 /// Lies over a popup's content and resizes the popup when its visible edges or corners are dragged.
 @MainActor
 final class PopupResizeEdges: NSView {
@@ -223,6 +230,7 @@ private struct PinnedPopup {
     let transition: PopupTransition
     let source: CGFloat
     let morphPopups: Bool
+    let nativeContentView: NSView?
     let onClose: (command: String, widget: WidgetConfiguration)?
 }
 
@@ -290,8 +298,8 @@ final class WidgetPopup {
     private(set) var pinned = false
     private var closesAfterClick = false
     private var shown: (inset: CGFloat, cornerRadius: CGFloat)?
-    private var morph: (panel: PopupPanel, link: CADisplayLink, from: PopupPanel)?
-    private typealias MorphSource = (panel: PopupPanel, shadow: NSPanel?, box: NSRect, cornerRadius: CGFloat)
+    private var morph: (panel: PopupPanel, link: CADisplayLink, from: PopupPanel, nativeContentView: NSView?)?
+    private typealias MorphSource = (panel: PopupPanel, shadow: NSPanel?, box: NSRect, cornerRadius: CGFloat, nativeContentView: NSView?)
     private var morphPopups = false
     private var pinnedPopups: [String: PinnedPopup] = [:]
     /// Where each widget's popup was last pinned, and whether it closed pinned, so it pins there again when it next opens.
@@ -300,6 +308,7 @@ final class WidgetPopup {
     private var sizes: [String: NSSize] = [:]
     /// What the open popup runs when it closes.
     private var onClose: (command: String, widget: WidgetConfiguration)?
+    private var nativeContentView: NSView?
     let backgrounds = PopupBackgrounds()
     let pins = PopupPins()
 
@@ -411,7 +420,9 @@ final class WidgetPopup {
         let source = (panel, shadowWindow, panel.frame.insetBy(dx: shown.inset, dy: shown.inset), shown.cornerRadius)
         self.panel = nil
         shadowWindow = nil
-        return source
+        let nativeContentView = self.nativeContentView
+        self.nativeContentView = nil
+        return (source.0, source.1, source.2, source.3, nativeContentView)
     }
 
     func showTooltip(_ text: String, widget: WidgetConfiguration, defaults: WidgetStyle,
@@ -523,6 +534,25 @@ final class WidgetPopup {
 
     func open(_ popup: PopupConfiguration, widget: WidgetConfiguration, defaults: WidgetStyle,
               store: BarStore, anchor: NSView, onHover: Bool) {
+        open(popup, widget: widget, defaults: defaults, store: store, anchor: anchor, onHover: onHover,
+             nativeContentView: nil)
+    }
+
+    @discardableResult
+    func open(_ contentView: NSView, popup: PopupConfiguration, widget: WidgetConfiguration, defaults: WidgetStyle,
+              store: BarStore, anchor: NSView, onHover: Bool) -> Bool {
+        if pinnedPopups[widget.id] != nil {
+            if !onHover { closePinned(widget.id) }
+            return false
+        }
+        guard contentView.superview == nil, contentView.window == nil else { return false }
+        open(popup, widget: widget, defaults: defaults, store: store, anchor: anchor, onHover: onHover,
+             nativeContentView: contentView)
+        return true
+    }
+
+    private func open(_ popup: PopupConfiguration, widget: WidgetConfiguration, defaults: WidgetStyle,
+                      store: BarStore, anchor: NSView, onHover: Bool, nativeContentView: NSView?) {
         if pinnedPopups[widget.id] != nil {
             if !onHover { closePinned(widget.id) }
             return
@@ -556,24 +586,32 @@ final class WidgetPopup {
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.opensUpward = upward
         let host = NSHostingView(rootView: PopupCanvas(size: panel.size, inset: shadowInset, upward: upward) {
-            PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds)
-                .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen)))
-                .frame(idealWidth: width, maxWidth: .infinity)
-                .onPreferenceChange(PopupHeightPreference.self) { [weak self, weak panel] contentHeight in
-                    guard popup.height == nil, let panel, let self, !self.pins.resized.contains(widget.id) else { return }
-                    let shadow: NSWindow?
-                    if panel === self.panel {
-                        shadow = self.shadowWindow
-                    } else if let pinned = self.pinnedPopups.values.first(where: { $0.panel === panel }) {
-                        shadow = pinned.shadow
-                    } else {
-                        return
-                    }
-                    let height = min(contentHeight, maximumHeight).rounded(.up)
-                    guard let shown = panel.size.height, abs(shown - height) > 0.5 else { return }
-                    self.resize(panel, shadow: shadow, to: height, inset: shadowInset, animation: popup.animation)
+            Group {
+                if let nativeContentView {
+                    PopupNativeContent(view: nativeContentView)
+                        .frame(idealWidth: width, maxWidth: .infinity)
+                        .modifier(PopupBackground(style: style, glass: bar.glass, backgrounds: backgrounds))
+                } else {
+                    PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds)
+                        .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen)))
+                        .frame(idealWidth: width, maxWidth: .infinity)
+                        .onPreferenceChange(PopupHeightPreference.self) { [weak self, weak panel] contentHeight in
+                            guard popup.height == nil, let panel, let self, !self.pins.resized.contains(widget.id) else { return }
+                            let shadow: NSWindow?
+                            if panel === self.panel {
+                                shadow = self.shadowWindow
+                            } else if let pinned = self.pinnedPopups.values.first(where: { $0.panel === panel }) {
+                                shadow = pinned.shadow
+                            } else {
+                                return
+                            }
+                            let height = min(contentHeight, maximumHeight).rounded(.up)
+                            guard let shown = panel.size.height, abs(shown - height) > 0.5 else { return }
+                            self.resize(panel, shadow: shadow, to: height, inset: shadowInset, animation: popup.animation)
+                        }
                 }
-                .padding(shadowInset)
+            }
+            .padding(shadowInset)
         }
         .onHover { [weak self, weak panel] inside in
             if panel === self?.panel { self?.hoverPopup(inside) }
@@ -616,6 +654,7 @@ final class WidgetPopup {
         if sizes[widget.id] != nil { keepSize(widget.id, of: panel) }
         widgetID = widget.id
         self.store = store
+        self.nativeContentView = nativeContentView
         onClose = popup.onClose.map { ($0, widget) }
         if let command = popup.onOpen { store.runAction(command, widget: widget, event: ScriptEvent(sender: "popup.opened")) }
         if parentPopup == nil {
@@ -683,7 +722,7 @@ final class WidgetPopup {
         }
         let link = morph.displayLink(target: morph, selector: #selector(NSWindow.invalidateShadow))
         link.add(to: .main, forMode: .common)
-        self.morph = (morph, link, from.panel)
+        self.morph = (morph, link, from.panel, from.nativeContentView)
         backgrounds.hidden = true
         from.shadow?.close()
         from.panel.hasShadow = false
@@ -830,7 +869,7 @@ final class WidgetPopup {
                                        home: NSPoint(x: panel.frame.minX, y: panel.opensUpward ? panel.frame.minY : panel.frame.maxY),
                                        homeScreen: panel.screen!.visibleFrame,
                                        shown: shown!, animation: animation!, transition: transition, source: source, morphPopups: morphPopups,
-                                       onClose: onClose)
+                                       nativeContentView: nativeContentView, onClose: onClose)
         onClose = nil
         pins.ids.insert(id)
         panel.resizeEdges?.resizable = .all
@@ -842,6 +881,7 @@ final class WidgetPopup {
         }
         self.panel = nil
         shadowWindow = nil
+        nativeContentView = nil
         shown = nil
         widgetID = nil
         anchor = nil
@@ -860,7 +900,7 @@ final class WidgetPopup {
         guard let anchor = popup.anchor, let store = popup.store else {
             if let onClose = popup.onClose { popup.store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
             dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source,
-                    upward: popup.panel.opensUpward, animation: popup.animation)
+                    upward: popup.panel.opensUpward, animation: popup.animation, removing: popup.nativeContentView)
             return
         }
         popup.panel.resizeEdges?.resizable = [.leading, .trailing, popup.panel.opensUpward ? .top : .bottom]
@@ -874,6 +914,7 @@ final class WidgetPopup {
         transition = popup.transition
         source = popup.source
         morphPopups = popup.morphPopups
+        nativeContentView = popup.nativeContentView
         onClose = popup.onClose
         pinned = true
         store.setPopupVisibleWidget(id, anchor: anchor)
@@ -893,13 +934,22 @@ final class WidgetPopup {
         pins.resized.remove(id)
         if let onClose = popup.onClose { popup.store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
         dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source,
-                upward: popup.panel.opensUpward, animation: popup.animation)
+                upward: popup.panel.opensUpward, animation: popup.animation, removing: popup.nativeContentView)
     }
 
     /// Closes the open popup and every pinned one.
     func closeAll() {
         close()
         for id in pinnedPopups.keys { closePinned(id) }
+    }
+
+    /// Closes this widget's active or pinned popup without affecting another widget's popup.
+    func close(widgetID: String) {
+        if self.widgetID == widgetID {
+            close()
+        } else if pinnedPopups[widgetID] != nil {
+            closePinned(widgetID)
+        }
     }
 
     /// Stops fitting a popup to its content once it's resized by hand; its content then follows the window's size.
@@ -964,6 +1014,7 @@ final class WidgetPopup {
         Task { @MainActor in
             morph.panel.close()
             morph.from.close()
+            morph.nativeContentView?.removeFromSuperview()
         }
     }
 
@@ -1006,16 +1057,19 @@ final class WidgetPopup {
         parentPopup = nil
         store = nil
         finishMorph()
-        dismiss([panel, shadowWindow].compactMap { $0 }, transition: transition, source: source, upward: panel?.opensUpward == true, animation: animation)
+        dismiss([panel, shadowWindow].compactMap { $0 }, transition: transition, source: source, upward: panel?.opensUpward == true,
+                animation: animation, removing: nativeContentView)
         panel = nil
         shadowWindow = nil
+        nativeContentView = nil
         shown = nil
         widgetID = nil
         anchor = nil
         animation = nil
     }
 
-    private func dismiss(_ windows: [NSWindow], transition: PopupTransition, source: CGFloat, upward: Bool, animation: WidgetAnimation?) {
+    private func dismiss(_ windows: [NSWindow], transition: PopupTransition, source: CGFloat, upward: Bool,
+                         animation: WidgetAnimation?, removing contentView: NSView? = nil) {
         if let animation {
             if animation.duration > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 for window in windows { transition.animate(window.contentView!, source: source, upward: upward, closing: true, with: animation) }
@@ -1025,10 +1079,14 @@ final class WidgetPopup {
                 context.timingFunction = animation.timingFunction
                 for window in windows { window.animator().alphaValue = 0 }
             } completionHandler: {
-                Task { @MainActor in windows.forEach { $0.close() } }
+                Task { @MainActor in
+                    windows.forEach { $0.close() }
+                    contentView?.removeFromSuperview()
+                }
             }
         } else {
             windows.forEach { $0.close() }
+            contentView?.removeFromSuperview()
         }
     }
 

@@ -1,0 +1,10 @@
+{
+  "id": "org.stablebar.example.native-demo",
+  "name": "StableBar Native Plugin Demo",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json",
+  "nativeBundle": "build/StableBarNativeDemo.bundle",
+  "settings": {"tapCount": {"type": "number", "default": 0}},
+  "description": "Demonstrates the StableBar native widget plugin ABI."
+}

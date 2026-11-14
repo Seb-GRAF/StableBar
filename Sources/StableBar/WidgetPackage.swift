@@ -41,6 +41,7 @@ struct WidgetPackageManifest: Codable, Sendable {
     let version: String
     let kind: Kind?
     let entry: String
+    let nativeBundle: String?
     let settings: [String: WidgetPackageSetting]
     /// The names of `settings` in the order package.json lists them, which `WidgetPackageStore.manifest(at:)` reads.
     var settingNames: [String] = []
@@ -54,7 +55,7 @@ struct WidgetPackageManifest: Codable, Sendable {
     let hosts: [String]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, name, version, kind, entry, settings, description, author, repository, screenshot, minimumVersion, requires, permissions, hosts
+        case id, name, version, kind, entry, nativeBundle, settings, description, author, repository, screenshot, minimumVersion, requires, permissions, hosts
     }
 
     init(from decoder: Decoder) throws {
@@ -65,6 +66,10 @@ struct WidgetPackageManifest: Codable, Sendable {
         version = try values.decode(String.self, forKey: .version)
         kind = try values.decodeIfPresent(Kind.self, forKey: .kind)
         entry = try values.decode(String.self, forKey: .entry)
+        nativeBundle = try values.decodeIfPresent(String.self, forKey: .nativeBundle)
+        if nativeBundle != nil, kind != .widgets {
+            throw DecodingError.dataCorruptedError(forKey: .nativeBundle, in: values, debugDescription: "Native bundles need a widgets package.")
+        }
         settings = try values.decodeIfPresent([String: WidgetPackageSetting].self, forKey: .settings) ?? [:]
         description = try values.decodeIfPresent(String.self, forKey: .description)
         author = try values.decodeIfPresent(String.self, forKey: .author)
@@ -127,22 +132,64 @@ struct WidgetPackageSelection: Decodable {
     var key: String { version.map { "\(id)/\($0)" } ?? id }
 }
 
+struct NativePluginBundle: Equatable, Sendable {
+    let packageID: String
+    let version: String
+    let path: String
+    let url: URL
+    let bundleID: String
+    let apiMajor: Int
+    let signature: NativePluginSignature
+
+    var review: NativePluginReview {
+        NativePluginReview(packageID: packageID, version: version, path: path, bundleID: bundleID, apiMajor: apiMajor, signature: signature)
+    }
+}
+
+struct NativePluginReview: Equatable, Sendable {
+    let packageID: String
+    let version: String
+    let path: String
+    let bundleID: String
+    let apiMajor: Int
+    let signature: NativePluginSignature
+
+    var description: String {
+        "Package \(packageID) \(version) runs arbitrary native code inside StableBar with the app’s permissions under your macOS user account. Bundle \(path), signed as \(bundleID), Team ID \(signature.teamIdentifier), cdhash \(signature.cdhash), API \(apiMajor)."
+    }
+}
+
 struct WidgetPackageInspection: Sendable {
     let manifest: WidgetPackageManifest
     let directory: URL
     let commands: [String]
     let screenshot: URL?
     let widgets: [WidgetConfiguration]
+    let nativePluginBundle: NativePluginBundle?
 
     var requiresReview: Bool {
         !commands.isEmpty || !manifest.permissions.isEmpty || !manifest.hosts.isEmpty || !manifest.requires.isEmpty
-            || manifest.settings.values.contains { $0.type == "secret" }
+            || manifest.settings.values.contains { $0.type == "secret" } || nativePluginBundle != nil
+    }
+
+    var storeReviewStatus: String {
+        if nativePluginBundle != nil { return "The Store package includes native code" }
+        return commands.isEmpty ? "The Store checked that it runs no commands" : "A maintainer read this version"
+    }
+
+    var storeReviewHint: String? {
+        nativePluginBundle == nil ? nil : "Store review does not restrict what this code can do inside StableBar."
     }
 
     func additions(since previous: WidgetPackageInspection) -> [String] {
-        commands.filter { !previous.commands.contains($0) }.map { "Command: \($0)" }
+        var additions = commands.filter { !previous.commands.contains($0) }.map { "Command: \($0)" }
             + manifest.hosts.filter { !previous.manifest.hosts.contains($0) }.map { "Host: \($0)" }
             + manifest.permissions.filter { !previous.manifest.permissions.contains($0) }.map { "Permission: \($0.rawValue.capitalized)" }
+        if let review = nativePluginBundle?.review,
+           manifest.version != previous.manifest.version || review != previous.nativePluginBundle?.review {
+            additions.append(review.description)
+        }
+        return additions
     }
 }
 
@@ -169,6 +216,9 @@ enum WidgetPackageError: LocalizedError {
     case checksumMismatch(String)
     case archiveMismatch(String, String)
     case misplacedSecret(String)
+    case nativePluginNotActive(String)
+    case nativePluginReviewRequired(String)
+    case nativePluginChanged(String)
 
     var errorDescription: String? {
         switch self {
@@ -194,6 +244,9 @@ enum WidgetPackageError: LocalizedError {
         case let .checksumMismatch(id): "The archive of package \(id) does not match the store's checksum."
         case let .archiveMismatch(id, version): "The archive of package \(id) \(version) contains a different id or version."
         case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider that its own package defines."
+        case let .nativePluginNotActive(id): "Native widget package \(id) is not active on this bar."
+        case let .nativePluginReviewRequired(id): "Review the native code in package \(id) before adding it to the bar."
+        case let .nativePluginChanged(id): "The native code in package \(id) changed after review. Review it again before adding it to the bar."
         }
     }
 }
@@ -236,6 +289,7 @@ func packageFile(_ path: String, inside directory: URL) throws -> URL {
 
 struct WidgetPackageStore: Sendable {
     let directory: URL
+    var nativePluginTrustURL: URL { directory.deletingLastPathComponent().appending(path: "native-plugin-trust.json") }
     var appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
 
     func directory(id: String, version: String) throws -> URL {
@@ -375,6 +429,20 @@ struct WidgetPackageStore: Sendable {
         }
         try validateContents(at: source)
         let screenshot = try manifest.screenshot.map { try packageFile($0, inside: source) }
+        let nativePluginBundle = try manifest.nativeBundle.map { path -> NativePluginBundle in
+            guard !path.split(separator: "/").contains("..") else { throw WidgetPackageError.outsidePackage(path) }
+            let url = try packageFile(path, inside: source)
+            let metadata = try NativeWidgetPluginMetadata.read(at: url)
+            guard metadata.bundleID == manifest.id else { throw NativeWidgetPluginLoaderError.pluginIDMismatch }
+            guard metadata.version == manifest.version else { throw NativeWidgetPluginLoaderError.versionMismatch }
+            guard metadata.apiMajor == NativeWidgetPluginLoader.supportedAPIMajor else {
+                throw NativeWidgetPluginLoaderError.unsupportedAPI(metadata.apiMajor)
+            }
+            let signature = try NativePluginSignature.verify(at: url)
+            guard signature.identifier == metadata.bundleID else { throw NativeWidgetPluginLoaderError.signatureIdentifierMismatch }
+            return NativePluginBundle(packageID: manifest.id, version: manifest.version, path: path, url: url,
+                                      bundleID: metadata.bundleID, apiMajor: metadata.apiMajor, signature: signature)
+        }
         var loader = ConfigurationLoader()
         let layer = try loader.readPackage(at: source, manifest: manifest, settings: settings)
         let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? []
@@ -393,7 +461,8 @@ struct WidgetPackageStore: Sendable {
             widgets.append(contentsOf: configuration.widgets.filter { widget in !widgets.contains { $0.id == widget.id } })
             commands.formUnion(packageCommands(.object(document)))
         }
-        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot, widgets: widgets)
+        return WidgetPackageInspection(manifest: manifest, directory: source, commands: commands.sorted(), screenshot: screenshot,
+                                       widgets: widgets, nativePluginBundle: nativePluginBundle)
     }
 
     /// `record` is the source the package comes from, `.local` for a folder; `requestedName` names it in a refusal.

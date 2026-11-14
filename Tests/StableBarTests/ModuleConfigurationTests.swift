@@ -593,8 +593,16 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
     }
     let registry = DataSourceRegistry.builtIn
     #expect(typeNames("provider") == Set(registry.types.map(\.name)))
-    #expect(typeNames("widget") == Set(["aerospace", "workspaces", "activeApp", "appMenu", "appleMenu", "controlCenter", "stableBar", "menuBarItems", "clock", "text", "script", "provider", "spacer"]
+    #expect(typeNames("widget") == Set(["aerospace", "workspaces", "activeApp", "appMenu", "appleMenu", "controlCenter", "stableBar", "menuBarItems", "clock", "text", "script", "provider", "spacer", "nativePlugin"]
         + registry.types.filter(\.isNative).map(\.name)))
+    let widget = try schema["definitions"]!.decoded([String: ConfigurationValue].self)["widget"]!.decoded([String: ConfigurationValue].self)
+    let properties = try widget["properties"]!.decoded([String: ConfigurationValue].self)
+    let plugin = try properties["plugin"]!.decoded([String: ConfigurationValue].self)
+    #expect(plugin["pattern"] == .string("^(?!\\.{1,2}$)[A-Za-z0-9._-]+$"))
+    let condition = try widget["if"]!.decoded([String: ConfigurationValue].self)
+    #expect(condition["properties"] == .object(["type": .object(["const": .string("nativePlugin")])]))
+    #expect(condition["required"] == .array([.string("type")]))
+    #expect(try widget["then"]!.decoded([String: ConfigurationValue].self)["required"] == .array([.string("plugin")]))
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
         .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),

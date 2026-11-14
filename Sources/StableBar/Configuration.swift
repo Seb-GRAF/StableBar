@@ -437,6 +437,7 @@ enum WidgetContent: Equatable, Sendable {
     case clock(format: String)
     case text(String)
     case script(command: String, interval: Double?)
+    case nativePlugin(packageID: String)
 }
 
 struct WidgetConfiguration: Decodable, Identifiable, Sendable {
@@ -478,7 +479,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
+        case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground, plugin
     }
 
     var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
@@ -553,6 +554,10 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .interval, in: values, debugDescription: "A script interval must be greater than zero.")
             }
             content = .script(command: try values.decode(String.self, forKey: .command), interval: interval)
+        case "nativePlugin":
+            let packageID = try values.decode(String.self, forKey: .plugin)
+            try validatePackageComponent(packageID)
+            content = .nativePlugin(packageID: packageID)
         case let type:
             guard DataSourceRegistry.builtIn[type]?.isNative == true else {
                 throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")

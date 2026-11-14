@@ -10,6 +10,11 @@
     "version": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
     "kind": { "enum": ["theme", "widgets"] },
     "entry": { "type": "string" },
+    "nativeBundle": {
+      "type": "string",
+      "pattern": "\\.bundle$",
+      "description": "Relative path to a signed native widget bundle inside this widgets package."
+    },
     "description": { "type": "string" },
     "author": { "type": "string" },
     "repository": { "type": "string", "pattern": "^https://" },
@@ -26,6 +31,8 @@
       "additionalProperties": { "$ref": "#/definitions/setting" }
     }
   },
+  "if": { "required": ["nativeBundle"] },
+  "then": { "properties": { "kind": { "const": "widgets" } }, "required": ["kind"] },
   "definitions": {
     "setting": {
       "type": "object",

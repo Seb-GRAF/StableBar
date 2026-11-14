@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>StableBarNativeDemo</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.stablebar.example.native-demo</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleName</key>
+	<string>StableBar Native Demo</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSPrincipalClass</key>
+	<string>StableBarNativeWidgetPluginPrincipal</string>
+	<key>StableBarNativeWidgetPluginAPIMajor</key>
+	<integer>1</integer>
+</dict>
+</plist>

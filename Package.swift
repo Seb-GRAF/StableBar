@@ -7,7 +7,8 @@ let package = Package(
     products: [.executable(name: "StableBar", targets: ["StableBar"])],
     dependencies: [.package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.0")],
     targets: [
-        .executableTarget(name: "StableBar", dependencies: [.product(name: "Sparkle", package: "Sparkle")]),
-        .testTarget(name: "StableBarTests", dependencies: ["StableBar"])
+        .target(name: "NativeWidgetPluginABI", path: "Sources/NativeWidgetPluginABI", publicHeadersPath: "include"),
+        .executableTarget(name: "StableBar", dependencies: [.product(name: "Sparkle", package: "Sparkle"), "NativeWidgetPluginABI"]),
+        .testTarget(name: "StableBarTests", dependencies: ["StableBar", "NativeWidgetPluginABI"])
     ]
 )

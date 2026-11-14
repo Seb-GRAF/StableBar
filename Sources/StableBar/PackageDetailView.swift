@@ -59,11 +59,14 @@ struct PackageDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .confirmationDialog("Review additional access", isPresented: Binding(get: { !additions.isEmpty }, set: { if !$0 { additions = [] } })) {
+        .confirmationDialog("Review additional access", isPresented: Binding(get: { !additions.isEmpty }, set: {
+            if !$0 { additions = []; draft.reviewedNativePlugin = nil }
+        })) {
             Button("Add to bar") {
                 draft.working = true
                 onWorkingChanged?(true)
-                Task { await add(draft) }
+                let review = draft.reviewedNativePlugin
+                Task { await add(draft, reviewedNativePlugin: review) }
             }
         } message: {
             Text("This version adds:\n\(additions.joined(separator: "\n"))")
@@ -275,10 +278,21 @@ struct PackageDetailView: View {
             if let minimum = manifest.minimumVersion {
                 row("app.badge.checkmark", "Needs StableBar \(minimum) or later")
             }
+            if let native = draft.inspection.nativePluginBundle {
+                row("exclamationmark.triangle.fill", "Native code execution risk", hint: native.review.description) {
+                    Text("Native code").font(.caption).foregroundStyle(SettingsPalette.warning)
+                }
+            }
             switch library.origin(draft) {
             case .store?:
-                row("checkmark.shield", commands.isEmpty ? "The Store checked that it runs no commands" : "A maintainer read this version") {
-                    Label(commands.isEmpty ? "Checked" : "Reviewed", systemImage: "checkmark").foregroundStyle(SettingsPalette.success)
+                if draft.inspection.nativePluginBundle != nil {
+                    row("exclamationmark.triangle.fill", draft.inspection.storeReviewStatus, hint: draft.inspection.storeReviewHint) {
+                        Text("Review the signer").font(.caption).foregroundStyle(SettingsPalette.warning)
+                    }
+                } else {
+                    row("checkmark.shield", draft.inspection.storeReviewStatus) {
+                        Label(commands.isEmpty ? "Checked" : "Reviewed", systemImage: "checkmark").foregroundStyle(SettingsPalette.success)
+                    }
                 }
             case .listed?, .installed?:
                 row("shield", "Review status unknown", hint: "This installed copy’s review status isn’t recorded.")
@@ -384,8 +398,8 @@ struct PackageDetailView: View {
         }
     }
 
-    private func add(_ draft: PackageDraft) async {
-        await library.add(draft, onEnable: onEnable)
+    private func add(_ draft: PackageDraft, reviewedNativePlugin: NativePluginReview? = nil) async {
+        await library.add(draft, reviewedNativePlugin: reviewedNativePlugin, onEnable: onEnable)
         onWorkingChanged?(false)
         if draft.error == nil && draft.credentialsError == nil { onAdded?() }
     }

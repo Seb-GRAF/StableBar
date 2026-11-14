@@ -43,6 +43,7 @@ struct WidgetSample: View {
             case .stableBar: if let image = NSImage(named: "StatusBarIconTemplate") { Image(nsImage: image) }
             case .appMenu: Text("File   Edit   View")
             case .spacer: Label("Space", systemImage: "arrow.left.and.right")
+            case .nativePlugin: Label("Native plugin", systemImage: "puzzlepiece.extension")
             default:
                 let label = widget.label(output: output, activeApp: "Finder", date: Date(timeIntervalSince1970: 1_792_573_260))
                 let layout = widget.defaultLayout(label, output: output, appIcon: false)!

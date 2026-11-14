@@ -4,6 +4,46 @@ import XCTest
 @testable import StableBar
 
 final class PackagesViewTests: XCTestCase {
+    @MainActor func testNativePluginLookupUsesCurrentConfigurationBeforeSettingsLoadAndAfterDisable() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let source = fixture.directory.appending(path: "sources/clock")
+        try fixture.write(#"{"id":"clock","name":"Clock","version":"1","kind":"widgets","entry":"config.json"}"#,
+                          to: source.appending(path: "package.json"))
+        try fixture.write(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
+        _ = try fixture.packages.install(source)
+        try fixture.write(#"{"packages":[{"id":"clock","version":"1","enabled":true}],"widgets":[]}"#, to: fixture.url)
+        let store = try fixture.store()
+        defer { store.stop() }
+        let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: fixture.url))
+
+        do {
+            _ = try await library.activeNativePluginSettings(packageID: "clock", version: "1")
+            XCTFail("The enabled package should be found even before the Settings UI loads selections.")
+        } catch let error as WidgetPackageError {
+            XCTAssertTrue(error.localizedDescription.contains("changed after review"), error.localizedDescription)
+        }
+
+        let captured = try XCTUnwrap(try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self).first)
+        var gate: CheckedContinuation<Void, Never>?
+        let delayedInspectionResult = Task { @MainActor in
+            await withCheckedContinuation { gate = $0 }
+            return try library.revalidatedActiveSelection(packageID: "clock", matching: captured)
+        }
+        try await awaitCondition { gate != nil }
+        try fixture.write(#"{"packages":[{"id":"clock","version":"1","enabled":false}],"widgets":[]}"#, to: fixture.url)
+        store.reloadConfiguration()
+        gate?.resume()
+        let selectionAfterSuspension = try await delayedInspectionResult.value
+        XCTAssertNil(selectionAfterSuspension, "A disable during inspection must invalidate the captured selection.")
+        do {
+            _ = try await library.activeNativePluginSettings(packageID: "clock", version: "1")
+            XCTFail("A package disabled in the current configuration must not be returned.")
+        } catch let error as WidgetPackageError {
+            XCTAssertTrue(error.localizedDescription.contains("is not active"), error.localizedDescription)
+        }
+    }
+
     @MainActor func testStoreEssentialsBecomeBuiltInAndKeepEditingAndUndo() async throws {
         for record in [PackageInstallRecord(PackageSource.store), .local] {
             let fixture = try ThemeGalleryFixture()

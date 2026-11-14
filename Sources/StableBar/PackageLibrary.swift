@@ -22,6 +22,7 @@ final class PackageDraft {
     /// The source whose Store card or update opened this draft; nil for a folder or the Installed list.
     /// Adding the draft installs the package for that source, or claims the installed version for it.
     var sourceID: String?
+    var reviewedNativePlugin: NativePluginReview?
     @ObservationIgnored var inspectionTask: Task<Void, Never>?
 
     init(inspection: WidgetPackageInspection, settings: [String: ConfigurationValue]) {
@@ -37,6 +38,9 @@ final class PackageLibrary {
     private weak var store: BarStore?
     private let client: PackageStoreClient
     private let packages: WidgetPackageStore
+    let nativeWidgetEvents = NativeWidgetEvents()
+    var nativeWidgetWidths: [Int: [String: (packageID: String, width: CGFloat)]] = [:]
+    @ObservationIgnored var nativeWidgetSaveTails: [String: Task<Void, Never>] = [:]
     private let reviewing: Bool
     private let preferences: UserDefaults
     private var dismissedUpdates: Set<String>
@@ -191,6 +195,108 @@ final class PackageLibrary {
         }
     }
 
+    func activeNativePlugin(packageID: String) async throws -> NativePluginBundle? {
+        guard let active = try await activeNativePluginInspection(packageID: packageID) else { return nil }
+        return active.inspection.nativePluginBundle
+    }
+
+    func activeNativePluginSettings(packageID: String, version: String) async throws -> [String: ConfigurationValue] {
+        guard let active = try await activeNativePluginInspection(packageID: packageID) else {
+            throw WidgetPackageError.nativePluginNotActive(packageID)
+        }
+        guard active.selection.version == version, let plugin = active.inspection.nativePluginBundle else {
+            throw WidgetPackageError.nativePluginChanged(packageID)
+        }
+        let trustStore = NativePluginTrustStore(url: packages.nativePluginTrustURL)
+        guard try trustStore.isTrusted(pluginID: packageID, bundleID: plugin.bundleID, version: version, signature: plugin.signature) else {
+            throw NativeWidgetPluginLoaderError.notTrusted
+        }
+        _ = try JSONEncoder().encode(active.selection.settings)
+        return try active.inspection.manifest.values(active.selection.settings)
+    }
+
+    func saveNativePluginSettings(packageID: String, version: String, settings: [String: ConfigurationValue]) async throws {
+        guard let store, let active = try await activeNativePluginInspection(packageID: packageID) else {
+            throw WidgetPackageError.nativePluginNotActive(packageID)
+        }
+        let inspection = active.inspection
+        guard active.selection.version == version, let plugin = inspection.nativePluginBundle else {
+            throw WidgetPackageError.nativePluginChanged(packageID)
+        }
+        let trustStore = NativePluginTrustStore(url: packages.nativePluginTrustURL)
+        guard try trustStore.isTrusted(pluginID: packageID, bundleID: plugin.bundleID, version: version, signature: plugin.signature) else {
+            throw NativeWidgetPluginLoaderError.notTrusted
+        }
+        _ = try JSONEncoder().encode(settings)
+        let edits = store.customizationEdits
+        let persisted = try store.editedMainDocument(replaying: edits)["packages"]?
+            .decoded([WidgetPackageSelection].self).first(where: { $0.id == packageID })
+        let inherited = try store.composedDocument(replaying: edits)["packages"]?
+            .decoded([WidgetPackageSelection].self).first(where: { $0.id == packageID })
+        var supplied = inherited?.settings ?? persisted?.settings ?? [:]
+        supplied.merge(settings) { _, new in new }
+        _ = try inspection.manifest.values(supplied)
+        var persistedSettings = persisted?.settings ?? [:]
+        persistedSettings.merge(settings) { _, new in new }
+        try store.customizationHistory.changePackageSettings(ConfigurationEdit(action: .package, properties: [
+            "id": .string(packageID), "version": .string(version), "enabled": .bool(true), "settings": .object(persistedSettings)
+        ]))
+        configurationChanged()
+    }
+
+    private func activeNativePluginInspection(packageID: String) async throws -> (selection: WidgetPackageSelection, inspection: WidgetPackageInspection)? {
+        guard let store else { return nil }
+        let configured = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        guard let selection = configured.first(where: { $0.id == packageID }), selection.enabled else { return nil }
+        guard let version = selection.version else { throw WidgetPackageError.missingVersion(packageID) }
+        let directory = try packages.directory(id: packageID, version: version)
+        let inspection = try await client.inspect(directory, settings: selection.settings)
+        guard inspection.manifest.id == packageID, inspection.manifest.version == version else {
+            throw WidgetPackageError.manifestMismatch
+        }
+        guard let currentSelection = try revalidatedActiveSelection(packageID: packageID, matching: selection) else { return nil }
+        return (currentSelection, inspection)
+    }
+
+    func revalidatedActiveSelection(packageID: String, matching captured: WidgetPackageSelection) throws -> WidgetPackageSelection? {
+        guard let store else { return nil }
+        let currentSelections = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
+        guard let current = currentSelections.first(where: { $0.id == packageID }), current.enabled else { return nil }
+        guard current.version == captured.version, current.settings == captured.settings else {
+            throw WidgetPackageError.nativePluginChanged(packageID)
+        }
+        return current
+    }
+
+    private func isNativePluginTrusted(_ plugin: NativePluginBundle) throws -> Bool {
+        try NativePluginTrustStore(url: packages.nativePluginTrustURL).isTrusted(
+            pluginID: plugin.packageID, bundleID: plugin.bundleID, version: plugin.version, signature: plugin.signature
+        )
+    }
+
+    func requireNativeReviewOrTrust(_ plugin: NativePluginBundle?, reviewed: NativePluginReview?) throws {
+        if let reviewed {
+            guard let plugin, plugin.review == reviewed else {
+                throw WidgetPackageError.nativePluginChanged(reviewed.packageID)
+            }
+        } else if let plugin, try !isNativePluginTrusted(plugin) {
+            throw WidgetPackageError.nativePluginReviewRequired(plugin.packageID)
+        }
+    }
+
+    private func finalizeNativeReview(_ plugin: NativePluginBundle?, reviewed: NativePluginReview?) throws {
+        if let reviewed {
+            guard let plugin, plugin.review == reviewed else {
+                throw WidgetPackageError.nativePluginChanged(reviewed.packageID)
+            }
+            try NativePluginTrustStore(url: packages.nativePluginTrustURL).grant(
+                pluginID: plugin.packageID, bundleID: plugin.bundleID, version: plugin.version, signature: plugin.signature
+            )
+        } else if let plugin, try !isNativePluginTrusted(plugin) {
+            throw WidgetPackageError.nativePluginReviewRequired(plugin.packageID)
+        }
+    }
+
     /// The name of the other source that installed this entry's ID, which must be uninstalled before getting it.
     func installedElsewhere(_ entry: PackageIndex.Entry) -> String? {
         guard let record = records[entry.id], !record.isLocal, record.source != entry.sourceID else { return nil }
@@ -211,6 +317,7 @@ final class PackageLibrary {
             let draft = PackageDraft(inspection: inspection, settings: values)
             draft.sourceID = entry.sourceID
             updateAdditions = inspection.additions(since: previous)
+            draft.reviewedNativePlugin = inspection.nativePluginBundle?.review
             if updateAdditions.isEmpty {
                 try await applyUpdate(draft)
             } else {
@@ -222,12 +329,12 @@ final class PackageLibrary {
         }
     }
 
-    func confirmUpdate(_ draft: PackageDraft) async {
+    func confirmUpdate(_ draft: PackageDraft, reviewedNativePlugin: NativePluginReview? = nil) async {
         pendingUpdate = nil
         let id = draft.inspection.manifest.id
         updating.insert(id)
         defer { updating.remove(id) }
-        do { try await applyUpdate(draft); error = nil }
+        do { try await applyUpdate(draft, reviewedNativePlugin: reviewedNativePlugin); error = nil }
         catch { self.error = errorMessage(error) }
     }
 
@@ -242,15 +349,20 @@ final class PackageLibrary {
         return source
     }
 
-    private func applyUpdate(_ draft: PackageDraft) async throws {
+    private func applyUpdate(_ draft: PackageDraft, reviewedNativePlugin: NativePluginReview? = nil) async throws {
         guard let store else { return }
+        // Reinspect the reviewed source immediately before copying it. The installed copy is checked again below.
+        draft.inspection = try await client.inspect(draft.inspection.directory, settings: draft.settings)
         let manifest = draft.inspection.manifest
+        try requireNativeReviewOrTrust(draft.inspection.nativePluginBundle, reviewed: reviewedNativePlugin)
         if !isInstalled(draft) {
             draft.inspection = try await install(draft)
         } else if let source = try await source(of: draft) {
             // The update reviewed the source's files; the installed version is enabled only when it has them, as Add does.
             try await client.claim(manifest, from: source, reviewed: draft.inspection.directory)
         }
+        draft.inspection = try await client.inspect(packages.directory(id: manifest.id, version: manifest.version), settings: draft.settings)
+        try finalizeNativeReview(draft.inspection.nativePluginBundle, reviewed: reviewedNativePlugin)
         configurationChanged()
         if let selection = selections.first(where: { $0.id == manifest.id }) {
             try store.customizationHistory.flush()
@@ -632,24 +744,33 @@ final class PackageLibrary {
 
     func accessChanges(_ draft: PackageDraft) async throws -> [String] {
         let manifest = draft.inspection.manifest
+        draft.reviewedNativePlugin = nil
+        var additions: [String] = []
         if let previous = selections.first(where: { $0.id == manifest.id && $0.enabled && $0.version != manifest.version }),
            let version = previous.version {
             let inspection = try await client.inspect(packages.directory(id: manifest.id, version: version), settings: previous.settings)
-            return draft.inspection.additions(since: inspection)
+            additions = draft.inspection.additions(since: inspection)
         }
-        return []
+        if let plugin = draft.inspection.nativePluginBundle,
+           try !isNativePluginTrusted(plugin) {
+            draft.reviewedNativePlugin = plugin.review
+            if !additions.contains(plugin.review.description) { additions.append(plugin.review.description) }
+        }
+        return additions
     }
 
-    func add(_ draft: PackageDraft, onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)? = nil) async {
+    func add(_ draft: PackageDraft, reviewedNativePlugin: NativePluginReview? = nil,
+             onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)? = nil) async {
         guard let store else { return }
         draft.working = true
         defer { draft.working = false }
         do {
             draft.inspectionTask?.cancel()
             draft.inspection = try await client.inspect(draft.inspection.directory, settings: draft.settings)
+            let review = reviewedNativePlugin
+            try requireNativeReviewOrTrust(draft.inspection.nativePluginBundle, reviewed: review)
             if !isInstalled(draft) {
                 draft.inspection = try await install(draft)
-                draft.inspection = try await client.inspect(draft.inspection.directory, settings: draft.settings)
                 await loadInstalled()
             } else if let source = try await source(of: draft) {
                 // As Get does: an unclaimed installed version with the draft's files becomes the source's;
@@ -657,6 +778,9 @@ final class PackageLibrary {
                 try await client.claim(draft.inspection.manifest, from: source, reviewed: draft.inspection.directory)
                 await loadInstalled()
             }
+            let manifest = draft.inspection.manifest
+            draft.inspection = try await client.inspect(packages.directory(id: manifest.id, version: manifest.version), settings: draft.settings)
+            try finalizeNativeReview(draft.inspection.nativePluginBundle, reviewed: review)
             if let onEnable {
                 try onEnable(draft.inspection, draft.settings)
             } else if draft.inspection.manifest.kind == .theme {
@@ -665,6 +789,7 @@ final class PackageLibrary {
                 _ = try WidgetSetup(store: store).enable(draft.inspection, settings: draft.settings, position: .right)
             }
             draft.error = nil
+            draft.reviewedNativePlugin = nil
             draft.checking = false
             configurationChanged()
             await saveCredentials(draft)
