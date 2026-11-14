@@ -426,7 +426,7 @@ private func appcastItem(_ version: String, notes: String = "") throws -> SUAppc
     #expect(update.canProceed)
 }
 
-@Test @MainActor func updatePollsRemoveAnOfferOnlyWhenNoUpdateIsLeft() throws {
+@Test @MainActor func updateChecksRemoveAnOfferOnlyWhenNoUpdateIsLeft() throws {
     let (update, updater) = updateProbe()
     try offer("0.16.0-beta.1", to: update, updater)
     update.checkForUpdateInformation()
@@ -438,6 +438,10 @@ private func appcastItem(_ version: String, notes: String = "") throws -> SUAppc
     updater.busy = false
     let noUpdate = NSError(domain: SUSparkleErrorDomain, code: Int(SUError.noUpdateError.rawValue))
     update.updater(updater, didFinishUpdateCycleFor: .updateInformation, error: noUpdate)
+    #expect(update.version == nil)
+
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.updater(updater, didFinishUpdateCycleFor: .updatesInBackground, error: noUpdate)
     #expect(update.version == nil)
 }
 

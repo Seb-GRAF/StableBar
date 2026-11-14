@@ -107,7 +107,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         keepingOffer = false
         if startWaitingDownloadCheck() { return }
         downloadCheck = nil
-        if updateCheck == .updateInformation, version != nil, stage == .available, let error = error as NSError?,
+        if version != nil, stage == .available, let error = error as NSError?,
            error.domain == SUSparkleErrorDomain, error.code == Int(SUError.noUpdateError.rawValue) {
             version = nil
         }
