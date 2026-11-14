@@ -1,0 +1,20 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "leaf", "type": "appleMenu", "position": "left",
+        "layout": { "type": "symbol", "name": "leaf", "style": { "iconSize": 16, "states": { "open": { "symbolVariant": "fill" } } } } },
+      { "id": "leaf-fill", "type": "appleMenu", "position": "left",
+        "layout": { "type": "symbol", "name": "leaf", "style": { "iconSize": 16, "symbolVariant": "fill" } } },
+      { "id": "bell", "type": "text", "text": "bell", "icon": "bell", "position": "right" },
+      { "id": "bell-fill", "type": "text", "text": "fill", "icon": "bell", "position": "right", "style": { "symbolVariant": "fill" } },
+      { "id": "bell-slash", "type": "text", "text": "slash", "icon": "bell", "position": "right", "style": { "symbolVariant": "slash" } },
+      { "id": "leaf-circle", "type": "text", "text": "circle.fill", "icon": "leaf", "position": "right",
+        "style": { "symbolVariant": "circle.fill" } },
+      { "id": "no-variant", "type": "text", "text": "no fill form", "icon": "apple.logo", "position": "right",
+        "style": { "symbolVariant": "fill" } }
+    ]
+  },
+  "draw": "bar",
+  "width": 900
+}

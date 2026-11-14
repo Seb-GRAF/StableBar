@@ -336,6 +336,7 @@ struct PopupBlockView: View {
             .font(appearance.font)
             .foregroundStyle(current.text.foreground?.color ?? appearance.foreground)
             .tint(appearance.accent)
+            .styledSymbolVariant(current.text.symbolVariant)
             .background(box.background?.shapeStyle ?? AnyShapeStyle(Color.clear), in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
