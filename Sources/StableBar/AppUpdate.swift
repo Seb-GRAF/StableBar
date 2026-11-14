@@ -11,7 +11,8 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     private enum DownloadCheck {
-        case dismissing, checking
+        /// Download was clicked during another check, and checks once it ends.
+        case waiting, checking
     }
 
     nonisolated static let widgetID = "stablebar.update"
@@ -34,11 +35,18 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     @ObservationIgnored private var receivedLength: UInt64 = 0
     @ObservationIgnored private var checkTimer: Timer?
     @ObservationIgnored private var foundUpdate = false
+    /// Set while Sparkle ends a session whose dismissal leaves the offer on show: an offer answered at once, or a
+    /// check for updates that failed without saying whether an update is left.
+    @ObservationIgnored private var keepingOffer = false
     let starRequest: StarRequest
     /// The version the popup lists changes since, and where it reads their release notes.
     @ObservationIgnored private(set) var installedVersion = AppVersion().version ?? ""
     @ObservationIgnored private(set) var loadHistory: @Sendable (_ installed: String, _ offered: String) async throws -> [UpdateRelease] = {
         try await UpdateRelease.load(after: $0, through: $1)
+    }
+    @ObservationIgnored var presentError: (any Error) -> Void = { error in
+        NSApp.activate(ignoringOtherApps: true)
+        NSAlert(error: error).runModal()
     }
 
     init(starRequest: StarRequest = StarRequest(),
@@ -96,15 +104,29 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        if downloadCheck == .dismissing {
-            downloadCheck = .checking
-            updater.checkForUpdates()
-            return
-        }
+        keepingOffer = false
+        if startWaitingDownloadCheck() { return }
         downloadCheck = nil
+        if version != nil, stage == .available, let error = error as NSError?,
+           error.domain == SUSparkleErrorDomain, error.code == Int(SUError.noUpdateError.rawValue) {
+            version = nil
+        }
         guard updateCheck == .updateInformation, error == nil, foundUpdate, updater.automaticallyChecksForUpdates else { return }
         foundUpdate = false
         updater.checkForUpdatesInBackground()
+    }
+
+    /// Sparkle also holds `sessionInProgress` while it schedules its next check, and calls this, not the cycle's
+    /// end, once it's idle again.
+    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
+        _ = startWaitingDownloadCheck()
+    }
+
+    private func startWaitingDownloadCheck() -> Bool {
+        guard downloadCheck == .waiting else { return false }
+        downloadCheck = .checking
+        updater.checkForUpdates()
+        return true
     }
 
     /// The tile the bar adds at its right end while there's an update.
@@ -140,14 +162,18 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     var canProceed: Bool { downloadCheck == nil && (stage == .available || stage == .ready) }
 
-    /// Downloads the update, or installs it and relaunches StableBar once it's downloaded.
+    /// Checks again and downloads the newest update, or installs it and relaunches StableBar once it's downloaded.
     func proceed() {
-        let reply = reply
-        self.reply = nil
         if stage == .available {
-            downloadCheck = .dismissing
-            reply?(.dismiss)
+            if updater.sessionInProgress {
+                downloadCheck = .waiting
+            } else {
+                downloadCheck = .checking
+                updater.checkForUpdates()
+            }
         } else {
+            let reply = reply
+            self.reply = nil
             reply?(.install)
         }
     }
@@ -174,16 +200,25 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
 
     func showUpdateFound(with appcastItem: SUAppcastItem, state: SPUUserUpdateState, reply: @escaping (SPUUserUpdateChoice) -> Void) {
-        version = appcastItem.displayVersionString
-        changes = Self.changes(in: appcastItem.itemDescription ?? "")
-        stage = state.stage == .notDownloaded ? .available : .ready
-        if downloadCheck == .checking {
+        if version != appcastItem.displayVersionString {
+            version = appcastItem.displayVersionString
+            Task { await starRequest.refresh() }
+        }
+        let changes = Self.changes(in: appcastItem.itemDescription ?? "")
+        if self.changes != changes { self.changes = changes }
+        let stage = state.stage == .notDownloaded ? Stage.available : .ready
+        if self.stage != stage { self.stage = stage }
+        if downloadCheck != nil {
             downloadCheck = nil
-            stage = .downloading
+            self.stage = .downloading
             reply(.install)
+        } else if stage == .available {
+            // Download checks again anyway, and an unanswered offer holds Sparkle's session, which pauses every
+            // later check.
+            keepingOffer = true
+            reply(.dismiss)
         } else {
             self.reply = reply
-            Task { await starRequest.refresh() }
         }
     }
 
@@ -196,6 +231,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
+        if downloadCheck != .checking, stage == .available { keepingOffer = true }
         alert(error, then: acknowledgement)
     }
 
@@ -238,14 +274,13 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     func dismissUpdateInstallation() {
         reply = nil
-        if downloadCheck == .dismissing { return }
+        if keepingOffer { return }
         version = nil
         downloadCheck = nil
     }
 
     private func alert(_ error: any Error, then acknowledgement: () -> Void) {
-        NSApp.activate(ignoringOtherApps: true)
-        NSAlert(error: error).runModal()
+        presentError(error)
         acknowledgement()
     }
 }
