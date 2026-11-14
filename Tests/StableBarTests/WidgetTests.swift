@@ -270,6 +270,7 @@ func workspaceWindowFocusUsesItsIDAndReportsFailure(source: WorkspaceSource) asy
     let store = WorkspaceStore()
     store.reconnectDelay = 30
     store.executablePath = { executable.path }
+    store.reopenApp = { _ in false }
     return (store, log, directory)
 }
 
@@ -299,6 +300,21 @@ private func calls(_ log: URL) -> [Substring] {
         "query workspaces --fields raw-name,display-name,display,is-visible,is-current --format json",
         "window focus ow_a --format json", "workspace focus-name 1 --format json"
     ])
+}
+
+@Test @MainActor func omniwmWindowItCantFindReopensItsRunningAppInsteadOfFailing() async throws {
+    let fixture = try omniwmFixture("""
+    printf '%s\\n' '{"ok":false,"kind":"window","status":"error","code":"not_found"}'; exit 1
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    var reopened: [String] = []
+    fixture.store.reopenApp = { reopened.append($0); return true }
+    fixture.store.source = .omniwm
+    let app = WorkspaceApp(workspace: "4", name: "Dayflow", bundleID: "teleportlabs.com.Dayflow")
+    await fixture.store.focus(WorkspaceWindow(id: 20370, title: "Dayflow", app: app, reference: "ow_a"))?.value
+    #expect(reopened == ["teleportlabs.com.Dayflow"])
+    #expect(fixture.store.error == nil)
+    #expect(calls(fixture.log) == ["window focus ow_a --format json"])
 }
 
 @Test @MainActor func omniwmEventsRefreshWorkspacesAfterTheSubscriptionStarts() async throws {
