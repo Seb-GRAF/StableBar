@@ -2,9 +2,10 @@ import AppKit
 import SwiftUI
 
 /// Where a filled slider's fill ends and which stop a pointer picks. The fill is at least as wide as the bar is tall,
-/// so a glyph at its leading end always sits on it, and its trailing end, a cap as wide as the bar is tall, follows the
+/// so a glyph at its leading end sits on it, and its trailing end, a cap as wide as the bar is tall, follows the
 /// pointer, as a knob would. With an end stop, the steps end before a notch and the end stop, laid out as
-/// `EndStopSliderTrack` lays them out with the cap as its knob, and the end stop fills the whole bar.
+/// `EndStopSliderTrack` lays them out with the cap as its knob, and the end stop fills the whole bar. A bar narrower
+/// than `minimumWidth` narrows its cap instead, so its steps still move the fill.
 struct FilledSliderTrack: Equatable {
     typealias Stop = EndStopSliderTrack.Stop
 
@@ -15,8 +16,14 @@ struct FilledSliderTrack: Equatable {
     let step: Double
     var endStop = false
 
+    /// The narrowest bar whose cap is as wide as it is tall: with an end stop, room for the notch, the end stop and as
+    /// much travel for the steps as the cap's width.
+    static func minimumWidth(height: Double, endStop: Bool) -> Double {
+        endStop ? height * 3 + EndStopSliderTrack.notch + EndStopSliderTrack.stopPadding : height * 2
+    }
+
     /// As wide as the bar is tall, unless an end stop would then leave the steps less travel than the cap's width:
-    /// on a short bar the cap narrows, so every step still moves the fill.
+    /// below `minimumWidth`, as an explicit `width` can make it, the cap narrows, so every step still moves the fill.
     var cap: Double {
         let full = min(height, width)
         guard endStop else { return full }
@@ -133,7 +140,7 @@ struct FilledSlider: View {
                 .onChanged { drag in move(to: track.stop(at: drag.location.x, from: shown)) }
                 .onEnded { _ in finish() })
         }
-        .frame(minWidth: height * 2, maxWidth: .infinity)
+        .frame(minWidth: FilledSliderTrack.minimumWidth(height: height, endStop: endStop != nil), maxWidth: .infinity)
         .frame(height: height)
         .focusable(interactions: .activate)
         .modifier(FocusHighlight(appearance: appearance))

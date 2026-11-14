@@ -92,6 +92,17 @@ private let minutes = FilledSliderTrack(width: 288, height: 40, minimum: 15, max
     #expect(minutes.cap == 40, "A bar with room keeps a cap as wide as it is tall")
 }
 
+@Test func aFilledSliderAsksForRoomToKeepItsFillAsWideAsTheBarIsTall() {
+    #expect(FilledSliderTrack.minimumWidth(height: 40, endStop: false) == 80)
+    #expect(FilledSliderTrack.minimumWidth(height: 40, endStop: true) == 134)
+    let narrowest = FilledSliderTrack(width: 134, height: 40, minimum: 15, maximum: 240, step: 15, endStop: true)
+    #expect(narrowest.cap == 40)
+    #expect(narrowest.fillWidth(for: .value(15)) == 40, "The fill starts as wide as the bar is tall, so an icon sits on it")
+    #expect(narrowest.fillWidth(for: .value(240)) - narrowest.fillWidth(for: .value(15)) == 40, "The steps keep a cap's width of travel")
+    let amphetamine = FilledSliderTrack(width: 104, height: 28, minimum: 15, maximum: 240, step: 15, endStop: true)
+    #expect(amphetamine.cap == 28, "Amphetamine's 104-point hover slider at the default height keeps its full cap")
+}
+
 @Test func draggingAFilledSliderIntoItsNotchSnapsOntoTheEndStop() {
     #expect(minutes.stop(at: 214, from: .value(225)) == .value(240))
     #expect(minutes.stop(at: 239.9, from: .value(240)) == .value(240), "Most of the notch holds the maximum")
