@@ -45,13 +45,13 @@ Setup asks for these in its permissions step, and **Settings → General → Acc
 - **Automation**, to control System Events, which hides or shows the macOS menu bar.
 - **Calendars**, for Meetings and other calendar widgets.
 
-Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles. See [Install and set up](getting-started.md#install-and-set-up).
+Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles, as does a menu bar item shown as in the menu bar. See [Install and set up](getting-started.md#install-and-set-up).
 
 ## Where did my other apps' menu bar icons go?
 
 The **Menu bar items** widget, a grid symbol, lists them. Rest the pointer on it, or click it, to see every item in the macOS menu bar as a row of icons, then click one to open its menu. It needs Accessibility access. If your bar doesn't have it, add **Menu bar items** with **Add widget** in **Settings → Bar**.
 
-To keep an item you use often on the bar itself, right-click its icon in the row and choose **Show on Bar**; **Hide** takes an item out of the row. In **Settings → Bar**, the widget's **Content** tab arranges them all. See [Menu bar items](widgets.md#menu-bar-items).
+To keep an item you use often on the bar itself, right-click its icon in the row and choose **Show on Bar**; **Hide** takes an item out of the row. In **Settings → Bar**, the widget's **Content** tab arranges them all, and **As in the menu bar** there makes an item on the bar show what it shows in the menu bar, such as your next meeting, instead of its app's icon. See [Menu bar items](widgets.md#menu-bar-items).
 
 ## How do I show my workspaces on the bar?
 

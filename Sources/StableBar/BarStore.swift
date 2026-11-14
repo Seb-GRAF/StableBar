@@ -768,6 +768,7 @@ final class BarStore: NSObject {
         managesConnections = true
         readAppMenu()
         readMenuBarItems()
+        appMenu.mirror.references = next.liveMenuBarItems
         preparePresentations()
         effectiveDocument = loader.document
         let sources = packageSources.filter { !$0.isStore }
@@ -1217,6 +1218,7 @@ final class BarStore: NSObject {
         menuBarDelay.stop()
         menuBarAppObservation = nil
         appMenu.read(nil)
+        appMenu.mirror.references = []
         reloadTask?.cancel()
         configurationWatcher.stop()
         workspaceStore.stop()

@@ -103,7 +103,7 @@ enum UninstallStep: Hashable {
         case let .command(url): "Run sudo rm '\(url.path.replacingOccurrences(of: "'", with: "'\\''"))' in Terminal."
         case .keychain: "Run security delete-generic-password -s StableBar in Terminal until it finds no item."
         case let .configuration(url): "Move \(abbreviated(url)) to the Trash in Finder."
-        case .permissions: "Remove StableBar in System Settings → Privacy & Security → Accessibility, Calendars and Automation."
+        case .permissions: "Remove StableBar in System Settings → Privacy & Security → Accessibility, Screen Recording, Calendars and Automation."
         case let .files(urls): "Delete \((urls.map(abbreviated) + ["~/Library/Preferences/org.stablebar.app.plist"]).joined(separator: ", "))."
         case .app: "Drag StableBar from Applications to the Trash."
         }

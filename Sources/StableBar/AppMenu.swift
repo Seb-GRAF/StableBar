@@ -37,6 +37,7 @@ final class AppMenu: NSObject {
     @ObservationIgnored private var revealedPresses = 0
     @ObservationIgnored private var pressedItem: AXUIElement?
     private(set) var menuBarItems: [MenuBarItem] = []
+    @ObservationIgnored let mirror: MenuBarItemMirror
     @ObservationIgnored var hidesMenuBar = false {
         didSet { if hidesMenuBar != oldValue { setMenuBarHidden(hidesMenuBar) } }
     }
@@ -54,7 +55,9 @@ final class AppMenu: NSObject {
         self.readAttributes = readAttributes
         self.sleep = sleep
         isTrusted = checkAccess()
+        mirror = MenuBarItemMirror(readAttribute: readAttribute)
         super.init()
+        mirror.items = { [weak self] in self?.menuBarItems ?? [] }
     }
 
     func read(_ app: NSRunningApplication?) {
@@ -349,14 +352,23 @@ struct MenuBarItem {
     let bundleID: String?
     let appName: String
     let identifier: String?
+
+    /// Names the item among those in the menu bar.
+    var key: String { "\(bundleID ?? appName) \(identifier ?? entry.title)" }
+}
+
+/// How a menu bar item on the bar draws: its app's icon, or a copy of the item as macOS draws it.
+enum MenuBarItemDisplay: String, Decodable, Sendable {
+    case icon, live
 }
 
 struct MenuBarItemReference: Decodable, Equatable, Sendable {
     let app: String
     var item: String?
     var icon: String?
+    var display: MenuBarItemDisplay?
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case app, item, icon }
+    enum CodingKeys: String, CodingKey, CaseIterable { case app, item, icon, display }
 
     init(app: String, item: String?) {
         self.app = app
@@ -369,6 +381,7 @@ struct MenuBarItemReference: Decodable, Equatable, Sendable {
         app = try values.decode(String.self, forKey: .app)
         item = try values.decodeIfPresent(String.self, forKey: .item)
         icon = try values.decodeIfPresent(String.self, forKey: .icon)
+        display = try values.decodeIfPresent(MenuBarItemDisplay.self, forKey: .display)
     }
 
     func matches(_ item: MenuBarItem) -> Bool {
@@ -379,6 +392,7 @@ struct MenuBarItemReference: Decodable, Equatable, Sendable {
         var value: [String: ConfigurationValue] = ["app": .string(app)]
         if let item { value["item"] = .string(item) }
         if let icon { value["icon"] = .string(icon) }
+        if let display { value["display"] = .string(display.rawValue) }
         return .object(value)
     }
 }
@@ -500,7 +514,7 @@ struct FoundMenuBarItem {
     }
 }
 
-private let menuBarAgentID = "com.apple.MenuBarAgent"
+let menuBarAgentID = "com.apple.MenuBarAgent"
 
 /// The items in the macOS menu bar. Up to macOS 26, each app lists its own in its extras menu bar. From macOS 27 on,
 /// MenuBarAgent draws them all, and when its windows hold none, as on systems without it, the apps' lists are read instead.
@@ -745,7 +759,7 @@ func copyAttributes(_ names: [String], of element: AXUIElement) -> [CFTypeRef?] 
     }
 }
 
-private func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> CGRect {
+func frame(of element: AXUIElement, _ readAttribute: (String, AXUIElement) -> CFTypeRef?) -> CGRect {
     var position = CGPoint.zero
     var size = CGSize.zero
     if let value = readAttribute(kAXPositionAttribute, element) { AXValueGetValue(value as! AXValue, .cgPoint, &position) }

@@ -8,6 +8,7 @@ struct SourcePermissionList: View {
     var accessChanged: () -> Void = {}
     @State private var calendarAccess = EKEventStore.authorizationStatus(for: .event)
     @State private var accessibilityAccess = AXIsProcessTrusted()
+    @State private var screenRecordingAccess = CGPreflightScreenCaptureAccess()
     @State private var requestingCalendar = false
     @State private var error: String?
 
@@ -52,6 +53,12 @@ struct SourcePermissionList: View {
                             accessibilityAccess = AXIsProcessTrusted()
                         }
                     }
+                case "Privacy_ScreenCapture":
+                    if screenRecordingAccess {
+                        allowed
+                    } else {
+                        Button("Allow…") { requestScreenRecording() }
+                    }
                 default:
                     Button("Open Settings…") { openPrivacyPane(permission.privacyPane) }
                 }
@@ -60,6 +67,7 @@ struct SourcePermissionList: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             calendarAccess = EKEventStore.authorizationStatus(for: .event)
             accessibilityAccess = AXIsProcessTrusted()
+            screenRecordingAccess = CGPreflightScreenCaptureAccess()
             accessChanged()
         }
         if let error {
@@ -81,6 +89,12 @@ struct SourcePermissionList: View {
 func requestAccessibility() {
     openPrivacyPane("Privacy_Accessibility")
     accessibilityGuide.show()
+}
+
+/// macOS asks only the first time; after that the request does nothing, so the pane opens instead.
+@MainActor
+func requestScreenRecording() {
+    if !CGRequestScreenCaptureAccess() { openPrivacyPane("Privacy_ScreenCapture") }
 }
 
 @MainActor

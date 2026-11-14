@@ -903,6 +903,10 @@
         "icon": {
           "$ref": "#/definitions/string",
           "description": "An SF Symbol a shown item draws in place of its icon."
+        },
+        "display": {
+          "enum": ["icon", "live"],
+          "description": "How a shown item draws: \"icon\", its app's icon (the default), or \"live\", a copy of the item as macOS draws it in the menu bar, which needs macOS 27 or later and Screen Recording access. A live item that macOS isn't drawing shows its icon."
         }
       }
     },

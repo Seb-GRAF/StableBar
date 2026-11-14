@@ -1219,7 +1219,8 @@ private struct MenuBarItemsView: View {
                     .contextMenu { commands(position, count: shown.count, isSymbol: true) }
                 case let .item(reference):
                     ForEach(Array(store.appMenu.menuBarItems.filter(reference.matches).enumerated()), id: \.offset) { _, item in
-                        itemCell(item, icon: reference.icon, openAnchor: openAnchor)
+                        itemCell(item, icon: reference.icon, live: reference.display == .live ? store.appMenu.mirror.images[item.key] : nil,
+                                 openAnchor: openAnchor)
                             .contextMenu { commands(position, count: shown.count, isSymbol: false) }
                     }
                 }
@@ -1229,7 +1230,7 @@ private struct MenuBarItemsView: View {
         .onHover { if $0 { Task { await store.appMenu.readMenuBarItems(requestingAccess: false) } } }
     }
 
-    private func itemCell(_ item: MenuBarItem, icon: String?, openAnchor: ObjectIdentifier?) -> some View {
+    private func itemCell(_ item: MenuBarItem, icon: String?, live: MenuBarItemImage?, openAnchor: ObjectIdentifier?) -> some View {
         MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
@@ -1240,7 +1241,11 @@ private struct MenuBarItemsView: View {
                 store.popup.showTooltip(item.entry.title, widget: widget, defaults: defaults, store: store, anchor: anchor)
             }
         } label: {
-            if let icon {
+            if let live {
+                // As tall as an icon to the layout, so the item's own height, the menu bar's, doesn't stretch the bar.
+                Color.clear.frame(width: live.image.size.width, height: appearance.iconSize)
+                    .overlay { Image(nsImage: live.image).fixedSize() }
+            } else if let icon {
                 Image(systemName: icon).font(.system(size: appearance.iconSize))
             } else {
                 Image(nsImage: item.entry.icon!).resizable().scaledToFit().frame(height: appearance.iconSize)
