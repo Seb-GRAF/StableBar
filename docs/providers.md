@@ -66,7 +66,7 @@ Set `processes` on a `system` provider to list the apps and processes using the 
 "providers": { "system": { "type": "system", "interval": 2, "processes": 5 } }
 ```
 
-The Essentials app list uses `lists.apps`, an alias of `lists.memory` or `lists.cpu` selected by `sortBy` (`memory` by default). `cpuWarning` and `memoryWarning` default to `0.9`: exceeding either fraction applies the `warning` style to a System monitor widget with `details: true`. Memory pressure `warning` or thermal state `serious` also warns; critical pressure or heat applies `critical`. These built-in warnings apply only when the widget has no custom rules. Other widgets and existing Store packages keep their own rules. Values above `1` disable the corresponding usage threshold, while pressure and heat still warn.
+The Essentials app list uses `lists.apps`, an alias of `lists.memory` or `lists.cpu` selected by `sortBy` (`memory` by default). `cpuWarning` and `memoryWarning` default to `0.9`: exceeding either fraction applies the `warning` style to a System monitor widget with `details: true`. Memory pressure `warning` or thermal state `serious` also warns; critical pressure or heat applies `critical`. When the widget's `layout` shows both CPU and memory, each part warns on its own: CPU use styles only the blocks showing CPU, memory use and pressure only the blocks showing memory, and heat the whole widget. A row or column whose data is all CPU or all memory counts as that part, labels included. These built-in warnings apply only when the widget has no custom rules. Other widgets and existing Store packages keep their own rules. Values above `1` disable the corresponding usage threshold, while pressure and heat still warn.
 
 ## Calendar
 

@@ -465,14 +465,99 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     let provider = try ConfigurationValue.object(["type": .string("system"), "cpuWarning": .number(0.8), "memoryWarning": .number(1.01)])
         .decoded(ProviderConfiguration.self)
     var output = ScriptOutput(text: "", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.8, "memory": 0.99])
-    #expect(systemWarning(output, provider: provider) == nil)
+    #expect(SystemWarnings(output, provider: provider)?.any == nil)
     output.values!["cpu"] = 0.81
-    #expect(systemWarning(output, provider: provider) == "warning")
+    #expect(SystemWarnings(output, provider: provider)?.any == "warning")
     output.values!["cpu"] = 0.1
     output.fields!["thermal"] = "serious"
-    #expect(systemWarning(output, provider: provider) == "warning")
+    #expect(SystemWarnings(output, provider: provider)?.any == "warning")
     output.fields!["pressure"] = "critical"
-    #expect(systemWarning(output, provider: provider) == "critical")
+    #expect(SystemWarnings(output, provider: provider)?.any == "critical")
+}
+
+@Test func systemWarningsTellCPUFromMemoryAndHeatWarnsBoth() throws {
+    let provider = try ConfigurationValue.object(["type": .string("system")]).decoded(ProviderConfiguration.self)
+    var output = ScriptOutput(text: "", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.95, "memory": 0.5])
+    func warnings() throws -> [String?] {
+        let warnings = try #require(SystemWarnings(output, provider: provider))
+        return [warnings.heat, warnings.cpu, warnings.memory]
+    }
+    #expect(try warnings() == [nil, "warning", nil])
+    output.values = ["cpu": 0.1, "memory": 0.95]
+    #expect(try warnings() == [nil, nil, "warning"])
+    output.values!["memory"] = 0.5
+    output.fields!["pressure"] = "critical"
+    #expect(try warnings() == [nil, nil, "critical"])
+    output.fields!["thermal"] = "serious"
+    #expect(try warnings() == ["warning", "warning", "critical"])
+}
+
+@Test func aSystemMonitorShowingCPUAndMemoryWarnsOnlyThePartOverItsThreshold() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"providers":{"system":{"type":"system"}},"widgets":[
+      {"id":"cpu","type":"system","position":"right","details":true},
+      {"id":"both","type":"system","position":"right","details":true,"layout":{"type":"row","children":[
+        {"type":"column","children":[
+          {"type":"row","children":[{"type":"text","text":"CPU"},{"type":"row","children":[{"type":"field","field":"cpu"},{"type":"text","text":"%"}]}]},
+          {"type":"graph","source":"cpu","height":6}]},
+        {"type":"column","children":[
+          {"type":"row","children":[{"type":"text","text":"MEM"},{"type":"row","children":[{"type":"field","field":"memory"},{"type":"text","text":"%"}]}]},
+          {"type":"progress","source":"memory","height":4}]}]}}]}
+    """#.utf8))
+    var output = ScriptOutput(text: "95%", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.95, "memory": 0.5])
+    func states(_ index: Int) -> WidgetDataStates {
+        widgetDataStates(output, widget: configuration.widgets[index], providers: configuration.providers)
+    }
+    // A widget showing CPU alone still warns as a whole, memory included.
+    #expect(states(0) == WidgetDataStates(widget: "warning"))
+    output.values = ["cpu": 0.1, "memory": 0.95]
+    #expect(states(0) == WidgetDataStates(widget: "warning"))
+
+    output.values = ["cpu": 0.95, "memory": 0.5]
+    let both = states(1)
+    #expect(both.widget == nil)
+    let layout = try #require(configuration.widgets[1].layout)
+    guard case let .row(parts) = layout.content, case let .column(cpu) = parts[0].content else {
+        Issue.record("Expected a row of two columns"); return
+    }
+    let widget = StyleStates(data: both.widget, parts: both.parts)
+    #expect(widget.scoped(to: layout).data == nil)
+    #expect(widget.scoped(to: parts[0]).data == "warning")
+    // The CPU label has no data of its own and keeps its part's state.
+    #expect(widget.scoped(to: parts[0]).scoped(to: cpu[0]).data == "warning")
+    #expect(widget.scoped(to: parts[1]).data == nil)
+
+    output.fields!["thermal"] = "serious"
+    output.values!["cpu"] = 0.1
+    let hot = StyleStates(data: states(1).widget, parts: states(1).parts)
+    #expect(hot.data == "warning")
+    #expect(hot.scoped(to: parts[0]).data == "warning")
+    #expect(hot.scoped(to: parts[1]).data == "warning")
+}
+
+@Test func theCPUAndMemoryDisplayChoicesWarnEachMetricApart() throws {
+    for sources in [["cpu", "memory"], ["memory", "cpu"]] {
+        for display in [WidgetMetricDisplay.standard, .icon, .value, .meter, .graph] {
+            let configuration = try ConfigurationValue.object([
+                "providers": .object(["system": .object(["type": .string("system")])]),
+                "widgets": .array([.object(["id": .string("system"), "type": .string("system"), "position": .string("right"),
+                                            "details": .bool(true), "layout": try #require(display.layout(for: sources))])])
+            ]).decoded(Configuration.self)
+            let widget = configuration.widgets[0]
+            guard case let .row(blocks)? = widget.layout?.content else { Issue.record("Expected a row for \(display)"); continue }
+            for (cpu, memory) in [(0.95, 0.5), (0.5, 0.95)] {
+                let output = ScriptOutput(text: "\(Int(cpu * 100))%", icon: "cpu", fields: ["pressure": "normal", "thermal": "nominal"],
+                                          values: ["cpu": cpu, "memory": memory])
+                let states = widgetDataStates(output, widget: widget, providers: configuration.providers)
+                #expect(states.widget == nil, "\(display) \(sources)")
+                // Each metric has as many blocks as the other, the first metric's first, its symbol included.
+                let expected = sources.map { ($0 == "cpu" ? cpu : memory) > 0.9 ? "warning" : nil }
+                let scoped = blocks.map { StyleStates(data: states.widget, parts: states.parts).scoped(to: $0).data }
+                #expect(scoped == Array(repeating: expected[0], count: blocks.count / 2) + Array(repeating: expected[1], count: blocks.count / 2),
+                        "\(display) \(sources) cpu \(cpu)")
+            }
+        }
+    }
 }
 
 @Test @MainActor func nativeSystemWarningsLeaveExistingWidgetsAndPackageRulesInControl() async throws {
@@ -497,7 +582,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     output.values = ["cpu": 0.95, "memory": 0.5]
     output.fields = ["pressure": "normal", "thermal": "nominal"]
     func state(_ index: Int, _ output: ScriptOutput) -> String? {
-        widgetDataState(output, widget: configuration.widgets[index], providers: configuration.providers)
+        widgetDataStates(output, widget: configuration.widgets[index], providers: configuration.providers).widget
     }
     #expect(state(0, output) == nil)
     #expect(state(1, output) == "warning")

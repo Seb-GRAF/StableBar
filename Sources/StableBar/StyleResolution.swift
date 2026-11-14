@@ -4,6 +4,8 @@ import Foundation
 /// of `names`, later ones winning: data, workspace, mode, mode alias, hover, then open.
 struct StyleStates: Equatable, Sendable {
     var data: String?
+    /// The data states of a widget's parts, which replace `data` for the layout blocks of one part.
+    var parts = PartStates()
     var workspace: WorkspaceState?
     var mode = ModePresentation()
     var hover = false
@@ -20,6 +22,53 @@ struct StyleStates: Equatable, Sendable {
         [data, workspace?.rawValue, mode.active ? "mode" : nil, mode.alias.map { "mode.\($0)" },
          hover ? "hover" : nil, open ? "open" : nil].compactMap { $0 }
     }
+
+    /// These states for `block` and the blocks inside it: when all of its data belongs to one metric
+    /// of `parts`, `data` is that metric's state.
+    func scoped(to block: PopupBlock) -> StyleStates {
+        guard !parts.keys.isEmpty else { return self }
+        let metrics = parts.metrics(in: block)
+        guard metrics.count == 1, let metric = metrics.first else { return self }
+        var scoped = self
+        scoped.data = parts.states[metric]
+        scoped.parts = PartStates()
+        return scoped
+    }
+}
+
+/// The data states of a widget's parts that each show one metric, such as a System monitor's CPU and
+/// memory side by side.
+struct PartStates: Equatable, Sendable {
+    /// Each metric's state; a metric missing here has none.
+    var states: [String: String] = [:]
+    /// The metric each field, value, series or list belongs to. `value` is the provider's value,
+    /// which a graph without a source draws.
+    var keys: [String: String] = [:]
+    /// The metric a symbol without a source stands for, by name.
+    var symbols: [String: String] = [:]
+
+    /// A System monitor's text, icon and value show its CPU use. Its display choices draw memory as
+    /// a `memorychip` symbol, which reads no data.
+    static func system(cpu: String?, memory: String?) -> PartStates {
+        PartStates(states: ["cpu": cpu, "memory": memory].compactMapValues { $0 },
+                   keys: Dictionary(uniqueKeysWithValues: ["cpu", "cpuUser", "cpuSystem", "text", "icon", "value"].map { ($0, "cpu") }
+                       + ["memory", "memoryUsed", "memoryCompressed", "memoryTotal", "swap", "pressure"].map { ($0, "memory") }),
+                   symbols: ["cpu": "cpu", "memorychip": "memory"])
+    }
+
+    /// The metrics whose data `block` and the blocks inside it show.
+    func metrics(in block: PopupBlock) -> Set<String> {
+        switch block.content {
+        case let .row(children), let .column(children): children.reduce(into: []) { $0.formUnion(metrics(in: $1)) }
+        case let .field(key), let .progress(key, _), let .battery(key), let .list(key, _, _): metric(of: key)
+        case let .graph(_, source, _): metric(of: source ?? "value")
+        case let .symbol(name, source): source.map(metric(of:)) ?? symbols[name].map { [$0] } ?? []
+        case let .equalizer(source, _): source.map(metric(of:)) ?? []
+        default: []
+        }
+    }
+
+    private func metric(of key: String) -> Set<String> { keys[key].map { [$0] } ?? [] }
 }
 
 struct ModePresentation: Equatable, Sendable {
@@ -115,13 +164,16 @@ struct ResolvedWidgetStyle: Equatable, Sendable {
     let base: WidgetStyle
     /// The data state, from the widget's output or its rules.
     let state: String?
+    /// The data states of the parts of its layout that show one metric each.
+    let parts: PartStates
     let mode: ModePresentation
     /// `base` resolved at rest, hovered, open, then open and hovered.
     private let variants: [WidgetStyle]
 
-    init(base: WidgetStyle, state: String? = nil, mode: ModePresentation = ModePresentation()) {
+    init(base: WidgetStyle, state: String? = nil, parts: PartStates = PartStates(), mode: ModePresentation = ModePresentation()) {
         self.base = base
         self.state = state
+        self.parts = parts
         self.mode = mode
         variants = [(false, false), (true, false), (false, true), (true, true)].map {
             base.resolved(for: StyleStates(data: state, mode: mode, hover: $0.0, open: $0.1))
@@ -131,7 +183,7 @@ struct ResolvedWidgetStyle: Equatable, Sendable {
     func style(hovered: Bool, open: Bool = false) -> WidgetStyle { variants[(hovered ? 1 : 0) + (open ? 2 : 0)] }
 
     /// The states the widget's layout and overlay blocks share; each block adds its own hover.
-    func blockStates(open: Bool) -> StyleStates { StyleStates(data: state, mode: mode, open: open) }
+    func blockStates(open: Bool) -> StyleStates { StyleStates(data: state, parts: parts, mode: mode, open: open) }
 }
 
 /// A workspace cell's styles in one workspace state, resolved when the configuration loads.
@@ -220,12 +272,24 @@ func dataState(_ output: ScriptOutput?, rules: [StyleRule] = []) -> String? {
     return rules.first { $0.when.matches(output) }?.state
 }
 
-func widgetDataState(_ output: ScriptOutput?, widget: WidgetConfiguration, providers: [String: ProviderConfiguration]) -> String? {
+/// A widget's data state, and the states of the parts of its layout that show one metric each.
+struct WidgetDataStates: Equatable {
+    var widget: String?
+    var parts = PartStates()
+}
+
+func widgetDataStates(_ output: ScriptOutput?, widget: WidgetConfiguration, providers: [String: ProviderConfiguration]) -> WidgetDataStates {
     if widget.details, widget.rules.isEmpty, let name = widget.providerName,
        let provider = providers[name], provider.type == "system", let output {
-        return systemWarning(output, provider: provider)
+        guard let warnings = SystemWarnings(output, provider: provider) else { return WidgetDataStates() }
+        let parts = PartStates.system(cpu: warnings.cpu, memory: warnings.memory)
+        // A layout showing CPU and memory warns on each apart; only heat warns the rest of it.
+        if let layout = widget.layout, parts.metrics(in: layout).count > 1 {
+            return WidgetDataStates(widget: warnings.heat, parts: parts)
+        }
+        return WidgetDataStates(widget: warnings.any)
     }
-    return dataState(output, rules: widget.rules)
+    return WidgetDataStates(widget: dataState(output, rules: widget.rules))
 }
 
 /// Sets a widget's data state while its output matches `when`.

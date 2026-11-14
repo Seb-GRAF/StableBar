@@ -254,6 +254,8 @@ struct PopupBlockView: View {
         self.block = block
         self.inheritedStyle = inheritedStyle
         self.fields = fields
+        var context = context
+        context.states = context.states.scoped(to: block)
         self.context = context
         _pointerInside = State(initialValue: pointerInside)
     }

@@ -4,12 +4,29 @@ import EventKit
 import Foundation
 import IOKit
 
-func systemWarning(_ output: ScriptOutput, provider: ProviderConfiguration) -> String? {
-    guard let values = output.values else { return nil }
-    if output.fields?["pressure"] == "critical" || output.fields?["thermal"] == "critical" { return "critical" }
-    if output.fields?["pressure"] == "warning" || output.fields?["thermal"] == "serious"
-        || values["cpu"]! > provider.cpuWarning || values["memory"]! > provider.memoryWarning { return "warning" }
-    return nil
+/// The data states a System monitor with details warns with when it has no rules of its own. Heat
+/// concerns the whole Mac; CPU use, and memory use or pressure, concern only the CPU or the memory.
+struct SystemWarnings: Equatable {
+    let heat: String?
+    let cpu: String?
+    let memory: String?
+
+    init?(_ output: ScriptOutput, provider: ProviderConfiguration) {
+        guard let values = output.values else { return nil }
+        let thermal = output.fields?["thermal"], pressure = output.fields?["pressure"]
+        heat = thermal == "critical" ? "critical" : thermal == "serious" ? "warning" : nil
+        cpu = severest(heat, values["cpu", default: 0] > provider.cpuWarning ? "warning" : nil)
+        memory = severest(heat, pressure == "critical" ? "critical" : pressure == "warning" ? "warning" : nil,
+                          values["memory", default: 0] > provider.memoryWarning ? "warning" : nil)
+    }
+
+    /// The state of a widget that warns as a whole.
+    var any: String? { severest(cpu, memory) }
+}
+
+/// The most severe of `states`: `critical`, then `warning`.
+private func severest(_ states: String?...) -> String? {
+    states.contains("critical") ? "critical" : states.contains("warning") ? "warning" : nil
 }
 
 struct NetworkCounters: Sendable {
