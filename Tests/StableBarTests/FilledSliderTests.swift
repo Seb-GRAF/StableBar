@@ -83,6 +83,15 @@ private let minutes = FilledSliderTrack(width: 288, height: 40, minimum: 15, max
     #expect(minutes.fillWidth(for: .end) == 288)
 }
 
+@Test func aShortFilledSliderNarrowsItsCapSoItsStepsStillMove() {
+    let short = FilledSliderTrack(width: 80, height: 40, minimum: 15, maximum: 240, step: 15, endStop: true)
+    #expect(short.cap == 22, "An 8-point notch and a stop 6 points wider than the cap leave 80 − 14 = 66 points for three caps")
+    #expect(short.fillWidth(for: .value(15)) == 22)
+    #expect(short.fillWidth(for: .value(240)) == 44)
+    #expect(short.fillWidth(for: .end) == 80)
+    #expect(minutes.cap == 40, "A bar with room keeps a cap as wide as it is tall")
+}
+
 @Test func draggingAFilledSliderIntoItsNotchSnapsOntoTheEndStop() {
     #expect(minutes.stop(at: 214, from: .value(225)) == .value(240))
     #expect(minutes.stop(at: 239.9, from: .value(240)) == .value(240), "Most of the notch holds the maximum")

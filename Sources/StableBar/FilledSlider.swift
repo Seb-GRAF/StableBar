@@ -15,7 +15,13 @@ struct FilledSliderTrack: Equatable {
     let step: Double
     var endStop = false
 
-    private var cap: Double { min(height, width) }
+    /// As wide as the bar is tall, unless an end stop would then leave the steps less travel than the cap's width:
+    /// on a short bar the cap narrows, so every step still moves the fill.
+    var cap: Double {
+        let full = min(height, width)
+        guard endStop else { return full }
+        return max(min(full, (width - EndStopSliderTrack.notch - EndStopSliderTrack.stopPadding) / 3), 0)
+    }
     private var stops: EndStopSliderTrack {
         EndStopSliderTrack(width: width, knobWidth: cap, minimum: minimum, maximum: maximum, step: step)
     }
@@ -116,7 +122,7 @@ struct FilledSlider: View {
                     Image(systemName: icon)
                         .font(.system(size: appearance.iconSize))
                         .foregroundStyle(appearance.accentText)
-                        .frame(width: min(height, geometry.size.width), height: height)
+                        .frame(width: track.cap, height: height)
                         .accessibilityHidden(true)
                 }
             }
