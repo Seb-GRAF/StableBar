@@ -41,6 +41,8 @@ struct EndStopSliderTrack: Equatable {
     static let notch = 8.0
     /// Dots closer than this would run together, so the slider leaves them out.
     static let minimumTickSpacing = 3.0
+    /// How much wider than the knob the end stop's stretch of track is.
+    static let stopPadding = 6.0
 
     let width: Double
     let knobWidth: Double
@@ -49,7 +51,7 @@ struct EndStopSliderTrack: Equatable {
     let step: Double
 
     /// The end stop's stretch of track, a little wider than the knob that rests on it.
-    var stopWidth: Double { knobWidth + 6 }
+    var stopWidth: Double { knobWidth + Self.stopPadding }
     /// Where the stepped track ends and the notch begins.
     var rangeEnd: Double { max(width - Self.notch - stopWidth, knobWidth) }
     var notchCenter: Double { rangeEnd + Self.notch / 2 }

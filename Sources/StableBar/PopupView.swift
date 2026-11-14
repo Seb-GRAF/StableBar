@@ -274,7 +274,7 @@ struct PopupBlockView: View {
 
     private var handlesInteraction: Bool {
         switch block.content {
-        case .button, .slider, .toggle, .segmented, .chooser, .search, .input: true
+        case .button, .slider, .filledSlider, .toggle, .segmented, .chooser, .search, .input: true
         default: false
         }
     }
@@ -486,6 +486,14 @@ struct PopupBlockView: View {
                 PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
                     context.runAction(command, ["VALUE": String($0)])
                 }
+            }
+        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command):
+            let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
+            let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
+            FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
+                         height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
+                         appearance: appearance) {
+                context.runAction(command, ["VALUE": String($0)])
             }
         case let .toggle(title, source, command):
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
