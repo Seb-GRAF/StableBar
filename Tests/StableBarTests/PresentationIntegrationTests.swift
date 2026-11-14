@@ -624,6 +624,37 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     #expect(presentations == 0)
 }
 
+/// Under a bar at the top of the display, a popup's window reaches into the menu bar by its shadow's margin. macOS moves
+/// a window out of the menu bar when it's shown, which would leave the popup far below the bar.
+@Test(.enabled("needs a display that keeps its top for the menu bar") { await MainActor.run { menuBarScreen != nil } })
+@MainActor func popupWindowsKeepTheirPlaceInTheMenuBar() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"popupDefaults":{"shadowColor":"#00000080","shadowRadius":24},
+     "widgets":[{"id":"awake","type":"text","text":"Awake","position":"right"}]}
+    """#.utf8))
+    var presented: PopupPanel?
+    let popup = WidgetPopup(present: { panel, _ in presented = panel })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    popup.showWidgets(defaults: configuration.popupDefaults.inheriting(configuration.defaults), store: store,
+                      anchor: try #require(bar.anchors("awake").first)) { Text("Awake") }
+    defer { popup.close() }
+    let screen = try #require(menuBarScreen)
+    for window in [try #require(presented), try #require(popup.shadowWindow)] as [NSWindow] {
+        let frame = window.frame.offsetBy(dx: 0, dy: screen.visibleFrame.maxY + 20 - window.frame.maxY)
+        #expect(window.constrainFrameRect(frame, to: screen) == frame, "\(window.title)")
+    }
+}
+
+/// A display whose visible frame stops below its top, for the menu bar: AppKit moves windows only out of that strip.
+@MainActor private var menuBarScreen: NSScreen? { NSScreen.screens.first { $0.visibleFrame.maxY < $0.frame.maxY } }
+
 @Test(arguments: [false, true], [false, true]) @MainActor
 func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, animated: Bool) async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data("""
