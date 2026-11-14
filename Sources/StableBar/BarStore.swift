@@ -322,6 +322,12 @@ final class BarStore: NSObject {
         try configurationEditing.editedMainDocument(data: data, replaying: replaying)
     }
 
+    func composedDocument(replaying edits: [ConfigurationEdit]) throws -> [String: ConfigurationValue] {
+        var loader = configurationLoader
+        let root = try editedMainDocument(replaying: edits)
+        return try loader.compose(configurationURL, data: configurationData(root), context: context)
+    }
+
     func requireSavedWidget(_ id: String) throws {
         try configurationEditing.requireSavedWidget(id, widgets: configuration?.widgets ?? [])
     }
