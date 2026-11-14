@@ -789,6 +789,8 @@ struct WidgetView: View {
     private func content(_ resolution: ResolvedWidgetStyle, open: Bool, padding: EdgeInsets) -> some View {
         switch widget.content {
         case let .nativePlugin(packageID):
+            let measured = store.packageLibrary.nativeWidgetWidths[monitor]?[widget.id]
+            let matchingWidth = measured?.packageID == packageID ? measured?.width : nil
             let appearance = WidgetAppearance(resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id,
                                                                open: open), defaults: WidgetStyle())
             if NativeWidgetView.shouldLoadPlugin(measuring: measuring, offline: offline,
@@ -802,7 +804,7 @@ struct WidgetView: View {
                 Image(systemName: "puzzlepiece.extension")
                     .font(.system(size: appearance.iconSize))
                     .foregroundStyle(appearance.foreground)
-                    .frame(width: measuring ? store.packageLibrary.nativeWidgetWidths[monitor]?[widget.id] : nil)
+                    .frame(width: measuring ? matchingWidth : nil)
                     .padding(padding)
                     .accessibilityLabel(accessibilityName)
             }

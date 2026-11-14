@@ -97,8 +97,10 @@ struct NativeWidgetView: NSViewRepresentable {
         let view = NativeWidgetContainerView()
         view.widthDidChange = { [weak store] width in
             Task { @MainActor in
-                guard let store, store.packageLibrary.nativeWidgetWidths[displayID]?[widget.id] != width else { return }
-                store.packageLibrary.nativeWidgetWidths[displayID, default: [:]][widget.id] = width
+                guard let store else { return }
+                let measured = store.packageLibrary.nativeWidgetWidths[displayID]?[widget.id]
+                guard measured?.packageID != packageID || measured?.width != width else { return }
+                store.packageLibrary.nativeWidgetWidths[displayID, default: [:]][widget.id] = (packageID, width)
             }
         }
         context.coordinator.attach(to: view)
@@ -134,6 +136,7 @@ struct NativeWidgetView: NSViewRepresentable {
         private var operationTasks: [UUID: Task<Void, Never>] = [:]
         private var settingsRefresh: Task<Void, Never>?
         private var observedSelections: ConfigurationValue?
+        private var latestSelections: ConfigurationValue?
         private var currentSettings: [String: ConfigurationValue]?
         private var stopped = false
 
@@ -157,11 +160,16 @@ struct NativeWidgetView: NSViewRepresentable {
             self.defaults = defaults
             self.popupDefaults = popupDefaults
             self.anchor = anchor
-            guard observedSelections != packageSelections else { return }
-            observedSelections = packageSelections
+            latestSelections = packageSelections
+            refreshSettingsIfNeeded()
+        }
+
+        private func refreshSettingsIfNeeded() {
+            guard observedSelections != latestSelections, let plugin, let bundle else { return }
+            observedSelections = latestSelections
             settingsRefresh?.cancel()
             settingsRefresh = Task { @MainActor [weak self] in
-                guard let self, let plugin, let bundle else { return }
+                guard let self else { return }
                 do {
                     let settings = try await runtime.validateActivePlugin(packageID: packageID, expected: bundle)
                     try Task.checkCancellation()
@@ -208,6 +216,7 @@ struct NativeWidgetView: NSViewRepresentable {
                     }
                     pluginView = view
                     container.install(view)
+                    refreshSettingsIfNeeded()
                 } catch is CancellationError {
                     return
                 } catch {
