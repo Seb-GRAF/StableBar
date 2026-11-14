@@ -152,6 +152,13 @@ func userProcessIsRunning(named name: String) -> Bool {
     }
 }
 
+/// Opens a running app as clicking its Dock icon does, which shows a window it closed but kept. An app that
+/// isn't running stays closed.
+@MainActor func reopenRunningApp(bundleID: String) async -> Bool {
+    guard let url = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.bundleURL else { return false }
+    return (try? await NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())) != nil
+}
+
 func workspaceSnapshot(workspaces: Data, windows: Data, focusedWindow: Int? = nil) throws -> [Workspace] {
     var windows = try JSONDecoder().decode([WorkspaceWindow].self, from: windows)
     for index in windows.indices { windows[index].isFocused = windows[index].id == focusedWindow }
@@ -184,6 +191,8 @@ final class WorkspaceStore {
     var desktopShortcuts = DesktopShortcuts()
     /// Tests supply desktops without reading this Mac's Spaces.
     var readSpaces: () throws -> [Workspace] = { try currentSpaces() }
+    /// Tests reopen apps without opening them on this Mac.
+    var reopenApp: (String) async -> Bool = { await reopenRunningApp(bundleID: $0) }
     private(set) var desktopShortcutStatus = DesktopShortcuts.Status(desktops: [], disabled: [], unsupported: [])
     private var reportedError: String?
     private var failedDesktopShortcut: Int?
@@ -509,6 +518,11 @@ final class WorkspaceStore {
                 }
             } catch {
                 guard let window else { self.error = error.localizedDescription; return }
+                // OmniWM keeps listing a window its app closed without releasing it, but can't focus it. Opening the
+                // app again, as its Dock icon does, shows that window.
+                if source == .omniwm, (error as? OmniWMFailure)?.code == "not_found", await reopenApp(window.app.bundleID) {
+                    return
+                }
                 let failure = error.localizedDescription
                 do { try await refresh() } catch { self.error = failure; return }
                 if lists(window) { self.error = failure }
