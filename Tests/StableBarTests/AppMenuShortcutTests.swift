@@ -174,3 +174,26 @@ private func item(_ title: String, key: String? = nil, virtualKey: Int? = nil, g
     #expect(tree.rowsReadTogether == [50, 51, 52])
     #expect(tree.rowsReadOneAttributeAtATime.isEmpty)
 }
+
+// Apple menu Accessibility values from macOS 26.5 and 27.2 (modifiers: 1 Shift, 2 Option, 4 Control, 8 no Command).
+@Test @MainActor func appMenuMarksOptionAlternates() throws {
+    let tree = MenuTree(items: [
+        item("About This Mac"), item("System Information", modifiers: 10),
+        item("System Settings…"), item("App Store…"),
+        item("Force Quit…", key: "\u{238B}", virtualKey: 53, glyph: 27, modifiers: 2),
+        item("Force Quit Finder", key: "\u{238B}", virtualKey: 53, glyph: 27, modifiers: 3),
+        item("Sleep"), item("Restart…"), item("Restart", modifiers: 10),
+        item("Lock Screen", key: "Q", modifiers: 4),
+        item("Log Out…", key: "Q", modifiers: 1), item("Log Out", key: "Q", modifiers: 3),
+    ])
+    #expect(try entries(tree).filter(\.isAlternate).map(\.title) == ["System Information", "Restart", "Log Out"])
+}
+
+@Test @MainActor func appMenuKeepsNeighboursThatAddShift() throws {
+    let tree = MenuTree(items: [
+        item("Undo", key: "Z"), item("Redo", key: "Z", modifiers: 1),
+        item("Find Next", key: "G"), item("Find Previous", key: "G", modifiers: 1),
+        item("Duplicate", key: "S", modifiers: 1), item("Save As…", key: "S", modifiers: 3),
+    ])
+    #expect(try entries(tree).filter(\.isAlternate).map(\.title) == ["Save As…"])
+}

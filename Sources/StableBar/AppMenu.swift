@@ -18,6 +18,8 @@ struct AppMenuEntry {
     var shortcut: MenuShortcut? = nil
     var icon: NSImage? = nil
     var menuBarDisplay: CGDirectDisplayID? = nil
+    /// Shown in place of the entry before it while Option is held, as macOS menus show an alternate.
+    var isAlternate = false
 }
 
 @MainActor @Observable
@@ -149,6 +151,7 @@ final class AppMenu: NSObject {
     private func entries(of element: AXUIElement) -> [AppMenuEntry] {
         guard let menu = submenu(of: element) else { return [] }
         var entries: [AppMenuEntry] = []
+        var previous: MenuItemKey?
         for child in children(of: menu) {
             AXUIElementSetMessagingTimeout(child, 0.1)
             let values = readAttributes(Self.entryAttributes, child)
@@ -156,12 +159,16 @@ final class AppMenu: NSObject {
                   let title = values[0] as? String ?? text(in: child, readAttribute),
                   !title.isEmpty || entries.last?.title.isEmpty == false else { continue }
             let submenu = submenu(among: values[3] as? [AXUIElement] ?? [])
+            let key = MenuItemKey(character: values[4] as? String, virtualKey: values[5] as? Int, glyph: values[6] as? Int,
+                                  modifiers: values[7] as? Int ?? 0)
             entries.append(AppMenuEntry(title: title, element: child, isEnabled: values[1] as? Bool == true,
                                         isChecked: values[2] as? String != nil,
                                         hasSubmenu: submenu != nil,
-                                        shortcut: MenuShortcut(character: values[4] as? String, virtualKey: values[5] as? Int,
-                                                               glyph: values[6] as? Int, modifiers: values[7] as? Int ?? 0),
-                                        icon: icon(identifier: values[8] as? String, submenu: submenu)))
+                                        shortcut: MenuShortcut(character: key.character, virtualKey: key.virtualKey, glyph: key.glyph,
+                                                               modifiers: key.modifiers),
+                                        icon: icon(identifier: values[8] as? String, submenu: submenu),
+                                        isAlternate: previous.map(key.isAlternate) ?? false))
+            previous = key
         }
         if entries.last?.title.isEmpty == true { entries.removeLast() }
         return entries
@@ -795,5 +802,23 @@ private func menuBarDisplay(of frame: CGRect) -> CGDirectDisplayID? {
     return displays.prefix(Int(count)).first {
         let bounds = CGDisplayBounds($0)
         return bounds.minX <= frame.midX && frame.midX < bounds.maxX && abs(frame.midY - bounds.minY) < frame.height * 2
+    }
+}
+
+/// A menu item's shortcut as Accessibility reports it. Accessibility doesn't expose `isAlternate`, and every item reports
+/// itself as its `AXMenuItemPrimaryUIElement`, so an alternate can only be told by its shortcut.
+private struct MenuItemKey {
+    let character: String?
+    let virtualKey: Int?
+    let glyph: Int?
+    let modifiers: Int
+
+    /// Whether this item has the same key as `item` and adds exactly Option, as AppKit's alternates do. Command doesn't
+    /// count: an alternate without a key reports none. Shift doesn't make an alternate: Redo follows Undo.
+    func isAlternate(of item: MenuItemKey) -> Bool {
+        let option = MenuShortcut.Modifier.option
+        let held = MenuShortcut.Modifier.shift | option | MenuShortcut.Modifier.control
+        return character == item.character && virtualKey == item.virtualKey && glyph == item.glyph
+            && item.modifiers & option == 0 && modifiers & held == item.modifiers & held | option
     }
 }
