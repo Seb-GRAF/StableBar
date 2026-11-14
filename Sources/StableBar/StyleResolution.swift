@@ -44,12 +44,16 @@ struct PartStates: Equatable, Sendable {
     /// The metric each field, value, series or list belongs to. `value` is the provider's value,
     /// which a graph without a source draws.
     var keys: [String: String] = [:]
+    /// The metric a symbol without a source stands for, by name.
+    var symbols: [String: String] = [:]
 
-    /// A System monitor's text, icon and value show its CPU use.
+    /// A System monitor's text, icon and value show its CPU use. Its display choices draw memory as
+    /// a `memorychip` symbol, which reads no data.
     static func system(cpu: String?, memory: String?) -> PartStates {
         PartStates(states: ["cpu": cpu, "memory": memory].compactMapValues { $0 },
                    keys: Dictionary(uniqueKeysWithValues: ["cpu", "cpuUser", "cpuSystem", "text", "icon", "value"].map { ($0, "cpu") }
-                       + ["memory", "memoryUsed", "memoryCompressed", "memoryTotal", "swap", "pressure"].map { ($0, "memory") }))
+                       + ["memory", "memoryUsed", "memoryCompressed", "memoryTotal", "swap", "pressure"].map { ($0, "memory") }),
+                   symbols: ["cpu": "cpu", "memorychip": "memory"])
     }
 
     /// The metrics whose data `block` and the blocks inside it show.
@@ -58,7 +62,8 @@ struct PartStates: Equatable, Sendable {
         case let .row(children), let .column(children): children.reduce(into: []) { $0.formUnion(metrics(in: $1)) }
         case let .field(key), let .progress(key, _), let .battery(key), let .list(key, _, _): metric(of: key)
         case let .graph(_, source, _): metric(of: source ?? "value")
-        case let .symbol(_, source), let .equalizer(source, _): source.map(metric(of:)) ?? []
+        case let .symbol(name, source): source.map(metric(of:)) ?? symbols[name].map { [$0] } ?? []
+        case let .equalizer(source, _): source.map(metric(of:)) ?? []
         default: []
         }
     }

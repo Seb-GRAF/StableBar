@@ -536,18 +536,27 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
 }
 
 @Test func theCPUAndMemoryDisplayChoicesWarnEachMetricApart() throws {
-    let provider = try ConfigurationValue.object(["type": .string("system")]).decoded(ProviderConfiguration.self)
-    let output = ScriptOutput(text: "95%", icon: "cpu", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.95, "memory": 0.5])
-    let warnings = try #require(SystemWarnings(output, provider: provider))
-    let states = StyleStates(parts: .system(cpu: warnings.cpu, memory: warnings.memory))
-    for display in [WidgetMetricDisplay.standard, .value, .meter, .graph] {
-        let layout = try #require(display.layout(for: ["cpu", "memory"])).decoded(PopupBlock.self)
-        guard case let .row(blocks) = layout.content else { Issue.record("Expected a row for \(display)"); continue }
-        #expect(states.parts.metrics(in: layout) == ["cpu", "memory"], "\(display)")
-        // The CPU's blocks come first, then as many for memory, whose symbol has no data and warns with the widget.
-        let scoped = blocks.map { states.scoped(to: $0).data }
-        #expect(scoped.prefix(blocks.count / 2).allSatisfy { $0 == "warning" }, "\(display)")
-        #expect(scoped.suffix(blocks.count / 2).allSatisfy { $0 == nil }, "\(display)")
+    for sources in [["cpu", "memory"], ["memory", "cpu"]] {
+        for display in [WidgetMetricDisplay.standard, .icon, .value, .meter, .graph] {
+            let configuration = try ConfigurationValue.object([
+                "providers": .object(["system": .object(["type": .string("system")])]),
+                "widgets": .array([.object(["id": .string("system"), "type": .string("system"), "position": .string("right"),
+                                            "details": .bool(true), "layout": try #require(display.layout(for: sources))])])
+            ]).decoded(Configuration.self)
+            let widget = configuration.widgets[0]
+            guard case let .row(blocks)? = widget.layout?.content else { Issue.record("Expected a row for \(display)"); continue }
+            for (cpu, memory) in [(0.95, 0.5), (0.5, 0.95)] {
+                let output = ScriptOutput(text: "\(Int(cpu * 100))%", icon: "cpu", fields: ["pressure": "normal", "thermal": "nominal"],
+                                          values: ["cpu": cpu, "memory": memory])
+                let states = widgetDataStates(output, widget: widget, providers: configuration.providers)
+                #expect(states.widget == nil, "\(display) \(sources)")
+                // Each metric has as many blocks as the other, the first metric's first, its symbol included.
+                let expected = sources.map { ($0 == "cpu" ? cpu : memory) > 0.9 ? "warning" : nil }
+                let scoped = blocks.map { StyleStates(data: states.widget, parts: states.parts).scoped(to: $0).data }
+                #expect(scoped == Array(repeating: expected[0], count: blocks.count / 2) + Array(repeating: expected[1], count: blocks.count / 2),
+                        "\(display) \(sources) cpu \(cpu)")
+            }
+        }
     }
 }
 
