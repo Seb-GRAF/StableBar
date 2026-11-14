@@ -105,11 +105,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
         keepingOffer = false
-        if downloadCheck == .waiting {
-            downloadCheck = .checking
-            updater.checkForUpdates()
-            return
-        }
+        if startWaitingDownloadCheck() { return }
         downloadCheck = nil
         if updateCheck == .updateInformation, version != nil, stage == .available, let error = error as NSError?,
            error.domain == SUSparkleErrorDomain, error.code == Int(SUError.noUpdateError.rawValue) {
@@ -118,6 +114,19 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
         guard updateCheck == .updateInformation, error == nil, foundUpdate, updater.automaticallyChecksForUpdates else { return }
         foundUpdate = false
         updater.checkForUpdatesInBackground()
+    }
+
+    /// Sparkle also holds `sessionInProgress` while it schedules its next check, and calls this, not the cycle's
+    /// end, once it's idle again.
+    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) {
+        _ = startWaitingDownloadCheck()
+    }
+
+    private func startWaitingDownloadCheck() -> Bool {
+        guard downloadCheck == .waiting else { return false }
+        downloadCheck = .checking
+        updater.checkForUpdates()
+        return true
     }
 
     /// The tile the bar adds at its right end while there's an update.
@@ -222,7 +231,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
     }
 
     func showUpdaterError(_ error: any Error, acknowledgement: @escaping () -> Void) {
-        if downloadCheck == nil, stage == .available { keepingOffer = true }
+        if downloadCheck != .checking, stage == .available { keepingOffer = true }
         alert(error, then: acknowledgement)
     }
 

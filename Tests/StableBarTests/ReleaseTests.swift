@@ -519,6 +519,35 @@ private func appcastItem(_ version: String, notes: String = "") throws -> SUAppc
     #expect(update.version == nil)
 }
 
+@Test @MainActor func downloadDuringSparklesSchedulingStartsOnceSparkleIsIdle() throws {
+    let (update, updater) = updateProbe()
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.updater(updater, willScheduleUpdateCheckAfterDelay: 3600)
+    #expect(updater.userChecks == 0)
+    updater.busy = true
+    update.proceed()
+    #expect(updater.userChecks == 0)
+    updater.busy = false
+    update.updater(updater, willScheduleUpdateCheckAfterDelay: 3600)
+    #expect(updater.userChecks == 1)
+    #expect(update.action == "Checking…")
+}
+
+@Test @MainActor func downloadQueuedBehindAFailedCheckForUpdatesStillChecks() throws {
+    let (update, updater) = updateProbe()
+    update.presentError = { _ in }
+    try offer("0.16.0-beta.1", to: update, updater)
+    update.checkForUpdates()
+    update.proceed()
+    update.showUpdaterError(URLError(.notConnectedToInternet)) {}
+    update.dismissUpdateInstallation()
+    updater.busy = false
+    update.updater(updater, didFinishUpdateCycleFor: .updates, error: URLError(.notConnectedToInternet))
+    #expect(updater.userChecks == 2)
+    #expect(update.version == "0.16.0-beta.1")
+    #expect(update.action == "Checking…")
+}
+
 @Test @MainActor func failedDownloadChecksDoNotDownloadALaterOffer() throws {
     let (update, updater) = updateProbe()
     update.presentError = { _ in }
