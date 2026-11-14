@@ -1126,6 +1126,14 @@
           "$ref": "#/definitions/sliderEndStop",
           "description": "For sliders: one more stop past max, set apart by a notch, such as ∞. Its value must be outside min…max."
         },
+        "filled": {
+          "$ref": "#/definitions/boolean",
+          "description": "For sliders: draw a bar in the block's style instead of macOS's slider. The background is the track, the accent fills it, and clicking or dragging anywhere sets the value. Can't have an endStop."
+        },
+        "icon": {
+          "$ref": "#/definitions/string",
+          "description": "For filled sliders: an SF Symbol drawn on the fill at its leading end, in accentText."
+        },
         "options": {
           "type": "array",
           "items": {
