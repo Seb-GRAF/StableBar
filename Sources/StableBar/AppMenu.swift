@@ -804,9 +804,8 @@ private func menuBarDisplay(of frame: CGRect) -> CGDirectDisplayID? {
     }
 }
 
-/// A menu item's shortcut as Accessibility reports it, to tell an item's alternate from the next item. Accessibility marks
-/// no alternates, but AppKit only shows one in place of the item right before it, with the same key and more modifiers:
-/// Restart and Log Out without their dialogs add Option, Force Quit Terminal adds Shift.
+/// A menu item's shortcut as Accessibility reports it, to tell an Option alternate from the item before it. Accessibility
+/// doesn't expose `isAlternate`, and every item reports itself as its primary item.
 struct MenuItemKey: Equatable {
     var character: String?
     var virtualKey: Int?
@@ -816,8 +815,7 @@ struct MenuItemKey: Equatable {
 
     func isAlternate(of item: MenuItemKey) -> Bool {
         guard character == item.character, virtualKey == item.virtualKey, glyph == item.glyph else { return false }
-        // Without a key the no-Command bit says nothing, so only Shift, Option and Control count.
-        let held = modifiers & 7, itemHeld = item.modifiers & 7
-        return held != itemHeld && held & itemHeld == itemHeld
+        // Only Option counts: Redo after Undo and Find Previous after Find Next add Shift and are ordinary items.
+        return modifiers & 7 == item.modifiers & 7 | 2 && item.modifiers & 2 == 0
     }
 }

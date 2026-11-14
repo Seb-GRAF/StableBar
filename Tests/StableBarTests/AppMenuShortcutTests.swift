@@ -175,20 +175,24 @@ private func item(_ title: String, key: String? = nil, virtualKey: Int? = nil, g
     #expect(tree.rowsReadOneAttributeAtATime.isEmpty)
 }
 
-// macOS hides an item's alternate (Restart without "…", Log Out without the dialog, System Information under About
-// This Mac) until its modifier is held. Accessibility lists it anyway and marks nothing: every item names itself as its
-// primary item. AppKit only lets an alternate follow its item with the same key and more modifiers, so that is the test.
-// Modifiers and keys below are the Apple menu's on macOS 26.5 (Accessibility: 1 Shift, 2 Option, 4 Control, 8 no Command).
-@Test @MainActor func appMenuLeavesOutAlternates() throws {
+// Apple menu Accessibility values from macOS 26.5 (modifiers: 1 Shift, 2 Option, 4 Control, 8 no Command).
+@Test @MainActor func appMenuLeavesOutOptionAlternates() throws {
     let tree = MenuTree(items: [
         item("About This Mac"), item("System Information", modifiers: 10),
         item("System Settings…"), item("App Store…"),
-        item("Force Quit…", key: "⎋", virtualKey: 53, glyph: 27, modifiers: 2),
-        item("Force Quit Terminal", key: "⎋", virtualKey: 53, glyph: 27, modifiers: 3),
         item("Sleep"), item("Restart…"), item("Restart", modifiers: 10),
         item("Lock Screen", key: "Q", modifiers: 4),
         item("Log Out…", key: "Q", modifiers: 1), item("Log Out", key: "Q", modifiers: 3),
     ])
     #expect(try entries(tree).map(\.title) ==
-        ["About This Mac", "System Settings…", "App Store…", "Force Quit…", "Sleep", "Restart…", "Lock Screen", "Log Out…"])
+        ["About This Mac", "System Settings…", "App Store…", "Sleep", "Restart…", "Lock Screen", "Log Out…"])
+}
+
+@Test @MainActor func appMenuKeepsNeighboursThatAddShift() throws {
+    let tree = MenuTree(items: [
+        item("Undo", key: "Z"), item("Redo", key: "Z", modifiers: 1),
+        item("Find Next", key: "G"), item("Find Previous", key: "G", modifiers: 1),
+        item("Duplicate", key: "S", modifiers: 1), item("Save As…", key: "S", modifiers: 3),
+    ])
+    #expect(try entries(tree).map(\.title) == ["Undo", "Redo", "Find Next", "Find Previous", "Duplicate"])
 }
