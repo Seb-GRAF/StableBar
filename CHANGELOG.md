@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.15.0](https://github.com/Seb-GRAF/StableBar/compare/v0.14.0...v0.15.0) (2026-11-14)
+
+### Features
+
+* keep widgets in place while editing the bar and scroll a crowded side by @Seb-GRAF ([b78a1a0](https://github.com/Seb-GRAF/StableBar/commit/b78a1a0b1bb650c6f211609cd7e74ddb5500e437))
+* let themes set how far the focused window's box reaches past the icon by @M4n0x ([5d7985a](https://github.com/Seb-GRAF/StableBar/commit/5d7985a1646e6edefbcc088877cdba146a5dcbea)), closes [#627](https://github.com/Seb-GRAF/StableBar/issues/627)
+* retire the bar's per-display scale and keep files that set it by @Seb-GRAF ([fa80a7c](https://github.com/Seb-GRAF/StableBar/commit/fa80a7cfb43b4887dd28cd1f4d390087d60e85d9))
+* show each app's Dock badge on its workspace icon ([#607](https://github.com/Seb-GRAF/StableBar/issues/607)) by @Jonathanm10 ([8bb0a8f](https://github.com/Seb-GRAF/StableBar/commit/8bb0a8f5e2893b9385b3ead10b4e9d9ba733b986))
+* show the icons macOS 27 shows beside app menu items by @Seb-GRAF ([947ebd2](https://github.com/Seb-GRAF/StableBar/commit/947ebd22dec0c8d5005e8f1c6614a04605f27750))
+* show which window has focus in workspace widgets ([#611](https://github.com/Seb-GRAF/StableBar/issues/611)) by @Jonathanm10 ([ba83a11](https://github.com/Seb-GRAF/StableBar/commit/ba83a11588d01bb478d58bf3adf9fbd02a2c2da2)), closes [#610](https://github.com/Seb-GRAF/StableBar/issues/610)
+* show who made each change in the update popup and release notes ([#614](https://github.com/Seb-GRAF/StableBar/issues/614)) by @Seb-GRAF ([8c5c56e](https://github.com/Seb-GRAF/StableBar/commit/8c5c56e7b91509b7683cbe9e0d1c2503262606cf))
+
+### Bug Fixes
+
+* don't crash when macOS lists the same app twice ([#617](https://github.com/Seb-GRAF/StableBar/issues/617)) by @Jonathanm10 ([2789ecd](https://github.com/Seb-GRAF/StableBar/commit/2789ecd11e347f327d0de0039ac11c6bdbc857c0))
+* draw a crowded edit bar without a notch from its left edge by @Seb-GRAF ([137014f](https://github.com/Seb-GRAF/StableBar/commit/137014f2bb60c48d82724c18881fe83ec9969f5f))
+* keep blocking work off Swift's shared thread pool by @M4n0x ([6bd7a6b](https://github.com/Seb-GRAF/StableBar/commit/6bd7a6b6a40929234d928ec582f1f5247e9a394f)), closes [#618](https://github.com/Seb-GRAF/StableBar/issues/618)
+* keep the edit bar's drop targets, scrolling and notch edges within each side by @Seb-GRAF ([38bd53d](https://github.com/Seb-GRAF/StableBar/commit/38bd53d778cd4fae2139a1284b940d49a280c70c))
+* keep the focused window's box steady on hover without magnification by @M4n0x ([944eacd](https://github.com/Seb-GRAF/StableBar/commit/944eacd3ad9d2319a7551a549530801ad4c63a01)), closes [#626](https://github.com/Seb-GRAF/StableBar/issues/626)
+* keep the native menu bar hidden when opening Control Center ([#622](https://github.com/Seb-GRAF/StableBar/issues/622)) by @Seb-GRAF ([846f353](https://github.com/Seb-GRAF/StableBar/commit/846f35349c751abeedd1d8819b9d376b4af53625))
+* keep the Settings search field clear of the tabs ([#609](https://github.com/Seb-GRAF/StableBar/issues/609)) by @Jonathanm10 ([25ebac4](https://github.com/Seb-GRAF/StableBar/commit/25ebac4490942b49f98f1351d5213ef3c034e049))
+* keep windows clear after repeated moves to the same position ([#623](https://github.com/Seb-GRAF/StableBar/issues/623)) by @Seb-GRAF ([9f5c967](https://github.com/Seb-GRAF/StableBar/commit/9f5c96702da66c0757c95430631e01ee8829ad2b))
+* name Time Machine and show its symbol in the Menu bar items row ([#615](https://github.com/Seb-GRAF/StableBar/issues/615)) by @Seb-GRAF ([9d60793](https://github.com/Seb-GRAF/StableBar/commit/9d607932db48a2329088d79678d0b72980f7738a))
+* stop the edit bar crashing when a widget comes back on another display by @M4n0x ([78b073d](https://github.com/Seb-GRAF/StableBar/commit/78b073da1a786903a861972586453776c3aca4f7)), closes [#636](https://github.com/Seb-GRAF/StableBar/issues/636)
+
 ## [0.14.0](https://github.com/Seb-GRAF/StableBar/compare/v0.13.0...v0.14.0) (2026-11-12)
 
 ### Features
