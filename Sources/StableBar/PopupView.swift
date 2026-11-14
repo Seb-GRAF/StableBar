@@ -1396,7 +1396,7 @@ struct AppMenuList: View {
     let appearance: WidgetAppearance
     let openSubmenu: (AXUIElement?, NSView) -> Void
     let press: (AppMenuEntry) -> Void
-    @State private var submenu: Int?
+    @State private var submenu: AXUIElement?
     @State private var keyWidth: CGFloat = 0
     @State private var optionHeld = false
     @State private var flagsMonitor: Any?
@@ -1412,10 +1412,10 @@ struct AppMenuList: View {
                     Rectangle().fill(appearance.foreground.opacity(0.12)).frame(height: 1).padding(.vertical, 4)
                 } else {
                     AppMenuRow(entry: entry, checks: checks, iconColumn: iconColumns.contains(index), iconWidth: iconWidth, keyWidth: keyWidth,
-                               appearance: appearance, open: submenu == index) { row in
-                        guard submenu != index else { return }
+                               appearance: appearance, open: submenu == entry.element) { row in
+                        guard submenu != entry.element else { return }
                         let opens = entry.hasSubmenu && entry.isEnabled
-                        submenu = opens ? index : nil
+                        submenu = opens ? entry.element : nil
                         openSubmenu(opens ? entry.element : nil, row)
                     } press: {
                         press(entry)
@@ -1526,6 +1526,7 @@ private struct AppMenuRow: View {
             guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
             rest(anchor)
         }
+        .onChange(of: entry.element) { if hovered { rest(anchor) } }
     }
 }
 
