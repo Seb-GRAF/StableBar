@@ -7,17 +7,25 @@ private func volume(_ slider: String) -> String {
         + slider + "}}}]}"
 }
 
-@Test func aFilledSliderDecodesWithItsIconAndRange() throws {
+@Test func aFilledSliderDecodesWithItsIconRangeAndEndStop() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "filled-slider.json")
     var loader = ConfigurationLoader()
     let configuration = try loader.load(url, data: Data(volume(#""filled":true,"icon":"speaker.wave.2.fill","step":0.05"#).utf8))
-    guard case let .filledSlider(title, source, minimum, maximum, step, icon, command) = configuration.widgets.first?.popup?.layout.content else {
+    guard case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command) = configuration.widgets.first?.popup?.layout.content else {
         Issue.record("Expected a filled slider")
         return
     }
     #expect([title, source, command] == ["Volume", "volume", "set"])
     #expect([minimum, maximum, step] == [0, 1, 0.05])
+    #expect(endStop == nil)
     #expect(icon == "speaker.wave.2.fill")
+    let timer = try loader.load(url, data: Data(volume(#""filled":true,"min":15,"max":240,"step":15,"endStop":{"value":0,"label":"∞"}"#).utf8))
+    guard case let .filledSlider(_, _, _, _, _, stop, none, _) = timer.widgets.first?.popup?.layout.content else {
+        Issue.record("Expected a filled slider with an end stop")
+        return
+    }
+    #expect(stop == SliderEndStop(value: 0, label: "∞"))
+    #expect(none == nil)
     let native = try loader.load(url, data: Data(volume(#""filled":false"#).utf8))
     guard case .slider = native.widgets.first?.popup?.layout.content else {
         Issue.record("Expected the native slider")
@@ -25,47 +33,62 @@ private func volume(_ slider: String) -> String {
     }
 }
 
-@Test func filledSliderMistakesNameTheirProblem() throws {
+@Test func anIconWithoutAFilledSliderNamesItsProblem() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "filled-slider.json")
     var loader = ConfigurationLoader()
-    let mistakes = [
-        #""filled":true,"min":0,"max":1,"endStop":{"value":2,"label":"∞"}"#:
-            "widgets.sound: popup.layout.filled: A filled slider can't have an end stop.",
-        #""icon":"speaker.fill""#: #"widgets.sound: popup.layout.icon: Only a filled slider shows an icon; add "filled": true."#,
-    ]
-    for (slider, message) in mistakes {
-        let error = #expect(throws: (any Error).self) { try loader.load(url, data: Data(volume(slider).utf8)) }
-        #expect(error.map(errorMessage) == message, "\(slider)")
-    }
+    let error = #expect(throws: (any Error).self) { try loader.load(url, data: Data(volume(#""icon":"speaker.fill""#).utf8)) }
+    #expect(error.map(errorMessage) == #"widgets.sound: popup.layout.icon: Only a filled slider shows an icon; add "filled": true."#)
 }
 
 /// A 288-point bar, 40 points tall, over 0–1 in hundredths.
 private let bar = FilledSliderTrack(width: 288, height: 40, minimum: 0, maximum: 1, step: 0.01)
 
 @Test func aFilledSlidersFillStartsAsTallAsTheBarAndEndsAtItsWidth() {
-    #expect(bar.fillWidth(for: 0) == 40)
-    #expect(bar.fillWidth(for: 1) == 288)
-    #expect(bar.fillWidth(for: 0.5) == 164)
-    #expect(bar.fillWidth(for: -3) == 40, "Values below the range sit at its start")
-    #expect(bar.fillWidth(for: 7) == 288, "Values past the range fill the bar")
-    #expect(FilledSliderTrack(width: 30, height: 40, minimum: 0, maximum: 1, step: 0.01).fillWidth(for: 0) == 30,
+    #expect(bar.fillWidth(for: .value(0)) == 40)
+    #expect(bar.fillWidth(for: .value(1)) == 288)
+    #expect(bar.fillWidth(for: .value(0.5)) == 164)
+    #expect(bar.fillWidth(for: .value(-3)) == 40, "Values below the range sit at its start")
+    #expect(bar.fillWidth(for: .value(7)) == 288, "Values past the range fill the bar")
+    #expect(FilledSliderTrack(width: 30, height: 40, minimum: 0, maximum: 1, step: 0.01).fillWidth(for: .value(0)) == 30,
             "A bar narrower than it is tall is filled, not overrun")
 }
 
 @Test func aPointerSetsTheValueWhoseFillEndsUnderIt() {
-    #expect(bar.value(at: 20) == 0, "The cap's center at the start is the minimum")
-    #expect(bar.value(at: 268) == 1)
-    #expect(bar.value(at: 144) == 0.5)
-    #expect(bar.value(at: -50) == 0)
-    #expect(bar.value(at: 400) == 1)
+    #expect(bar.stop(at: 20, from: .value(0.5)) == .value(0), "The cap's center at the start is the minimum")
+    #expect(bar.stop(at: 268, from: .value(0.5)) == .value(1))
+    #expect(bar.stop(at: 144, from: .value(0)) == .value(0.5))
+    #expect(bar.stop(at: -50, from: .value(0.5)) == .value(0))
+    #expect(bar.stop(at: 400, from: .value(0.5)) == .value(1), "Without an end stop, nothing lies past the maximum")
     let tenths = FilledSliderTrack(width: 288, height: 40, minimum: 0, maximum: 100, step: 10)
-    #expect(tenths.value(at: 150) == 50, "Halfway is snapped to the nearest step")
+    #expect(tenths.stop(at: 150, from: .value(0)) == .value(50), "Halfway is snapped to the nearest step")
 }
 
 @Test func arrowKeysMoveAFilledSliderOneStepWithinItsRange() {
     let tenths = FilledSliderTrack(width: 0, height: 0, minimum: 0, maximum: 100, step: 10)
-    #expect(tenths.value(after: 40, forward: true) == 50)
-    #expect(tenths.value(after: 43, forward: false) == 30, "A value between steps moves from its nearest step")
-    #expect(tenths.value(after: 100, forward: true) == 100)
-    #expect(tenths.value(after: 0, forward: false) == 0)
+    #expect(tenths.stop(after: .value(40), forward: true) == .value(50))
+    #expect(tenths.stop(after: .value(43), forward: false) == .value(30), "A value between steps moves from its nearest step")
+    #expect(tenths.stop(after: .value(100), forward: true) == .value(100))
+    #expect(tenths.stop(after: .value(0), forward: false) == .value(0))
+}
+
+/// Amphetamine's 15–240 minutes and ∞ on a 288-point bar, 40 points tall: the end stop takes 46 points after an 8-point notch.
+private let minutes = FilledSliderTrack(width: 288, height: 40, minimum: 15, maximum: 240, step: 15, endStop: true)
+
+@Test func aFilledSlidersEndStopFollowsANotchAndFillsTheWholeBar() {
+    #expect(minutes.rangeEnd == 234)
+    #expect(minutes.notchCenter == 238)
+    #expect(minutes.stopCenter == 265)
+    #expect(minutes.fillWidth(for: .value(15)) == 40)
+    #expect(minutes.fillWidth(for: .value(240)) == 234, "The steps fill up to the notch")
+    #expect(minutes.fillWidth(for: .end) == 288)
+}
+
+@Test func draggingAFilledSliderIntoItsNotchSnapsOntoTheEndStop() {
+    #expect(minutes.stop(at: 214, from: .value(225)) == .value(240))
+    #expect(minutes.stop(at: 239.9, from: .value(240)) == .value(240), "Most of the notch holds the maximum")
+    #expect(minutes.stop(at: 240, from: .value(240)) == .end)
+    #expect(minutes.stop(at: 236, from: .end) == .end, "Leaving takes most of the notch too")
+    #expect(minutes.stop(at: 20, from: .end) == .value(15))
+    #expect(minutes.stop(after: .value(240), forward: true) == .end)
+    #expect(minutes.stop(after: .end, forward: false) == .value(240))
 }

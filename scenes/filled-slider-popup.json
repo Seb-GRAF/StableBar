@@ -8,25 +8,112 @@
         "command": "true",
         "position": "right",
         "popup": {
-          "style": { "width": 300, "paddingHorizontal": 16, "paddingVertical": 16, "spacing": 12 },
+          "style": {
+            "width": 300,
+            "paddingHorizontal": 16,
+            "paddingVertical": 16,
+            "spacing": 12
+          },
           "layout": {
             "type": "column",
             "children": [
-              { "type": "text", "text": "Sound", "style": { "fontWeight": "bold", "fontSize": 15 } },
               {
-                "type": "slider", "title": "Volume", "source": "volume", "onChange": "true",
-                "filled": true, "icon": "speaker.wave.2.fill",
-                "style": { "height": 40, "cornerRadius": 20, "iconSize": 16, "background": "@token.surfaceRaised" }
+                "type": "text",
+                "text": "Sound",
+                "style": {
+                  "fontWeight": "bold",
+                  "fontSize": 15
+                }
               },
               {
-                "type": "slider", "title": "Muted", "source": "muted", "onChange": "true",
-                "filled": true, "icon": "speaker.slash.fill",
-                "style": { "height": 40, "cornerRadius": 20, "iconSize": 16, "background": "@token.surfaceRaised" }
+                "type": "slider",
+                "title": "Volume",
+                "source": "volume",
+                "onChange": "true",
+                "filled": true,
+                "icon": "speaker.wave.2.fill",
+                "style": {
+                  "height": 40,
+                  "cornerRadius": 20,
+                  "iconSize": 16,
+                  "background": "@token.surfaceRaised"
+                }
               },
-              { "type": "text", "text": "Without a background or icon" },
               {
-                "type": "slider", "title": "Brightness", "source": "brightness", "min": 0, "max": 100, "step": 5, "onChange": "true",
-                "filled": true, "style": { "height": 24, "cornerRadius": 6 }
+                "type": "slider",
+                "title": "Muted",
+                "source": "muted",
+                "onChange": "true",
+                "filled": true,
+                "icon": "speaker.slash.fill",
+                "style": {
+                  "height": 40,
+                  "cornerRadius": 20,
+                  "iconSize": 16,
+                  "background": "@token.surfaceRaised"
+                }
+              },
+              {
+                "type": "text",
+                "text": "Without a background or icon"
+              },
+              {
+                "type": "slider",
+                "title": "Brightness",
+                "source": "brightness",
+                "min": 0,
+                "max": 100,
+                "step": 5,
+                "onChange": "true",
+                "filled": true,
+                "style": {
+                  "height": 24,
+                  "cornerRadius": 6
+                }
+              },
+              {
+                "type": "text",
+                "text": "With an end stop"
+              },
+              {
+                "type": "slider",
+                "title": "Minutes",
+                "source": "minutes",
+                "min": 15,
+                "max": 240,
+                "step": 15,
+                "onChange": "true",
+                "endStop": {
+                  "value": 0,
+                  "label": "∞"
+                },
+                "filled": true,
+                "icon": "pill.fill",
+                "style": {
+                  "height": 32,
+                  "cornerRadius": 16,
+                  "background": "@token.surfaceRaised"
+                }
+              },
+              {
+                "type": "slider",
+                "title": "Minutes",
+                "source": "indefinitely",
+                "min": 15,
+                "max": 240,
+                "step": 15,
+                "onChange": "true",
+                "endStop": {
+                  "value": 0,
+                  "label": "∞"
+                },
+                "filled": true,
+                "icon": "pill.fill",
+                "style": {
+                  "height": 32,
+                  "cornerRadius": 16,
+                  "background": "@token.surfaceRaised"
+                }
               }
             ]
           }
@@ -38,10 +125,16 @@
     "sound": {
       "text": "Sound",
       "icon": "speaker.wave.2",
-      "values": { "volume": 0.62, "muted": 0, "brightness": 35 }
+      "values": {
+        "volume": 0.62,
+        "muted": 0,
+        "brightness": 35,
+        "minutes": 165,
+        "indefinitely": 0
+      }
     }
   },
   "draw": "popup",
   "widget": "sound",
-  "height": 280
+  "height": 400
 }

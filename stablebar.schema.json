@@ -1128,7 +1128,7 @@
         },
         "filled": {
           "$ref": "#/definitions/boolean",
-          "description": "For sliders: draw a bar in the block's style instead of macOS's slider. The background is the track, the accent fills it, and clicking or dragging anywhere sets the value. Can't have an endStop."
+          "description": "For sliders: draw a bar in the block's style instead of macOS's slider. The background is the track, the accent fills it, and clicking or dragging anywhere sets the value. An endStop sits past a notch at the end and fills the whole bar."
         },
         "icon": {
           "$ref": "#/definitions/string",

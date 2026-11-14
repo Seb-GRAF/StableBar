@@ -58,8 +58,10 @@ indirect enum PopupContent: Sendable {
     case button(title: String, command: String)
     /// A slider over `minimum`…`maximum`, and past a notch the `endStop` when it has one.
     case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
-    /// A slider drawn as a bar in the block's style, filled from the leading edge, with `icon` on the fill.
-    case filledSlider(title: String, source: String, minimum: Double, maximum: Double, step: Double, icon: String?, command: String)
+    /// A slider drawn as a bar in the block's style, filled from the leading edge, with `icon` on the fill and past a
+    /// notch the `endStop` when it has one.
+    case filledSlider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?,
+                      icon: String?, command: String)
     case toggle(title: String, source: String, command: String)
     case segmented(title: String, source: String, options: [PopupControlOption], command: String)
     /// A pill, or chips for the presets starred in `lists[stars.source]`, that opens a panel: the groups in
@@ -246,9 +248,6 @@ struct PopupBlock: Decodable, Sendable {
             }
             let filled = try values.decodeIfPresent(Bool.self, forKey: .filled) ?? false
             let icon = try values.decodeIfPresent(String.self, forKey: .icon)
-            if filled, endStop != nil {
-                throw DecodingError.dataCorruptedError(forKey: .filled, in: values, debugDescription: "A filled slider can't have an end stop.")
-            }
             if icon != nil, !filled {
                 throw DecodingError.dataCorruptedError(forKey: .icon, in: values, debugDescription: "Only a filled slider shows an icon; add \"filled\": true.")
             }
@@ -256,7 +255,8 @@ struct PopupBlock: Decodable, Sendable {
             let source = try values.decode(String.self, forKey: .source)
             let command = try values.decode(String.self, forKey: .onChange)
             content = filled
-                ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, icon: icon, command: command)
+                ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
+                                icon: icon, command: command)
                 : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, command: command)
         case "toggle":
             content = .toggle(title: try values.decode(String.self, forKey: .title),

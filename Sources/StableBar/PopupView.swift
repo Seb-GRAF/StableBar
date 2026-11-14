@@ -485,10 +485,10 @@ struct PopupBlockView: View {
                     context.runAction(command, ["VALUE": String($0)])
                 }
             }
-        case let .filledSlider(title, source, minimum, maximum, step, icon, command):
+        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
-            FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, icon: icon,
+            FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
                          height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
                          appearance: appearance) {
                 context.runAction(command, ["VALUE": String($0)])
