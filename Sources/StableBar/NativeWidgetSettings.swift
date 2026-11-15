@@ -39,6 +39,14 @@ struct NativeWidgetSettings: View {
                         .labelsHidden().frame(width: 190)
                     }
                 }
+            case "disk":
+                SettingsGroup("Disk") {
+                    number("Refresh every", "interval", provider.interval, in: 10...600, unit: "s")
+                }
+                SettingsGroup("Warnings") {
+                    number("Warning at", "diskWarning", provider.diskWarning, in: 0...101, unit: "%", scale: 100, hint: "101% turns off this warning")
+                    number("Critical at", "diskCritical", provider.diskCritical, in: 0...101, unit: "%", scale: 100, hint: "101% turns off this warning")
+                }
             case "calendar":
                 SettingsGroup("Upcoming meetings") {
                     number("Look ahead", "lookahead", provider.lookahead, in: 1...168, unit: "h")
@@ -56,7 +64,7 @@ struct NativeWidgetSettings: View {
                 }
             default: EmptyView()
             }
-            if ["system", "network", "calendar"].contains(provider.type),
+            if ["system", "network", "disk", "calendar"].contains(provider.type),
                editor.store.configuration!.widgets.filter({ $0.providerName == widget.providerName }).count > 1 {
                 SettingsCallout(systemImage: "link", text: Text("These data settings apply to every widget using **\(widget.providerName!)**."))
                     .padding(.top, 12)

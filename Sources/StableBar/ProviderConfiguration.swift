@@ -18,16 +18,18 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let units: NetworkUnits
     let cpuWarning: Double
     let memoryWarning: Double
+    let diskWarning: Double
+    let diskCritical: Double
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
-        case sortBy, units, cpuWarning, memoryWarning
+        case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical
     }
 
     init(type: String) {
         self.type = type
         command = nil
-        interval = 5
+        interval = DataSourceRegistry.builtIn[type]?.defaultInterval ?? 5
         timeout = 10
         environment = [:]
         whenVisible = false
@@ -41,6 +43,8 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         units = .bytes
         cpuWarning = 0.9
         memoryWarning = 0.9
+        diskWarning = 0.85
+        diskCritical = 0.95
     }
 
     init(from decoder: Decoder) throws {
@@ -51,7 +55,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown provider type.")
         }
         command = source.settings.contains(.command) ? try values.decode(String.self, forKey: .command) : nil
-        interval = try values.decodeIfPresent(Double.self, forKey: .interval) ?? 5
+        interval = try values.decodeIfPresent(Double.self, forKey: .interval) ?? source.defaultInterval
         timeout = try values.decodeIfPresent(Double.self, forKey: .timeout) ?? 10
         environment = try values.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         whenVisible = try values.decodeIfPresent(Bool.self, forKey: .whenVisible) ?? false
@@ -65,6 +69,8 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         units = try values.decodeIfPresent(NetworkUnits.self, forKey: .units) ?? .bytes
         cpuWarning = try values.decodeIfPresent(Double.self, forKey: .cpuWarning) ?? 0.9
         memoryWarning = try values.decodeIfPresent(Double.self, forKey: .memoryWarning) ?? 0.9
+        diskWarning = try values.decodeIfPresent(Double.self, forKey: .diskWarning) ?? 0.85
+        diskCritical = try values.decodeIfPresent(Double.self, forKey: .diskCritical) ?? 0.95
         guard interval > 0, interval.isFinite else {
             throw DecodingError.dataCorruptedError(forKey: .interval, in: values,
                                                   debugDescription: "A provider interval must be greater than zero and finite.")

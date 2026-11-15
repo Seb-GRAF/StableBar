@@ -1,3 +1,4 @@
+import AppKit
 import EventKit
 import Foundation
 
@@ -23,10 +24,13 @@ struct DataSourceType: Sendable {
     var continuous: Bool
     /// The built-in events this source sends when its output changes.
     var events: [BuiltInEvent] = []
-    /// A notification macOS posts when the data changes between the runner's refreshes, such as
+    /// Notifications macOS posts when the data changes between the runner's refreshes, such as
     /// calendar's `EKEventStoreChanged`. While the source runs, the runner also refreshes it each
-    /// time it's posted, with an event named after the type.
-    var changeNotification: Notification.Name? = nil
+    /// time one is posted on `changeCenter`, with an event named after the type.
+    var changeNotifications: [Notification.Name] = []
+    var changeCenter: SourceChange.Center = .standard
+    /// Seconds between refreshes when the provider sets no `interval`.
+    var defaultInterval: Double = 5
     /// The access the source needs. Setup lists it whenever a configuration runs this source. The
     /// source asks macOS for it the first time it reads, and until it's granted, its output says so
     /// rather than failing, as calendar's `No calendar access` with `fields.access` does.
@@ -108,7 +112,7 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .audio, .inputSource, .microphone, .privacy,
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .disk, .audio, .inputSource, .microphone, .privacy,
                                                     .calendar])
 }
 
@@ -149,6 +153,27 @@ extension DataSourceType {
         return PollingSource { _ in .output(Result { try metrics.networkRates(units: provider.units) }) }
     }
 
+    static let disk = disk()
+
+    /// How full the startup disk is, and the other volumes, read on a timer and whenever one mounts,
+    /// unmounts or is renamed.
+    static func disk(reader: any VolumeReading = SystemVolumes()) -> DataSourceType {
+        DataSourceType(name: "disk", isNative: true, symbol: "internaldrive", settings: [],
+                       optionalSettings: [.diskWarning, .diskCritical], continuous: false,
+                       changeNotifications: [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification,
+                                             NSWorkspace.didRenameVolumeNotification],
+                       changeCenter: .workspace, defaultInterval: 60) { provider, _ in
+            PollingSource { _ in
+                do {
+                    let volumes = try await BlockingWork.run { try reader.read() }
+                    return .output(.success(diskOutput(volumes, warning: provider.diskWarning, critical: provider.diskCritical)))
+                } catch {
+                    return .output(.failure(error))
+                }
+            }
+        }
+    }
+
     static let audio = DataSourceType(name: "audio", isNative: true, symbol: "speaker.wave.2", settings: [], continuous: true,
                                       events: [.volumeChange, .outputDeviceChange]) { _, _ in
         PushSource(monitor: AudioMonitor())
@@ -173,7 +198,7 @@ extension DataSourceType {
     /// boundary.
     static let calendar = DataSourceType(name: "calendar", isNative: true, symbol: "calendar", settings: [],
                                          optionalSettings: [.calendars, .lookahead, .soon, .now], continuous: false,
-                                         changeNotification: .EKEventStoreChanged, permission: .calendars) { provider, _ in
+                                         changeNotifications: [.EKEventStoreChanged], permission: .calendars) { provider, _ in
         let metrics = CalendarMetrics()
         return PollingSource { _ in .output(.success(await metrics.read(provider))) }
     }

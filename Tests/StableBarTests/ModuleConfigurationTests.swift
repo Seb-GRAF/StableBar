@@ -424,8 +424,8 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
         (#"{"widgets":[}"#, "The given data was not valid JSON. Unexpected character '}' around line 1, column 13."),
         (#"{"providers":{"machine":{"type":"sytem"}},"widgets":[]}"#, "providers.machine.type: Unknown provider type."),
         (#"{"providers":{"feed":{"type":"stream"}},"widgets":[]}"#, "providers.feed: Missing property command."),
-        (#"{"widgets":[{"id":"disk","type":"disk","position":"right"}]}"#, "widgets.disk: type: Unknown widget type."),
-        (#"{"widgets":[{"id":"disk","type":"provider","provider":"disk","position":"right"}]}"#, "Unknown provider: disk."),
+        (#"{"widgets":[{"id":"disk","type":"teleport","position":"right"}]}"#, "widgets.disk: type: Unknown widget type."),
+        (#"{"widgets":[{"id":"disk","type":"provider","provider":"teleport","position":"right"}]}"#, "Unknown provider: teleport."),
         (#"{"widgets":[],"profiles":[{"name":"work","configuration":{"providers":{"machine":{"type":"command"}}}}]}"#,
          "providers.machine: Missing property command.")
     ] {
@@ -599,7 +599,8 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
         .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
         .processes: ("5", #""5""#), .sortBy: (#""cpu""#, #""unknown""#), .units: (#""bits""#, #""unknown""#),
-        .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#)
+        .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#),
+        .diskWarning: ("0.5", #""high""#), .diskCritical: ("0.5", #""high""#)
     ]
     #expect(Set(registry.types.flatMap(\.optionalSettings)) == Set(samples.keys))
     for type in registry.types {

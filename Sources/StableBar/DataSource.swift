@@ -36,14 +36,22 @@ struct SourceSchedule: Equatable, Sendable {
     /// Runs stay open and the source sends updates as they happen, like a stream or a native
     /// listener. A refresh restarts the run.
     var continuous = false
-    /// A notification that refreshes the source while it runs, such as calendar's
+    /// Notifications that refresh the source while it runs, such as calendar's
     /// `EKEventStoreChanged`.
     var change: SourceChange? = nil
 }
 
-/// A notification that refreshes a source, and the event that refresh sends.
+/// Notifications that refresh a source, the centre they're posted on, and the event that refresh sends.
 struct SourceChange: Equatable, Sendable {
-    var notification: Notification.Name
+    enum Center: Sendable {
+        /// `NotificationCenter.default`.
+        case standard
+        /// `NSWorkspace.shared.notificationCenter`, where volume mounts are posted.
+        case workspace
+    }
+
+    var notifications: [Notification.Name]
+    var center: Center = .standard
     var event: String
 }
 
