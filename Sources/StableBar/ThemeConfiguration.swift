@@ -1,6 +1,7 @@
 import Foundation
 
 let configurationReferenceExpansionLimit = 100_000
+let configurationReferenceDepthLimit = 64
 
 struct ConfigurationContext: Sendable, Equatable {
     var appearance = "light"
@@ -71,6 +72,7 @@ enum ThemeConfigurationError: LocalizedError {
     case unknownReference(String)
     case referenceCycle([String])
     case referenceExpansionTooLarge(String)
+    case referencesNestTooDeep(String)
     case unknownProfile(String)
     case duplicateProfile(String)
 
@@ -80,6 +82,9 @@ enum ThemeConfigurationError: LocalizedError {
         case let .referenceCycle(names): "Configuration reference cycle: \(names.joined(separator: " → "))."
         case let .referenceExpansionTooLarge(name):
             "Configuration references expand to more than 100,000 values at \(name). "
+                + "Check tokens or settings that refer to each other."
+        case let .referencesNestTooDeep(name):
+            "Configuration references nest more than 64 levels deep at \(name). "
                 + "Check tokens or settings that refer to each other."
         case let .unknownProfile(name): "Unknown configuration profile: \(name)."
         case let .duplicateProfile(name): "Duplicate configuration profile: \(name)."
@@ -94,17 +99,30 @@ func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: Stri
     var path = path
     var namesOnPath = Set(path)
     return try substituteReferences(value, prefix: prefix, values: values,
-                                    path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
+                                    path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
+                                    depth: max(0, path.count - 1))
 }
 
 private func substituteReferences(_ value: ConfigurationValue, prefix: String,
                                   values: [String: ConfigurationValue], path: inout [String],
                                   namesOnPath: inout Set<String>,
-                                  remaining: inout Int) throws -> ConfigurationValue {
+                                  remaining: inout Int, depth: Int) throws -> ConfigurationValue {
+    var depth = depth
     if let name = path.last {
         remaining -= 1
         guard remaining >= 0 else {
             throw ThemeConfigurationError.referenceExpansionTooLarge(name)
+        }
+        switch value {
+        case .array, .object:
+            depth += 1
+        case let .string(string) where string.hasPrefix(prefix):
+            depth += 1
+        default:
+            break
+        }
+        guard depth <= configurationReferenceDepthLimit else {
+            throw ThemeConfigurationError.referencesNestTooDeep(name)
         }
     }
     if case let .string(string) = value, string.hasPrefix(prefix) {
@@ -122,18 +140,18 @@ private func substituteReferences(_ value: ConfigurationValue, prefix: String,
             namesOnPath.remove(name)
         }
         return try substituteReferences(replacement, prefix: prefix, values: values,
-                                        path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
+                                        path: &path, namesOnPath: &namesOnPath, remaining: &remaining, depth: depth)
     }
     switch value {
     case let .object(object):
         return .object(try object.mapValues {
             try substituteReferences($0, prefix: prefix, values: values,
-                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
+                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining, depth: depth)
         })
     case let .array(array):
         return .array(try array.map {
             try substituteReferences($0, prefix: prefix, values: values,
-                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
+                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining, depth: depth)
         })
     default:
         return value

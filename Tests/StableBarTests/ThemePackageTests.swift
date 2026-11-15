@@ -239,17 +239,16 @@ func referenceExpansionCountsVisitedValuesAcrossTheWholeCall(prefix: String) thr
         + "Check tokens or settings that refer to each other.")
 }
 
-// The deep fixture uses the main thread's larger stack.
-@Test(arguments: ["@token.", "@setting."]) @MainActor
+@Test(arguments: ["@token.", "@setting."])
 func referenceExpansionChargesRepeatedAliasHops(prefix: String) throws {
-    var values: [String: ConfigurationValue] = ["a999": .number(1)]
-    for index in 0..<999 {
+    var values: [String: ConfigurationValue] = ["a59": .number(1)]
+    for index in 0..<59 {
         values["a\(index)"] = .string(prefix + "a\(index + 1)")
     }
-    let shortReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a997"), count: 200))
+    let shortReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a57"), count: 200))
     #expect(try substituteConfigurationReferences(shortReferences, prefix: prefix, values: values)
         == .array(Array(repeating: .number(1), count: 200)))
-    let longReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a0"), count: 200))
+    let longReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a0"), count: 2_000))
     let error = #expect(throws: ThemeConfigurationError.self) {
         _ = try substituteConfigurationReferences(longReferences, prefix: prefix, values: values)
     }
@@ -257,7 +256,73 @@ func referenceExpansionChargesRepeatedAliasHops(prefix: String) throws {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }
-    #expect(name == "a0")
+    #expect(name == "a40")
+}
+
+@Test(arguments: ["@token.", "@setting."])
+func referencesNestTooDeepAlongAliasChainsOnAWorkerThread(prefix: String) throws {
+    #expect(!Thread.isMainThread)
+    var values: [String: ConfigurationValue] = ["a999": .number(1)]
+    for index in 0..<999 {
+        values["a\(index)"] = .string(prefix + "a\(index + 1)")
+    }
+    #expect(try substituteConfigurationReferences(.string(prefix + "a935"), prefix: prefix, values: values) == .number(1))
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string(prefix + "a0"), prefix: prefix, values: values)
+    }
+    guard case let .referencesNestTooDeep(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "a64")
+    #expect(error?.errorDescription == "Configuration references nest more than 64 levels deep at a64. "
+        + "Check tokens or settings that refer to each other.")
+}
+
+@Test(arguments: ["@token.", "@setting."], [false, true])
+func referencesNestAtMost64ContainerLevels(prefix: String, objects: Bool) throws {
+    var fits = ConfigurationValue.number(1)
+    for _ in 0..<64 {
+        fits = objects ? .object(["child": fits]) : .array([fits])
+    }
+    let reference = ConfigurationValue.string(prefix + "nested")
+    let siblings = ConfigurationValue.array([reference, reference])
+    #expect(try substituteConfigurationReferences(siblings, prefix: prefix, values: ["nested": fits]) == .array([fits, fits]))
+    let tooDeep = objects ? ConfigurationValue.object(["child": fits]) : .array([fits])
+    #expect(try substituteConfigurationReferences(tooDeep, prefix: prefix, values: [:]) == tooDeep)
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(reference, prefix: prefix, values: ["nested": tooDeep])
+    }
+    guard case let .referencesNestTooDeep(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "nested")
+}
+
+@Test(arguments: ["@token.", "@setting."])
+func referencesNestCountsContainersAndAliasHopsTogether(prefix: String) throws {
+    let reference = ConfigurationValue.string(prefix + "nested")
+    var nested = ConfigurationValue.string(prefix + "alias")
+    for level in 0..<63 {
+        nested = level.isMultiple(of: 2) ? .object(["child": nested]) : .array([nested])
+    }
+    let values: [String: ConfigurationValue] = [
+        "nested": nested, "alias": .number(1), "outer": .array([reference])
+    ]
+    var expected = ConfigurationValue.number(1)
+    for level in 0..<63 {
+        expected = level.isMultiple(of: 2) ? .object(["child": expected]) : .array([expected])
+    }
+    #expect(try substituteConfigurationReferences(reference, prefix: prefix, values: values) == expected)
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string(prefix + "outer"), prefix: prefix, values: values)
+    }
+    guard case let .referencesNestTooDeep(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "nested")
 }
 
 @Test(arguments: ["@token.", "@setting."])
