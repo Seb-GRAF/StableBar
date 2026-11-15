@@ -130,7 +130,14 @@ private func diskProvider(_ properties: [String: ConfigurationValue] = [:]) thro
     try await awaitCondition { script.output.text == "59%" && script.output.state == .string("warning") }
     try await awaitCondition { !script.diagnostics.running }
     NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didMountNotification, object: nil)
-    try await awaitCondition { volumes.reads == 2 }
+    // Other tests can post the same notification while this one runs.
+    try await awaitCondition { volumes.reads >= 2 }
+    try await awaitCondition { !script.diagnostics.running }
+    script.stop()
+    let stopped = volumes.reads
+    NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didUnmountNotification, object: nil)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(volumes.reads == stopped)
 }
 
 @Test @MainActor func aFailedDiskReadShowsTheProviderError() async throws {
@@ -143,10 +150,13 @@ private func diskProvider(_ properties: [String: ConfigurationValue] = [:]) thro
 
 @Test @MainActor func aSlowVolumeReadKeepsTheMainActorFree() async throws {
     let release = DispatchSemaphore(value: 0)
+    let first = OSAllocatedUnfairLock(initialState: true)
+    // Only the first read blocks: a mount posted by another test must not leave a second read waiting forever.
     let volumes = FakeVolumes {
-        release.wait()
+        if first.withLock({ isFirst in defer { isFirst = false }; return isFirst }) { release.wait() }
         return fixture
     }
+    defer { release.signal() }
     let script = ScriptWidget()
     defer { script.stop() }
     script.start(provider: try diskProvider(), registry: DataSourceRegistry(types: [.disk(reader: volumes)]))
