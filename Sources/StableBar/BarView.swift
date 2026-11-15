@@ -254,6 +254,25 @@ private struct BarContextMenu: View {
     }
 }
 
+/// Edit Widget… and the bar's menu, unless the widget's `rightClick` action takes the click.
+private struct WidgetContextMenu: View {
+    let widget: WidgetConfiguration
+    let store: BarStore
+    let display: Int
+    /// For a menu that lists other commands first.
+    var dividerAbove = false
+
+    var body: some View {
+        if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
+           store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
+            if dividerAbove { Divider() }
+            Button("Edit Widget…") { store.onCustomizeWidget?(widget.id) }
+            Divider()
+            BarContextMenu(store: store, display: display)
+        }
+    }
+}
+
 private struct MoreWidgetsButton: View {
     let units: [BarUnit]
     let config: Configuration
@@ -715,14 +734,7 @@ struct WidgetView: View {
         .animation(reduceMotion ? nil : animation.value, value: widget.content == .activeApp ? store.activeApp : nil)
         .accessibilityHint(tooltip ?? "")
         .accessibilityIdentifier(widget.id)
-        .contextMenu {
-            if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
-               store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
-                Button("Edit Widget…") { store.onCustomizeWidget?(widget.id) }
-                Divider()
-                BarContextMenu(store: store, display: monitor)
-            }
-        }
+        .contextMenu { WidgetContextMenu(widget: widget, store: store, display: monitor) }
     }
 
     private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
@@ -840,7 +852,7 @@ struct WidgetView: View {
             }
         case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
             let leftOut = widget.shownMenuBarItems.references + hidden.references
-            MenuBarItemsView(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults),
+            MenuBarItemsView(widget: widget, store: store, display: monitor, defaults: popupDefaults.inheriting(defaults),
                              appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                              padding: padding, symbol: store.label(for: widget).icon!) { anchor in
                 toggleMenuBarItems(leavingOut: leftOut, anchor: anchor)
@@ -1196,6 +1208,7 @@ private struct FocusedWindowHighlight: View {
 private struct MenuBarItemsView: View {
     let widget: WidgetConfiguration
     let store: BarStore
+    let display: Int
     let defaults: WidgetStyle
     let appearance: WidgetAppearance
     let padding: EdgeInsets
@@ -1217,12 +1230,11 @@ private struct MenuBarItemsView: View {
                         Image(systemName: symbol).font(.system(size: appearance.iconSize))
                     }
                     .accessibilityLabel("Menu bar items")
-                    .contextMenu { commands(position, count: shown.count, isSymbol: true) }
+                    .contextMenu { symbolCommands(position, count: shown.count) }
                 case let .item(reference):
                     ForEach(Array(store.appMenu.menuBarItems.filter(reference.matches).enumerated()), id: \.offset) { _, item in
                         itemCell(item, icon: reference.icon, live: reference.display == .live ? store.appMenu.mirror.images[item.key] : nil,
                                  openAnchor: openAnchor)
-                            .contextMenu { commands(position, count: shown.count, isSymbol: false) }
                     }
                 }
             }
@@ -1232,7 +1244,8 @@ private struct MenuBarItemsView: View {
     }
 
     private func itemCell(_ item: MenuBarItem, icon: String?, live: MenuBarItemImage?, openAnchor: ObjectIdentifier?) -> some View {
-        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu) { anchor in
+        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu,
+                        clicksOnRightClick: true) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
             if inside, switches(to: anchor) {
@@ -1255,10 +1268,12 @@ private struct MenuBarItemsView: View {
         .accessibilityLabel(item.entry.title)
     }
 
-    private func commands(_ position: Int, count: Int, isSymbol: Bool) -> some View {
-        MenuBarItemCommands(source: .shown(position), shownCount: count, isSymbol: isSymbol) { placement, index in
+    /// The grid symbol's menu takes the place of the widget's, so it ends with the widget's commands.
+    @ViewBuilder private func symbolCommands(_ position: Int, count: Int) -> some View {
+        MenuBarItemCommands(source: .shown(position), shownCount: count, isSymbol: true) { placement, index in
             store.move(.shown(position), to: placement, before: index, in: widget)
         }
+        WidgetContextMenu(widget: widget, store: store, display: display, dividerAbove: true)
     }
 
     private func switches(to anchor: NSView) -> Bool {
@@ -1299,6 +1314,8 @@ private struct MenuBarItemCell<Label: View>: View {
     let padding: EdgeInsets
     let openAnchor: ObjectIdentifier?
     var actsOnMouseDown = false
+    /// A right-click does what a click does, as on an app's item in the macOS menu bar, instead of opening a menu.
+    var clicksOnRightClick = false
     let click: (NSView) -> Void
     let hover: (NSView, Bool) -> Void
     @ViewBuilder let label: () -> Label
@@ -1324,6 +1341,7 @@ private struct MenuBarItemCell<Label: View>: View {
         Group {
             if actsOnMouseDown { button.buttonStyle(MouseDownButtonStyle()) } else { button.buttonStyle(.plain) }
         }
+        .overlay { if clicksOnRightClick { RightClickCapture { click(anchor) } } }
         .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onHover { inside in
             hovered = inside
@@ -1578,6 +1596,32 @@ private struct MouseDownButtonStyle: PrimitiveButtonStyle {
             if pressing { configuration.trigger() }
         }
     }
+}
+
+/// Runs `action` on a right-click over the view, in place of the menu around it.
+private struct RightClickCapture: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> RightClickView { RightClickView(action: action) }
+    func updateNSView(_ nsView: RightClickView, context: Context) { nsView.action = action }
+}
+
+final class RightClickView: NSView {
+    var action: () -> Void
+
+    init(action: @escaping () -> Void) {
+        self.action = action
+        super.init(frame: .zero)
+    }
+
+    required init?(coder: NSCoder) { fatalError("RightClickView is created programmatically.") }
+
+    // Only a right-click stops here; every other event goes on to the SwiftUI view beneath.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        NSApp?.currentEvent?.type == .rightMouseDown ? super.hitTest(point) : nil
+    }
+
+    override func rightMouseDown(with event: NSEvent) { action() }
 }
 
 struct MenuAnchor: NSViewRepresentable {
