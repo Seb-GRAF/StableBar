@@ -73,6 +73,50 @@ test("popup defaults inherit widget defaults like the app", () => {
   assert.equal(resolved.popupDefaults.paddingVertical, 12);
 });
 
+test("popup hover falls back to its own background before inherited background", () => {
+  const config = {
+    defaults: { background: "#111111", foreground: "#222222" },
+    popupDefaults: { background: "#333333", foreground: "#444444" },
+  };
+  const fallback = resolveTheme({}, config, "dark");
+  assert.equal(fallback.defaults.hoverBackground, "#111111");
+  assert.equal(fallback.popupDefaults.hoverBackground, "#333333");
+  assert.equal(fallback.popupDefaults.hoverForeground, "#444444");
+
+  config.defaults.hoverBackground = "#555555";
+  assert.equal(resolveTheme({}, config, "dark").popupDefaults.hoverBackground, "#555555");
+  config.defaults.states = { hover: { background: "#666666" } };
+  assert.equal(resolveTheme({}, config, "dark").popupDefaults.hoverBackground, "#666666");
+  config.popupDefaults.hoverBackground = "#777777";
+  assert.equal(resolveTheme({}, config, "dark").popupDefaults.hoverBackground, "#777777");
+  config.popupDefaults.states = { hover: { background: "#888888" } };
+  assert.equal(resolveTheme({}, config, "dark").popupDefaults.hoverBackground, "#888888");
+});
+
+test("icon size uses the app's fallback and popup inheritance", () => {
+  const fallback = resolveTheme({}, {}, "light");
+  assert.equal(fallback.defaults.iconSize, 13);
+  assert.equal(fallback.popupDefaults.iconSize, 13);
+  const config = { defaults: { iconSize: 17 } };
+  assert.equal(resolveTheme({}, config, "light").popupDefaults.iconSize, 17);
+  config.popupDefaults = { iconSize: 19 };
+  assert.equal(resolveTheme({}, config, "light").popupDefaults.iconSize, 19);
+});
+
+test("unknown font weights fall back to regular after style inheritance", () => {
+  const config = { defaults: { fontWeight: "unknown" } };
+  let resolved = resolveTheme({}, config, "dark");
+  assert.equal(resolved.defaults.fontWeight, "regular");
+  assert.equal(resolved.popupDefaults.fontWeight, "regular");
+  config.defaults.fontWeight = "bold";
+  config.popupDefaults = { fontWeight: "unknown" };
+  resolved = resolveTheme({}, config, "dark");
+  assert.equal(resolved.defaults.fontWeight, "bold");
+  assert.equal(resolved.popupDefaults.fontWeight, "regular");
+  config.popupDefaults.fontWeight = "semibold";
+  assert.equal(resolveTheme({}, config, "dark").popupDefaults.fontWeight, "semibold");
+});
+
 test("resolution merges objects, replaces arrays and gradients, and preserves null clears", () => {
   const original = {
     tokens: { accent: { light: "#123456", dark: "#abcdef" }, alias: "@token.accent" },
@@ -213,6 +257,64 @@ test("tiles restore Built-in borders and a cleared shadow", () => {
   assert.deepEqual(off.config.defaults.shadowColor, builtIn.defaults.shadowColor);
 });
 
+test("editing token-backed sections preserves their other properties and both appearances", () => {
+  const cases = [
+    ["defaults", "widgets.fontSize", { fontName: "Monaco", background: "@token.surface" },
+      { fontName: "Monaco", background: builtIn.tokens.surface, fontSize: 17 }],
+    ["popupDefaults", "popups.cornerRadius", { spacing: 12, background: "@token.surface" },
+      { spacing: 12, background: builtIn.tokens.surface, cornerRadius: 17 }],
+    ["workspaceDefaults", "workspaces.underlineWidth", {
+      indicator: "underline", style: { foreground: "@token.text" }, indicatorStyle: "@token.underline",
+    }, {
+      indicator: "underline", style: { foreground: builtIn.tokens.text },
+      indicatorStyle: { height: 3, background: builtIn.tokens.accent, width: 17 },
+    }],
+  ];
+  for (const [section, id, value, expected] of cases) {
+    const original = state("built-in");
+    original.config.tokens.section = "@token.sectionStyle";
+    original.config.tokens.sectionStyle = value;
+    original.config.tokens.underline = { height: 3, background: "@token.accent" };
+    original.config[section] = "@token.section";
+    const before = structuredClone(original);
+    const edited = applyControl(original, id, 17, "light");
+    assert.deepEqual(edited.config[section], expected, section);
+    assert.deepEqual(edited.config.tokens, before.config.tokens, section);
+    assert.deepEqual(original, before, section);
+  }
+});
+
+test("editing a nested token-backed style preserves the containing workspace", () => {
+  const original = state("nord");
+  original.config.tokens.underline = { height: 3, background: "@token.accent" };
+  original.config.workspaceDefaults.indicatorStyle = "@token.underline";
+  const before = structuredClone(original);
+  const edited = applyControl(original, "workspaces.underlineWidth", 24, "light");
+  assert.deepEqual(edited.config.workspaceDefaults, {
+    ...before.config.workspaceDefaults,
+    indicatorStyle: { height: 3, background: original.config.tokens.accent, width: 24 },
+  });
+  assert.deepEqual(edited.config.tokens, before.config.tokens);
+  assert.deepEqual(original, before);
+});
+
+test("tiles preserve the other properties of token-backed defaults", () => {
+  const original = state("built-in");
+  const style = { fontName: "Monaco", cornerRadius: 7, shadowColor: "#123456", shadowRadius: 5 };
+  original.config.tokens.widgetStyle = style;
+  original.config.defaults = "@token.widgetStyle";
+  const before = structuredClone(original);
+  for (const enabled of [false, true]) {
+    const edited = applyControl(original, "widgets.tiles", enabled, "dark");
+    assert.deepEqual(edited.config.defaults, {
+      ...style, background: enabled ? "@token.surface" : null,
+      borderColor: enabled ? builtIn.defaults.borderColor : null,
+    });
+    assert.deepEqual(edited.config.tokens, before.config.tokens);
+    assert.deepEqual(original, before);
+  }
+});
+
 test("workspace controls follow the indicator", () => {
   for (const [id, underline, fill] of [["nord", true, false], ["leman", false, true], ["notch", false, false]]) {
     const ids = idsFor(state(id));
@@ -256,11 +358,28 @@ test("strip background can be removed, colored, or restored from the base gradie
   const gradient = original.config.bar.style.background;
   const none = applyControl(original, "bar.background", "none", "dark");
   assert.ok(!Object.hasOwn(none.config.bar.style, "background"));
-  const color = applyControl(none, "bar.background", "#ff0000", "light");
-  assert.deepEqual(color.config.bar.style.background, { light: "#ff0000", dark: "#00000000" });
-  const restored = applyControl(color, "bar.background", gradient, "light");
+  const color = applyControl(none, "bar.background", "color", "light");
+  assert.equal(color.config.bar.style.background, "@token.surface");
+  const edited = applyControl(color, "bar.background", "#ff0000", "light");
+  assert.deepEqual(edited.config.bar.style.background, { light: "#ff0000", dark: original.config.tokens.surface.dark });
+  const restored = applyControl(edited, "bar.background", gradient, "light");
   assert.deepEqual(restored.config.bar.style.background, gradient);
   assert.deepEqual(original, state("gruvbox"));
+});
+
+test("choosing a colored strip follows the surface in both appearances", () => {
+  for (const id of baseIDs) {
+    for (const appearance of ["light", "dark"]) {
+      const none = applyControl(state(id), "bar.background", "none", appearance);
+      const color = applyControl(none, "bar.background", "color", appearance);
+      for (const shown of ["light", "dark"]) {
+        const resolved = resolveTheme(builtIn, color.config, shown);
+        assert.equal(resolved.bar.style.background, resolved.tokens.surface, `${id}: ${appearance} → ${shown}`);
+      }
+      const edited = applyControl(color, "palette.surface", "#123456", appearance);
+      assert.equal(resolveTheme(builtIn, edited.config, appearance).bar.style.background, "#123456");
+    }
+  }
 });
 
 test("about controls edit only the manifest and derive the id from the name", () => {
@@ -288,6 +407,18 @@ test("controls describe their keys and documentation", () => {
     assert.ok(Array.isArray(control.paths) && control.paths.length > 0, control.id);
     assert.ok(control.paths.every(path => control.help.includes(path)), control.id);
     assert.ok(control.docs.startsWith("https://"), control.id);
+  }
+});
+
+test("select controls offer the values accepted by the app", () => {
+  const { style, workspaceDefaults } = json("stablebar.schema.json").definitions;
+  const properties = {
+    "bar.borderEdges": style.properties.borderEdges,
+    "widgets.fontWeight": style.properties.fontWeight,
+    "workspaces.indicator": workspaceDefaults.properties.indicator,
+  };
+  for (const control of CONTROLS.filter(control => control.kind === "select")) {
+    assert.deepEqual(control.options, properties[control.id].anyOf.find(option => option.enum).enum, control.id);
   }
 });
 

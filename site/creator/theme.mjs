@@ -39,8 +39,7 @@ function overriding(earlier, next) {
   ]));
 }
 
-function substituteTokens(document) {
-  const tokens = document.tokens ?? {};
+function substituteTokens(document, tokens = document.tokens ?? {}) {
   const path = new Set();
   const encoder = new TextEncoder();
   let remaining = 100_000;
@@ -80,10 +79,12 @@ function forAppearance(value, appearance) {
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, forAppearance(child, appearance)]));
 }
 
+const fontWeights = ["ultralight", "thin", "light", "regular", "medium", "semibold", "bold"];
+
 const appearanceDefaults = {
   accent: "#f7821b", accentText: "#ffffff", borderWidth: 1, cornerRadius: 14,
   paddingHorizontal: 10, paddingVertical: 6, spacing: 6, shadowRadius: 2,
-  fontSize: 13, fontName: "system", fontWeight: "regular",
+  fontSize: 13, fontName: "system", fontWeight: "regular", iconSize: 13,
 };
 
 function inheriting(own, defaults) {
@@ -109,16 +110,18 @@ function withHover(style) {
 }
 
 function resolvedStyle(style, defaults) {
-  const resolved = inheriting(withHover(style), defaults);
+  const resolved = inheriting(inheriting(withHover(style), withHover(defaults)), appearanceDefaults);
   resolved.hoverBackground = resolved.states?.hover?.background ?? resolved.hoverBackground ?? resolved.background;
   resolved.hoverForeground = resolved.states?.hover?.foreground ?? resolved.hoverForeground ?? resolved.foreground;
+  if (!fontWeights.includes(resolved.fontWeight)) resolved.fontWeight = "regular";
   return resolved;
 }
 
 export function resolveTheme(base, config, appearance) {
   const resolved = forAppearance(substituteTokens(overriding(base, config)), appearance);
-  resolved.defaults = resolvedStyle(resolved.defaults, appearanceDefaults);
-  resolved.popupDefaults = resolvedStyle(resolved.popupDefaults, resolved.defaults);
+  const defaults = resolved.defaults;
+  resolved.defaults = resolvedStyle(defaults);
+  resolved.popupDefaults = resolvedStyle(resolved.popupDefaults, defaults);
   resolved.bar ??= {};
 
   const workspace = resolved.workspaceDefaults ?? {};
@@ -159,6 +162,10 @@ function control(id, label, kind, paths, help, guide, appliesWhen) {
   };
 }
 
+function select(id, label, paths, help, guide, options) {
+  return { ...control(id, label, "select", paths, help, guide), options };
+}
+
 export const CONTROLS = [
   control("about.name", "Name", "text", ["manifest.name", "manifest.id"],
     "Name your theme; its name also gives its folder id.", "themes.md"),
@@ -187,16 +194,16 @@ export const CONTROLS = [
     "Set the strip's border color.", "layout.md"),
   control("bar.borderWidth", "Border width", "number", ["bar.style.borderWidth"],
     "Set the strip's border width in points.", "layout.md"),
-  control("bar.borderEdges", "Border edges", "select", ["bar.style.borderEdges"],
-    "Choose which strip edges have a border.", "layout.md"),
+  select("bar.borderEdges", "Border edges", ["bar.style.borderEdges"],
+    "Choose which strip edges have a border.", "layout.md", ["bottom", "all"]),
   control("widgets.tiles", "Tiles", "toggle", ["defaults.background", "defaults.borderColor", "defaults.shadowColor"],
     "Turn widget tiles on or off, keeping any existing shadow or glow.", "themes.md"),
   control("widgets.fontName", "Font", "text", ["defaults.fontName"],
     "Use system or the name of a font installed on your Mac.", "styling.md#widget-styles"),
   control("widgets.fontSize", "Font size", "number", ["defaults.fontSize"],
     "Set the widget font size in points.", "styling.md#widget-styles"),
-  control("widgets.fontWeight", "Font weight", "select", ["defaults.fontWeight"],
-    "Choose the widget font weight.", "styling.md#widget-styles"),
+  select("widgets.fontWeight", "Font weight", ["defaults.fontWeight"],
+    "Choose the widget font weight.", "styling.md#widget-styles", fontWeights),
   control("widgets.cornerRadius", "Tile corners", "number", ["defaults.cornerRadius"],
     "Round widget tile corners in points.", "styling.md#widget-styles"),
   control("widgets.paddingHorizontal", "Horizontal padding", "number", ["defaults.paddingHorizontal"],
@@ -209,8 +216,8 @@ export const CONTROLS = [
     "Set the widget shadow or, without tiles, its glow.", "styling.md#widget-styles"),
   control("widgets.shadowRadius", "Shadow radius", "number", ["defaults.shadowRadius"],
     "Set the shadow or glow radius in points.", "styling.md#widget-styles"),
-  control("workspaces.indicator", "Indicator", "select", ["workspaceDefaults.indicator"],
-    "Choose background, underline or none.", "widgets.md#workspace-appearance"),
+  select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
+    "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
   control("workspaces.foreground", "Unfocused text", "color", ["workspaceDefaults.style.foreground"],
     "Set the text color of unfocused workspaces.", "widgets.md#workspace-appearance"),
   control("workspaces.focusedForeground", "Focused text", "color", ["workspaceDefaults.style.states.focused.foreground"],
@@ -256,6 +263,9 @@ function writePath(object, path, value) {
   const last = keys.pop();
   let target = object;
   for (const key of keys) {
+    if (typeof target[key] === "string" && target[key].startsWith("@token.")) {
+      target[key] = substituteTokens(target[key], object.tokens ?? {});
+    }
     if (!isObject(target[key])) target[key] = {};
     target = target[key];
   }
@@ -286,9 +296,8 @@ export function applyControl(state, id, value, appearance) {
     else next.manifest[key] = value;
     if (key === "name") next.manifest.id = slug(value);
   } else if (id === "widgets.tiles") {
-    next.config.defaults ??= {};
-    next.config.defaults.background = value ? "@token.surface" : null;
-    next.config.defaults.borderColor = value ? structuredClone(builtIn.defaults.borderColor) : null;
+    writePath(next.config, "defaults.background", value ? "@token.surface" : null);
+    writePath(next.config, "defaults.borderColor", value ? builtIn.defaults.borderColor : null);
     if (value && next.config.defaults.shadowColor === null) {
       next.config.defaults.shadowColor = structuredClone(builtIn.defaults.shadowColor);
     }
@@ -298,9 +307,10 @@ export function applyControl(state, id, value, appearance) {
     } else if (isGradient(value)) {
       // The page keeps the original base gradient and passes it back for the base-gradient choice.
       writePath(next.config, control.paths[0], value);
+    } else if (value === "color") {
+      writePath(next.config, control.paths[0], "@token.surface");
     } else {
-      const color = value === "color" ? resolveTheme(builtIn, state.config, appearance).tokens.surface : value;
-      writePath(next.config, control.paths[0], editedColor(state.config, control.paths[0], color, appearance));
+      writePath(next.config, control.paths[0], editedColor(state.config, control.paths[0], value, appearance));
     }
   } else {
     const path = control.paths[0];
