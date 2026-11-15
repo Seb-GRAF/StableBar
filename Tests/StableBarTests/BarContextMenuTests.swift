@@ -115,10 +115,8 @@ private final class FakeMenuBarItem: @unchecked Sendable {
     defer { store.stop() }
     #expect(await store.appMenu.readMenuBarItems(requestingAccess: false))
     try #require(store.appMenu.menuBarItems.map(\.entry.title) == ["Fake item"])
-    _ = NSApplication.shared
     let bar = HostedBar(store: store)
     defer { bar.window.close() }
-    defer { store.popup.close() }
 
     // Nothing here opens a menu: an open menu tracks the mouse, and a stray click in it could choose Quit StableBar.
     var found: RightClickView?
@@ -131,10 +129,18 @@ private final class FakeMenuBarItem: @unchecked Sendable {
     let center = bar.host.convert(CGPoint(x: capture.bounds.midX, y: capture.bounds.midY), from: capture)
     #expect(!bar.menu(at: center).contains("Hide"), "The item no longer has a menu of StableBar's commands")
 
+    // A clicked popup becomes the key window. Tests running alongside send actions to theirs, so it gets key status back
+    // before this test next waits.
+    let keyWindow = NSApplication.shared.keyWindow
+    func closePopup() {
+        store.popup.close()
+        keyWindow?.makeKey()
+    }
+    defer { closePopup() }
     capture.rightMouseDown(with: try #require(bar.rightMouseDown(at: center)))
     #expect(store.popup.isOpen, "A right-click opens the item's menu, as a click does")
 
-    store.popup.close()
+    closePopup()
     try #require(!store.popup.isOpen)
     for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
         bar.window.sendEvent(try #require(bar.mouseEvent(type, at: center)))
