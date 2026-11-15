@@ -54,7 +54,7 @@ private struct ScrollingTextLayer: NSViewRepresentable {
     func updateNSView(_ view: ScrollingTextView, context: Context) {
         view.rootView = AnyView(text.fixedSize()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .environment(\.self, context.environment))
+            .environment(\.self, context.nestedEnvironment))
         guard view.text != text || view.distance != distance || view.speed != speed else { return }
         view.text = text
         view.distance = distance

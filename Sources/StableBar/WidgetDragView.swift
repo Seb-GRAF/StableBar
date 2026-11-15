@@ -30,6 +30,16 @@ class WidgetHostingView: NSView {
     override var fittingSize: NSSize { hostingView.fittingSize }
 }
 
+extension NSViewRepresentableContext {
+    /// The environment to hand a hosting view nested in this representable. SwiftUI calls `updateNSView` again only
+    /// for the environment values it read, so reading the appearance here passes a switch to Light or Dark on.
+    var nestedEnvironment: EnvironmentValues {
+        let environment = self.environment
+        _ = (environment.colorScheme, environment.colorSchemeContrast)
+        return environment
+    }
+}
+
 /// Both widget editors use the same native drag lifecycle and single-use payload.
 class WidgetDragSourceView: WidgetHostingView, NSDraggingSource {
     static let pasteboardType = NSPasteboard.PasteboardType(WidgetDragSession.typeIdentifier)

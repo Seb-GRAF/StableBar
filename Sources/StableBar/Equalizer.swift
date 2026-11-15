@@ -67,7 +67,7 @@ private struct EqualizerLayer: NSViewRepresentable {
     }
 
     func updateNSView(_ view: EqualizerView, context: Context) {
-        view.rootView = AnyView(Rectangle().fill(.foreground).environment(\.self, context.environment))
+        view.rootView = AnyView(Rectangle().fill(.foreground).environment(\.self, context.nestedEnvironment))
         guard view.playing != equalizer.playing || view.height != equalizer.height else { return }
         let toggled = view.playing != nil && view.playing != equalizer.playing
         view.playing = equalizer.playing
