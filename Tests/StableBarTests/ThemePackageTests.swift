@@ -214,6 +214,87 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(name == "big")
 }
 
+@Test func longKeysInDoublingTokensCannotExhaustOriginBookkeeping() throws {
+    var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
+    for level in 1...12 {
+        tokens["t\(level)"] = .object([
+            String(repeating: "A", count: 1_300) + String(level): .string("@token.t\(level - 1)"),
+            String(repeating: "B", count: 1_300) + String(level): .string("@token.t\(level - 1)")
+        ])
+    }
+    let value = ConfigurationValue.object([
+        "widgets": .array([]), "tokens": .object(tokens),
+        "bar": .object(["style": .object(["background": .string("@token.t12")])])
+    ])
+    let data = try JSONEncoder().encode(value)
+    #expect(data.count <= 32_000)
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try loader.load(FileManager.default.temporaryDirectory.appending(path: "long-key-tokens.json"), data: data)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(tokens[name] != nil)
+}
+
+@Test func templateCopiesShareTheTokenOriginPathBudget() throws {
+    let properties = Dictionary(uniqueKeysWithValues: (0..<500).map { ("p\($0)", ConfigurationValue.number(1)) })
+    let widgets = (0..<40).map { index in
+        ConfigurationValue.object([
+            "id": .string(String(repeating: "w", count: 500) + String(index)), "template": .string("base")
+        ])
+    }
+    let data = try JSONEncoder().encode(ConfigurationValue.object([
+        "tokens": .object(["style": .object(properties)]),
+        "templates": .object(["base": .object([
+            "type": .string("text"), "position": .string("left"), "text": .string("Ready"),
+            "style": .string("@token.style")
+        ])]),
+        "widgets": .array(widgets)
+    ]))
+    #expect(data.count <= 32_000)
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try loader.load(FileManager.default.temporaryDirectory.appending(path: "template-origin-paths.json"), data: data)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "style")
+}
+
+@Test func nestedTokensKeepEveryOriginAndItsOriginalSource() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let module = directory.appending(path: "tokens.json")
+    let root = directory.appending(path: "config.json")
+    try writePackageFile(##"""
+    {"tokens":{"color":"#112233","look":{"background":{"gradient":{"colors":["@token.color","#445566"],"angle":45}},"fontSize":17},
+               "alias":"@token.look"}}
+    """##, to: module)
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    _ = try loader.load(root, data: Data(#"""
+    {"includes":["tokens.json"],"widgets":[{"id":"status.main","type":"text","position":"left","text":"Ready","style":"@token.alias"}]}
+    """#.utf8))
+    let tokenSource = ConfigurationOrigin(file: module.path).description
+    let widgetSource = ConfigurationOrigin(file: root.path, token: "alias", tokenSource: tokenSource)
+    let lookSource = ConfigurationOrigin(file: module.path, token: "look", tokenSource: tokenSource)
+    let colorSource = ConfigurationOrigin(file: module.path, token: "color", tokenSource: tokenSource)
+    let suffixes = ["", ".fontSize", ".background", ".background.gradient", ".background.gradient.colors",
+                    ".background.gradient.colors.0", ".background.gradient.colors.1", ".background.gradient.angle"]
+    let actual = loader.origins.filter { path, _ in
+        path == "widgets.status.main.style" || path.hasPrefix("widgets.status.main.style.")
+            || path == "tokens.alias" || path.hasPrefix("tokens.alias.") || path == "tokens.look.background.gradient.colors.0"
+    }
+    var expected = Dictionary(uniqueKeysWithValues: suffixes.map { ("widgets.status.main.style" + $0, widgetSource) })
+    for suffix in suffixes { expected["tokens.alias" + suffix] = lookSource }
+    expected["tokens.look.background.gradient.colors.0"] = colorSource
+    #expect(actual == expected)
+}
+
 @Test(arguments: ["@token.", "@setting."])
 func referenceExpansionCountsVisitedValuesAcrossTheWholeCall(prefix: String) throws {
     let literal = ConfigurationValue.array(Array(repeating: .number(1), count: 100_000))
