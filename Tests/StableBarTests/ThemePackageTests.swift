@@ -239,8 +239,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
     for level in 1...12 {
         tokens["t\(level)"] = .object([
-            String(repeating: "A", count: 1_300) + String(level): .string("@token.t\(level - 1)"),
-            String(repeating: "B", count: 1_300) + String(level): .string("@token.t\(level - 1)")
+            String(repeating: "A", count: 250) + String(level): .string("@token.t\(level - 1)"),
+            String(repeating: "B", count: 250) + String(level): .string("@token.t\(level - 1)")
         ])
     }
     let value = ConfigurationValue.object([
@@ -619,6 +619,88 @@ func longStringsOutsideReferencesUseNoExpansionBudget(prefix: String) throws {
 }
 
 @Test(arguments: ["@token.", "@setting."], [false, true])
+func referenceExpansionChargesKeyBytesPerVisit(prefix: String, multibyte: Bool) throws {
+    for (byteCount, copies) in [(255, 50_000), (256, 33_333), (20_000, 1_250)] {
+        let key = multibyte
+            ? String(repeating: "é", count: byteCount / 2) + String(repeating: "x", count: byteCount % 2)
+            : String(repeating: "x", count: byteCount)
+        let object = ConfigurationValue.object([key: .number(1)])
+        let reference = ConfigurationValue.string(prefix + "s")
+        let fits = ConfigurationValue.array(Array(repeating: reference, count: copies))
+        #expect(try substituteConfigurationReferences(fits, prefix: prefix, values: ["s": object])
+            == .array(Array(repeating: object, count: copies)))
+        let tooMany = ConfigurationValue.array(Array(repeating: reference, count: copies + 1))
+        let error = #expect(throws: ThemeConfigurationError.self) {
+            _ = try substituteConfigurationReferences(tooMany, prefix: prefix, values: ["s": object])
+        }
+        guard case let .referenceExpansionTooLarge(name)? = error else {
+            Issue.record("wrong error: \(String(describing: error))")
+            return
+        }
+        #expect(name == "s")
+    }
+}
+
+@Test(arguments: ["@token.", "@setting."])
+func referenceExpansionRejectsNestedCopiesOfLongKeys(prefix: String) throws {
+    let values: [String: ConfigurationValue] = [
+        "s": .object([String(repeating: "x", count: 25_000): .number(1)]),
+        "t1": .array(Array(repeating: .string(prefix + "s"), count: 100)),
+        "t2": .array(Array(repeating: .string(prefix + "t1"), count: 295))
+    ]
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        _ = try substituteConfigurationReferences(.string(prefix + "t2"), prefix: prefix, values: values)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "s")
+}
+
+@Test func tokensThatCopyLongKeysCannotExhaustLoading() throws {
+    let tokens: [String: ConfigurationValue] = [
+        "s": .object([String(repeating: "x", count: 25_000): .number(1)]),
+        "t1": .array(Array(repeating: .string("@token.s"), count: 100)),
+        "t2": .array(Array(repeating: .string("@token.t1"), count: 295))
+    ]
+    let data = try JSONEncoder().encode(ConfigurationValue.object([
+        "widgets": .array([]), "tokens": .object(tokens)
+    ]))
+    #expect(data.count <= 32_000)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        _ = try loader.load(FileManager.default.temporaryDirectory.appending(path: "long-key-tokens.json"), data: data)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "s")
+}
+
+@Test func aTokenWithAFewLongKeysCanBeCopiedAFewTimes() throws {
+    let keys = ["x", "y", "z"].map { String(repeating: $0, count: 20_000) }
+    let object = ConfigurationValue.object(Dictionary(uniqueKeysWithValues: keys.map { ($0, .number(1)) }))
+    let data = try JSONEncoder().encode(ConfigurationValue.object([
+        "widgets": .array([]),
+        "tokens": .object([
+            "s": object, "copies": .array(Array(repeating: .string("@token.s"), count: 3))
+        ])
+    ]))
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
+    let root = FileManager.default.temporaryDirectory.appending(path: "shared-long-keys.json")
+    #expect(try loader.load(root, data: data).widgets.isEmpty)
+    let tokens = try #require(try loader.document["tokens"]?.decoded([String: ConfigurationValue].self))
+    #expect(tokens["copies"] == .array(Array(repeating: object, count: 3)))
+    for key in keys {
+        #expect(loader.origins["tokens.copies.0.\(key)"]?.token == "s")
+    }
+}
+
+@Test(arguments: ["@token.", "@setting."], [false, true])
 func referenceExpansionChargesLongNamesPerHop(prefix: String, multibyte: Bool) throws {
     let name = String(repeating: multibyte ? "é" : "a", count: multibyte ? 8_000 : 16_000)
     let reference = ConfigurationValue.string(prefix + name)
@@ -638,6 +720,33 @@ func referenceExpansionChargesLongNamesPerHop(prefix: String, multibyte: Bool) t
     let largeReplacement = ConfigurationValue.array(Array(repeating: .number(1), count: 99_937))
     #expect(try substituteConfigurationReferences(reference, prefix: prefix, values: [name: largeReplacement])
         == largeReplacement)
+}
+
+@Test(arguments: ["@token.", "@setting."], [false, true])
+func referenceExpansionChargesNestedLongNamesOnlyPerHop(prefix: String, multibyte: Bool) throws {
+    for byteCount in [255, 256] {
+        let name = multibyte
+            ? String(repeating: "é", count: byteCount / 2) + String(repeating: "x", count: byteCount % 2)
+            : String(repeating: "x", count: byteCount)
+        let reference = ConfigurationValue.string(prefix + name)
+        for nested in [false, true] {
+            let leaves = 99_999 - byteCount / 256 - (nested ? 1 : 0)
+            let replacement = ConfigurationValue.array(Array(repeating: .number(1), count: leaves))
+            let value = nested ? ConfigurationValue.string(prefix + "alias") : reference
+            let values: [String: ConfigurationValue] = ["alias": reference, name: replacement]
+            #expect(try substituteConfigurationReferences(value, prefix: prefix, values: values) == replacement)
+            let tooLarge = ConfigurationValue.array(Array(repeating: .number(1), count: leaves + 1))
+            let error = #expect(throws: ThemeConfigurationError.self) {
+                _ = try substituteConfigurationReferences(value, prefix: prefix,
+                                                          values: ["alias": reference, name: tooLarge])
+            }
+            guard case let .referenceExpansionTooLarge(failedName)? = error else {
+                Issue.record("wrong error: \(String(describing: error))")
+                return
+            }
+            #expect(failedName == name)
+        }
+    }
 }
 
 @Test(arguments: ["@token.", "@setting."])

@@ -115,8 +115,13 @@ private func substituteReferences(_ value: ConfigurationValue, prefix: String,
     var depth = depth
     if let name = path.last {
         remaining -= 1
-        if case let .string(string) = value {
+        switch value {
+        case let .string(string) where !string.hasPrefix(prefix):
             remaining -= string.utf8.count / 256
+        case let .object(object):
+            for key in object.keys { remaining -= key.utf8.count / 256 }
+        default:
+            break
         }
         guard remaining >= 0 else {
             throw ThemeConfigurationError.referenceExpansionTooLarge(name)
