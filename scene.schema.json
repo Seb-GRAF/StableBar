@@ -82,6 +82,7 @@
       "enum": ["general", "bar", "theme", "profiles", "packages", "help", "feedback", "crashes"]
     },
     "package": { "description": "With section packages, the installed package whose settings to draw.", "type": "string" },
+    "themeLink": { "description": "A theme folder relative to this file, opened as a link on Settings Theme. Requires draw settings and section theme, without a widget.", "type": "string" },
     "tab": { "description": "The tab of the widget's Settings page: content, style or behavior. With section bar and no widget, the tab of the bar's settings: size, look or placement.", "enum": ["content", "style", "behavior", "size", "look", "placement"] },
     "uninstall": {
       "description": "What the Uninstall sheet shows for a sample Mac: its confirmation, or the steps that failed before StableBar quits. The confirmation by default.",

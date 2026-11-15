@@ -38,6 +38,18 @@ final class ThemeGallery {
 
     var selectedKey: String { store.selectedThemeKey }
 
+    var linkedThemeIsActive: Bool {
+        switch store.pendingLinks.theme?.state {
+        case .ready, .trying: true
+        default: false
+        }
+    }
+
+    var overrideTheme: ThemeChoice? {
+        if linkedThemeIsActive { return store.pendingLinks.theme?.choice }
+        return choices.first { $0.key == selectedKey }
+    }
+
     /// Store themes, without versions installed from their own source or from no source.
     /// Another source's copy of the same version keeps its card, whose Get explains the conflict.
     var storeThemes: [PackageIndex.Entry] {
@@ -61,7 +73,7 @@ final class ThemeGallery {
     }
 
     func error(for key: String) -> String? {
-        errors[key] ?? previewErrors[key] ?? (key == selectedKey ? overrideError : nil)
+        errors[key] ?? previewErrors[key] ?? (key == overrideTheme?.key ? overrideError : nil)
     }
 
     func configurationChanged() {
@@ -112,20 +124,46 @@ final class ThemeGallery {
             }
         }.value
         guard self.generation == generation, !Task.isCancelled else { return }
-        let available = Set(choices.map(\.key) + downloaded.keys)
+        let linked = store.pendingLinks.theme.map { [$0.choice.linkedPreviewKey] } ?? []
+        let available = Set(choices.map(\.key) + downloaded.keys + linked)
         previews = previews.filter { available.contains($0.key) }
         previewErrors = previewErrors.filter { available.contains($0.key) }
         for (key, result) in results { accept(result, key: key) }
         updateOverrides()
+        if let choice = store.pendingLinks.theme?.choice { await linkedPreview(for: choice) }
     }
 
     private func buildPreview(_ choice: ThemeChoice, key: String) async {
         let generation = generation
-        let loadPreview = loadPreview
-        let themesDirectory = store.themesDirectory
-        let result = await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
+        let result = await previewResult(for: choice)
         guard self.generation == generation, !Task.isCancelled else { return }
         accept(result, key: key)
+    }
+
+    private func previewResult(for choice: ThemeChoice) async -> Result<ThemePreview, Error> {
+        let loadPreview = loadPreview
+        let themesDirectory = store.themesDirectory
+        return await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
+    }
+
+    func linkedPreview(for choice: ThemeChoice) async {
+        guard previews[choice.linkedPreviewKey] == nil else { updateOverrides(); return }
+        let result = await previewResult(for: choice)
+        guard !Task.isCancelled, store.pendingLinks.theme?.choice.directory == choice.directory else { return }
+        accept(result, key: choice.linkedPreviewKey)
+        updateOverrides()
+    }
+
+    func dismissLinkedTheme(_ candidate: ThemeLinkCandidate) {
+        candidate.discard()
+        if store.pendingLinks.theme === candidate { store.pendingLinks.theme = nil }
+        configurationChanged()
+    }
+
+    func resetOverrides(everyBar: Bool) {
+        do { try store.customizationHistory.change(overrides.resetEdit, everyBar: everyBar) }
+        catch { store.customizationHistory.error = errorMessage(error) }
+        configurationChanged()
     }
 
     private func accept(_ result: Result<ThemePreview, Error>, key: String) {
@@ -142,7 +180,7 @@ final class ThemeGallery {
     private func updateOverrides() {
         overrideError = nil
         overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
-        guard let selected = choices.first(where: { $0.key == selectedKey }) else { return }
+        guard let selected = overrideTheme else { return }
         do {
             let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument),
                                                    activeProfiles: store.activeProfiles)
@@ -260,4 +298,9 @@ final class ThemeGallery {
 
 extension PackageIndex.Entry {
     var versionKey: String { "\(id)/\(version)" }
+}
+
+extension ThemeChoice {
+    // A link can carry different bytes for a version already installed or downloaded from a source.
+    var linkedPreviewKey: String { "linked:\(directory.path)" }
 }

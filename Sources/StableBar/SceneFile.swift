@@ -64,6 +64,8 @@ struct SceneFile: Decodable {
     var tab: Tab?
     /// The installed package whose settings the Packages section shows.
     var package: String?
+    /// A linked theme's folder, relative to the scene file, shown above the Theme gallery.
+    var themeLink: String?
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
     /// The star request the update popup shows, for `update`.
@@ -83,7 +85,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
-             starRequest, setup, applicationMove, macOSMajorVersion, appearances,
+             themeLink, starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -171,6 +173,7 @@ struct SceneFile: Decodable {
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         package = try values.decodeIfPresent(String.self, forKey: .package)
+        themeLink = try values.decodeIfPresent(String.self, forKey: .themeLink)
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
@@ -212,6 +215,10 @@ struct SceneFile: Decodable {
         }
         if package != nil, draw != .settings || widget != nil || section != .packages {
             throw DecodingError.dataCorruptedError(forKey: .package, in: values, debugDescription: "package belongs to the packages section of Settings.")
+        }
+        if themeLink != nil, draw != .settings || widget != nil || section != .theme {
+            throw DecodingError.dataCorruptedError(forKey: .themeLink, in: values,
+                                                   debugDescription: "themeLink belongs to the theme section of Settings.")
         }
         if menu != nil, draw != .popup {
             throw DecodingError.dataCorruptedError(forKey: .menu, in: values, debugDescription: "A menu belongs to a popup scene.")

@@ -47,7 +47,7 @@ struct AppearanceView: View {
                                 .padding(.top, 10).padding(.bottom, 4)
                         }
                         themes(appearance)
-                        if screen == nil { overrides }
+                        if screen == nil, !gallery.linkedThemeIsActive { overrides }
                         colors(appearance)
                         HStack(alignment: .top, spacing: 20) {
                             VStack(spacing: 22) {
@@ -101,6 +101,8 @@ struct AppearanceView: View {
         .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
         .onChange(of: store.configurationError) { _, _ in gallery.contextChanged() }
         .onChange(of: store.context) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.pendingLinks.theme?.choice.directory) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.pendingLinks.theme?.state) { _, _ in gallery.contextChanged() }
     }
 
     private func themes(_ appearance: BarAppearance) -> some View {
@@ -158,6 +160,14 @@ struct AppearanceView: View {
             .padding(.top, 24)
             .padding(.horizontal, 2)
             .id(SettingsSearchResult.theme.id)
+            if let candidate = store.pendingLinks.theme, candidate.state != .used {
+                LinkedThemeCard(candidate: candidate, gallery: gallery, screen: screen, everyBar: editor.themeChangesEveryBar)
+                    .id(candidate.choice.directory)
+                    .padding(.bottom, 4)
+            } else if let message = store.pendingLinks.themeError {
+                LinkedThemeErrorCard(message: message) { store.pendingLinks.themeError = nil }
+                    .padding(.bottom, 4)
+            }
             SettingsSegments(selection: $filter, options: [(.all, "All"), (.included, "Included"), (.store, "Store")],
                              stretches: false)
                 .fixedSize()
@@ -210,7 +220,7 @@ struct AppearanceView: View {
     }
 
     @ViewBuilder private var overrides: some View {
-        if let theme = gallery.choices.first(where: { $0.key == gallery.selectedKey }) {
+        if let theme = gallery.overrideTheme {
             let tint = gallery.overrides.values.isEmpty ? Color.secondary : SettingsPalette.warning
             HStack(spacing: 10) {
                 Text(gallery.overrides.notice(theme: theme.title)).fontWeight(.semibold)
