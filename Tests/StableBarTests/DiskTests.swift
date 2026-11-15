@@ -203,6 +203,15 @@ private final class RecordedUnmounts: @unchecked Sendable {
     #expect(unmounts.first?.options == VolumeEjector.options(.drive, isLocal: true))
 }
 
+@Test func aVolumeEjectUnmountsWithoutReadingTheVolumeFirst() async throws {
+    let recorded = RecordedUnmounts()
+    let ejector = VolumeEjector { recorded.append($0, $1) }
+    // Reading this path's keys would throw, so the unmount only runs if the eject skips the read.
+    let missing = NSTemporaryDirectory() + "StableBarTests-\(UUID().uuidString)"
+    try await ejector.eject(missing, .volume)
+    #expect(recorded.all.map { $0.options } == [[.withoutUI]])
+}
+
 @Test func aRefusedEjectReachesTheCaller() async {
     let ejector = VolumeEjector { _, _ in throw CocoaError(.fileWriteUnknown) }
     await #expect(throws: CocoaError.self) {
