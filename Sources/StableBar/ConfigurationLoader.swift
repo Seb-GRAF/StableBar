@@ -328,13 +328,55 @@ private func visitConfigurationValues(_ value: ConfigurationValue, path: String 
     }
 }
 
-// Flat origin maps repeat ancestor keys, so a node limit alone cannot bound their size.
+// Flat paths repeat ancestor keys; this budget counts bytes processed, including repeated passes.
 private struct ConfigurationOriginPathBudget {
-    private var remaining = 4_000_000
+    private static let maximumProcessedPathBytes = 4_000_000
+    private var remaining = Self.maximumProcessedPathBytes
 
     mutating func record(_ path: String, token: String) throws {
         remaining -= path.utf8.count
-        guard remaining >= 0 else { throw ThemeConfigurationError.referenceExpansionTooLarge(token) }
+        guard remaining >= 0 else { throw ThemeConfigurationError.referenceOriginsTooLarge(token) }
+    }
+}
+
+struct ConfigurationPathIndex<Value> {
+    private final class PrefixNode {
+        var children: [Substring: PrefixNode] = [:]
+        var prefix: String?
+    }
+
+    private let root = PrefixNode()
+    private var properties: [String: [String: Value]] = [:]
+
+    init(_ entries: some Sequence<(key: String, value: Value)>, prefixes: Set<String>) {
+        for prefix in prefixes {
+            var node = root
+            for part in prefix.split(separator: ".", omittingEmptySubsequences: false) {
+                if let child = node.children[part] {
+                    node = child
+                } else {
+                    let child = PrefixNode()
+                    node.children[part] = child
+                    node = child
+                }
+            }
+            node.prefix = prefix
+        }
+        for (path, value) in entries { insert(value, at: path) }
+    }
+
+    subscript(prefix: String) -> [String: Value] { properties[prefix] ?? [:] }
+
+    mutating func insert(_ value: Value, at path: String) {
+        var node = root
+        var start = path.startIndex
+        while let dot = path[start...].firstIndex(of: ".") {
+            guard let child = node.children[path[start..<dot]] else { break }
+            node = child
+            start = path.index(after: dot)
+            // Dotted ids and names can put the same path under several prefixes.
+            if let prefix = node.prefix { properties[prefix, default: [:]][String(path[start...])] = value }
+        }
     }
 }
 
@@ -550,13 +592,22 @@ struct ConfigurationLoader: Sendable {
         templates = try layer.values["templates"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
         let overrides = try layer.values["widgetOverrides"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
         let definitions = try layer.values["widgets"]!.decoded([[String: ConfigurationValue]].self)
+        // A widget can inherit its id from a template.
+        let sourceIDs = (definitions + Array(templates.values)).compactMap { definition -> String? in
+            guard case let .string(id)? = definition["id"] else { return nil }
+            return id
+        }
+        let prefixes = Set(sourceIDs.flatMap { ["widgets.\($0)", "widgetOverrides.\($0)"] }
+            + templates.keys.map { "templates.\($0)" } + essentialsPopupNames.values.map { "popups.\($0)" })
+        var originIndex = ConfigurationPathIndex(layer.origins, prefixes: prefixes)
+        var contributionIndex = ConfigurationPathIndex(layer.contributions, prefixes: prefixes)
         var widgets: [[String: ConfigurationValue]] = []
         for definition in definitions {
             var expanded = try expandWidgetTemplate(definition, templates: templates)
             let id = try (expanded["id"] ?? .null).decoded(String.self)
             if let popup = essentialsPopupNames[id],
-               layer.origins.contains(where: { path, source in
-                   path.hasPrefix("popups.\(popup).") && source.file != layer.origins["widgets.\(id).id"]!.file
+               originIndex["popups.\(popup)"].values.contains(where: { source in
+                   source.file != layer.origins["widgets.\(id).id"]!.file
                }) {
                 expanded["popupName"] = .string(popup)
             }
@@ -564,21 +615,19 @@ struct ConfigurationLoader: Sendable {
                 guard properties["id"] == nil else { throw ConfigurationCompositionError.widgetOverrideID(id) }
                 expanded.merge(properties) { $1.overriding($0) }
             }
-            var propertyOrigins = try templateOrigins(definition, templates: templates, origins: layer.origins)
-            var propertyContributions = try templateContributions(definition, templates: templates, contributions: layer.contributions)
+            var propertyOrigins = try templateOrigins(definition, templates: templates, origins: originIndex)
+            var propertyContributions = try templateContributions(definition, templates: templates, contributions: contributionIndex)
             let widgetPrefix = "widgets.\(id)"
-            for (path, source) in layer.origins where path.hasPrefix(widgetPrefix + ".") {
-                propertyOrigins[String(path.dropFirst(widgetPrefix.count + 1))] = source
+            propertyOrigins.merge(originIndex[widgetPrefix]) { $1 }
+            let overridePrefix = "widgetOverrides.\(id)"
+            for (path, entries) in contributionIndex[widgetPrefix] {
+                propertyContributions[path, default: []] += entries
             }
-            let overridePrefix = "widgetOverrides.\(id)."
-            for (path, entries) in layer.contributions where path.hasPrefix(widgetPrefix + ".") {
-                propertyContributions[String(path.dropFirst(widgetPrefix.count + 1)), default: []] += entries
+            for (path, source) in originIndex[overridePrefix] {
+                propertyOrigins[path] = source.appending("(widget override)")
             }
-            for (path, source) in layer.origins where path.hasPrefix(overridePrefix) {
-                propertyOrigins[String(path.dropFirst(overridePrefix.count))] = source.appending("(widget override)")
-            }
-            for (path, entries) in layer.contributions where path.hasPrefix(overridePrefix) {
-                propertyContributions[String(path.dropFirst(overridePrefix.count)), default: []] += entries.map {
+            for (path, entries) in contributionIndex[overridePrefix] {
+                propertyContributions[path, default: []] += entries.map {
                     var entry = $0
                     entry.origin = entry.origin.appending("(widget override)")
                     return entry
@@ -588,8 +637,13 @@ struct ConfigurationLoader: Sendable {
                 let destination = "\(widgetPrefix).\(path)"
                 if let token = source.token { try originBudget.record(destination, token: token) }
                 layer.origins[destination] = source
+                originIndex.insert(source, at: destination)
             }
-            for (path, entries) in propertyContributions { layer.contributions["\(widgetPrefix).\(path)"] = entries }
+            for (path, entries) in propertyContributions {
+                let destination = "\(widgetPrefix).\(path)"
+                layer.contributions[destination] = entries
+                contributionIndex.insert(entries, at: destination)
+            }
             widgets.append(expanded)
         }
         let ids = try widgets.map { try $0["id"]!.decoded(String.self) }
@@ -664,26 +718,24 @@ struct ConfigurationLoader: Sendable {
 
     private func templateOrigins(_ definition: [String: ConfigurationValue],
                                  templates: [String: [String: ConfigurationValue]],
-                                 origins: [String: ConfigurationOrigin]) throws -> [String: ConfigurationOrigin] {
+                                 origins: ConfigurationPathIndex<ConfigurationOrigin>) throws -> [String: ConfigurationOrigin] {
         guard let reference = definition["template"] else { return [:] }
         let name = try reference.decoded(String.self)
         var inherited = try templateOrigins(templates[name]!, templates: templates, origins: origins)
-        let prefix = "templates.\(name)."
-        for (path, source) in origins where path.hasPrefix(prefix) {
-            inherited[String(path.dropFirst(prefix.count))] = source.appending("(template \(name))")
+        for (path, source) in origins["templates.\(name)"] {
+            inherited[path] = source.appending("(template \(name))")
         }
         return inherited
     }
 
     private func templateContributions(_ definition: [String: ConfigurationValue],
                                        templates: [String: [String: ConfigurationValue]],
-                                       contributions: [String: [ConfigurationContribution]]) throws -> [String: [ConfigurationContribution]] {
+                                       contributions: ConfigurationPathIndex<[ConfigurationContribution]>) throws -> [String: [ConfigurationContribution]] {
         guard let reference = definition["template"] else { return [:] }
         let name = try reference.decoded(String.self)
         var inherited = try templateContributions(templates[name]!, templates: templates, contributions: contributions)
-        let prefix = "templates.\(name)."
-        for (path, entries) in contributions where path.hasPrefix(prefix) {
-            inherited[String(path.dropFirst(prefix.count)), default: []] += entries.map {
+        for (path, entries) in contributions["templates.\(name)"] {
+            inherited[path, default: []] += entries.map {
                 var entry = $0
                 entry.origin = entry.origin.appending("(template \(name))")
                 return entry

@@ -72,6 +72,7 @@ enum ThemeConfigurationError: LocalizedError {
     case unknownReference(String)
     case referenceCycle([String])
     case referenceExpansionTooLarge(String)
+    case referenceOriginsTooLarge(String)
     case referencesNestTooDeep(String)
     case unknownProfile(String)
     case duplicateProfile(String)
@@ -82,6 +83,9 @@ enum ThemeConfigurationError: LocalizedError {
         case let .referenceCycle(names): "Configuration reference cycle: \(names.joined(separator: " → "))."
         case let .referenceExpansionTooLarge(name):
             "Configuration references expand to more than 100,000 values at \(name). "
+                + "Check tokens or settings that refer to each other."
+        case let .referenceOriginsTooLarge(name):
+            "Configuration references at \(name) produce more than StableBar can track. "
                 + "Check tokens or settings that refer to each other."
         case let .referencesNestTooDeep(name):
             "Configuration references nest more than 64 levels deep at \(name). "

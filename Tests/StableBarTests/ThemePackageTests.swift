@@ -232,14 +232,16 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let error = #expect(throws: ThemeConfigurationError.self) {
         try loader.load(FileManager.default.temporaryDirectory.appending(path: "long-key-tokens.json"), data: data)
     }
-    guard case let .referenceExpansionTooLarge(name)? = error else {
+    guard case let .referenceOriginsTooLarge(name)? = error else {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }
     #expect(tokens[name] != nil)
+    #expect(error?.errorDescription == "Configuration references at \(name) produce more than StableBar can track. "
+        + "Check tokens or settings that refer to each other.")
 }
 
-@Test func templateCopiesShareTheTokenOriginPathBudget() throws {
+@Test func manyWidgetsWithATokenBackedTemplateCannotExhaustOriginBookkeeping() throws {
     let properties = Dictionary(uniqueKeysWithValues: (0..<500).map { ("p\($0)", ConfigurationValue.number(1)) })
     let widgets = (0..<40).map { index in
         ConfigurationValue.object([
@@ -259,7 +261,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let error = #expect(throws: ThemeConfigurationError.self) {
         try loader.load(FileManager.default.temporaryDirectory.appending(path: "template-origin-paths.json"), data: data)
     }
-    guard case let .referenceExpansionTooLarge(name)? = error else {
+    guard case let .referenceOriginsTooLarge(name)? = error else {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }
@@ -293,6 +295,108 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     for suffix in suffixes { expected["tokens.alias" + suffix] = lookSource }
     expected["tokens.look.background.gradient.colors.0"] = colorSource
     #expect(actual == expected)
+}
+
+@Test func dottedWidgetIDsKeepOriginsAndContributionOrderThroughTemplateCopies() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "dotted-widget-origins.json")
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    _ = try loader.load(root, data: Data(#"""
+    {"templates":{
+       "type.base":{"type":"text","position":"left","text":"Ready","style":{"fontSize":11}},
+       "metric.large":{"template":"type.base","style":{"fontSize":12}}},
+     "widgets":[{"id":"status.main","template":"metric.large","style":{"fontSize":13}},
+                {"id":"status","type":"text","position":"left","text":"Parent"}],
+     "widgetOverrides":{"status.main":{"style":{"fontSize":18}}}}
+    """#.utf8))
+    let path = "widgets.status.main.style.fontSize"
+    let source = ConfigurationOrigin(file: root.path)
+    #expect(loader.origins[path] == source.appending("(widget override)"))
+    let history = try #require(loader.contributions[path])
+    // The broader id also matches the dotted override's source prefix.
+    #expect(history.map(\.value) == [.number(11), .number(12), .number(13), .number(18), .number(18)])
+    #expect(history.map(\.origin) == [source.appending("(template type.base)"),
+                                    source.appending("(template metric.large)"), source,
+                                    source.appending("(widget override)"),
+                                    source.appending("(widget override)")])
+    #expect(loader.origins["widgets.status.main.text"] == source.appending("(template type.base)"))
+}
+
+@Test(arguments: [40, 560])
+func widgetSourceIndexesExamineEachPathOnceDespiteExpandedTokens(widgetCount: Int) throws {
+    var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
+    for level in 1...13 {
+        tokens["t\(level)"] = .array(Array(repeating: .string("@token.t\(level - 1)"), count: 2))
+    }
+    let ids = (0..<widgetCount).map { "w\($0)" }
+    let value = ConfigurationValue.object([
+        "tokens": .object(tokens), "bar": .object(["style": .object(["background": .string("@token.t13")])]),
+        "widgets": .array(ids.map { .object([
+            "id": .string($0), "type": .string("text"), "position": .string("left"), "text": .string("x")
+        ]) })
+    ])
+    let resolved = try substituteConfigurationReferences(value, prefix: "@token.", values: tokens)
+    let origins = configurationOrigins(resolved, source: ConfigurationOrigin(file: "theme.json"))
+    let layer = ConfigurationLayer(values: try resolved.decoded([String: ConfigurationValue].self), origins: origins)
+    #expect(origins.count == 49_139 + 5 * widgetCount)
+    let prefixes = Set(ids.map { "widgets.\($0)" })
+    var examinedOrigins = 0
+    var examinedContributions = 0
+    var originIndex = ConfigurationPathIndex(origins.lazy.map { entry in
+        examinedOrigins += 1
+        return entry
+    }, prefixes: prefixes)
+    var contributionIndex = ConfigurationPathIndex(layer.contributions.lazy.map { entry in
+        examinedContributions += 1
+        return entry
+    }, prefixes: prefixes)
+    for id in ids {
+        let prefix = "widgets.\(id)"
+        let propertyOrigins = originIndex[prefix]
+        let propertyContributions = contributionIndex[prefix]
+        #expect(propertyOrigins.count == 4)
+        #expect(propertyContributions.count == 4)
+        for (path, source) in propertyOrigins { originIndex.insert(source, at: "\(prefix).\(path)") }
+        for (path, entries) in propertyContributions { contributionIndex.insert(entries, at: "\(prefix).\(path)") }
+    }
+    #expect(examinedOrigins == origins.count)
+    #expect(examinedContributions == layer.contributions.count)
+}
+
+@Test func widgetIDsInheritedFromTemplatesKeepTheirSources() throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "inherited-widget-id.json")
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    _ = try loader.load(root, data: Data(#"""
+    {"templates":{"label":{"id":"status.main","type":"text","position":"left","text":"Ready"}},
+     "widgets":[{"template":"label"}],"widgetOverrides":{"status.main":{"text":"Changed"}}}
+    """#.utf8))
+    let source = ConfigurationOrigin(file: root.path)
+    #expect(loader.origins["widgets.status.main.id"] == source.appending("(template label)"))
+    #expect(loader.origins["widgets.status.main.text"] == source.appending("(widget override)"))
+    let history = try #require(loader.contributions["widgets.status.main.text"])
+    #expect(history.map(\.value) == [.string("Ready"), .string("Changed")])
+    #expect(history.map(\.origin) == [source.appending("(template label)"), source.appending("(widget override)")])
+}
+
+@Test func sourceIndexesMatchDottedPrefixesAndKeepLaterCopies() {
+    let prefixes: Set<String> = ["widgets.status", "widgets.status.main", "templates.type", "templates.type.base",
+                                 "widgetOverrides.status", "widgetOverrides.status.main", "popups.details"]
+    var sources = ["widgets.status.main.text": "widget", "widgets.status.mainly.text": "other widget",
+                   "widgets.status.main": "root", "templates.type.base.text": "template",
+                   "widgetOverrides.status.main.style.fontSize": "override", "popups.details.layout.text": "popup",
+                   "tokens.unrelated": "token"]
+    var index = ConfigurationPathIndex(sources, prefixes: prefixes)
+    index.insert("template copy", at: "widgets.status.main.style.fontSize")
+    sources["widgets.status.main.style.fontSize"] = "template copy"
+    index.insert("updated widget", at: "widgets.status.main.text")
+    sources["widgets.status.main.text"] = "updated widget"
+    for prefix in prefixes {
+        var expected: [String: String] = [:]
+        for (path, source) in sources where path.hasPrefix(prefix + ".") {
+            expected[String(path.dropFirst(prefix.count + 1))] = source
+        }
+        #expect(index[prefix] == expected)
+    }
+    #expect(index["widgets.missing"].isEmpty)
 }
 
 @Test(arguments: ["@token.", "@setting."])
