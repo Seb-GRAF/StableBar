@@ -1,4 +1,7 @@
+import DiskArbitration
 import Foundation
+import IOKit
+import IOKit.storage
 
 struct DiskVolume: Equatable, Sendable {
     var name: String
@@ -57,4 +60,74 @@ private func diskPercent(_ fraction: Double) -> String { String(Int((fraction * 
 private func diskState(_ fraction: Double, warning: Double, critical: Double) -> String? {
     if fraction > critical { return "critical" }
     return fraction > warning ? "warning" : nil
+}
+
+/// Reads the mounted volumes. Blocking: a network share can stall, so callers go through `BlockingWork.run`.
+protocol VolumeReading: Sendable {
+    func read() throws -> DiskVolumes
+}
+
+/// The startup disk and the volumes Finder shows, from Foundation's volume resource values.
+struct SystemVolumes: VolumeReading {
+    private static let keys: [URLResourceKey] = [
+        .volumeLocalizedNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
+        .volumeAvailableCapacityKey, .volumeLocalizedFormatDescriptionKey, .volumeIsLocalKey, .volumeIsInternalKey,
+        .volumeIsEjectableKey, .volumeIsRemovableKey, .volumeIsRootFileSystemKey
+    ]
+
+    func read() throws -> DiskVolumes {
+        let session = DASessionCreate(kCFAllocatorDefault)
+        guard let startup = try volume(at: URL(filePath: "/"), session: session) else {
+            throw CommandFailure(message: "Couldn't read the startup disk.")
+        }
+        let urls = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: Self.keys,
+                                                         options: [.skipHiddenVolumes]) ?? []
+        // On APFS the startup disk also mounts its data, preboot and other volumes under /System/Volumes.
+        let others = urls.compactMap { url -> DiskVolume? in
+            guard (try? url.resourceValues(forKeys: [.volumeIsRootFileSystemKey]))?.volumeIsRootFileSystem != true,
+                  !Self.path(of: url).hasPrefix("/System/Volumes/") else { return nil }
+            return try? volume(at: url, session: session)
+        }
+        return DiskVolumes(startup: startup, others: others)
+    }
+
+    private func volume(at url: URL, session: DASession?) throws -> DiskVolume? {
+        let values = try url.resourceValues(forKeys: Set(Self.keys))
+        guard let total = values.volumeTotalCapacity.map(Int64.init) else { return nil }
+        let available = values.volumeAvailableCapacityForImportantUsage ?? values.volumeAvailableCapacity.map(Int64.init) ?? 0
+        let isLocal = values.volumeIsLocal ?? true
+        let ejectable = values.volumeIsInternal != true || values.volumeIsEjectable == true
+            || values.volumeIsRemovable == true || !isLocal
+        return DiskVolume(name: values.volumeLocalizedName ?? url.lastPathComponent, path: Self.path(of: url),
+                          format: values.volumeLocalizedFormatDescription ?? "", total: total,
+                          available: min(max(available, 0), total), isLocal: isLocal, ejectable: ejectable,
+                          drive: session.flatMap { Self.drive(of: url, session: $0) })
+    }
+
+    private static func path(of url: URL) -> String {
+        let path = url.path(percentEncoded: false)
+        return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+    }
+
+    /// The BSD name of the topmost whole `IOMedia` above the volume, so an APFS volume maps to its physical disk
+    /// rather than to its synthesized container. Nil for volumes without a disk, such as network shares.
+    private static func drive(of url: URL, session: DASession) -> String? {
+        guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, url as CFURL) else { return nil }
+        var entry = DADiskCopyIOMedia(disk)
+        var whole: String?
+        while entry != 0 {
+            if IOObjectConformsTo(entry, kIOMediaClass) != 0,
+               IORegistryEntryCreateCFProperty(entry, kIOMediaWholeKey as CFString, kCFAllocatorDefault, 0)?
+                   .takeRetainedValue() as? Bool == true,
+               let name = IORegistryEntryCreateCFProperty(entry, kIOBSDNameKey as CFString, kCFAllocatorDefault, 0)?
+                   .takeRetainedValue() as? String {
+                whole = name
+            }
+            var parent: io_registry_entry_t = 0
+            let status = IORegistryEntryGetParentEntry(entry, kIOServicePlane, &parent)
+            IOObjectRelease(entry)
+            entry = status == KERN_SUCCESS ? parent : 0
+        }
+        return whole
+    }
 }

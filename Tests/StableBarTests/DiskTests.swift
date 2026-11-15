@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import os
 import Testing
 @testable import StableBar
 
@@ -66,4 +68,89 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     let output = diskOutput(DiskVolumes(startup: startup, others: [startup]), warning: 1.01, critical: 1.01)
     #expect(output.state == nil)
     #expect(output.lists?["volumes"]?.first?["state"] == "")
+}
+
+private final class FakeVolumes: VolumeReading {
+    private let result: @Sendable () throws -> DiskVolumes
+    private let count = OSAllocatedUnfairLock(initialState: 0)
+
+    init(_ result: @escaping @Sendable () throws -> DiskVolumes) { self.result = result }
+
+    var reads: Int { count.withLock { $0 } }
+
+    func read() throws -> DiskVolumes {
+        count.withLock { $0 += 1 }
+        return try result()
+    }
+}
+
+private func diskProvider(_ properties: [String: ConfigurationValue] = [:]) throws -> ProviderConfiguration {
+    try ConfigurationValue.object(properties.merging(["type": .string("disk")]) { _, type in type })
+        .decoded(ProviderConfiguration.self)
+}
+
+@Test func diskProvidersDefaultToAMinuteAndTheirThresholds() throws {
+    let decoded = try ConfigurationValue.object(["type": .string("disk")]).decoded(ProviderConfiguration.self)
+    #expect(decoded.interval == 60 && decoded.diskWarning == 0.85 && decoded.diskCritical == 0.95)
+    #expect(ProviderConfiguration(type: "disk").interval == 60)
+    #expect(ProviderConfiguration(type: "network").interval == 5)
+}
+
+@Test func aDiskWidgetLoadsWithAnImplicitProvider() throws {
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(FileManager.default.temporaryDirectory.appending(path: "disk.json"), data: Data(#"""
+    {"widgets":[{"id":"disk","type":"disk","position":"right","details":true}]}
+    """#.utf8))
+    #expect(configuration.widgets.first?.content == .provider("disk"))
+    #expect(configuration.providers["disk"]?.interval == 60)
+}
+
+@Test @MainActor func theDiskSourceReadsWithItsThresholdsAndRefreshesOnMount() async throws {
+    let volumes = FakeVolumes { fixture }
+    let script = ScriptWidget()
+    defer { script.stop() }
+    script.start(provider: try diskProvider(["diskWarning": .number(0.5)]),
+                 registry: DataSourceRegistry(types: [.disk(reader: volumes)]))
+    try await awaitCondition { script.output.text == "59%" && script.output.state == .string("warning") }
+    try await awaitCondition { !script.diagnostics.running }
+    NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didMountNotification, object: nil)
+    try await awaitCondition { volumes.reads == 2 }
+}
+
+@Test @MainActor func aFailedDiskReadShowsTheProviderError() async throws {
+    let volumes = FakeVolumes { throw CommandFailure(message: "No startup volume.") }
+    let script = ScriptWidget()
+    defer { script.stop() }
+    script.start(provider: try diskProvider(), registry: DataSourceRegistry(types: [.disk(reader: volumes)]))
+    try await awaitCondition { script.error == "No startup volume." }
+}
+
+@Test @MainActor func aSlowVolumeReadKeepsTheMainActorFree() async throws {
+    let release = DispatchSemaphore(value: 0)
+    let volumes = FakeVolumes {
+        release.wait()
+        return fixture
+    }
+    let script = ScriptWidget()
+    defer { script.stop() }
+    script.start(provider: try diskProvider(), registry: DataSourceRegistry(types: [.disk(reader: volumes)]))
+    try await awaitCondition { volumes.reads == 1 }
+    var ticks = 0
+    let ticker = Task { @MainActor in
+        while !Task.isCancelled {
+            ticks += 1
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+    defer { ticker.cancel() }
+    try await awaitCondition { ticks >= 3 }
+    #expect(script.output.text == "…")
+    release.signal()
+    try await awaitCondition { script.output.text == "59%" }
+}
+
+@Test func theLiveReaderKeepsTheStartupDisksOwnVolumesOutOfTheList() throws {
+    let volumes = try SystemVolumes().read()
+    #expect(volumes.startup.path == "/" && volumes.startup.total > 0)
+    #expect(!volumes.others.contains { $0.path == "/" || $0.path.hasPrefix("/System/Volumes/") })
 }
