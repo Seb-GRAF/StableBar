@@ -62,7 +62,7 @@ enum DocsImages {
             controls.stop()
 
             let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: nil, dark: dark,
-                                             widgets: ["clock", "battery", "system", "network", "calendar"].map { type in
+                                             widgets: ["clock", "battery", "system", "network", "calendar", "disk"].map { type in
                 WidgetAddCatalog.builtIns.first { $0.id == type }!.add(position: .right, id: type)!.properties!
             }, native: true)
             let details = VStack(alignment: .leading, spacing: 20) {
@@ -71,7 +71,7 @@ enum DocsImages {
                     ForEach(["clock", "battery", "network"], id: \.self) { id in essentialsPopup(essentials, id) }
                 }
                 HStack(alignment: .top, spacing: 18) {
-                    ForEach(["system", "calendar"], id: \.self) { id in essentialsPopup(essentials, id) }
+                    ForEach(["system", "calendar", "disk"], id: \.self) { id in essentialsPopup(essentials, id) }
                 }
             }
             .padding(24)
@@ -266,6 +266,15 @@ enum DocsImages {
                           {"name":"Finder","pid":"102","path":"/System/Library/CoreServices/Finder.app","memory":"120 MB","cpu":"1"}]}}
         """#,
         "network": #"{"text":"↓1.2 MiB/s ↑240 KiB/s","icon":"network","fields":{"interface":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"},"lists":{"interfaces":[{"name":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"}]},"values":{"download":1258291,"upload":245760}}"#,
+        "disk": #"""
+        {"text":"59%","icon":"internaldrive","tooltip":"412 GB available on Macintosh HD",
+         "fields":{"percent":"59","volume":"Macintosh HD","format":"APFS","used":"582 GB","free":"412 GB","total":"994 GB"},
+         "values":{"disk":0.5855,"used":582000000000,"free":412000000000,"total":994000000000},
+         "lists":{"volumes":[{"name":"Backup","path":"/Volumes/Backup","symbol":"externaldrive","percent":"41","fraction":"0.41",
+                              "used":"820 GB","free":"1.18 TB","total":"2 TB","state":"","ejectable":"true","drive":"disk4","driveVolumes":"Photos"},
+                             {"name":"Photos","path":"/Volumes/Photos","symbol":"externaldrive","percent":"40","fraction":"0.4",
+                              "used":"200 GB","free":"300 GB","total":"500 GB","state":"","ejectable":"true","drive":"disk4","driveVolumes":"Backup"}]}}
+        """#,
         "battery": #"""
         {"text":"82%","icon":"battery.75percent","values":{"percent":0.82},
          "fields":{"percent":"82","state":"battery","present":"true","health":"normal","timeRemaining":"285"}}
