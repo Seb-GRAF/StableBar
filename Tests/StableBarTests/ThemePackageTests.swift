@@ -338,8 +338,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let source = ConfigurationOrigin(file: root.path)
     #expect(loader.origins[path] == source.appending("(widget override)"))
     let history = try #require(loader.contributions[path])
-    // The second 18 is current, pre-existing behavior for an id extending another dotted id,
-    // not an intended rule.
+    // Both dotted widget prefixes match this override path, so it's recorded twice.
     #expect(history.map(\.value) == [.number(11), .number(12), .number(13), .number(18), .number(18)])
     #expect(history.map(\.origin) == [source.appending("(template type.base)"),
                                     source.appending("(template metric.large)"), source,
