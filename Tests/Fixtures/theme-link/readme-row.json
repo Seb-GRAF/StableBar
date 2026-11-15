@@ -1,0 +1,13 @@
+{
+  "manifest": {
+    "id": "fern",
+    "name": "Fern",
+    "version": "1.2.0",
+    "kind": "theme",
+    "entry": "config.json",
+    "description": "A floating olive-black strip of pill groups with a pale-lime accent and Material-style tonal states, in dark and light. Set in Rubik, with the system font until it's installed.",
+    "author": "M4n0x",
+    "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+  },
+  "row": "|  | **[Fern](packages/fern)**<br>A floating olive-black strip of pill groups with a pale-lime accent and Material-style tonal states, in dark and light. Set in Rubik, with the system font until it's installed. | No commands |"
+}

@@ -1,10 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import {
   BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, resolveTheme,
   CONTROLS, controlsFor, applyControl, fileText,
 } from "../../site/creator/theme.mjs";
+import {
+  themeFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
+} from "../../site/creator/files.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = path => readFileSync(new URL(path, root));
@@ -453,4 +459,301 @@ test("versions", () => {
 
 test("fileText is the shared file serializer", () => {
   assert.equal(fileText({ name: "Léman", value: null }), '{\n  "name": "Léman",\n  "value": null\n}\n');
+});
+
+const sample = json("Tests/Fixtures/theme-link/sample.json");
+const linkedFiles = {
+  manifestText: read("Tests/Fixtures/linked-theme/package.json").toString(),
+  configText: read("Tests/Fixtures/linked-theme/config.json").toString(),
+};
+const utf8 = text => new TextEncoder().encode(text);
+const uncheckedLink = (config = "{}", manifest = "{}") =>
+  `stablebar://theme?v=1&package=${Buffer.from(manifest).toString("base64url")}` +
+  `&config=${Buffer.from(config).toString("base64url")}`;
+const nestedJSON = levels => '{"x":' + "[".repeat(levels - 1) + "0" + "]".repeat(levels - 1) + "}";
+const profilesJSON = count => JSON.stringify({ profiles: Array.from({ length: count }, () => ({ name: "x" })) });
+const linkError = message => ({ name: "Error", message });
+const rejectsFiles = (configText, error, manifestText = "{}") => {
+  assert.throws(() => encodeLink({ manifestText, configText }), linkError(error));
+  assert.throws(() => decodeLink(uncheckedLink(configText, manifestText)), linkError(error));
+};
+
+test("theme files build a fresh manifest and use the shared serializer", () => {
+  const manifest = {
+    ...theme("built-in"), ...state("built-in").manifest,
+    id: "harbour-test", name: "Harbour Test", version: "1.2.3", author: "a-builder", description: "A theme",
+    kind: "commands", entry: "other.json", screenshot: "preview.png", permissions: ["automation"],
+  };
+  const config = theme("nord");
+  const original = structuredClone({ manifest, config });
+  assert.deepEqual(themeFiles({ manifest, config }), {
+    manifestText: fileText({
+      id: "harbour-test", name: "Harbour Test", version: "1.2.3", kind: "theme", entry: "config.json",
+      description: "A theme", author: "a-builder",
+    }),
+    configText: fileText(config),
+  });
+  assert.deepEqual({ manifest, config }, original);
+  const optional = themeFiles({ manifest: { id: "my-theme", name: "My theme", version: "1.0.0" }, config: {} });
+  assert.deepEqual(JSON.parse(optional.manifestText), {
+    id: "my-theme", name: "My theme", version: "1.0.0", kind: "theme", entry: "config.json",
+  });
+});
+
+test("theme files refuse empty and reserved ids with a message", () => {
+  assert.throws(() => themeFiles({ manifest: { id: slug("日本") }, config: {} }), /id/i);
+  for (const id of RESERVED_IDS) {
+    assert.throws(() => themeFiles({ manifest: { id }, config: {} }), /id/i, id);
+    assert.throws(() => writeZip(id, linkedFiles), /id/i, id);
+  }
+  for (const id of ["", " ", "../escape", "a/b", "a\\b"]) {
+    assert.throws(() => writeZip(id, linkedFiles), /id/i, id);
+  }
+});
+
+test("links match the app's fixture", () => {
+  assert.equal(linkedFiles.manifestText, sample["package.json"]);
+  assert.equal(linkedFiles.configText, sample["config.json"]);
+  assert.equal(encodeLink(linkedFiles), sample.link);
+  assert.deepEqual(decodeLink(sample.link), linkedFiles);
+  assert.deepEqual(decodeLink("#" + sample.link.split("?")[1]), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link.replace("stablebar://theme", "STABLEBAR://THEME")), linkedFiles);
+});
+
+test("share URLs carry the exact same query in the fragment", () => {
+  const base = "https://stablebar.app/create-theme.html";
+  assert.equal(shareURL(base, linkedFiles), `${base}#${sample.link.split("?")[1]}`);
+  assert.equal(shareURL(base + "#old", linkedFiles), shareURL(base, linkedFiles));
+});
+
+test("links accept exact padding and unknown query items", () => {
+  const padded = new URL(sample.link);
+  for (const name of ["package", "config"]) {
+    const value = padded.searchParams.get(name);
+    padded.searchParams.set(name, value + "=".repeat((4 - value.length % 4) % 4));
+  }
+  assert.deepEqual(decodeLink(padded.href), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link.replace("&config=", "==&config=")), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link + "&x=1&x=2"), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link + "&x=%"), linkedFiles);
+  assert.deepEqual(decodeLink("#" + padded.search.slice(1)), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link.replace("//theme?", "//%74heme?")), linkedFiles);
+  assert.deepEqual(decodeLink(sample.link.replace("//theme?", "//theme:?")), linkedFiles);
+});
+
+test("links refuse damaged query items and unsupported versions like the app", () => {
+  const damaged = [
+    "v=1&config=e30", "v=1&package=!!&config=e30", "v=1&package=e30&config=WzFd",
+    "package=e30&config=e30", "v=&package=e30&config=e30", "v=0&package=e30&config=e30",
+    "v=-1&package=e30&config=e30", "v=abc&package=e30&config=e30", "v=1.0&package=e30&config=e30",
+    "v=01&package=e30&config=e30", "v=+1&package=e30&config=e30", "v=9223372036854775808&package=e30&config=e30",
+    "v=1&package=WzFd&config=e30", "v=1&package=e30&config=!!", "v=1&package=e30&config=bnVsbA",
+    "v=1&package=e30&config=ew", "v=1&package=e30", "v=1&package&config=e30",
+    "v=1&v=2&package=e30&config=e30", "v=1&package=e30&package=e30&config=e30",
+    "v=1&package=e30&config=e30&config=e30", "v=1&package=e30==&config=e30",
+    "v=1&package=e30&config=e=30", "v=1&package=e30&config=a", "v=1&package=e30&config=e30+",
+    "v=1&package=e30&config=e30/", "v=1&package=e30&config=e30%0A", "v=1&package=e30&config=e30=extra",
+    "v=1&package=e30&config=e30%", "v=1&package=e30&config=e30&%76=1",
+  ];
+  for (const query of damaged) {
+    assert.throws(() => decodeLink("stablebar://theme?" + query), linkError("damaged"), query);
+  }
+  for (const version of ["2", "3", "+2", "02"]) {
+    assert.throws(() => decodeLink(`stablebar://theme?v=${version}&package=e30&config=e30`),
+      linkError("unsupportedVersion"), version);
+  }
+  for (const query of ["v=2", "v=2&package=e30&package=e30&config=e30"]) {
+    assert.throws(() => decodeLink("stablebar://theme?" + query), linkError("unsupportedVersion"), query);
+  }
+  for (const [urlChar, base64Char] of [["-", "+"], ["_", "/"]]) {
+    assert.throws(() => decodeLink(sample.link.replaceAll(urlChar, base64Char)), linkError("damaged"));
+  }
+});
+
+test("links refuse additional URL components", () => {
+  const query = "?v=1&package=e30&config=e30";
+  const links = [
+    "stablebar://theme/" + query, "stablebar://theme/extra" + query,
+    "stablebar://theme" + query + "#fragment", "stablebar://theme" + query + "#",
+    "stablebar://user@theme" + query, "stablebar://user:password@theme" + query,
+    "stablebar://@theme" + query, "stablebar://theme:123" + query,
+    "https://theme" + query, "stablebar://themes" + query, "stablebar://package/nord",
+  ];
+  for (const link of links) assert.throws(() => decodeLink(link), linkError("damaged"), link);
+});
+
+test("links refuse what the app refuses", () => {
+  const padded = size => "{" + " ".repeat(size - 2) + "}";
+  rejectsFiles(padded(13_000), "tooLarge", padded(20_000));
+  const maximum = { manifestText: padded(20_000), configText: padded(12_768) };
+  assert.deepEqual(decodeLink(encodeLink(maximum)), maximum);
+  const unicode = { manifestText: "{}", configText: JSON.stringify({ name: "é".repeat(16_381) }) };
+  assert.ok(unicode.configText.length < 32_768);
+  assert.throws(() => encodeLink(unicode), linkError("tooLarge"));
+  const prefix = uncheckedLink() + "&x=";
+  assert.deepEqual(decodeLink(prefix + "x".repeat(65_536 - prefix.length)),
+    { manifestText: "{}", configText: "{}" });
+  assert.throws(() => decodeLink(prefix + "x".repeat(65_537 - prefix.length)), linkError("tooLong"));
+  rejectsFiles(nestedJSON(33), "tooDeep");
+  rejectsFiles("{}", "tooDeep", nestedJSON(33));
+  rejectsFiles(nestedJSON(5_001), "tooDeep");
+  rejectsFiles('{"x":' + nestedJSON(40) + ',"x":null}', "tooDeep");
+  rejectsFiles('{"x":null,"x":' + nestedJSON(40) + "}", "tooDeep");
+  const boundary = { manifestText: "{}", configText: nestedJSON(32) };
+  assert.deepEqual(decodeLink(encodeLink(boundary)), boundary);
+  const bracesInString = { manifestText: "{}", configText: JSON.stringify({ label: '[[{{\\"'.repeat(40) }) };
+  assert.deepEqual(decodeLink(encodeLink(bracesInString)), bracesInString);
+  for (const invalid of ["[]", "null", "1", "true", '"text"', "", "{", '{"x":1,}', "{}{}", "{\u0000}"]) {
+    rejectsFiles(invalid, "damaged");
+    rejectsFiles("{}", "damaged", invalid);
+  }
+});
+
+test("links accept only UTF-8 and preserve a UTF-8 BOM", () => {
+  const files = { manifestText: '\ufeff{"name":"Harbour — Nord"}', configText: "\ufeff" + nestedJSON(32) };
+  assert.deepEqual(decodeLink(encodeLink(files)), files);
+  for (const bytes of [Buffer.from("{}", "utf16le"), Buffer.from([0xff, 0xfe, 0x7b, 0, 0x7d, 0]),
+    Buffer.from([0xfe, 0xff, 0, 0x7b, 0, 0x7d]), Buffer.from([0x7b, 0, 0, 0, 0x7d, 0, 0, 0]),
+    Buffer.from([0x7b, 0x22, 0x78, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d])]) {
+    assert.throws(() => decodeLink(uncheckedLink(bytes)), linkError("damaged"));
+    assert.throws(() => decodeLink(uncheckedLink("{}", bytes)), linkError("damaged"));
+  }
+  rejectsFiles("\ufeff" + nestedJSON(33), "tooDeep");
+});
+
+test("links refuse JSON strings and numbers Foundation cannot decode", () => {
+  for (const invalid of ['{"n":1e9999}', '{"x":"\\ud800"}', '{"x":"\\udc00"}', '{"\\ud800":null}',
+    '{"n":1e9999,"n":0}', '{"x":"\\ud800","x":"valid"}']) {
+    rejectsFiles(invalid, "damaged");
+    rejectsFiles("{}", "damaged", invalid);
+  }
+  const valid = { manifestText: "{}", configText: '{"x":"\\ud83d\\ude00","n":1e308,"small":1e-9999}' };
+  assert.deepEqual(decodeLink(encodeLink(valid)), valid);
+});
+
+test("links limit profiles in raw JSON and across nested profiles", () => {
+  const sixteen = { manifestText: "{}", configText: profilesJSON(16) };
+  assert.deepEqual(decodeLink(encodeLink(sixteen)), sixteen);
+  rejectsFiles(profilesJSON(17), "tooManyProfiles");
+  for (const extraFirst of [false, true]) {
+    const extra = profilesJSON(17).slice(1, -1);
+    rejectsFiles("{" + (extraFirst ? extra + ',"profiles":[]' : '"profiles":[],' + extra) + "}", "tooManyProfiles");
+  }
+  const escaped = profilesJSON(17).replace("profiles", "pro\\u0066iles");
+  rejectsFiles(escaped, "tooManyProfiles");
+  const nested = count => JSON.stringify({ profiles: [{ name: "outer", configuration: JSON.parse(profilesJSON(count)) }] });
+  rejectsFiles(nested(16), "tooManyProfiles");
+  assert.doesNotThrow(() => encodeLink({ manifestText: "{}", configText: nested(15) }));
+  const manifest = profilesJSON(17);
+  assert.doesNotThrow(() => encodeLink({ manifestText: manifest, configText: "{}" }));
+  const delimiters = JSON.stringify({ other: Array(17).fill(0), profiles: Array.from({ length: 16 },
+    () => ({ name: 'commas, [ ] { } " \\ \\u0066' })) }).replace('"profiles"', '"pro\\u0066iles"');
+  assert.doesNotThrow(() => encodeLink({ manifestText: "{}", configText: delimiters }));
+});
+
+test("linked bar properties are restricted at the root and in every profile", () => {
+  const bar = {
+    height: 30, margin: 0, inset: 1, spacing: 6, background: "#123456", style: { cornerRadius: 5 },
+    notchWidth: 0, notchSpacing: 2, fillNotch: false, popupOffset: 3,
+  };
+  assert.doesNotThrow(() => encodeLink({ manifestText: "{}", configText: JSON.stringify({ bar }) }));
+  for (const value of [{ position: "bottom" }, { hideMenuBar: true }, "@token.bar", "@setting.bar", null, [], 30, true]) {
+    const document = { bar: value };
+    rejectsFiles(JSON.stringify(document), "barProperty");
+    rejectsFiles(JSON.stringify({ profiles: [{ name: "p", configuration: document }] }), "barProperty");
+    rejectsFiles(JSON.stringify({ profiles: [{ name: "p", configuration: {
+      profiles: [{ name: "nested", configuration: document }],
+    } }] }), "barProperty");
+  }
+});
+
+test("crc32", () => {
+  assert.equal(crc32(utf8("hello")), 0x3610a686);
+  assert.equal(crc32(new Uint8Array()), 0);
+});
+
+test("zip round trip", async () => {
+  const zip = writeZip("harbour-test", linkedFiles);
+  assert.ok(zip instanceof Uint8Array);
+  assert.deepEqual(writeZip("harbour-test", linkedFiles), zip);
+  const header = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  assert.equal(header.getUint16(8, true), 0);
+  assert.equal(header.getUint16(10, true), 0);
+  assert.equal(header.getUint16(12, true), 33);
+  assert.deepEqual(await readZip(zip), linkedFiles);
+  const padded = new Uint8Array(zip.length + 8);
+  padded.set(zip, 4);
+  assert.deepEqual(await readZip(padded.subarray(4, -4)), linkedFiles);
+});
+
+test("written zips pass unzip -t", t => {
+  const available = spawnSync("unzip", ["-v"], { encoding: "utf8" });
+  if (available.error?.code === "ENOENT") return t.skip("unzip is not installed");
+  const directory = mkdtempSync(join(tmpdir(), "stablebar-creator-"));
+  try {
+    const file = join(directory, "theme.zip");
+    writeFileSync(file, writeZip("harbour-test", linkedFiles));
+    const checked = spawnSync("unzip", ["-t", file], { encoding: "utf8" });
+    assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("reads a zip Finder made and skips its metadata", async () => {
+  const zip = read("Tests/Fixtures/theme-link/finder.zip");
+  assert.ok(zip.includes(Buffer.from(".DS_Store")));
+  assert.ok(zip.includes(Buffer.from("__MACOSX/")));
+  assert.deepEqual(await readZip(zip), linkedFiles);
+});
+
+test("zip metadata cannot be mistaken for the theme manifest", async () => {
+  for (const folder of ["__MACOSX", ".ignored"]) {
+    const zip = Buffer.from(writeZip("metadata", linkedFiles));
+    const before = Buffer.from("metadata/"), after = Buffer.from(`${folder}/`);
+    for (let index = zip.indexOf(before); index !== -1; index = zip.indexOf(before, index + before.length)) {
+      zip.set(after, index);
+    }
+    await assert.rejects(() => readZip(zip));
+  }
+});
+
+test("a theme too large for links still downloads and reopens as a zip", async () => {
+  const files = { ...linkedFiles, configText: JSON.stringify({ tokens: { large: "x".repeat(40_000) } }) };
+  assert.throws(() => encodeLink(files), linkError("tooLarge"));
+  assert.throws(() => shareURL("https://stablebar.app/create-theme.html", files), linkError("tooLarge"));
+  assert.deepEqual(await readZip(writeZip("harbour-test", files)), files);
+});
+
+test("zip corruption and missing entries are refused", async () => {
+  for (const bytes of [new Uint8Array(), utf8("not a zip"), writeZip("harbour-test", linkedFiles).slice(0, -1)]) {
+    await assert.rejects(() => readZip(bytes));
+  }
+  const corrupt = writeZip("harbour-test", linkedFiles);
+  const text = Buffer.from(corrupt.buffer);
+  corrupt[text.indexOf(Buffer.from("Harbour Test"))] ^= 1;
+  await assert.rejects(() => readZip(corrupt));
+  const missing = { ...linkedFiles, manifestText: '{"entry":"missing.json"}' };
+  await assert.rejects(() => readZip(writeZip("harbour-test", missing)));
+});
+
+test("readme row matches the Store's script", () => {
+  const { manifest, row } = json("Tests/Fixtures/theme-link/readme-row.json");
+  assert.equal(manifest.version, "1.2.0");
+  assert.equal(readmeRow(manifest), row);
+  for (const description of [undefined, null, "", "   "]) {
+    assert.throws(() => readmeRow({ ...manifest, description }), /description/i);
+  }
+});
+
+test("store lookup", async () => {
+  const { manifest } = json("Tests/Fixtures/theme-link/readme-row.json");
+  const url = "https://raw.githubusercontent.com/Seb-GRAF/stablebar-packages/main/packages/fern/package.json";
+  const response = status => async requested => {
+    assert.equal(requested, url);
+    return new Response(JSON.stringify(manifest), { status });
+  };
+  assert.equal(await storeManifest("fern", response(404)), null);
+  assert.deepEqual(await storeManifest("fern", response(200)), manifest);
+  await assert.rejects(() => storeManifest("fern", response(500)), /500/);
+  await assert.rejects(() => storeManifest("fern", async () => { throw new Error("offline"); }), /offline/);
+  await assert.rejects(() => storeManifest("fern", async () => new Response("not JSON")));
 });
