@@ -121,6 +121,7 @@ struct ThemeLinkTests {
         #expect(ThemeLink.maximumLength == 65_536)
         #expect(ThemeLink.maximumFileBytes == 32_768)
         #expect(ThemeLink.maximumDepth == 32)
+        #expect(ThemeLink.maximumValues == 372)
 
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: Data("{}".utf8))
         let prefix = link.link.absoluteString + "&x="
@@ -132,6 +133,42 @@ struct ThemeLinkTests {
 
         let maximumDepth = ThemeLink(manifest: Data("{}".utf8), configuration: nestedObject(levels: 32))
         #expect(try ThemeLink(url: maximumDepth.link) == maximumDepth)
+    }
+
+    @Test(arguments: [false, true])
+    func rawValuesAcrossBothFilesAreLimitedBeforeDecoding(inManifest: Bool) throws {
+        // Two roots, the array and its 369 scalars use all 372 values.
+        let scalars = ["null", "true", "false", "-12.5e2", #""commas, [ ] { } \" \\ \u0066""#]
+        let entries = (0..<369).map { scalars[$0 % scalars.count] }.joined(separator: ",")
+        let full = Data((#"{"values":["# + entries + "]}").utf8)
+        let empty = Data("{}".utf8)
+        let link = ThemeLink(manifest: inManifest ? full : empty, configuration: inManifest ? empty : full)
+        #expect(try ThemeLink(url: link.link) == link)
+
+        let extra = Data(#"{"x":0}"#.utf8)
+        let overflow = ThemeLink(manifest: inManifest ? full : extra, configuration: inManifest ? extra : full)
+        var reachedDecoder = false
+        let error = #expect(throws: (any Error).self) {
+            try ThemeLink(url: overflow.link, decode: { _ in
+                reachedDecoder = true
+                return .object([:])
+            })
+        }
+        #expect(error as? ThemeLinkError == .tooManySettings)
+        #expect(!reachedDecoder)
+    }
+
+    @Test func duplicateKeysCannotHideValuesFromTheRawLimit() {
+        let entries = Array(repeating: #""x":{}"#, count: 371).joined(separator: ",")
+        let link = ThemeLink(manifest: Data("{}".utf8), configuration: Data(("{" + entries + "}").utf8))
+        var reachedDecoder = false
+        #expect(throws: ThemeLinkError.tooManySettings) {
+            try ThemeLink(url: link.link, decode: { _ in
+                reachedDecoder = true
+                return .object([:])
+            })
+        }
+        #expect(!reachedDecoder)
     }
 
     @Test(arguments: [false, true])
@@ -274,6 +311,7 @@ struct ThemeLinkTests {
         (.tooLarge, "This theme is larger than a theme link can carry (32 KB)."),
         (.tooDeep, "This theme nests its settings more than 32 levels deep."),
         (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry."),
+        (.tooManySettings, "This theme has more settings than a link can carry. Download it as a zip instead."),
         (.indirectBar, "A theme link must set the bar's settings directly, not through a token or setting."),
         (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Download it as a zip instead."),
         (.idTaken("Harbour-Test"), "Another package already uses the ID Harbour-Test. Rename the theme on the page.")

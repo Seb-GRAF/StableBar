@@ -462,9 +462,10 @@ struct ThemeLinkCandidateTests {
             configuration["tokens"] = .object(doublingTokens(levels: 17))
             configuration["bar"] = .object(["style": .object(["background": .string("@token.t17")])])
         case .profileExpansion, .nestedProfileExpansion:
-            let colors = ConfigurationValue.array(Array(repeating: .string("#123456"), count: 250))
-            configuration["tokens"] = .object(["colors": colors])
-            let rows = Array(repeating: ConfigurationValue.string("@token.colors"), count: 400)
+            let colors = ConfigurationValue.array(Array(repeating: .string("#123456"), count: 100))
+            let row = ConfigurationValue.array(Array(repeating: .string("@token.colors"), count: 10))
+            configuration["tokens"] = .object(["colors": colors, "row": row])
+            let rows = Array(repeating: ConfigurationValue.string("@token.row"), count: 100)
             let gradient: ConfigurationValue = .object(["gradient": .object(["colors": .array(rows)])])
             var content: [String: ConfigurationValue] = ["defaults": .object(["background": gradient])]
             if rejection == .nestedProfileExpansion { content = ["profiles": .array([profile(content, name: "Nested")])] }
@@ -574,8 +575,8 @@ struct ThemeLinkCandidateTests {
                 return
             }
         case .referenceOrigins:
-            guard case .referenceOriginsTooLarge? = error as? ThemeConfigurationError else {
-                Issue.record("Expected reference origins limit, got \(String(describing: error))")
+            guard case .referenceExpansionTooLarge? = error as? ThemeConfigurationError else {
+                Issue.record("Expected long-key expansion limit, got \(String(describing: error))")
                 return
             }
         case .invalidEntry, .unknownProperty: #expect(error is WidgetPackageError)
@@ -620,8 +621,8 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         var link = try linkedTheme()
         let tokens: [String: ConfigurationValue] = [
-            "c": .array(Array(repeating: .number(1), count: 250)),
-            "r": .array(Array(repeating: .string("@token.c"), count: 198))
+            "c": .array(Array(repeating: .number(1), count: 100)),
+            "r": .array(Array(repeating: .string("@token.c"), count: 100))
         ]
         let profiles = (0..<16).map { index in
             profile(["tokens": .object(["p": .string("@token.r")])], name: "p\(index)", enabled: false)
@@ -635,8 +636,8 @@ struct ThemeLinkCandidateTests {
         loader.previewProfile = "p0"
         let expanded = try loader.finish(layer, context: ConfigurationContext())
         let expandedTokens = try expanded["tokens"]?.decoded([String: ConfigurationValue].self)
-        let row = ConfigurationValue.array(Array(repeating: .number(1), count: 250))
-        #expect(expandedTokens?["p"] == .array(Array(repeating: row, count: 198)))
+        let row = ConfigurationValue.array(Array(repeating: .number(1), count: 100))
+        #expect(expandedTokens?["p"] == .array(Array(repeating: row, count: 100)))
 
         let before = try temporaryFolders()
         let error = #expect(throws: (any Error).self) {
@@ -654,18 +655,22 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         let bundled = try FileManager.default.contentsOfDirectory(at: fixture.themes, includingPropertiesForKeys: nil)
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var largestConfiguration = 0
         for directory in [linkedThemeDirectory] + bundled {
             var manifest = try JSONDecoder().decode([String: ConfigurationValue].self,
                                                    from: Data(contentsOf: directory.appending(path: "package.json")))
             manifest["id"] = .string("linked-\(directory.lastPathComponent)")
             let link = ThemeLink(manifest: try configurationData(manifest),
                                  configuration: try Data(contentsOf: directory.appending(path: "config.json")))
+            largestConfiguration = max(largestConfiguration, try valueCount(link.configuration))
+            #expect(try ThemeLink(url: link.link) == link)
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             defer { candidate.discard() }
             #expect(candidate.state == .ready, "\(directory.lastPathComponent)")
             #expect(candidate.validationExpansionUnits < 300_000)
             #expect(candidate.validationOriginPathBytes < 8_000_000)
         }
+        #expect(ThemeLink.maximumValues == 4 * largestConfiguration)
     }
 
     @Test func longKeyOriginsShareOneAllowanceAcrossDisabledProfiles() throws {
@@ -681,6 +686,38 @@ struct ThemeLinkCandidateTests {
             candidate.discard()
         }
         #expect(error as? ThemeLinkError == .tooManyReferences)
+        #expect(try temporaryFolders() == before)
+    }
+
+    @Test(arguments: [0, 24])
+    func literalValuesAtTheLinkCapCanBeTriedAndUsed(nesting: Int) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        func configuration(numbers: Int) throws -> Data {
+            var values = ConfigurationValue.array(Array(repeating: .number(1), count: numbers))
+            for _ in 0..<nesting { values = .array([values]) }
+            let first = profile(["tokens": .object(["x": values])], name: "p0", enabled: false)
+            let empty = (1..<16).map { ConfigurationValue.object(["name": .string("p\($0)"), "enabled": .bool(false)]) }
+            return try JSONEncoder().encode(ConfigurationValue.object(["profiles": .array([first] + empty)]))
+        }
+        let overhead = try valueCount(link.manifest) + valueCount(configuration(numbers: 0))
+        let numbers = ThemeLink.maximumValues - overhead
+        #expect(numbers > 0)
+        link.configuration = try configuration(numbers: numbers)
+        #expect(try valueCount(link.manifest) + valueCount(link.configuration) == ThemeLink.maximumValues)
+        let candidate = try ThemeLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        await candidate.use()
+        #expect(candidate.state == .used)
+
+        link.configuration = try configuration(numbers: numbers + 1)
+        let before = try temporaryFolders()
+        #expect(throws: ThemeLinkError.tooManySettings) { try ThemeLinkCandidate(link: link, store: store) }
         #expect(try temporaryFolders() == before)
     }
 
@@ -702,7 +739,7 @@ struct ThemeLinkCandidateTests {
         #expect(!exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")))
     }
 
-    @Test func successfulTrialReloadAndReuseContinueChargingTheSameAllowance() async throws {
+    @Test func onlyCandidateStartedCompositionsChargeTheAllowance() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         _ = try fixture.packages.install(linkedThemeDirectory)
@@ -712,6 +749,11 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         let initial = candidate.validationOriginPathBytes
         #expect(initial > 0)
+        var displays = 0
+        store.onConfigurationChange = {
+            displays += 1
+            #expect(ConfigurationReferenceExpansionBudget.current == nil)
+        }
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
         let tried = candidate.validationOriginPathBytes
@@ -719,7 +761,7 @@ struct ThemeLinkCandidateTests {
         store.reloadConfiguration()
         #expect(store.configurationError == nil)
         let reloaded = candidate.validationOriginPathBytes
-        #expect(reloaded > tried)
+        #expect(reloaded == tried)
         await candidate.use()
         #expect(candidate.state == .used)
         #expect(candidate.validationOriginPathBytes > reloaded)
@@ -727,22 +769,37 @@ struct ThemeLinkCandidateTests {
         store.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(candidate.validationOriginPathBytes == used)
+        #expect(displays >= 2)
     }
 
-    @Test func trialReloadsCannotResetAnAlmostSpentOriginAllowance() throws {
-        let fixture = try ThemeGalleryFixture()
+    @Test func aThousandStoreReloadsDoNotSpendTheCandidatesAllowance() async throws {
+        let widgets = (0..<40).map { #"{"id":"w\#($0)","type":"text","text":"Label","position":"left"}"# }
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[\#(widgets.joined(separator: ","))]}"#)
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        let candidate = try ThemeLinkCandidate(link: longKeyLink(profileCount: 0, groups: 5), store: store)
+        let theme = fixture.themes.appending(path: "gruvbox")
+        var manifest = try JSONDecoder().decode([String: ConfigurationValue].self,
+                                               from: Data(contentsOf: theme.appending(path: "package.json")))
+        manifest["id"] = .string("linked-gruvbox")
+        let link = ThemeLink(manifest: try configurationData(manifest),
+                             configuration: try Data(contentsOf: theme.appending(path: "config.json")))
+        let candidate = try ThemeLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
+        let initial = candidate.validationOriginPathBytes
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
-        store.reloadConfiguration()
-        #expect(store.configurationError == nil)
-        store.reloadConfiguration()
-        #expect(candidate.validationOriginPathBytes == 8_000_000)
-        #expect(store.configurationError == ThemeLinkError.tooManyReferences.errorDescription)
+        let tried = candidate.validationOriginPathBytes
+        #expect(tried > initial)
+        for _ in 0..<1_000 {
+            store.reloadConfiguration()
+            #expect(store.configurationError == nil)
+        }
+        #expect(candidate.validationOriginPathBytes == tried)
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configuration?.widgets.count == 40)
+        await candidate.use()
+        #expect(candidate.state == .used)
     }
 
     @Test func nestedProfilesShareTheBudgetWithInspectionAndOtherReferenceChecks() throws {
@@ -752,10 +809,11 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         var link = try linkedTheme()
         let tokens: [String: ConfigurationValue] = [
-            "c": .array(Array(repeating: .number(1), count: 250)),
-            "r": .array([.string("@token.c")])
+            "seed": .array(Array(repeating: .number(1), count: 90)),
+            "c": .array(Array(repeating: .string("@token.seed"), count: 3)),
+            "r": .array(Array(repeating: .string("@token.c"), count: 10))
         ]
-        let references = ConfigurationValue.array(Array(repeating: .string("@token.r"), count: 100))
+        let references = ConfigurationValue.array(Array(repeating: .string("@token.r"), count: 10))
         let nested = (0..<15).map { index in
             profile(["tokens": .object(["p": references])], name: "p\(index)", enabled: false)
         }
@@ -773,7 +831,7 @@ struct ThemeLinkCandidateTests {
         #expect(try temporaryFolders() == before)
     }
 
-    @Test(arguments: [239, 240])
+    @Test(arguments: [194, 195])
     func aCandidatesBudgetSpansInspectionAndItsFinalReferenceCheck(referenceCount: Int) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -781,14 +839,15 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         var link = try linkedTheme()
         link.configuration = try configurationData(["tokens": .object([
-            "c": .array(Array(repeating: .number(1), count: 250)),
+            "seed": .array(Array(repeating: .number(1), count: 100)),
+            "c": .array(Array(repeating: .string("@token.seed"), count: 3)),
             "r": .array(Array(repeating: .string("@token.c"), count: referenceCount))
         ])])
         let before = try temporaryFolders()
-        if referenceCount == 239 {
+        if referenceCount == 194 {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             #expect(candidate.state == .ready)
-            #expect(candidate.validationExpansionUnits == 299_945)
+            #expect(candidate.validationExpansionUnits == 299_305)
             candidate.discard()
         } else {
             let error = #expect(throws: (any Error).self) {
@@ -817,6 +876,15 @@ struct ThemeLinkCandidateTests {
     private func linkedTheme() throws -> ThemeLink {
         ThemeLink(manifest: try Data(contentsOf: linkedThemeDirectory.appending(path: "package.json")),
                   configuration: try Data(contentsOf: linkedThemeDirectory.appending(path: "config.json")))
+    }
+
+    private func valueCount(_ data: Data) throws -> Int {
+        func count(_ value: Any) -> Int {
+            if let object = value as? [String: Any] { return 1 + object.values.reduce(0) { $0 + count($1) } }
+            if let array = value as? [Any] { return 1 + array.reduce(0) { $0 + count($1) } }
+            return 1
+        }
+        return count(try JSONSerialization.jsonObject(with: data))
     }
 
     private func longKeyLink(profileCount: Int, groups: Int = 10) throws -> ThemeLink {

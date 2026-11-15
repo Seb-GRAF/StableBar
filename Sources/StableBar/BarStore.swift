@@ -81,7 +81,7 @@ final class BarStore: NSObject {
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
-    private var triedTheme: (choice: ThemeChoice, budget: ConfigurationReferenceExpansionBudget?)?
+    private var triedTheme: ThemeChoice?
     private var managesConnections = false
     private let configurationWatcher = ConfigurationWatcher()
     private(set) var reloadTask: Task<Void, Never>?
@@ -607,7 +607,9 @@ final class BarStore: NSObject {
         normalComposition = (next, configurationLoader)
         if let triedTheme {
             do {
-                let (preview, loader) = try configurationTryingTheme(triedTheme.choice, referenceExpansionBudget: triedTheme.budget)
+                let (preview, loader) = try ConfigurationReferenceExpansionBudget.$current.withValue(nil) {
+                    try configurationTryingTheme(triedTheme)
+                }
                 display(preview, loader: loader)
             } catch { configurationError = errorMessage(error) }
         } else {
@@ -620,7 +622,7 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
-    var themeTrialDirectory: URL? { triedTheme?.choice.directory }
+    var themeTrialDirectory: URL? { triedTheme?.directory }
 
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
@@ -669,7 +671,7 @@ final class BarStore: NSObject {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
         let (next, loader) = try configurationTryingTheme(choice, referenceExpansionBudget: referenceExpansionBudget)
-        triedTheme = (choice, referenceExpansionBudget)
+        triedTheme = choice
         display(next, loader: loader)
     }
 
@@ -723,6 +725,13 @@ final class BarStore: NSObject {
     }
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
+        // Background tasks started by display must not inherit a linked theme's validation allowance.
+        ConfigurationReferenceExpansionBudget.$current.withValue(nil) {
+            displayWithoutReferenceBudget(next, loader: loader)
+        }
+    }
+
+    private func displayWithoutReferenceBudget(_ next: Configuration, loader: ConfigurationLoader) {
         adopt(loader)
         if effectiveDocument == loader.document {
             origins = loader.origins

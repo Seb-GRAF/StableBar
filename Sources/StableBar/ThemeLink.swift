@@ -8,6 +8,7 @@ struct ThemeLink: Equatable, Sendable {
     static let maximumFileBytes = 32_768
     static let maximumDepth = 32
     static let maximumProfiles = 16
+    static let maximumValues = 372
 
     init(manifest: Data, configuration: Data) {
         self.manifest = manifest
@@ -52,8 +53,11 @@ struct ThemeLink: Equatable, Sendable {
     func validateFiles() throws(ThemeLinkError) {
         guard manifest.count + configuration.count <= Self.maximumFileBytes else { throw .tooLarge }
         // ConfigurationValue's recursive decoding is expensive even without references, so bound the raw JSON first.
-        try Self.checkJSON(manifest, limitProfiles: false)
-        try Self.checkJSON(configuration, limitProfiles: true)
+        var valueCount = 0
+        try Self.scan(manifest, limitProfiles: false, valueCount: &valueCount)
+        try Self.scan(configuration, limitProfiles: true, valueCount: &valueCount)
+        try Self.checkJSON(manifest)
+        try Self.checkJSON(configuration)
     }
 
     var link: URL {
@@ -92,8 +96,7 @@ struct ThemeLink: Equatable, Sendable {
         return Data(base64Encoded: base64 + String(repeating: "=", count: padding))
     }
 
-    private static func checkJSON(_ data: Data, limitProfiles: Bool) throws(ThemeLinkError) {
-        try scan(data, limitProfiles: limitProfiles)
+    private static func checkJSON(_ data: Data) throws(ThemeLinkError) {
         do {
             guard try JSONSerialization.jsonObject(with: data) is [String: Any] else {
                 throw ThemeLinkError.damaged
@@ -101,7 +104,7 @@ struct ThemeLink: Equatable, Sendable {
         } catch { throw .damaged }
     }
 
-    private static func scan(_ data: Data, limitProfiles: Bool) throws(ThemeLinkError) {
+    private static func scan(_ data: Data, limitProfiles: Bool, valueCount: inout Int) throws(ThemeLinkError) {
         let bytes = try jsonBytes(data)
         var depth = 0
         var inString = false
@@ -112,6 +115,8 @@ struct ThemeLink: Equatable, Sendable {
         var inProfiles = false
         var profileCount = 0
         var inProfile = false
+        var containers: [UInt8] = []
+        var expectingValue = true
 
         // Scan every value because parsed dictionaries discard duplicate keys.
         for (index, byte) in bytes.enumerated() {
@@ -145,11 +150,18 @@ struct ThemeLink: Equatable, Sendable {
             switch byte {
             case UInt8(ascii: "\""):
                 inString = true
+                if expectingValue {
+                    valueCount += 1
+                    expectingValue = false
+                }
                 if limitProfiles, depth == 1, expectingKey {
                     keyStart = index
                     expectingKey = false
                 }
             case UInt8(ascii: "{"), UInt8(ascii: "["):
+                valueCount += 1
+                containers.append(byte)
+                expectingValue = byte == UInt8(ascii: "[")
                 depth += 1
                 guard depth <= maximumDepth else { throw .tooDeep }
                 if limitProfiles, depth == 2, byte == UInt8(ascii: "["), key == "profiles" {
@@ -158,13 +170,25 @@ struct ThemeLink: Equatable, Sendable {
                     inProfile = false
                 }
             case UInt8(ascii: "}"), UInt8(ascii: "]"):
+                _ = containers.popLast()
+                expectingValue = false
                 if depth == 2, byte == UInt8(ascii: "]") { inProfiles = false }
                 depth -= 1
-            case UInt8(ascii: ",") where depth == 1:
-                expectingKey = true
-                key = nil
-            default: break
+            case UInt8(ascii: ","):
+                expectingValue = containers.last == UInt8(ascii: "[")
+                if depth == 1 {
+                    expectingKey = true
+                    key = nil
+                }
+            case UInt8(ascii: ":"): expectingValue = true
+            case UInt8(ascii: "\t"), UInt8(ascii: "\n"), UInt8(ascii: "\r"), UInt8(ascii: " "): break
+            default:
+                if expectingValue {
+                    valueCount += 1
+                    expectingValue = false
+                }
             }
+            guard valueCount <= maximumValues else { throw .tooManySettings }
         }
         guard depth == 0, !inString else { throw .damaged }
     }
@@ -186,7 +210,7 @@ struct ThemeLink: Equatable, Sendable {
 
 enum ThemeLinkError: LocalizedError, Equatable {
     case tooLong, unsupportedVersion(String), damaged, tooLarge, tooDeep, tooManyProfiles
-    case notATheme, needsReview, extraFiles, indirectBar, tooManyReferences
+    case notATheme, needsReview, extraFiles, indirectBar, tooManyReferences, tooManySettings
     case barProperty(String), reservedID(String), idTaken(String)
     case versionTaken(id: String, version: String)
 
@@ -204,6 +228,8 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .indirectBar: "A theme link must set the bar's settings directly, not through a token or setting."
         case .tooManyReferences:
             "This theme refers to its own values too many times to open from a link. Download it as a zip instead."
+        case .tooManySettings:
+            "This theme has more settings than a link can carry. Download it as a zip instead."
         case let .barProperty(key): "A theme link can't set the bar's \(key)."
         case let .reservedID(id): "\(id) is the ID of a theme that comes with StableBar. Rename the theme on the page."
         case let .idTaken(id): "Another package already uses the ID \(id). Rename the theme on the page."
