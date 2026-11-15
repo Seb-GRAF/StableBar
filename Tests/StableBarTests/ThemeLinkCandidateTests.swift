@@ -4,6 +4,82 @@ import Testing
 
 @MainActor @Suite(.serialized)
 struct ThemeLinkCandidateTests {
+    @Test(arguments: [false, true])
+    func aThemeLinkOpensTheThemePageAndReplacesAnEarlierOne(tryFirst: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let a = try linkedTheme()
+        var b = a
+        b.configuration = Data(#"{"bar":{"height":42}}"#.utf8)
+
+        #expect(store.receive([a.link]) == .appearance)
+        let first = try #require(store.pendingLinks.theme)
+        defer { first.discard() }
+        #expect(first.link == a)
+        #expect(exists(first.choice.directory))
+        if tryFirst {
+            first.tryOnBar()
+            #expect(store.themeTrialDirectory == first.choice.directory)
+        }
+
+        #expect(store.receive([b.link]) == .appearance)
+        let second = try #require(store.pendingLinks.theme)
+        defer { second.discard() }
+        #expect(second.link == b)
+        #expect(second.state == .ready)
+        #expect(store.pendingLinks.themeError == nil)
+        #expect(!exists(first.choice.directory))
+        #expect(exists(second.choice.directory))
+        #expect(store.themeTrialDirectory == nil)
+    }
+
+    @Test func aDamagedThemeLinkShowsWhyOnTheThemePage() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let damaged = URL(string: "stablebar://theme?v=1&package=!!")!
+
+        #expect(store.receive([damaged]) == .appearance)
+        #expect(store.pendingLinks.theme == nil)
+        #expect(store.pendingLinks.themeError == ThemeLinkError.damaged.errorDescription)
+
+        #expect(store.receive([try linkedTheme().link]) == .appearance)
+        #expect(store.pendingLinks.themeError == nil)
+        let candidate = try #require(store.pendingLinks.theme)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
+
+        #expect(store.receive([damaged]) == .appearance)
+        #expect(store.pendingLinks.theme == nil)
+        #expect(store.pendingLinks.themeError == ThemeLinkError.damaged.errorDescription)
+        #expect(!exists(candidate.choice.directory))
+        #expect(store.themeTrialDirectory == nil)
+    }
+
+    @Test(arguments: [false, true])
+    func stoppingTheStoreRemovesALinkedThemesFolder(tryFirst: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        #expect(store.receive([try linkedTheme().link]) == .appearance)
+        let candidate = try #require(store.pendingLinks.theme)
+        defer { candidate.discard() }
+        #expect(exists(candidate.choice.directory))
+        if tryFirst {
+            candidate.tryOnBar()
+            #expect(store.themeTrialDirectory == candidate.choice.directory)
+        }
+
+        store.stop()
+        #expect(!exists(candidate.choice.directory))
+        #expect(store.themeTrialDirectory == nil)
+    }
+
     @Test func aLinkedThemeIsTriedFromATemporaryFolderAndRemovedOnDiscard() throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }

@@ -1223,6 +1223,19 @@ final class BarStore: NSObject {
     /// Keeps the last `stablebar://` link StableBar opens for Settings and returns its section.
     func receive(_ urls: [URL]) -> CustomizationSection? {
         for url in urls.reversed() {
+            do {
+                if let link = try ThemeLink(url: url) {
+                    pendingLinks.theme?.discard()
+                    pendingLinks.theme = try ThemeLinkCandidate(link: link, store: self)
+                    pendingLinks.themeError = nil
+                    return .appearance
+                }
+            } catch {
+                pendingLinks.theme?.discard()
+                pendingLinks.theme = nil
+                pendingLinks.themeError = errorMessage(error)
+                return .appearance
+            }
             if let link = PackageSourceLink(url: url) {
                 pendingLinks.source = link
             } else if let link = PackageLink(url: url) {
@@ -1239,6 +1252,7 @@ final class BarStore: NSObject {
         packageLibrary.stopUpdateChecks()
         barEditing.end()
         endThemeTrial()
+        pendingLinks.theme?.discard()
         flushCustomization()
         managesConnections = false
         popup.closeAll()
