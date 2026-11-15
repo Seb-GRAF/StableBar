@@ -225,7 +225,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
         ]) })
     ]))
     let root = FileManager.default.temporaryDirectory.appending(path: "shared-app-glyphs.json")
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     let configuration = try loader.load(root, data: data)
     #expect(configuration.widgets.map(\.id) == ids)
     for widget in configuration.widgets {
@@ -248,7 +249,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     ])
     let data = try JSONEncoder().encode(value)
     #expect(data.count <= 32_000)
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     let error = #expect(throws: ThemeConfigurationError.self) {
         try loader.load(FileManager.default.temporaryDirectory.appending(path: "long-key-tokens.json"), data: data)
     }
@@ -277,7 +279,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
         "widgets": .array(widgets)
     ]))
     #expect(data.count <= 32_000)
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     let error = #expect(throws: ThemeConfigurationError.self) {
         try loader.load(FileManager.default.temporaryDirectory.appending(path: "template-origin-paths.json"), data: data)
     }
@@ -297,7 +300,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     {"tokens":{"color":"#112233","look":{"background":{"gradient":{"colors":["@token.color","#445566"],"angle":45}},"fontSize":17},
                "alias":"@token.look"}}
     """##, to: module)
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     _ = try loader.load(root, data: Data(#"""
     {"includes":["tokens.json"],"widgets":[{"id":"status.main","type":"text","position":"left","text":"Ready","style":"@token.alias"}]}
     """#.utf8))
@@ -307,10 +311,11 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let colorSource = ConfigurationOrigin(file: module.path, token: "color", tokenSource: tokenSource)
     let suffixes = ["", ".fontSize", ".background", ".background.gradient", ".background.gradient.colors",
                     ".background.gradient.colors.0", ".background.gradient.colors.1", ".background.gradient.angle"]
-    let actual = loader.origins.filter { path, _ in
-        path == "widgets.status.main.style" || path.hasPrefix("widgets.status.main.style.")
-            || path == "tokens.alias" || path.hasPrefix("tokens.alias.") || path == "tokens.look.background.gradient.colors.0"
+    func isChecked(_ path: String) -> Bool {
+        if path == "tokens.look.background.gradient.colors.0" { return true }
+        return ["widgets.status.main.style", "tokens.alias"].contains { path == $0 || path.hasPrefix($0 + ".") }
     }
+    let actual = loader.origins.filter { path, _ in isChecked(path) }
     var expected = Dictionary(uniqueKeysWithValues: suffixes.map { ("widgets.status.main.style" + $0, widgetSource) })
     for suffix in suffixes { expected["tokens.alias" + suffix] = lookSource }
     expected["tokens.look.background.gradient.colors.0"] = colorSource
@@ -319,7 +324,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
 
 @Test func dottedWidgetIDsKeepOriginsAndContributionOrderThroughTemplateCopies() throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "dotted-widget-origins.json")
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     _ = try loader.load(root, data: Data(#"""
     {"templates":{
        "type.base":{"type":"text","position":"left","text":"Ready","style":{"fontSize":11}},
@@ -385,7 +391,8 @@ func widgetSourceIndexesExamineEachPathOnceDespiteExpandedTokens(widgetCount: In
 
 @Test func widgetIDsInheritedFromTemplatesKeepTheirSources() throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "inherited-widget-id.json")
-    var loader = ConfigurationLoader(themesDirectory: nil)
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = nil
     _ = try loader.load(root, data: Data(#"""
     {"templates":{"label":{"id":"status.main","type":"text","position":"left","text":"Ready"}},
      "widgets":[{"template":"label"}],"widgetOverrides":{"status.main":{"text":"Changed"}}}
