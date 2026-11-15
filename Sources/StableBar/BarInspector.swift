@@ -54,7 +54,6 @@ struct BarInspector: View {
     @State private var fontFamilies: [String] = []
     @State private var customClockFormat = false
     @State private var json = ""
-    @State private var jsonError: String?
     @State private var editingJSON = false
     @State private var webPage = ""
     @State private var editingWebPage = false
@@ -122,7 +121,10 @@ struct BarInspector: View {
             customClockFormat = false
             clickError = nil
         }
-        .sheet(isPresented: $editingJSON) { jsonSheet }
+        .sheet(isPresented: $editingJSON) {
+            JSONSheet(title: "\(names[editor.selectedID ?? ""] ?? "Widget") as JSON", text: json,
+                      apply: { editor.replaceProperties($0); return editor.error }, close: { editingJSON = false })
+        }
         .sheet(isPresented: $editingWebPage) { webPageSheet }
         .confirmationDialog("Reset \(resetting.map { names[$0.id] ?? $0.id } ?? "")?",
                             isPresented: Binding(get: { resetting != nil }, set: { if !$0 { resetting = nil } }), presenting: resetting) { widget in
@@ -173,7 +175,6 @@ struct BarInspector: View {
                 var properties = editor.properties(for: widget.id)
                 properties["id"] = nil
                 json = (try? String(decoding: configurationData(properties), as: UTF8.self)) ?? "{}"
-                jsonError = nil
                 editingJSON = true
             }
             Button("Copy widget ID") {
@@ -707,35 +708,6 @@ struct BarInspector: View {
                 .frame(width: 200)
             }
         }
-    }
-
-
-    private var jsonSheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(names[editor.selectedID ?? ""] ?? "Widget") as JSON").font(.headline)
-            TextEditor(text: $json)
-                .font(.system(size: 11.5, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .frame(width: 480, height: 300)
-                .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(SettingsPalette.groupBorder))
-            if let jsonError { Text(jsonError).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
-            HStack(spacing: 8) {
-                Text("Removing a property clears it. Includes and templates stay as they are.").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button("Cancel") { editingJSON = false }.keyboardShortcut(.cancelAction)
-                Button("Apply") {
-                    do {
-                        editor.replaceProperties(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(json.utf8)))
-                        jsonError = editor.error
-                    } catch { jsonError = errorMessage(error) }
-                    if jsonError == nil { editingJSON = false }
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(16)
     }
 
     private var webPageSheet: some View {

@@ -34,7 +34,13 @@ struct ProfilesView: View {
             return .handled
         })
         .sheet(isPresented: $editingJSON) {
-            if let selected { ProfileJSONSheet(editor: editor, profile: selected) }
+            if let selected {
+                let json = try? String(decoding: configurationData(selected.configuration), as: UTF8.self)
+                JSONSheet(title: "\(selected.name) as JSON", text: json ?? "{}", apply: {
+                    editor.setProfileConfiguration(name: selected.name, configuration: $0)
+                    return editor.error
+                }, close: { editingJSON = false })
+            }
         }
         .confirmationDialog(deleting.map { editor.profileRemoval($0) == .removeChanges ? "Remove your changes to \($0)?" : "Delete the \($0) profile?" } ?? "",
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { name in
@@ -511,48 +517,4 @@ private struct ProfileCondition: Identifiable {
     let text: String
     let phrase: String
     let remove: () -> Void
-}
-
-private struct ProfileJSONSheet: View {
-    let editor: ConfigurationEditor
-    let profile: ConfigurationProfile
-    @State private var text = ""
-    @State private var error: String?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("\(profile.name) as JSON").font(.headline)
-            TextEditor(text: $text)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .frame(height: 280)
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
-            if let error { Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled) }
-            HStack {
-                Text("Removing a property clears it. Includes and templates stay as they are.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Apply", action: apply).keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(16)
-        .frame(width: 560)
-        .onAppear {
-            text = (try? String(decoding: configurationData(profile.configuration), as: UTF8.self)) ?? "{}"
-        }
-    }
-
-    private func apply() {
-        do {
-            editor.setProfileConfiguration(name: profile.name, configuration:
-                try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8)))
-            error = editor.error
-        } catch { self.error = errorMessage(error) }
-        if error == nil { dismiss() }
-    }
 }

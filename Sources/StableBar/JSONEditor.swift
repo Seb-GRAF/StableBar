@@ -100,9 +100,10 @@ import SwiftUI
     }
 }
 
-/// Lets a sheet point the editor at a line, such as where a syntax error is.
-@MainActor final class JSONEditorController {
-    weak var textView: JSONTextView?
+/// Lets a sheet point the editor at a line, such as where a syntax error is, and see whether its find bar is open.
+@MainActor @Observable final class JSONEditorController {
+    @ObservationIgnored weak var textView: JSONTextView?
+    var isFindBarVisible = false
 
     func selectLine(_ line: Int) { textView?.selectLine(line) }
 }
@@ -120,6 +121,9 @@ struct JSONEditor: NSViewRepresentable {
             textView.delegate = context.coordinator
             controller.textView = textView
         }
+        context.coordinator.findBar = scrollView.observe(\.isFindBarVisible) { [controller] scrollView, _ in
+            MainActor.assumeIsolated { controller.isFindBarVisible = scrollView.isFindBarVisible }
+        }
         return scrollView
     }
 
@@ -132,6 +136,7 @@ struct JSONEditor: NSViewRepresentable {
 
     @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
+        var findBar: NSKeyValueObservation?
 
         init(text: Binding<String>) { self.text = text }
 

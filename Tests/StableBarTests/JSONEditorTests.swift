@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -113,6 +114,133 @@ struct JSONSyntaxProblemTests {
             return CocoaError(.featureUnsupported)
         } catch { return error }
     }
+}
+
+@MainActor struct JSONSheetTests {
+    @Test func returnInTheSheetInsertsANewlineInsteadOfApplying() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{", probe: probe)
+        defer { window.close() }
+        press(try key("\r", code: 36, in: window), in: window)
+        #expect(textView.string == "{\n  ")
+        #expect(probe.applied.isEmpty && probe.closed == 0)
+    }
+
+    @Test func escapeClosesTheFindBarBeforeTheSheet() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
+        defer { window.close() }
+        let scrollView = try #require(textView.enclosingScrollView)
+        press(try key("f", code: 3, .command, in: window), in: window)
+        try #require(await poll { scrollView.isFindBarVisible })
+        press(try key("\u{1b}", code: 53, in: window), in: window)
+        #expect(await poll { !scrollView.isFindBarVisible })
+        #expect(probe.closed == 0)
+        press(try key("\u{1b}", code: 53, in: window), in: window)
+        #expect(await poll { probe.closed == 1 })
+    }
+
+    @Test func escapeInTheTextWithTheFindBarOpenClosesOnlyTheFindBar() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
+        defer { window.close() }
+        let scrollView = try #require(textView.enclosingScrollView)
+        press(try key("f", code: 3, .command, in: window), in: window)
+        try #require(await poll { scrollView.isFindBarVisible })
+        window.makeFirstResponder(textView)
+        // Let SwiftUI redraw Cancel without its Escape shortcut, as it does long before a person presses Escape.
+        let host = try #require(window.contentView)
+        for _ in 0..<10 {
+            host.layoutSubtreeIfNeeded()
+            await Task.yield()
+        }
+        press(try key("\u{1b}", code: 53, in: window), in: window)
+        #expect(await poll { !scrollView.isFindBarVisible })
+        #expect(probe.closed == 0)
+    }
+
+    @Test func returnInTheFindBarFindsInsteadOfApplying() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
+        defer { window.close() }
+        let scrollView = try #require(textView.enclosingScrollView)
+        press(try key("f", code: 3, .command, in: window), in: window)
+        try #require(await poll { scrollView.isFindBarVisible })
+        press(try key("\r", code: 36, in: window), in: window)
+        for _ in 0..<20 { await Task.yield() }
+        #expect(probe.applied.isEmpty && probe.closed == 0)
+        #expect(scrollView.isFindBarVisible)
+    }
+
+    @Test func applyingCurlyQuotesSelectsTheErrorLine() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{\n  \"label\": “hi”\n}", probe: probe)
+        defer { window.close() }
+        window.makeFirstResponder(nil)
+        press(try key("\r", code: 36, in: window), in: window)
+        #expect(await poll {
+            window.firstResponder === textView && textView.selectedRange() == NSRange(location: 2, length: 16)
+        })
+        #expect(probe.applied.isEmpty && probe.closed == 0)
+    }
+
+    @Test func applyingValidJSONHandsOverTheValuesAndCloses() async throws {
+        let probe = SheetProbe()
+        let (window, _) = try await hostedSheet("{\"label\": \"hi\"}", probe: probe)
+        defer { window.close() }
+        window.makeFirstResponder(nil)
+        press(try key("\r", code: 36, in: window), in: window)
+        #expect(await poll { probe.closed == 1 })
+        #expect(probe.applied == [["label": .string("hi")]])
+
+        let refused = SheetProbe()
+        refused.result = "Nope"
+        let (otherWindow, _) = try await hostedSheet("{\"label\": \"hi\"}", probe: refused)
+        defer { otherWindow.close() }
+        otherWindow.makeFirstResponder(nil)
+        press(try key("\r", code: 36, in: otherWindow), in: otherWindow)
+        #expect(await poll { refused.applied.count == 1 })
+        #expect(refused.closed == 0)
+    }
+
+    private func hostedSheet(_ text: String, probe: SheetProbe) async throws -> (NSWindow, JSONTextView) {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 560, height: 420), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.alphaValue = 0
+        let host = NSHostingView(rootView: JSONSheet(title: "Clock as JSON", text: text,
+                                                     apply: { probe.applied.append($0); return probe.result },
+                                                     close: { probe.closed += 1 }))
+        window.contentView = host
+        window.orderFrontRegardless()
+        var found: JSONTextView?
+        let appeared = await poll {
+            host.layoutSubtreeIfNeeded()
+            found = jsonTextView(in: host)
+            return found != nil
+        }
+        let textView = try #require(appeared ? found : nil)
+        window.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        return (window, textView)
+    }
+
+    /// Sends a key as AppKit does: command keys try key equivalents first, other keys reach the focused view first.
+    private func press(_ event: NSEvent, in window: NSWindow) {
+        if event.modifierFlags.contains(.command), window.performKeyEquivalent(with: event) { return }
+        window.sendEvent(event)
+    }
+
+    private func jsonTextView(in view: NSView) -> JSONTextView? {
+        view as? JSONTextView ?? view.subviews.lazy.compactMap { jsonTextView(in: $0) }.first
+    }
+}
+
+@MainActor private final class SheetProbe {
+    var applied: [[String: ConfigurationValue]] = []
+    var closed = 0
+    var result: String?
 }
 
 @MainActor private func hostedTextView(_ text: String) throws -> (NSWindow, NSScrollView, JSONTextView) {
