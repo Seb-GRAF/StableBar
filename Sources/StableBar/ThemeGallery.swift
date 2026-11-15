@@ -152,16 +152,8 @@ final class ThemeGallery {
     }
 
     func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
-        perform(on: choice.key) { try apply(choice, on: kind, everyBar: everyBar) }
+        perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
         configurationChanged()
-    }
-
-    private func apply(_ choice: ThemeChoice, on kind: ScreenKind?, everyBar: Bool) throws {
-        guard let kind else { return try store.customizationHistory.change(store.themeEdit(for: choice), everyBar: everyBar) }
-        try store.customizationHistory.change([
-            ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
-            ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
-        ], everyBar: everyBar)
     }
 
     /// Lists the themes of every source. Only the Store's failure is shown; private sources report theirs in Packages.
@@ -198,7 +190,7 @@ final class ThemeGallery {
             if !choices.contains(where: { $0.key == choice.key }) { choices.append(choice) }
             if previews[choice.key] == nil, let preview = previews[key] { previews[choice.key] = preview }
             progress[key] = "Applying…"
-            perform(on: choice.key) { try apply(choice, on: kind, everyBar: everyBar) }
+            perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
     }
 

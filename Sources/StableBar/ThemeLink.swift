@@ -39,17 +39,21 @@ struct ThemeLink: Equatable, Sendable {
         }
         guard let manifest = Self.decoded(try item("package")),
               let configuration = Self.decoded(try item("config")) else { throw .damaged }
-        guard manifest.count + configuration.count <= Self.maximumFileBytes else { throw .tooLarge }
-
-        // ConfigurationValue's recursive decoding is expensive even without references, so bound the raw JSON first.
-        try Self.checkJSON(manifest, limitProfiles: false)
-        try Self.checkJSON(configuration, limitProfiles: true)
+        let link = Self(manifest: manifest, configuration: configuration)
+        try link.validateFiles()
         do {
             for file in [manifest, configuration] {
                 guard case .object = try decode(file) else { throw ThemeLinkError.damaged }
             }
         } catch { throw .damaged }
         self.init(manifest: manifest, configuration: configuration)
+    }
+
+    func validateFiles() throws(ThemeLinkError) {
+        guard manifest.count + configuration.count <= Self.maximumFileBytes else { throw .tooLarge }
+        // ConfigurationValue's recursive decoding is expensive even without references, so bound the raw JSON first.
+        try Self.checkJSON(manifest, limitProfiles: false)
+        try Self.checkJSON(configuration, limitProfiles: true)
     }
 
     var link: URL {
@@ -182,6 +186,9 @@ struct ThemeLink: Equatable, Sendable {
 
 enum ThemeLinkError: LocalizedError, Equatable {
     case tooLong, unsupportedVersion(String), damaged, tooLarge, tooDeep, tooManyProfiles
+    case notATheme, needsReview, extraFiles
+    case barProperty(String), reservedID(String), idTaken(String)
+    case versionTaken(id: String, version: String)
 
     var errorDescription: String? {
         switch self {
@@ -191,6 +198,14 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .tooLarge: "This theme is larger than a theme link can carry (32 KB)."
         case .tooDeep: "This theme nests its settings more than 32 levels deep."
         case .tooManyProfiles: "This theme has more than 16 profiles, which a theme link can't carry."
+        case .notATheme: "This link doesn't hold a theme."
+        case .needsReview: "This theme asks for hosts, permissions, tools or secrets, which a theme link can't carry."
+        case .extraFiles: "This theme refers to other files, such as a screenshot or an include, which a theme link can't carry."
+        case let .barProperty(key): "A theme link can't set the bar's \(key)."
+        case let .reservedID(id): "\(id) is the ID of a theme that comes with StableBar. Rename the theme on the page."
+        case let .idTaken(id): "A widget package already uses the ID \(id). Rename the theme on the page."
+        case let .versionTaken(id, version):
+            "A different \(id) \(version) is already installed. Raise the version on the page and try again."
         }
     }
 }

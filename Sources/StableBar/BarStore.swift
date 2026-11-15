@@ -620,6 +620,8 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
+    var themeTrialKey: String? { triedTheme?.key }
+
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
         let document = try previewDocument ?? editedMainDocument(replaying: customizationEdits)
@@ -647,6 +649,14 @@ final class BarStore: NSObject {
             }
         }
         return edit
+    }
+
+    func applyTheme(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) throws {
+        guard let kind else { return try customizationHistory.change(themeEdit(for: choice), everyBar: everyBar) }
+        try customizationHistory.change([
+            ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
+            ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
+        ], everyBar: everyBar)
     }
 
     var clearanceConfiguration: Configuration? {

@@ -1,0 +1,167 @@
+import Foundation
+import Observation
+
+@MainActor @Observable
+final class ThemeLinkCandidate {
+    enum State: Equatable { case ready, trying, used, failed(String) }
+
+    let link: ThemeLink
+    let choice: ThemeChoice
+    private(set) var state: State = .ready
+    private weak var store: BarStore?
+    private var discarded = false
+    private var using = false
+
+    init(link: ThemeLink, store: BarStore) throws {
+        try link.validateFiles()
+        let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
+        let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
+        if manifest["screenshot"] != nil { throw ThemeLinkError.extraFiles }
+        var profileCount = 0
+        try Self.checkDocument(document, profileCount: &profileCount)
+        guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
+
+        let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
+        let packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            try link.manifest.write(to: directory.appending(path: "package.json"))
+            try link.configuration.write(to: directory.appending(path: "config.json"))
+            let inspection = try packages.inspect(directory)
+            guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
+            guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
+            let id = inspection.manifest.id
+            let bundled = store.themesDirectory?.appending(path: id)
+            if legacyThemeIDs.contains(id) || bundled.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
+                throw ThemeLinkError.reservedID(id)
+            }
+            if try packages.list().contains(where: { $0.id == id && $0.kind != .theme }) {
+                throw ThemeLinkError.idTaken(id)
+            }
+            var loader = ConfigurationLoader()
+            let layer = try loader.readPackage(at: directory, manifest: inspection.manifest, settings: [:])
+            try Self.checkReferences(layer)
+            self.link = link
+            choice = ThemeChoice(manifest: inspection.manifest, directory: directory, isBundled: false)
+            self.store = store
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+    }
+
+    func tryOnBar() {
+        guard !discarded, !using, state != .used, let store else { return }
+        store.barEditing.end()
+        store.onEndThemeTrial?()
+        do {
+            try store.tryTheme(choice)
+            state = .trying
+        } catch {
+            store.endThemeTrial()
+            state = .failed(errorMessage(error))
+        }
+    }
+
+    func cancelTrial() {
+        guard state == .trying else { return }
+        if store?.themeTrialKey == choice.key { store?.endThemeTrial() }
+        state = .ready
+    }
+
+    func use(with client: PackageStoreClient, on kind: ScreenKind? = nil, everyBar: Bool = false) async {
+        guard !discarded, !using, state != .used, let store else { return }
+        using = true
+        defer { using = false }
+        do {
+            let packages = client.packages
+            let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
+            let installed: ThemeChoice
+            if FileManager.default.fileExists(atPath: directory.path) {
+                guard try sameFiles(at: directory) else {
+                    throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
+                }
+                installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
+            } else {
+                let inspection = try await client.install(choice.directory, from: nil)
+                installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
+            }
+            guard !discarded else { return }
+            try store.applyTheme(installed, on: kind, everyBar: everyBar)
+            store.endThemeTrial()
+            state = .used
+            try? FileManager.default.removeItem(at: choice.directory)
+        } catch {
+            guard !discarded else { return }
+            store.endThemeTrial()
+            state = .failed(errorMessage(error))
+        }
+    }
+
+    func discard() {
+        guard !discarded else { return }
+        discarded = true
+        cancelTrial()
+        try? FileManager.default.removeItem(at: choice.directory)
+    }
+
+    private func sameFiles(at directory: URL) throws -> Bool {
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+        guard Set(files.map(\.lastPathComponent)) == ["package.json", "config.json"] else { return false }
+        for file in files {
+            let properties = try file.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard properties.isRegularFile == true, properties.isSymbolicLink != true else { return false }
+            let expected = file.lastPathComponent == "package.json" ? link.manifest : link.configuration
+            guard try Data(contentsOf: file) == expected else { return false }
+        }
+        return true
+    }
+
+    private static let barProperties: Set<String> = [
+        "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset"
+    ]
+
+    private static func checkDocument(_ document: [String: ConfigurationValue], profileCount: inout Int) throws {
+        if document["includes"] != nil { throw ThemeLinkError.extraFiles }
+        if case let .object(bar) = document["bar"] {
+            for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
+        }
+        let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []
+        profileCount += profiles.count
+        guard profileCount <= ThemeLink.maximumProfiles else { throw ThemeLinkError.tooManyProfiles }
+        for profile in profiles { try checkDocument(profile.configuration, profileCount: &profileCount) }
+    }
+
+    private static func checkReferences(_ layer: ConfigurationLayer) throws {
+        var loader = ConfigurationLoader()
+        let resolved = try loader.finish(layer, context: ConfigurationContext())
+        var profileCount = 0
+        try checkDocument(resolved, profileCount: &profileCount)
+        let originalTokens = layer.values["tokens"] ?? .object([:])
+        let inheritedTokens = resolved["tokens"] ?? .object([:])
+        let tokens = try originalTokens.overriding(inheritedTokens).decoded([String: ConfigurationValue].self)
+        // Merging can hide raw references, and the loader strips profiles before substitution; Settings reads both.
+        try checkDocumentReferences(layer.values, tokens: tokens)
+        let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? []
+        for profile in profiles {
+            loader.previewProfile = profile.name
+            let selected = try loader.finish(layer, context: ConfigurationContext())
+            try checkDocument(selected, profileCount: &profileCount)
+        }
+    }
+
+    private static func checkDocumentReferences(_ document: [String: ConfigurationValue], tokens: [String: ConfigurationValue]) throws {
+        var base = document
+        let profiles = try base.removeValue(forKey: "profiles")?.decoded([ConfigurationProfile].self) ?? []
+        let resolved = try substituteConfigurationReferences(.object(base), prefix: "@token.", values: tokens)
+            .decoded([String: ConfigurationValue].self)
+        var profileCount = 0
+        try checkDocument(resolved, profileCount: &profileCount)
+        for profile in profiles {
+            let localTokens = profile.configuration["tokens"] ?? .object([:])
+            let inherited = try localTokens.overriding(.object(tokens))
+                .decoded([String: ConfigurationValue].self)
+            try checkDocumentReferences(profile.configuration, tokens: inherited)
+        }
+    }
+}
