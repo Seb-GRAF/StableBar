@@ -17,6 +17,7 @@ final class ThemeLinkCandidate {
         try link.validateFiles()
         let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
         let packages = store.packageStoreClient.packages
+        let budget = ConfigurationReferenceExpansionBudget(limit: 300_000)
         do {
             let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
             let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
@@ -28,7 +29,6 @@ final class ThemeLinkCandidate {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             try link.manifest.write(to: directory.appending(path: "package.json"))
             try link.configuration.write(to: directory.appending(path: "config.json"))
-            let budget = ConfigurationReferenceExpansionBudget(limit: 300_000)
             let inspection = try packages.inspect(directory, referenceExpansionBudget: budget)
             guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
             guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
@@ -49,6 +49,9 @@ final class ThemeLinkCandidate {
         } catch {
             try? FileManager.default.removeItem(at: directory)
             if error is DecodingError { throw ThemeLinkError.damaged }
+            if case .referenceExpansionTooLarge? = error as? ThemeConfigurationError, budget.consumed == budget.limit {
+                throw ThemeLinkError.tooManyReferences
+            }
             throw error
         }
     }
@@ -72,12 +75,14 @@ final class ThemeLinkCandidate {
         state = .ready
     }
 
-    func use(with client: PackageStoreClient, on kind: ScreenKind? = nil, everyBar: Bool = false) async {
+    func use(on kind: ScreenKind? = nil, everyBar: Bool = false) async {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
         do {
-            let packages = store.packageStoreClient.packages
+            let client = store.packageStoreClient
+            let packages = client.packages
+            try Self.checkInstalledID(choice.manifest.id, packages: packages)
             let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
             let installed: ThemeChoice
             if FileManager.default.fileExists(atPath: directory.path) {
@@ -129,7 +134,10 @@ final class ThemeLinkCandidate {
         guard FileManager.default.fileExists(atPath: directory.path) else { return }
         try validatePackagePath(directory, inside: packages.directory)
         let versions = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
+        let stagingPrefix = ".install-"
         for version in versions {
+            if version.lastPathComponent.hasPrefix(stagingPrefix),
+               UUID(uuidString: String(version.lastPathComponent.dropFirst(stagingPrefix.count))) != nil { continue }
             guard try version.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { continue }
             try validatePackagePath(version, inside: packages.directory)
             guard let manifest = try? packages.manifest(at: version), manifest.kind == .theme, manifest.id == id else {
@@ -142,7 +150,7 @@ final class ThemeLinkCandidate {
         if document["includes"] != nil { throw ThemeLinkError.extraFiles }
         if let value = document["bar"] {
             // References may supply allowed values, but profile and setting choices must never supply the bar's keys.
-            guard case let .object(bar) = value else { throw ThemeLinkError.barProperty("bar") }
+            guard case let .object(bar) = value else { throw ThemeLinkError.indirectBar }
             for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
         }
         let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []

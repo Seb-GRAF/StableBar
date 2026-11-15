@@ -273,7 +273,10 @@ struct ThemeLinkTests {
         (.damaged, "This theme link is damaged. Copy it again from the page."),
         (.tooLarge, "This theme is larger than a theme link can carry (32 KB)."),
         (.tooDeep, "This theme nests its settings more than 32 levels deep."),
-        (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry.")
+        (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry."),
+        (.indirectBar, "A theme link must set the bar's settings directly, not through a token or setting."),
+        (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Download it as a zip instead."),
+        (.idTaken("Harbour-Test"), "Another package already uses the ID Harbour-Test. Rename the theme on the page.")
     ])
     func themeLinkErrorsExplainWhatHappened(error: ThemeLinkError, message: String) {
         #expect(error.errorDescription == message)

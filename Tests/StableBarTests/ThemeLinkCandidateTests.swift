@@ -134,7 +134,7 @@ struct ThemeLinkCandidateTests {
         trial.next()
         store.onEndThemeTrial = { trial.cancel() }
         if installationFails { try fixture.write("not a directory", to: fixture.packages.directory) }
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         #expect(!trial.isActive)
         #expect(store.themeTrialDirectory == nil)
         if installationFails {
@@ -171,7 +171,7 @@ struct ThemeLinkCandidateTests {
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         candidate.tryOnBar()
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         let installed = try fixture.packages.directory(id: "harbour-test", version: "1.0.0")
         #expect(try Data(contentsOf: installed.appending(path: "config.json")) == candidate.link.configuration)
         #expect(try Data(contentsOf: installed.appending(path: "package.json")) == candidate.link.manifest)
@@ -196,7 +196,7 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         #expect(candidate.state == .used)
         #expect(store.selectedThemeKey == "harbour-test/1.0.0")
         #expect(!exists(candidate.choice.directory))
@@ -222,9 +222,57 @@ struct ThemeLinkCandidateTests {
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         candidate.tryOnBar()
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
         #expect(store.selectedThemeKey == selection)
+        #expect(store.themeTrialDirectory == nil)
+        #expect(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @Test(arguments: ["1.0.0", "2", ".2"])
+    func aWidgetInstalledAfterValidationIsRefusedAtUse(version: String) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        let source = fixture.directory.appending(path: "widget")
+        try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"\#(version)","kind":"widgets","entry":"config.json"}"#,
+                          to: source.appending(path: "package.json"))
+        try fixture.write(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
+        let installed = try fixture.packages.install(source)
+        let manifest = try Data(contentsOf: installed.directory.appending(path: "package.json"))
+        let configuration = try Data(contentsOf: installed.directory.appending(path: "config.json"))
+
+        await candidate.use()
+        #expect(candidate.state == .failed(ThemeLinkError.idTaken("harbour-test").errorDescription!))
+        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.themeTrialDirectory == nil)
+        #expect(store.customizationHistory.undoSteps.isEmpty)
+        #expect(exists(candidate.choice.directory))
+        #expect(try Data(contentsOf: installed.directory.appending(path: "package.json")) == manifest)
+        #expect(try Data(contentsOf: installed.directory.appending(path: "config.json")) == configuration)
+        if version != "1.0.0" {
+            #expect(!exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")))
+        }
+    }
+
+    @Test func anInstalledVersionChangedAfterValidationIsRefused() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let installed = try fixture.packages.install(linkedThemeDirectory)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        try fixture.write(#"{"bar":{"height":42}}"#, to: installed.directory.appending(path: "config.json"))
+
+        await candidate.use()
+        #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
+        #expect(store.selectedThemeKey == "built-in")
         #expect(store.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
@@ -238,7 +286,7 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
-        await candidate.use(with: client(fixture), on: .monitor, everyBar: true)
+        await candidate.use(on: .monitor, everyBar: true)
         #expect(candidate.state == .used)
         let selected = ConfigurationValue.object(["id": .string("harbour-test"), "version": .string("1.0.0")])
         let screens = try #require(try fixture.document()["screens"]?.decoded([String: [String: ConfigurationValue]].self))
@@ -258,7 +306,7 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         candidate.tryOnBar()
         try fixture.write("not a directory", to: fixture.packages.directory)
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         guard case .failed = candidate.state else {
             Issue.record("Expected installation to fail")
             return
@@ -268,27 +316,30 @@ struct ThemeLinkCandidateTests {
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
-    @Test(arguments: ["2", ".2"])
-    func aPackageIDWithDifferentCaseFollowsTheFilesystem(version: String) throws {
+    @Test(arguments: ["2", ".2"], ["theme", "widgets"])
+    func aPackageIDWithDifferentCaseFollowsTheFilesystem(version: String, kind: String) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         let source = fixture.directory.appending(path: "widget")
-        try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"\#(version)","kind":"widgets","entry":"config.json"}"#,
+        try fixture.write(#"{"id":"harbour-test","name":"Package","version":"\#(version)","kind":"\#(kind)","entry":"config.json"}"#,
                           to: source.appending(path: "package.json"))
-        try fixture.write(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
+        try fixture.write("{}", to: source.appending(path: "config.json"))
         _ = try fixture.packages.install(source)
+        let staging = fixture.packages.directory.appending(path: "harbour-test/.install-\(UUID().uuidString)")
+        try fixture.write("partial manifest", to: staging.appending(path: "package.json"))
         var link = try linkedTheme()
         var manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
         manifest["id"] = .string("Harbour-Test")
         link.manifest = try configurationData(manifest)
         let before = try temporaryFolders()
         if exists(fixture.packages.directory.appending(path: "Harbour-Test")) {
-            #expect(throws: ThemeLinkError.idTaken("Harbour-Test")) {
+            let error = #expect(throws: ThemeLinkError.idTaken("Harbour-Test")) {
                 let candidate = try ThemeLinkCandidate(link: link, store: store)
                 candidate.discard()
             }
+            #expect(error?.errorDescription == "Another package already uses the ID Harbour-Test. Rename the theme on the page.")
         } else {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             candidate.discard()
@@ -297,15 +348,35 @@ struct ThemeLinkCandidateTests {
     }
 
     @Test(arguments: [false, true])
-    func everyVersionUnderTheIDMustBeAThemeWithThatID(brokenManifest: Bool) throws {
+    func anUnfinishedInstallIsNotAnInstalledVersion(installedTheme: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        if installedTheme { _ = try fixture.packages.install(linkedThemeDirectory) }
+        let staging = fixture.packages.directory.appending(path: "harbour-test/.install-\(UUID().uuidString)")
+        try fixture.write("partial manifest", to: staging.appending(path: "package.json"))
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        #expect(candidate.state == .ready)
+
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+        #expect(exists(staging))
+        #expect(!exists(candidate.choice.directory))
+    }
+
+    @Test(arguments: [false, true], ["2", ".2", ".install-not-a-uuid"])
+    func everyVersionUnderTheIDMustBeAThemeWithThatID(brokenManifest: Bool, version: String) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         _ = try fixture.packages.install(linkedThemeDirectory)
-        let version = try fixture.packages.directory(id: "harbour-test", version: "2")
-        let manifest = brokenManifest ? "broken" : #"{"id":"other-theme","name":"Theme","version":"2","kind":"theme","entry":"config.json"}"#
-        try fixture.write(manifest, to: version.appending(path: "package.json"))
+        let directory = try fixture.packages.directory(id: "harbour-test", version: version)
+        let manifest = brokenManifest ? "broken" : #"{"id":"other-theme","name":"Theme","version":"\#(version)","kind":"theme","entry":"config.json"}"#
+        try fixture.write(manifest, to: directory.appending(path: "package.json"))
         #expect(throws: ThemeLinkError.idTaken("harbour-test")) {
             let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
             candidate.discard()
@@ -323,7 +394,7 @@ struct ThemeLinkCandidateTests {
         #expect(candidate.state == .ready)
     }
 
-    @Test func packageChecksUseTheStoresClient() async throws {
+    @Test func packageChecksAndInstallationUseTheStoresClient() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
@@ -341,10 +412,17 @@ struct ThemeLinkCandidateTests {
         try fixture.write(#"{"bar":{"height":42}}"#, to: version.appending(path: "config.json"))
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
         #expect(store.selectedThemeKey == "built-in")
         #expect(!exists(fixture.packages.directory))
+
+        try FileManager.default.removeItem(at: version)
+        await candidate.use()
+        #expect(!exists(fixture.packages.directory))
+        try #require(exists(version.appending(path: "config.json")))
+        #expect(try Data(contentsOf: version.appending(path: "config.json")) == candidate.link.configuration)
+        #expect(try Data(contentsOf: version.appending(path: "package.json")) == candidate.link.manifest)
     }
 
     @Test(arguments: Rejection.allCases)
@@ -472,7 +550,7 @@ struct ThemeLinkCandidateTests {
         switch rejection {
         case .bar: #expect(error as? ThemeLinkError == .barProperty("hideMenuBar"))
         case .tokenBar, .overriddenTokenBar, .settingBar, .combinedProfileBar, .settingChoiceBar, .nestedProfileBar, .nullBar, .arrayBar:
-            #expect(error as? ThemeLinkError == .barProperty("bar"))
+            #expect(error as? ThemeLinkError == .indirectBar)
         case .profileBar: #expect(error as? ThemeLinkError == .barProperty("position"))
         case .hosts, .permissions, .tools, .secrets: #expect(error as? ThemeLinkError == .needsReview)
         case .screenshot, .includes, .profileIncludes: #expect(error as? ThemeLinkError == .extraFiles)
@@ -531,7 +609,7 @@ struct ThemeLinkCandidateTests {
         #expect(candidate.state == .trying)
         #expect(store.configuration?.defaults.fontSize == 19)
         #expect(store.configuration?.bar.height == 19)
-        await candidate.use(with: client(fixture))
+        await candidate.use()
         #expect(candidate.state == .used)
     }
 
@@ -561,14 +639,11 @@ struct ThemeLinkCandidateTests {
         #expect(expandedTokens?["p"] == .array(Array(repeating: row, count: 198)))
 
         let before = try temporaryFolders()
-        let error = #expect(throws: ThemeConfigurationError.self) {
+        let error = #expect(throws: (any Error).self) {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             candidate.discard()
         }
-        guard case .referenceExpansionTooLarge? = error else {
-            Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
-            return
-        }
+        #expect(error as? ThemeLinkError == .tooManyReferences)
         #expect(try temporaryFolders() == before)
     }
 
@@ -589,7 +664,6 @@ struct ThemeLinkCandidateTests {
             defer { candidate.discard() }
             #expect(candidate.state == .ready, "\(directory.lastPathComponent)")
             #expect(candidate.validationExpansionUnits < 300_000)
-            print("THEME_LINK_EXPANSION_UNITS theme=\(directory.lastPathComponent) units=\(candidate.validationExpansionUnits)")
         }
     }
 
@@ -613,14 +687,11 @@ struct ThemeLinkCandidateTests {
         ]))
         #expect(link.manifest.count + link.configuration.count <= ThemeLink.maximumFileBytes)
         let before = try temporaryFolders()
-        let error = #expect(throws: ThemeConfigurationError.self) {
+        let error = #expect(throws: (any Error).self) {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             candidate.discard()
         }
-        guard case .referenceExpansionTooLarge? = error else {
-            Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
-            return
-        }
+        #expect(error as? ThemeLinkError == .tooManyReferences)
         #expect(try temporaryFolders() == before)
     }
 
@@ -642,14 +713,11 @@ struct ThemeLinkCandidateTests {
             #expect(candidate.validationExpansionUnits == 299_945)
             candidate.discard()
         } else {
-            let error = #expect(throws: ThemeConfigurationError.self) {
+            let error = #expect(throws: (any Error).self) {
                 let candidate = try ThemeLinkCandidate(link: link, store: store)
                 candidate.discard()
             }
-            guard case .referenceExpansionTooLarge? = error else {
-                Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
-                return
-            }
+            #expect(error as? ThemeLinkError == .tooManyReferences)
         }
         #expect(try temporaryFolders() == before)
     }
@@ -679,10 +747,6 @@ struct ThemeLinkCandidateTests {
         #expect(store.configurationError == nil)
         _ = try #require(store.configuration)
         return store
-    }
-
-    private func client(_ fixture: ThemeGalleryFixture) -> PackageStoreClient {
-        PackageStoreClient(packages: fixture.packages, indexURL: fixture.directory.appending(path: "index.json"))
     }
 
     private func exists(_ directory: URL) -> Bool { FileManager.default.fileExists(atPath: directory.path) }

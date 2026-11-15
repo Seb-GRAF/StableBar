@@ -186,7 +186,7 @@ struct ThemeLink: Equatable, Sendable {
 
 enum ThemeLinkError: LocalizedError, Equatable {
     case tooLong, unsupportedVersion(String), damaged, tooLarge, tooDeep, tooManyProfiles
-    case notATheme, needsReview, extraFiles
+    case notATheme, needsReview, extraFiles, indirectBar, tooManyReferences
     case barProperty(String), reservedID(String), idTaken(String)
     case versionTaken(id: String, version: String)
 
@@ -201,9 +201,12 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .notATheme: "This link doesn't hold a theme."
         case .needsReview: "This theme asks for hosts, permissions, tools or secrets, which a theme link can't carry."
         case .extraFiles: "This theme refers to other files, such as a screenshot or an include, which a theme link can't carry."
+        case .indirectBar: "A theme link must set the bar's settings directly, not through a token or setting."
+        case .tooManyReferences:
+            "This theme refers to its own values too many times to open from a link. Download it as a zip instead."
         case let .barProperty(key): "A theme link can't set the bar's \(key)."
         case let .reservedID(id): "\(id) is the ID of a theme that comes with StableBar. Rename the theme on the page."
-        case let .idTaken(id): "A widget package already uses the ID \(id). Rename the theme on the page."
+        case let .idTaken(id): "Another package already uses the ID \(id). Rename the theme on the page."
         case let .versionTaken(id, version):
             "A different \(id) \(version) is already installed. Raise the version on the page and try again."
         }
