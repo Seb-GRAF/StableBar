@@ -340,43 +340,68 @@ private struct ConfigurationOriginPathBudget {
 }
 
 struct ConfigurationPathIndex<Value> {
-    private final class PrefixNode {
-        var children: [Substring: PrefixNode] = [:]
-        var prefix: String?
+    private struct Node {
+        var children: [Substring: Int] = [:]
+        var isPrefix = false
+        var entry: (path: String, value: Value)?
     }
 
-    private let root = PrefixNode()
-    private var properties: [String: [String: Value]] = [:]
+    private var nodes = [Node()]
+
+    var storedPathCount: Int { nodes.reduce(0) { $0 + ($1.entry == nil ? 0 : 1) } }
 
     init(_ entries: some Sequence<(key: String, value: Value)>, prefixes: Set<String>) {
         for prefix in prefixes {
-            var node = root
+            var node = 0
             for part in prefix.split(separator: ".", omittingEmptySubsequences: false) {
-                if let child = node.children[part] {
-                    node = child
-                } else {
-                    let child = PrefixNode()
-                    node.children[part] = child
-                    node = child
-                }
+                node = child(part, under: node)
             }
-            node.prefix = prefix
+            nodes[node].isPrefix = true
         }
         for (path, value) in entries { insert(value, at: path) }
     }
 
-    subscript(prefix: String) -> [String: Value] { properties[prefix] ?? [:] }
+    subscript(prefix: String) -> [String: Value] {
+        var node = 0
+        for part in prefix.split(separator: ".", omittingEmptySubsequences: false) {
+            guard let child = nodes[node].children[part] else { return [:] }
+            node = child
+        }
+        guard nodes[node].isPrefix else { return [:] }
+        var result: [String: Value] = [:]
+        var pending = Array(nodes[node].children.values)
+        let offset = prefix.count + 1
+        while let descendant = pending.popLast() {
+            if let entry = nodes[descendant].entry {
+                result[String(entry.path.dropFirst(offset))] = entry.value
+            }
+            pending.append(contentsOf: nodes[descendant].children.values)
+        }
+        return result
+    }
 
     mutating func insert(_ value: Value, at path: String) {
-        var node = root
-        var start = path.startIndex
-        while let dot = path[start...].firstIndex(of: ".") {
-            guard let child = node.children[path[start..<dot]] else { break }
-            node = child
-            start = path.index(after: dot)
-            // Dotted ids and names can put the same path under several prefixes.
-            if let prefix = node.prefix { properties[prefix, default: [:]][String(path[start...])] = value }
+        var node = 0
+        var withinPrefix = false
+        for part in path.split(separator: ".", omittingEmptySubsequences: false) {
+            withinPrefix = withinPrefix || nodes[node].isPrefix
+            if let child = nodes[node].children[part] {
+                node = child
+            } else {
+                guard withinPrefix else { return }
+                node = child(part, under: node)
+            }
         }
+        // Overlapping dotted ids share this entry; suffixes exist only while a prefix is queried.
+        if withinPrefix { nodes[node].entry = (path, value) }
+    }
+
+    private mutating func child(_ part: Substring, under parent: Int) -> Int {
+        if let child = nodes[parent].children[part] { return child }
+        let child = nodes.count
+        nodes.append(Node())
+        nodes[parent].children[part] = child
+        return child
     }
 }
 

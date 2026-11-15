@@ -389,6 +389,56 @@ func widgetSourceIndexesExamineEachPathOnceDespiteExpandedTokens(widgetCount: In
     #expect(examinedContributions == layer.contributions.count)
 }
 
+@Test func overlappingWidgetIDsStoreEachSourcePathOnce() throws {
+    var ids: [String] = []
+    var id = "w"
+    for _ in 0..<128 {
+        ids.append(id)
+        id += ".w"
+    }
+    let values: [String: ConfigurationValue] = ["widgets": .array(ids.map { .object([
+        "id": .string($0), "type": .string("text"), "position": .string("left"), "text": .string("x")
+    ]) })]
+    let origins = configurationOrigins(.object(values), source: ConfigurationOrigin(file: "config.json"))
+    let layer = ConfigurationLayer(values: values, origins: origins)
+    let prefixes = Set(ids.map { "widgets.\($0)" })
+    var originIndex = ConfigurationPathIndex(origins, prefixes: prefixes)
+    var contributionIndex = ConfigurationPathIndex(layer.contributions, prefixes: prefixes)
+    let storedPaths = origins.keys.filter { $0.hasPrefix("widgets.w.") }.count
+    #expect(originIndex.storedPathCount == storedPaths)
+    #expect(contributionIndex.storedPathCount == storedPaths)
+    for prefix in prefixes {
+        var expectedOrigins: [String: ConfigurationOrigin] = [:]
+        var expectedContributions: [String: [ConfigurationContribution]] = [:]
+        for (path, source) in origins where path.hasPrefix(prefix + ".") {
+            let suffix = String(path.dropFirst(prefix.count + 1))
+            expectedOrigins[suffix] = source
+            expectedContributions[suffix] = layer.contributions[path]
+        }
+        #expect(originIndex[prefix] == expectedOrigins)
+        #expect(contributionIndex[prefix] == expectedContributions)
+    }
+    let lastID = try #require(ids.last)
+    let path = "widgets.\(lastID).text"
+    let copiedSource = ConfigurationOrigin(file: "template.json")
+    let copiedEntries = [ConfigurationContribution(value: .string("copy"), origin: copiedSource)]
+    originIndex.insert(copiedSource, at: path)
+    contributionIndex.insert(copiedEntries, at: path)
+    #expect(originIndex.storedPathCount == storedPaths)
+    #expect(contributionIndex.storedPathCount == storedPaths)
+    let newPath = "widgets.\(lastID).style.fontSize"
+    originIndex.insert(copiedSource, at: newPath)
+    contributionIndex.insert(copiedEntries, at: newPath)
+    #expect(originIndex.storedPathCount == storedPaths + 1)
+    #expect(contributionIndex.storedPathCount == storedPaths + 1)
+    for prefix in prefixes {
+        #expect(originIndex[prefix][String(path.dropFirst(prefix.count + 1))] == copiedSource)
+        #expect(contributionIndex[prefix][String(path.dropFirst(prefix.count + 1))] == copiedEntries)
+        #expect(originIndex[prefix][String(newPath.dropFirst(prefix.count + 1))] == copiedSource)
+        #expect(contributionIndex[prefix][String(newPath.dropFirst(prefix.count + 1))] == copiedEntries)
+    }
+}
+
 @Test func widgetIDsInheritedFromTemplatesKeepTheirSources() throws {
     let root = FileManager.default.temporaryDirectory.appending(path: "inherited-widget-id.json")
     var loader = ConfigurationLoader()
@@ -407,12 +457,15 @@ func widgetSourceIndexesExamineEachPathOnceDespiteExpandedTokens(widgetCount: In
 
 @Test func sourceIndexesMatchDottedPrefixesAndKeepLaterCopies() {
     let prefixes: Set<String> = ["widgets.status", "widgets.status.main", "templates.type", "templates.type.base",
-                                 "widgetOverrides.status", "widgetOverrides.status.main", "popups.details"]
+                                 "widgetOverrides.status", "widgetOverrides.status.main", "popups.details",
+                                 "widgets.status.", "popups.详情"]
     var sources = ["widgets.status.main.text": "widget", "widgets.status.mainly.text": "other widget",
                    "widgets.status.main": "root", "templates.type.base.text": "template",
                    "widgetOverrides.status.main.style.fontSize": "override", "popups.details.layout.text": "popup",
-                   "tokens.unrelated": "token"]
+                   "tokens.unrelated": "token", "widgets.status..text": "empty segment",
+                   "widgets.status.": "empty suffix", "popups.详情.text": "unicode"]
     var index = ConfigurationPathIndex(sources, prefixes: prefixes)
+    let beforeCopies = index
     index.insert("template copy", at: "widgets.status.main.style.fontSize")
     sources["widgets.status.main.style.fontSize"] = "template copy"
     index.insert("updated widget", at: "widgets.status.main.text")
@@ -424,6 +477,9 @@ func widgetSourceIndexesExamineEachPathOnceDespiteExpandedTokens(widgetCount: In
         }
         #expect(index[prefix] == expected)
     }
+    #expect(beforeCopies["widgets.status.main"]["text"] == "widget")
+    #expect(beforeCopies["widgets.status.main"]["style.fontSize"] == nil)
+    #expect(index["widgets.status.main.style"].isEmpty)
     #expect(index["widgets.missing"].isEmpty)
 }
 
