@@ -14,16 +14,16 @@ final class ThemeLinkCandidate {
 
     init(link: ThemeLink, store: BarStore) throws {
         try link.validateFiles()
-        let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
-        let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
-        if manifest["screenshot"] != nil { throw ThemeLinkError.extraFiles }
-        var profileCount = 0
-        try Self.checkDocument(document, profileCount: &profileCount)
-        guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
-
         let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
-        let packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
+        let packages = store.packageStoreClient.packages
         do {
+            let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
+            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
+            if manifest["screenshot"] != nil { throw ThemeLinkError.extraFiles }
+            var profileCount = 0
+            try Self.checkDocument(document, profileCount: &profileCount)
+            guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
+
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             try link.manifest.write(to: directory.appending(path: "package.json"))
             try link.configuration.write(to: directory.appending(path: "config.json"))
@@ -35,9 +35,7 @@ final class ThemeLinkCandidate {
             if legacyThemeIDs.contains(id) || bundled.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
                 throw ThemeLinkError.reservedID(id)
             }
-            if try packages.list().contains(where: { $0.id == id && $0.kind != .theme }) {
-                throw ThemeLinkError.idTaken(id)
-            }
+            try Self.checkInstalledID(id, packages: packages)
             var loader = ConfigurationLoader()
             let layer = try loader.readPackage(at: directory, manifest: inspection.manifest, settings: [:])
             try Self.checkReferences(layer)
@@ -46,6 +44,7 @@ final class ThemeLinkCandidate {
             self.store = store
         } catch {
             try? FileManager.default.removeItem(at: directory)
+            if error is DecodingError { throw ThemeLinkError.damaged }
             throw error
         }
     }
@@ -65,7 +64,7 @@ final class ThemeLinkCandidate {
 
     func cancelTrial() {
         guard state == .trying else { return }
-        if store?.themeTrialKey == choice.key { store?.endThemeTrial() }
+        if store?.themeTrialDirectory == choice.directory { store?.endThemeTrial() }
         state = .ready
     }
 
@@ -74,7 +73,7 @@ final class ThemeLinkCandidate {
         using = true
         defer { using = false }
         do {
-            let packages = client.packages
+            let packages = store.packageStoreClient.packages
             let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
             let installed: ThemeChoice
             if FileManager.default.fileExists(atPath: directory.path) {
@@ -88,11 +87,13 @@ final class ThemeLinkCandidate {
             }
             guard !discarded else { return }
             try store.applyTheme(installed, on: kind, everyBar: everyBar)
+            store.onEndThemeTrial?()
             store.endThemeTrial()
             state = .used
             try? FileManager.default.removeItem(at: choice.directory)
         } catch {
             guard !discarded else { return }
+            store.onEndThemeTrial?()
             store.endThemeTrial()
             state = .failed(errorMessage(error))
         }
@@ -117,13 +118,27 @@ final class ThemeLinkCandidate {
         return true
     }
 
-    private static let barProperties: Set<String> = [
-        "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset"
-    ]
+    private static let barProperties = savedThemeBarProperties.union(["popupOffset"])
+
+    private static func checkInstalledID(_ id: String, packages: WidgetPackageStore) throws {
+        let directory = packages.directory.appending(path: id)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        try validatePackagePath(directory, inside: packages.directory)
+        let versions = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
+        for version in versions {
+            guard try version.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { continue }
+            try validatePackagePath(version, inside: packages.directory)
+            guard let manifest = try? packages.manifest(at: version), manifest.kind == .theme, manifest.id == id else {
+                throw ThemeLinkError.idTaken(id)
+            }
+        }
+    }
 
     private static func checkDocument(_ document: [String: ConfigurationValue], profileCount: inout Int) throws {
         if document["includes"] != nil { throw ThemeLinkError.extraFiles }
-        if case let .object(bar) = document["bar"] {
+        if let value = document["bar"] {
+            // References may supply allowed values, but profile and setting choices must never supply the bar's keys.
+            guard case let .object(bar) = value else { throw ThemeLinkError.barProperty("bar") }
             for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
         }
         let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []

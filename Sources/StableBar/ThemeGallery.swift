@@ -1,6 +1,10 @@
 import Foundation
 import Observation
 
+let savedThemeBarProperties: Set<String> = [
+    "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch"
+]
+
 @MainActor @Observable
 final class ThemeGallery {
     private let store: BarStore
@@ -210,7 +214,7 @@ final class ThemeGallery {
                 removal[property] = .null
             }
             let bar = try (main["bar"]?.decoded([String: ConfigurationValue].self) ?? [:]).filter {
-                ["height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch"].contains($0.key)
+                savedThemeBarProperties.contains($0.key)
             }
             if !bar.isEmpty {
                 moved["bar"] = .object(bar)

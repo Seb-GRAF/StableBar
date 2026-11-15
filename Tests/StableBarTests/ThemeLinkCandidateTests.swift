@@ -22,7 +22,7 @@ struct ThemeLinkCandidateTests {
 
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialKey == candidate.choice.key)
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
         #expect(store.selectedThemeKey == selection)
         #expect(store.configuration?.bar.height == 30)
         #expect(try Data(contentsOf: fixture.url) == original)
@@ -31,9 +31,9 @@ struct ThemeLinkCandidateTests {
         candidate.discard()
         candidate.discard()
         #expect(!exists(candidate.choice.directory))
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         candidate.tryOnBar()
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
     }
 
     @Test func cancellingATrialKeepsTheCandidateReadyToTryAgain() throws {
@@ -46,11 +46,29 @@ struct ThemeLinkCandidateTests {
         candidate.tryOnBar()
         candidate.cancelTrial()
         #expect(candidate.state == .ready)
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         #expect(exists(candidate.choice.directory))
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialKey == candidate.choice.key)
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
+    }
+
+    @Test(arguments: [false, true])
+    func endingOneCandidatesTrialKeepsAnotherCopyOfTheSameTheme(discard: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let first = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { first.discard() }
+        let second = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { second.discard() }
+        first.tryOnBar()
+        second.tryOnBar()
+        if discard { first.discard() } else { first.cancelTrial() }
+        #expect(store.themeTrialDirectory == second.choice.directory)
+        #expect(store.configuration?.bar.height == 30)
+        #expect(exists(second.choice.directory))
     }
 
     @Test func aTrialSurvivesAReloadOfTheConfiguration() throws {
@@ -65,13 +83,13 @@ struct ThemeLinkCandidateTests {
         store.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialKey == candidate.choice.key)
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
         #expect(store.configuration?.bar.height == 30)
         #expect(store.configuration?.bar.margin == 17)
         #expect(exists(candidate.choice.directory))
         candidate.cancelTrial()
         #expect(store.configuration?.bar.margin == 17)
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
     }
 
     @Test func tryingALinkedThemeEndsEditingTheBar() throws {
@@ -101,7 +119,33 @@ struct ThemeLinkCandidateTests {
         candidate.tryOnBar()
         #expect(!trial.isActive)
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialKey == candidate.choice.key)
+        #expect(store.themeTrialDirectory == candidate.choice.directory)
+    }
+
+    @Test(arguments: [false, true])
+    func usingALinkedThemeEndsTheOpenTryThemesPanel(installationFails: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        let trial = ThemeTrial(store: store)
+        trial.next()
+        store.onEndThemeTrial = { trial.cancel() }
+        if installationFails { try fixture.write("not a directory", to: fixture.packages.directory) }
+        await candidate.use(with: client(fixture))
+        #expect(!trial.isActive)
+        #expect(store.themeTrialDirectory == nil)
+        if installationFails {
+            guard case .failed = candidate.state else {
+                Issue.record("Expected installation to fail")
+                return
+            }
+        } else {
+            #expect(candidate.state == .used)
+            #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+        }
     }
 
     @Test func aFailedTrialReportsTheLoaderErrorWithoutSelectingTheTheme() throws {
@@ -114,7 +158,7 @@ struct ThemeLinkCandidateTests {
         candidate.tryOnBar()
         #expect(candidate.state == .failed("Load a bar before trying themes."))
         #expect(store.selectedThemeKey == "built-in")
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         #expect(exists(candidate.choice.directory))
     }
 
@@ -133,7 +177,7 @@ struct ThemeLinkCandidateTests {
         #expect(try Data(contentsOf: installed.appending(path: "package.json")) == candidate.link.manifest)
         #expect(store.selectedThemeKey == "harbour-test/1.0.0")
         #expect(store.configurationError == nil)
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         #expect(candidate.state == .used)
         #expect(!exists(candidate.choice.directory))
         #expect(store.customizationHistory.undoSteps.count == 1)
@@ -181,7 +225,7 @@ struct ThemeLinkCandidateTests {
         await candidate.use(with: client(fixture))
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
         #expect(store.selectedThemeKey == selection)
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -219,9 +263,88 @@ struct ThemeLinkCandidateTests {
             Issue.record("Expected installation to fail")
             return
         }
-        #expect(store.themeTrialKey == nil)
+        #expect(store.themeTrialDirectory == nil)
         #expect(store.selectedThemeKey == "built-in")
         #expect(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @Test(arguments: ["2", ".2"])
+    func aPackageIDWithDifferentCaseFollowsTheFilesystem(version: String) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let source = fixture.directory.appending(path: "widget")
+        try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"\#(version)","kind":"widgets","entry":"config.json"}"#,
+                          to: source.appending(path: "package.json"))
+        try fixture.write(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
+        _ = try fixture.packages.install(source)
+        var link = try linkedTheme()
+        var manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
+        manifest["id"] = .string("Harbour-Test")
+        link.manifest = try configurationData(manifest)
+        let before = try temporaryFolders()
+        if exists(fixture.packages.directory.appending(path: "Harbour-Test")) {
+            #expect(throws: ThemeLinkError.idTaken("Harbour-Test")) {
+                let candidate = try ThemeLinkCandidate(link: link, store: store)
+                candidate.discard()
+            }
+        } else {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+        #expect(try temporaryFolders() == before)
+    }
+
+    @Test(arguments: [false, true])
+    func everyVersionUnderTheIDMustBeAThemeWithThatID(brokenManifest: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        _ = try fixture.packages.install(linkedThemeDirectory)
+        let version = try fixture.packages.directory(id: "harbour-test", version: "2")
+        let manifest = brokenManifest ? "broken" : #"{"id":"other-theme","name":"Theme","version":"2","kind":"theme","entry":"config.json"}"#
+        try fixture.write(manifest, to: version.appending(path: "package.json"))
+        #expect(throws: ThemeLinkError.idTaken("harbour-test")) {
+            let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test func anUnrelatedBrokenPackageDoesNotBlockALinkedTheme() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try fixture.write("broken", to: fixture.packages.directory.appending(path: "unrelated/1/package.json"))
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        #expect(candidate.state == .ready)
+    }
+
+    @Test func packageChecksUseTheStoresClient() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let packages = WidgetPackageStore(directory: fixture.directory.appending(path: "client-packages"))
+        store.packageStoreClient = PackageStoreClient(packages: packages, indexURL: fixture.directory.appending(path: "index.json"))
+        let version = try packages.directory(id: "harbour-test", version: "1.0.0")
+        try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"1.0.0","kind":"widgets","entry":"config.json"}"#,
+                          to: version.appending(path: "package.json"))
+        #expect(throws: ThemeLinkError.idTaken("harbour-test")) {
+            let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+            candidate.discard()
+        }
+        try linkedTheme().manifest.write(to: version.appending(path: "package.json"))
+        try fixture.write(#"{"bar":{"height":42}}"#, to: version.appending(path: "config.json"))
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        await candidate.use(with: client(fixture))
+        #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
+        #expect(store.selectedThemeKey == "built-in")
+        #expect(!exists(fixture.packages.directory))
     }
 
     @Test(arguments: Rejection.allCases)
@@ -278,6 +401,34 @@ struct ThemeLinkCandidateTests {
             manifest["settings"] = .object(["property": .object(["type": .string("string"), "default": .string("@token.bar")])])
             configuration["tokens"] = .object(["bar": .object(["hideMenuBar": .bool(true)])])
             configuration["bar"] = .string("@setting.property")
+        case .combinedProfileBar:
+            configuration["tokens"] = .object(["b": .object(["height": .number(30)])])
+            let dark: ConfigurationValue = .object([
+                "name": .string("Dark"), "when": .object(["appearance": .string("dark")]),
+                "configuration": .object(["tokens": .object(["b": .object(["hideMenuBar": .bool(true)])])])
+            ])
+            configuration["profiles"] = .array([dark, profile(["bar": .string("@token.b")])])
+        case .settingChoiceBar:
+            manifest["settings"] = .object(["look": .object([
+                "type": .string("string"), "default": .string("@token.safe"),
+                "choices": .array([.string("@token.safe"), .string("@token.evil")])
+            ])])
+            configuration["tokens"] = .object([
+                "safe": .object(["height": .number(30)]), "evil": .object(["hideMenuBar": .bool(true)])
+            ])
+            configuration["bar"] = .string("@setting.look")
+        case .nestedProfileBar:
+            configuration["tokens"] = .object(["safe": .object(["height": .number(30)])])
+            let nested = profile(["bar": .string("@token.safe")], name: "Nested")
+            configuration["profiles"] = .array([profile(["profiles": .array([nested])])])
+        case .nullBar: configuration["bar"] = .null
+        case .arrayBar: configuration["bar"] = .array([])
+        case .malformedProfiles: configuration["profiles"] = .array([.object(["name": .number(1)])])
+        case .outOfRangeNumber:
+            configuration["profiles"] = .array([.object([
+                "name": .string("Count"), "when": .object(["displayCount": .number(1e100)])
+            ])])
+        case .malformedManifest: manifest["id"] = .number(1)
         case .referenceDepth:
             var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
             for level in 1...66 { tokens["t\(level)"] = .string("@token.t\(level - 1)") }
@@ -294,7 +445,7 @@ struct ThemeLinkCandidateTests {
             configuration["bar"] = .object(["style": .object(["background": .string("@token.t12")])])
         case .invalidEntry: manifest["entry"] = .string("missing.json")
         case .unknownProperty: configuration["notAThemeProperty"] = .bool(true)
-        case .tooLarge, .tooDeep, .tooManyProfiles, .notUTF8, .notAnObject: break
+        case .tooLarge, .tooDeep, .tooManyProfiles, .tooManyNestedProfiles, .notUTF8, .notAnObject: break
         }
         link.manifest = try configurationData(manifest)
         link.configuration = try configurationData(configuration)
@@ -302,6 +453,12 @@ struct ThemeLinkCandidateTests {
         case .tooLarge: link.configuration = Data((#"{"tokens":{"large":""# + String(repeating: "x", count: 32_768) + #""}}"#).utf8)
         case .tooDeep: link.configuration = Data((#"{"tokens":{"deep":"# + String(repeating: "[", count: 500) + "0" + String(repeating: "]", count: 500) + "}}").utf8)
         case .tooManyProfiles: link.configuration = try configurationData(["profiles": .array((0..<17).map { profile([:], name: "p\($0)") })])
+        case .tooManyNestedProfiles:
+            let first = (0..<7).map { profile([:], name: "a\($0)") }
+            let second = (0..<8).map { profile([:], name: "b\($0)") }
+            link.configuration = try configurationData(["profiles": .array([
+                profile(["profiles": .array(first)], name: "First"), profile(["profiles": .array(second)], name: "Second")
+            ])])
         case .notUTF8: link.configuration = try #require("{}".data(using: .utf16))
         case .notAnObject: link.configuration = Data("[]".utf8)
         default: break
@@ -313,7 +470,9 @@ struct ThemeLinkCandidateTests {
         }
         #expect(try temporaryFolders() == before)
         switch rejection {
-        case .bar, .tokenBar, .overriddenTokenBar, .settingBar: #expect(error as? ThemeLinkError == .barProperty("hideMenuBar"))
+        case .bar: #expect(error as? ThemeLinkError == .barProperty("hideMenuBar"))
+        case .tokenBar, .overriddenTokenBar, .settingBar, .combinedProfileBar, .settingChoiceBar, .nestedProfileBar, .nullBar, .arrayBar:
+            #expect(error as? ThemeLinkError == .barProperty("bar"))
         case .profileBar: #expect(error as? ThemeLinkError == .barProperty("position"))
         case .hosts, .permissions, .tools, .secrets: #expect(error as? ThemeLinkError == .needsReview)
         case .screenshot, .includes, .profileIncludes: #expect(error as? ThemeLinkError == .extraFiles)
@@ -323,8 +482,9 @@ struct ThemeLinkCandidateTests {
         case .widgetID: #expect(error as? ThemeLinkError == .idTaken("harbour-test"))
         case .tooLarge: #expect(error as? ThemeLinkError == .tooLarge)
         case .tooDeep: #expect(error as? ThemeLinkError == .tooDeep)
-        case .tooManyProfiles: #expect(error as? ThemeLinkError == .tooManyProfiles)
-        case .notUTF8, .notAnObject: #expect(error as? ThemeLinkError == .damaged)
+        case .tooManyProfiles, .tooManyNestedProfiles: #expect(error as? ThemeLinkError == .tooManyProfiles)
+        case .notUTF8, .notAnObject, .malformedProfiles, .outOfRangeNumber, .malformedManifest:
+            #expect(error as? ThemeLinkError == .damaged)
         case .doublingTokens, .profileExpansion, .nestedProfileExpansion:
             guard case .referenceExpansionTooLarge? = error as? ThemeConfigurationError else {
                 Issue.record("Expected reference expansion limit, got \(String(describing: error))")
@@ -355,7 +515,8 @@ struct ThemeLinkCandidateTests {
         manifest["settings"] = .object(["size": .object(["type": .string("number"), "default": .number(19)])])
         link.manifest = try configurationData(manifest)
         link.configuration = Data(##"""
-        {"tokens":{"base":"#123456"},"defaults":{"fontSize":"@setting.size"},"profiles":[
+        {"tokens":{"base":"#123456"},"defaults":{"fontSize":"@setting.size"},
+         "bar":{"height":"@setting.size","style":{"background":"@token.base"}},"profiles":[
           {"name":"Local tokens","configuration":{"tokens":{"color":"@token.base"},"defaults":{"foreground":"@token.color"}}}
         ]}
         """##.utf8)
@@ -369,6 +530,7 @@ struct ThemeLinkCandidateTests {
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
         #expect(store.configuration?.defaults.fontSize == 19)
+        #expect(store.configuration?.bar.height == 19)
         await candidate.use(with: client(fixture))
         #expect(candidate.state == .used)
     }
@@ -377,7 +539,9 @@ struct ThemeLinkCandidateTests {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
         case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
         case tokenBar, overriddenTokenBar, settingBar, referenceDepth, referenceOrigins, invalidEntry, unknownProperty
-        case tooLarge, tooDeep, tooManyProfiles, notUTF8, notAnObject
+        case combinedProfileBar, settingChoiceBar, nestedProfileBar, nullBar, arrayBar
+        case tooLarge, tooDeep, tooManyProfiles, tooManyNestedProfiles, notUTF8, notAnObject
+        case malformedProfiles, outOfRangeNumber, malformedManifest
     }
 
     private var linkedThemeDirectory: URL {

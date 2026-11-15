@@ -620,7 +620,7 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
-    var themeTrialKey: String? { triedTheme?.key }
+    var themeTrialDirectory: URL? { triedTheme?.directory }
 
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
