@@ -24,9 +24,10 @@ private let fixture = DiskVolumes(
     #expect(output.text == "59%")
     #expect(output.icon == "internaldrive")
     #expect(output.value == nil)
-    #expect(output.tooltip == "412 GB available on Macintosh HD")
+    #expect(output.tooltip == "\(diskSize(412_000_000_000)) available on Macintosh HD")
     #expect(output.fields == ["percent": "59", "volume": "Macintosh HD", "format": "APFS",
-                              "used": "582 GB", "free": "412 GB", "total": "994 GB"])
+                              "used": diskSize(582_000_000_000), "free": diskSize(412_000_000_000),
+                              "total": diskSize(994_000_000_000)])
     #expect(output.values?["disk"] == 582.0 / 994.0)
     #expect(output.values?["used"] == 582e9 && output.values?["free"] == 412e9 && output.values?["total"] == 994e9)
     #expect(output.state == nil)
