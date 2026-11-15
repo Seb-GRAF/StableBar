@@ -81,7 +81,7 @@ final class BarStore: NSObject {
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
-    private var triedTheme: ThemeChoice?
+    private var triedTheme: (choice: ThemeChoice, budget: ConfigurationReferenceExpansionBudget?)?
     private var managesConnections = false
     private let configurationWatcher = ConfigurationWatcher()
     private(set) var reloadTask: Task<Void, Never>?
@@ -607,7 +607,7 @@ final class BarStore: NSObject {
         normalComposition = (next, configurationLoader)
         if let triedTheme {
             do {
-                let (preview, loader) = try configurationTryingTheme(triedTheme)
+                let (preview, loader) = try configurationTryingTheme(triedTheme.choice, referenceExpansionBudget: triedTheme.budget)
                 display(preview, loader: loader)
             } catch { configurationError = errorMessage(error) }
         } else {
@@ -620,7 +620,7 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
-    var themeTrialDirectory: URL? { triedTheme?.directory }
+    var themeTrialDirectory: URL? { triedTheme?.choice.directory }
 
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
@@ -664,12 +664,12 @@ final class BarStore: NSObject {
         return normalComposition?.configuration ?? configuration
     }
 
-    func tryTheme(_ choice: ThemeChoice) throws {
+    func tryTheme(_ choice: ThemeChoice, referenceExpansionBudget: ConfigurationReferenceExpansionBudget? = nil) throws {
         guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
-        let (next, loader) = try configurationTryingTheme(choice)
-        triedTheme = choice
+        let (next, loader) = try configurationTryingTheme(choice, referenceExpansionBudget: referenceExpansionBudget)
+        triedTheme = (choice, referenceExpansionBudget)
         display(next, loader: loader)
     }
 
@@ -679,13 +679,21 @@ final class BarStore: NSObject {
         if let normalComposition { display(normalComposition.configuration, loader: normalComposition.loader) }
     }
 
-    private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
-        var loader = newLoader()
-        let settings = try themeSettings(for: choice, in: configurationLoader.document)
-        let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
-        let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
-                                   context: context, previewTheme: layer)
-        return (next, loader)
+    private func configurationTryingTheme(_ choice: ThemeChoice,
+                                         referenceExpansionBudget: ConfigurationReferenceExpansionBudget? = nil) throws -> (Configuration, ConfigurationLoader) {
+        let budget = referenceExpansionBudget ?? ConfigurationReferenceExpansionBudget.current
+        do {
+            return try ConfigurationReferenceExpansionBudget.$current.withValue(budget) {
+                var loader = newLoader()
+                let settings = try themeSettings(for: choice, in: configurationLoader.document)
+                let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
+                let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
+                                           context: context, previewTheme: layer)
+                return (next, loader)
+            }
+        } catch {
+            throw budget?.themeLinkError(error) ?? error
+        }
     }
 
     /// Takes what `loader` read besides the configuration itself: profiles, packages and contributions.

@@ -6,15 +6,35 @@ let configurationReferenceExpansionLimit = 100_000
 let configurationReferenceDepthLimit = 64
 
 final class ConfigurationReferenceExpansionBudget: Sendable {
-    let limit: Int
-    private let remaining: OSAllocatedUnfairLock<Int>
+    // Trial and use create loaders across the history and package-client boundaries.
+    @TaskLocal static var current: ConfigurationReferenceExpansionBudget?
 
-    init(limit: Int) {
+    let limit: Int
+    let originPathByteLimit: Int?
+    private let remaining: OSAllocatedUnfairLock<Int>
+    private let remainingOriginPathBytes: OSAllocatedUnfairLock<Int>
+
+    init(limit: Int, originPathByteLimit: Int? = nil) {
         self.limit = limit
+        self.originPathByteLimit = originPathByteLimit
         remaining = OSAllocatedUnfairLock(initialState: limit)
+        remainingOriginPathBytes = OSAllocatedUnfairLock(initialState: originPathByteLimit ?? 0)
     }
 
     var consumed: Int { limit - remaining.withLock { $0 } }
+    var consumedOriginPathBytes: Int { (originPathByteLimit ?? 0) - remainingOriginPathBytes.withLock { $0 } }
+
+    func recordOriginPath(_ path: String, token: String) throws {
+        guard originPathByteLimit != nil else { return }
+        let bytes = path.utf8.count
+        try remainingOriginPathBytes.withLock { remaining in
+            guard bytes <= remaining else {
+                remaining = 0
+                throw ThemeConfigurationError.referenceOriginsTooLarge(token)
+            }
+            remaining -= bytes
+        }
+    }
 
     fileprivate func withRemaining<T>(_ body: (inout Int) throws -> T) rethrows -> T {
         try remaining.withLockUnchecked { remaining in
@@ -130,7 +150,7 @@ func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: Stri
                                  path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
                                  depth: max(0, path.count - 1))
     }
-    if let budget { return try budget.withRemaining(resolve) }
+    if let budget = budget ?? ConfigurationReferenceExpansionBudget.current { return try budget.withRemaining(resolve) }
     var remaining = configurationReferenceExpansionLimit
     return try resolve(&remaining)
 }

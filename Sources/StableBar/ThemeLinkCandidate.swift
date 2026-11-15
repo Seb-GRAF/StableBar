@@ -8,7 +8,9 @@ final class ThemeLinkCandidate {
     let link: ThemeLink
     let choice: ThemeChoice
     let validationExpansionUnits: Int
+    var validationOriginPathBytes: Int { validationBudget.consumedOriginPathBytes }
     private(set) var state: State = .ready
+    private let validationBudget: ConfigurationReferenceExpansionBudget
     private weak var store: BarStore?
     private var discarded = false
     private var using = false
@@ -17,7 +19,7 @@ final class ThemeLinkCandidate {
         try link.validateFiles()
         let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
         let packages = store.packageStoreClient.packages
-        let budget = ConfigurationReferenceExpansionBudget(limit: 300_000)
+        let budget = ConfigurationReferenceExpansionBudget(limit: 300_000, originPathByteLimit: 8_000_000)
         do {
             let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
             let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
@@ -45,14 +47,12 @@ final class ThemeLinkCandidate {
             self.link = link
             choice = ThemeChoice(manifest: inspection.manifest, directory: directory, isBundled: false)
             validationExpansionUnits = budget.consumed
+            validationBudget = budget
             self.store = store
         } catch {
             try? FileManager.default.removeItem(at: directory)
             if error is DecodingError { throw ThemeLinkError.damaged }
-            if case .referenceExpansionTooLarge? = error as? ThemeConfigurationError, budget.consumed == budget.limit {
-                throw ThemeLinkError.tooManyReferences
-            }
-            throw error
+            throw budget.themeLinkError(error)
         }
     }
 
@@ -61,11 +61,11 @@ final class ThemeLinkCandidate {
         store.barEditing.end()
         store.onEndThemeTrial?()
         do {
-            try store.tryTheme(choice)
+            try store.tryTheme(choice, referenceExpansionBudget: validationBudget)
             state = .trying
         } catch {
             store.endThemeTrial()
-            state = .failed(errorMessage(error))
+            state = .failed(errorMessage(validationBudget.themeLinkError(error)))
         }
     }
 
@@ -79,32 +79,34 @@ final class ThemeLinkCandidate {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
-        do {
-            let client = store.packageStoreClient
-            let packages = client.packages
-            try Self.checkInstalledID(choice.manifest.id, packages: packages)
-            let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
-            let installed: ThemeChoice
-            if FileManager.default.fileExists(atPath: directory.path) {
-                guard try sameFiles(at: directory) else {
-                    throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
+        await ConfigurationReferenceExpansionBudget.$current.withValue(validationBudget) {
+            do {
+                let client = store.packageStoreClient
+                let packages = client.packages
+                try Self.checkInstalledID(choice.manifest.id, packages: packages)
+                let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
+                let installed: ThemeChoice
+                if FileManager.default.fileExists(atPath: directory.path) {
+                    guard try sameFiles(at: directory) else {
+                        throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
+                    }
+                    installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
+                } else {
+                    let inspection = try await client.install(choice.directory, from: nil)
+                    installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
                 }
-                installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
-            } else {
-                let inspection = try await client.install(choice.directory, from: nil)
-                installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
+                guard !discarded else { return }
+                try store.applyTheme(installed, on: kind, everyBar: everyBar)
+                store.onEndThemeTrial?()
+                store.endThemeTrial()
+                state = .used
+                try? FileManager.default.removeItem(at: choice.directory)
+            } catch {
+                guard !discarded else { return }
+                store.onEndThemeTrial?()
+                store.endThemeTrial()
+                state = .failed(errorMessage(validationBudget.themeLinkError(error)))
             }
-            guard !discarded else { return }
-            try store.applyTheme(installed, on: kind, everyBar: everyBar)
-            store.onEndThemeTrial?()
-            store.endThemeTrial()
-            state = .used
-            try? FileManager.default.removeItem(at: choice.directory)
-        } catch {
-            guard !discarded else { return }
-            store.onEndThemeTrial?()
-            store.endThemeTrial()
-            state = .failed(errorMessage(error))
         }
     }
 
@@ -136,10 +138,11 @@ final class ThemeLinkCandidate {
         let versions = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.isDirectoryKey])
         let stagingPrefix = ".install-"
         for version in versions {
-            if version.lastPathComponent.hasPrefix(stagingPrefix),
-               UUID(uuidString: String(version.lastPathComponent.dropFirst(stagingPrefix.count))) != nil { continue }
             guard try version.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true else { continue }
             try validatePackagePath(version, inside: packages.directory)
+            if version.lastPathComponent.hasPrefix(stagingPrefix),
+               UUID(uuidString: String(version.lastPathComponent.dropFirst(stagingPrefix.count))) != nil,
+               !FileManager.default.fileExists(atPath: version.appending(path: "package.json").path) { continue }
             guard let manifest = try? packages.manifest(at: version), manifest.kind == .theme, manifest.id == id else {
                 throw ThemeLinkError.idTaken(id)
             }
@@ -191,6 +194,18 @@ final class ThemeLinkCandidate {
             let inherited = try localTokens.overriding(.object(tokens))
                 .decoded([String: ConfigurationValue].self)
             try checkDocumentReferences(profile.configuration, tokens: inherited, budget: budget)
+        }
+    }
+}
+
+extension ConfigurationReferenceExpansionBudget {
+    func themeLinkError(_ error: any Error) -> any Error {
+        switch error as? ThemeConfigurationError {
+        case .referenceExpansionTooLarge where consumed == limit:
+            return ThemeLinkError.tooManyReferences
+        case .referenceOriginsTooLarge where consumedOriginPathBytes == originPathByteLimit:
+            return ThemeLinkError.tooManyReferences
+        default: return error
         }
     }
 }

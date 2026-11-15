@@ -229,7 +229,7 @@ struct ThemeLinkCandidateTests {
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
-    @Test(arguments: ["1.0.0", "2", ".2"])
+    @Test(arguments: ["1.0.0", "2", ".2", ".install-12345678-1234-1234-1234-123456789ABC"])
     func aWidgetInstalledAfterValidationIsRefusedAtUse(version: String) async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -328,7 +328,7 @@ struct ThemeLinkCandidateTests {
         try fixture.write("{}", to: source.appending(path: "config.json"))
         _ = try fixture.packages.install(source)
         let staging = fixture.packages.directory.appending(path: "harbour-test/.install-\(UUID().uuidString)")
-        try fixture.write("partial manifest", to: staging.appending(path: "package.json"))
+        try fixture.write("partial configuration", to: staging.appending(path: "config.json"))
         var link = try linkedTheme()
         var manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
         manifest["id"] = .string("Harbour-Test")
@@ -355,7 +355,7 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         if installedTheme { _ = try fixture.packages.install(linkedThemeDirectory) }
         let staging = fixture.packages.directory.appending(path: "harbour-test/.install-\(UUID().uuidString)")
-        try fixture.write("partial manifest", to: staging.appending(path: "package.json"))
+        try fixture.write("partial configuration", to: staging.appending(path: "config.json"))
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         #expect(candidate.state == .ready)
@@ -367,7 +367,7 @@ struct ThemeLinkCandidateTests {
         #expect(!exists(candidate.choice.directory))
     }
 
-    @Test(arguments: [false, true], ["2", ".2", ".install-not-a-uuid"])
+    @Test(arguments: [false, true], ["2", ".2", ".install-not-a-uuid", ".install-12345678-1234-1234-1234-123456789ABC"])
     func everyVersionUnderTheIDMustBeAThemeWithThatID(brokenManifest: Bool, version: String) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -664,7 +664,85 @@ struct ThemeLinkCandidateTests {
             defer { candidate.discard() }
             #expect(candidate.state == .ready, "\(directory.lastPathComponent)")
             #expect(candidate.validationExpansionUnits < 300_000)
+            #expect(candidate.validationOriginPathBytes < 8_000_000)
         }
+    }
+
+    @Test func longKeyOriginsShareOneAllowanceAcrossDisabledProfiles() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let link = try longKeyLink(profileCount: 16)
+        #expect(link.manifest.count + link.configuration.count == ThemeLink.maximumFileBytes - 16)
+        let before = try temporaryFolders()
+        let error = #expect(throws: (any Error).self) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+        #expect(error as? ThemeLinkError == .tooManyReferences)
+        #expect(try temporaryFolders() == before)
+    }
+
+    @Test(arguments: [false, true])
+    func trialAndInstallationKeepTheCandidatesOriginAllowance(install: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: longKeyLink(profileCount: 0), store: store)
+        defer { candidate.discard() }
+        #expect(candidate.validationOriginPathBytes > 4_000_000)
+        if install { await candidate.use() } else { candidate.tryOnBar() }
+        #expect(candidate.validationOriginPathBytes == 8_000_000)
+        #expect(candidate.state == .failed(ThemeLinkError.tooManyReferences.errorDescription!))
+        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.themeTrialDirectory == nil)
+        #expect(store.customizationHistory.undoSteps.isEmpty)
+        #expect(!exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")))
+    }
+
+    @Test func successfulTrialReloadAndReuseContinueChargingTheSameAllowance() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        _ = try fixture.packages.install(linkedThemeDirectory)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        let initial = candidate.validationOriginPathBytes
+        #expect(initial > 0)
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        let tried = candidate.validationOriginPathBytes
+        #expect(tried > initial)
+        store.reloadConfiguration()
+        #expect(store.configurationError == nil)
+        let reloaded = candidate.validationOriginPathBytes
+        #expect(reloaded > tried)
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(candidate.validationOriginPathBytes > reloaded)
+        let used = candidate.validationOriginPathBytes
+        store.reloadConfiguration()
+        #expect(store.configurationError == nil)
+        #expect(candidate.validationOriginPathBytes == used)
+    }
+
+    @Test func trialReloadsCannotResetAnAlmostSpentOriginAllowance() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: longKeyLink(profileCount: 0, groups: 5), store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        store.reloadConfiguration()
+        #expect(store.configurationError == nil)
+        store.reloadConfiguration()
+        #expect(candidate.validationOriginPathBytes == 8_000_000)
+        #expect(store.configurationError == ThemeLinkError.tooManyReferences.errorDescription)
     }
 
     @Test func nestedProfilesShareTheBudgetWithInspectionAndOtherReferenceChecks() throws {
@@ -739,6 +817,24 @@ struct ThemeLinkCandidateTests {
     private func linkedTheme() throws -> ThemeLink {
         ThemeLink(manifest: try Data(contentsOf: linkedThemeDirectory.appending(path: "package.json")),
                   configuration: try Data(contentsOf: linkedThemeDirectory.appending(path: "config.json")))
+    }
+
+    private func longKeyLink(profileCount: Int, groups: Int = 10) throws -> ThemeLink {
+        var link = try linkedTheme()
+        func configuration(keyBytes: Int) throws -> Data {
+            let tokens: [String: ConfigurationValue] = [
+                "s": .object([String(repeating: "k", count: keyBytes): .number(1)]),
+                "t1": .array(Array(repeating: .string("@token.s"), count: 10)),
+                "t2": .array(Array(repeating: .string("@token.t1"), count: groups))
+            ]
+            let profiles = (0..<profileCount).map { profile([:], name: "p\($0)", enabled: false) }
+            return try JSONEncoder().encode(ConfigurationValue.object([
+                "tokens": .object(tokens), "profiles": .array(profiles)
+            ]))
+        }
+        let overhead = try configuration(keyBytes: 0).count
+        link.configuration = try configuration(keyBytes: ThemeLink.maximumFileBytes - link.manifest.count - overhead - 16)
+        return link
     }
 
     private func loadedStore(_ fixture: ThemeGalleryFixture) throws -> BarStore {

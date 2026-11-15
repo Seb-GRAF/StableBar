@@ -332,8 +332,14 @@ private func visitConfigurationValues(_ value: ConfigurationValue, path: String 
 private struct ConfigurationOriginPathBudget {
     private static let maximumProcessedPathBytes = 4_000_000
     private var remaining = Self.maximumProcessedPathBytes
+    private let shared: ConfigurationReferenceExpansionBudget?
+
+    init(shared: ConfigurationReferenceExpansionBudget? = nil) {
+        self.shared = shared
+    }
 
     mutating func record(_ path: String, token: String) throws {
+        try shared?.recordOriginPath(path, token: token)
         remaining -= path.utf8.count
         guard remaining >= 0 else { throw ThemeConfigurationError.referenceOriginsTooLarge(token) }
     }
@@ -614,7 +620,7 @@ struct ConfigurationLoader: Sendable {
         layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens,
                                                             budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
-        var originBudget = ConfigurationOriginPathBudget()
+        var originBudget = ConfigurationOriginPathBudget(shared: referenceExpansionBudget ?? ConfigurationReferenceExpansionBudget.current)
         let tokenSources = layer.origins
         try tokenOrigins(.object(beforeTokens), origins: tokenSources, tokens: tokens, into: &layer.origins, budget: &originBudget)
         templates = try layer.values["templates"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
@@ -831,7 +837,8 @@ struct ConfigurationLoader: Sendable {
                                                                               budget: referenceExpansionBudget)
                 } catch {
                     entry.settingValue = nil
-                    if referenceExpansionBudget != nil, case .referenceExpansionTooLarge? = error as? ThemeConfigurationError {
+                    if referenceExpansionBudget != nil || ConfigurationReferenceExpansionBudget.current != nil,
+                       case .referenceExpansionTooLarge? = error as? ThemeConfigurationError {
                         throw error
                     }
                 }
