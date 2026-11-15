@@ -16,7 +16,10 @@ struct VolumeEjector: Sendable {
     /// Reads `volumeIsLocalKey` for `path`, then unmounts with `options(scope, isLocal:)`.
     func eject(_ path: String, _ scope: EjectScope) async throws {
         let url = URL(fileURLWithPath: path)
-        let isLocal = try url.resourceValues(forKeys: [.volumeIsLocalKey]).volumeIsLocal ?? true
+        // Reading the key stats the mount point, which can hang on an unresponsive network share.
+        let isLocal = try await BlockingWork.run {
+            try url.resourceValues(forKeys: [.volumeIsLocalKey]).volumeIsLocal ?? true
+        }
         try await unmount(url, Self.options(scope, isLocal: isLocal))
     }
 }
