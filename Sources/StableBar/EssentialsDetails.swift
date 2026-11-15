@@ -234,6 +234,7 @@ struct EssentialsDetails: View {
             if let volumes = context.lists["volumes"], !volumes.isEmpty {
                 Divider().overlay(appearance.foreground.opacity(0.12))
                 Text("Other volumes").font(.system(size: 12, weight: .semibold)).opacity(0.6)
+                    .accessibilityAddTraits(.isHeader)
                 ForEach(volumes, id: \.["path"]) { row in
                     DiskVolumeRow(row: row, context: context, appearance: appearance)
                 }
