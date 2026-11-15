@@ -214,7 +214,7 @@ Clicking an icon whose app has an ordinary menu opens that menu below it, in you
 
 Items you use all day can sit on the bar beside the grid symbol, as they do in the macOS menu bar, and items you never use can leave the row. Select Menu bar items in **Settings → Bar** and open **Content**. **Menu bar items** shows the items in three strips: **On the bar**, in their order, with the grid symbol among them; **In the row**, in menu bar order; and **Hidden**. Drag an icon to another strip, or within **On the bar** to change its place; a line shows where it will go. Right-click an icon to move it left or right, onto the bar, back to the row or into **Hidden**. Select an icon to see its name and app, choose **Bar**, **Row** or **Hidden** for it, and, for an item on the bar, enter an SF Symbol to draw in place of its icon. An item whose app isn't running stays in its strip, dimmed, so you can still move it.
 
-The grid symbol moves the same way: drag it to either end of **On the bar** or between items, or into **Hidden** to leave it out. Select it to choose another SF Symbol for it. Without the grid symbol, the bar has no way to open the row; the items in it stay listed in Settings.
+The grid symbol moves the same way: drag it to either end of **On the bar** or between items, or into **Hidden** to leave it out. Select it to choose another SF Symbol for it. Without the grid symbol, the bar has no way to open the row, and right-clicking an item opens the item, so edit the widget from **Settings → Bar**. The items in the row stay listed in Settings.
 
 On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click the grid symbol for the same commands as in Settings, followed by **Edit Widget…** and the bar's menu.
 
