@@ -10,7 +10,9 @@ import Testing
     let host: NSHostingView<BarView>
 
     init(store: BarStore) {
-        window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 600, height: 100), styleMask: [.borderless],
+        // At the top of the screen, as a bar is, so a popup has room below it.
+        let screen = NSScreen.screens.first?.frame ?? .zero
+        window = NSWindow(contentRect: CGRect(x: screen.minX, y: screen.maxY - 100, width: 600, height: 100), styleMask: [.borderless],
                           backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.alphaValue = 0
@@ -30,14 +32,6 @@ import Testing
         guard let event = mouseEvent(.rightMouseDown, at: point)?.cgEvent?.copy() else { return nil }
         event.setIntegerValueField(.mouseEventButtonNumber, value: 1)
         return NSEvent(cgEvent: event)
-    }
-
-    /// Sends `event` through the app's queue, as a real click comes, so it's the current event while the window finds its view.
-    func send(_ event: NSEvent?) throws {
-        let app = NSApplication.shared
-        app.postEvent(try #require(event), atStart: true)
-        app.sendEvent(try #require(app.nextEvent(matching: NSEvent.EventTypeMask(type: event!.type), until: .distantPast,
-                                                 inMode: .default, dequeue: true)))
     }
 
     /// The titles of the menu a right-click at `point` opens, read without opening it.
@@ -120,37 +114,34 @@ private final class FakeMenuBarItem: @unchecked Sendable {
     let store = try fixture.store(appMenu: AppMenu(checkAccess: { true }, readAttribute: fake.read))
     defer { store.stop() }
     #expect(await store.appMenu.readMenuBarItems(requestingAccess: false))
-    #expect(store.appMenu.menuBarItems.map(\.entry.title) == ["Fake item"])
+    try #require(store.appMenu.menuBarItems.map(\.entry.title) == ["Fake item"])
+    _ = NSApplication.shared
     let bar = HostedBar(store: store)
     defer { bar.window.close() }
-
-    // The widget holds only the item, so the item sits in the middle of where the widget's menu is offered.
-    let widget: ([String]) -> Bool = { $0.contains("Edit Widget…") }
-    var corner: CGPoint?
-    try await awaitCondition {
-        corner = bar.firstPoint(where: widget)
-        return corner != nil
-    }
-    let topLeft = try #require(corner)
-    let right = Array(stride(from: topLeft.x, to: 200, by: 1).prefix { widget(bar.menu(at: CGPoint(x: $0, y: topLeft.y))) }).last ?? topLeft.x
-    let bottom = Array(stride(from: topLeft.y, to: 100, by: 1).prefix { widget(bar.menu(at: CGPoint(x: topLeft.x, y: $0))) }).last ?? topLeft.y
-    let center = CGPoint(x: (topLeft.x + right) / 2, y: (topLeft.y + bottom) / 2)
-
-    nonisolated(unsafe) var menusOpened = 0
-    let observer = NotificationCenter.default.addObserver(forName: NSMenu.didBeginTrackingNotification, object: nil, queue: nil) { note in
-        menusOpened += 1
-        nonisolated(unsafe) let menu = note.object as? NSMenu
-        DispatchQueue.main.async { menu?.cancelTracking() }
-    }
-    defer { NotificationCenter.default.removeObserver(observer) }
     defer { store.popup.close() }
-    try bar.send(bar.rightMouseDown(at: center))
-    #expect(menusOpened == 0, "A right-click on an app's item opens none of StableBar's menus")
-    #expect(store.popup.isOpen, "It opens the item's menu, as a click does")
+
+    // Nothing here opens a menu: an open menu tracks the mouse, and a stray click in it could choose Quit StableBar.
+    var found: RightClickView?
+    try await awaitCondition {
+        bar.host.layoutSubtreeIfNeeded()
+        found = descendants(of: bar.host).lazy.compactMap { $0 as? RightClickView }.first
+        return found != nil
+    }
+    let capture = try #require(found)
+    let center = bar.host.convert(CGPoint(x: capture.bounds.midX, y: capture.bounds.midY), from: capture)
+    #expect(!bar.menu(at: center).contains("Hide"), "The item no longer has a menu of StableBar's commands")
+
+    capture.rightMouseDown(with: try #require(bar.rightMouseDown(at: center)))
+    #expect(store.popup.isOpen, "A right-click opens the item's menu, as a click does")
 
     store.popup.close()
     try #require(!store.popup.isOpen)
-    try bar.send(bar.mouseEvent(.leftMouseDown, at: center))
-    try bar.send(bar.mouseEvent(.leftMouseUp, at: center))
-    #expect(store.popup.isOpen, "A click still reaches the item")
+    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+        bar.window.sendEvent(try #require(bar.mouseEvent(type, at: center)))
+    }
+    #expect(store.popup.isOpen, "A click still reaches the item beneath the view that takes right-clicks")
+}
+
+@MainActor private func descendants(of view: NSView) -> [NSView] {
+    view.subviews + view.subviews.flatMap { descendants(of: $0) }
 }

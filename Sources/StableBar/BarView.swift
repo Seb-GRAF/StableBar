@@ -1606,7 +1606,7 @@ private struct RightClickCapture: NSViewRepresentable {
     func updateNSView(_ nsView: RightClickView, context: Context) { nsView.action = action }
 }
 
-private final class RightClickView: NSView {
+final class RightClickView: NSView {
     var action: () -> Void
 
     init(action: @escaping () -> Void) {
@@ -1618,7 +1618,7 @@ private final class RightClickView: NSView {
 
     // Only a right-click stops here; every other event goes on to the SwiftUI view beneath.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        NSApp.currentEvent?.type == .rightMouseDown ? super.hitTest(point) : nil
+        NSApp?.currentEvent?.type == .rightMouseDown ? super.hitTest(point) : nil
     }
 
     override func rightMouseDown(with event: NSEvent) { action() }
