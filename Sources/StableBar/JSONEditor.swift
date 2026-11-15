@@ -141,3 +141,38 @@ struct JSONEditor: NSViewRepresentable {
         }
     }
 }
+
+struct JSONSyntaxProblem: Equatable {
+    let line: Int
+    let message: String
+}
+
+/// The line of a JSON syntax error and a message naming it. The decoder counts UTF-8 bytes, may point one byte past
+/// the culprit and prints that byte as Latin-1, so the real character is read back from the text.
+func jsonSyntaxProblem(_ error: Error, in text: String) -> JSONSyntaxProblem? {
+    guard case let .dataCorrupted(context)? = error as? DecodingError,
+          let underlying = context.underlyingError as NSError?,
+          let detail = underlying.userInfo[NSDebugDescriptionErrorKey] as? String else { return nil }
+    let bytes = Array(text.utf8)
+    let index = underlying.userInfo["NSJSONSerializationErrorIndex"] as? Int
+    let line: Int
+    if let index {
+        line = 1 + bytes.prefix(min(max(index, 0), bytes.count)).count { $0 == UInt8(ascii: "\n") }
+    } else if let match = detail.firstMatch(of: /line (\d+)/), let number = Int(match.1) {
+        line = number
+    } else {
+        return nil
+    }
+    var message = detail.replacing(#/ around line \d+, column \d+/#, with: "")
+        .replacing(#/ around character \d+/#, with: "")
+    if let index, let match = message.firstMatch(of: /Unexpected character '(.)'/),
+       let scalar = match.1.unicodeScalars.first, match.1.unicodeScalars.count == 1, scalar.value <= 0xFF {
+        for offset in [index, index - 1] where bytes.indices.contains(offset) && bytes[offset] == UInt8(scalar.value) {
+            guard let start = text.utf8.index(text.utf8.startIndex, offsetBy: offset).samePosition(in: text)
+            else { continue }
+            message.replaceSubrange(match.1.startIndex..<match.1.endIndex, with: String(text[start]))
+            break
+        }
+    }
+    return JSONSyntaxProblem(line: line, message: "Line \(line): \(message)")
+}

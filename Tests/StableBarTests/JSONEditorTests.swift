@@ -85,6 +85,36 @@ import Testing
     }
 }
 
+struct JSONSyntaxProblemTests {
+    @Test func curlyQuoteNamesItsLineAndCharacter() throws {
+        let text = "{\n  \"label\": “hi”\n}"
+        let problem = try #require(jsonSyntaxProblem(decodingError(text), in: text))
+        #expect(problem.line == 2)
+        #expect(problem.message.hasPrefix("Line 2: ") && problem.message.contains("“"))
+        #expect(!problem.message.contains("â") && !problem.message.contains("column"))
+    }
+
+    @Test func multiByteTextBeforeTheErrorKeepsTheLineRight() throws {
+        let text = "{\n  \"é\": 1,\n  \"ü\": 2,\n  x: 3\n}"
+        let problem = try #require(jsonSyntaxProblem(decodingError(text), in: text))
+        #expect(problem.line == 4)
+        #expect(problem.message.hasPrefix("Line 4: ") && problem.message.contains("'x'"))
+    }
+
+    @Test func errorsWithoutAPositionAreLeftToErrorMessage() {
+        #expect(jsonSyntaxProblem(decodingError("{\"a\": 1"), in: "{\"a\": 1") == nil)
+        #expect(jsonSyntaxProblem(decodingError("[1]"), in: "[1]") == nil)
+        #expect(jsonSyntaxProblem(CocoaError(.fileReadUnknown), in: "{}") == nil)
+    }
+
+    private func decodingError(_ text: String) -> Error {
+        do {
+            _ = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8))
+            return CocoaError(.featureUnsupported)
+        } catch { return error }
+    }
+}
+
 @MainActor private func hostedTextView(_ text: String) throws -> (NSWindow, NSScrollView, JSONTextView) {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 480, height: 300), styleMask: [.borderless],
