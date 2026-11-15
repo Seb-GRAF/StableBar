@@ -1,0 +1,749 @@
+import builtIn from "./themes/built-in/config.json" with { type: "json" };
+import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, fileText, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
+import { themeFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
+import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
+
+const TRY_LINK_MIN_VERSION = null;
+const POPUP_SPACING = false;
+const flags = { popupSpacing: POPUP_SPACING };
+const names = { palette: "Colours", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
+const baseNames = { "built-in": "Built-in", leman: "Léman", notch: "Notch", catppuccin: "Catppuccin", nord: "Nord", gruvbox: "Gruvbox", phosphor: "Phosphor" };
+const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colours and tiles", nord: "Cool colours and an underline", gruvbox: "Warm colours and stripes", phosphor: "Amber text with a glow" };
+const groupCopy = {
+  palette: "Each colour has a light and a dark value. Edit the appearance shown in the preview.",
+  bar: "Change the strip behind your widgets. Tiles have their own controls below.",
+  widgets: "Change the tiles, type and spacing. Turn tiles off to keep just the text and any glow.",
+  workspaces: "Choose a background, an underline or text alone. Only the settings it uses are shown.",
+  popups: "Change the popup colours and corners. Tooltips stay compact.",
+  about: "Give your theme a name. Add your GitHub username if you plan to share it in the Store.",
+};
+const messages = {
+  invalidID: "Add a name with at least one ASCII letter or number to give the folder an id.",
+  reservedID: "That id belongs to a theme that comes with StableBar. Choose another name.",
+  invalidName: "Give your theme a name.",
+  invalidVersion: "Use a version with three numbers, such as 1.0.0.",
+  descriptionRequired: "Add a description in About before copying the Store README row.",
+  storeUnavailable: "Store couldn't be checked. Check the id and version in the Store before submitting.",
+  damaged: "This theme could not be read. Open a theme zip, its folder or a complete share link.",
+  damagedZip: "This zip could not be read. Choose the original theme zip or its unzipped folder.",
+  tooLarge: "The two files are over 32 KB. Download the zip; they are too large for a link.",
+  tooLong: "This theme makes a link longer than 65,536 bytes. Download it as a zip instead.",
+  tooDeep: "This theme nests more than 32 levels deep. Download it as a zip instead.",
+  tooManyProfiles: "This theme has more than 16 profiles. Download it as a zip instead.",
+  barProperty: "This theme has bar settings a link cannot carry. Download it as a zip instead.",
+  extraFiles: "This theme needs other files. Open a theme with no includes.",
+  unsupportedVersion: "This link uses a newer theme format. Open it with a newer creator page.",
+  zipTooLarge: "This theme is too large for a zip.",
+  notTheme: "Choose a theme package, with kind set to theme and only theme settings.",
+  sameID: "Choose a different name so this theme gets a new id.",
+  takenID: "That id is already used in the Store. Choose another name, or reopen your own theme to update it.",
+  importTooLarge: "This file is too large to reopen here. Choose a theme with JSON files under 16 MB each.",
+  copyFailed: "Copy is unavailable in this browser. Allow clipboard access and try again.",
+};
+const message = error => messages[error.message] ?? (error instanceof TypeError || error instanceof RangeError ? messages.damaged : error.message);
+const fail = code => { throw new Error(code); };
+const e = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
+const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const isReserved = id => RESERVED_IDS.has(id.toLowerCase());
+const root = document.querySelector("#creator");
+const dialog = document.querySelector("#theme-dialog");
+const bases = new Map();
+const fieldErrors = new Map();
+const storeCache = new Map();
+let state, baseID = "built-in", baseGradient, mode = "new", sourceID;
+let appearance = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+let jsonFile = "config", activePaths = [], store = { status: "checking" }, storeTimer, storeRequest = 0;
+let pendingTheme, importRequest = 0;
+const resolved = () => resolveTheme(builtIn, state.config, appearance);
+
+function colorInput(control, value, suffix = "") {
+  const helpID = `c-${control.id.replaceAll(".", "-")}`;
+  const id = helpID + suffix;
+  const colour = typeof value === "string" && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value) ? value : "#00000000";
+  return `<div class="color-input"><input type="color" id="${id}" data-control="${control.id}" aria-label="${e(control.label)} colour" aria-describedby="${helpID}-help" value="${colour.slice(0, 7)}"><input type="text" id="${id}-hex" data-control="${control.id}" data-colour-text aria-label="${e(control.label)} hex value" aria-describedby="${helpID}-help ${helpID}-error" value="${e(colour)}" spellcheck="false" autocomplete="off"></div>`;
+}
+
+function controlValue(control, r) {
+  if (control.group === "about") return state.manifest[control.id.split(".")[1]] ?? "";
+  const fallbacks = { "bar.height": 40, "bar.margin": 0, "bar.cornerRadius": 0, "bar.borderWidth": 0,
+    "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0 };
+  return at(r, control.paths[0]) ?? fallbacks[control.id];
+}
+
+function controlHTML(control, r) {
+  const id = `c-${control.id.replaceAll(".", "-")}`;
+  const value = controlValue(control, r);
+  const attr = `id="${id}" data-control="${control.id}" aria-describedby="${id}-help ${id}-error"`;
+  let input;
+  if (control.kind === "color") input = colorInput(control, value);
+  else if (control.kind === "toggle") {
+    const on = r.defaults.background != null && r.defaults.background !== "transparent";
+    input = `<div class="toggle"><span>${on ? "On" : "Off"}</span><input type="checkbox" ${attr} ${on ? "checked" : ""}></div>`;
+  } else if (control.kind === "select") {
+    input = `<select ${attr}>${control.options.map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option[0].toUpperCase() + option.slice(1)}</option>`).join("")}</select>`;
+  } else if (control.kind === "background") {
+    const selected = value?.gradient ? "gradient" : value ? "color" : "none";
+    input = `<select ${attr}>${[["none", "None"], ["color", "A colour"], ...(baseGradient ? [["gradient", "Keep the base gradient"]] : [])].map(([key, label]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`).join("")}</select>`;
+    if (selected === "color") input += `<div class="background-colour">${colorInput(control, value, "-colour")}</div>`;
+  } else {
+    const number = control.kind === "number";
+    input = `<input ${attr} type="${number ? "number" : "text"}" value="${e(value ?? "")}" ${number ? `step="0.5" ${control.id.endsWith("OffsetY") ? "" : 'min="0"'}` : 'autocomplete="off"'}>`;
+  }
+  const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
+  const helpText = control.help.slice(control.help.indexOf(": ") + 2);
+  return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><label for="${id}">${e(control.label.replaceAll("color", "colour").replace("Underline cornerRadius", "Underline corners").replace("Underline offsetY", "Underline position"))}</label>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
+}
+
+function renderControls() {
+  const focused = document.activeElement;
+  const focusedID = focused?.id;
+  const selection = focused?.type === "text" ? [focused.selectionStart, focused.selectionEnd] : null;
+  const drafts = new Map([...fieldErrors.keys()].map(id => [id, (root.querySelector(`[data-control="${id}"][data-colour-text]`) ?? root.querySelector(`[data-control="${id}"]`))?.value]));
+  const r = resolved(), controls = controlsFor(state, flags);
+  for (const key of fieldErrors.keys()) if (!controls.some(control => control.id === key)) fieldErrors.delete(key);
+  for (const group of Object.keys(names)) {
+    root.querySelector(`[data-group="${group}"]`).innerHTML = controls.filter(control => control.group === group).map(control => controlHTML(control, r)).join("");
+  }
+  for (const [id, value] of drafts) {
+    const input = root.querySelector(`[data-control="${id}"][data-colour-text]`) ?? root.querySelector(`[data-control="${id}"]`);
+    if (input && value !== undefined) input.value = value;
+  }
+  if (focusedID) {
+    const replacement = document.getElementById(focusedID);
+    replacement?.focus({ preventScroll: true });
+    if (selection && replacement?.type === "text") replacement.setSelectionRange(...selection);
+  }
+}
+
+function previewHTML() {
+  return `<section class="preview-card" aria-label="Live theme preview">
+    <div class="panel-heading">
+    <h2>Your theme</h2>
+    <div class="segmented" role="group" aria-label="Preview appearance">
+    <button data-appearance="light" aria-pressed="false">Light</button>
+    <button data-appearance="dark" aria-pressed="false">Dark</button>
+    </div>
+    </div>
+    <div class="preview-stage">
+    <div class="theme-preview">
+    <div class="preview-bar">
+    <div class="preview-strip">
+    <div class="preview-group">
+    <div class="preview-tile preview-workspaces" aria-label="Three workspaces">
+    <span class="preview-workspace">1</span>
+    <span class="preview-workspace is-focused">2</span>
+    <span class="preview-workspace is-visible">3</span>
+    </div>
+    <div class="preview-tile preview-app-menus">
+    <span class="preview-app-name">Finder</span>${["File", "Edit", "View", "Go", "Window", "Help"].map(text => `<span class="preview-menu-entry">${text}</span>`).join("")}</div>
+    </div>
+    <div class="preview-spacer"></div>
+    <div class="preview-group">
+    <div class="preview-tile">
+    <svg class="preview-battery" viewBox="0 0 28 14" aria-hidden="true">
+    <rect x="1" y="1" width="23" height="12" rx="2" fill="none" stroke="currentColor"/>
+    <rect x="3" y="3" width="17" height="8" rx="1" fill="currentColor"/>
+    <path d="M26 5v4" stroke="currentColor" stroke-width="2"/>
+    </svg>
+    <span>82%</span>
+    </div>
+    <div class="preview-tile">09:41</div>
+    </div>
+    </div>
+    </div>
+    <div class="preview-below">
+    <div class="tooltip-example">
+    <div class="preview-tooltip">Battery at 82%</div>
+    </div>
+    <div class="preview-popup">
+    <h3 class="preview-heading">Battery</h3>
+    <div class="preview-row">
+    <span class="preview-key">Charge</span>
+    <span class="preview-value">82%</span>
+    </div>
+    <div class="preview-meter">
+    <span class="preview-meter-fill">
+    </span>
+    </div>
+    <div class="preview-row">
+    <span class="preview-key">Power source</span>
+    <span class="preview-value">Battery</span>
+    </div>
+    </div>
+    </div>
+    </div>
+    <p class="preview-caption">Bar, popup and tooltip</p>
+    </div>
+    <p class="font-note" hidden>macOS fonts show only on a Mac. Other systems use a fallback.</p>
+    </section>`;
+}
+
+function render() {
+  root.innerHTML = `<div class="split">
+    <div class="editor-column">
+    <div class="base-block">
+    <label class="base-label" for="base-theme">Base theme</label>
+    <select class="base-select" id="base-theme">${BASE_IDS.map(id => `<option value="${id}">${baseNames[id]}</option>`).join("")}</select>
+    <p class="base-help">Choose a starting point. Changing it replaces your colour and shape edits.</p>
+    <p class="base-meta"></p>
+    </div>${Object.entries(names).map(([group, name], index) => `<details class="group" data-control-section="${group}" ${group === "palette" ? "open" : ""}>
+    <summary>
+    <span class="section-no">${String(index + 1).padStart(2, "0")}</span>
+    <h2>${name}</h2>${group === "palette" ? '<span class="summary-note">Light and dark</span>' : ""}</summary>
+    <p class="group-intro">${groupCopy[group]}</p>
+    <div class="control-grid" data-group="${group}"></div>
+    </details>`).join("")}</div>
+    <aside class="sticky">${previewHTML()}<section class="json-panel" aria-label="Read-only theme files">
+    <div class="json-heading">
+    <div class="file-tabs" role="tablist" aria-label="Theme files">
+    <button id="tab-config" role="tab" data-json="config" aria-controls="json-content">config.json</button>
+    <button id="tab-package" role="tab" data-json="package" aria-controls="json-content">package.json</button>
+    </div>
+    <span class="read-only">Read only</span>
+    </div>
+    <pre class="json-content" id="json-content" tabindex="0" role="tabpanel"><code>
+    </code></pre>
+    <p class="active-path"></p>
+    <div class="kept"></div>
+    </section>
+    <section class="outputs" aria-label="Download and share">
+    <div class="output-buttons">
+    <button class="btn primary" data-action="download">Download zip</button>
+    <button class="btn" data-action="try" hidden>Try in StableBar</button>
+    </div>
+    <p class="version-note" hidden></p>
+    <div class="output-secondary">
+    <button class="btn text" data-action="share">Copy share link</button>
+    <button class="btn text" data-action="store">Submit to the Store</button>
+    </div>
+    <p class="output-note" id="output-note" role="status"></p>
+    <p class="store-note small" role="status"></p>
+    <p class="file-note">The zip and link carry the same two files.</p>
+    <p class="feedback" role="status"></p>
+    </section>
+    </aside>
+    </div>`;
+  renderControls();
+  refresh();
+}
+
+function draftManifest() {
+  const { id, name, version, description, author } = state.manifest;
+  return { id, name, version, kind: "theme", entry: "config.json", ...(description ? { description } : {}), ...(author ? { author } : {}) };
+}
+
+function updateJSON() {
+  const kept = keptFromBase(state.config), manifest = jsonFile === "package";
+  const object = manifest ? draftManifest() : state.config;
+  const paths = activePaths.filter(path => manifest === path.startsWith("manifest.")).map(path => path.replace(/^manifest\./, ""));
+  const lines = [];
+  function line(text, path, key) {
+    const focused = paths.some(control => path === control || path.startsWith(control + "."));
+    let html = e(text);
+    if (key !== null) html = html.replace(e(JSON.stringify(key)), `<span class="json-key">${e(JSON.stringify(key))}</span>`);
+    lines.push(`<span class="json-line${focused ? " is-focused" : ""}${!manifest && key !== null && kept.includes(path) ? " is-kept" : ""}" data-json-path="${e(path)}">${html}</span>`);
+  }
+  function visit(value, path = "", depth = 0, key = null, comma = false) {
+    const indent = "  ".repeat(depth), prefix = indent + (key === null ? "" : JSON.stringify(key) + ": ");
+    if (value && typeof value === "object") {
+      const array = Array.isArray(value), entries = Object.entries(value);
+      if (!entries.length) line(prefix + (array ? "[]" : "{}") + (comma ? "," : ""), path, key);
+      else {
+        line(prefix + (array ? "[" : "{"), path, key);
+        entries.forEach(([key, child], index) => visit(child, path ? `${path}.${key}` : key, depth + 1, array ? null : key, index < entries.length - 1));
+        line(indent + (array ? "]" : "}") + (comma ? "," : ""), path, null);
+      }
+    } else line(prefix + JSON.stringify(value) + (comma ? "," : ""), path, key);
+  }
+  visit(object);
+  root.querySelector(".json-content code").innerHTML = lines.join("\n") + "\n";
+  root.querySelector(".json-content").setAttribute("aria-labelledby", `tab-${jsonFile}`);
+  root.querySelectorAll("[data-json]").forEach(button => {
+    const selected = button.dataset.json === jsonFile;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
+  root.querySelector(".active-path").textContent = activePaths.length ? `Control in focus: ${activePaths.join(", ")}` : "Focus a control to find its key here.";
+  root.querySelector(".kept").innerHTML = `<strong>Kept from the base theme</strong>${kept.length ? `<details><summary>${kept.length} ${kept.length === 1 ? "setting stays" : "settings stay"} in your files. This preview does not show them exactly.</summary><ul>${kept.map(path => `<li><code>${e(path)}</code></li>`).join("")}</ul></details>` : "No extra settings in this base theme."}`;
+}
+
+function exportProblem() {
+  if (fieldErrors.size) return [...fieldErrors.values()][0];
+  try { themeFiles(state); } catch (error) { return message(error); }
+  if (mode === "new" && sourceID?.toLowerCase() === state.manifest.id.toLowerCase()) return messages.sameID;
+  if (mode === "new" && store.status === "found") return messages.takenID;
+  if (store.status === "checking") return "Checking the id in the Store…";
+  return "";
+}
+
+function higherVersion(left, right) {
+  const a = left.split(".").map(BigInt), b = right.split(".").map(BigInt);
+  for (let index = 0; index < 3; index++) if (a[index] !== b[index]) return a[index] > b[index];
+  return false;
+}
+
+function updateOutputs() {
+  const problem = exportProblem();
+  let linkProblem = "";
+  try { encodeLink(themeFiles(state)); } catch (error) { linkProblem = message(error); }
+  for (const action of ["download", "share", "try"]) {
+    const button = root.querySelector(`[data-action="${action}"]`);
+    button.disabled = !!problem || (action !== "download" && !!linkProblem);
+    button.setAttribute("aria-describedby", "output-note");
+  }
+  root.querySelector("[data-action=try]").hidden = TRY_LINK_MIN_VERSION === null;
+  const versionNote = root.querySelector(".version-note");
+  versionNote.hidden = TRY_LINK_MIN_VERSION === null;
+  versionNote.textContent = TRY_LINK_MIN_VERSION ? `Needs StableBar ${TRY_LINK_MIN_VERSION} or later.` : "";
+  root.querySelector(".output-note").textContent = problem || linkProblem;
+  const updateWarning = mode === "update" && store.status === "found" && isVersion(state.manifest.version) && !higherVersion(state.manifest.version, store.manifest.version);
+  root.querySelector(".store-note").textContent = store.status === "unavailable" ? messages.storeUnavailable : updateWarning ? `The Store has ${store.manifest.version}. Raise your version above it before submitting.` : "";
+  for (const control of controlsFor(state, flags)) {
+    const error = root.querySelector(`#c-${control.id.replaceAll(".", "-")}-error`);
+    let reason = fieldErrors.get(control.id) ?? "";
+    if (control.id === "about.name") {
+      if (!state.manifest.name.trim()) reason = messages.invalidName;
+      else if (!state.manifest.id) reason = messages.invalidID;
+      else if (isReserved(state.manifest.id)) reason = messages.reservedID;
+      else if (mode === "new" && store.status === "found") reason = messages.takenID;
+    }
+    if (control.id === "about.version" && !isVersion(state.manifest.version)) reason = messages.invalidVersion;
+    if (error) error.textContent = reason;
+    root.querySelectorAll(`[data-control="${control.id}"]`).forEach(input => input.setAttribute("aria-invalid", String(!!reason)));
+  }
+}
+
+function refresh() {
+  const r = resolved(), preview = root.querySelector(".theme-preview");
+  preview.className = "theme-preview " + indicatorClass(r);
+  for (const [key, value] of Object.entries(cssVariables(r, flags))) preview.style.setProperty(key, value);
+  root.querySelectorAll(".preview-stage, .json-panel").forEach(element => element.dataset.appearance = appearance);
+  root.querySelectorAll("[data-appearance]").forEach(button => {
+    if (button.tagName === "BUTTON") button.setAttribute("aria-pressed", String(button.dataset.appearance === appearance));
+  });
+  const mac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) && !/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
+  root.querySelector(".font-note").hidden = mac || ![r.defaults.fontName, r.popupDefaults.fontName].some(font => font && font !== "system");
+  root.querySelector(".base-meta").textContent = baseDescriptions[baseID] ?? "Settings from the theme you opened";
+  root.querySelector("[data-theme-id]").innerHTML = `Folder id: <code>${e(state.manifest.id)}</code>${mode === "update" ? " · Kept for this update" : ""}`;
+  updateJSON();
+  updateOutputs();
+}
+
+async function lookupStore(id) {
+  if (!storeCache.has(id)) {
+    storeCache.set(id, storeManifest(id, url => fetch(url, { signal: AbortSignal.timeout(8000) }))
+      .then(manifest => manifest ? { status: "found", manifest } : { status: "free" })
+      .catch(() => ({ status: "unavailable" })));
+  }
+  return storeCache.get(id);
+}
+
+function scheduleStoreCheck() {
+  clearTimeout(storeTimer);
+  const request = ++storeRequest, id = state.manifest.id;
+  if (!id || isReserved(id) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(id)) {
+    store = { status: "unchecked" };
+    return;
+  }
+  store = { status: "checking" };
+  storeTimer = setTimeout(async () => {
+    const result = await lookupStore(id);
+    if (request !== storeRequest) return;
+    store = result;
+    updateOutputs();
+  }, 300);
+}
+
+function changeControl(input) {
+  const control = controlsFor(state, flags).find(control => control.id === input.dataset.control);
+  if (!control) return;
+  let value = input.type === "checkbox" ? input.checked : input.value;
+  const colour = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
+  if (colour) {
+    if (input.type === "color") {
+      const text = input.parentElement.querySelector("[data-colour-text]");
+      if (/^#[\da-f]{8}$/i.test(text.value)) value += text.value.slice(7);
+    }
+    if (!/^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value)) {
+      fieldErrors.set(control.id, "Use #RRGGBB or #RRGGBBAA for this colour."); updateOutputs(); return;
+    }
+  } else if (control.kind === "number") {
+    value = input.value === "" && control.id === "workspaces.underlineWidth" ? null : Number(input.value);
+    if ((input.value === "" && value !== null) || !input.validity.valid || (value !== null && !Number.isFinite(value))) {
+      fieldErrors.set(control.id, "Enter a valid number of points."); updateOutputs(); return;
+    }
+  }
+  fieldErrors.delete(control.id);
+  if (control.id === "bar.background" && value === "gradient") value = baseGradient;
+  const oldID = state.manifest.id;
+  try {
+    const next = applyControl(state, control.id, value, appearance);
+    if (control.id === "about.name" && mode === "update") next.manifest.id = oldID;
+    resolveTheme(builtIn, next.config, appearance);
+    state = next;
+  } catch (error) { fieldErrors.set(control.id, message(error)); updateOutputs(); return; }
+  if (state.manifest.id !== oldID) scheduleStoreCheck();
+  activePaths = control.paths;
+  jsonFile = control.group === "about" ? "package" : "config";
+  // Keep the input being typed into in place; token edits can change the other controls' resolved values.
+  const r = resolved();
+  for (const other of controlsFor(state, flags)) {
+    if (other.id === control.id || fieldErrors.has(other.id)) continue;
+    const value = controlValue(other, r);
+    root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
+      if (element.type === "color") element.value = typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : "#000000";
+      else if (element.hasAttribute("data-colour-text")) element.value = value ?? "#00000000";
+      else if (other.kind !== "toggle" && other.kind !== "background") element.value = value ?? "";
+    });
+  }
+  if (colour) {
+    input.parentElement.querySelector("[data-colour-text]").value = value;
+    input.parentElement.querySelector('[type="color"]').value = value.slice(0, 7);
+  }
+  if (input.type === "checkbox") input.closest(".toggle").querySelector("span").textContent = input.checked ? "On" : "Off";
+  if (control.id === "workspaces.indicator" || (control.id === "bar.background" && input.tagName === "SELECT")) renderControls();
+  refresh();
+}
+
+function showDialog(html) {
+  dialog.innerHTML = html;
+  if (!dialog.open) dialog.showModal();
+  dialog.querySelector("button, input")?.focus({ preventScroll: true });
+  dialog.scrollTop = 0;
+}
+const dialogHead = (title, eyebrow = "") => `<div class="dialog-head"><div>${eyebrow ? `<p class="eyebrow">${e(eyebrow)}</p>` : ""}<h2 id="dialog-title">${title}</h2></div><button class="btn icon" data-action="close" aria-label="Close">×</button></div>`;
+
+function openFiles() {
+  showDialog(`${dialogHead("Open a theme")}<p class="dialog-intro">Reopen a zip or folder. A shared link opens here when you visit it.</p><div class="drop-zone"><p>Drop a theme zip or folder here.</p><div class="file-inputs"><label class="btn">Choose zip<input type="file" accept=".zip,application/zip" data-open-zip></label><label class="btn">Choose folder<input type="file" webkitdirectory multiple data-open-folder></label></div></div><p class="field-error" data-import-error role="status"></p><div class="dialog-actions"><button class="btn" data-action="close">Cancel</button></div>`);
+}
+
+function checkTheme(files) {
+  let manifest, config;
+  try { manifest = JSON.parse(files.manifestText.replace(/^\ufeff/, "")); config = JSON.parse(files.configText.replace(/^\ufeff/, "")); }
+  catch { fail("damaged"); }
+  if (!isObject(manifest) || !isObject(config)) fail("damaged");
+  if (manifest.kind !== "theme") fail("notTheme");
+  if (typeof manifest.id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(manifest.id)) fail("invalidID");
+  if (typeof manifest.name !== "string" || !manifest.name.trim()) fail("invalidName");
+  if (!isVersion(manifest.version)) fail("invalidVersion");
+  for (const key of ["description", "author"]) if (Object.hasOwn(manifest, key) && typeof manifest[key] !== "string") fail("damaged");
+  const allowed = ["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"];
+  function check(document) {
+    if (!isObject(document)) fail("damaged");
+    if (Object.hasOwn(document, "includes")) fail("extraFiles");
+    if (Object.keys(document).some(key => !allowed.includes(key))) fail("notTheme");
+    if (Object.hasOwn(document, "profiles")) {
+      if (!Array.isArray(document.profiles)) fail("damaged");
+      for (const profile of document.profiles) {
+        if (!isObject(profile) || typeof profile.name !== "string" || Object.keys(profile).some(key => !["name", "enabled", "when", "configuration"].includes(key))) fail("damaged");
+        if (Object.hasOwn(profile, "configuration")) check(profile.configuration);
+      }
+    }
+  }
+  check(config);
+  const candidate = { manifest, config };
+  cssVariables(resolveTheme(builtIn, config, "light"), flags);
+  cssVariables(resolveTheme(builtIn, config, "dark"), flags);
+  return candidate;
+}
+
+function offerReopen(files) {
+  pendingTheme = checkTheme(files);
+  const { name, version, id } = pendingTheme.manifest;
+  showDialog(`${dialogHead("Update it or make a new theme?", `${name} · ${version}`)}<p class="dialog-intro">You opened ${e(name)}. Is it your theme, or a starting point for a new one?</p>
+    <label class="choice">
+    <span class="choice-title">
+    <input type="radio" name="reopen" value="update" ${isReserved(id) ? "disabled" : ""}>Update it</span>
+    <p>For your own theme. Keep the id and author. Raise the version to ${e(nextPatch(version))}.${isReserved(id) ? " This id belongs to a theme that comes with StableBar; give your copy a new name." : ""}</p>
+    </label>
+    <label class="choice">
+    <span class="choice-title">
+    <input type="radio" name="reopen" value="remix">Make a new theme from it</span>
+    <p>Choose a new name and id. Clear the author and start at 1.0.0.</p>
+    </label>
+    <div class="control remix-name" hidden>
+    <label for="new-theme-name">New theme name</label>
+    <input type="text" id="new-theme-name" autocomplete="off" placeholder="For example, Harbour light">
+    <p class="help">The name gives your theme a new folder id.</p>
+    </div>
+    <p class="field-error" data-reopen-error role="status"></p>
+    <div class="dialog-actions">
+    <button class="btn" data-action="close">Cancel</button>
+    <button class="btn primary" data-action="continue" disabled>Continue</button>
+    </div>`);
+}
+
+function checkReopen() {
+  const choice = dialog.querySelector('[name="reopen"]:checked')?.value;
+  const field = dialog.querySelector("#new-theme-name");
+  let reason = "";
+  if (choice === "remix") {
+    const id = slug(field.value);
+    if (!id) reason = messages.invalidID;
+    else if (isReserved(id)) reason = messages.reservedID;
+    else if (id.toLowerCase() === pendingTheme.manifest.id.toLowerCase()) reason = messages.sameID;
+  }
+  field.setAttribute("aria-invalid", String(!!reason));
+  dialog.querySelector("[data-reopen-error]").textContent = reason;
+  dialog.querySelector('[data-action="continue"]').disabled = !choice || !!reason;
+}
+
+function continueReopen() {
+  checkReopen();
+  if (dialog.querySelector('[data-action="continue"]').disabled) return;
+  const choice = dialog.querySelector('[name="reopen"]:checked').value;
+  state = structuredClone(pendingTheme);
+  sourceID = state.manifest.id;
+  mode = choice === "update" ? "update" : "new";
+  if (mode === "update") state.manifest.version = nextPatch(state.manifest.version);
+  else {
+    state.manifest.name = dialog.querySelector("#new-theme-name").value;
+    state.manifest.id = slug(state.manifest.name);
+    state.manifest.version = "1.0.0";
+    delete state.manifest.author;
+  }
+  baseGradient = at(state.config, "bar.style.background")?.gradient ? structuredClone(state.config.bar.style.background) : undefined;
+  baseID = "opened";
+  fieldErrors.clear();
+  scheduleStoreCheck();
+  dialog.close();
+  renderControls();
+  const baseSelect = root.querySelector("#base-theme");
+  if (!baseSelect.querySelector('[value="opened"]')) baseSelect.add(new Option("Opened theme", "opened"));
+  baseSelect.value = "opened";
+  refresh();
+  root.querySelector('[data-control-section="about"]').open = true;
+  root.querySelector('#c-about-name').focus();
+  notify(mode === "update" ? `Ready to edit version ${state.manifest.version}.` : `Ready to edit ${state.manifest.name}.`);
+}
+
+async function folderFiles(files) {
+  const visible = files.filter(file => !file.name.split("/").some(part => part.startsWith(".") || part === "__MACOSX"));
+  const manifests = visible.filter(file => file.name.split("/").at(-1) === "package.json");
+  if (manifests.length !== 1) fail("damaged");
+  const manifestFile = manifests[0];
+  if (manifestFile.file.size > 16 * 1024 * 1024) fail("importTooLarge");
+  const manifestText = await manifestFile.file.text();
+  let manifest;
+  try { manifest = JSON.parse(manifestText.replace(/^\ufeff/, "")); } catch { fail("damaged"); }
+  const entry = manifest?.entry;
+  if (typeof entry !== "string" || !entry.split("/").every(part => part && part !== "." && part !== "..") || entry.includes("\\")) fail("damaged");
+  const entryPath = manifestFile.name.slice(0, manifestFile.name.lastIndexOf("/") + 1) + entry;
+  const matching = visible.filter(file => file.name === entryPath);
+  if (matching.length !== 1) fail("damaged");
+  if (matching[0].file.size > 16 * 1024 * 1024) fail("importTooLarge");
+  return { manifestText, configText: await matching[0].file.text() };
+}
+
+async function openSelection(files) {
+  const request = ++importRequest;
+  if (!dialog.open || !dialog.querySelector(".drop-zone")) openFiles();
+  dialog.querySelector("[data-import-error]").textContent = "Opening theme…";
+  try {
+    const zip = files.length === 1 && /\.zip$/i.test(files[0].name);
+    if (zip && files[0].file.size > 32 * 1024 * 1024) fail("importTooLarge");
+    const content = zip ? await readZip(new Uint8Array(await files[0].file.arrayBuffer())) : await folderFiles(files);
+    if (request !== importRequest || !dialog.open) return;
+    offerReopen(content);
+  } catch (error) {
+    if (request === importRequest && dialog.open) dialog.querySelector("[data-import-error]").textContent = message(error);
+  }
+}
+
+async function droppedFiles(transfer) {
+  const entries = [...transfer.items].map(item => item.webkitGetAsEntry?.()).filter(Boolean);
+  if (!entries.length) return [...transfer.files].map(file => ({ name: file.webkitRelativePath || file.name, file }));
+  const files = [];
+  async function visit(entry, parent = "") {
+    const name = parent + entry.name;
+    if (entry.name.startsWith(".") || entry.name === "__MACOSX") return;
+    if (entry.isFile) files.push({ name, file: await new Promise((resolve, reject) => entry.file(resolve, reject)) });
+    else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      while (true) {
+        const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+        if (!children.length) break;
+        for (const child of children) await visit(child, name + "/");
+      }
+    }
+  }
+  for (const entry of entries) await visit(entry);
+  return files;
+}
+
+function storeGuide() {
+  let row = "", reason = "";
+  try {
+    const problem = exportProblem();
+    if (problem) throw new Error(problem);
+    const files = themeFiles(state);
+    row = readmeRow(JSON.parse(files.manifestText));
+  } catch (error) { reason = message(error); }
+  showDialog(`${dialogHead("Submit to the Store", "Share your theme")}<div class="dialog-intro">
+    <p class="small muted">Download and unzip your theme first. The rest happens in your browser.</p>
+    <ol class="guide-steps">
+    <li>
+    <strong>Fork <a href="https://github.com/Seb-GRAF/stablebar-packages/fork">stablebar-packages</a>.</strong>
+    <p>Make your own copy on GitHub.</p>
+    </li>
+    <li>
+    <strong>Upload your theme folder into <code>packages/</code>.</strong>
+    <p>Use GitHub’s Upload files button. Keep the folder named <code>${e(state.manifest.id)}</code>.</p>
+    </li>
+    <li>
+    <strong>Add your theme to <code>README.md</code>.</strong>
+    <p>Edit it in the browser. Paste this row in alphabetical order.</p>${reason ? `<p class="field-error">${e(reason)}</p>
+    <button class="btn" data-action="about">Edit About</button>` : `<div class="readme-box">
+    <pre tabindex="0" aria-label="Row for the Store README">${e(row)}</pre>
+    <button class="btn" data-action="row">Copy table row</button>
+    </div>`}</li>
+    <li>
+    <strong>Open a pull request.</strong>
+    <p>Send your changes back to stablebar-packages.</p>
+    </li>
+    </ol>
+    <p class="guide-foot">Use your GitHub username as the author. <a class="guide-link" href="https://github.com/Seb-GRAF/stablebar-packages/blob/main/CONTRIBUTING.md">Read the Store guide</a>.</p>
+    </div>
+    <p class="feedback" role="status"></p>
+    <div class="dialog-actions">
+    <button class="btn" data-action="close">Done</button>
+    <button class="btn primary" data-action="download" ${exportProblem() ? "disabled" : ""}>Download zip</button>
+    </div>`);
+}
+
+function notify(text) {
+  root.querySelector(".feedback").textContent = text;
+  const feedback = dialog.querySelector(".feedback");
+  if (feedback) feedback.textContent = text;
+}
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { fail("copyFailed"); }
+}
+
+async function output(action) {
+  if (exportProblem()) { updateOutputs(); return; }
+  const files = themeFiles(state);
+  if (action === "download") {
+    const url = URL.createObjectURL(new Blob([writeZip(state.manifest.id, files)], { type: "application/zip" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = `${state.manifest.id}.zip`;
+    document.body.append(anchor); anchor.click(); anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify(`Downloaded ${state.manifest.id}.zip.`);
+  } else if (action === "share") {
+    await copyText(shareURL(location.href, files));
+    notify("Theme link copied.");
+  } else if (action === "try" && TRY_LINK_MIN_VERSION !== null) location.href = encodeLink(files);
+  else if (action === "row") {
+    await copyText(readmeRow(JSON.parse(files.manifestText)));
+    notify("Table row copied.");
+  }
+}
+
+function loadHash() {
+  if (!location.hash || location.hash === "#main") return;
+  try { offerReopen(decodeLink(location.hash)); }
+  catch (error) { document.querySelector("#page-message").textContent = message(error); }
+}
+
+async function start() {
+  await Promise.all(BASE_IDS.map(async id => {
+    const response = await fetch(`creator/themes/${id}/config.json`);
+    if (!response.ok) throw new Error(`Could not load ${baseNames[id]}. Reload the page to try again.`);
+    bases.set(id, await response.json());
+  }));
+  state = { manifest: { id: "my-theme", name: "My theme", version: "1.0.0" }, config: structuredClone(builtIn) };
+  scheduleStoreCheck();
+  render();
+  document.querySelector('[data-action="open"]').disabled = false;
+  loadHash();
+}
+
+document.addEventListener("input", event => {
+  if (event.target.dataset.control && !["checkbox", "select-one"].includes(event.target.type)) changeControl(event.target);
+  if (event.target.id === "new-theme-name") checkReopen();
+});
+document.addEventListener("change", event => {
+  const input = event.target;
+  if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
+  if (input.id === "base-theme") {
+    if (!bases.has(input.value)) return;
+    baseID = input.value;
+    state.config = structuredClone(bases.get(baseID));
+    baseGradient = state.config.bar?.style?.background?.gradient ? structuredClone(state.config.bar.style.background) : undefined;
+    for (const key of fieldErrors.keys()) if (!key.startsWith("about.")) fieldErrors.delete(key);
+    renderControls(); refresh();
+  }
+  if (input.name === "reopen") {
+    dialog.querySelector(".remix-name").hidden = input.value !== "remix";
+    if (input.value === "remix") dialog.querySelector("#new-theme-name").focus();
+    checkReopen();
+  }
+  if (input.matches("[data-open-zip], [data-open-folder]")) openSelection([...input.files].map(file => ({ name: file.webkitRelativePath || file.name, file })));
+});
+document.addEventListener("focusin", event => {
+  if (!event.target.dataset.control) return;
+  const control = controlsFor(state, flags).find(control => control.id === event.target.dataset.control);
+  if (!control) return;
+  activePaths = control.paths; jsonFile = control.group === "about" ? "package" : "config";
+  updateJSON();
+  const pre = root.querySelector(".json-content"), mark = pre.querySelector(".is-focused");
+  if (mark) pre.scrollTop = mark.offsetTop - 40;
+});
+document.addEventListener("click", async event => {
+  const button = event.target.closest("button");
+  if (!button || button.disabled) return;
+  if (button.dataset.appearance) {
+    appearance = button.dataset.appearance;
+    fieldErrors.forEach((_value, key) => { if (["color", "background"].includes(controlsFor(state, flags).find(control => control.id === key)?.kind)) fieldErrors.delete(key); });
+    renderControls(); refresh();
+  }
+  if (button.dataset.json) { jsonFile = button.dataset.json; updateJSON(); }
+  try {
+    const action = button.dataset.action;
+    if (action === "open") openFiles();
+    else if (action === "close") { importRequest++; dialog.close(); }
+    else if (action === "continue") continueReopen();
+    else if (action === "store") storeGuide();
+    else if (action === "about") {
+      dialog.close(); root.querySelector('[data-control-section="about"]').open = true;
+      root.querySelector("#c-about-description").focus();
+    } else if (["download", "share", "try", "row"].includes(action)) await output(action);
+  } catch (error) { notify(message(error)); }
+});
+document.addEventListener("keydown", event => {
+  const tab = event.target.closest('[role="tab"]');
+  if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  event.preventDefault();
+  const tabs = [...tab.parentElement.querySelectorAll('[role="tab"]')];
+  const index = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (tabs.indexOf(tab) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+  tabs[index].click(); tabs[index].focus();
+});
+dialog.addEventListener("close", () => {
+  // A queued close event can arrive after another import has opened the dialog again.
+  if (dialog.open) return;
+  pendingTheme = null;
+  importRequest++;
+});
+dialog.addEventListener("cancel", () => { importRequest++; });
+document.addEventListener("dragover", event => {
+  if (![...event.dataTransfer.types].includes("Files")) return;
+  event.preventDefault(); event.dataTransfer.dropEffect = "copy";
+  dialog.querySelector(".drop-zone")?.classList.add("is-over");
+});
+document.addEventListener("dragleave", event => {
+  if (!event.relatedTarget || !dialog.contains(event.relatedTarget)) dialog.querySelector(".drop-zone")?.classList.remove("is-over");
+});
+document.addEventListener("drop", async event => {
+  if (![...event.dataTransfer.types].includes("Files")) return;
+  event.preventDefault();
+  if (!dialog.querySelector(".drop-zone") || !dialog.open) openFiles();
+  try { await openSelection(await droppedFiles(event.dataTransfer)); }
+  catch (error) { dialog.querySelector("[data-import-error]").textContent = message(error); }
+  dialog.querySelector(".drop-zone")?.classList.remove("is-over");
+});
+window.addEventListener("hashchange", loadHash);
+start().catch(() => { root.textContent = "The themes could not be loaded. Reload the page to try again."; });

@@ -106,7 +106,7 @@ test("every contract path feeds the renderer", () => {
     "popupDefaults.paddingHorizontal": 20, "popupDefaults.paddingVertical": 12, "popupDefaults.spacing": 9,
     "popupDefaults.shadowRadius": 7, "popupDefaults.fontName": "Monaco", "popupDefaults.fontSize": 17,
     "popupDefaults.fontWeight": "bold",
-    "popupDefaults.foreground": "#123456", "popupDefaults.borderWidth": 3,
+    "popupDefaults.foreground": "#123456", "popupDefaults.accent": "#123456", "popupDefaults.borderWidth": 3,
     "bar.popupOffset": 12,
   };
   const draw = config => {
@@ -960,7 +960,112 @@ test("store lookup", async () => {
   };
   assert.equal(await storeManifest("fern", response(404)), null);
   assert.deepEqual(await storeManifest("fern", response(200)), manifest);
-  await assert.rejects(() => storeManifest("fern", response(500)), /500/);
-  await assert.rejects(() => storeManifest("fern", async () => { throw new Error("offline"); }), /offline/);
+  await assert.rejects(() => storeManifest("fern", response(500)), /storeUnavailable/);
+  await assert.rejects(() => storeManifest("fern", async () => { throw new Error("offline"); }), /storeUnavailable/);
   await assert.rejects(() => storeManifest("fern", async () => new Response("not JSON")));
+});
+
+test("exports require a name and version and reserve ids without regard to case", () => {
+  const manifest = { id: "custom-theme", name: "Custom theme", version: "1.0.0" };
+  for (const id of ["Nord", "NORD", "Paper", "BUILT-IN"]) {
+    assert.throws(() => themeFiles({ manifest: { ...manifest, id }, config: {} }), linkError("reservedID"));
+  }
+  for (const name of [undefined, null, "", "   "]) {
+    assert.throws(() => themeFiles({ manifest: { ...manifest, name }, config: {} }), linkError("invalidName"));
+  }
+  for (const version of [undefined, "", "1.0", "1.0.0-beta"]) {
+    assert.throws(() => themeFiles({ manifest: { ...manifest, version }, config: {} }), linkError("invalidVersion"));
+  }
+});
+
+test("links refuse includes and malformed profile declarations at every level", () => {
+  const rejected = [
+    [{ includes: [] }, "extraFiles"],
+    [{ profiles: [{ name: "x", configuration: { includes: [] } }] }, "extraFiles"],
+    [{ profiles: null }, "damaged"],
+    [{ profiles: {} }, "damaged"],
+    [{ profiles: [{}] }, "damaged"],
+    [{ profiles: [{ name: 7 }] }, "damaged"],
+    [{ profiles: [{ name: "x", mystery: true }] }, "damaged"],
+    [{ profiles: [{ name: "x", configuration: null }] }, "damaged"],
+    [{ profiles: [{ name: "x", configuration: { profiles: null } }] }, "damaged"],
+  ];
+  for (const [config, code] of rejected) rejectsFiles(fileText(config), code);
+});
+
+test("zip errors have a single code and oversized entries are refused before inflation", async () => {
+  for (const size of [0, 1, 21, 22]) {
+    await assert.rejects(() => readZip(new Uint8Array(size)), linkError("damagedZip"));
+  }
+  const zip = writeZip("harbour-test", linkedFiles);
+  const directory = Buffer.from(zip).indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  const invalidName = zip.slice();
+  invalidName[directory + 46] = 0xff;
+  await assert.rejects(() => readZip(invalidName), linkError("damagedZip"));
+
+  const view = new DataView(zip.buffer);
+  view.setUint16(8, 8, true);
+  view.setUint16(directory + 10, 8, true);
+  view.setUint32(directory + 24, 0x7fffffff, true);
+  const original = globalThis.DecompressionStream;
+  let inflated = false;
+  globalThis.DecompressionStream = class {
+    constructor() { inflated = true; throw new Error("Must not inflate an oversized entry"); }
+  };
+  try {
+    await assert.rejects(() => readZip(zip), linkError("damagedZip"));
+    assert.equal(inflated, false);
+  } finally { globalThis.DecompressionStream = original; }
+});
+
+test("zip inflation cancels when a chunk exceeds the declared entry size", async () => {
+  const zip = writeZip("harbour-test", linkedFiles);
+  const directory = Buffer.from(zip).indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+  const view = new DataView(zip.buffer);
+  view.setUint16(8, 8, true);
+  view.setUint16(directory + 10, 8, true);
+  view.setUint32(directory + 24, 8, true);
+  const original = globalThis.DecompressionStream;
+  let cancelled = false;
+  globalThis.DecompressionStream = class {
+    constructor() {
+      return {
+        readable: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new Uint8Array(9));
+            controller.enqueue(new Uint8Array(100));
+            controller.close();
+          },
+          cancel() { cancelled = true; },
+        }),
+        writable: new WritableStream(),
+      };
+    }
+  };
+  try {
+    await assert.rejects(() => readZip(zip), linkError("damagedZip"));
+    assert.equal(cancelled, true);
+  } finally { globalThis.DecompressionStream = original; }
+});
+
+test("Store failures and missing descriptions use page error codes", async () => {
+  assert.throws(() => readmeRow({}), linkError("descriptionRequired"));
+  for (const response of [
+    async () => { throw new Error("offline"); },
+    async () => new Response("{}", { status: 500 }),
+    async () => new Response("not JSON"),
+    async () => new Response("{}"),
+  ]) await assert.rejects(() => storeManifest("custom-theme", response), linkError("storeUnavailable"));
+});
+
+test("popup accent and line metrics belong to the popup style", () => {
+  const config = { defaults: { fontName: "Monaco" }, popupDefaults: { accent: "#123456", fontName: "Avenir Next" } };
+  const resolved = resolveTheme(builtIn, config, "dark");
+  const css = cssVariables(resolved);
+  assert.equal(css["--pop-accent"], "#123456");
+  assert.match(css["--pop-font"], /13px\/16px/);
+  assert.ok(!keptFromBase(config).includes("popupDefaults.accent"));
+  const style = read("site/creator/preview.css").toString();
+  assert.doesNotMatch(style, /filter: drop-shadow\(0 8px/);
+  assert.match(style, /var\(--pop-shadow\), 0 8px 36px #00000047/);
 });

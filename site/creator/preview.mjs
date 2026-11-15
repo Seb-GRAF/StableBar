@@ -19,7 +19,7 @@ export const CONTRACT = [
   "popupDefaults.background", "popupDefaults.borderColor", "popupDefaults.shadowColor", "popupDefaults.cornerRadius",
   "popupDefaults.paddingHorizontal", "popupDefaults.paddingVertical", "popupDefaults.spacing", "bar.popupOffset",
   "popupDefaults.shadowRadius", "popupDefaults.fontName", "popupDefaults.fontSize", "popupDefaults.fontWeight",
-  "popupDefaults.foreground", "popupDefaults.borderWidth",
+  "popupDefaults.foreground", "popupDefaults.borderWidth", "popupDefaults.accent",
 ];
 
 const px = value => `${value}px`;
@@ -65,8 +65,7 @@ export function cssVariables(resolved, { popupSpacing = false } = {}) {
   const tiled = hasPaint(widget.background);
   const borderWidth = nonnegative(strip.borderWidth ?? 0);
   const batteryHeight = Math.round(nonnegative(widget.iconSize) * 0.8);
-  // Chromium's normal leading is taller than SwiftUI's for Monaco.
-  const popupLineHeight = popup.fontName === "Monaco" ? px(Math.ceil(popup.fontSize * 1.2)) : "normal";
+  const popupLineHeight = px(Math.ceil(popup.fontSize * 1.2));
   return {
     "--bar-h": px(nonnegative(bar.height ?? 40)),
     "--strip-bg": background(strip.background),
@@ -109,6 +108,7 @@ export function cssVariables(resolved, { popupSpacing = false } = {}) {
     "--ul-visible": background(underline.states.visible.background),
     "--pop-bg": background(popup.background),
     "--pop-fg": color(popup.foreground),
+    "--pop-accent": color(popup.accent),
     "--pop-border": color(popup.borderColor),
     "--pop-border-w": px(nonnegative(popup.borderWidth)),
     "--pop-radius": px(nonnegative(popup.cornerRadius)),

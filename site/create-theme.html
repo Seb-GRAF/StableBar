@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Make a theme · StableBar</title>
+<meta name="description" content="Start with a StableBar theme, change its colours and shape, then download it or share it.">
+<link rel="canonical" href="https://stablebar.app/create-theme.html">
+<meta name="theme-color" content="#86cbf2">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script>
+document.documentElement.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+if (document.documentElement.dataset.mode === "dark") document.querySelector('meta[name="theme-color"]').content = "#232662";
+</script>
+<link rel="stylesheet" href="creator/preview.css">
+<link rel="stylesheet" href="creator/creator.css">
+<script type="module" src="creator/page.mjs"></script>
+</head>
+<body class="doc creator">
+<a class="skip" href="#main">Skip to content</a>
+<div class="page">
+  <header class="top">
+    <a class="brand" href="./"><img src="images/icon-64.png" alt="">StableBar</a>
+    <nav class="nav">
+      <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">Guide</a>
+      <a href="./#store">Store</a>
+    </nav>
+  </header>
+  <main id="main">
+    <div class="intro">
+      <div><p class="eyebrow">StableBar themes</p><h1>Make a theme</h1>
+      <p>Start with a theme you like. Change its colours and shape, see the result, then download it or share it.</p></div>
+      <div class="intro-side"><button class="btn" data-action="open" disabled>Open a theme</button><p>Reopen a zip, folder or shared link.</p></div>
+    </div>
+    <p id="page-message" role="status"></p>
+    <div id="creator"><p class="loading">Loading themes…</p></div>
+    <noscript><p>Turn on JavaScript to make a theme. You can also <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/themes.md">make one with the guide</a>.</p></noscript>
+  </main>
+  <footer>
+    <a href="./">Home</a>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="https://github.com/Seb-GRAF/StableBar">Source on GitHub</a>
+  </footer>
+</div>
+<dialog id="theme-dialog" aria-labelledby="dialog-title"></dialog>
+</body>
+</html>

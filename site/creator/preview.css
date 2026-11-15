@@ -100,10 +100,9 @@
   padding: var(--pop-py) var(--pop-px);
   color: var(--pop-fg);
   font: var(--pop-font);
-  filter: drop-shadow(0 8px 18px #00000047);
   background: var(--pop-bg);
   border-radius: var(--pop-radius);
-  box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow);
+  box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow), 0 8px 36px #00000047;
 }
 
 .theme-preview .preview-heading { margin: 0; color: var(--pop-fg); font: inherit; font-weight: 600; }
@@ -117,7 +116,7 @@
   border-radius: 3px;
   background: linear-gradient(var(--track), var(--track)), var(--track);
 }
-.theme-preview .preview-meter-fill { display: block; width: 82%; height: 100%; border-radius: inherit; background: var(--accent); }
+.theme-preview .preview-meter-fill { display: block; width: 82%; height: 100%; border-radius: inherit; background: var(--pop-accent); }
 
 .theme-preview .preview-tooltip {
   display: inline-block;
@@ -125,8 +124,7 @@
   padding: 6px 10px;
   color: var(--pop-fg);
   font: var(--pop-font);
-  filter: drop-shadow(0 8px 18px #00000047);
   background: var(--pop-bg);
   border-radius: var(--pop-radius);
-  box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow);
+  box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow), 0 8px 36px #00000047;
 }

@@ -1,4 +1,4 @@
-import { RESERVED_IDS, fileText } from "./theme.mjs";
+import { RESERVED_IDS, fileText, isVersion } from "./theme.mjs";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -7,6 +7,7 @@ const maximumLength = 65_536;
 const maximumFileBytes = 32_768;
 const maximumDepth = 32;
 const maximumProfiles = 16;
+// Keep this list aligned with ThemeLinkCandidate’s appearance-only bar properties.
 const barProperties = new Set([
   "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset",
 ]);
@@ -16,13 +17,15 @@ const fail = reason => { throw new Error(reason); };
 
 function checkID(id) {
   if (typeof id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(id)) {
-    throw new Error("Choose a theme id with letters or digits and no path separators.");
+    fail("invalidID");
   }
-  if (RESERVED_IDS.has(id)) throw new Error(`The id ${id} belongs to a theme that comes with StableBar. Choose another name.`);
+  if (RESERVED_IDS.has(id.toLowerCase())) fail("reservedID");
 }
 
 export function themeFiles({ manifest, config }) {
   checkID(manifest.id);
+  if (typeof manifest.name !== "string" || !manifest.name.trim()) fail("invalidName");
+  if (!isVersion(manifest.version)) fail("invalidVersion");
   const fresh = {
     id: manifest.id, name: manifest.name, version: manifest.version, kind: "theme", entry: "config.json",
   };
@@ -115,12 +118,15 @@ function checkDocuments(document, count = { profiles: 0 }) {
     if (!isObject(document.bar)) fail("barProperty");
     if (Object.keys(document.bar).some(key => !barProperties.has(key))) fail("barProperty");
   }
-  const profiles = document.profiles ?? [];
+  if (Object.hasOwn(document, "includes")) fail("extraFiles");
+  const profiles = Object.hasOwn(document, "profiles") ? document.profiles : [];
   if (!Array.isArray(profiles)) fail("damaged");
   count.profiles += profiles.length;
   if (count.profiles > maximumProfiles) fail("tooManyProfiles");
   for (const profile of profiles) {
-    if (!isObject(profile) || !isObject(profile.configuration ?? {})) fail("damaged");
+    if (!isObject(profile) || typeof profile.name !== "string" ||
+        Object.keys(profile).some(key => !["name", "enabled", "when", "configuration"].includes(key))) fail("damaged");
+    if (Object.hasOwn(profile, "configuration") && !isObject(profile.configuration)) fail("damaged");
     checkDocuments(profile.configuration ?? {}, count);
   }
 }
@@ -273,6 +279,11 @@ function safePath(path) {
 }
 
 export async function readZip(bytes) {
+  try { return await zipFiles(bytes); }
+  catch { fail("damagedZip"); }
+}
+
+async function zipFiles(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = bytes.length - 22;
   const lastPossible = Math.max(0, end - 0xffff);
@@ -308,6 +319,8 @@ export async function readZip(bytes) {
   async function extract(name) {
     const entry = entries.get(name);
     if (!entry || entry.flags & 1 || ![0, 8].includes(entry.method)) fail("damagedZip");
+    // Store files are limited to 1 MiB; leave room for larger local themes without unbounded inflation.
+    if (entry.size > 16 * 1024 * 1024) fail("damagedZip");
     const local = entry.offset;
     if (local + 30 > directoryOffset || view.getUint32(local, true) !== 0x04034b50) fail("damagedZip");
     if (view.getUint16(local + 8, true) !== entry.method) fail("damagedZip");
@@ -316,7 +329,20 @@ export async function readZip(bytes) {
     let content = bytes.slice(start, start + entry.compressedSize);
     if (entry.method === 8) {
       const stream = new Blob([content]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-      content = new Uint8Array(await new Response(stream).arrayBuffer());
+      const reader = stream.getReader(), chunks = [];
+      let length = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          length += value.length;
+          if (length > entry.size) fail("damagedZip");
+          chunks.push(value);
+        }
+      } finally { await reader.cancel(); }
+      content = new Uint8Array(length);
+      let position = 0;
+      for (const chunk of chunks) { content.set(chunk, position); position += chunk.length; }
     }
     if (content.length !== entry.size || crc32(content) !== entry.crc) fail("damagedZip");
     return decoder.decode(content);
@@ -333,16 +359,18 @@ export async function readZip(bytes) {
 }
 
 export function readmeRow({ id, name, description }) {
-  if (typeof description !== "string" || !description.trim()) throw new Error("Add a description for the Store README row.");
+  if (typeof description !== "string" || !description.trim()) fail("descriptionRequired");
   return `|  | **[${name}](packages/${id})**<br>${description} | No commands |`;
 }
 
 export async function storeManifest(id, fetchImpl = fetch) {
   checkID(id);
-  const response = await fetchImpl(`https://raw.githubusercontent.com/Seb-GRAF/stablebar-packages/main/packages/${id}/package.json`);
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Store lookup failed (${response.status}).`);
-  const manifest = await response.json();
-  if (!isObject(manifest)) throw new Error("The Store returned an invalid manifest.");
-  return manifest;
+  try {
+    const response = await fetchImpl(`https://raw.githubusercontent.com/Seb-GRAF/stablebar-packages/main/packages/${id}/package.json`);
+    if (response.status === 404) return null;
+    if (!response.ok) fail("storeUnavailable");
+    const manifest = await response.json();
+    if (!isObject(manifest) || !isVersion(manifest.version)) fail("storeUnavailable");
+    return manifest;
+  } catch { fail("storeUnavailable"); }
 }
