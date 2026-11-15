@@ -11,6 +11,9 @@ import {
 import {
   themeFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
 } from "../../site/creator/files.mjs";
+import {
+  CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur,
+} from "../../site/creator/preview.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = path => readFileSync(new URL(path, root));
@@ -21,6 +24,168 @@ const theme = id => json(`Resources/themes/${id}/config.json`);
 const state = id => ({ manifest: json(`Resources/themes/${id}/package.json`), config: theme(id) });
 const idsFor = (s, flags = {}) => controlsFor(s, flags).map(control => control.id);
 const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
+
+test("preview colors match the site's hand-checked ones", () => {
+  const css = read("site/style.css").toString().replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const id of baseIDs) {
+    for (const appearance of ["dark", "light"]) {
+      const selectors = new Set(["[data-theme]", `[data-theme="${id}"]`]);
+      if (appearance === "light") {
+        selectors.add('[data-mode="light"] [data-theme]');
+        selectors.add(`[data-mode="light"] [data-theme="${id}"]`);
+      }
+      const expected = {};
+      const priority = {};
+      for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        if (!selectors.has(selector.trim())) continue;
+        const specificity = [...selector.matchAll(/\[/g)].length;
+        for (const [, key, value] of body.matchAll(/(--[\w-]+):\s*([^;]+);/g)) {
+          if ((priority[key] ?? 0) > specificity) continue;
+          expected[key] = value.trim();
+          priority[key] = specificity;
+        }
+      }
+      const actual = cssVariables(resolveTheme(builtIn, theme(id), appearance));
+      for (const key of ["--fg", "--muted", "--accent", "--accent-text", "--w-bg", "--pop-bg", "--raised", "--track"]) {
+        assert.equal(actual[key], expected[key], `${id} ${appearance} ${key}`);
+      }
+    }
+  }
+});
+
+test("preview geometry follows the theme", () => {
+  const variables = id => cssVariables(resolveTheme(builtIn, theme(id), "dark"));
+  const nord = variables("nord");
+  assert.equal(nord["--bar-h"], "30px");
+  assert.equal(nord["--ul-w"], "12px");
+  assert.equal(nord["--ul-h"], "3px");
+  assert.equal(nord["--ul-dy"], "4px");
+  assert.equal(variables("leman")["--tile-h"], "22px");
+  assert.equal(variables("leman")["--strip-m"], "6px");
+  assert.equal(variables("phosphor")["--tile-h"], "27px");
+  assert.equal(variables("gruvbox")["--w-dy"], "-4.5px");
+  const built = variables("built-in");
+  assert.equal(built["--tile-h"], "28px");
+  assert.equal(shadowBlur(2), 4);
+  assert.equal(built["--w-shadow-box"], `0 1px ${shadowBlur(2)}px #00000040`);
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("leman"), "dark")), "ws-fill");
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("nord"), "dark")), "ws-under");
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("notch"), "dark")), "ws-text");
+});
+
+test("every config control is in the contract", () => {
+  assert.equal(new Set(CONTRACT).size, CONTRACT.length);
+  for (const path of CONTROLS.flatMap(control => control.paths)) {
+    assert.equal(CONTRACT.includes(path), !path.startsWith("manifest."), path);
+  }
+  for (const path of ["defaults.foreground", "defaults.accent", "defaults.offsetY"]) {
+    assert.ok(CONTRACT.includes(path), path);
+  }
+});
+
+test("every contract path feeds the renderer", () => {
+  const edits = {
+    "defaults.foreground": "#123456", "defaults.accent": "#123456", "defaults.accentText": "#123456",
+    "defaults.offsetY": 3, "defaults.background": "#123456", "defaults.borderColor": "#123456",
+    "defaults.shadowColor": "#123456", "defaults.shadowRadius": 7, "defaults.fontName": "Monaco",
+    "defaults.fontSize": 17, "defaults.fontWeight": "bold", "defaults.cornerRadius": 5,
+    "defaults.paddingHorizontal": 16, "defaults.paddingVertical": 9, "defaults.hoverBackground": "#123456",
+    "defaults.borderWidth": 3, "defaults.iconSize": 17, "defaults.spacing": 9,
+    "bar.height": 44, "bar.margin": 8, "bar.style.background": "#123456", "bar.style.cornerRadius": 12,
+    "bar.style.borderColor": "#123456", "bar.style.borderWidth": 3, "bar.style.borderEdges": "all",
+    "bar.inset": 20, "bar.spacing": 12,
+    "workspaceDefaults.indicator": "none", "workspaceDefaults.style.foreground": "#123456",
+    "workspaceDefaults.style.states.focused.foreground": "#123456",
+    "workspaceDefaults.style.states.focused.background": "#123456", "workspaceDefaults.style.cornerRadius": 4,
+    "workspaceDefaults.indicatorStyle.width": 20, "workspaceDefaults.indicatorStyle.height": 4,
+    "workspaceDefaults.indicatorStyle.cornerRadius": 2, "workspaceDefaults.indicatorStyle.offsetY": 6,
+    "workspaceDefaults.indicatorStyle.background": "#123456",
+    "workspaceDefaults.indicatorStyle.states.visible.background": "#123456",
+    "popupDefaults.background": "#123456", "popupDefaults.borderColor": "#123456",
+    "popupDefaults.shadowColor": "#123456", "popupDefaults.cornerRadius": 5,
+    "popupDefaults.paddingHorizontal": 20, "popupDefaults.paddingVertical": 12, "popupDefaults.spacing": 9,
+    "popupDefaults.shadowRadius": 7, "popupDefaults.fontName": "Monaco", "popupDefaults.fontSize": 17,
+    "popupDefaults.fontWeight": "bold",
+    "popupDefaults.foreground": "#123456", "popupDefaults.borderWidth": 3,
+    "bar.popupOffset": 12,
+  };
+  const draw = config => {
+    const resolved = resolveTheme(builtIn, config, "dark");
+    return { ...cssVariables(resolved, { popupSpacing: true }), indicator: indicatorClass(resolved) };
+  };
+  for (const path of CONTRACT) {
+    const config = { bar: { style: { borderColor: "#abcdef", borderWidth: 1 } } };
+    if (path.startsWith("tokens.")) {
+      config.defaults = { foreground: `@token.${path.slice("tokens.".length)}` };
+    } else {
+      assert.ok(Object.hasOwn(edits, path), `Missing consumption check for ${path}`);
+    }
+    const before = draw(config);
+    const keys = path.split(".");
+    const last = keys.pop();
+    let target = config;
+    for (const key of keys) target = target[key] ??= {};
+    target[last] = path.startsWith("tokens.") ? "#123456" : edits[path];
+    assert.notDeepEqual(draw(config), before, path);
+  }
+});
+
+test("kept keys are listed", () => {
+  assert.deepEqual(keptFromBase(builtIn), ["roles"]);
+  assert.deepEqual(keptFromBase(theme("gruvbox")), ["workspaceDefaults.style.states.visible"]);
+  const config = {
+    tokens: { custom: "#123456" }, defaults: { states: { hover: { background: "#123456" } } },
+    bar: { style: { opacity: 0.5 } }, groups: [], profiles: [],
+  };
+  assert.deepEqual(keptFromBase(config), [
+    "tokens.custom", "defaults.states", "bar.style.opacity", "groups", "profiles",
+  ]);
+});
+
+test("popup spacing waits for its flag while tooltip padding stays compact", () => {
+  const resolved = resolveTheme(builtIn, {
+    popupDefaults: { paddingHorizontal: 22, paddingVertical: 18, spacing: 16 }, bar: { popupOffset: 12 },
+  }, "dark");
+  const before = structuredClone(resolved);
+  const off = cssVariables(resolved);
+  const on = cssVariables(resolved, { popupSpacing: true });
+  for (const [key, fixed, configured] of [
+    ["--pop-px", "10px", "22px"], ["--pop-py", "6px", "18px"],
+    ["--pop-gap", "6px", "16px"], ["--pop-offset", "4px", "12px"],
+  ]) {
+    assert.equal(off[key], fixed, key);
+    assert.equal(on[key], configured, key);
+  }
+  assert.deepEqual(resolved, before);
+  const css = read("site/creator/preview.css").toString();
+  const tooltip = css.match(/\.theme-preview \.preview-tooltip\s*\{([^}]+)\}/)[1];
+  assert.match(tooltip, /padding: 6px 10px;/);
+  assert.doesNotMatch(tooltip, /var\(--pop-p[xy]\)/);
+});
+
+test("tiles use box shadows and bare widgets keep their glow", () => {
+  const resolved = resolveTheme(builtIn, theme("phosphor"), "dark");
+  const bare = cssVariables(resolved);
+  assert.equal(bare["--w-shadow-box"], "none");
+  assert.equal(bare["--w-glow"], `drop-shadow(0 1px ${shadowBlur(4) / 2}px #ffb00080)`);
+  const tiled = applyControl(state("phosphor"), "widgets.tiles", true, "dark");
+  const variables = cssVariables(resolveTheme(builtIn, tiled.config, "dark"));
+  assert.equal(variables["--w-glow"], "none");
+  assert.equal(variables["--w-shadow-box"], `0 1px ${shadowBlur(4)}px #ffb00080`);
+  resolved.defaults.background = "#00000000";
+  resolved.defaults.borderColor = "#ffffff00";
+  assert.equal(cssVariables(resolved)["--w-shadow-box"], "none");
+  assert.equal(cssVariables(resolved)["--w-glow"], bare["--w-glow"]);
+});
+
+test("gradients use the native default angle and keep unsupported angles from the base", () => {
+  const config = { bar: { style: { background: { gradient: { colors: ["#ff0000", "#0000ff"] } } } } };
+  const variables = () => cssVariables(resolveTheme(builtIn, config, "dark"))["--strip-bg"];
+  assert.equal(variables(), "linear-gradient(90deg, #ff0000, #0000ff)");
+  config.bar.style.background.gradient.angle = 45;
+  assert.equal(variables(), "transparent");
+  assert.deepEqual(keptFromBase(config), ["bar.style.background"]);
+});
 
 test("slug matches the app", () => {
   for (const { name, id } of json("Tests/Fixtures/theme-link/slugs.json")) {
