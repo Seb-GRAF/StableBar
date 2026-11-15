@@ -44,7 +44,8 @@ struct PopupView: View {
                 }, eject: { path, scope in
                     guard store.barEditing.allowsWidgetActions else { return }
                     try await VolumeEjector.live.eject(path, scope)
-                }, stateAccents: popupStateAccents(style, mode: mode), pressMenuBarItem: { reference in
+                }, stateAccents: popupStateAccents(style, mode: mode),
+                   dataState: dataState(script?.output, rules: widget.rules), pressMenuBarItem: { reference in
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     store.appMenu.press(reference)
@@ -175,6 +176,8 @@ struct BlockContext {
     var eject: @MainActor (String, EjectScope) async throws -> Void = { _, _ in }
     /// The widget's accent in its `warning` and `critical` data states; a state its style doesn't set is missing.
     var stateAccents: [String: Color] = [:]
+    /// The widget's data state, such as `warning`, for views that colour by it; popup blocks don't take its style.
+    var dataState: String?
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Selects a `selectInputSourceField` block's keyboard input source.
     var selectInputSource: (String) -> Void = { _ in }

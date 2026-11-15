@@ -1,0 +1,96 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "disk",
+        "type": "disk",
+        "position": "right",
+        "details": true,
+        "style": {
+          "states": {
+            "warning": {
+              "foreground": "@token.warning",
+              "accent": "@token.warning"
+            },
+            "critical": {
+              "foreground": "@token.critical",
+              "accent": "@token.critical"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "disk": {
+      "text": "88%",
+      "icon": "internaldrive",
+      "tooltip": "119 GB available on Macintosh HD",
+      "state": "warning",
+      "fields": {
+        "format": "APFS",
+        "free": "119 GB",
+        "percent": "88",
+        "total": "994 GB",
+        "used": "875 GB",
+        "volume": "Macintosh HD"
+      },
+      "lists": {
+        "volumes": [
+          {
+            "drive": "disk4",
+            "driveVolumes": "Photos",
+            "ejectable": "true",
+            "fraction": "0.41",
+            "free": "1.18 TB",
+            "name": "Backup",
+            "path": "/Volumes/Backup",
+            "percent": "41",
+            "state": "",
+            "symbol": "externaldrive",
+            "total": "2 TB",
+            "used": "820 GB"
+          },
+          {
+            "drive": "disk4",
+            "driveVolumes": "Backup",
+            "ejectable": "true",
+            "fraction": "0.4",
+            "free": "300 GB",
+            "name": "Photos",
+            "path": "/Volumes/Photos",
+            "percent": "40",
+            "state": "",
+            "symbol": "externaldrive",
+            "total": "500 GB",
+            "used": "200 GB"
+          },
+          {
+            "drive": "",
+            "driveVolumes": "",
+            "ejectable": "true",
+            "fraction": "0.025",
+            "free": "3.9 TB",
+            "name": "NAS",
+            "path": "/Volumes/NAS",
+            "percent": "3",
+            "state": "",
+            "symbol": "externaldrive.connected.to.line.below",
+            "total": "4 TB",
+            "used": "100 GB"
+          }
+        ]
+      },
+      "values": {
+        "disk": 0.8803,
+        "free": 119000000000,
+        "total": 994000000000,
+        "used": 875000000000
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "disk",
+  "height": 560
+}

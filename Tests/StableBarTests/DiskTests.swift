@@ -192,3 +192,13 @@ private final class RecordedUnmounts: @unchecked Sendable {
     #expect(accents.keys.sorted() == ["warning"])
     #expect(accents["warning"] == HexColor(0xaabbccff).color)
 }
+
+@Test func aDiskWidgetWithDetailsGetsTheDiskPopup() throws {
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(FileManager.default.temporaryDirectory.appending(path: "disk.json"), data: Data(#"""
+    {"widgets":[{"id":"disk","type":"disk","position":"right","details":true}]}
+    """#.utf8))
+    let widget = try #require(configuration.widgets.first)
+    #expect(EssentialsPopup.kind(for: widget, providerType: configuration.providerType(of: widget)) == .disk)
+    #expect(EssentialsPopup.disk.popup(timeZone: nil).style.width == 320)
+}
