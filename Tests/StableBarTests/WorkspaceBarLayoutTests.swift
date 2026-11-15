@@ -57,6 +57,28 @@ private final class Count: @unchecked Sendable {
     #expect(store.barEditing.widgets(on: laptop).map(\.id) == ["spaces", "clock"])
 }
 
+@Test func aFiltersEmptinessMatchesTheWorkspacesItShows() {
+    let notes = WorkspaceApp(workspace: "3", name: "Notes", bundleID: "com.apple.Notes")
+    let spaces = [
+        Workspace(name: "1", isFocused: false, isVisible: false, monitor: 1, apps: [terminal],
+                  windows: [WorkspaceWindow(id: 1, title: "zsh", app: terminal)]),
+        Workspace(name: "2", isFocused: false, isVisible: false, monitor: 1),
+        Workspace(name: "3", isFocused: true, isVisible: true, monitor: 2, apps: [notes]),
+        Workspace(name: "4", isFocused: false, isVisible: true, monitor: 3)
+    ]
+    let filters = [
+        WorkspaceFilter(monitor: 1, showEmpty: false),
+        WorkspaceFilter(monitor: 1, showEmpty: false, hideApps: ["Terminal"]),
+        WorkspaceFilter(monitor: 1, showEmpty: true, hideApps: ["Terminal"]),
+        WorkspaceFilter(monitor: 1, showEmpty: true, hideWorkspaces: ["1", "2"]),
+        WorkspaceFilter(monitor: 2, showEmpty: false, hideApps: ["com.apple.Notes"], hideWorkspaces: ["3"]),
+        WorkspaceFilter(monitor: 3, showEmpty: false),
+        WorkspaceFilter(monitor: 4, showEmpty: true)
+    ]
+    #expect(filters.map { $0.isEmpty(in: spaces) } == [false, true, false, true, false, false, true])
+    for filter in filters { #expect(filter.isEmpty(in: spaces) == filter.apply(to: spaces).isEmpty) }
+}
+
 @Test @MainActor func focusMovingToAnotherDisplayMovesOnlyWidgetsShownOnTheActiveDisplay() throws {
     let store = try makeStore()
     let external = BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)

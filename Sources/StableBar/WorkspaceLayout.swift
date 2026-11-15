@@ -9,12 +9,26 @@ struct WorkspaceFilter: Hashable {
 
     func apply(to workspaces: [Workspace]) -> [Workspace] {
         workspaces.compactMap { workspace in
-            guard workspace.monitor == monitor, workspace.isFocused || !hideWorkspaces.contains(workspace.name) else { return nil }
+            guard shows(workspace) else { return nil }
             var workspace = workspace
-            workspace.apps.removeAll { app in hideApps.contains { appMatches(app, key: $0) } }
-            workspace.windows.removeAll { window in hideApps.contains { appMatches(window.app, key: $0) } }
-            return showEmpty || workspace.isVisible || !workspace.apps.isEmpty ? workspace : nil
+            workspace.apps.removeAll(where: hides)
+            workspace.windows.removeAll { hides($0.app) }
+            return workspace
         }
+    }
+
+    /// Whether no workspace is shown, without filtering their apps and windows.
+    func isEmpty(in workspaces: [Workspace]) -> Bool {
+        !workspaces.contains(where: shows)
+    }
+
+    private func shows(_ workspace: Workspace) -> Bool {
+        guard workspace.monitor == monitor, workspace.isFocused || !hideWorkspaces.contains(workspace.name) else { return false }
+        return showEmpty || workspace.isVisible || workspace.apps.contains { !hides($0) }
+    }
+
+    private func hides(_ app: WorkspaceApp) -> Bool {
+        hideApps.contains { appMatches(app, key: $0) }
     }
 }
 
@@ -34,7 +48,7 @@ final class WorkspaceLayout {
         let focused = workspaces.first(where: \.isFocused)?.monitor
         if focusedMonitor != focused { focusedMonitor = focused }
         for (filter, flag) in emptiness {
-            let isEmpty = filter.apply(to: workspaces).isEmpty
+            let isEmpty = filter.isEmpty(in: workspaces)
             if flag.isEmpty != isEmpty { flag.isEmpty = isEmpty }
         }
     }
@@ -42,7 +56,7 @@ final class WorkspaceLayout {
     /// Whether `filter` leaves its display without workspaces.
     func isEmpty(_ filter: WorkspaceFilter) -> Bool {
         if let flag = emptiness[filter] { return flag.isEmpty }
-        let flag = WorkspaceEmptiness(isEmpty: filter.apply(to: workspaces).isEmpty)
+        let flag = WorkspaceEmptiness(isEmpty: filter.isEmpty(in: workspaces))
         emptiness[filter] = flag
         return flag.isEmpty
     }
