@@ -503,7 +503,7 @@ func referenceExpansionCountsVisitedValuesAcrossTheWholeCall(prefix: String) thr
         return
     }
     #expect(name == "leaf")
-    #expect(error?.errorDescription == "Configuration references expand to more than 100,000 values at leaf. "
+    #expect(error?.errorDescription == "Configuration references expand past StableBar's limit at leaf. "
         + "Check tokens or settings that refer to each other.")
 }
 

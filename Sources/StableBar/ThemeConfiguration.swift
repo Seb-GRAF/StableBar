@@ -83,7 +83,7 @@ enum ThemeConfigurationError: LocalizedError {
         case let .unknownReference(name): "Unknown configuration reference: \(name)."
         case let .referenceCycle(names): "Configuration reference cycle: \(names.joined(separator: " → "))."
         case let .referenceExpansionTooLarge(name):
-            "Configuration references expand to more than 100,000 values at \(name). "
+            "Configuration references expand past StableBar's limit at \(name). "
                 + "Check tokens or settings that refer to each other."
         case let .referenceOriginsTooLarge(name):
             "Configuration references at \(name) produce more than StableBar can track. "
