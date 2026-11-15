@@ -200,6 +200,59 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(loader.origins["widgets.script.style.fontSize"]?.description.contains("token style") == true)
 }
 
+@Test func referenceExpansionStopsJustAboveTheLimit() throws {
+    let fits = ConfigurationValue.array(Array(repeating: .number(1), count: 99_999))
+    let tooBig = ConfigurationValue.array(Array(repeating: .number(1), count: 100_000))
+    #expect(try substituteConfigurationReferences(.string("@token.big"), prefix: "@token.", values: ["big": fits]) == fits)
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string("@token.big"), prefix: "@token.", values: ["big": tooBig])
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "big")
+}
+
+@Test(arguments: ["@token.", "@setting."])
+func referenceExpansionCountsOnlyEmittedValuesAcrossTheWholeCall(prefix: String) throws {
+    let literal = ConfigurationValue.array(Array(repeating: .number(1), count: 100_000))
+    #expect(try substituteConfigurationReferences(literal, prefix: prefix, values: [:]) == literal)
+    let replacement = ConfigurationValue.array(Array(repeating: .number(1), count: 49_999))
+    let reference = ConfigurationValue.string(prefix + "alias")
+    let values: [String: ConfigurationValue] = [
+        "alias": .string(prefix + "big"), "big": replacement,
+        "last": .string(prefix + "leaf"), "leaf": .number(1)
+    ]
+    #expect(try substituteConfigurationReferences(.array([reference, reference]), prefix: prefix, values: values)
+        == .array([replacement, replacement]))
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        _ = try substituteConfigurationReferences(.array([reference, reference, .string(prefix + "last")]),
+                                                prefix: prefix, values: values)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "leaf")
+    #expect(error?.errorDescription == "Configuration references expand to more than 100,000 values at leaf. "
+        + "Check tokens or settings that refer to each other.")
+}
+
+@Test func tokensThatDoubleEachOtherFailToLoadInsteadOfExpanding() throws {
+    // t17 expands to 2^18 leaves: small to write, far over the limit.
+    var tokens = [#""t0": [1, 1]"#]
+    for level in 1...17 { tokens.append(#""t\#(level)": ["@token.t\#(level - 1)", "@token.t\#(level - 1)"]"#) }
+    let json = #"{"widgets":[],"tokens":{\#(tokens.joined(separator: ","))},"bar":{"style":{"background":"@token.t17"}}}"#
+    var loader = ConfigurationLoader()
+    let url = FileManager.default.temporaryDirectory.appending(path: "tokens.json")
+    let error = #expect(throws: ThemeConfigurationError.self) { try loader.load(url, data: Data(json.utf8)) }
+    guard case .referenceExpansionTooLarge? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+}
+
 @Test func widgetOrderSkipsAbsentWidgetsAndRejectsDuplicates() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "order.json")
     var loader = ConfigurationLoader()

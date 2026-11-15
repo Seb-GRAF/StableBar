@@ -1,5 +1,7 @@
 import Foundation
 
+let configurationReferenceExpansionLimit = 100_000
+
 struct ConfigurationContext: Sendable, Equatable {
     var appearance = "light"
     var onBattery = false
@@ -68,6 +70,7 @@ struct ProfileConditions: Codable, Equatable, Sendable {
 enum ThemeConfigurationError: LocalizedError {
     case unknownReference(String)
     case referenceCycle([String])
+    case referenceExpansionTooLarge(String)
     case unknownProfile(String)
     case duplicateProfile(String)
 
@@ -75,6 +78,9 @@ enum ThemeConfigurationError: LocalizedError {
         switch self {
         case let .unknownReference(name): "Unknown configuration reference: \(name)."
         case let .referenceCycle(names): "Configuration reference cycle: \(names.joined(separator: " → "))."
+        case let .referenceExpansionTooLarge(name):
+            "Configuration references expand to more than 100,000 values at \(name). "
+                + "Check tokens or settings that refer to each other."
         case let .unknownProfile(name): "Unknown configuration profile: \(name)."
         case let .duplicateProfile(name): "Duplicate configuration profile: \(name)."
         }
@@ -84,8 +90,14 @@ enum ThemeConfigurationError: LocalizedError {
 func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: String,
                                        values: [String: ConfigurationValue],
                                        path: [String] = []) throws -> ConfigurationValue {
-    switch value {
-    case let .string(string) where string.hasPrefix(prefix):
+    var remaining = configurationReferenceExpansionLimit
+    return try substituteReferences(value, prefix: prefix, values: values, path: path, remaining: &remaining)
+}
+
+private func substituteReferences(_ value: ConfigurationValue, prefix: String,
+                                  values: [String: ConfigurationValue], path: [String],
+                                  remaining: inout Int) throws -> ConfigurationValue {
+    if case let .string(string) = value, string.hasPrefix(prefix) {
         let name = String(string.dropFirst(prefix.count))
         guard !path.contains(name) else {
             throw ThemeConfigurationError.referenceCycle(path + [name])
@@ -93,14 +105,23 @@ func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: Stri
         guard let replacement = values[name] else {
             throw ThemeConfigurationError.unknownReference(string)
         }
-        return try substituteConfigurationReferences(replacement, prefix: prefix, values: values, path: path + [name])
+        return try substituteReferences(replacement, prefix: prefix, values: values,
+                                        path: path + [name], remaining: &remaining)
+    }
+    if let name = path.last {
+        remaining -= 1
+        guard remaining >= 0 else {
+            throw ThemeConfigurationError.referenceExpansionTooLarge(name)
+        }
+    }
+    switch value {
     case let .object(object):
         return .object(try object.mapValues {
-            try substituteConfigurationReferences($0, prefix: prefix, values: values, path: path)
+            try substituteReferences($0, prefix: prefix, values: values, path: path, remaining: &remaining)
         })
     case let .array(array):
         return .array(try array.map {
-            try substituteConfigurationReferences($0, prefix: prefix, values: values, path: path)
+            try substituteReferences($0, prefix: prefix, values: values, path: path, remaining: &remaining)
         })
     default:
         return value
