@@ -115,6 +115,9 @@ private func substituteReferences(_ value: ConfigurationValue, prefix: String,
     var depth = depth
     if let name = path.last {
         remaining -= 1
+        if case let .string(string) = value {
+            remaining -= string.utf8.count / 256
+        }
         guard remaining >= 0 else {
             throw ThemeConfigurationError.referenceExpansionTooLarge(name)
         }

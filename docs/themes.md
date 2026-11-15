@@ -69,7 +69,7 @@ Popups inherit `popupDefaults` and then `defaults`, and the workspace highlight 
 | `warning` | Warning text or fills |
 | `critical` | Critical text or fills |
 
-A reference to a token that no layer defines is an error. Built-in defines all of these, so your own widgets can use them under any theme. Their names are reserved for colors: Built-in's `defaults` use `text`, `surface`, `surfaceRaised` and `accent`, so a token of yours with one of these names replaces the theme's color and must be a color. A widget package should still define fallback values for the shared tokens it uses, so it passes review on its own; Built-in and any other theme replace them. StableBar also rejects references nested more than 64 levels deep, references that expand past 100,000 values, and references that need more tracking than StableBar allows.
+A reference to a token that no layer defines is an error. Built-in defines all of these, so your own widgets can use them under any theme. Their names are reserved for colors: Built-in's `defaults` use `text`, `surface`, `surfaceRaised` and `accent`, so a token of yours with one of these names replaces the theme's color and must be a color. A widget package should still define fallback values for the shared tokens it uses, so it passes review on its own; Built-in and any other theme replace them. StableBar also rejects references nested more than 64 levels deep, references whose expansion is too large, and references that need more tracking than StableBar allows.
 
 ## Liquid Glass
 
