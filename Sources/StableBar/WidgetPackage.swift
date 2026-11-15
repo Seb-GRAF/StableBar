@@ -368,7 +368,8 @@ struct WidgetPackageStore: Sendable {
         return appVersion.compare(minimumVersion, options: .numeric) == .orderedAscending
     }
 
-    func inspect(_ source: URL, settings: [String: ConfigurationValue] = [:]) throws -> WidgetPackageInspection {
+    func inspect(_ source: URL, settings: [String: ConfigurationValue] = [:],
+                 referenceExpansionBudget: ConfigurationReferenceExpansionBudget? = nil) throws -> WidgetPackageInspection {
         let manifest = try manifest(at: source)
         if let minimumVersion = manifest.minimumVersion, requiresNewerApp(minimumVersion) {
             throw WidgetPackageError.newerVersionRequired(manifest.id, minimumVersion)
@@ -376,6 +377,7 @@ struct WidgetPackageStore: Sendable {
         try validateContents(at: source)
         let screenshot = try manifest.screenshot.map { try packageFile($0, inside: source) }
         var loader = ConfigurationLoader()
+        loader.referenceExpansionBudget = referenceExpansionBudget
         let layer = try loader.readPackage(at: source, manifest: manifest, settings: settings)
         let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? []
         var documents = [try loader.finish(layer, context: ConfigurationContext())]

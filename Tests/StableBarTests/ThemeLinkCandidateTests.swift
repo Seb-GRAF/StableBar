@@ -535,6 +535,125 @@ struct ThemeLinkCandidateTests {
         #expect(candidate.state == .used)
     }
 
+    @Test func individuallyBoundedProfilesShareOneCandidatesExpansionBudget() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        let tokens: [String: ConfigurationValue] = [
+            "c": .array(Array(repeating: .number(1), count: 250)),
+            "r": .array(Array(repeating: .string("@token.c"), count: 198))
+        ]
+        let profiles = (0..<16).map { index in
+            profile(["tokens": .object(["p": .string("@token.r")])], name: "p\(index)", enabled: false)
+        }
+        link.configuration = try configurationData(["tokens": .object(tokens), "profiles": .array(profiles)])
+        let source = fixture.directory.appending(path: "source")
+        try fixture.write(String(decoding: link.manifest, as: UTF8.self), to: source.appending(path: "package.json"))
+        try fixture.write(String(decoding: link.configuration, as: UTF8.self), to: source.appending(path: "config.json"))
+        var loader = ConfigurationLoader()
+        let layer = try loader.readPackage(at: source, manifest: fixture.packages.manifest(at: source), settings: [:])
+        loader.previewProfile = "p0"
+        let expanded = try loader.finish(layer, context: ConfigurationContext())
+        let expandedTokens = try expanded["tokens"]?.decoded([String: ConfigurationValue].self)
+        let row = ConfigurationValue.array(Array(repeating: .number(1), count: 250))
+        #expect(expandedTokens?["p"] == .array(Array(repeating: row, count: 198)))
+
+        let before = try temporaryFolders()
+        let error = #expect(throws: ThemeConfigurationError.self) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+        guard case .referenceExpansionTooLarge? = error else {
+            Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
+            return
+        }
+        #expect(try temporaryFolders() == before)
+    }
+
+    @Test func bundledThemesAndTheSharedFixtureFitALinkCandidatesBudget() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let bundled = try FileManager.default.contentsOfDirectory(at: fixture.themes, includingPropertiesForKeys: nil)
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        for directory in [linkedThemeDirectory] + bundled {
+            var manifest = try JSONDecoder().decode([String: ConfigurationValue].self,
+                                                   from: Data(contentsOf: directory.appending(path: "package.json")))
+            manifest["id"] = .string("linked-\(directory.lastPathComponent)")
+            let link = ThemeLink(manifest: try configurationData(manifest),
+                                 configuration: try Data(contentsOf: directory.appending(path: "config.json")))
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            defer { candidate.discard() }
+            #expect(candidate.state == .ready, "\(directory.lastPathComponent)")
+            #expect(candidate.validationExpansionUnits < 300_000)
+            print("THEME_LINK_EXPANSION_UNITS theme=\(directory.lastPathComponent) units=\(candidate.validationExpansionUnits)")
+        }
+    }
+
+    @Test func nestedProfilesShareTheBudgetWithInspectionAndOtherReferenceChecks() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        let tokens: [String: ConfigurationValue] = [
+            "c": .array(Array(repeating: .number(1), count: 250)),
+            "r": .array([.string("@token.c")])
+        ]
+        let references = ConfigurationValue.array(Array(repeating: .string("@token.r"), count: 100))
+        let nested = (0..<15).map { index in
+            profile(["tokens": .object(["p": references])], name: "p\(index)", enabled: false)
+        }
+        link.configuration = try JSONEncoder().encode(ConfigurationValue.object([
+            "tokens": .object(tokens),
+            "profiles": .array([profile(["profiles": .array(nested)], enabled: false)])
+        ]))
+        #expect(link.manifest.count + link.configuration.count <= ThemeLink.maximumFileBytes)
+        let before = try temporaryFolders()
+        let error = #expect(throws: ThemeConfigurationError.self) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+        guard case .referenceExpansionTooLarge? = error else {
+            Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
+            return
+        }
+        #expect(try temporaryFolders() == before)
+    }
+
+    @Test(arguments: [239, 240])
+    func aCandidatesBudgetSpansInspectionAndItsFinalReferenceCheck(referenceCount: Int) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        link.configuration = try configurationData(["tokens": .object([
+            "c": .array(Array(repeating: .number(1), count: 250)),
+            "r": .array(Array(repeating: .string("@token.c"), count: referenceCount))
+        ])])
+        let before = try temporaryFolders()
+        if referenceCount == 239 {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            #expect(candidate.state == .ready)
+            #expect(candidate.validationExpansionUnits == 299_945)
+            candidate.discard()
+        } else {
+            let error = #expect(throws: ThemeConfigurationError.self) {
+                let candidate = try ThemeLinkCandidate(link: link, store: store)
+                candidate.discard()
+            }
+            guard case .referenceExpansionTooLarge? = error else {
+                Issue.record("Expected the candidate's shared expansion limit, got \(String(describing: error))")
+                return
+            }
+        }
+        #expect(try temporaryFolders() == before)
+    }
+
     enum Rejection: CaseIterable, Sendable {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
         case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion

@@ -1,8 +1,30 @@
 import Foundation
+import os
 
 let configurationReferenceExpansionLimit = 100_000
 // Keeps reference recursion within a worker thread's stack.
 let configurationReferenceDepthLimit = 64
+
+final class ConfigurationReferenceExpansionBudget: Sendable {
+    let limit: Int
+    private let remaining: OSAllocatedUnfairLock<Int>
+
+    init(limit: Int) {
+        self.limit = limit
+        remaining = OSAllocatedUnfairLock(initialState: limit)
+    }
+
+    var consumed: Int { limit - remaining.withLock { $0 } }
+
+    fileprivate func withRemaining<T>(_ body: (inout Int) throws -> T) rethrows -> T {
+        try remaining.withLockUnchecked { remaining in
+            let available = min(remaining, configurationReferenceExpansionLimit)
+            var callRemaining = available
+            defer { remaining -= available - max(0, callRemaining) }
+            return try body(&callRemaining)
+        }
+    }
+}
 
 struct ConfigurationContext: Sendable, Equatable {
     var appearance = "light"
@@ -99,13 +121,18 @@ enum ThemeConfigurationError: LocalizedError {
 
 func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: String,
                                        values: [String: ConfigurationValue],
-                                       path: [String] = []) throws -> ConfigurationValue {
-    var remaining = configurationReferenceExpansionLimit
+                                       path: [String] = [],
+                                       budget: ConfigurationReferenceExpansionBudget? = nil) throws -> ConfigurationValue {
     var path = path
     var namesOnPath = Set(path)
-    return try substituteReferences(value, prefix: prefix, values: values,
-                                    path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
-                                    depth: max(0, path.count - 1))
+    func resolve(_ remaining: inout Int) throws -> ConfigurationValue {
+        try substituteReferences(value, prefix: prefix, values: values,
+                                 path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
+                                 depth: max(0, path.count - 1))
+    }
+    if let budget { return try budget.withRemaining(resolve) }
+    var remaining = configurationReferenceExpansionLimit
+    return try resolve(&remaining)
 }
 
 private func substituteReferences(_ value: ConfigurationValue, prefix: String,

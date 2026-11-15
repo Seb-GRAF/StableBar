@@ -409,6 +409,7 @@ let bundledThemesDirectory = Bundle.main.url(forResource: "themes", withExtensio
 
 struct ConfigurationLoader: Sendable {
     var themesDirectory = bundledThemesDirectory
+    var referenceExpansionBudget: ConfigurationReferenceExpansionBudget?
     /// The release that reads the configuration; without one, as in development builds, every file is read strictly.
     var appVersion = AppVersion.release
     /// The newest release a file of the configuration was written for, when it's newer than `appVersion`.
@@ -567,7 +568,8 @@ struct ConfigurationLoader: Sendable {
         profileAppearance = nil
         if case let .object(bar) = layer.values["bar"], let appearance = bar["appearance"],
            case let .string(name) = try substituteConfigurationReferences(appearance, prefix: "@token.",
-                                                                          values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]) {
+                                                                          values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:],
+                                                                          budget: referenceExpansionBudget) {
             context.appearance = name
             profileAppearance = name
         }
@@ -609,7 +611,8 @@ struct ConfigurationLoader: Sendable {
         for key in ["profiles", "profile"] { layer.values.removeValue(forKey: key) }
         let tokens = try layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
         let beforeTokens = layer.values
-        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens)
+        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens,
+                                                            budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
         var originBudget = ConfigurationOriginPathBudget()
         let tokenSources = layer.origins
@@ -716,7 +719,8 @@ struct ConfigurationLoader: Sendable {
         switch value {
         case let .string(reference) where reference.hasPrefix("@token."):
             let name = String(reference.dropFirst(7))
-            let resolved = try substituteConfigurationReferences(value, prefix: "@token.", values: tokens)
+            let resolved = try substituteConfigurationReferences(value, prefix: "@token.", values: tokens,
+                                                                budget: referenceExpansionBudget)
             var origin = source
             origin.token = name
             origin.tokenSource = origins["tokens.\(name)"]!.description
@@ -816,12 +820,21 @@ struct ConfigurationLoader: Sendable {
         for (name, setting) in manifest.settings where setting.type == "secret" {
             values[name] = .string("@secret.\(manifest.id)/\(name)")
         }
-        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@setting.", values: values)
+        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@setting.", values: values,
+                                                            budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
-        layer.contributions = layer.contributions.mapValues { entries in
-            entries.map {
+        layer.contributions = try layer.contributions.mapValues { entries in
+            try entries.map {
                 var entry = $0
-                entry.settingValue = try? substituteConfigurationReferences(entry.value, prefix: "@setting.", values: values)
+                do {
+                    entry.settingValue = try substituteConfigurationReferences(entry.value, prefix: "@setting.", values: values,
+                                                                              budget: referenceExpansionBudget)
+                } catch {
+                    entry.settingValue = nil
+                    if referenceExpansionBudget != nil, case .referenceExpansionTooLarge? = error as? ThemeConfigurationError {
+                        throw error
+                    }
+                }
                 return entry
             }
         }

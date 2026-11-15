@@ -850,6 +850,76 @@ func referenceExpansionPreservesCyclePathsAndUnknownNames(prefix: String) throws
     }
 }
 
+@Test(arguments: ["@token.", "@setting."])
+func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: String) throws {
+    let budget = ConfigurationReferenceExpansionBudget(limit: 300_000)
+    let fits = ConfigurationValue.array(Array(repeating: .number(1), count: 99_999))
+    let tooBig = ConfigurationValue.array(Array(repeating: .number(1), count: 100_000))
+    let values = ["fits": fits, "big": tooBig]
+    let reference = ConfigurationValue.string(prefix + "fits")
+    let perCallError = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string(prefix + "big"), prefix: prefix, values: values, budget: budget)
+    }
+    guard case .referenceExpansionTooLarge? = perCallError else {
+        Issue.record("Expected the unchanged per-call limit, got \(String(describing: perCallError))")
+        return
+    }
+    #expect(budget.consumed == 100_000)
+    for used in [200_000, 300_000] {
+        #expect(try substituteConfigurationReferences(reference, prefix: prefix, values: values, budget: budget) == fits)
+        #expect(budget.consumed == used)
+    }
+    let sharedError = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(reference, prefix: prefix, values: values, budget: budget)
+    }
+    guard case .referenceExpansionTooLarge? = sharedError else {
+        Issue.record("Expected the shared limit, got \(String(describing: sharedError))")
+        return
+    }
+    #expect(budget.consumed == 300_000)
+    #expect(try substituteConfigurationReferences(reference, prefix: prefix, values: values) == fits)
+}
+
+@Test func aLoadersSharedBudgetIncludesAppearanceOriginsAndLaterFinishes() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let theme = try fixture.theme(#"{"tokens":{"look":"light"},"bar":{"appearance":"@token.look"}}"#, install: false)
+    let budget = ConfigurationReferenceExpansionBudget(limit: 3)
+    var loader = ConfigurationLoader()
+    loader.referenceExpansionBudget = budget
+    let layer = try loader.readPackage(at: theme.directory, manifest: theme.manifest, settings: [:])
+    #expect(try loader.finish(layer, context: ConfigurationContext())["bar"] == .object(["appearance": .string("light")]))
+    #expect(budget.consumed == 3)
+    var copy = loader
+    let error = #expect(throws: ThemeConfigurationError.self) { try copy.finish(layer, context: ConfigurationContext()) }
+    guard case .referenceExpansionTooLarge? = error else {
+        Issue.record("Expected the copied loader to share its budget, got \(String(describing: error))")
+        return
+    }
+}
+
+@Test func settingContributionsCannotSwallowTheSharedBudgetError() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let source = fixture.directory.appending(path: "source")
+    try fixture.write(#"{"id":"settings","name":"Settings","version":"1","kind":"theme","entry":"config.json","settings":{"size":{"type":"number","default":12}}}"#,
+                      to: source.appending(path: "package.json"))
+    try fixture.write(#"{"defaults":{"fontSize":"@setting.size"}}"#, to: source.appending(path: "config.json"))
+    let manifest = try fixture.packages.manifest(at: source)
+    var loader = ConfigurationLoader()
+    _ = try loader.readPackage(at: source, manifest: manifest, settings: [:])
+    let budget = ConfigurationReferenceExpansionBudget(limit: 1)
+    loader.referenceExpansionBudget = budget
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try loader.readPackage(at: source, manifest: manifest, settings: [:])
+    }
+    guard case .referenceExpansionTooLarge? = error else {
+        Issue.record("Expected setting contributions to propagate the shared limit, got \(String(describing: error))")
+        return
+    }
+    #expect(budget.consumed == 1)
+}
+
 @Test func widgetOrderSkipsAbsentWidgetsAndRejectsDuplicates() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "order.json")
     var loader = ConfigurationLoader()

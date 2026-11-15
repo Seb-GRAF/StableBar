@@ -7,6 +7,7 @@ final class ThemeLinkCandidate {
 
     let link: ThemeLink
     let choice: ThemeChoice
+    let validationExpansionUnits: Int
     private(set) var state: State = .ready
     private weak var store: BarStore?
     private var discarded = false
@@ -27,7 +28,8 @@ final class ThemeLinkCandidate {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             try link.manifest.write(to: directory.appending(path: "package.json"))
             try link.configuration.write(to: directory.appending(path: "config.json"))
-            let inspection = try packages.inspect(directory)
+            let budget = ConfigurationReferenceExpansionBudget(limit: 300_000)
+            let inspection = try packages.inspect(directory, referenceExpansionBudget: budget)
             guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
             guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
             let id = inspection.manifest.id
@@ -37,10 +39,12 @@ final class ThemeLinkCandidate {
             }
             try Self.checkInstalledID(id, packages: packages)
             var loader = ConfigurationLoader()
+            loader.referenceExpansionBudget = budget
             let layer = try loader.readPackage(at: directory, manifest: inspection.manifest, settings: [:])
-            try Self.checkReferences(layer)
+            try Self.checkReferences(layer, budget: budget)
             self.link = link
             choice = ThemeChoice(manifest: inspection.manifest, directory: directory, isBundled: false)
+            validationExpansionUnits = budget.consumed
             self.store = store
         } catch {
             try? FileManager.default.removeItem(at: directory)
@@ -147,8 +151,9 @@ final class ThemeLinkCandidate {
         for profile in profiles { try checkDocument(profile.configuration, profileCount: &profileCount) }
     }
 
-    private static func checkReferences(_ layer: ConfigurationLayer) throws {
+    private static func checkReferences(_ layer: ConfigurationLayer, budget: ConfigurationReferenceExpansionBudget) throws {
         var loader = ConfigurationLoader()
+        loader.referenceExpansionBudget = budget
         let resolved = try loader.finish(layer, context: ConfigurationContext())
         var profileCount = 0
         try checkDocument(resolved, profileCount: &profileCount)
@@ -156,7 +161,7 @@ final class ThemeLinkCandidate {
         let inheritedTokens = resolved["tokens"] ?? .object([:])
         let tokens = try originalTokens.overriding(inheritedTokens).decoded([String: ConfigurationValue].self)
         // Merging can hide raw references, and the loader strips profiles before substitution; Settings reads both.
-        try checkDocumentReferences(layer.values, tokens: tokens)
+        try checkDocumentReferences(layer.values, tokens: tokens, budget: budget)
         let profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? []
         for profile in profiles {
             loader.previewProfile = profile.name
@@ -165,10 +170,11 @@ final class ThemeLinkCandidate {
         }
     }
 
-    private static func checkDocumentReferences(_ document: [String: ConfigurationValue], tokens: [String: ConfigurationValue]) throws {
+    private static func checkDocumentReferences(_ document: [String: ConfigurationValue], tokens: [String: ConfigurationValue],
+                                                budget: ConfigurationReferenceExpansionBudget) throws {
         var base = document
         let profiles = try base.removeValue(forKey: "profiles")?.decoded([ConfigurationProfile].self) ?? []
-        let resolved = try substituteConfigurationReferences(.object(base), prefix: "@token.", values: tokens)
+        let resolved = try substituteConfigurationReferences(.object(base), prefix: "@token.", values: tokens, budget: budget)
             .decoded([String: ConfigurationValue].self)
         var profileCount = 0
         try checkDocument(resolved, profileCount: &profileCount)
@@ -176,7 +182,7 @@ final class ThemeLinkCandidate {
             let localTokens = profile.configuration["tokens"] ?? .object([:])
             let inherited = try localTokens.overriding(.object(tokens))
                 .decoded([String: ConfigurationValue].self)
-            try checkDocumentReferences(profile.configuration, tokens: inherited)
+            try checkDocumentReferences(profile.configuration, tokens: inherited, budget: budget)
         }
     }
 }
