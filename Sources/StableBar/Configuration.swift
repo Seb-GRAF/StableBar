@@ -648,6 +648,11 @@ struct BarSettings: Decodable, Sendable {
 
     init() {}
 
+    /// The gap below what a popup or tooltip opens from: `popupOffset` below the bar, 6 below a row of another popup.
+    func popupGap(inPopup: Bool) -> Double {
+        inPopup ? 6 : popupOffset
+    }
+
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)

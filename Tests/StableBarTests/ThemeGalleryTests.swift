@@ -140,7 +140,7 @@ final class ThemeGalleryTests: XCTestCase {
     @MainActor func testSaveAsThemeMovesYourLookIntoANewThemeWithOneUndoStep() async throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"theme":{"id":"phosphor"},"tokens":{"accent":"#ff0000","brand":"#00ff00"},"defaults":{"fontSize":17},
-         "bar":{"offset":30,"height":34},
+         "bar":{"offset":30,"height":34,"popupOffset":12},
          "widgets":[{"id":"clock","type":"clock","position":"right","style":{"foreground":"@token.brand"}}]}
         """#)
         defer { fixture.close() }

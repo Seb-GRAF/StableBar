@@ -310,7 +310,7 @@ struct AppearanceView: View {
                                    values: editor.values("defaults", on: screen).merging(editor.values("popupDefaults", on: screen)) { $1 })
         // Popups don't take the bar widgets' padding and spacing from defaults.
         let spacing = editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen))
-        let popupSpacing = PopupConfiguration.defaultSpacing
+        let popupPadding = PopupConfiguration.defaultPadding
         let bar = editor.fields(["bar"], on: screen, values: editor.values("bar", on: screen))
         return ThemeGroup(title: "Popups") {
             popups.color("Background", "background")
@@ -319,9 +319,10 @@ struct AppearanceView: View {
             popups.weight()
             popups.number("Text size", "fontSize", default: 13, in: 6...40)
             popups.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
-            spacing.number("Horizontal padding", "paddingHorizontal", default: popupSpacing.paddingHorizontal!, in: 0...40)
-            spacing.number("Vertical padding", "paddingVertical", default: popupSpacing.paddingVertical!, in: 0...40)
-            spacing.number("Spacing", "spacing", default: popupSpacing.spacing!, in: 0...40)
+            spacing.number("Horizontal padding", "paddingHorizontal", default: popupPadding.paddingHorizontal!, in: 0...40)
+            spacing.number("Vertical padding", "paddingVertical", default: popupPadding.paddingVertical!, in: 0...40)
+            spacing.number("Spacing", "spacing", default: PopupConfiguration.blockSpacing, in: 0...40,
+                           hint: "Unset, a popup's blocks sit 12 apart and the items of a row, column or list 6. A value sets both.")
             bar.number("Gap below the bar", "popupOffset", default: BarSettings().popupOffset, in: 0...40,
                        hint: "Also moves tooltips and hover controls. A popup's own offset wins.")
         }

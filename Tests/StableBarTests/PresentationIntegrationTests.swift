@@ -678,7 +678,7 @@ func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async 
     let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
     switch kind {
     case "controls": popup.showControls(widget: widget, defaults: defaults, store: store, anchor: anchor) { _ in Text("Volume") }
-    case "row": popup.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor) { Text("Items") }
+    case "row": popup.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor, sidePadding: 10) { Text("Items") }
     default: popup.showWidgets(defaults: defaults, store: store, anchor: anchor) { Text("Widgets") }
     }
     defer { popup.close() }

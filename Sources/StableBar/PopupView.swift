@@ -21,7 +21,7 @@ struct PopupView: View {
     var body: some View {
         let script = store.scripts[widget.id]
         let states = StyleStates(mode: mode)
-        let appearance = WidgetAppearance(presentationStyle, defaults: WidgetStyle())
+        let appearance = WidgetAppearance(presentationStyle, defaults: WidgetStyle(spacing: PopupConfiguration.blockSpacing))
         let fields = script?.output.fields ?? [:]
         let lists = script?.output.lists ?? [:]
         let samples = script?.samples ?? []
@@ -74,7 +74,7 @@ struct PopupView: View {
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                     store.runAction(command, widget: widget,
                                     event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
-                })
+                }, topLevel: true)
                 if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
                 }
@@ -244,16 +244,21 @@ struct PopupBlockView: View {
     let inheritedStyle: WidgetStyle
     let fields: [String: String]
     let context: BlockContext
+    /// The popup's layout itself. As a column, it spaces its blocks `PopupConfiguration.blockSpacing` apart when nothing
+    /// sets `spacing`; rows and lists keep 6 at every level.
+    var topLevel = false
     @State private var pointerInside: Bool
     @State private var query = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.popupFillsHeight) private var fillsHeight
 
     /// `pointerInside` starts the block with the pointer over it; tests use it, as drawing has no pointer.
-    init(block: PopupBlock, inheritedStyle: WidgetStyle, fields: [String: String], context: BlockContext, pointerInside: Bool = false) {
+    init(block: PopupBlock, inheritedStyle: WidgetStyle, fields: [String: String], context: BlockContext, pointerInside: Bool = false,
+         topLevel: Bool = false) {
         self.block = block
         self.inheritedStyle = inheritedStyle
         self.fields = fields
+        self.topLevel = topLevel
         var context = context
         context.states = context.states.scoped(to: block)
         self.context = context
@@ -284,7 +289,8 @@ struct PopupBlockView: View {
         var hovering = context.states
         hovering.hover = true
         let current = hovered ? block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: hovering, roles: context.roles) : resting
-        let appearance = WidgetAppearance(resting.text, defaults: WidgetStyle())
+        let stacksBlocks = if topLevel, case .column = block.content { true } else { false }
+        let appearance = WidgetAppearance(resting.text, defaults: WidgetStyle(spacing: stacksBlocks ? PopupConfiguration.blockSpacing : nil))
         let box = current.box
         let alignment: Alignment = switch block.alignment {
         case .leading: .leading

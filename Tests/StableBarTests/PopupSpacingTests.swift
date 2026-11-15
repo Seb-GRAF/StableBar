@@ -21,8 +21,39 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     """#)
     let widget = config.widgets[0]
     let style = try #require(widget.popup).baseStyle(widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults))
-    #expect(padding(style) == padding(PopupConfiguration.defaultSpacing))
+    #expect(padding(style) == [16, 16, nil])
     #expect(style.foreground == HexColor(0x111111FF))
+}
+
+/// The height of `layout` drawn in a popup under `popupDefaults`.
+@MainActor private func popupHeight(_ layout: String, popupDefaults: String = "{}") throws -> CGFloat {
+    let config = try spacingConfiguration(#"""
+    {"defaults":{"spacing":2},"popupDefaults":\#(popupDefaults),
+     "widgets":[{"id":"agenda","type":"text","text":"Agenda","position":"right","popup":{"style":{},"layout":\#(layout)}}]}
+    """#)
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
+    store.configuration = config
+    defer { store.stop() }
+    let script = ScriptWidget()
+    try script.accept(ScriptOutput.read(Data(#"{"text":"Agenda","lists":{"days":[{"name":"Today"},{"name":"Tomorrow"}]}}"#.utf8)))
+    store.scripts["agenda"] = script
+    let widget = config.widgets[0], popup = try #require(widget.popup)
+    let style = popup.baseStyle(widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults))
+    return NSHostingView(rootView: PopupView(popup: popup, style: style, store: store, widget: widget)).fittingSize.height
+}
+
+@Test @MainActor func popupsSpaceTheirTopBlocks12AndWhatRowsColumnsAndListsHold6() throws {
+    let lines = #"[{"type":"text","text":"Today"},{"type":"text","text":"Tomorrow"}]"#
+    let top = #"{"type":"column","children":\#(lines)}"#
+    let nested = #"{"type":"column","children":[{"type":"column","children":\#(lines)}]}"#
+    let list = #"{"type":"list","source":"days","row":{"type":"field","field":"name"}}"#
+    #expect(try popupHeight(top) - popupHeight(nested) == 6)
+    // A list's rows aren't blocks, even when the list is the popup's whole layout.
+    #expect(try popupHeight(list) == popupHeight(nested))
+    #expect(try popupHeight(#"{"type":"column","children":[\#(list)]}"#) == popupHeight(nested))
+    // A spacing that popupDefaults sets reaches every level, as before.
+    #expect(try popupHeight(top, popupDefaults: #"{"spacing":9}"#) == popupHeight(nested, popupDefaults: #"{"spacing":9}"#))
+    #expect(try popupHeight(top, popupDefaults: #"{"spacing":9}"#) - popupHeight(top) == -3)
 }
 
 @Test func popupDefaultsPadAndSpaceEveryPopupThatSetsNoneOfItsOwn() throws {
@@ -59,7 +90,7 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
 
 @Test func tooltipsStayCompactWhateverThePopupAndBarPadding() throws {
     let config = try spacingConfiguration(#"""
-    {"defaults":{"paddingVertical":3},"popupDefaults":{"background":"#202020","paddingHorizontal":20,"paddingVertical":21,"spacing":9},
+    {"defaults":{"paddingVertical":3,"spacing":2},"popupDefaults":{"background":"#202020","paddingHorizontal":20,"paddingVertical":21,"spacing":9},
      "widgets":[{"id":"sound","type":"text","text":"Sound","position":"right","style":{"paddingHorizontal":0}}]}
     """#)
     let style = tooltipStyle(defaults: config.popupDefaults.popupStyle(over: config.defaults), widget: config.widgets[0].tooltipStyle)
@@ -67,17 +98,24 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     #expect(style.background == .color(HexColor(0x202020FF)))
 }
 
-/// Hover controls apply the widget's data state again when they draw, so a state's padding mustn't survive either.
-@Test func tooltipsStayCompactInTheStatesTheirContentAppliesAgain() throws {
+/// Hover controls lay out the widget's hover layout and apply its data state again when they draw, so they keep the
+/// widget's own spacing, in its states too, but no state's padding.
+@Test func tooltipsTakeTheWidgetsOwnSpacingButNotItsPaddingInEveryState() throws {
     let config = try spacingConfiguration(#"""
-    {"popupDefaults":{"states":{"warning":{"spacing":30}}},
+    {"popupDefaults":{"spacing":9,"states":{"warning":{"spacing":30}}},
      "widgets":[{"id":"sound","type":"text","text":"Sound","position":"right",
-       "style":{"states":{"warning":{"paddingHorizontal":20,"spacing":40,"foreground":"#ff0000"}}}}]}
+       "style":{"spacing":3,"states":{"warning":{"paddingHorizontal":20,"spacing":40,"foreground":"#ff0000"}}}},
+      {"id":"plain","type":"text","text":"Plain","position":"right","style":{"states":{"critical":{"paddingVertical":12}}}}]}
     """#)
-    let style = tooltipStyle(defaults: config.popupDefaults.popupStyle(over: config.defaults), widget: config.widgets[0].tooltipStyle)
-    let warning = style.resolved(for: StyleStates(data: "warning"))
-    #expect(padding(warning) == [10, 6, 6])
+    let defaults = config.popupDefaults.popupStyle(over: config.defaults)
+    let sound = tooltipStyle(defaults: defaults, widget: config.widgets[0].tooltipStyle)
+    #expect(padding(sound) == [10, 6, 3])
+    let warning = sound.resolved(for: StyleStates(data: "warning"))
+    #expect(padding(warning) == [10, 6, 40])
     #expect(warning.foreground == HexColor(0xFF0000FF))
+    let plain = tooltipStyle(defaults: defaults, widget: config.widgets[1].tooltipStyle)
+    #expect(padding(plain.resolved(for: StyleStates(data: "warning"))) == [10, 6, 6])
+    #expect(padding(plain.resolved(for: StyleStates(data: "critical"))) == [10, 6, 6])
 }
 
 @Test func barPopupOffsetSetsTheGapBelowTheBarUnlessAPopupSetsItsOwn() throws {
@@ -93,8 +131,9 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     #expect(agenda.gap(below: BarSettings()) == 6)
 }
 
-/// The top edge of the window a popup or tooltip opens in under a bar with `bar`'s settings.
-@MainActor private func openedTop(_ kind: String, bar: String) async throws -> CGFloat {
+/// The window a popup or tooltip of `kind` opens in under a bar with `bar`'s settings, anchored on the bar or, with
+/// `insidePopup`, on a row of the widget's open popup, and the frame of that anchor on screen.
+@MainActor private func opened(_ kind: String, bar: String, insidePopup: Bool = false) async throws -> (window: NSRect, anchor: NSRect) {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"bar":{"motion":"none"\#(bar)},
      "widgets":[{"id":"agenda","type":"text","text":"Agenda","position":"right","popup":{"style":{},"layout":{"type":"text","text":"Today"}}}]}
@@ -110,21 +149,45 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     defer { bar.close() }
     await bar.settle()
     let widget = configuration.widgets[0]
-    let anchor = try #require(bar.anchors(widget.id).first)
+    var anchor = try #require(bar.anchors(widget.id).first)
     let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
-    switch kind {
-    case "popup": popup.toggle(try #require(widget.popup), widget: widget, defaults: defaults, store: store, anchor: anchor)
-    case "controls": popup.showControls(widget: widget, defaults: defaults, store: store, anchor: anchor) { _ in Text("Volume") }
-    default: popup.showTooltip("Agenda", widget: widget, defaults: defaults, store: store, anchor: anchor)
+    var opener = popup
+    if insidePopup {
+        popup.toggle(try #require(widget.popup), widget: widget, defaults: defaults, store: store, anchor: anchor)
+        let row = NSView(frame: NSRect(x: 30, y: 30, width: 80, height: 20))
+        try #require(presented?.contentView).addSubview(row)
+        anchor = row
+        opener = WidgetPopup(present: { panel, _ in presented = panel })
     }
-    let top = try #require(presented).frame.maxY
-    popup.close()
-    return top
+    defer { opener.close(); popup.close() }
+    let anchorFrame = try #require(anchor.window).convertToScreen(anchor.convert(anchor.bounds, to: nil))
+    switch kind {
+    case "popup": opener.toggle(try #require(widget.popup), widget: widget, defaults: defaults, store: store, anchor: anchor)
+    case "controls": opener.showControls(widget: widget, defaults: defaults, store: store, anchor: anchor) { _ in Text("Volume") }
+    case "row": opener.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor, sidePadding: 0) { Text("Items") }
+    case "padded row": opener.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor, sidePadding: 4) { Text("Items") }
+    default: opener.showTooltip("Agenda", widget: widget, defaults: defaults, store: store, anchor: anchor)
+    }
+    return (try #require(presented).frame, anchorFrame)
 }
 
 @Test(.serialized, arguments: ["popup", "tooltip", "controls"]) @MainActor
 func popupsAndTooltipsOpenAtTheBarsPopupGap(kind: String) async throws {
-    let standard = try await openedTop(kind, bar: "")
-    let wide = try await openedTop(kind, bar: #","popupOffset":20"#)
-    #expect(standard - wide == 14)
+    let standard = try await opened(kind, bar: "").window
+    let wide = try await opened(kind, bar: #","popupOffset":20"#).window
+    #expect(standard.maxY - wide.maxY == 14)
+}
+
+@Test(.serialized, arguments: ["popup", "tooltip"]) @MainActor
+func popupsAndTooltipsOpenedInsideAPopupKeepTheirGapWhateverTheBarsPopupGap(kind: String) async throws {
+    let standard = try await opened(kind, bar: "", insidePopup: true)
+    let wide = try await opened(kind, bar: #","popupOffset":20"#, insidePopup: true)
+    #expect(standard.anchor.minY - standard.window.maxY == wide.anchor.minY - wide.window.maxY)
+}
+
+/// The app menu row lines its titles up with the widget's on the bar, so its sides take the widget's padding.
+@Test(.serialized) @MainActor func theAppMenuRowPadsItsSidesLikeItsWidget() async throws {
+    let flush = try await opened("row", bar: "").window
+    let padded = try await opened("padded row", bar: "").window
+    #expect(padded.width - flush.width == 8)
 }

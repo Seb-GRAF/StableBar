@@ -25,17 +25,20 @@ struct PopupConfiguration: Decodable, Sendable {
         self.layout = layout
     }
 
-    /// The padding and spacing of a popup that neither it nor `popupDefaults` sets.
-    static let defaultSpacing = WidgetStyle(paddingHorizontal: 16, paddingVertical: 16, spacing: 12)
+    /// The padding of a popup that neither it nor `popupDefaults` sets.
+    static let defaultPadding = WidgetStyle(paddingHorizontal: 16, paddingVertical: 16)
+    /// The gap between the blocks of a popup's top-level column when nothing sets `spacing`. Everything else keeps 6.
+    static let blockSpacing = 12.0
 
     /// `defaults` is `popupDefaults.popupStyle(over: defaults)`. A widget's explicit style reaches its popup, except its
     /// padding and spacing, which are the bar widget's; its bar role deliberately does not.
     func baseStyle(widget: WidgetConfiguration, defaults: WidgetStyle) -> WidgetStyle {
-        resolveStyle([Self.defaultSpacing, defaults, widget.style.withoutSpacing, style, WidgetStyle(background: widget.popupBackground)])
+        resolveStyle([Self.defaultPadding, defaults, widget.style.withoutSpacing, style, WidgetStyle(background: widget.popupBackground)])
     }
 
-    func gap(below bar: BarSettings) -> Double {
-        offset ?? bar.popupOffset
+    /// The gap below what the popup opens from: the bar, or with `inPopup` a row of another popup.
+    func gap(below bar: BarSettings, inPopup: Bool = false) -> Double {
+        offset ?? bar.popupGap(inPopup: inPopup)
     }
 
     init(from decoder: Decoder) throws {
@@ -57,8 +60,8 @@ struct PopupConfiguration: Decodable, Sendable {
 }
 
 extension WidgetStyle {
-    /// This style without its padding and spacing, in its states too.
-    var withoutSpacing: WidgetStyle {
+    /// This style without its padding, in its states too.
+    var withoutPadding: WidgetStyle {
         var style = self
         style.paddingHorizontal = nil
         style.paddingVertical = nil
@@ -66,8 +69,15 @@ extension WidgetStyle {
         style.paddingTrailing = nil
         style.paddingTop = nil
         style.paddingBottom = nil
+        style.states = states?.mapValues(\.withoutPadding)
+        return style
+    }
+
+    /// This style without its padding and spacing, in its states too.
+    var withoutSpacing: WidgetStyle {
+        var style = withoutPadding
         style.spacing = nil
-        style.states = states?.mapValues(\.withoutSpacing)
+        style.states = style.states?.mapValues(\.withoutSpacing)
         return style
     }
 

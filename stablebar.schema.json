@@ -1253,7 +1253,7 @@
         },
         "offset": {
           "$ref": "#/definitions/number",
-          "description": "The gap in points between the bar and this popup. Defaults to the bar's popupOffset."
+          "description": "The gap in points below what this popup opens from. Defaults to the bar's popupOffset below the bar, and to 6 below a row of another popup."
         },
         "dismissOnAction": {
           "$ref": "#/definitions/boolean"

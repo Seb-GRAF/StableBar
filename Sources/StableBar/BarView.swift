@@ -738,8 +738,12 @@ struct WidgetView: View {
     }
 
     private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
+        // The tile's own side padding, so the row's titles line up with the widget's.
+        let style = resolution.style(hovered: true, open: false)
+        let side = style.paddingLeading ?? WidgetAppearance(style, defaults: WidgetStyle()).paddingHorizontal
         store.popup.hover(true, store: store, anchor: popupAnchor) {
-            store.popup.showRow(widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: popupAnchor) {
+            store.popup.showRow(widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: popupAnchor,
+                                sidePadding: side) {
                 AppMenuRow(widget: widget, store: store, defaults: popupDefaults.popupStyle(over: defaults), appearance: appearance, padding: padding)
             }
         }
