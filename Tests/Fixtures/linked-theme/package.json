@@ -1,0 +1,9 @@
+{
+  "id": "harbour-test",
+  "name": "Harbour Test",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "author": "stablebar",
+  "description": "A Harbour test theme — who’s for a Nord accent?"
+}
