@@ -25,6 +25,17 @@ import Testing
         #expect(textView.string == "{}x")
     }
 
+    @Test func commandZFollowsTheKeyOnANonLatinLayoutButNotOnQWERTZ() throws {
+        let (window, _, textView) = try hostedTextView("{}")
+        defer { window.close() }
+        textView.insertText("x", replacementRange: textView.selectedRange())
+        // On QWERTZ, the key where QWERTY has Z types Y.
+        #expect(!textView.performKeyEquivalent(with: try key("y", code: 6, .command, in: window)))
+        #expect(textView.string == "{}x")
+        #expect(window.performKeyEquivalent(with: try key("я", code: 6, .command, in: window)))
+        #expect(textView.string == "{}")
+    }
+
     @Test func commandZWithNothingToUndoIsSwallowed() throws {
         let (window, _, textView) = try hostedTextView("{}")
         defer { window.close() }
@@ -88,31 +99,30 @@ import Testing
 
 struct JSONSyntaxProblemTests {
     @Test func curlyQuoteNamesItsLineAndCharacter() throws {
-        let text = "{\n  \"label\": “hi”\n}"
-        let problem = try #require(jsonSyntaxProblem(decodingError(text), in: text))
+        let problem = try #require(jsonSyntaxProblem(in: "{\n  \"label\": “hi”\n}"))
         #expect(problem.line == 2)
         #expect(problem.message.hasPrefix("Line 2: ") && problem.message.contains("“"))
         #expect(!problem.message.contains("â") && !problem.message.contains("column"))
     }
 
     @Test func multiByteTextBeforeTheErrorKeepsTheLineRight() throws {
-        let text = "{\n  \"é\": 1,\n  \"ü\": 2,\n  x: 3\n}"
-        let problem = try #require(jsonSyntaxProblem(decodingError(text), in: text))
+        let problem = try #require(jsonSyntaxProblem(in: "{\n  \"é\": 1,\n  \"ü\": 2,\n  x: 3\n}"))
         #expect(problem.line == 4)
         #expect(problem.message.hasPrefix("Line 4: ") && problem.message.contains("'x'"))
     }
 
-    @Test func errorsWithoutAPositionAreLeftToErrorMessage() {
-        #expect(jsonSyntaxProblem(decodingError("{\"a\": 1"), in: "{\"a\": 1") == nil)
-        #expect(jsonSyntaxProblem(decodingError("[1]"), in: "[1]") == nil)
-        #expect(jsonSyntaxProblem(CocoaError(.fileReadUnknown), in: "{}") == nil)
+    @Test(arguments: [("{\"a\": \"x,\n  \"b\": 2\n}", 1), ("{\"a\": \"C:\\path\"}", 1), ("{\n  \"a\": \"\tb\"\n}", 2),
+                      ("{\n  \"a\": 1", 2)])
+    func mistakesTheDecoderMissesNameTheirLine(text: String, line: Int) throws {
+        let problem = try #require(jsonSyntaxProblem(in: text))
+        #expect(problem.line == line)
+        #expect(problem.message.hasPrefix("Line \(line): ") && !problem.message.contains("column"))
     }
 
-    private func decodingError(_ text: String) -> Error {
-        do {
-            _ = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8))
-            return CocoaError(.featureUnsupported)
-        } catch { return error }
+    @Test func validJSONHasNoSyntaxProblem() {
+        #expect(jsonSyntaxProblem(in: "{}") == nil)
+        #expect(jsonSyntaxProblem(in: "[1]") == nil)
+        #expect(jsonSyntaxProblem(in: "{\"a\": {\"b\": [1, true, null]}}") == nil)
     }
 }
 
@@ -170,6 +180,28 @@ struct JSONSyntaxProblemTests {
         for _ in 0..<20 { await Task.yield() }
         #expect(probe.applied.isEmpty && probe.closed == 0)
         #expect(scrollView.isFindBarVisible)
+    }
+
+    @Test func applyAfterUndoAndRedoAppliesWhatTheEditorShows() async throws {
+        let probe = SheetProbe()
+        let (window, textView) = try await hostedSheet("{}", probe: probe)
+        defer { window.close() }
+        textView.setSelectedRange(NSRange(location: 1, length: 0))
+        textView.insertText("\"a\": 1", replacementRange: textView.selectedRange())
+        press(try key("z", code: 6, .command, in: window), in: window)
+        #expect(textView.string == "{}")
+        window.makeFirstResponder(nil)
+        press(try key("\r", code: 36, in: window), in: window)
+        #expect(await poll { probe.applied.count == 1 })
+        #expect(probe.applied == [[:]])
+
+        window.makeFirstResponder(textView)
+        press(try key("z", code: 6, [.command, .shift], in: window), in: window)
+        #expect(textView.string == "{\"a\": 1}")
+        window.makeFirstResponder(nil)
+        press(try key("\r", code: 36, in: window), in: window)
+        #expect(await poll { probe.applied.count == 2 })
+        #expect(probe.applied.last == ["a": .number(1)])
     }
 
     @Test func applyingCurlyQuotesSelectsTheErrorLine() async throws {

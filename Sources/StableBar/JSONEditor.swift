@@ -51,11 +51,23 @@ import SwiftUI
             return true
         }
         guard window?.firstResponder === self else { return super.performKeyEquivalent(with: event) }
-        switch (event.charactersIgnoringModifiers?.lowercased(), modifiers) {
+        let letters = [event.characters, event.charactersIgnoringModifiers].compactMap { $0?.lowercased() }
+        // A non-Latin layout types its own letter, so the key's place stands in; a Latin layout may type another
+        // letter there, such as Y on QWERTZ.
+        let byPlace = letters.contains { $0.contains { $0.isASCII && $0.isLetter } }
+            ? nil : ([6: "z", 3: "f", 5: "g"] as [UInt16: String])[event.keyCode]
+        switch (letters.first { ["z", "f", "g"].contains($0) } ?? byPlace, modifiers) {
+        // TextKit 2 posts no text change for undo and redo, so say so, or the sheet would apply the old text.
         case ("z", [.command]):
-            if undoManager?.canUndo == true { undoManager?.undo() }
+            if undoManager?.canUndo == true {
+                undoManager?.undo()
+                didChangeText()
+            }
         case ("z", [.command, .shift]):
-            if undoManager?.canRedo == true { undoManager?.redo() }
+            if undoManager?.canRedo == true {
+                undoManager?.redo()
+                didChangeText()
+            }
         case ("f", [.command]): performFinderAction(.showFindInterface)
         case ("g", [.command]): performFinderAction(.nextMatch)
         case ("g", [.command, .shift]): performFinderAction(.previousMatch)
@@ -152,14 +164,31 @@ struct JSONSyntaxProblem: Equatable {
     let message: String
 }
 
-/// The line of a JSON syntax error and a message naming it. The decoder counts UTF-8 bytes, may point one byte past
-/// the culprit and prints that byte as Latin-1, so the real character is read back from the text.
-func jsonSyntaxProblem(_ error: Error, in text: String) -> JSONSyntaxProblem? {
-    guard case let .dataCorrupted(context)? = error as? DecodingError,
-          let underlying = context.underlyingError as NSError?,
-          let detail = underlying.userInfo[NSDebugDescriptionErrorKey] as? String else { return nil }
+/// The first JSON syntax error in `text` and a message naming its line, or nil for valid JSON. The decoder words
+/// its errors best, but checks strings only once a value is decoded, which `ConfigurationValue` turns into a type
+/// error; `JSONSerialization` checks them as it reads, so the earlier line of the two wins.
+func jsonSyntaxProblem(in text: String) -> JSONSyntaxProblem? {
+    let data = Data(text.utf8)
+    var errors: [NSError] = []
+    do {
+        _ = try JSONDecoder().decode(ConfigurationValue.self, from: data)
+    } catch let DecodingError.dataCorrupted(context) {
+        if let underlying = context.underlyingError as NSError? { errors.append(underlying) }
+    } catch {}
+    do {
+        _ = try JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)
+    } catch {
+        errors.append(error as NSError)
+    }
+    return errors.compactMap { jsonSyntaxProblem($0, in: text) }.min { $0.line < $1.line }
+}
+
+/// Both parsers count UTF-8 bytes, may point one byte past the culprit and print that byte as Latin-1, so the real
+/// character is read back from the text.
+private func jsonSyntaxProblem(_ error: NSError, in text: String) -> JSONSyntaxProblem? {
+    guard let detail = error.userInfo[NSDebugDescriptionErrorKey] as? String else { return nil }
     let bytes = Array(text.utf8)
-    let index = underlying.userInfo["NSJSONSerializationErrorIndex"] as? Int
+    let index = error.userInfo["NSJSONSerializationErrorIndex"] as? Int
     let line: Int
     if let index {
         line = 1 + bytes.prefix(min(max(index, 0), bytes.count)).count { $0 == UInt8(ascii: "\n") }

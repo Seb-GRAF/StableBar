@@ -43,7 +43,7 @@ struct JSONSheet: View {
         do {
             error = apply(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8)))
         } catch {
-            if let problem = jsonSyntaxProblem(error, in: text) {
+            if let problem = jsonSyntaxProblem(in: text) {
                 self.error = problem.message
                 controller.selectLine(problem.line)
             } else {
