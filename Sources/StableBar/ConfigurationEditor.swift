@@ -293,6 +293,43 @@ final class ConfigurationEditor {
         } catch { self.error = errorMessage(error) }
     }
 
+    enum ProfileRemoval { case delete, removeChanges, unavailable }
+
+    /// What removing the main file's entry for a profile does: a profile that a theme, package or include also defines
+    /// stays with the values set there.
+    func profileRemoval(_ name: String) -> ProfileRemoval {
+        guard (try? mainFileDefinesProfile(name)) == true else { return .unavailable }
+        let main = store.configurationURL.standardizedFileURL.path
+        return store.profileFiles[name]?.contains { $0 != main } == true ? .removeChanges : .delete
+    }
+
+    func deleteProfile(_ name: String) {
+        endProfileEditing()
+        do {
+            error = nil
+            store.flushCustomization()
+            guard try store.customizationProfiles().contains(where: { $0.name == name }) else {
+                throw CommandFailure(message: "Save command-line changes before editing this profile.")
+            }
+            let removal = profileRemoval(name)
+            guard removal != .unavailable else {
+                throw CommandFailure(message: "This profile comes from your theme, a package or an included file. Turn it off instead.")
+            }
+            var properties: [String: ConfigurationValue] = ["profiles": .object([name: .null])]
+            // A pin that names a missing profile fails to load.
+            if removal == .delete, try store.editedMainDocument(replaying: store.customizationEdits)["profile"] == .string(name) {
+                properties["profile"] = .null
+            }
+            change(ConfigurationEdit(action: .unset, properties: properties))
+            if error == nil, removal == .delete, selectedProfileName == name { selectedProfileName = nil }
+        } catch { self.error = errorMessage(error) }
+    }
+
+    private func mainFileDefinesProfile(_ name: String) throws -> Bool {
+        try store.editedMainDocument(replaying: store.customizationEdits)["profiles"]?
+            .decoded([[String: ConfigurationValue]].self).contains { $0["name"] == .string(name) } == true
+    }
+
     func undo() {
         finishEditing()
         do { try history.undo() }

@@ -324,6 +324,54 @@ func workspaceWindowDropMovesIconsToTheDestination(windows: Bool) async throws {
     #expect(store.moveTask == nil)
 }
 
+/// A cell's label is drawn in a hosting view of its own, which must follow the bar from Light to Dark.
+@Test @MainActor func workspaceLabelsFollowTheBarFromLightToDark() throws {
+    _ = NSApplication.shared
+    let configuration = try JSONDecoder().decode(WorkspaceConfiguration.self, from: Data(#"""
+    {"style":{"fontSize":30,"states":{"focused":{"background":"#000000",
+      "foreground":{"light":"#ff0000","dark":"#00ff00"}}}}}
+    """#.utf8))
+    let store = WorkspaceStore()
+    defer { store.stop() }
+    store.workspaces = [Workspace(name: "8", isFocused: true, isVisible: true, monitor: 1)]
+    let host = NSHostingView(rootView: WorkspaceView(workspaceStore: store, monitor: 1,
+        appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), configuration: configuration,
+        animation: WidgetAnimation(duration: 0)))
+    let window = NSWindow(contentRect: CGRect(x: -9000, y: -6000, width: 120, height: 60), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.appearance = NSAppearance(named: .aqua)
+    window.contentView = host
+    defer { window.close() }
+    func labelPixels() -> (light: Int, dark: Int) {
+        host.layoutSubtreeIfNeeded()
+        guard let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return (0, 0) }
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        var pixels = (light: 0, dark: 0)
+        for x in 0..<bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                if color.redComponent > 0.6, color.greenComponent < 0.3 { pixels.light += 1 }
+                if color.greenComponent > 0.6, color.redComponent < 0.3 { pixels.dark += 1 }
+            }
+        }
+        return pixels
+    }
+    // Counted, not timed: the views redraw from the main run loop.
+    func waitFor(_ condition: () -> Bool) throws {
+        for _ in 0..<100 {
+            if condition() { return }
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        try #require(condition())
+    }
+    try waitFor { labelPixels().light > 0 }
+    #expect(!workspaceDropTargets(host).isEmpty)
+    window.appearance = NSAppearance(named: .darkAqua)
+    try waitFor { labelPixels().dark > 0 }
+    #expect(labelPixels().light == 0)
+}
+
 @MainActor private final class WorkspaceDraggingInfo: NSObject, NSDraggingInfo {
     let draggingSource: Any?
     let draggingDestinationWindow: NSWindow?

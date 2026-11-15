@@ -169,13 +169,18 @@ private func removing(_ keys: [String: ConfigurationValue], from object: [String
                 let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : .object)
                 result[key] = remaining.isEmpty && !profileConfiguration ? nil : .object(remaining)
             } else if scope == .document, case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
-                // A root unset can address several named definitions in one undoable change.
+                // A root unset can address several named definitions in one undoable change, and null removes a profile.
+                // Widgets are removed with `remove`, which also drops the references to them.
                 let identity = key == "widgets" ? "id" : "name"
-                result[key] = .array(current.map { value in
-                    guard case let .object(definition) = value, case let .string(id) = definition[identity],
-                          case let .object(mask) = nested[id] else { return value }
-                    return .object(removing(mask, from: definition, scope: key == "profiles" ? .profile : .object))
-                })
+                let remaining = current.compactMap { value -> ConfigurationValue? in
+                    guard case let .object(definition) = value, case let .string(id) = definition[identity] else { return value }
+                    switch nested[id] {
+                    case let .object(mask)?: return .object(removing(mask, from: definition, scope: key == "profiles" ? .profile : .object))
+                    case .null? where key == "profiles": return nil
+                    default: return value
+                    }
+                }
+                result[key] = remaining.isEmpty && remaining.count < current.count ? nil : .array(remaining)
             }
         } else {
             result[key] = nil

@@ -465,6 +465,8 @@ final class BarStore: NSObject {
         readConfiguration(leavingEditMode: false)
     }
 
+    var profileFiles: [String: Set<String>] { configurationLoader.profileFiles }
+
     func customizationProfiles(includingPending: Bool = true) throws -> [ConfigurationProfile] {
         let root = try editedDocument([], replaying: includingPending ? customizationEdits : [])
         var loader = configurationLoader
