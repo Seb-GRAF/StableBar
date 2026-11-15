@@ -328,7 +328,7 @@ private func visitConfigurationValues(_ value: ConfigurationValue, path: String 
     }
 }
 
-// Flat paths repeat ancestor keys; this budget counts bytes processed, including repeated passes.
+// Flat paths repeat ancestor keys; count bytes when token origins are stored or copied.
 private struct ConfigurationOriginPathBudget {
     private static let maximumProcessedPathBytes = 4_000_000
     private var remaining = Self.maximumProcessedPathBytes
@@ -666,8 +666,7 @@ struct ConfigurationLoader: Sendable {
             layer.values.removeValue(forKey: key)
         }
         var finalPaths = Set<String>()
-        try visitConfigurationValues(.object(layer.values)) { path, _ in
-            if let token = layer.origins[path]?.token { try originBudget.record(path, token: token) }
+        visitConfigurationValues(.object(layer.values)) { path, _ in
             finalPaths.insert(path)
         }
         document = try preparePackageAssets(.object(layer.values), origins: layer.origins, boundaries: packageBoundaries)

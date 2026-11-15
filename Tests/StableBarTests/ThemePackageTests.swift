@@ -214,6 +214,26 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(name == "big")
 }
 
+@Test func fortyWorkspaceWidgetsCanShareAnAppGlyphSizedToken() throws {
+    let glyphs = Dictionary(uniqueKeysWithValues: (0..<881).map { ("Application\($0)", ":glyph:") })
+    let ids = (0..<40).map { "spaces\($0)" }
+    let data = try JSONEncoder().encode(ConfigurationValue.object([
+        "tokens": .object(["appGlyphs": .object(glyphs.mapValues(ConfigurationValue.string))]),
+        "widgets": .array(ids.map { .object([
+            "id": .string($0), "type": .string("workspaces"), "position": .string("left"),
+            "workspace": .object(["appGlyphs": .string("@token.appGlyphs")])
+        ]) })
+    ]))
+    let root = FileManager.default.temporaryDirectory.appending(path: "shared-app-glyphs.json")
+    var loader = ConfigurationLoader(themesDirectory: nil)
+    let configuration = try loader.load(root, data: data)
+    #expect(configuration.widgets.map(\.id) == ids)
+    for widget in configuration.widgets {
+        #expect(widget.workspace?.appGlyphs == glyphs)
+        #expect(loader.origins["widgets.\(widget.id).workspace.appGlyphs.Application880"]?.token == "appGlyphs")
+    }
+}
+
 @Test func longKeysInDoublingTokensCannotExhaustOriginBookkeeping() throws {
     var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
     for level in 1...12 {
@@ -238,7 +258,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     }
     #expect(tokens[name] != nil)
     #expect(error?.errorDescription == "Configuration references at \(name) produce more than StableBar can track. "
-        + "Check tokens or settings that refer to each other.")
+        + "Check tokens or settings that refer to each other or are used in many places.")
 }
 
 @Test func manyWidgetsWithATokenBackedTemplateCannotExhaustOriginBookkeeping() throws {
@@ -312,7 +332,8 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     let source = ConfigurationOrigin(file: root.path)
     #expect(loader.origins[path] == source.appending("(widget override)"))
     let history = try #require(loader.contributions[path])
-    // The broader id also matches the dotted override's source prefix.
+    // The second 18 is current, pre-existing behavior for an id extending another dotted id,
+    // not an intended rule.
     #expect(history.map(\.value) == [.number(11), .number(12), .number(13), .number(18), .number(18)])
     #expect(history.map(\.origin) == [source.appending("(template type.base)"),
                                     source.appending("(template metric.large)"), source,
@@ -444,8 +465,30 @@ func referenceExpansionChargesRepeatedAliasHops(prefix: String) throws {
     #expect(name == "a40")
 }
 
+@Test(arguments: ["@token.", "@setting."], [false, true])
+func referenceExpansionChargesLongNamesPerHop(prefix: String, multibyte: Bool) throws {
+    let name = String(repeating: multibyte ? "é" : "a", count: multibyte ? 8_000 : 16_000)
+    let reference = ConfigurationValue.string(prefix + name)
+    let values = [name: ConfigurationValue.number(1)]
+    let fits = ConfigurationValue.array(Array(repeating: reference, count: 1_587))
+    #expect(try substituteConfigurationReferences(fits, prefix: prefix, values: values)
+        == .array(Array(repeating: .number(1), count: 1_587)))
+    let tooMany = ConfigurationValue.array(Array(repeating: reference, count: 1_588))
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(tooMany, prefix: prefix, values: values)
+    }
+    guard case let .referenceExpansionTooLarge(failedName)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(failedName == name)
+    let largeReplacement = ConfigurationValue.array(Array(repeating: .number(1), count: 99_937))
+    #expect(try substituteConfigurationReferences(reference, prefix: prefix, values: [name: largeReplacement])
+        == largeReplacement)
+}
+
 @Test(arguments: ["@token.", "@setting."])
-func referencesNestTooDeepAlongAliasChainsOnAWorkerThread(prefix: String) throws {
+func referenceNestingTooDeepAlongAliasChainsOnAWorkerThread(prefix: String) throws {
     #expect(!Thread.isMainThread)
     var values: [String: ConfigurationValue] = ["a999": .number(1)]
     for index in 0..<999 {
@@ -455,7 +498,7 @@ func referencesNestTooDeepAlongAliasChainsOnAWorkerThread(prefix: String) throws
     let error = #expect(throws: ThemeConfigurationError.self) {
         try substituteConfigurationReferences(.string(prefix + "a0"), prefix: prefix, values: values)
     }
-    guard case let .referencesNestTooDeep(name)? = error else {
+    guard case let .referenceNestingTooDeep(name)? = error else {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }
@@ -478,7 +521,7 @@ func referencesNestAtMost64ContainerLevels(prefix: String, objects: Bool) throws
     let error = #expect(throws: ThemeConfigurationError.self) {
         try substituteConfigurationReferences(reference, prefix: prefix, values: ["nested": tooDeep])
     }
-    guard case let .referencesNestTooDeep(name)? = error else {
+    guard case let .referenceNestingTooDeep(name)? = error else {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }
@@ -503,7 +546,7 @@ func referencesNestCountsContainersAndAliasHopsTogether(prefix: String) throws {
     let error = #expect(throws: ThemeConfigurationError.self) {
         try substituteConfigurationReferences(.string(prefix + "outer"), prefix: prefix, values: values)
     }
-    guard case let .referencesNestTooDeep(name)? = error else {
+    guard case let .referenceNestingTooDeep(name)? = error else {
         Issue.record("wrong error: \(String(describing: error))")
         return
     }

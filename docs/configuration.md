@@ -95,7 +95,7 @@ From another terminal, run `./dist/StableBar.app/Contents/MacOS/StableBar --trig
 
 ## Theme tokens and automatic profiles
 
-Define reusable JSON values in `tokens` and reference them with a whole string such as `"@token.accent"`. Values retain their type: a token can supply a number, boolean, array, object, or string. Tokens can reference other tokens; unknown names and cycles reject the change while the current configuration keeps running. References are not interpolated inside shell commands or other strings.
+Define reusable JSON values in `tokens` and reference them with a whole string such as `"@token.accent"`. Values retain their type: a token can supply a number, boolean, array, object, or string. Tokens can reference other tokens; unknown names and cycles reject the change while the current configuration keeps running. StableBar also rejects references nested more than 64 levels deep, references that expand past 100,000 values, and references that need more tracking than StableBar allows. References are not interpolated inside shell commands or other strings.
 
 ```json
 {
