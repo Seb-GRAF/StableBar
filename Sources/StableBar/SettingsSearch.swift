@@ -42,7 +42,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .roles: ("Presentation roles", .appearance, "Theme › Advanced", "role time status style")
         case .workspaceStyle: ("Workspace look", .appearance, "Theme › Advanced", "defaults indicator empty focused")
         case .modeAliases: ("AeroSpace mode names", .appearance, "Theme › Advanced", "mode aliases mapping")
-        case .profiles: ("Profiles", .profiles, "Profiles", "automatic conditions app battery power dark external display pinned")
+        case .profiles: ("Profiles", .profiles, "Profiles", "automatic conditions app battery power dark external display pinned delete remove")
         case .library: ("Installed packages", .packages, "Packages › Installed", "package version update uninstall settings credentials local folder built-in")
         case .store: ("Get widgets and themes from the Store", .packages, "Packages › Store", "store install download")
         case .packageSources: ("Package sources", .packages, "Packages › Sources", "private team company source repository index token gitlab github")

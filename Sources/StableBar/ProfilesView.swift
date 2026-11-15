@@ -8,6 +8,7 @@ struct ProfilesView: View {
     @State private var newName = ""
     @State private var editingJSON = false
     @State private var hovered: String?
+    @State private var deleting: String?
 
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? {
@@ -34,6 +35,16 @@ struct ProfilesView: View {
         })
         .sheet(isPresented: $editingJSON) {
             if let selected { ProfileJSONSheet(editor: editor, profile: selected) }
+        }
+        .confirmationDialog(deleting.map { editor.profileRemoval($0) == .removeChanges ? "Remove your changes to \($0)?" : "Delete the \($0) profile?" } ?? "",
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), presenting: deleting) { name in
+            Button(editor.profileRemoval(name) == .removeChanges ? "Remove changes" : "Delete profile", role: .destructive) {
+                editor.deleteProfile(name)
+            }
+        } message: { name in
+            Text(editor.profileRemoval(name) == .removeChanges
+                 ? "It comes from your theme, a package or an included file, so it stays with the conditions and changes set there."
+                 : "Its conditions and changes are removed from your configuration.")
         }
         .onChange(of: editor.searchTarget, initial: true) {
             if editor.searchTarget == SettingsSearchResult.profiles.id { editor.searchTarget = nil }
@@ -91,6 +102,7 @@ struct ProfilesView: View {
         .contentShape(RoundedRectangle(cornerRadius: 9))
         .onHover { hovered = $0 ? profile.name : nil }
         .onTapGesture { editor.selectedProfileName = profile.name }
+        .contextMenu { removalButton(profile) }
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction { editor.selectedProfileName = profile.name }
@@ -166,14 +178,15 @@ struct ProfilesView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     group("When") { conditionsRow(profile) }
                     group("What it changes") { changeRows(profile) }
-                    HStack(spacing: 8) {
-                        Button { editor.editBar(for: profile.name) } label: {
-                            Label("Edit the bar for this profile", systemImage: "pencil")
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 8) {
+                            actions(profile, pinned: pinned)
+                            Spacer(minLength: 0)
+                            removalButton(profile)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(SettingsPalette.profile)
-                        Button(pinned ? "Stop previewing" : "Preview now") {
-                            editor.change(ConfigurationEdit(action: .profile, name: pinned ? nil : profile.name))
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) { actions(profile, pinned: pinned) }
+                            removalButton(profile)
                         }
                     }
                     .padding(.top, 14)
@@ -187,6 +200,26 @@ struct ProfilesView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    @ViewBuilder private func actions(_ profile: ConfigurationProfile, pinned: Bool) -> some View {
+        Button { editor.editBar(for: profile.name) } label: {
+            Label("Edit the bar for this profile", systemImage: "pencil")
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(SettingsPalette.profile)
+        Button(pinned ? "Stop previewing" : "Preview now") {
+            editor.change(ConfigurationEdit(action: .profile, name: pinned ? nil : profile.name))
+        }
+    }
+
+    private func removalButton(_ profile: ConfigurationProfile) -> some View {
+        let removal = editor.profileRemoval(profile.name)
+        return Button(removal == .removeChanges ? "Remove your changes…" : "Delete profile…", role: .destructive) {
+            deleting = profile.name
+        }
+        .disabled(removal == .unavailable)
+        .help(removal == .unavailable ? "This profile comes from your theme, a package or an included file. Turn it off instead." : "")
     }
 
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {

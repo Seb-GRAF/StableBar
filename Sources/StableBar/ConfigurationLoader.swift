@@ -339,6 +339,8 @@ struct ConfigurationLoader: Sendable {
     private(set) var builtInWidgetIDs: Set<String> = []
     private(set) var activeProfiles: [String] = []
     private(set) var profiles: [ConfigurationProfile] = []
+    /// The files that define each profile, by name: the main file, includes, packages and the theme.
+    private(set) var profileFiles: [String: Set<String>] = [:]
     private(set) var pinnedProfile: String?
     var previewProfile: String?
     /// The fixed appearance used to match conditions, before profiles apply their settings.
@@ -486,6 +488,9 @@ struct ConfigurationLoader: Sendable {
         }
         activeProfiles = []
         profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []
+        profileFiles = Dictionary(profiles.map { profile in
+            (profile.name, Set(layer.contributions["profiles.\(profile.name).name"]?.map(\.origin.file) ?? []))
+        }) { $0.union($1) }
         matchesApps = profiles.contains { $0.enabled && $0.when?.app != nil }
         let selected = try previewProfile ?? layer.values["profile"].flatMap { try $0.decoded(String?.self) }
         pinnedProfile = selected
