@@ -44,7 +44,7 @@ struct WorkspaceWindowDragSource<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WorkspaceWindowDragSourceView, context: Context) {
-        view.rootView = AnyView(content().environment(\.self, context.environment))
+        view.rootView = AnyView(content().environment(\.self, context.nestedEnvironment))
         view.store = store
         view.windows = windows
         view.action = action
@@ -146,7 +146,7 @@ private struct WorkspaceWindowDropTarget<Content: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WorkspaceWindowDropTargetView, context: Context) {
-        view.rootView = AnyView(content().environment(\.self, context.environment))
+        view.rootView = AnyView(content().environment(\.self, context.nestedEnvironment))
         view.store = store
         view.workspace = workspace
     }
