@@ -154,3 +154,41 @@ private func diskProvider(_ properties: [String: ConfigurationValue] = [:]) thro
     #expect(volumes.startup.path == "/" && volumes.startup.total > 0)
     #expect(!volumes.others.contains { $0.path == "/" || $0.path.hasPrefix("/System/Volumes/") })
 }
+
+private final class RecordedUnmounts: @unchecked Sendable {
+    private let lock = OSAllocatedUnfairLock(initialState: [(url: URL, options: FileManager.UnmountOptions)]())
+    var all: [(url: URL, options: FileManager.UnmountOptions)] { lock.withLock { $0 } }
+    func append(_ url: URL, _ options: FileManager.UnmountOptions) { lock.withLock { $0.append((url, options)) } }
+}
+
+@Test func ejectingADriveEjectsEveryPartitionButANetworkShareOnlyUnmounts() {
+    #expect(VolumeEjector.options(.drive, isLocal: true) == [.allPartitionsAndEjectDisk, .withoutUI])
+    #expect(VolumeEjector.options(.volume, isLocal: true) == [.withoutUI])
+    #expect(VolumeEjector.options(.drive, isLocal: false) == [.withoutUI])
+}
+
+@Test func ejectUnmountsThePathItWasGiven() async throws {
+    let recorded = RecordedUnmounts()
+    let ejector = VolumeEjector { recorded.append($0, $1) }
+    try await ejector.eject(NSTemporaryDirectory(), .drive)
+    let unmounts = recorded.all
+    #expect(unmounts.count == 1)
+    #expect(unmounts.first?.url.path == URL(fileURLWithPath: NSTemporaryDirectory()).path)
+    #expect(unmounts.first?.options == VolumeEjector.options(.drive, isLocal: true))
+}
+
+@Test func aRefusedEjectReachesTheCaller() async {
+    let ejector = VolumeEjector { _, _ in throw CocoaError(.fileWriteUnknown) }
+    await #expect(throws: CocoaError.self) {
+        try await ejector.eject(NSTemporaryDirectory(), .volume)
+    }
+}
+
+@Test func aPopupTakesItsStateAccentsFromTheStatesTheWidgetStyles() throws {
+    let style = try JSONDecoder().decode(WidgetStyle.self, from: Data("""
+    {"accent": "#112233", "states": {"warning": {"accent": "#aabbcc"}, "critical": {"foreground": "#ffffff"}}}
+    """.utf8))
+    let accents = popupStateAccents(style, mode: ModePresentation())
+    #expect(accents.keys.sorted() == ["warning"])
+    #expect(accents["warning"] == HexColor(0xaabbccff).color)
+}

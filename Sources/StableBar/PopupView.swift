@@ -41,7 +41,10 @@ struct PopupView: View {
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     confirmQuit(pid)
-                }, pressMenuBarItem: { reference in
+                }, eject: { path, scope in
+                    guard store.barEditing.allowsWidgetActions else { return }
+                    try await VolumeEjector.live.eject(path, scope)
+                }, stateAccents: popupStateAccents(style, mode: mode), pressMenuBarItem: { reference in
                     guard store.barEditing.allowsWidgetActions else { return }
                     if popup.dismissOnAction { store.popup.close() }
                     store.appMenu.press(reference)
@@ -142,6 +145,15 @@ struct PopupHeightPreference: PreferenceKey {
     }
 }
 
+/// The accent the widget's style gives each of the data states a disk widget warns in.
+func popupStateAccents(_ style: WidgetStyle, mode: ModePresentation) -> [String: Color] {
+    ["warning", "critical"].reduce(into: [:]) { accents, name in
+        guard style.states?[name]?.accent != nil else { return }
+        let resolved = style.resolved(for: StyleStates(data: name, mode: mode))
+        accents[name] = WidgetAppearance(resolved, defaults: WidgetStyle()).accent
+    }
+}
+
 /// What every block of one layout shares: the widget's data, the states it applies and the action
 /// its controls run.
 struct BlockContext {
@@ -159,6 +171,10 @@ struct BlockContext {
     let open: (OpenTarget) -> Void
     /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
     var quit: (pid_t) -> Void = { _ in }
+    /// Ejects a disk block's volume; unlike the other actions it leaves the popup open and reports a refusal.
+    var eject: @MainActor (String, EjectScope) async throws -> Void = { _, _ in }
+    /// The widget's accent in its `warning` and `critical` data states; a state its style doesn't set is missing.
+    var stateAccents: [String: Color] = [:]
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Selects a `selectInputSourceField` block's keyboard input source.
     var selectInputSource: (String) -> Void = { _ in }
