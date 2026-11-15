@@ -215,10 +215,10 @@ private func writePackageFile(_ text: String, to url: URL) throws {
 }
 
 @Test(arguments: ["@token.", "@setting."])
-func referenceExpansionCountsOnlyEmittedValuesAcrossTheWholeCall(prefix: String) throws {
+func referenceExpansionCountsVisitedValuesAcrossTheWholeCall(prefix: String) throws {
     let literal = ConfigurationValue.array(Array(repeating: .number(1), count: 100_000))
     #expect(try substituteConfigurationReferences(literal, prefix: prefix, values: [:]) == literal)
-    let replacement = ConfigurationValue.array(Array(repeating: .number(1), count: 49_999))
+    let replacement = ConfigurationValue.array(Array(repeating: .number(1), count: 49_998))
     let reference = ConfigurationValue.string(prefix + "alias")
     let values: [String: ConfigurationValue] = [
         "alias": .string(prefix + "big"), "big": replacement,
@@ -227,7 +227,7 @@ func referenceExpansionCountsOnlyEmittedValuesAcrossTheWholeCall(prefix: String)
     #expect(try substituteConfigurationReferences(.array([reference, reference]), prefix: prefix, values: values)
         == .array([replacement, replacement]))
     let error = #expect(throws: ThemeConfigurationError.self) {
-        _ = try substituteConfigurationReferences(.array([reference, reference, .string(prefix + "last")]),
+        _ = try substituteConfigurationReferences(.array([.string(prefix + "big"), reference, .string(prefix + "last")]),
                                                 prefix: prefix, values: values)
     }
     guard case let .referenceExpansionTooLarge(name)? = error else {
@@ -237,6 +237,48 @@ func referenceExpansionCountsOnlyEmittedValuesAcrossTheWholeCall(prefix: String)
     #expect(name == "leaf")
     #expect(error?.errorDescription == "Configuration references expand to more than 100,000 values at leaf. "
         + "Check tokens or settings that refer to each other.")
+}
+
+// The deep fixture uses the main thread's larger stack.
+@Test(arguments: ["@token.", "@setting."]) @MainActor
+func referenceExpansionChargesRepeatedAliasHops(prefix: String) throws {
+    var values: [String: ConfigurationValue] = ["a999": .number(1)]
+    for index in 0..<999 {
+        values["a\(index)"] = .string(prefix + "a\(index + 1)")
+    }
+    let shortReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a997"), count: 200))
+    #expect(try substituteConfigurationReferences(shortReferences, prefix: prefix, values: values)
+        == .array(Array(repeating: .number(1), count: 200)))
+    let longReferences = ConfigurationValue.array(Array(repeating: .string(prefix + "a0"), count: 200))
+    let error = #expect(throws: ThemeConfigurationError.self) {
+        _ = try substituteConfigurationReferences(longReferences, prefix: prefix, values: values)
+    }
+    guard case let .referenceExpansionTooLarge(name)? = error else {
+        Issue.record("wrong error: \(String(describing: error))")
+        return
+    }
+    #expect(name == "a0")
+}
+
+@Test(arguments: ["@token.", "@setting."])
+func referenceExpansionPreservesCyclePathsAndUnknownNames(prefix: String) throws {
+    let cycle = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string(prefix + "b"), prefix: prefix,
+                                              values: ["b": .string(prefix + "a")], path: ["a"])
+    }
+    guard case let .referenceCycle(names)? = cycle else {
+        Issue.record("wrong error: \(String(describing: cycle))")
+        return
+    }
+    #expect(names == ["a", "b", "a"])
+    let unknown = #expect(throws: ThemeConfigurationError.self) {
+        try substituteConfigurationReferences(.string(prefix + "missing"), prefix: prefix, values: [:])
+    }
+    guard case let .unknownReference(name)? = unknown else {
+        Issue.record("wrong error: \(String(describing: unknown))")
+        return
+    }
+    #expect(name == prefix + "missing")
 }
 
 @Test func tokensThatDoubleEachOtherFailToLoadInsteadOfExpanding() throws {

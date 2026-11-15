@@ -91,37 +91,49 @@ func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: Stri
                                        values: [String: ConfigurationValue],
                                        path: [String] = []) throws -> ConfigurationValue {
     var remaining = configurationReferenceExpansionLimit
-    return try substituteReferences(value, prefix: prefix, values: values, path: path, remaining: &remaining)
+    var path = path
+    var namesOnPath = Set(path)
+    return try substituteReferences(value, prefix: prefix, values: values,
+                                    path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
 }
 
 private func substituteReferences(_ value: ConfigurationValue, prefix: String,
-                                  values: [String: ConfigurationValue], path: [String],
+                                  values: [String: ConfigurationValue], path: inout [String],
+                                  namesOnPath: inout Set<String>,
                                   remaining: inout Int) throws -> ConfigurationValue {
-    if case let .string(string) = value, string.hasPrefix(prefix) {
-        let name = String(string.dropFirst(prefix.count))
-        guard !path.contains(name) else {
-            throw ThemeConfigurationError.referenceCycle(path + [name])
-        }
-        guard let replacement = values[name] else {
-            throw ThemeConfigurationError.unknownReference(string)
-        }
-        return try substituteReferences(replacement, prefix: prefix, values: values,
-                                        path: path + [name], remaining: &remaining)
-    }
     if let name = path.last {
         remaining -= 1
         guard remaining >= 0 else {
             throw ThemeConfigurationError.referenceExpansionTooLarge(name)
         }
     }
+    if case let .string(string) = value, string.hasPrefix(prefix) {
+        let name = String(string.dropFirst(prefix.count))
+        guard !namesOnPath.contains(name) else {
+            throw ThemeConfigurationError.referenceCycle(path + [name])
+        }
+        guard let replacement = values[name] else {
+            throw ThemeConfigurationError.unknownReference(string)
+        }
+        path.append(name)
+        namesOnPath.insert(name)
+        defer {
+            path.removeLast()
+            namesOnPath.remove(name)
+        }
+        return try substituteReferences(replacement, prefix: prefix, values: values,
+                                        path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
+    }
     switch value {
     case let .object(object):
         return .object(try object.mapValues {
-            try substituteReferences($0, prefix: prefix, values: values, path: path, remaining: &remaining)
+            try substituteReferences($0, prefix: prefix, values: values,
+                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
         })
     case let .array(array):
         return .array(try array.map {
-            try substituteReferences($0, prefix: prefix, values: values, path: path, remaining: &remaining)
+            try substituteReferences($0, prefix: prefix, values: values,
+                                     path: &path, namesOnPath: &namesOnPath, remaining: &remaining)
         })
     default:
         return value
