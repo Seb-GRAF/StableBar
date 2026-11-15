@@ -1,0 +1,19 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "disk",
+        "type": "disk",
+        "position": "right",
+        "details": true
+      }
+    ],
+    "providers": {
+      "disk": { "type": "disk", "diskWarning": 0.8 }
+    }
+  },
+  "draw": "settings",
+  "widget": "disk",
+  "height": 1180
+}
