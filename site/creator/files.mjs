@@ -7,6 +7,7 @@ const maximumLength = 65_536;
 const maximumFileBytes = 32_768;
 const maximumDepth = 32;
 const maximumProfiles = 16;
+const maximumValues = 372;
 // Keep this list aligned with ThemeLinkCandidate’s appearance-only bar properties.
 const barProperties = new Set([
   "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset",
@@ -50,12 +51,13 @@ function parseObject(text) {
   return object;
 }
 
-function scanJSON(text, limitProfiles) {
+function scanJSON(text, limitProfiles, count) {
   text = withoutBOM(text);
   if (text.includes("\0") || !/^[\t\n\r ]*\{/.test(text)) fail("damaged");
   let depth = 0, inString = false, escaped = false, expectingKey = true;
   let keyStart = -1, key, inProfiles = false, profileCount = 0, inProfile = false;
-  let stringStart = 0, invalidValue = false;
+  let stringStart = 0, invalidValue = false, expectingValue = true;
+  const containers = [];
 
   // JSON.parse drops duplicate keys and accepts unpaired surrogates and overflowing numbers.
   for (let index = 0; index < text.length; index++) {
@@ -86,11 +88,15 @@ function scanJSON(text, limitProfiles) {
     if (char === '"') {
       inString = true;
       stringStart = index;
+      if (expectingValue) { count.values++; expectingValue = false; }
       if (limitProfiles && depth === 1 && expectingKey) {
         keyStart = index;
         expectingKey = false;
       }
     } else if (char === "{" || char === "[") {
+      count.values++;
+      containers.push(char);
+      expectingValue = char === "[";
       if (++depth > maximumDepth) fail("tooDeep");
       if (limitProfiles && depth === 2 && char === "[" && key === "profiles") {
         inProfiles = true;
@@ -98,19 +104,26 @@ function scanJSON(text, limitProfiles) {
         inProfile = false;
       }
     } else if (char === "}" || char === "]") {
+      containers.pop();
+      expectingValue = false;
       if (depth === 2 && char === "]") inProfiles = false;
       depth--;
-    } else if (char === "," && depth === 1) {
-      expectingKey = true;
-      key = undefined;
-    } else if (char === "-" || /[0-9]/.test(char)) {
+    } else if (char === ",") {
+      expectingValue = containers.at(-1) === "[";
+      if (depth === 1) { expectingKey = true; key = undefined; }
+    } else if (char === ":") expectingValue = true;
+    else if (char === "-" || /[0-9]/.test(char)) {
+      if (expectingValue) { count.values++; expectingValue = false; }
       const start = index;
       while (index + 1 < text.length && /[0-9eE+.\-]/.test(text[index + 1])) index++;
       if (!Number.isFinite(Number(text.slice(start, index + 1)))) invalidValue = true;
+    } else if (!/[\t\n\r ]/.test(char) && expectingValue) {
+      count.values++;
+      expectingValue = false;
     }
+    if (count.values > maximumValues) fail("tooManySettings");
   }
   if (depth !== 0 || inString || invalidValue) fail("damaged");
-  return parseObject(text);
 }
 
 function checkDocuments(document, count = { profiles: 0 }) {
@@ -136,8 +149,11 @@ function validateFiles(manifest, config) {
   let manifestText, configText;
   try { manifestText = decoder.decode(manifest); configText = decoder.decode(config); }
   catch { fail("damaged"); }
-  scanJSON(manifestText, false);
-  checkDocuments(scanJSON(configText, true));
+  const count = { values: 0 };
+  scanJSON(manifestText, false, count);
+  scanJSON(configText, true, count);
+  parseObject(manifestText);
+  checkDocuments(parseObject(configText));
   return { manifestText, configText };
 }
 

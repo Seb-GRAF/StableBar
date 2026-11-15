@@ -1,4 +1,4 @@
-import builtIn from "./themes/built-in/config.json" with { type: "json" };
+import builtIn from "./built-in.mjs";
 
 export const BASE_IDS = ["built-in", "leman", "notch", "catppuccin", "nord", "gruvbox", "phosphor"];
 
@@ -227,8 +227,9 @@ export const CONTROLS = [
   control("workspaces.cornerRadius", "Indicator corners", "number", ["workspaceDefaults.style.cornerRadius"],
     "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background")),
   ...[
-    ["Width", "width"], ["Height", "height"], ["CornerRadius", "cornerRadius"], ["OffsetY", "offsetY"],
-  ].map(([name, key]) => control(`workspaces.underline${name}`, `Underline ${key}`, "number",
+    ["Width", "width", "Underline width"], ["Height", "height", "Underline height"],
+    ["CornerRadius", "cornerRadius", "Underline corners"], ["OffsetY", "offsetY", "Underline position"],
+  ].map(([name, key, label]) => control(`workspaces.underline${name}`, label, "number",
     [`workspaceDefaults.indicatorStyle.${key}`], "Set the underline's geometry in points.",
     "widgets.md#workspace-appearance", indicatorIs("underline"))),
   control("workspaces.underlineBackground", "Underline color", "color", ["workspaceDefaults.indicatorStyle.background"],

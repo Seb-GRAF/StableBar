@@ -253,6 +253,14 @@ test("site theme copies equal Resources", () => {
   }
 });
 
+test("the bundled fallback matches the built-in JSON without JSON import attributes", async () => {
+  const { default: bundled } = await import("../../site/creator/built-in.mjs");
+  assert.deepEqual(bundled, builtIn);
+  for (const file of ["theme.mjs", "page.mjs"]) {
+    assert.doesNotMatch(read(`site/creator/${file}`).toString(), /with\s*\{\s*type:\s*["']json["']/);
+  }
+});
+
 test("resolve applies the app's fallbacks", () => {
   const resolved = resolveTheme(builtIn, builtIn, "dark");
   assert.equal(resolved.defaults.cornerRadius, 14);
@@ -814,6 +822,57 @@ test("links refuse what the app refuses", () => {
     rejectsFiles(invalid, "damaged");
     rejectsFiles("{}", "damaged", invalid);
   }
+});
+
+test("links count scalars and containers across both files up to 372 values", () => {
+  const scalars = [null, true, false, 0, -1.25e30, 'brackets [ ], braces { }, colon : comma , quote " and slash \\'];
+  const valuesJSON = count => JSON.stringify({ values: Array.from({ length: count - 2 }, (_, i) => scalars[i % scalars.length]) });
+  for (const [manifestCount, configCount] of [[1, 371], [371, 1], [180, 192]]) {
+    const text = count => count === 1 ? "{}" : valuesJSON(count);
+    const files = { manifestText: text(manifestCount), configText: text(configCount) };
+    assert.deepEqual(decodeLink(encodeLink(files)), files);
+    rejectsFiles(text(configCount + 1), "tooManySettings", files.manifestText);
+    rejectsFiles(files.configText, "tooManySettings", text(manifestCount + 1));
+  }
+  const containers = { manifestText: "{}", configText: JSON.stringify({ values: Array.from({ length: 369 }, (_, i) => i % 2 ? {} : []) }) };
+  assert.deepEqual(decodeLink(encodeLink(containers)), containers);
+  rejectsFiles(containers.configText.replace('"values":[', '"values":[{},'), "tooManySettings");
+});
+
+test("link value counts include duplicate values but exclude object keys", () => {
+  const object = count => "{" + Array.from({ length: count }, (_, i) => `${JSON.stringify('key:' + i)}:0`).join(",") + "}";
+  const duplicate = count => "{" + Array(count).fill('"same":0').join(",") + "}";
+  for (const make of [object, duplicate]) {
+    for (const file of ["manifestText", "configText"]) {
+      const files = { manifestText: "{}", configText: "{}", [file]: make(370) };
+      assert.deepEqual(decodeLink(encodeLink(files)), files);
+      const manifest = file === "manifestText" ? make(371) : "{}";
+      const config = file === "configText" ? make(371) : "{}";
+      rejectsFiles(config, "tooManySettings", manifest);
+    }
+  }
+});
+
+test("the raw value cap is checked in both files before parsing either document", () => {
+  const parse = JSON.parse;
+  let documentParses = 0;
+  JSON.parse = (text, ...args) => {
+    if (/^[\t\n\r ]*\{/.test(text)) documentParses++;
+    return parse(text, ...args);
+  };
+  try {
+    const text = "{" + Array(372).fill('"same":null').join(",") + "}";
+    rejectsFiles(text, "tooManySettings");
+    rejectsFiles("{}", "tooManySettings", text);
+    assert.equal(documentParses, 0);
+  } finally { JSON.parse = parse; }
+});
+
+test("a theme over the link value cap still downloads and reopens as a zip", async () => {
+  const files = { ...linkedFiles, configText: JSON.stringify({ tokens: Object.fromEntries(Array.from({ length: 372 }, (_, i) => [`t${i}`, "#112233"])) }) };
+  assert.throws(() => encodeLink(files), linkError("tooManySettings"));
+  assert.throws(() => shareURL("https://stablebar.app/create-theme.html", files), linkError("tooManySettings"));
+  assert.deepEqual(await readZip(writeZip("many-settings", files)), files);
 });
 
 test("links accept only UTF-8 and preserve a UTF-8 BOM", () => {

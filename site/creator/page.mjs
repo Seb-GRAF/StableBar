@@ -1,20 +1,20 @@
-import builtIn from "./themes/built-in/config.json" with { type: "json" };
-import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, fileText, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
+import builtIn from "./built-in.mjs";
+import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
 import { themeFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
 import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
 const POPUP_SPACING = false;
 const flags = { popupSpacing: POPUP_SPACING };
-const names = { palette: "Colours", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
+const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
 const baseNames = { "built-in": "Built-in", leman: "Léman", notch: "Notch", catppuccin: "Catppuccin", nord: "Nord", gruvbox: "Gruvbox", phosphor: "Phosphor" };
-const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colours and tiles", nord: "Cool colours and an underline", gruvbox: "Warm colours and stripes", phosphor: "Amber text with a glow" };
+const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colors and tiles", nord: "Cool colors and an underline", gruvbox: "Warm colors and stripes", phosphor: "Amber text with a glow" };
 const groupCopy = {
-  palette: "Each colour has a light and a dark value. Edit the appearance shown in the preview.",
+  palette: "Each color has a light and a dark value. Edit the appearance shown in the preview.",
   bar: "Change the strip behind your widgets. Tiles have their own controls below.",
   widgets: "Change the tiles, type and spacing. Turn tiles off to keep just the text and any glow.",
   workspaces: "Choose a background, an underline or text alone. Only the settings it uses are shown.",
-  popups: "Change the popup colours and corners. Tooltips stay compact.",
+  popups: "Change the popup colors and corners. Tooltips stay compact.",
   about: "Give your theme a name. Add your GitHub username if you plan to share it in the Store.",
 };
 const messages = {
@@ -30,6 +30,7 @@ const messages = {
   tooLong: "This theme makes a link longer than 65,536 bytes. Download it as a zip instead.",
   tooDeep: "This theme nests more than 32 levels deep. Download it as a zip instead.",
   tooManyProfiles: "This theme has more than 16 profiles. Download it as a zip instead.",
+  tooManySettings: "This theme has more settings than a link can carry. Download it as a zip instead.",
   barProperty: "This theme has bar settings a link cannot carry. Download it as a zip instead.",
   extraFiles: "This theme needs other files. Open a theme with no includes.",
   unsupportedVersion: "This link uses a newer theme format. Open it with a newer creator page.",
@@ -40,7 +41,7 @@ const messages = {
   importTooLarge: "This file is too large to reopen here. Choose a theme with JSON files under 16 MB each.",
   copyFailed: "Copy is unavailable in this browser. Allow clipboard access and try again.",
 };
-const message = error => messages[error.message] ?? (error instanceof TypeError || error instanceof RangeError ? messages.damaged : error.message);
+const message = error => Object.hasOwn(messages, error?.message) ? messages[error.message] : messages.damaged;
 const fail = code => { throw new Error(code); };
 const e = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
@@ -60,8 +61,8 @@ const resolved = () => resolveTheme(builtIn, state.config, appearance);
 function colorInput(control, value, suffix = "") {
   const helpID = `c-${control.id.replaceAll(".", "-")}`;
   const id = helpID + suffix;
-  const colour = typeof value === "string" && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value) ? value : "#00000000";
-  return `<div class="color-input"><input type="color" id="${id}" data-control="${control.id}" aria-label="${e(control.label)} colour" aria-describedby="${helpID}-help" value="${colour.slice(0, 7)}"><input type="text" id="${id}-hex" data-control="${control.id}" data-colour-text aria-label="${e(control.label)} hex value" aria-describedby="${helpID}-help ${helpID}-error" value="${e(colour)}" spellcheck="false" autocomplete="off"></div>`;
+  const color = typeof value === "string" && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value) ? value : "#00000000";
+  return `<div class="color-input"><input type="color" id="${id}" data-control="${control.id}" aria-label="${e(control.label)} color" aria-describedby="${helpID}-help" value="${color.slice(0, 7)}"><input type="text" id="${id}-hex" data-control="${control.id}" data-color-text aria-label="${e(control.label)} hex value" aria-describedby="${helpID}-help ${helpID}-error" value="${e(color)}" spellcheck="false" autocomplete="off"></div>`;
 }
 
 function controlValue(control, r) {
@@ -84,29 +85,29 @@ function controlHTML(control, r) {
     input = `<select ${attr}>${control.options.map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option[0].toUpperCase() + option.slice(1)}</option>`).join("")}</select>`;
   } else if (control.kind === "background") {
     const selected = value?.gradient ? "gradient" : value ? "color" : "none";
-    input = `<select ${attr}>${[["none", "None"], ["color", "A colour"], ...(baseGradient ? [["gradient", "Keep the base gradient"]] : [])].map(([key, label]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`).join("")}</select>`;
-    if (selected === "color") input += `<div class="background-colour">${colorInput(control, value, "-colour")}</div>`;
+    input = `<select ${attr}>${[["none", "None"], ["color", "A color"], ...(baseGradient ? [["gradient", "Keep the base gradient"]] : [])].map(([key, label]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`).join("")}</select>`;
+    if (selected === "color") input += `<div class="background-color">${colorInput(control, value, "-color")}</div>`;
   } else {
     const number = control.kind === "number";
     input = `<input ${attr} type="${number ? "number" : "text"}" value="${e(value ?? "")}" ${number ? `step="0.5" ${control.id.endsWith("OffsetY") ? "" : 'min="0"'}` : 'autocomplete="off"'}>`;
   }
   const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
   const helpText = control.help.slice(control.help.indexOf(": ") + 2);
-  return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><label for="${id}">${e(control.label.replaceAll("color", "colour").replace("Underline cornerRadius", "Underline corners").replace("Underline offsetY", "Underline position"))}</label>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
+  return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><label for="${id}">${e(control.label)}</label>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
 }
 
 function renderControls() {
   const focused = document.activeElement;
   const focusedID = focused?.id;
   const selection = focused?.type === "text" ? [focused.selectionStart, focused.selectionEnd] : null;
-  const drafts = new Map([...fieldErrors.keys()].map(id => [id, (root.querySelector(`[data-control="${id}"][data-colour-text]`) ?? root.querySelector(`[data-control="${id}"]`))?.value]));
+  const drafts = new Map([...fieldErrors.keys()].map(id => [id, (root.querySelector(`[data-control="${id}"][data-color-text]`) ?? root.querySelector(`[data-control="${id}"]`))?.value]));
   const r = resolved(), controls = controlsFor(state, flags);
   for (const key of fieldErrors.keys()) if (!controls.some(control => control.id === key)) fieldErrors.delete(key);
   for (const group of Object.keys(names)) {
     root.querySelector(`[data-group="${group}"]`).innerHTML = controls.filter(control => control.group === group).map(control => controlHTML(control, r)).join("");
   }
   for (const [id, value] of drafts) {
-    const input = root.querySelector(`[data-control="${id}"][data-colour-text]`) ?? root.querySelector(`[data-control="${id}"]`);
+    const input = root.querySelector(`[data-control="${id}"][data-color-text]`) ?? root.querySelector(`[data-control="${id}"]`);
     if (input && value !== undefined) input.value = value;
   }
   if (focusedID) {
@@ -127,10 +128,10 @@ function previewHTML() {
     </div>
     <div class="preview-stage">
     <div class="theme-preview">
-    <div class="preview-bar">
+    <div class="preview-bar" aria-hidden="true">
     <div class="preview-strip">
     <div class="preview-group">
-    <div class="preview-tile preview-workspaces" aria-label="Three workspaces">
+    <div class="preview-tile preview-workspaces">
     <span class="preview-workspace">1</span>
     <span class="preview-workspace is-focused">2</span>
     <span class="preview-workspace is-visible">3</span>
@@ -153,10 +154,10 @@ function previewHTML() {
     </div>
     </div>
     <div class="preview-below">
-    <div class="tooltip-example">
+    <div class="tooltip-example" aria-hidden="true">
     <div class="preview-tooltip">Battery at 82%</div>
     </div>
-    <div class="preview-popup">
+    <div class="preview-popup" aria-hidden="true">
     <h3 class="preview-heading">Battery</h3>
     <div class="preview-row">
     <span class="preview-key">Charge</span>
@@ -185,7 +186,7 @@ function render() {
     <div class="base-block">
     <label class="base-label" for="base-theme">Base theme</label>
     <select class="base-select" id="base-theme">${BASE_IDS.map(id => `<option value="${id}">${baseNames[id]}</option>`).join("")}</select>
-    <p class="base-help">Choose a starting point. Changing it replaces your colour and shape edits.</p>
+    <p class="base-help">Choose a starting point. Changing it replaces your color and shape edits.</p>
     <p class="base-meta"></p>
     </div>${Object.entries(names).map(([group, name], index) => `<details class="group" data-control-section="${group}" ${group === "palette" ? "open" : ""}>
     <summary>
@@ -241,7 +242,7 @@ function updateJSON() {
   function line(text, path, key) {
     const focused = paths.some(control => path === control || path.startsWith(control + "."));
     let html = e(text);
-    if (key !== null) html = html.replace(e(JSON.stringify(key)), `<span class="json-key">${e(JSON.stringify(key))}</span>`);
+    if (key !== null) html = html.replace(e(JSON.stringify(key)), () => `<span class="json-key">${e(JSON.stringify(key))}</span>`);
     lines.push(`<span class="json-line${focused ? " is-focused" : ""}${!manifest && key !== null && kept.includes(path) ? " is-kept" : ""}" data-json-path="${e(path)}">${html}</span>`);
   }
   function visit(value, path = "", depth = 0, key = null, comma = false) {
@@ -268,12 +269,12 @@ function updateJSON() {
   root.querySelector(".kept").innerHTML = `<strong>Kept from the base theme</strong>${kept.length ? `<details><summary>${kept.length} ${kept.length === 1 ? "setting stays" : "settings stay"} in your files. This preview does not show them exactly.</summary><ul>${kept.map(path => `<li><code>${e(path)}</code></li>`).join("")}</ul></details>` : "No extra settings in this base theme."}`;
 }
 
-function exportProblem() {
+function exportProblem({ waitForStore = true } = {}) {
   if (fieldErrors.size) return [...fieldErrors.values()][0];
   try { themeFiles(state); } catch (error) { return message(error); }
   if (mode === "new" && sourceID?.toLowerCase() === state.manifest.id.toLowerCase()) return messages.sameID;
   if (mode === "new" && store.status === "found") return messages.takenID;
-  if (store.status === "checking") return "Checking the id in the Store…";
+  if (waitForStore && store.status === "checking") return "Checking the id in the Store…";
   return "";
 }
 
@@ -284,12 +285,12 @@ function higherVersion(left, right) {
 }
 
 function updateOutputs() {
-  const problem = exportProblem();
+  const problem = exportProblem(), downloadProblem = exportProblem({ waitForStore: false });
   let linkProblem = "";
   try { encodeLink(themeFiles(state)); } catch (error) { linkProblem = message(error); }
   for (const action of ["download", "share", "try"]) {
     const button = root.querySelector(`[data-action="${action}"]`);
-    button.disabled = !!problem || (action !== "download" && !!linkProblem);
+    button.disabled = action === "download" ? !!downloadProblem : !!problem || !!linkProblem;
     button.setAttribute("aria-describedby", "output-note");
   }
   root.querySelector("[data-action=try]").hidden = TRY_LINK_MIN_VERSION === null;
@@ -312,6 +313,7 @@ function updateOutputs() {
     if (error) error.textContent = reason;
     root.querySelectorAll(`[data-control="${control.id}"]`).forEach(input => input.setAttribute("aria-invalid", String(!!reason)));
   }
+  updateStoreGuide();
 }
 
 function refresh() {
@@ -359,14 +361,14 @@ function changeControl(input) {
   const control = controlsFor(state, flags).find(control => control.id === input.dataset.control);
   if (!control) return;
   let value = input.type === "checkbox" ? input.checked : input.value;
-  const colour = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
-  if (colour) {
+  const color = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
+  if (color) {
     if (input.type === "color") {
-      const text = input.parentElement.querySelector("[data-colour-text]");
-      if (/^#[\da-f]{8}$/i.test(text.value)) value += text.value.slice(7);
+      const previous = controlValue(control, resolved());
+      if (typeof previous === "string" && /^#[\da-f]{8}$/i.test(previous) && previous.slice(7) !== "00") value += previous.slice(7);
     }
     if (!/^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value)) {
-      fieldErrors.set(control.id, "Use #RRGGBB or #RRGGBBAA for this colour."); updateOutputs(); return;
+      fieldErrors.set(control.id, "Use #RRGGBB or #RRGGBBAA for this color."); updateOutputs(); return;
     }
   } else if (control.kind === "number") {
     value = input.value === "" && control.id === "workspaces.underlineWidth" ? null : Number(input.value);
@@ -393,12 +395,12 @@ function changeControl(input) {
     const value = controlValue(other, r);
     root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
       if (element.type === "color") element.value = typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : "#000000";
-      else if (element.hasAttribute("data-colour-text")) element.value = value ?? "#00000000";
+      else if (element.hasAttribute("data-color-text")) element.value = value ?? "#00000000";
       else if (other.kind !== "toggle" && other.kind !== "background") element.value = value ?? "";
     });
   }
-  if (colour) {
-    input.parentElement.querySelector("[data-colour-text]").value = value;
+  if (color) {
+    input.parentElement.querySelector("[data-color-text]").value = value;
     input.parentElement.querySelector('[type="color"]').value = value.slice(0, 7);
   }
   if (input.type === "checkbox") input.closest(".toggle").querySelector("span").textContent = input.checked ? "On" : "Off";
@@ -450,6 +452,7 @@ function checkTheme(files) {
 
 function offerReopen(files) {
   pendingTheme = checkTheme(files);
+  document.querySelector("#page-message").textContent = "";
   const { name, version, id } = pendingTheme.manifest;
   showDialog(`${dialogHead("Update it or make a new theme?", `${name} · ${version}`)}<p class="dialog-intro">You opened ${e(name)}. Is it your theme, or a starting point for a new one?</p>
     <label class="choice">
@@ -505,6 +508,7 @@ function continueReopen() {
   }
   baseGradient = at(state.config, "bar.style.background")?.gradient ? structuredClone(state.config.bar.style.background) : undefined;
   baseID = "opened";
+  bases.set(baseID, structuredClone(state.config));
   fieldErrors.clear();
   scheduleStoreCheck();
   dialog.close();
@@ -572,14 +576,23 @@ async function droppedFiles(transfer) {
   return files;
 }
 
+function updateStoreGuide() {
+  const rowSection = dialog.querySelector("[data-store-row]");
+  if (!dialog.open || !rowSection) return;
+  let row = "", reason = exportProblem();
+  if (!reason) {
+    try { row = readmeRow(JSON.parse(themeFiles(state).manifestText)); }
+    catch (error) { reason = message(error); }
+  }
+  rowSection.innerHTML = reason ? `<p class="field-error" role="status">${e(reason)}</p>
+    <button class="btn" data-action="about">Edit About</button>` : `<div class="readme-box">
+    <pre tabindex="0" aria-label="Row for the Store README">${e(row)}</pre>
+    <button class="btn" data-action="row">Copy table row</button>
+    </div>`;
+  dialog.querySelector('[data-action="download"]').disabled = !!exportProblem({ waitForStore: false });
+}
+
 function storeGuide() {
-  let row = "", reason = "";
-  try {
-    const problem = exportProblem();
-    if (problem) throw new Error(problem);
-    const files = themeFiles(state);
-    row = readmeRow(JSON.parse(files.manifestText));
-  } catch (error) { reason = message(error); }
   showDialog(`${dialogHead("Submit to the Store", "Share your theme")}<div class="dialog-intro">
     <p class="small muted">Download and unzip your theme first. The rest happens in your browser.</p>
     <ol class="guide-steps">
@@ -593,11 +606,8 @@ function storeGuide() {
     </li>
     <li>
     <strong>Add your theme to <code>README.md</code>.</strong>
-    <p>Edit it in the browser. Paste this row in alphabetical order.</p>${reason ? `<p class="field-error">${e(reason)}</p>
-    <button class="btn" data-action="about">Edit About</button>` : `<div class="readme-box">
-    <pre tabindex="0" aria-label="Row for the Store README">${e(row)}</pre>
-    <button class="btn" data-action="row">Copy table row</button>
-    </div>`}</li>
+    <p>Edit it in the browser. Paste this row in alphabetical order.</p>
+    <div data-store-row></div></li>
     <li>
     <strong>Open a pull request.</strong>
     <p>Send your changes back to stablebar-packages.</p>
@@ -608,8 +618,9 @@ function storeGuide() {
     <p class="feedback" role="status"></p>
     <div class="dialog-actions">
     <button class="btn" data-action="close">Done</button>
-    <button class="btn primary" data-action="download" ${exportProblem() ? "disabled" : ""}>Download zip</button>
+    <button class="btn primary" data-action="download">Download zip</button>
     </div>`);
+  updateStoreGuide();
 }
 
 function notify(text) {
@@ -624,7 +635,7 @@ async function copyText(text) {
 }
 
 async function output(action) {
-  if (exportProblem()) { updateOutputs(); return; }
+  if (exportProblem({ waitForStore: action !== "download" })) { updateOutputs(); return; }
   const files = themeFiles(state);
   if (action === "download") {
     const url = URL.createObjectURL(new Blob([writeZip(state.manifest.id, files)], { type: "application/zip" }));
