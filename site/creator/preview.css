@@ -40,14 +40,24 @@
   font: var(--bar-font);
   background: var(--w-bg);
   border-radius: var(--w-radius);
-  box-shadow: inset 0 0 0 var(--w-border-w) var(--w-border), var(--w-shadow-box);
+  box-shadow: var(--w-shadow-box);
   filter: var(--w-glow);
   transform: translateY(var(--w-dy));
+}
+
+.theme-preview .preview-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 var(--w-border-w) var(--w-border);
+  pointer-events: none;
 }
 
 .theme-preview .preview-tile:hover { background: var(--w-hover); }
 .theme-preview .preview-workspaces { gap: var(--w-gap); padding-block: 0; }
 
+/* Workspace padding and app-menu spacing use app defaults, independent of theme values. */
 .theme-preview .preview-workspace {
   position: relative;
   display: flex;
@@ -60,10 +70,10 @@
 }
 
 .theme-preview .preview-workspace.is-focused { color: var(--ws-on); }
-.theme-preview.ws-fill .preview-workspace.is-focused { background: var(--ws-ind); }
+.theme-preview.preview-ws-fill .preview-workspace.is-focused { background: var(--ws-ind); }
 
-.theme-preview.ws-under .preview-workspace.is-focused::after,
-.theme-preview.ws-under .preview-workspace.is-visible::after {
+.theme-preview.preview-ws-under .preview-workspace.is-focused::after,
+.theme-preview.preview-ws-under .preview-workspace.is-visible::after {
   content: "";
   position: absolute;
   left: 50%;
@@ -75,11 +85,12 @@
   background: var(--ws-ind);
 }
 
-.theme-preview.ws-under .preview-workspace.is-visible::after { background: var(--ul-visible); }
+.theme-preview.preview-ws-under .preview-workspace.is-visible::after { background: var(--ul-visible); }
 .theme-preview .preview-app-menus { display: flex; align-items: center; gap: 14px; padding-inline: 7px; }
 .theme-preview .preview-app-name { font-weight: 700; }
 .theme-preview .preview-battery { width: var(--battery-w); height: var(--battery-h); flex: none; color: var(--fg); }
 
+/* macOS adds a window shadow as well as the theme's configured shadow. */
 .theme-preview .preview-popup {
   display: grid;
   gap: var(--pop-gap);
@@ -89,6 +100,7 @@
   padding: var(--pop-py) var(--pop-px);
   color: var(--pop-fg);
   font: var(--pop-font);
+  filter: drop-shadow(0 8px 18px #00000047);
   background: var(--pop-bg);
   border-radius: var(--pop-radius);
   box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow);
@@ -98,8 +110,14 @@
 .theme-preview .preview-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .theme-preview .preview-key { color: var(--muted); }
 .theme-preview .preview-value { color: var(--pop-fg); font-variant-numeric: tabular-nums; }
-.theme-preview .preview-meter { height: 6px; overflow: hidden; border-radius: 3px; background: var(--track); }
-.theme-preview .preview-meter-fill { display: block; width: 82%; height: 100%; background: var(--accent); }
+/* Progress blocks paint their track over the block's own background. */
+.theme-preview .preview-meter {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: linear-gradient(var(--track), var(--track)), var(--track);
+}
+.theme-preview .preview-meter-fill { display: block; width: 82%; height: 100%; border-radius: inherit; background: var(--accent); }
 
 .theme-preview .preview-tooltip {
   display: inline-block;
@@ -107,6 +125,7 @@
   padding: 6px 10px;
   color: var(--pop-fg);
   font: var(--pop-font);
+  filter: drop-shadow(0 8px 18px #00000047);
   background: var(--pop-bg);
   border-radius: var(--pop-radius);
   box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow);

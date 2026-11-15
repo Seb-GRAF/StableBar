@@ -28,24 +28,26 @@ const nonnegative = value => Math.max(0, value);
 const weights = { ultralight: 100, thin: 200, light: 300, regular: 400, medium: 500, semibold: 600, bold: 700 };
 const systemFont = '-apple-system, BlinkMacSystemFont, system-ui, sans-serif';
 
-function font(style) {
+function font(style, lineHeight = px(Math.ceil(style.fontSize * 1.2))) {
   const family = style.fontName === "system" ? systemFont : `${JSON.stringify(style.fontName)}, ${systemFont}`;
-  return `${weights[style.fontWeight] ?? 400} ${px(style.fontSize)}/${px(Math.ceil(style.fontSize * 1.2))} ${family}`;
+  return `${weights[style.fontWeight] ?? 400} ${px(style.fontSize)}/${lineHeight} ${family}`;
 }
 
 function background(value) {
-  if (!canDrawBackground(value)) return "transparent";
   if (!value?.gradient) return color(value);
   const { colors, locations, angle = 90 } = value.gradient;
   const stops = colors.map((value, index) => `${color(value)}${locations ? ` ${locations[index] * 100}%` : ""}`);
   return `linear-gradient(${angle}deg, ${stops.join(", ")})`;
 }
 
-// SwiftUI's oblique gradients use unit-square points, which CSS angles don't reproduce on a strip.
-const canDrawBackground = value => !value?.gradient || (value.gradient.angle ?? 90) % 90 === 0;
+// CSS angles approximate SwiftUI's oblique unit-square gradients on a strip.
+function isExactBackground(value) {
+  if (value?.gradient) return (value.gradient.angle ?? 90) % 90 === 0;
+  if (value?.light != null || value?.dark != null) return Object.values(value).every(isExactBackground);
+  return true;
+}
 
 function hasPaint(value) {
-  if (!canDrawBackground(value)) return false;
   if (value?.gradient) return value.gradient.colors.some(hasPaint);
   return typeof value === "string" && value !== "transparent" && !/^#[\da-f]{6}00$/i.test(value);
 }
@@ -60,9 +62,11 @@ export function cssVariables(resolved, { popupSpacing = false } = {}) {
   const focused = workspace.style.states.focused;
   const underline = workspace.indicatorStyle;
   const shadowRadius = shadowBlur(widget.shadowRadius);
-  const tiled = hasPaint(widget.background) || (widget.borderWidth > 0 && hasPaint(widget.borderColor));
+  const tiled = hasPaint(widget.background);
   const borderWidth = nonnegative(strip.borderWidth ?? 0);
   const batteryHeight = Math.round(nonnegative(widget.iconSize) * 0.8);
+  // Chromium's normal leading is taller than SwiftUI's for Monaco.
+  const popupLineHeight = popup.fontName === "Monaco" ? px(Math.ceil(popup.fontSize * 1.2)) : "normal";
   return {
     "--bar-h": px(nonnegative(bar.height ?? 40)),
     "--strip-bg": background(strip.background),
@@ -112,24 +116,41 @@ export function cssVariables(resolved, { popupSpacing = false } = {}) {
     "--pop-px": px(popupSpacing ? popup.paddingHorizontal : 10),
     "--pop-py": px(popupSpacing ? popup.paddingVertical : 6),
     "--pop-gap": px(popupSpacing ? popup.spacing : 6),
-    "--pop-offset": px(popupSpacing ? bar.popupOffset ?? 4 : 4),
+    "--pop-offset": px(popupSpacing ? bar.popupOffset ?? 6 : 6),
     "--bar-font": font(widget),
-    "--pop-font": font(popup),
+    "--pop-font": font(popup, popupLineHeight),
   };
 }
 
 export function indicatorClass(resolved) {
-  return { background: "ws-fill", underline: "ws-under", none: "ws-text" }[resolved.workspaceDefaults.indicator] ?? "ws-fill";
+  return { background: "preview-ws-fill", underline: "preview-ws-under", none: "preview-ws-text" }[resolved.workspaceDefaults.indicator] ?? "preview-ws-fill";
 }
 
 export function keptFromBase(config) {
+  const rendered = new Set(CONTRACT);
+  const visitedTokens = new Set();
+  function references(value) {
+    if (typeof value === "string" && value.startsWith("@token.")) {
+      const name = value.slice("@token.".length);
+      if (visitedTokens.has(name)) return;
+      visitedTokens.add(name);
+      rendered.add(`tokens.${name}`);
+      references(config.tokens?.[name]);
+    } else if (value && typeof value === "object") {
+      for (const child of Object.values(value)) references(child);
+    }
+  }
+  for (const path of CONTRACT) {
+    references(path.split(".").reduce((value, key) => value?.[key], config));
+  }
+  const paths = [...rendered];
   const kept = [];
   function visit(value, path) {
-    if (CONTRACT.includes(path)) {
-      if (!canDrawBackground(value)) kept.push(path);
+    if (rendered.has(path)) {
+      if (!isExactBackground(value)) kept.push(path);
       return;
     }
-    if (path && !CONTRACT.some(key => key.startsWith(path + "."))) {
+    if (path && !paths.some(key => key.startsWith(path + "."))) {
       kept.push(path);
     } else if (value && typeof value === "object" && !Array.isArray(value)) {
       for (const [key, child] of Object.entries(value)) visit(child, path ? `${path}.${key}` : key);

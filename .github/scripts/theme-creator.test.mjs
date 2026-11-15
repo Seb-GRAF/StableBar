@@ -68,9 +68,9 @@ test("preview geometry follows the theme", () => {
   assert.equal(built["--tile-h"], "28px");
   assert.equal(shadowBlur(2), 4);
   assert.equal(built["--w-shadow-box"], `0 1px ${shadowBlur(2)}px #00000040`);
-  assert.equal(indicatorClass(resolveTheme(builtIn, theme("leman"), "dark")), "ws-fill");
-  assert.equal(indicatorClass(resolveTheme(builtIn, theme("nord"), "dark")), "ws-under");
-  assert.equal(indicatorClass(resolveTheme(builtIn, theme("notch"), "dark")), "ws-text");
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("leman"), "dark")), "preview-ws-fill");
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("nord"), "dark")), "preview-ws-under");
+  assert.equal(indicatorClass(resolveTheme(builtIn, theme("notch"), "dark")), "preview-ws-text");
 });
 
 test("every config control is in the contract", () => {
@@ -142,6 +142,44 @@ test("kept keys are listed", () => {
   ]);
 });
 
+test("tokens referenced by rendered properties are not marked as kept", () => {
+  const probe = { tokens: { mine: "#123456" }, popupDefaults: { background: "@token.mine" } };
+  assert.equal(cssVariables(resolveTheme(builtIn, probe, "dark"))["--pop-bg"], "#123456");
+  assert.deepEqual(keptFromBase(probe), []);
+  const config = {
+    tokens: {
+      day: "#123456", night: "#654321", stop: "#abcdef", alias: "@token.stop", unused: "#fedcba",
+    },
+    defaults: { foreground: { light: "@token.day", dark: "@token.night" } },
+    bar: { style: { background: { gradient: { colors: ["@token.alias", "#ffffff"] } } } },
+  };
+  assert.deepEqual(keptFromBase(config), ["tokens.unused"]);
+  assert.equal(cssVariables(resolveTheme(builtIn, config, "light"))["--fg"], "#123456");
+  assert.equal(cssVariables(resolveTheme(builtIn, config, "dark"))["--fg"], "#654321");
+  assert.equal(cssVariables(resolveTheme(builtIn, config, "dark"))["--strip-bg"],
+    "linear-gradient(90deg, #abcdef, #ffffff)");
+});
+
+test("kept token analysis follows aliases once and ignores references outside the contract", () => {
+  const config = {
+    tokens: { a: "@token.b", b: "@token.a", onlyInRole: "#abcdef" },
+    defaults: { foreground: "@token.a" }, roles: { heading: { foreground: "@token.onlyInRole" } },
+  };
+  assert.deepEqual(keptFromBase(config), ["tokens.onlyInRole", "roles"]);
+  assert.deepEqual(keptFromBase({ tokens: { unused: "@token.missing" } }), ["tokens.unused"]);
+});
+
+test("Fern marks only its undrawn custom tokens as kept", () => {
+  const referenced = { hover: "#2f3329", popup: "#1a1c16", accentText: "#1f3701", outline: "#8e9285" };
+  const config = {
+    tokens: referenced,
+    defaults: { hoverBackground: "@token.hover", accentText: "@token.accentText" },
+    popupDefaults: { background: "@token.popup" },
+    workspaceDefaults: { style: { states: { visible: { borderColor: "@token.outline" } } } },
+  };
+  assert.deepEqual(keptFromBase(config), ["tokens.outline", "workspaceDefaults.style.states.visible"]);
+});
+
 test("popup spacing waits for its flag while tooltip padding stays compact", () => {
   const resolved = resolveTheme(builtIn, {
     popupDefaults: { paddingHorizontal: 22, paddingVertical: 18, spacing: 16 }, bar: { popupOffset: 12 },
@@ -151,7 +189,7 @@ test("popup spacing waits for its flag while tooltip padding stays compact", () 
   const on = cssVariables(resolved, { popupSpacing: true });
   for (const [key, fixed, configured] of [
     ["--pop-px", "10px", "22px"], ["--pop-py", "6px", "18px"],
-    ["--pop-gap", "6px", "16px"], ["--pop-offset", "4px", "12px"],
+    ["--pop-gap", "6px", "16px"], ["--pop-offset", "6px", "12px"],
   ]) {
     assert.equal(off[key], fixed, key);
     assert.equal(on[key], configured, key);
@@ -176,6 +214,10 @@ test("tiles use box shadows and bare widgets keep their glow", () => {
   resolved.defaults.borderColor = "#ffffff00";
   assert.equal(cssVariables(resolved)["--w-shadow-box"], "none");
   assert.equal(cssVariables(resolved)["--w-glow"], bare["--w-glow"]);
+  resolved.defaults.borderColor = "#ffffff";
+  resolved.defaults.borderWidth = 2;
+  assert.equal(cssVariables(resolved)["--w-shadow-box"], "none");
+  assert.equal(cssVariables(resolved)["--w-glow"], bare["--w-glow"]);
 });
 
 test("gradients use the native default angle and keep unsupported angles from the base", () => {
@@ -183,7 +225,7 @@ test("gradients use the native default angle and keep unsupported angles from th
   const variables = () => cssVariables(resolveTheme(builtIn, config, "dark"))["--strip-bg"];
   assert.equal(variables(), "linear-gradient(90deg, #ff0000, #0000ff)");
   config.bar.style.background.gradient.angle = 45;
-  assert.equal(variables(), "transparent");
+  assert.equal(variables(), "linear-gradient(45deg, #ff0000, #0000ff)");
   assert.deepEqual(keptFromBase(config), ["bar.style.background"]);
 });
 
