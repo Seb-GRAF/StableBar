@@ -54,6 +54,12 @@ func diskOutput(_ volumes: DiskVolumes, warning: Double, critical: Double) -> Sc
     return output
 }
 
+/// Important usage adds purgeable space, but volumes other than the startup disk report it as 0, not nil.
+func diskAvailable(important: Int64?, plain: Int64?) -> Int64 {
+    if let important, important > 0 { return important }
+    return plain ?? 0
+}
+
 private func diskPercent(_ fraction: Double) -> String { String(Int((fraction * 100).rounded())) }
 
 /// Strictly above a threshold, like `SystemWarnings`; a threshold above 1 never triggers.
@@ -94,7 +100,8 @@ struct SystemVolumes: VolumeReading {
     private func volume(at url: URL, session: DASession?) throws -> DiskVolume? {
         let values = try url.resourceValues(forKeys: Set(Self.keys))
         guard let total = values.volumeTotalCapacity.map(Int64.init) else { return nil }
-        let available = values.volumeAvailableCapacityForImportantUsage ?? values.volumeAvailableCapacity.map(Int64.init) ?? 0
+        let available = diskAvailable(important: values.volumeAvailableCapacityForImportantUsage,
+                                      plain: values.volumeAvailableCapacity.map(Int64.init))
         let isLocal = values.volumeIsLocal ?? true
         let ejectable = values.volumeIsInternal != true || values.volumeIsEjectable == true
             || values.volumeIsRemovable == true || !isLocal

@@ -63,6 +63,12 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     #expect(output.lists?["volumes"]?.first?["state"] == state)
 }
 
+@Test(arguments: [(0, 30_000_000_000, 30_000_000_000), (44_000_000_000, 30_000_000_000, 44_000_000_000),
+                  (nil, 30_000_000_000, 30_000_000_000), (nil, nil, 0), (0, nil, 0)] as [(Int64?, Int64?, Int64)])
+func availableSpacePrefersImportantUsageOnlyWhenTheVolumeReportsIt(important: Int64?, plain: Int64?, expected: Int64) {
+    #expect(diskAvailable(important: important, plain: plain) == expected)
+}
+
 @Test func diskThresholdsAbove100PercentTurnWarningsOff() {
     let startup = volume("Macintosh HD", total: 1_000_000_000_000, available: 10_000_000_000)
     let output = diskOutput(DiskVolumes(startup: startup, others: [startup]), warning: 1.01, critical: 1.01)
