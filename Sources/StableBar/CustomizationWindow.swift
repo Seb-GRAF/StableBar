@@ -5,19 +5,33 @@ import SwiftUI
 final class CustomizationWindow: NSObject, NSWindowDelegate {
     private weak var store: BarStore?
     private var window: NSWindow?
-    private var editor: ConfigurationEditor?
+    private(set) var editor: ConfigurationEditor?
     private let launchResume: ApplicationMoveLaunchResume
+    /// Brings the window forward; tests keep it off screen.
+    private let present: (NSWindow) -> Void
     private(set) lazy var applicationMove = ApplicationMoveController(error: launchResume.take(for: .settings)?.failure)
 
-    init(store: BarStore? = nil, launchResume: ApplicationMoveLaunchResume = ApplicationMoveLaunchResume()) {
+    init(store: BarStore? = nil, launchResume: ApplicationMoveLaunchResume = ApplicationMoveLaunchResume(),
+         present: @escaping (NSWindow) -> Void = { window in
+             NSApplication.shared.setActivationPolicy(.regular)
+             NSApp.activate(ignoringOtherApps: true)
+             window.makeKeyAndOrderFront(nil)
+         }) {
         self.store = store
         self.launchResume = launchResume
+        self.present = present
     }
 
     func show(store: BarStore, widgetID: String? = nil, section: CustomizationSection? = nil) {
         self.store = store
         store.setInspectorOpen(true)
-        if window == nil {
+        if editor == nil {
+            let editor = ConfigurationEditor(store: store, endEditing: { [weak self] in self?.window?.endEditing(for: nil) })
+            self.editor = editor
+            store.onEndCustomizationEditing = { [weak editor] in editor?.finishEditing() }
+            store.onCustomizeProfile = { [weak editor] name in editor?.showProfile(name) }
+        }
+        if window == nil, let editor {
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
                                   styleMask: [.titled, .closable, .miniaturizable, .resizable],
                                   backing: .buffered, defer: false)
@@ -28,10 +42,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             window.delegate = self
             window.minSize = NSSize(width: 900, height: 620)
             window.isReleasedWhenClosed = false
-            let editor = ConfigurationEditor(store: store, endEditing: { [weak window] in window?.endEditing(for: nil) })
-            self.editor = editor
-            store.onEndCustomizationEditing = { [weak editor] in editor?.finishEditing() }
-            store.onCustomizeProfile = { [weak editor] name in editor?.showProfile(name) }
+            // Only the window's views keep the selection valid, and they were gone while it was closed.
+            editor.keepSelection()
             window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor,
                 applicationMove: applicationMove))
             window.center()
@@ -42,9 +54,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         editor?.widgetTab = .content
         if let widgetID { editor?.showWidget(widgetID) }
         if let section { editor?.section = section }
-        NSApplication.shared.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
-        window!.makeKeyAndOrderFront(nil)
+        present(window!)
     }
 
     func showCrashes(store: BarStore) {
@@ -65,6 +75,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
         NSApplication.shared.setActivationPolicy(.accessory)
+        // SwiftUI views in a closed window still observe the store and redraw. The editor outlives the window.
+        window = nil
     }
 }
 
