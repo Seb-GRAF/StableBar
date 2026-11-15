@@ -42,6 +42,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             window.delegate = self
             window.minSize = NSSize(width: 900, height: 620)
             window.isReleasedWhenClosed = false
+            // Only the window's views keep the selection valid, and they were gone while it was closed.
+            editor.keepSelection()
             window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor,
                 applicationMove: applicationMove))
             window.center()
@@ -73,8 +75,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
         NSApplication.shared.setActivationPolicy(.accessory)
-        // A closed window's views keep observing the store and drawing on every change, so they're built again
-        // when Settings opens. The editor stays, so it opens where it was.
+        // SwiftUI views in a closed window still observe the store and redraw. The editor outlives the window.
         window = nil
     }
 }
