@@ -14,6 +14,8 @@ struct DiskVolume: Equatable, Sendable {
     var ejectable: Bool
     /// BSD name of the physical drive, such as `disk4`; nil for a network share.
     var drive: String?
+    /// A disk image such as an installer reports no free space, which isn't a full disk.
+    var isReadOnly = false
 }
 
 struct DiskVolumes: Equatable, Sendable {
@@ -38,7 +40,7 @@ func diskOutput(_ volumes: DiskVolumes, warning: Double, critical: Double) -> Sc
                 "symbol": volume.isLocal ? "externaldrive" : "externaldrive.connected.to.line.below",
                 "percent": diskPercent(fraction), "fraction": String(fraction),
                 "used": diskSize(used), "free": diskSize(volume.available), "total": diskSize(volume.total),
-                "state": diskState(fraction, warning: warning, critical: critical) ?? "",
+                "state": volume.isReadOnly ? "" : diskState(fraction, warning: warning, critical: critical) ?? "",
                 "ejectable": volume.ejectable ? "true" : "", "drive": volume.drive ?? "",
                 "driveVolumes": sharing.map(\.name).joined(separator: ", ")]
     }
@@ -78,7 +80,7 @@ struct SystemVolumes: VolumeReading {
     private static let keys: [URLResourceKey] = [
         .volumeLocalizedNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
         .volumeAvailableCapacityKey, .volumeLocalizedFormatDescriptionKey, .volumeIsLocalKey, .volumeIsInternalKey,
-        .volumeIsEjectableKey, .volumeIsRemovableKey, .volumeIsRootFileSystemKey
+        .volumeIsEjectableKey, .volumeIsRemovableKey, .volumeIsRootFileSystemKey, .volumeIsReadOnlyKey
     ]
 
     func read() throws -> DiskVolumes {
@@ -108,7 +110,8 @@ struct SystemVolumes: VolumeReading {
         return DiskVolume(name: values.volumeLocalizedName ?? url.lastPathComponent, path: Self.path(of: url),
                           format: values.volumeLocalizedFormatDescription ?? "", total: total,
                           available: min(max(available, 0), total), isLocal: isLocal, ejectable: ejectable,
-                          drive: session.flatMap { Self.drive(of: url, session: $0) })
+                          drive: session.flatMap { Self.drive(of: url, session: $0) },
+                          isReadOnly: values.volumeIsReadOnly == true)
     }
 
     private static func path(of url: URL) -> String {

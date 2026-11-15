@@ -63,6 +63,16 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     #expect(output.lists?["volumes"]?.first?["state"] == state)
 }
 
+@Test func aReadOnlyVolumeListsItsFiguresWithoutAState() {
+    let startup = volume("Macintosh HD", total: 1_000_000_000_000, available: 500_000_000_000)
+    var installer = volume("Installer", total: 200_000_000, available: 0)
+    installer.isReadOnly = true
+    let row = diskOutput(DiskVolumes(startup: startup, others: [installer]), warning: 0.85, critical: 0.95)
+        .lists?["volumes"]?.first
+    #expect(row?["state"] == "")
+    #expect(row?["percent"] == "100" && row?["free"] == diskSize(0) && row?["total"] == diskSize(200_000_000))
+}
+
 @Test(arguments: [(0, 30_000_000_000, 30_000_000_000), (44_000_000_000, 30_000_000_000, 44_000_000_000),
                   (nil, 30_000_000_000, 30_000_000_000), (nil, nil, 0), (0, nil, 0)] as [(Int64?, Int64?, Int64)])
 func availableSpacePrefersImportantUsageOnlyWhenTheVolumeReportsIt(important: Int64?, plain: Int64?, expected: Int64) {
