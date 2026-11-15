@@ -1024,7 +1024,7 @@ final class BarStore: NSObject {
                 throw CommandFailure(message: "Widget \(id) has no popup or menu.")
             }
             let config = configuration!.onScreen(ScreenKind(BarDisplay(screen: bar.screen!)))
-            popup.open(content, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
+            popup.open(content, widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults),
                        store: self, anchor: anchor, onHover: false)
         case .focus:
             let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID

@@ -317,7 +317,7 @@ struct SetupDemo: View {
 
     private func card(system: Bool) -> some View {
         let look = looks[0].look
-        let appearance = WidgetAppearance(look.popupDefaults.inheriting(look.defaults).resolved(for: StyleStates()),
+        let appearance = WidgetAppearance(look.popupDefaults.popupStyle(over: look.defaults).resolved(for: StyleStates()),
                                           defaults: WidgetStyle())
         return ZStack(alignment: .topLeading) {
             if system {

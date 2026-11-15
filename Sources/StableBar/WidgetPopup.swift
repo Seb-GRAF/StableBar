@@ -470,7 +470,7 @@ final class WidgetPopup {
         parentPopup = window as? PopupPanel
         let frame = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let edge = popupAttachmentEdge(anchor: frame, window: window.frame, geometry: (window as? BarPanel)?.barGeometry, position: bar.position)
-        let style = resolveStyle([defaults, widgetStyle], states: StyleStates(mode: store.modePresentation(on: kind)))
+        let style = tooltipStyle(defaults: defaults, widget: widgetStyle, states: StyleStates(mode: store.modePresentation(on: kind)))
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
         let panel = PopupPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -489,7 +489,8 @@ final class WidgetPopup {
         let size = host.fittingSize
         let alignedX = alignment == .leading ? frame.minX - shadowInset : frame.midX - size.width / 2
         let x = min(max(alignedX, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - size.width - 8)
-        let y = bar.position == .bottom ? edge + 6 - shadowInset : edge - size.height - 6 + shadowInset
+        let gap = CGFloat(bar.popupOffset)
+        let y = bar.position == .bottom ? edge + gap - shadowInset : edge - size.height - gap + shadowInset
         panel.setFrame(NSRect(x: x, y: y, width: size.width, height: size.height), display: false)
         panel.opensUpward = bar.position == .bottom
         panel.title = "\(id) tooltip"
@@ -544,14 +545,15 @@ final class WidgetPopup {
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
         let width = min(sizes[widget.id]?.width ?? CGFloat(popup.style.width ?? 360), screen.visibleFrame.width - shadowInset * 2 - 16)
-        let maximumHeight = (upward ? screen.visibleFrame.maxY - edge : edge - screen.visibleFrame.minY) - shadowInset * 2 - 8 - popup.offset
+        let gap = CGFloat(popup.gap(below: bar))
+        let maximumHeight = (upward ? screen.visibleFrame.maxY - edge : edge - screen.visibleFrame.minY) - shadowInset * 2 - 8 - gap
         let alignedX: CGFloat = switch popup.alignment {
         case .leading: frame.minX
         case .center: frame.midX - width / 2
         case .trailing: frame.maxX - width
         }
         let x = min(max(alignedX, screen.visibleFrame.minX + 8), screen.visibleFrame.maxX - width - 8)
-        let panel = PopupPanel(contentRect: NSRect(x: x - shadowInset, y: upward ? edge + popup.offset - shadowInset : edge - popup.offset + shadowInset,
+        let panel = PopupPanel(contentRect: NSRect(x: x - shadowInset, y: upward ? edge + gap - shadowInset : edge - gap + shadowInset,
                                                   width: width + shadowInset * 2, height: 0),
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.opensUpward = upward
@@ -580,7 +582,7 @@ final class WidgetPopup {
         })
         let height = min(sizes[widget.id]?.height ?? popup.height.map { CGFloat($0) } ?? host.fittingSize.height - shadowInset * 2, maximumHeight)
         panel.size.height = height
-        panel.setFrame(NSRect(x: x - shadowInset, y: upward ? edge + popup.offset - shadowInset : edge - height - popup.offset - shadowInset,
+        panel.setFrame(NSRect(x: x - shadowInset, y: upward ? edge + gap - shadowInset : edge - height - gap - shadowInset,
                               width: width + shadowInset * 2, height: height + shadowInset * 2), display: false)
         panel.title = "\(widget.id) popup"
         panel.isOpaque = false
@@ -1046,6 +1048,12 @@ func popupHoverTriangleContains(_ point: NSPoint, from origin: NSPoint, to popup
     let left = origin.x + (popup.minX - origin.x) * progress
     let right = origin.x + (popup.maxX - origin.x) * progress
     return point.x >= left && point.x <= right
+}
+
+/// A tooltip's style: the popup style `defaults` and the widget's tooltip style, with a compact padding and spacing
+/// whatever they set.
+func tooltipStyle(defaults: WidgetStyle, widget: WidgetStyle, states: StyleStates = StyleStates()) -> WidgetStyle {
+    WidgetStyle(paddingHorizontal: 10, paddingVertical: 6, spacing: 6).inheriting(resolveStyle([defaults, widget], states: states))
 }
 
 /// `frame` with its `edges` moved by `offset`, as a drag moves them, and its other edges where they are. It stays at least

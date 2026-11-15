@@ -299,7 +299,7 @@ struct BarInspector: View {
             style.color("Text", "foreground")
             if let widget {
                 let configuration = store.configuration!.onScreen(screen)
-                let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+                let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
                 let popup = widgetPopup(widget, store: store)
                 let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
                     "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,

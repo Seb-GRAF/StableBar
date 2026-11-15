@@ -89,7 +89,7 @@ Layers apply from lowest to highest:
 | --- | --- |
 | Bar widget | `defaults` → `roles[role]` → widget `style` → output `widgetStyles` in configuration order → own output `style`/`color` |
 | Layout/popup block | inherited text style → `roles[role]` → block `style` → named output style selected by `styleSource`/`styleField` |
-| Popup panel | `defaults` → `popupDefaults` → widget's explicit `style` → popup `style`; the bar widget's role is excluded |
+| Popup panel | `defaults` → `popupDefaults` → widget's explicit `style` → popup `style`; the bar widget's role is excluded. Padding and spacing skip `defaults` and the widget's `style`, starting from 16, 16 and 12 points |
 | Workspace | `workspaceDefaults` → widget `workspace` |
 | Bar strip | `bar.style` → script `barStyle` in configuration order |
 

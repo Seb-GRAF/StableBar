@@ -60,11 +60,11 @@ struct PopupView: View {
                     guard let element else { return store.innerPopup.close() }
                     let look = store.configuration!.onScreen(screenKind)
                     store.innerPopup.toggle(store.appMenu.popup(forMenuBarItem: element), widget: widget,
-                                            defaults: look.popupDefaults.inheriting(look.defaults), store: store, anchor: anchor)
+                                            defaults: look.popupDefaults.popupStyle(over: look.defaults), store: store, anchor: anchor)
                 }, hoverMenuBarItem: { [screenKind] title, anchor, inside in
                     let look = store.configuration!.onScreen(screenKind)
                     store.innerPopup.hover(inside, store: store, anchor: anchor) {
-                        store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.inheriting(look.defaults),
+                        store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
                                                      store: store, anchor: anchor)
                     }
                 }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in

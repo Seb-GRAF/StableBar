@@ -631,6 +631,8 @@ struct BarSettings: Decodable, Sendable {
     var motion = BarMotion.smooth
     var popupTransition: PopupTransition?
     var morphPopups = true
+    /// The gap between the bar and the popups, tooltips and hover controls that open from it.
+    var popupOffset = 6.0
     var inlineHoverControls = false
     var animationDuration: Double?
     var notchWidth: Double?
@@ -641,7 +643,7 @@ struct BarSettings: Decodable, Sendable {
     var glass = GlassSettings()
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, displayScale, position, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
+        case height, displayScale, position, offset, belowMenuBar, margin, keepWindowsClear, keepNotificationsClear, menuBarRevealDelay, hideMenuBar, hoverDelay, inset, spacing, background, motion, popupTransition, morphPopups, popupOffset, inlineHoverControls, animationDuration, notchWidth, notchSpacing, fillNotch, style, appearance, glass
     }
 
     init() {}
@@ -669,6 +671,7 @@ struct BarSettings: Decodable, Sendable {
         motion = try values.decodeIfPresent(BarMotion.self, forKey: .motion) ?? motion
         popupTransition = try values.decodeIfPresent(PopupTransition.self, forKey: .popupTransition)
         morphPopups = try values.decodeIfPresent(Bool.self, forKey: .morphPopups) ?? morphPopups
+        popupOffset = try values.decodeIfPresent(Double.self, forKey: .popupOffset) ?? popupOffset
         inlineHoverControls = try values.decodeIfPresent(Bool.self, forKey: .inlineHoverControls) ?? inlineHoverControls
         animationDuration = try values.decodeIfPresent(Double.self, forKey: .animationDuration)
         notchWidth = try values.decodeIfPresent(Double.self, forKey: .notchWidth)
@@ -728,7 +731,7 @@ struct BarSettings: Decodable, Sendable {
 
 struct ScreenConfiguration: Decodable, Sendable {
     static let barKeys: Set<String> = ["height", "position", "offset", "belowMenuBar", "margin", "inset", "spacing", "background", "notchWidth", "notchSpacing", "fillNotch", "style",
-                                       "glass", "appearance", "motion", "popupTransition", "morphPopups"]
+                                       "glass", "appearance", "motion", "popupTransition", "morphPopups", "popupOffset"]
     let bar: [String: ConfigurationValue]?
     let layout: [String: [String]]?
     let hasLook: Bool
