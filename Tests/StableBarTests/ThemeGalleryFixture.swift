@@ -38,8 +38,8 @@ struct ThemeGalleryFixture {
         return ThemeChoice(manifest: try packages.manifest(at: source), directory: source, isBundled: false)
     }
 
-    @MainActor func store() throws -> BarStore {
-        let store = BarStore(configurationURL: url, themesDirectory: themes)
+    @MainActor func store(appMenu: AppMenu = AppMenu()) throws -> BarStore {
+        let store = BarStore(configurationURL: url, themesDirectory: themes, appMenu: appMenu)
         var loader = ConfigurationLoader()
         loader.themesDirectory = themes
         store.configuration = try loader.load(url)
