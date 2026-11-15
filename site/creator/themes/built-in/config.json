@@ -1,0 +1,22 @@
+{
+  "roles": { "time": {}, "primary": {}, "secondary": {}, "key": {}, "value": {}, "heading": {}, "button": {}, "meter": {}, "separator": {} },
+  "tokens": {
+    "surface": { "light": "#f8f8faed", "dark": "#242629ee" },
+    "surfaceRaised": { "light": "#ffffff", "dark": "#36383c" },
+    "text": { "light": "#1d1d1f", "dark": "#f5f5f7" },
+    "textMuted": { "light": "#6e6e73", "dark": "#a1a1a6" },
+    "accent": { "light": "#007aff", "dark": "#0a84ff" },
+    "track": { "light": "#1d1d1f26", "dark": "#f5f5f726" },
+    "hairline": { "light": "#1d1d1f1f", "dark": "#ffffff1f" },
+    "warning": { "light": "#c93400", "dark": "#ffb340" },
+    "critical": { "light": "#d70015", "dark": "#ff6961" }
+  },
+  "defaults": {
+    "foreground": "@token.text",
+    "background": "@token.surface",
+    "hoverBackground": "@token.surfaceRaised",
+    "borderColor": { "light": "#ffffffb3", "dark": "#ffffff1f" },
+    "shadowColor": { "light": "#00000014", "dark": "#00000040" },
+    "accent": "@token.accent"
+  }
+}

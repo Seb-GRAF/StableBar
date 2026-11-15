@@ -1,0 +1,7 @@
+{
+  "id": "built-in",
+  "name": "Built-in",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json"
+}

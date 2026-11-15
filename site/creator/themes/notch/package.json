@@ -1,0 +1,10 @@
+{
+  "id": "notch",
+  "name": "Notch",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "A pure black bar in both appearances that blends into the MacBook notch, with a cyan accent.",
+  "author": "alexandrebucci",
+  "repository": "https://github.com/Seb-GRAF/stablebar-packages"
+}

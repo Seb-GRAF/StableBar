@@ -1,0 +1,10 @@
+{
+  "id": "phosphor",
+  "name": "Phosphor",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "An amber CRT terminal: glowing Monaco on black in dark, brown ink on printout paper in light, with the focused workspace in reverse video.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}
