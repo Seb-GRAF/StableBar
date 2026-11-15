@@ -1051,9 +1051,10 @@ func popupHoverTriangleContains(_ point: NSPoint, from origin: NSPoint, to popup
 }
 
 /// A tooltip's style: the popup style `defaults` and the widget's tooltip style, with a compact padding and spacing
-/// whatever they set.
+/// whatever they or their states set. Hover controls apply the widget's data state again when they draw.
 func tooltipStyle(defaults: WidgetStyle, widget: WidgetStyle, states: StyleStates = StyleStates()) -> WidgetStyle {
-    WidgetStyle(paddingHorizontal: 10, paddingVertical: 6, spacing: 6).inheriting(resolveStyle([defaults, widget], states: states))
+    WidgetStyle(paddingHorizontal: 10, paddingVertical: 6, spacing: 6)
+        .inheriting(resolveStyle([defaults, widget], states: states).withoutSpacing)
 }
 
 /// `frame` with its `edges` moved by `offset`, as a drag moves them, and its other edges where they are. It stays at least

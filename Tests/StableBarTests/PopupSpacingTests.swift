@@ -67,6 +67,19 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     #expect(style.background == .color(HexColor(0x202020FF)))
 }
 
+/// Hover controls apply the widget's data state again when they draw, so a state's padding mustn't survive either.
+@Test func tooltipsStayCompactInTheStatesTheirContentAppliesAgain() throws {
+    let config = try spacingConfiguration(#"""
+    {"popupDefaults":{"states":{"warning":{"spacing":30}}},
+     "widgets":[{"id":"sound","type":"text","text":"Sound","position":"right",
+       "style":{"states":{"warning":{"paddingHorizontal":20,"spacing":40,"foreground":"#ff0000"}}}}]}
+    """#)
+    let style = tooltipStyle(defaults: config.popupDefaults.popupStyle(over: config.defaults), widget: config.widgets[0].tooltipStyle)
+    let warning = style.resolved(for: StyleStates(data: "warning"))
+    #expect(padding(warning) == [10, 6, 6])
+    #expect(warning.foreground == HexColor(0xFF0000FF))
+}
+
 @Test func barPopupOffsetSetsTheGapBelowTheBarUnlessAPopupSetsItsOwn() throws {
     let config = try spacingConfiguration(#"""
     {"bar":{"popupOffset":14},"screens":{"laptop":{"bar":{"popupOffset":0}}},
