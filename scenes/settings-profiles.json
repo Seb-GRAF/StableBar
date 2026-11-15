@@ -1,0 +1,6 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../examples/modular/config.json",
+  "draw": "settings",
+  "section": "profiles"
+}
