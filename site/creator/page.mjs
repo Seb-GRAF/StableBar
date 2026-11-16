@@ -25,6 +25,7 @@ const messages = {
   invalidMinimumVersion: "Use text for the minimum StableBar version.",
   invalidRepository: "Use an https URL for the theme repository.",
   descriptionRequired: "Add a description in About before copying the Store README row.",
+  invalidStoreText: "The Store's table can't show a | or a line break in the name or description. Remove it to submit.",
   storeUnavailable: "Store couldn't be checked. Check the id and version in the Store before submitting.",
   damaged: "This theme could not be read. Open a theme zip, its folder or a complete share link.",
   damagedZip: "This zip could not be read. Choose the original theme zip or its unzipped folder.",
@@ -552,12 +553,20 @@ async function droppedFiles(transfer) {
   return files;
 }
 
+function invalidStoreTextField() {
+  return ["name", "description"].find(field => /[|\r\n\u2028\u2029]/.test(state.manifest[field] ?? ""));
+}
+
 function updateStoreGuide() {
   const rowSection = dialog.querySelector("[data-store-row]");
   if (!dialog.open || !rowSection) return;
   let row = "", reason = exportProblem(), control;
   if ([messages.invalidID, messages.reservedID, messages.invalidName, messages.sameID, messages.takenID].includes(reason)) control = "name";
   else if (reason === messages.invalidVersion) control = "version";
+  if (!reason) {
+    control = invalidStoreTextField();
+    if (control) reason = messages.invalidStoreText;
+  }
   if (!reason) {
     try { row = readmeRow(JSON.parse(themeFiles(state).manifestText)); }
     catch (error) {
@@ -643,6 +652,7 @@ async function output(action) {
     notify("Theme link copied.");
   } else if (action === "try" && TRY_LINK_MIN_VERSION !== null) location.href = encodeLink(files);
   else if (action === "row") {
+    if (invalidStoreTextField()) fail("invalidStoreText");
     await copyText(readmeRow(JSON.parse(files.manifestText)));
     notify("Table row copied.");
   }

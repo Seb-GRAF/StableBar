@@ -1314,10 +1314,9 @@ test("readme row matches the Store's script", () => {
   }
 });
 
-test("readme rows escape pipes after doubling backslashes in both text fields", () => {
+test("readme rows keep pipes and backslashes verbatim like the Store's script", () => {
   const { manifest, row } = json(".github/scripts/fixtures/theme-creator-readme-row.json");
   assert.equal(readmeRow(manifest), row);
-  assert.equal(row.split(/(?<!\\)\|/).length, 5);
 });
 
 test("store lookup", async () => {

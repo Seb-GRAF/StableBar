@@ -426,8 +426,7 @@ export async function folderFiles(files) {
 
 export function readmeRow({ id, name, description }) {
   if (typeof description !== "string" || !description.trim()) fail("descriptionRequired");
-  const cell = text => text.replaceAll("\\", "\\\\").replaceAll("|", "\\|");
-  return `|  | **[${cell(name)}](packages/${id})**<br>${cell(description)} | No commands |`;
+  return `|  | **[${name}](packages/${id})**<br>${description} | No commands |`;
 }
 
 export async function storeManifest(id, fetchImpl = fetch) {

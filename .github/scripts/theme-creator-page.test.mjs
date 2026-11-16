@@ -12,11 +12,18 @@ const source = readFileSync(new URL("../../site/creator/page.mjs", import.meta.u
 
 function pageHarness() {
   const events = new Map(), dialogEvents = new Map(), fields = new Map();
-  const element = () => ({
-    value: "", disabled: false, textContent: "", focus() {}, setAttribute() {},
-    classList: { add() {}, remove() {} }, querySelector: () => element(),
-  });
-  const root = { querySelector: () => element() };
+  const element = () => {
+    const children = new Map();
+    return {
+      value: "", disabled: false, textContent: "", dataset: {}, focus() {}, setAttribute() {},
+      classList: { add() {}, remove() {} }, querySelectorAll: () => [],
+      querySelector(selector) {
+        if (!children.has(selector)) children.set(selector, element());
+        return children.get(selector);
+      },
+    };
+  };
+  const root = element();
   const dialog = {
     open: false, innerHTML: "", showModal() { this.open = true; }, close() { this.open = false; },
     querySelector(selector) {
@@ -39,8 +46,67 @@ function pageHarness() {
   const close = () => events.get("click")({ target: {
     closest: () => ({ disabled: false, dataset: { action: "close" } }),
   } });
-  return { events, dialogEvents, fields, dialog, context, run, close };
+  return { events, dialogEvents, fields, root, dialog, context, run, close };
 }
+
+function storePage(patch = {}) {
+  const page = pageHarness();
+  page.context.themeState = {
+    manifest: { id: "ocean-night", name: "Ocean night", description: "Blue and grey", version: "1.0.0", ...patch },
+    config: {},
+  };
+  page.run("state = themeState; store = { status: 'free' }");
+  page.dialog.open = true;
+  return page;
+}
+
+test("the Store guide refuses pipes and line breaks in either text field without blocking download or share", async () => {
+  const reason = "The Store's table can't show a | or a line break in the name or description. Remove it to submit.";
+  for (const field of ["name", "description"]) {
+    for (const separator of ["|", "\n", "\r", "\r\n", "\u2028", "\u2029"]) {
+      const page = storePage({ [field]: `Ocean${separator}night` });
+      page.run("updateOutputs()");
+      const section = page.dialog.querySelector("[data-store-row]");
+      assert.equal(section.querySelector("[data-store-error]").textContent, reason, `${field}: ${JSON.stringify(separator)}`);
+      assert.equal(section.querySelector(".readme-box").hidden, true);
+      assert.equal(section.querySelector("pre").textContent, "");
+      const edit = section.querySelector('[data-action="about"]');
+      assert.equal(edit.hidden, false);
+      assert.equal(edit.dataset.aboutField, field);
+      assert.equal(page.root.querySelector('[data-action="download"]').disabled, false);
+      assert.equal(page.dialog.querySelector('[data-action="download"]').disabled, false);
+      assert.equal(page.root.querySelector('[data-action="share"]').disabled, false);
+      assert.equal(page.run("exportProblem()"), "");
+      const themeState = page.run("state"), exported = files.themeFiles(themeState);
+      assert.deepEqual(await files.readZip(files.writeZip(themeState.manifest.id, exported)), exported);
+      const copied = [];
+      page.context.navigator = { clipboard: { writeText: async text => copied.push(text) } };
+      page.context.location = { href: "https://stablebar.app/create-theme.html" };
+      await page.run("output('share')");
+      assert.equal(copied.length, 1);
+      assert.deepEqual(files.decodeLink(new URL(copied[0]).hash), exported);
+      await assert.rejects(page.run("output('row')"), /invalidStoreText/);
+      assert.equal(copied.length, 1);
+    }
+  }
+});
+
+test("the Store guide restores the exact row after correcting text and allows literal backslashes", async () => {
+  const page = storePage({ name: "Ocean|night" });
+  page.run("updateStoreGuide()");
+  page.run("state.manifest.name = 'Ocean \\\\ night'; state.manifest.description = 'Blue \\\\ grey'; updateStoreGuide()");
+  const section = page.dialog.querySelector("[data-store-row]");
+  const expected = files.readmeRow(page.run("state.manifest"));
+  assert.equal(expected, "|  | **[Ocean \\ night](packages/ocean-night)**<br>Blue \\ grey | No commands |");
+  assert.equal(section.querySelector("[data-store-error]").textContent, "");
+  assert.equal(section.querySelector(".readme-box").hidden, false);
+  assert.equal(section.querySelector("pre").textContent, expected);
+  assert.equal(section.querySelector('[data-action="about"]').hidden, true);
+  const copied = [];
+  page.context.navigator = { clipboard: { writeText: async text => copied.push(text) } };
+  await page.run("output('row')");
+  assert.deepEqual(copied, [expected]);
+});
 
 test("remixing keeps compatibility while dropping ownership and resetting the version", () => {
   const page = pageHarness();
