@@ -44,6 +44,14 @@ import SwiftUI
         textContainerInset = NSSize(width: 4, height: 6)
     }
 
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        // The finder's highlight updates on a timer that can fire after the editor is freed, so shut the finder down
+        // while the editor still exists.
+        if newWindow == nil, enclosingScrollView?.isFindBarVisible == true { performFinderAction(.hideFindInterface) }
+        usesFindBar = newWindow != nil
+        super.viewWillMove(toWindow: newWindow)
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
         if event.keyCode == 53, modifiers.isEmpty, enclosingScrollView?.isFindBarVisible == true {

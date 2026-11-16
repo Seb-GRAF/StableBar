@@ -6,7 +6,7 @@ import Testing
 @MainActor struct JSONTextViewTests {
     @Test func substitutionsLeaveTypedTextAsIs() throws {
         let (window, _, textView) = try hostedTextView("\"a\": \"b\" -- x")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         // Applies every substitution that is on, as typing would after a pause.
         textView.checkTextInDocument(nil)
         #expect(textView.string == "\"a\": \"b\" -- x")
@@ -16,7 +16,7 @@ import Testing
 
     @Test func commandZUndoesAndShiftCommandZRedoesTyping() throws {
         let (window, _, textView) = try hostedTextView("{}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         textView.insertText("x", replacementRange: textView.selectedRange())
         #expect(textView.string == "{}x")
         #expect(window.performKeyEquivalent(with: try key("z", code: 6, .command, in: window)))
@@ -27,7 +27,7 @@ import Testing
 
     @Test func commandZFollowsTheKeyOnANonLatinLayoutButNotOnQWERTZ() throws {
         let (window, _, textView) = try hostedTextView("{}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         textView.insertText("x", replacementRange: textView.selectedRange())
         // On QWERTZ, the key where QWERTY has Z types Y.
         #expect(!textView.performKeyEquivalent(with: try key("y", code: 6, .command, in: window)))
@@ -38,14 +38,14 @@ import Testing
 
     @Test func commandZWithNothingToUndoIsSwallowed() throws {
         let (window, _, textView) = try hostedTextView("{}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         #expect(window.performKeyEquivalent(with: try key("z", code: 6, .command, in: window)))
         #expect(textView.string == "{}")
     }
 
     @Test func commandZIsLeftAloneWithoutFocus() throws {
         let (window, _, textView) = try hostedTextView("{}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         window.makeFirstResponder(nil)
         #expect(!textView.performKeyEquivalent(with: try key("z", code: 6, .command, in: window)))
     }
@@ -54,7 +54,7 @@ import Testing
                       ("  \"c\": [  ", "  \"c\": [  \n    ")])
     func returnKeepsIndentationAndIndentsAfterAnOpeningBracket(text: String, expected: String) throws {
         let (window, _, textView) = try hostedTextView(text)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         textView.insertNewline(nil)
         #expect(textView.string == expected)
         #expect(window.performKeyEquivalent(with: try key("z", code: 6, .command, in: window)))
@@ -63,21 +63,21 @@ import Testing
 
     @Test func tabInsertsTwoSpaces() throws {
         let (window, _, textView) = try hostedTextView("")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         textView.insertTab(nil)
         #expect(textView.string == "  ")
     }
 
     @Test func commandFShowsTheFindBar() async throws {
         let (window, scrollView, _) = try hostedTextView("{\"a\": 1}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         #expect(window.performKeyEquivalent(with: try key("f", code: 3, .command, in: window)))
         #expect(await poll { scrollView.isFindBarVisible })
     }
 
     @Test func escapeClosesAnOpenFindBar() async throws {
         let (window, scrollView, textView) = try hostedTextView("{\"a\": 1}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         #expect(window.performKeyEquivalent(with: try key("f", code: 3, .command, in: window)))
         try #require(await poll { scrollView.isFindBarVisible })
         #expect(window.performKeyEquivalent(with: try key("\u{1b}", code: 53, in: window)))
@@ -85,9 +85,18 @@ import Testing
         #expect(!textView.performKeyEquivalent(with: try key("\u{1b}", code: 53, in: window)))
     }
 
+    @Test func leavingTheWindowClosesTheFindBar() async throws {
+        let (window, scrollView, textView) = try hostedTextView("{\"a\": 1}")
+        defer { closeEditorWindow(window) }
+        #expect(window.performKeyEquivalent(with: try key("f", code: 3, .command, in: window)))
+        try #require(await poll { scrollView.isFindBarVisible })
+        window.contentView = nil
+        #expect(!scrollView.isFindBarVisible && !textView.usesFindBar)
+    }
+
     @Test func selectLineSelectsTheWholeLine() throws {
         let (window, _, textView) = try hostedTextView("{\n  \"a\": 1\n}")
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         window.makeFirstResponder(nil)
         textView.selectLine(2)
         #expect(textView.selectedRange() == NSRange(location: 2, length: 9))
@@ -130,7 +139,7 @@ struct JSONSyntaxProblemTests {
     @Test func returnInTheSheetInsertsANewlineInsteadOfApplying() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         press(try key("\r", code: 36, in: window), in: window)
         #expect(textView.string == "{\n  ")
         #expect(probe.applied.isEmpty && probe.closed == 0)
@@ -139,7 +148,7 @@ struct JSONSyntaxProblemTests {
     @Test func escapeClosesTheFindBarBeforeTheSheet() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         let scrollView = try #require(textView.enclosingScrollView)
         press(try key("f", code: 3, .command, in: window), in: window)
         try #require(await poll { scrollView.isFindBarVisible })
@@ -153,7 +162,7 @@ struct JSONSyntaxProblemTests {
     @Test func escapeInTheTextWithTheFindBarOpenClosesOnlyTheFindBar() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         let scrollView = try #require(textView.enclosingScrollView)
         press(try key("f", code: 3, .command, in: window), in: window)
         try #require(await poll { scrollView.isFindBarVisible })
@@ -172,7 +181,7 @@ struct JSONSyntaxProblemTests {
     @Test func returnInTheFindBarFindsInsteadOfApplying() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{\"a\": 1}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         let scrollView = try #require(textView.enclosingScrollView)
         press(try key("f", code: 3, .command, in: window), in: window)
         try #require(await poll { scrollView.isFindBarVisible })
@@ -185,7 +194,7 @@ struct JSONSyntaxProblemTests {
     @Test func applyAfterUndoAndRedoAppliesWhatTheEditorShows() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         textView.setSelectedRange(NSRange(location: 1, length: 0))
         textView.insertText("\"a\": 1", replacementRange: textView.selectedRange())
         press(try key("z", code: 6, .command, in: window), in: window)
@@ -207,7 +216,7 @@ struct JSONSyntaxProblemTests {
     @Test func applyingCurlyQuotesSelectsTheErrorLine() async throws {
         let probe = SheetProbe()
         let (window, textView) = try await hostedSheet("{\n  \"label\": “hi”\n}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         window.makeFirstResponder(nil)
         press(try key("\r", code: 36, in: window), in: window)
         #expect(await poll {
@@ -219,7 +228,7 @@ struct JSONSyntaxProblemTests {
     @Test func applyingValidJSONHandsOverTheValuesAndCloses() async throws {
         let probe = SheetProbe()
         let (window, _) = try await hostedSheet("{\"label\": \"hi\"}", probe: probe)
-        defer { window.close() }
+        defer { closeEditorWindow(window) }
         window.makeFirstResponder(nil)
         press(try key("\r", code: 36, in: window), in: window)
         #expect(await poll { probe.closed == 1 })
@@ -228,11 +237,40 @@ struct JSONSyntaxProblemTests {
         let refused = SheetProbe()
         refused.result = "Nope"
         let (otherWindow, _) = try await hostedSheet("{\"label\": \"hi\"}", probe: refused)
-        defer { otherWindow.close() }
+        defer { closeEditorWindow(otherWindow) }
         otherWindow.makeFirstResponder(nil)
         press(try key("\r", code: 36, in: otherWindow), in: otherWindow)
         #expect(await poll { refused.applied.count == 1 })
         #expect(refused.closed == 0)
+    }
+
+    @Test func dismissingTheEditorClosesItsFindBar() async throws {
+        _ = NSApplication.shared
+        let shown = Shown()
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 560, height: 420), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.alphaValue = 0
+        let host = NSHostingView(rootView: ShownEditor(shown: shown))
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { closeEditorWindow(window) }
+        var found: JSONTextView?
+        try #require(await poll {
+            host.layoutSubtreeIfNeeded()
+            found = jsonTextView(in: host)
+            return found != nil
+        })
+        let textView = try #require(found)
+        let scrollView = try #require(textView.enclosingScrollView)
+        window.makeFirstResponder(textView)
+        press(try key("f", code: 3, .command, in: window), in: window)
+        try #require(await poll { scrollView.isFindBarVisible })
+        shown.value = false
+        #expect(await poll {
+            host.layoutSubtreeIfNeeded()
+            return !scrollView.isFindBarVisible && !textView.usesFindBar
+        })
     }
 
     private func hostedSheet(_ text: String, probe: SheetProbe) async throws -> (NSWindow, JSONTextView) {
@@ -269,6 +307,20 @@ struct JSONSyntaxProblemTests {
     }
 }
 
+@MainActor @Observable private final class Shown {
+    var value = true
+}
+
+private struct ShownEditor: View {
+    let shown: Shown
+    @State private var text = "{\"a\": 1}"
+    @State private var controller = JSONEditorController()
+
+    var body: some View {
+        if shown.value { JSONEditor(text: $text, controller: controller) }
+    }
+}
+
 @MainActor private final class SheetProbe {
     var applied: [[String: ConfigurationValue]] = []
     var closed = 0
@@ -289,6 +341,13 @@ struct JSONSyntaxProblemTests {
     window.orderFrontRegardless()
     window.makeFirstResponder(textView)
     return (window, scrollView, textView)
+}
+
+/// Takes the editor out of its window before closing it, as dismissing the sheet does, so AppKit's finder shuts
+/// down before the editor is freed.
+@MainActor private func closeEditorWindow(_ window: NSWindow) {
+    window.contentView = nil
+    window.close()
 }
 
 @MainActor private func key(_ characters: String, code: UInt16, _ modifiers: NSEvent.ModifierFlags = [],
