@@ -1068,6 +1068,8 @@ final class BarStore: NSObject {
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
             refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
         case .query: break
+        // AppDelegate, which owns the bar's windows, hides or shows them before passing these on.
+        case .hide, .show, .toggle: break
         }
         return try snapshot(id: request.action == .query ? request.id : nil)
     }

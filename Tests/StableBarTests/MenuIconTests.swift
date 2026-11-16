@@ -14,9 +14,15 @@ import Testing
     let delegate = AppDelegate(store: store, panels: [1: bar])
     delegate.menuWillOpen(menu)
     let actions = menu.items.filter { $0.action != nil }
-    #expect(actions.map(\.title) == ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "Getting Started…", "Help…", "Send Feedback…",
-                                     "Settings…", "Quit StableBar"])
+    #expect(actions.map(\.title) == ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "Hide Bar", "Getting Started…", "Help…",
+                                     "Send Feedback…", "Settings…", "Quit StableBar"])
     #expect(actions.allSatisfy { $0.image?.isTemplate == true })
+
+    let hide = try #require(actions.first { $0.title == "Hide Bar" })
+    #expect(NSApplication.shared.sendAction(try #require(hide.action), to: hide.target, from: hide))
+    delegate.menuWillOpen(menu)
+    #expect(menu.items.filter { $0.action != nil }.map(\.title) == ["Show Bar", "Getting Started…", "Help…", "Send Feedback…",
+                                                                    "Settings…", "Quit StableBar"])
 
     try fixture.write("{", to: fixture.url)
     store.reloadConfiguration()

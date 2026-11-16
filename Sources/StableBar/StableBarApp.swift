@@ -277,6 +277,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var control: RuntimeControl?
     private var systemContext: SystemContext?
     private var panels: [CGDirectDisplayID: BarPanel] = [:]
+    private var hidesBar = false {
+        didSet { updatePanels() }
+    }
     private var statusItem: NSStatusItem!
 
     convenience init(configurationURL: URL) {
@@ -322,7 +325,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.showThemeTrial(on: screens[displayID - 1])
         }
         do {
-            let control = RuntimeControl { [store] in try store.handle($0) }
+            let control = RuntimeControl { [weak self, store] request in
+                switch request.action {
+                case .hide: self?.hidesBar = true
+                case .show: self?.hidesBar = false
+                case .toggle: self?.hidesBar.toggle()
+                default: break
+                }
+                return try store.handle(request)
+            }
             try control.start(url: store.sharedConfigurationURL)
             self.control = control
         } catch {
@@ -426,15 +437,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updatePanels() {
         if !store.barEditing.isActive { editingControls.close() }
         guard let config = store.configuration else { return }
+        let hidden = hidesBar || config.bar.hidden
         let screens = NSScreen.screens
         var clearanceDisplays: [WindowClearanceDisplay] = []
         var visibleFrames: [CGDirectDisplayID: CGRect] = [:]
         let ids = screens.map { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value }
-        for (id, panel) in panels where !ids.contains(id) {
+        for (id, panel) in panels where hidden || !ids.contains(id) {
             panel.close()
             panels.removeValue(forKey: id)
         }
-        for (index, screen) in screens.enumerated() {
+        if hidden {
+            store.popup.close()
+            store.retainDisplays([])
+        }
+        for (index, screen) in screens.enumerated() where !hidden {
             let id = ids[index]
             let panel: BarPanel
             if let existing = panels[id] {
@@ -484,8 +500,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menuBarStrip.update(panels: panels)
         editingControls.update(store: store, bars: panels, visibleFrames: visibleFrames)
-        store.windowClearance.update(windows: store.clearanceConfiguration?.bar.keepWindowsClear == true,
-                                     notifications: store.clearanceConfiguration?.bar.keepNotificationsClear == true,
+        store.windowClearance.update(windows: !hidden && store.clearanceConfiguration?.bar.keepWindowsClear == true,
+                                     notifications: !hidden && store.clearanceConfiguration?.bar.keepNotificationsClear == true,
                                      displays: clearanceDisplays)
         store.menuBarDelay.update(milliseconds: config.bar.menuBarRevealDelay, menuBars: screens.map {
             CGRect(x: $0.frame.minX, y: screens[0].frame.maxY - $0.frame.maxY, width: $0.frame.width,
@@ -515,8 +531,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             addItem("Try Themes…", icon: .themes, action: #selector(tryThemes), to: menu)
             addItem("Get Widgets…", icon: .store, action: #selector(getWidgets), to: menu)
-            menu.addItem(.separator())
         }
+        addItem(hidesBar ? "Show Bar" : "Hide Bar", icon: hidesBar ? .showBar : .hideBar, action: #selector(toggleBar), to: menu)
+        menu.addItem(.separator())
         addItem("Getting Started…", icon: .setup, action: #selector(showSetup), to: menu)
         addItem("Help…", icon: .help, action: #selector(showHelp), to: menu)
         addItem("Send Feedback…", icon: .feedback, action: #selector(showFeedback), to: menu)
@@ -558,6 +575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         customization.editor?.showSetting(.store)
     }
     @objc private func editBar() { store.barEditing.toggle() }
+    @objc private func toggleBar() { hidesBar.toggle() }
     @objc private func tryThemes() {
         let screens = NSScreen.screens
         let barIndices = screens.indices.filter { index in
