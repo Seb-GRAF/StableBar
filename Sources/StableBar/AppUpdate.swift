@@ -17,7 +17,7 @@ final class AppUpdate: NSObject, SPUUserDriver, SPUUpdaterDelegate {
 
     nonisolated static let widgetID = "stablebar.update"
     static let popup: PopupConfiguration = {
-        var popup = PopupConfiguration(height: 420, style: WidgetStyle(paddingHorizontal: 14, paddingVertical: 14, spacing: 10),
+        var popup = PopupConfiguration(height: 420, style: WidgetStyle(),
                                        layout: PopupBlock(content: .appUpdate))
         popup.animation = WidgetAnimation()
         return popup

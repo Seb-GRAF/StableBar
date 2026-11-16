@@ -1,0 +1,14 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": { "popupOffset": 14 },
+    "popupDefaults": { "paddingHorizontal": 22, "paddingVertical": 20 },
+    "widgets": [
+      { "id": "time", "type": "clock", "format": "EEE d MMM  HH:mm", "position": "center", "details": true }
+    ]
+  },
+  "draw": "bar",
+  "widget": "time",
+  "width": 900,
+  "height": 600
+}

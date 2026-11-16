@@ -61,7 +61,9 @@ final class ThemePreviewTests: XCTestCase {
         }
         let leman = try look("leman")
         XCTAssertEqual(leman.defaults.paddingVertical, 3)
-        XCTAssertEqual(leman.popupDefaults.inheriting(leman.defaults).paddingVertical, 6)
+        let popupDefaults = leman.popupDefaults.popupStyle(over: leman.defaults)
+        XCTAssertNil(popupDefaults.paddingVertical)
+        XCTAssertEqual(tooltipStyle(defaults: popupDefaults, widget: WidgetStyle()).paddingVertical, 6)
         XCTAssertEqual(workspaceCornerRadius(leman), .number(7))
         XCTAssertEqual(workspaceCornerRadius(try look("catppuccin")), .number(14))
     }

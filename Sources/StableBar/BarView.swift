@@ -283,7 +283,7 @@ private struct MoreWidgetsButton: View {
 
     var body: some View {
         Button {
-            store.popup.showWidgets(defaults: config.popupDefaults.inheriting(config.defaults), store: store, anchor: anchor) {
+            store.popup.showWidgets(defaults: config.popupDefaults.popupStyle(over: config.defaults), store: store, anchor: anchor) {
                 HStack(spacing: config.bar.spacing) {
                     ForEach(units) { BarUnitView(unit: $0, config: config, store: store, display: display.id) }
                 }
@@ -441,7 +441,7 @@ func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfigu
     if let name = widget.popupName { return store.configuration?.popups[name] }
     if let menu = store.scripts[widget.id]?.output.menu ?? widget.menu, !menu.isEmpty {
         return PopupConfiguration(
-            style: WidgetStyle(fontSize: 12, paddingHorizontal: 12, paddingVertical: 12, spacing: 4),
+            style: WidgetStyle(fontSize: 12, spacing: 4),
             layout: PopupBlock(content: .menu)
         )
     }
@@ -520,7 +520,7 @@ struct WidgetView: View {
         } else if let popup = widgetPopup(widget, store: store) {
             let click = {
                 guard store.barEditing.allowsWidgetActions else { return }
-                store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: clickAnchor)
+                store.popup.toggle(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: clickAnchor)
             }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
         } else if let command = output?.onClick ?? widget.onClick {
@@ -603,7 +603,7 @@ struct WidgetView: View {
             store.popup.hover(false, store: store, anchor: popupAnchor) {}
         } else if let popup = widgetPopup(widget, store: store), popup.openOnHover {
             store.popup.hover(inside, store: store, anchor: popupAnchor) {
-                store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
+                store.popup.open(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults),
                                  store: store, anchor: popupAnchor, onHover: true)
             }
         } else if case let .menuBarItems(openOnHover: true, _, hidden) = widget.content, !widget.drawsMenuBarItems,
@@ -611,12 +611,12 @@ struct WidgetView: View {
             hoverMenuBarItems(inside, leavingOut: hidden.references, anchor: popupAnchor)
         } else if !inlineHoverControls, widget.hoverLayout != nil || (isSound && output?.values?["volume"] != nil) {
             store.popup.hover(inside, store: store, anchor: popupAnchor) {
-                store.popup.showControls(widget: widget, defaults: popupDefaults.inheriting(defaults), store: store,
+                store.popup.showControls(widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store,
                                          anchor: popupAnchor) { style in hoverControls(style) }
             }
         } else if widget.hoverLayout == nil, let tooltip, !tooltip.isEmpty {
             store.popup.hover(inside, store: store, anchor: popupAnchor) {
-                store.popup.showTooltip(tooltip, widget: widget, defaults: popupDefaults.inheriting(defaults),
+                store.popup.showTooltip(tooltip, widget: widget, defaults: popupDefaults.popupStyle(over: defaults),
                                         store: store, anchor: popupAnchor)
             }
         }
@@ -738,9 +738,13 @@ struct WidgetView: View {
     }
 
     private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
+        // The tile's own side padding, so the row's titles line up with the widget's.
+        let style = resolution.style(hovered: true, open: false)
+        let side = style.paddingLeading ?? WidgetAppearance(style, defaults: WidgetStyle()).paddingHorizontal
         store.popup.hover(true, store: store, anchor: popupAnchor) {
-            store.popup.showRow(widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: popupAnchor) {
-                AppMenuRow(widget: widget, store: store, defaults: popupDefaults.inheriting(defaults), appearance: appearance, padding: padding)
+            store.popup.showRow(widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: popupAnchor,
+                                sidePadding: side) {
+                AppMenuRow(widget: widget, store: store, defaults: popupDefaults.popupStyle(over: defaults), appearance: appearance, padding: padding)
             }
         }
     }
@@ -749,14 +753,14 @@ struct WidgetView: View {
         guard store.barEditing.allowsWidgetActions, !store.popup.toggleIfOpen(widget.id, anchor: anchor) else { return }
         Task {
             guard let popup = await store.appMenu.menuBarItemsPopup(leavingOut: references) else { return }
-            store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: anchor)
+            store.popup.toggle(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: anchor)
         }
     }
 
     private func hoverMenuBarItems(_ inside: Bool, leavingOut references: [MenuBarItemReference], anchor: NSView) {
         store.popup.hover(inside, store: store, anchor: anchor) {
             guard let popup = await store.appMenu.menuBarItemsPopup(leavingOut: references, requestingAccess: false), !Task.isCancelled else { return }
-            store.popup.open(popup, widget: widget, defaults: popupDefaults.inheriting(defaults),
+            store.popup.open(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults),
                              store: store, anchor: anchor, onHover: true)
         }
     }
@@ -764,12 +768,12 @@ struct WidgetView: View {
     /// The menus that don't fit beside the notch, each opening its own menu.
     private func openAppMenus(_ items: [AppMenuItem], anchor: NSView) {
         guard store.barEditing.allowsWidgetActions, let popup = store.appMenu.overflowPopup(for: items) else { return }
-        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
+        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
     private func openAppMenu(_ item: AppMenuItem, anchor: NSView) {
         guard let popup = store.appMenu.popup(for: item) else { return }
-        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
+        store.popup.toggle(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: moreWidgetsAnchor ?? anchor)
     }
 
     /// Runs the Apple logo's click. Without Accessibility access, a menu click asks for it; with access but no menu read
@@ -804,7 +808,7 @@ struct WidgetView: View {
                           modeAliases: store.configuration?.look(on: screenKind).modeAliases ?? [:], widgetID: widget.id,
                           allowsWindowDragging: store.barEditing.allowsWidgetActions) { inside, name, anchor in
                 store.popup.hover(inside, store: store, anchor: anchor) {
-                    store.popup.showTooltip(name, widget: widget, defaults: popupDefaults.inheriting(defaults), store: store, anchor: anchor)
+                    store.popup.showTooltip(name, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: anchor)
                 }
             }
         case let .appMenu(expandOnHover) where widget.layout == nil:
@@ -852,7 +856,7 @@ struct WidgetView: View {
             }
         case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
             let leftOut = widget.shownMenuBarItems.references + hidden.references
-            MenuBarItemsView(widget: widget, store: store, display: monitor, defaults: popupDefaults.inheriting(defaults),
+            MenuBarItemsView(widget: widget, store: store, display: monitor, defaults: popupDefaults.popupStyle(over: defaults),
                              appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                              padding: padding, symbol: store.label(for: widget).icon!) { anchor in
                 toggleMenuBarItems(leavingOut: leftOut, anchor: anchor)

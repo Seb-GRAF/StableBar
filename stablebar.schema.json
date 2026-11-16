@@ -221,7 +221,7 @@
           "type": "null"
         }
       ],
-      "description": "Styles every popup inherits. A popup's own style and its widget's style win; defaults fill the rest."
+      "description": "Styles every popup inherits. A popup's own style and its widget's style win; defaults fill the rest. Padding and spacing come only from here and the popup's own style, not from defaults or the widget's style, and tooltips and hover controls keep their own."
     },
     "widgets": {
       "type": "array",
@@ -1252,7 +1252,8 @@
           "$ref": "#/definitions/alignment"
         },
         "offset": {
-          "$ref": "#/definitions/number"
+          "$ref": "#/definitions/number",
+          "description": "The gap in points below what this popup opens from. Defaults to the bar's popupOffset below the bar, and to 6 below a row of another popup."
         },
         "dismissOnAction": {
           "$ref": "#/definitions/boolean"
@@ -2054,6 +2055,10 @@
           "$ref": "#/definitions/boolean",
           "description": "When a popup or tooltip opens while another is open on the same bar, move and reshape the open one into the new one instead of closing it. Enabled by default."
         },
+        "popupOffset": {
+          "$ref": "#/definitions/number",
+          "description": "The gap in points between the bar and the popups, tooltips and hover controls that open from it. A popup's own offset wins. Defaults to 6."
+        },
         "inlineHoverControls": {
           "$ref": "#/definitions/boolean",
           "description": "Show hover controls, such as the Sound widget's volume slider, inside the widget, which widens and moves its neighbors, instead of in a tooltip under it. Disabled by default."
@@ -2251,6 +2256,9 @@
             },
             "morphPopups": {
               "$ref": "#/definitions/bar/properties/morphPopups"
+            },
+            "popupOffset": {
+              "$ref": "#/definitions/bar/properties/popupOffset"
             }
           },
           "description": "Bar settings that replace the shared ones on this kind of screen."
