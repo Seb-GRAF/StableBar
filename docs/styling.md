@@ -130,7 +130,7 @@ Other names work too. `hover`, `open`, `focused`, `visible`, `empty`, `mode` and
 
 A widget's own `states` override the theme's property by property. The data state applies first, so `hover` and `open` still show over it. Hover applies over the data state, so a state that sets a background should also set its hover background in its own `states`. A data state also reaches the widget's `layout` and `overlay` blocks, which apply their own `states` for it. Popups keep their own styles.
 
-Native providers can't return `state`, so a widget can set it with `rules`. The first rule that matches the latest output sets the state; a `state` in the output takes precedence:
+Apart from `disk`, native providers can't return `state`, so a widget can set it with `rules`. The first rule that matches the latest output sets the state; a `state` in the output takes precedence:
 
 ```json
 {

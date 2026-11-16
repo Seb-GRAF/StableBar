@@ -1,0 +1,86 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "disk",
+        "type": "disk",
+        "position": "right",
+        "details": true
+      }
+    ],
+    "providers": {
+      "disk": { "type": "disk", "diskWarning": 0.8 }
+    }
+  },
+  "outputs": {
+    "disk": {
+      "text": "59%",
+      "icon": "internaldrive",
+      "tooltip": "412 GB available on Macintosh HD",
+      "fields": {
+        "format": "APFS",
+        "free": "412 GB",
+        "percent": "59",
+        "total": "994 GB",
+        "used": "582 GB",
+        "volume": "Macintosh HD"
+      },
+      "lists": {
+        "volumes": [
+          {
+            "drive": "disk4",
+            "driveVolumes": "Photos",
+            "ejectable": "true",
+            "fraction": "0.41",
+            "free": "1.18 TB",
+            "name": "Backup",
+            "path": "/Volumes/Backup",
+            "percent": "41",
+            "state": "",
+            "symbol": "externaldrive",
+            "total": "2 TB",
+            "used": "820 GB"
+          },
+          {
+            "drive": "disk4",
+            "driveVolumes": "Backup",
+            "ejectable": "true",
+            "fraction": "0.4",
+            "free": "300 GB",
+            "name": "Photos",
+            "path": "/Volumes/Photos",
+            "percent": "40",
+            "state": "",
+            "symbol": "externaldrive",
+            "total": "500 GB",
+            "used": "200 GB"
+          },
+          {
+            "drive": "",
+            "driveVolumes": "",
+            "ejectable": "true",
+            "fraction": "0.025",
+            "free": "3.9 TB",
+            "name": "NAS",
+            "path": "/Volumes/NAS",
+            "percent": "3",
+            "state": "",
+            "symbol": "externaldrive.connected.to.line.below",
+            "total": "4 TB",
+            "used": "100 GB"
+          }
+        ]
+      },
+      "values": {
+        "disk": 0.5855,
+        "free": 412000000000,
+        "total": 994000000000,
+        "used": 582000000000
+      }
+    }
+  },
+  "draw": "settings",
+  "widget": "disk",
+  "height": 1180
+}

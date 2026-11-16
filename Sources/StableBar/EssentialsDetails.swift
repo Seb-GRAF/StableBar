@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum EssentialsPopup: String, Sendable {
-    case clock, battery, system, network, calendar
+    case clock, battery, system, network, calendar, disk
 
     static func kind(for widget: WidgetConfiguration, providerType: String?) -> Self? {
         if case .clock = widget.content { return .clock }
@@ -21,7 +21,6 @@ struct EssentialsDetails: View {
     let fields: [String: String]
     let context: BlockContext
     let appearance: WidgetAppearance
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -32,6 +31,7 @@ struct EssentialsDetails: View {
             case .system: system
             case .network: network
             case .calendar: calendar
+            case .disk: disk
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,6 +213,37 @@ struct EssentialsDetails: View {
         }
     }
 
+    private var disk: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Label(fields["volume"] ?? "—", systemImage: "internaldrive").fontWeight(.medium).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(fields["format"] ?? "").font(.system(size: 12)).opacity(0.6).lineLimit(1)
+                }
+                Text("\(fields["percent"] ?? "—")%")
+                    .font(.system(size: 28, weight: .semibold, design: .rounded)).monospacedDigit()
+                EssentialsMeter(value: context.values["disk"] ?? 0,
+                                color: stateAccent(context.dataState, context: context, appearance: appearance), appearance: appearance)
+            }
+            VStack(spacing: 8) {
+                detail("Used", fields["used"] ?? "—")
+                detail("Available", fields["free"] ?? "—")
+                detail("Capacity", fields["total"] ?? "—")
+            }
+            if let volumes = context.lists["volumes"], !volumes.isEmpty {
+                Divider().overlay(appearance.foreground.opacity(0.12))
+                Text("Other volumes").font(.system(size: 12, weight: .semibold)).opacity(0.6)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(volumes, id: \.["path"]) { row in
+                    DiskVolumeRow(row: row, context: context, appearance: appearance)
+                }
+            }
+            Divider().overlay(appearance.foreground.opacity(0.12))
+            open("Storage settings", "x-apple.systempreferences:com.apple.settings.Storage", symbol: "gearshape")
+        }
+    }
+
     private func metric(_ title: String, value: String, symbol: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label(title, systemImage: symbol).font(.system(size: 11, weight: .medium)).opacity(0.6)
@@ -231,12 +262,7 @@ struct EssentialsDetails: View {
     }
 
     private func meter(_ value: Double) -> some View {
-        GeometryReader { proxy in
-            Capsule().fill(appearance.foreground.opacity(0.1))
-                .overlay(alignment: .leading) { Capsule().fill(appearance.accent).frame(width: proxy.size.width * min(1, max(0, value))) }
-        }
-        .frame(height: 5)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: value)
+        EssentialsMeter(value: value, color: appearance.accent, appearance: appearance)
     }
 
     private func open(_ title: String, _ target: String, symbol: String) -> some View {
@@ -246,5 +272,130 @@ struct EssentialsDetails: View {
         }
         .buttonStyle(.plain)
         .modifier(FocusHighlight(appearance: appearance))
+    }
+}
+
+private func stateAccent(_ state: String?, context: BlockContext, appearance: WidgetAppearance) -> Color {
+    state.flatMap { context.stateAccents[$0] } ?? appearance.accent
+}
+
+private struct EssentialsMeter: View {
+    let value: Double
+    let color: Color
+    let appearance: WidgetAppearance
+    var height: CGFloat = 5
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule().fill(appearance.foreground.opacity(0.1))
+                .overlay(alignment: .leading) { Capsule().fill(color).frame(width: proxy.size.width * min(1, max(0, value))) }
+        }
+        .frame(height: height)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: value)
+    }
+}
+
+/// One of the disk popup's other volumes, with its eject button and the question an eject can ask.
+struct DiskVolumeRow: View {
+    let row: [String: String]
+    let context: BlockContext
+    let appearance: WidgetAppearance
+    @State private var asking: Bool
+    @State private var ejecting = false
+    @State private var error: String?
+
+    init(row: [String: String], context: BlockContext, appearance: WidgetAppearance, asking: Bool = false) {
+        self.row = row
+        self.context = context
+        self.appearance = appearance
+        _asking = State(initialValue: asking)
+    }
+
+    private var name: String { row["name"] ?? "" }
+    private var path: String { row["path"] ?? "" }
+    private var driveVolumes: String { row["driveVolumes"] ?? "" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: row["symbol"] ?? "externaldrive").frame(width: 18)
+                Text(name).lineLimit(1).truncationMode(.middle).frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(row["free"] ?? "—") free").font(.system(size: 12)).monospacedDigit().opacity(0.65).lineLimit(1)
+                if row["ejectable"] == "true" { ejectButton }
+            }
+            EssentialsMeter(value: row["fraction"].flatMap(Double.init) ?? 0,
+                            color: stateAccent(row["state"], context: context, appearance: appearance),
+                            appearance: appearance, height: 4)
+                .padding(.leading, 26)
+            if asking { question.padding(.leading, 26) }
+            if let error {
+                Text(error).font(.system(size: 11)).opacity(0.6).fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 26)
+            }
+        }
+    }
+
+    @ViewBuilder private var ejectButton: some View {
+        if ejecting {
+            ProgressView().controlSize(.mini).frame(width: 18).accessibilityLabel("Ejecting \(name)")
+        } else {
+            Button {
+                if driveVolumes.isEmpty { eject(.drive) } else { asking.toggle() }
+            } label: {
+                Image(systemName: "eject").opacity(0.7).frame(width: 18).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Eject \(name)")
+            .accessibilityLabel("Eject \(name)")
+            .modifier(FocusHighlight(appearance: appearance))
+        }
+    }
+
+    private var question: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Also ejects \(driveVolumes) on this drive").font(.system(size: 11)).opacity(0.6)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button { eject(.drive) } label: {
+                    Text("Eject All").foregroundStyle(appearance.accentText)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(appearance.accent, in: RoundedRectangle(cornerRadius: min(appearance.cornerRadius, 6)))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Eject All")
+                .modifier(FocusHighlight(appearance: appearance))
+                Button { eject(.volume) } label: {
+                    Text("Only \(name)").foregroundStyle(appearance.accent).lineLimit(1).truncationMode(.middle)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Only \(name)")
+                .modifier(FocusHighlight(appearance: appearance))
+                Button { asking = false } label: {
+                    Text("Cancel").opacity(0.7).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel")
+                .modifier(FocusHighlight(appearance: appearance))
+            }
+            .font(.system(size: 12, weight: .medium))
+        }
+    }
+
+    /// Leaves the row in place on success: it goes away when the provider's next read no longer lists the volume.
+    private func eject(_ scope: EjectScope) {
+        asking = false
+        error = nil
+        ejecting = true
+        Task {
+            do {
+                try await context.eject(path, scope)
+            } catch {
+                self.error = errorMessage(error)
+            }
+            ejecting = false
+        }
     }
 }

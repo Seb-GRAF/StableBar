@@ -13,11 +13,11 @@
 | `text` | Static text and optional icon | `text` |
 | `script` | Output of a shell command | `command`, `interval` in seconds or `null` for event-only updates |
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
-| `system`, `network`, `battery`, `audio`, `microphone`, `calendar` | Native CPU and memory, network, battery, audio output, microphone or calendar data | — |
+| `system`, `network`, `battery`, `audio`, `microphone`, `calendar`, `disk` | Native CPU and memory, network, battery, audio output, microphone, calendar or disk data | — |
 | `inputSource` | The keyboard input source, such as `FR`; clicking it switches to the next enabled one, unless it has its own `onClick`, `open`, popup or menu | — |
 | `privacy` | A microphone and a camera, lit orange and green while an app records from the default input device or uses a camera, as macOS's privacy indicators show; see [`privacy`](providers.md) for macOS 14.0 and 14.1 | `hideWhenIdle`: show only what is in use, and hide while nothing is (default `false`) |
 
-**Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, StableBar, Menu bar items, Battery, Sound, Input source, Microphone & camera, System monitor, Network, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. App menus, Control Center, Menu bar items and an Apple menu that opens the menu need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces); adding it picks the window manager [as setup does](getting-started.md#install-and-set-up), and macOS Spaces when none is running. Script starts with a clock command you can change through **More → Edit as JSON…**.
+**Add widget** includes Clock & date, Active app, Apple menu, App menus, Control Center, StableBar, Menu bar items, Battery, Sound, Input source, Microphone & camera, System monitor, Network, Disk, Calendar, Workspaces, Text and Spacer. Text starts with “New widget”. App menus, Control Center, Menu bar items and an Apple menu that opens the menu need Accessibility access; Calendar asks for Calendar access; Workspaces needs AeroSpace, yabai, [OmniWM](#omniwm-workspaces) or [macOS Spaces](#macos-spaces-workspaces); adding it picks the window manager [as setup does](getting-started.md#install-and-set-up), and macOS Spaces when none is running. Script starts with a clock command you can change through **More → Edit as JSON…**.
 
 The AeroSpace connection subscribes to workspace, monitor, window and focus events. It loads an initial snapshot, coalesces pending events and reconnects after a disconnect with exponential backoff, capped at five minutes, and at once when AeroSpace launches. Ten seconds of connection resets the backoff. The accent color marks the focused workspace; an outline marks a workspace visible on another monitor. Empty, inactive workspaces are hidden. App icons are deduplicated per workspace unless `workspace.windows` is enabled. Active-app updates come from NSWorkspace notifications.
 
@@ -25,7 +25,7 @@ Window dragging is enabled only for the AeroSpace, yabai and Rift workspace sour
 
 ## Essentials details and settings
 
-**Clock & date**, **Battery**, **System monitor**, **Network** and **Calendar** include detail popups when added from Essentials or **Add widget**. They replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed Store copies become built-in automatically and keep their saved settings and overrides; local folders and private sources can still offer packages with those IDs.
+**Clock & date**, **Battery**, **System monitor**, **Network**, **Calendar** and **Disk** include detail popups when added from Essentials or **Add widget**. The first five replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed Store copies become built-in automatically and keep their saved settings and overrides; local folders and private sources can still offer packages with those IDs.
 
 Select a widget in **Settings → Bar → Content** to change what it shows. **Behavior → Details popup** turns its built-in popup on or off. Existing native widgets can opt in with `"details": true`. The five former Store packages gain Essentials details automatically when the app updates, while preserving saved settings and overrides. A custom `popup`, `popupName`, menu, `onClick` or `open` keeps its action instead of the built-in details.
 
@@ -33,6 +33,7 @@ Select a widget in **Settings → Bar → Content** to change what it shows. **B
 - **Battery:** keeps the native battery glyph and its percentage/charging tooltip. The existing display choices can show a percentage, meter or graph. Its details show charge, power source, a time estimate when available, battery health and Battery settings. A Mac without a battery, such as a Mac mini or an iMac, only shows a plug and AC, so setup's presets add Battery only on a Mac with one.
 - **System monitor:** shows CPU and memory, load, heat, memory pressure, swap and uptime, plus the apps using the most memory or CPU. The quit button asks before quitting. Set the refresh interval, number of apps, sort order and warning thresholds in Content. Set the app count to 0 to stop app sampling; set a threshold to 101% to turn off that threshold. Pressure and heat still warn. On the bar it shows CPU; **Shows** in Content shows memory instead, or both in either order, with the same [Display](create-a-widget.md#composing-widgets) choices. Newly added System monitor widgets use the theme’s warning and critical colors.
 - **Network:** shows upload/download rates and a breakdown by active network interface. Choose bytes (KiB/s, MiB/s) or bits (kbit/s, Mbit/s), and the refresh interval. It uses the same native Ethernet/Wi-Fi interface counters as before.
+- **Disk:** shows how full the startup disk is, using the available space Finder reports, purgeable space included. The tooltip gives the space available, and the details show used, available and total space with the other volumes Finder lists, such as external drives, disk images and network shares. A volume's eject button asks first when its drive holds other volumes: **Eject All**, **Only** that volume, or **Cancel**. Refreshes every 60 seconds, and when a volume is mounted, unmounted or renamed. Set the refresh interval and the warning and critical thresholds in Content; set a threshold to 101% to turn it off. **Storage settings** opens System Settings.
 - **Calendar:** shows the next meeting and its countdown, today’s agenda and meeting links. Set the rolling lookahead and the upcoming/starting warning times. Calendar access is requested when its source runs. The lookahead is a number of hours, not a today-only cutoff.
 
 Data settings belong to the widget’s provider. Widgets sharing that provider share its settings; the inspector says so when several widgets use it. Edits made while editing a profile stay in that profile and support Undo. Custom layouts remain available through **Edit as JSON…**.
@@ -41,13 +42,15 @@ Data settings belong to the widget’s provider. Widgets sharing that provider s
 {
   "providers": {
     "system": { "type": "system", "interval": 2, "processes": 5, "sortBy": "memory", "cpuWarning": 0.9, "memoryWarning": 0.9 },
-    "network": { "type": "network", "interval": 5, "units": "bytes" }
+    "network": { "type": "network", "interval": 5, "units": "bytes" },
+    "disk": { "type": "disk", "interval": 60, "diskWarning": 0.85, "diskCritical": 0.95 }
   },
   "widgets": [
     { "id": "clock", "type": "clock", "position": "right", "format": "EEE d MMM  HH:mm", "timeZone": "Europe/Zurich", "details": true },
     { "id": "battery", "type": "battery", "position": "right", "details": true },
     { "id": "system", "type": "system", "position": "right", "details": true },
     { "id": "network", "type": "network", "position": "right", "details": true },
+    { "id": "disk", "type": "disk", "position": "right", "details": true },
     { "id": "calendar", "type": "calendar", "position": "right", "details": true }
   ]
 }

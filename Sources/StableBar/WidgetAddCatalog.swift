@@ -32,6 +32,12 @@ struct WidgetAddChoice: Identifiable, Sendable {
 }
 
 enum WidgetAddCatalog {
+    /// Warning and critical colours shared by the widgets that report a usage state.
+    static let warningStyle: ConfigurationValue = .object(["states": .object([
+        "warning": .object(["foreground": .string("@token.warning"), "accent": .string("@token.warning")]),
+        "critical": .object(["foreground": .string("@token.critical"), "accent": .string("@token.critical")])
+    ])])
+
     static let builtIns: [WidgetAddChoice] = [
         .init(id: "clock", name: "Clock & date", symbol: "clock", description: "Time, date and a month calendar, in your time zone.", properties: ["type": .string("clock"), "format": .string("EEE d MMM  HH:mm"), "details": .bool(true)], replacesPackage: "date"),
         .init(id: "activeApp", name: "Active app", symbol: "macwindow", description: "The frontmost app’s name and icon.", properties: ["type": .string("activeApp")]),
@@ -45,11 +51,9 @@ enum WidgetAddCatalog {
         .init(id: "inputSource", name: "Input source", symbol: "keyboard", description: "The keyboard input source. Clicking it switches to the next one.", properties: ["type": .string("inputSource")]),
         .init(id: "privacy", name: "Microphone & camera", symbol: "hand.raised", description: "Lights up while an app uses the microphone or camera.", properties: ["type": .string("privacy")]),
         .init(id: "system", name: "System monitor", symbol: "cpu", description: "CPU, memory and the apps using them, with adjustable warnings.",
-              properties: ["type": .string("system"), "details": .bool(true), "style": .object(["states": .object([
-                "warning": .object(["foreground": .string("@token.warning"), "accent": .string("@token.warning")]),
-                "critical": .object(["foreground": .string("@token.critical"), "accent": .string("@token.critical")])
-              ])])], replacesPackage: "system-monitor"),
+              properties: ["type": .string("system"), "details": .bool(true), "style": warningStyle], replacesPackage: "system-monitor"),
         .init(id: "network", name: "Network", symbol: "network", description: "Upload and download rates, with activity for each interface.", properties: ["type": .string("network"), "details": .bool(true)], replacesPackage: "network-speed"),
+        .init(id: "disk", name: "Disk", symbol: "internaldrive", description: "How full the startup disk is, with other drives you can eject.", properties: ["type": .string("disk"), "details": .bool(true), "style": warningStyle]),
         .init(id: "calendar", name: "Calendar", symbol: "calendar", description: "Your next meeting and today’s agenda. Asks for Calendar access.", properties: ["type": .string("calendar"), "details": .bool(true)], replacesPackage: "calendar-agenda"),
         .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai, OmniWM, Rift or macOS Spaces.", properties: ["type": .string("workspaces")]),
         .init(id: "text", name: "Text", symbol: "textformat", description: "Your own text and optional icon.", properties: ["type": .string("text"), "text": .string("New widget")]),

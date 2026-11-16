@@ -8,7 +8,7 @@ final class WidgetAddCatalogTests: XCTestCase {
         var loader = ConfigurationLoader()
         loader.themesDirectory = fixture.themes
         let choices = WidgetAddCatalog.compose()
-        XCTAssertEqual(choices.map(\.name), ["Clock & date", "Active app", "Apple menu", "App menus", "Control Center", "StableBar", "Menu bar items", "Battery", "Sound", "Input source", "Microphone & camera", "System monitor", "Network", "Calendar", "Workspaces", "Text", "Spacer", "Script"])
+        XCTAssertEqual(choices.map(\.name), ["Clock & date", "Active app", "Apple menu", "App menus", "Control Center", "StableBar", "Menu bar items", "Battery", "Sound", "Input source", "Microphone & camera", "System monitor", "Network", "Disk", "Calendar", "Workspaces", "Text", "Spacer", "Script"])
         XCTAssertEqual(Set(choices.map(\.id)).count, choices.count)
         XCTAssertTrue(choices.last!.isScript)
         for choice in choices {
@@ -19,10 +19,15 @@ final class WidgetAddCatalogTests: XCTestCase {
             let configuration = try loader.load(fixture.url, data: data)
             XCTAssertEqual(configuration.widgets[0].position, .right)
             if choice.id == "text" { XCTAssertEqual(configuration.widgets[0].content, .text("New widget")) }
-            if ["battery", "audio", "inputSource", "privacy", "system", "network", "calendar"].contains(choice.id) {
+            if ["battery", "audio", "inputSource", "privacy", "system", "network", "disk", "calendar"].contains(choice.id) {
                 XCTAssertEqual(configuration.providers[choice.id]?.type, choice.id)
             }
         }
+        let disk = try XCTUnwrap(choices.first { $0.id == "disk" })
+        XCTAssertEqual(disk.properties?["details"], .bool(true))
+        XCTAssertNotNil(disk.properties?["style"])
+        XCTAssertEqual(disk.properties?["style"], choices.first { $0.id == "system" }?.properties?["style"])
+        XCTAssertNil(disk.replacesPackage)
         XCTAssertTrue(choices.first { $0.id == "calendar" }!.description.contains("Calendar access"))
         XCTAssertTrue(choices.first { $0.id == "workspaces" }!.description.contains("AeroSpace, yabai, OmniWM, Rift or macOS Spaces"))
         XCTAssertEqual(choices.filter { $0.matches("SOUND") }.map(\.id), ["audio"])

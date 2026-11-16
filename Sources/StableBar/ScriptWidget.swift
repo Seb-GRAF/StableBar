@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import os
@@ -123,7 +124,7 @@ final class ScriptWidget {
     private var makeSource: (@MainActor () -> any DataSource)?
     private var source: (any DataSource)?
     private var schedule = SourceSchedule()
-    private var changeObserver: (any NSObjectProtocol)?
+    private var changeObservers: [any NSObjectProtocol] = []
     /// A continuous run open this long is steady: an update it sends, or the failure that ends it,
     /// starts a new failure streak. Tests shorten it.
     @ObservationIgnored var steadyRun: Duration = .seconds(10)
@@ -145,7 +146,8 @@ final class ScriptWidget {
             error = "Unknown data source type: \(provider.type)."
             return
         }
-        let change = type.changeNotification.map { SourceChange(notification: $0, event: type.name) }
+        let change = type.changeNotifications.isEmpty ? nil
+            : SourceChange(notifications: type.changeNotifications, center: type.changeCenter, event: type.name)
         start(schedule: SourceSchedule(interval: provider.interval, continuous: type.continuous, change: change)) {
             type.makeSource(provider, variables)
         }
@@ -153,7 +155,7 @@ final class ScriptWidget {
 
     /// Runs the source that `makeSource` creates. A fresh instance runs at startup, on resume and
     /// when a refresh restarts a continuous source. While it runs, the schedule's `change`
-    /// notification refreshes it.
+    /// notifications refresh it.
     func start(schedule: SourceSchedule, source makeSource: @escaping @MainActor () -> any DataSource) {
         stop()
         self.schedule = schedule
@@ -167,9 +169,11 @@ final class ScriptWidget {
         let schedule = schedule
         self.source = source
         diagnostics.suspended = false
-        if let change = schedule.change, changeObserver == nil {
-            changeObserver = NotificationCenter.default.addObserver(forName: change.notification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.refresh(ScriptEvent(sender: change.event)) }
+        if let change = schedule.change, changeObservers.isEmpty {
+            changeObservers = change.notifications.map { name in
+                change.center.notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.refresh(ScriptEvent(sender: change.event)) }
+                }
             }
         }
         let (stream, events) = AsyncStream<ScriptEvent>.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -308,12 +312,14 @@ final class ScriptWidget {
         timer?.cancel()
         events?.finish()
         source?.stop()
-        if let changeObserver { NotificationCenter.default.removeObserver(changeObserver) }
+        if let center = schedule.change?.center.notificationCenter {
+            changeObservers.forEach(center.removeObserver)
+        }
         task = nil
         timer = nil
         events = nil
         source = nil
-        changeObserver = nil
+        changeObservers = []
         diagnostics.running = false
         diagnostics.nextDelay = nil
     }
@@ -330,5 +336,14 @@ private extension Clock where Duration == Swift.Duration {
     func stopwatch() -> () -> Swift.Duration {
         let start = now
         return { start.duration(to: self.now) }
+    }
+}
+
+private extension SourceChange.Center {
+    var notificationCenter: NotificationCenter {
+        switch self {
+        case .standard: NotificationCenter.default
+        case .workspace: NSWorkspace.shared.notificationCenter
+        }
     }
 }

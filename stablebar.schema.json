@@ -1509,6 +1509,7 @@
                 "spacer",
                 "system",
                 "network",
+                "disk",
                 "battery",
                 "audio",
                 "inputSource",
@@ -1842,6 +1843,16 @@
           "description": "System warning threshold from 0 to 1; above 1 disables this threshold.",
           "$ref": "#/definitions/number"
         },
+        "diskWarning": {
+          "default": 0.85,
+          "description": "Disk warning threshold from 0 to 1; above 1 disables this threshold.",
+          "$ref": "#/definitions/number"
+        },
+        "diskCritical": {
+          "default": 0.95,
+          "description": "Disk critical threshold from 0 to 1; above 1 disables this threshold.",
+          "$ref": "#/definitions/number"
+        },
         "type": {
           "anyOf": [
             {
@@ -1850,6 +1861,7 @@
                 "stream",
                 "system",
                 "network",
+                "disk",
                 "battery",
                 "audio",
                 "inputSource",
@@ -1871,7 +1883,7 @@
         },
         "interval": {
           "$ref": "#/definitions/number",
-          "description": "Seconds between updates for command, system and network providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second."
+          "description": "Seconds between updates for command, system, network and disk providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second. Disk providers default to 60 seconds, the others to 5."
         },
         "timeout": {
           "$ref": "#/definitions/number"

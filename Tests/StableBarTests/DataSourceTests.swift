@@ -268,7 +268,7 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
                                                                         "position": .string("right")])], persist: false)
     #expect(store.configuration?.widgets.first?.content == .provider("system"))
     let error = #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("disk"), "type": .string("disk"),
+        try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("disk"), "type": .string("teleport"),
                                                                             "position": .string("right")])], persist: false)
     }
     #expect(error.map(errorMessage) == "widgets.disk: type: Unknown widget type.")
@@ -312,7 +312,7 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     let changed = Notification.Name("StableBarTests.change.\(UUID().uuidString)")
     let sources = FakeSources()
     let watched = DataSourceType(name: "calendar", isNative: true, symbol: "calendar", settings: [], continuous: false,
-                                 changeNotification: changed) { _, _ in sources.make() }
+                                 changeNotifications: [changed]) { _, _ in sources.make() }
     let script = ScriptWidget()
     defer { script.stop() }
     func refreshes() -> [String] { sources.made.flatMap(\.refreshes) }
@@ -341,6 +341,34 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     NotificationCenter.default.post(name: changed, object: nil)
     try await Task.sleep(for: .milliseconds(100))
     #expect(refreshes() == ["startup", "calendar", "resume", "calendar"])
+}
+
+@Test @MainActor func aSourceRefreshesOnWorkspaceChangeNotifications() async throws {
+    let a = Notification.Name("StableBarTests.workspaceChange.a.\(UUID().uuidString)")
+    let b = Notification.Name("StableBarTests.workspaceChange.b.\(UUID().uuidString)")
+    let sources = FakeSources()
+    let watched = DataSourceType(name: "calendar", isNative: true, symbol: "calendar", settings: [], continuous: false,
+                                 changeNotifications: [a, b], changeCenter: .workspace) { _, _ in sources.make() }
+    let script = ScriptWidget()
+    defer { script.stop() }
+    func refreshes() -> [String] { sources.made.flatMap(\.refreshes) }
+    func finishRun() async throws {
+        let source = try #require(sources.made.last)
+        source.emit?(.output(.success(ScriptOutput(text: "Standup"))))
+        source.emit?(.finished)
+        try await awaitCondition { !script.diagnostics.running && script.diagnostics.nextDelay == 5 }
+    }
+    script.start(provider: ProviderConfiguration(type: "calendar"), registry: DataSourceRegistry(types: [watched]))
+    try await awaitCondition { refreshes() == ["startup"] }
+    try await finishRun()
+    NotificationCenter.default.post(name: a, object: nil)
+    try await Task.sleep(for: .milliseconds(100))
+    #expect(refreshes() == ["startup"])
+    NSWorkspace.shared.notificationCenter.post(name: a, object: nil)
+    try await awaitCondition { refreshes() == ["startup", "calendar"] }
+    try await finishRun()
+    NSWorkspace.shared.notificationCenter.post(name: b, object: nil)
+    try await awaitCondition { refreshes() == ["startup", "calendar", "calendar"] }
 }
 
 @Test @MainActor func widgetStatusTellsMissingAccessFailuresPausedDisabledAndConnectedSourcesApart() throws {
