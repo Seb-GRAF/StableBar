@@ -44,6 +44,15 @@ private var bar: [String: Any] { window("StableBar", layer: 3, CGRect(x: -1800, 
     #expect(!state.raisesBar(on: 1))
 }
 
+@Test func menuBarStripRaisesTheBarAboveAFullScreenWindowAtTheMenuBarLevel() {
+    // screencaptureui can leave a window covering the whole display at the main menu level.
+    let state = MenuBarStripState(windows: [window("screencaptureui", layer: 24, laptop),
+                                            window("Window Server", layer: 24, CGRect(x: -1800, y: -39, width: 1800, height: 39)), strip],
+                                  displays: displays)
+    #expect(state.raisesBar(on: 1))
+    #expect(!state.showsMenuBar(on: 1))
+}
+
 @Test func menuBarStripKeepsCheckingABarOnANotchedDisplayBeforeTheStripShows() {
     // Right after a wake, an unlock or a display change, a check can run before MenuBarAgent puts its strip back.
     #expect(MenuBarStripState.checkInterval(strips: [], notched: [1], shownMenuBars: [], hovering: false) == 2)
