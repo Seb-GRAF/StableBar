@@ -109,6 +109,8 @@ struct EndStopSlider: View {
     let onChange: (Double) -> Void
     @State private var dragged: EndStopSliderTrack.Stop?
     @State private var editing = false
+    /// Resets however the drag ends, unlike `onEnded`, which a cancelled drag skips.
+    @GestureState private var dragging = false
     @Environment(\.controlSize) private var controlSize
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.colorScheme) private var colorScheme
@@ -187,6 +189,7 @@ struct EndStopSlider: View {
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
+                .updating($dragging) { _, active, _ in active = true }
                 .onChanged { drag in move(to: track.stop(at: drag.location.x, from: shown)) }
                 .onEnded { _ in finish() })
         }
@@ -208,6 +211,13 @@ struct EndStopSlider: View {
             }
         }
         .onChange(of: value) { if !editing { dragged = nil } }
+        // A drag that ended without `onEnded` was cancelled: drop its value rather than keep showing it.
+        .onChange(of: dragging) { _, active in
+            if !active, editing {
+                editing = false
+                dragged = nil
+            }
+        }
         .preference(key: ControlEditingPreference.self, value: editing)
     }
 
