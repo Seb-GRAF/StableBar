@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, resolveTheme,
-  CONTROLS, controlsFor, applyControl, fileText, substituteTokens,
+  CONTROLS, controlsFor, applyControl, fileText, substituteTokens, validateThemeColors,
 } from "../../site/creator/theme.mjs";
 import {
   ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
@@ -912,17 +912,17 @@ test("tiles restore Built-in borders and a cleared shadow", () => {
   assert.deepEqual(off.config.defaults.shadowColor, builtIn.defaults.shadowColor);
 });
 
-test("editing token-backed sections preserves their other properties and both appearances", () => {
+test("editing token-backed sections preserves their other properties and references", () => {
   const cases = [
     ["defaults", "widgets.fontSize", { fontName: "Monaco", background: "@token.surface" },
-      { fontName: "Monaco", background: builtIn.tokens.surface, fontSize: 17 }],
+      { fontName: "Monaco", background: "@token.surface", fontSize: 17 }],
     ["popupDefaults", "popups.cornerRadius", { spacing: 12, background: "@token.surface" },
-      { spacing: 12, background: builtIn.tokens.surface, cornerRadius: 17 }],
+      { spacing: 12, background: "@token.surface", cornerRadius: 17 }],
     ["workspaceDefaults", "workspaces.underlineWidth", {
       indicator: "underline", style: { foreground: "@token.text" }, indicatorStyle: "@token.underline",
     }, {
-      indicator: "underline", style: { foreground: builtIn.tokens.text },
-      indicatorStyle: { height: 3, background: builtIn.tokens.accent, width: 17 },
+      indicator: "underline", style: { foreground: "@token.text" },
+      indicatorStyle: { height: 3, background: "@token.accent", width: 17 },
     }],
   ];
   for (const [section, id, value, expected] of cases) {
@@ -947,7 +947,7 @@ test("editing a nested token-backed style preserves the containing workspace", (
   const edited = applyControl(original, "workspaces.underlineWidth", 24, "light");
   assert.deepEqual(edited.config.workspaceDefaults, {
     ...before.config.workspaceDefaults,
-    indicatorStyle: { height: 3, background: original.config.tokens.accent, width: 24 },
+    indicatorStyle: { height: 3, background: "@token.accent", width: 24 },
   });
   assert.deepEqual(edited.config.tokens, before.config.tokens);
   assert.deepEqual(original, before);
@@ -1696,5 +1696,17 @@ test("editing a section that names an inherited token keeps the built-in palette
   };
   const edited = applyControl(state, "widgets.fontSize", 14, "light");
   assert.equal(edited.config.defaults.fontSize, 14);
-  assert.deepEqual(edited.config.defaults.background, builtIn.tokens.surface);
+  assert.equal(edited.config.defaults.background, "@token.surface");
+  const recolored = applyControl(edited, "palette.surface", "#123456", "light");
+  assert.equal(resolveTheme(builtIn, recolored.config, "light").defaults.background, "#123456");
+});
+
+test("profiles expand with their own tokens over the root's, as the app does", () => {
+  const profile = tokens => ({ profiles: [{ name: "Night", configuration: { tokens, defaults: { foreground: "@token.glow" } } }] });
+  assert.doesNotThrow(() => validateThemeColors(profile({ glow: "#ff0000" })));
+  assert.equal(resolveTheme(builtIn, profile({ glow: "#ff0000" }), "dark").profiles[0].configuration.defaults.foreground, "#ff0000");
+  assert.doesNotThrow(() => validateThemeColors({ tokens: { glow: "#00ff00" }, ...profile({}) }));
+  assert.throws(() => validateThemeColors(profile({ glow: "red" })), /Use #RRGGBB or #RRGGBBAA/);
+  assert.throws(() => validateThemeColors({ defaults: { foreground: "@token.glow" }, ...profile({ glow: "#ff0000" }) }),
+    /Unknown configuration reference: @token\.glow/);
 });

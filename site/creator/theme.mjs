@@ -51,7 +51,7 @@ const colorProperties = new Set([
 const colorError = () => { throw new Error("Use #RRGGBB or #RRGGBBAA for colors."); };
 
 export function validateThemeColors(config) {
-  const expanded = substituteTokens(overriding(builtIn, config));
+  const expanded = expandDocument(overriding(builtIn, config));
   function visit(value) {
     if (!value || typeof value !== "object") return;
     for (const [key, child] of Object.entries(value)) {
@@ -71,6 +71,33 @@ export function validateThemeColors(config) {
       if (resolved.tokens?.[key] != null && !isColor(resolved.tokens[key])) colorError();
     }
   }
+}
+
+// The app expands a profile with its own tokens over the root's, never the root with a profile's.
+function expandDocument(document) {
+  const { profiles, ...root } = document;
+  const expanded = substituteTokens(root);
+  if (profiles === undefined) return expanded;
+  expanded.profiles = !Array.isArray(profiles) ? profiles : profiles.map(profile => {
+    if (!isObject(profile) || !isObject(profile.configuration)) return profile;
+    const { configuration } = profile;
+    const tokens = overriding(root.tokens ?? {}, isObject(configuration.tokens) ? configuration.tokens : {});
+    return { ...profile, configuration: substituteTokens(configuration, tokens) };
+  });
+  return expanded;
+}
+
+// Follows a section's own alias chain, keeping the references inside it so later palette edits reach them.
+function aliasValue(value, tokens) {
+  const seen = new Set();
+  while (typeof value === "string" && value.startsWith("@token.")) {
+    const name = value.slice("@token.".length);
+    if (seen.has(name)) throw new Error(`Configuration reference cycle: ${[...seen, name].join(" → ")}.`);
+    if (!Object.hasOwn(tokens, name)) throw new Error(`Unknown configuration reference: ${value}.`);
+    seen.add(name);
+    value = tokens[name];
+  }
+  return structuredClone(value);
 }
 
 function overriding(earlier, next) {
@@ -166,7 +193,7 @@ function resolvedStyle(style, defaults) {
 }
 
 export function resolveTheme(base, config, appearance) {
-  const resolved = forAppearance(substituteTokens(overriding(base, config)), appearance);
+  const resolved = forAppearance(expandDocument(overriding(base, config)), appearance);
   const defaults = resolved.defaults;
   resolved.defaults = resolvedStyle(defaults);
   const popup = resolved.popupDefaults;
@@ -323,8 +350,7 @@ function pathLocation(object, path) {
   let target = object;
   for (const key of keys) {
     if (typeof target[key] === "string" && target[key].startsWith("@token.")) {
-      // Resolve with the same palette resolveTheme uses: the theme's tokens over Built-in's.
-      target[key] = substituteTokens(target[key], overriding(builtIn, object).tokens ?? {});
+      target[key] = aliasValue(target[key], overriding(builtIn, object).tokens ?? {});
     }
     if (!isObject(target[key])) target[key] = {};
     target = target[key];
