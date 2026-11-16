@@ -47,7 +47,7 @@ enum LaunchCommand {
 
     init(arguments: [String]) throws {
         var arguments = arguments
-        var url = Self.configurationURL
+        var url = ProcessInfo.processInfo.environment["STABLEBAR_CONFIG"].map { URL(filePath: $0) } ?? Self.configurationURL
         let targeted = arguments.first == "--config"
         if arguments.first == "--config" {
             guard arguments.count >= 2 else { throw CommandFailure(message: Self.usage) }

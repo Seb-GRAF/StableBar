@@ -76,12 +76,20 @@ External hooks can trigger an event without launching another bar:
 
 Use that event name in the widget's `events`. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
 
+A widget's own commands can run the StableBar that started them as `"$STABLEBAR"`. Its live commands, such as `--refresh` and `--popup`, then address that bar instead of the default configuration:
+
+```json
+"onClick": "\"$STABLEBAR\" --refresh weather"
+```
+
 Commands inherit your login shell's environment, then top-level `environment`, then the widget's `environment`, then event data. Values must be strings. StableBar supplies these variables:
 
 | Variable | Value |
 | --- | --- |
 | `NAME` | Widget ID; event data cannot replace it |
 | `CONFIG_DIR` | Directory containing the main configuration; event data cannot replace it |
+| `STABLEBAR` | Path of the running StableBar executable; event data cannot replace it |
+| `STABLEBAR_CONFIG` | Path of the configuration file the bar was started with, which the [command line](command-line.md) uses when `--config` isn't given; event data cannot replace it |
 | `SENDER` | `startup`, `routine`, the subscribed event name, `action` after an action completes, or a mouse event below |
 | `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available |
 | `SID` | Display number for pointer actions and workspace events |

@@ -215,12 +215,13 @@ import Testing
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let url = directory.appending(path: "config.json")
     let configuration: [String: Any] = [
-        "environment": ["ROOT_ONLY": "root", "SHARED": "root", "NAME": "incorrect", "CONFIG_DIR": "incorrect"],
+        "environment": ["ROOT_ONLY": "root", "SHARED": "root", "NAME": "incorrect", "CONFIG_DIR": "incorrect", "STABLEBAR": "incorrect"],
         "widgets": [[
             "id": "environment", "type": "script", "position": "right", "interval": NSNull(),
             "events": ["custom"],
-            "environment": ["SHARED": "widget", "NAME": "also incorrect", "CONFIG_DIR": "also incorrect", "INFO": "initial"],
-            "command": "printf '%s|%s|%s|%s|%s|%s' \"$ROOT_ONLY\" \"$SHARED\" \"$NAME\" \"$CONFIG_DIR\" \"$SENDER\" \"$INFO\""
+            "environment": ["SHARED": "widget", "NAME": "also incorrect", "CONFIG_DIR": "also incorrect",
+                            "STABLEBAR_CONFIG": "also incorrect", "INFO": "initial"],
+            "command": "printf '%s|%s|%s|%s|%s|%s|%s|%s' \"$ROOT_ONLY\" \"$SHARED\" \"$NAME\" \"$CONFIG_DIR\" \"$STABLEBAR\" \"$STABLEBAR_CONFIG\" \"$SENDER\" \"$INFO\""
         ]]
     ]
     try JSONSerialization.data(withJSONObject: configuration).write(to: url, options: .atomic)
@@ -231,16 +232,18 @@ import Testing
     }
     store.reloadConfiguration()
     let script = try #require(store.scripts["environment"])
-    let startup = "root|widget|environment|\(directory.path)|startup|initial"
+    let bar = "\(try #require(Bundle.main.executablePath))|\(url.path)"
+    let startup = "root|widget|environment|\(directory.path)|\(bar)|startup|initial"
     for _ in 0..<100 {
         if script.output.text == startup { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(script.output.text == startup)
     store.refreshScripts(for: "custom", environment: [
-        "SHARED": "event", "NAME": "incorrect", "CONFIG_DIR": "incorrect", "SENDER": "incorrect", "INFO": "quoted ' = value"
+        "SHARED": "event", "NAME": "incorrect", "CONFIG_DIR": "incorrect", "STABLEBAR": "incorrect", "STABLEBAR_CONFIG": "incorrect",
+        "SENDER": "incorrect", "INFO": "quoted ' = value"
     ])
-    let refreshed = "root|event|environment|\(directory.path)|custom|quoted ' = value"
+    let refreshed = "root|event|environment|\(directory.path)|\(bar)|custom|quoted ' = value"
     for _ in 0..<100 {
         if script.output.text == refreshed { break }
         try await Task.sleep(for: .milliseconds(20))
