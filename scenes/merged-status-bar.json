@@ -1,0 +1,55 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "providers": {
+      "power": { "type": "battery" },
+      "net": { "type": "network" },
+      "sound": { "type": "audio" },
+      "machine": { "type": "system" },
+      "status": { "type": "merge", "providers": ["power", "net", "sound", "machine"] }
+    },
+    "widgets": [
+      {
+        "id": "status",
+        "type": "provider",
+        "provider": "status",
+        "position": "right",
+        "layout": {
+          "type": "row",
+          "style": { "spacing": 8 },
+          "children": [
+            {
+              "type": "ring",
+              "source": "power.percent",
+              "style": { "iconSize": 18, "accent": "#30d158", "background": "#8e8e9340" },
+              "children": [{ "type": "symbol", "source": "net.connectionIcon", "style": { "iconSize": 8 } }]
+            },
+            {
+              "type": "ring",
+              "source": "machine.strain",
+              "style": { "iconSize": 18, "accent": "#ff9f0a", "background": "#8e8e9340" },
+              "children": [{ "type": "symbol", "source": "machine.strainIcon", "style": { "iconSize": 8 } }]
+            },
+            { "type": "progress", "source": "sound.volume", "height": 3, "style": { "width": 24 } }
+          ]
+        }
+      },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "outputs": {
+    "status": {
+      "text": "",
+      "fields": {
+        "power.state": "charging",
+        "net.connection": "wifi",
+        "net.connectionIcon": "wifi",
+        "machine.strain": "cpu",
+        "machine.strainIcon": "cpu"
+      },
+      "values": { "power.percent": 0.62, "sound.volume": 0.5, "machine.strain": 0.82 }
+    }
+  },
+  "draw": "bar",
+  "width": 500
+}

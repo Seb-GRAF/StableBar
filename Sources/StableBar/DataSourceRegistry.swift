@@ -113,7 +113,7 @@ struct DataSourceRegistry: Sendable {
     }
 
     static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .disk, .audio, .inputSource, .microphone, .privacy,
-                                                    .calendar])
+                                                    .calendar, .merge])
 }
 
 extension DataSourceType {
@@ -208,5 +208,11 @@ extension DataSourceType {
                                          changeNotifications: [.EKEventStoreChanged], permission: .calendars) { provider, _ in
         let metrics = CalendarMetrics()
         return PollingSource { _ in .output(.success(await metrics.read(provider))) }
+    }
+
+    /// Combines the providers it names. The store runs it on their runners, as a `MergeSource`.
+    static let merge = DataSourceType(name: "merge", isNative: false, symbol: "square.stack.3d.up", settings: [.providers],
+                                      continuous: true) { _, _ in
+        fatalError("The store runs a merge on the runners of its providers.")
     }
 }

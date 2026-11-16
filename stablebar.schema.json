@@ -1869,7 +1869,8 @@
                 "inputSource",
                 "microphone",
                 "privacy",
-                "calendar"
+                "calendar",
+                "merge"
               ]
             },
             {
@@ -1882,6 +1883,10 @@
         },
         "command": {
           "$ref": "#/definitions/string"
+        },
+        "providers": {
+          "$ref": "#/definitions/strings",
+          "description": "Keys in providers that a merge provider combines. Their values, fields, lists and series appear under each key, such as power.percent. A merge can't include another merge."
         },
         "interval": {
           "$ref": "#/definitions/number",

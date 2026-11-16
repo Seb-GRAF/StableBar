@@ -29,7 +29,7 @@ Define a provider once and reference it from several widgets. StableBar keeps on
 }
 ```
 
-Provider `type` is `command`, `stream`, `system`, `network`, `battery`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar` or `disk`. `command` and `stream` require a shell `command`. `interval` defaults to 5 seconds: the polling interval for commands, `system` and `network` (60 seconds for `disk`), and for `calendar` until it has access; the first reconnect delay for streams; and for `audio`, `inputSource`, `microphone`, `privacy` and `battery`, which update when macOS reports a change, the first retry delay after a failure. That first delay is `interval`, or 1 second if `interval` is shorter. `timeout` defaults to 10 seconds and applies to command providers; streams remain running until they exit, fail, suspend or stop. Provider intervals and timeouts must be positive and finite.
+Provider `type` is `command`, `stream`, `system`, `network`, `battery`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar`, `disk` or `merge`. `command` and `stream` require a shell `command`, and `merge` the `providers` it combines; see [Merge](#merge). `interval` defaults to 5 seconds: the polling interval for commands, `system` and `network` (60 seconds for `disk`), and for `calendar` until it has access; the first reconnect delay for streams; and for `audio`, `inputSource`, `microphone`, `privacy` and `battery`, which update when macOS reports a change, the first retry delay after a failure. That first delay is `interval`, or 1 second if `interval` is shorter. `timeout` defaults to 10 seconds and applies to command providers; streams remain running until they exit, fail, suspend or stop. Provider intervals and timeouts must be positive and finite.
 
 A widget with `type` set to `system`, `network`, `battery`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar` or `disk` uses the provider of that name. Without a definition in `providers`, it is a native provider of that type with default settings, shared by every widget that names it. An implicit `system` provider uses a 2-second interval and lists 5 apps when a consumer enables Essentials details. Define a provider with the same name to change its interval or other settings. `{ "id": "power", "type": "battery", "position": "right" }` is enough for a battery widget.
 
@@ -146,3 +146,34 @@ With access, the provider updates at each minute and phase boundary and when you
   ]
 }
 ```
+
+## Merge
+
+A `merge` provider combines the providers it names in `providers`, so one widget can show several of them, such as the battery, the network and the volume. Its output holds each one's `values`, `fields`, `lists` and `series` under the provider's name and a dot, such as `power.percent`, `net.downloadRate` and `sound.volume`. It has no `text`, `icon` or `tooltip` of its own, so give its widget a `layout`. Layouts, popups, `hoverLayout` and `rules` read these names as they read any other.
+
+```json
+{
+  "providers": {
+    "power": { "type": "battery" },
+    "net": { "type": "network" },
+    "sound": { "type": "audio" },
+    "status": { "type": "merge", "providers": ["power", "net", "sound"] }
+  },
+  "widgets": [
+    {
+      "id": "status", "type": "provider", "provider": "status", "position": "right",
+      "layout": {
+        "type": "row", "style": { "spacing": 6 },
+        "children": [
+          { "type": "field", "field": "power.percent" },
+          { "type": "field", "field": "net.downloadRate" },
+          { "type": "progress", "source": "sound.volume", "height": 4, "style": { "width": 40 } }
+        ]
+      },
+      "rules": [{ "when": { "value": "power.percent", "below": 0.2 }, "state": "warning" }]
+    }
+  ]
+}
+```
+
+Each name in `providers` must be defined in `providers`, even a native type such as `battery`, and can't be another merge. The providers a merge combines run while an enabled widget shows the merge, shared with the widgets that show them directly, and the merge updates as soon as one of them does. An event in the merge's or its widget's `events`, a finished click action of its widget and **Refresh** in **Settings → Status** refresh every provider it combines; an event in one provider's own `events` refreshes that one. One with `whenVisible` runs while a widget showing it or a merge of it is visible. A provider that needs access, such as `calendar`, reports `access` under its name, such as `meetings.access`, and **Settings → Status** says the merge's widget needs that access, as it would for the provider's own widget. A widgets package can define a merge of native providers.

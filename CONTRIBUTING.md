@@ -68,7 +68,7 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 - [Workspaces.swift](Sources/StableBar/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
 - [Yabai.swift](Sources/StableBar/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
 - [ScriptWidget.swift](Sources/StableBar/ScriptWidget.swift): the runner that applies a data source's output, with diagnostics, retries and suspension.
-- [DataSource.swift](Sources/StableBar/DataSource.swift): the data source protocol, and the command, stream, polling and push sources.
+- [DataSource.swift](Sources/StableBar/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
 - [DataSourceRegistry.swift](Sources/StableBar/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
 - [BuiltInEvents.swift](Sources/StableBar/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
 - [BarView.swift](Sources/StableBar/BarView.swift): native rendering and selection animation.
