@@ -27,9 +27,11 @@ struct MenuBarStripState: Equatable {
             else { continue }
             for (id, display) in displays
             where bounds.minX <= display.minX + 1 && bounds.maxX >= display.maxX - 1 && bounds.minY <= display.minY + 1 {
-                if layer == menuBarLevel, bounds.maxY > display.minY + 1 { shownMenuBars.insert(id) }
+                // Other apps put windows at the menu bar's level too, such as screencaptureui covering the whole display.
+                let barSized = bounds.height < display.height / 4
+                if layer == menuBarLevel, barSized, bounds.maxY > display.minY + 1 { shownMenuBars.insert(id) }
                 if layer >= statusLevel, window[kCGWindowOwnerName as String] as? String == "MenuBarAgent",
-                   bounds.minY >= display.minY - 1, bounds.height < display.height / 4 { strips.insert(id) }
+                   bounds.minY >= display.minY - 1, barSized { strips.insert(id) }
             }
         }
     }
