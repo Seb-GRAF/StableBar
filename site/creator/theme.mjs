@@ -56,7 +56,7 @@ export function validateThemeColors(config) {
     if (!value || typeof value !== "object") return;
     for (const [key, child] of Object.entries(value)) {
       if (key === "tokens") continue;
-      if (key === "roles" && isObject(child)) Object.values(child).forEach(visit);
+      if ((key === "roles" || key === "groups") && isObject(child)) Object.values(child).forEach(visit);
       else if (colorProperties.has(key) && child != null) {
         const valid = key === "background" || key === "hoverBackground" ? isBackground(child) : isColor(child);
         if (!valid) colorError();
