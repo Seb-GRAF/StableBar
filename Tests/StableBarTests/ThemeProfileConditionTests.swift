@@ -153,3 +153,26 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     #expect(saved["when"] == .object(["theme": .string("fern")]))
     #expect(editor.undoSteps.count == 1)
 }
+
+@MainActor @Test func tryingAnotherThemeTurnsOffAProfileForTheSelectedOne() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(#"{"bar":{"margin":2}}"#)
+    let other = try fixture.theme(#"{"bar":{"margin":3}}"#, id: "other-theme")
+    try fixture.write(#"""
+    {"theme":{"id":"test-theme","version":"1"},"bar":{"height":40},"widgets":[],
+     "profiles":[\#(heightProfile(#"{"theme":"test-theme"}"#))]}
+    """#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.configuration?.bar.height == 30)
+
+    try store.tryTheme(other)
+    #expect(store.configuration?.bar.height == 40)
+    #expect(store.activeProfiles.isEmpty)
+
+    store.endThemeTrial()
+    #expect(store.configuration?.bar.height == 30)
+    #expect(store.activeProfiles == ["tuned"])
+}
