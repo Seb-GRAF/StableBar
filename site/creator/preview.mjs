@@ -1,4 +1,5 @@
-import { isColor, isBackground } from "./theme.mjs";
+import builtIn from "./built-in.mjs";
+import { isColor, isBackground, CONTROLS, applyControl, resolveTheme } from "./theme.mjs";
 
 // Token paths are honored wherever the config references them; unused palette colors stay unused.
 export const CONTRACT = [
@@ -124,6 +125,83 @@ export function cssVariables(resolved) {
     "--bar-font": font(widget),
     "--pop-font": font(popup, popupLineHeight),
   };
+}
+
+export const PREVIEW_TARGETS = {
+  "--bar-h": { selector: ".preview-bar", measure: "height" },
+  "--strip-bg": { selector: ".preview-strip" },
+  "--strip-edge": { selector: ".preview-strip" },
+  "--strip-radius": { selector: ".preview-strip" },
+  "--strip-m": { selector: ".preview-strip", measure: "offset" },
+  "--bar-inset": { selector: ".preview-strip" },
+  "--bar-gap": { selector: ".preview-strip, .preview-group", measure: "gap" },
+  "--w-bg": { selector: ".preview-tile" },
+  "--w-border": { selector: ".preview-tile" },
+  "--w-border-w": { selector: ".preview-tile" },
+  "--w-radius": { selector: ".preview-tile" },
+  "--w-px": { selector: ".preview-tile:not(.preview-app-menus)", measure: "padding-x" },
+  "--w-py": { selector: ".preview-tile:not(.preview-workspaces), .preview-workspace", measure: "padding-y" },
+  "--w-hover": { selector: ".preview-tile" },
+  "--w-gap": { selector: ".preview-tile:not(.preview-app-menus)", measure: "gap" },
+  "--battery-h": { selector: ".preview-battery" },
+  "--battery-w": { selector: ".preview-battery" },
+  "--w-shadow-box": { selector: ".preview-tile" },
+  "--w-glow": { selector: ".preview-tile" },
+  "--w-dy": { selector: ".preview-tile", measure: "offset" },
+  "--tile-h": { selector: ".preview-tile, .preview-workspace", measure: "height" },
+  "--fg": { selector: ".preview-tile:not(.preview-workspaces), .preview-battery" },
+  "--muted": { selector: ".preview-key" },
+  "--accent": { selector: ".preview-workspace.is-focused" },
+  "--accent-text": { selector: ".preview-workspace.is-focused" },
+  "--raised": { selector: ".preview-tile" },
+  "--track": { selector: ".preview-meter" },
+  "--ws-off": { selector: ".preview-workspace:not(.is-focused)" },
+  "--ws-on": { selector: ".preview-workspace.is-focused" },
+  "--ws-ind": { selector: ".preview-workspace.is-focused" },
+  "--ws-r": { selector: ".preview-workspace" },
+  "--ul-w": { selector: ".preview-underline" },
+  "--ul-h": { selector: ".preview-underline", measure: "height" },
+  "--ul-r": { selector: ".preview-underline" },
+  "--ul-dy": { selector: ".preview-underline", measure: "offset" },
+  "--ul-visible": { selector: ".preview-underline.is-visible" },
+  "--pop-bg": { selector: ".preview-popup, .preview-tooltip" },
+  "--pop-fg": { selector: ".preview-heading, .preview-value, .preview-tooltip" },
+  "--pop-accent": { selector: ".preview-meter-fill" },
+  "--pop-border": { selector: ".preview-popup, .preview-tooltip" },
+  "--pop-border-w": { selector: ".preview-popup, .preview-tooltip" },
+  "--pop-radius": { selector: ".preview-popup, .preview-tooltip" },
+  "--pop-shadow": { selector: ".preview-popup, .preview-tooltip" },
+  "--pop-px": { selector: ".preview-popup", measure: "padding-x" },
+  "--pop-py": { selector: ".preview-popup", measure: "padding-y" },
+  "--pop-gap": { selector: ".preview-popup", measure: "gap" },
+  "--pop-offset": { selector: ".preview-popup", measure: "offset" },
+  "--bar-font": { selector: ".preview-tile, .preview-workspace" },
+  "--pop-font": { selector: ".preview-popup, .preview-tooltip" },
+};
+
+export function affectedVariables(state, controlId, appearance) {
+  const control = CONTROLS.find(control => control.id === controlId);
+  if (!control || control.paths.every(path => path.startsWith("manifest."))) return [];
+  let resolved, current;
+  try {
+    resolved = resolveTheme(builtIn, state.config, appearance);
+    current = cssVariables(resolved);
+  } catch { return []; }
+  const value = control.paths[0].split(".").reduce((object, key) => object?.[key], resolved);
+  const probes = {
+    number: [3, 29], color: ["#123456", "#654321"], background: ["#123456", "#654321"],
+    select: control.options?.filter(option => option !== value).slice(0, 2),
+    toggle: [true, false], text: ["Probe A", "Probe B"],
+  }[control.kind] ?? [];
+  const affected = new Set();
+  for (const probe of probes) {
+    try {
+      const next = applyControl(state, controlId, probe, appearance);
+      const variables = cssVariables(resolveTheme(builtIn, next.config, appearance));
+      for (const key of Object.keys(current)) if (variables[key] !== current[key]) affected.add(key);
+    } catch { /* A rejected probe cannot contribute preview targets. */ }
+  }
+  return [...affected].sort();
 }
 
 export function indicatorClass(resolved) {

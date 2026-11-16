@@ -1,7 +1,7 @@
 import builtIn from "./built-in.mjs";
 import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
 import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
-import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
+import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS } from "./preview.mjs";
 import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
@@ -58,7 +58,8 @@ let state, baseID = "built-in", baseGradient, mode = "new", sourceID;
 let appearance = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 let jsonFile = "config", activePaths = [], store = { status: "unchecked" }, storeTimer, storeRequest = 0;
 let pendingTheme, importRequest = 0;
-let numberDrag;
+let numberDrag, hoveredControl, focusedControl;
+const cueResizeObserver = typeof ResizeObserver === "function" ? new ResizeObserver(updateCue) : null;
 const resolved = () => resolveTheme(builtIn, state.config, appearance);
 
 function colorInput(control, value, suffix = "") {
@@ -122,6 +123,98 @@ function renderControls() {
     replacement?.focus({ preventScroll: true });
     if (selection && replacement?.type === "text") replacement.setSelectionRange(...selection);
   }
+  hoveredControl = cueControlID(root.querySelector(".control:hover"));
+  for (const row of root.querySelectorAll(".control")) {
+    row.addEventListener("pointerenter", () => { hoveredControl = cueControlID(row); updateCue(); });
+    row.addEventListener("pointerleave", () => { hoveredControl = undefined; updateCue(); });
+  }
+  updateCue();
+}
+
+function cueControlID(element) {
+  return element?.dataset?.control ?? element?.dataset?.sliderFor
+    ?? element?.closest?.(".control")?.querySelector("[data-control]")?.dataset.control;
+}
+
+function updateCue() {
+  const layer = root.querySelector(".preview-cue");
+  if (!layer || !state) return;
+  const id = numberDrag?.control.id ?? hoveredControl ?? focusedControl;
+  const control = controlsFor(state).find(control => control.id === id);
+  layer.innerHTML = "";
+  delete layer.dataset.cueControl;
+  if (!control) return;
+  const preview = root.querySelector(".theme-preview"), targets = new Map();
+  for (const variable of affectedVariables(state, id, appearance)) {
+    const target = PREVIEW_TARGETS[variable];
+    if (!target) continue;
+    for (const element of preview.querySelectorAll(target.selector)) {
+      if (!element.getClientRects().length) continue;
+      if (!targets.has(element)) targets.set(element, []);
+      targets.get(element).push({ variable, measure: target.measure });
+    }
+  }
+  if (!targets.size) return;
+  const stage = root.querySelector(".preview-stage").getBoundingClientRect(), parts = [];
+  const rectFor = element => {
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left - stage.left, y: rect.top - stage.top, width: rect.width, height: rect.height };
+  };
+  function box(kind, { x, y, width, height }) {
+    if (width <= 0 || height <= 0) return;
+    parts.push(`<span class="preview-cue-${kind}" style="left:${x}px;top:${y}px;width:${width}px;height:${height}px"></span>`);
+  }
+  function ruler(rect, from, to) {
+    box("ruler", { x: Math.max(2, rect.x - 8), y: Math.min(from, to), width: 6, height: Math.max(1, Math.abs(to - from)) });
+  }
+  function measure(element, rect, { variable, measure }) {
+    const style = getComputedStyle(element);
+    if (measure === "padding-x") {
+      const left = Math.min(rect.width / 2, parseFloat(style.paddingLeft)), right = Math.min(rect.width / 2, parseFloat(style.paddingRight));
+      box("band", { ...rect, width: left });
+      box("band", { ...rect, x: rect.x + rect.width - right, width: right });
+    } else if (measure === "padding-y") {
+      const top = Math.min(rect.height / 2, parseFloat(style.paddingTop)), bottom = Math.min(rect.height / 2, parseFloat(style.paddingBottom));
+      box("band", { ...rect, height: top });
+      box("band", { ...rect, y: rect.y + rect.height - bottom, height: bottom });
+    } else if (measure === "gap") {
+      const children = [...element.children].filter(child => child.getClientRects().length).map(rectFor);
+      const vertical = style.display.includes("grid") || style.flexDirection.startsWith("column");
+      for (let index = 1; index < children.length; index++) {
+        const before = children[index - 1], after = children[index];
+        if (vertical) box("band", { x: rect.x, y: before.y + before.height, width: rect.width, height: after.y - before.y - before.height });
+        else box("band", { x: before.x + before.width, y: rect.y, width: after.x - before.x - before.width, height: rect.height });
+      }
+    } else if (measure === "height") {
+      ruler(rect, rect.y, rect.y + rect.height);
+    } else if (measure === "offset") {
+      if (variable === "--strip-m") ruler(rect, rectFor(element.closest(".preview-bar")).y, rect.y);
+      else if (variable === "--ul-dy") {
+        const parent = rectFor(element.parentElement);
+        ruler(rect, parent.y + parent.height - parseFloat(getComputedStyle(element.parentElement).paddingBottom), rect.y + rect.height);
+      } else {
+        const offset = parseFloat(preview.style.getPropertyValue(variable)) || 0;
+        ruler(rect, rect.y - offset, rect.y);
+      }
+    }
+  }
+  let labelRect;
+  for (const [element, measurements] of targets) {
+    const rect = rectFor(element);
+    if (!rect.width || !rect.height) continue;
+    box("outline", rect);
+    for (const target of measurements) if (target.measure) measure(element, rect, target);
+    labelRect ??= rect;
+  }
+  if (control.kind === "number" && labelRect) {
+    const value = controlValue(control, resolved());
+    const label = value == null ? "Auto" : `${formatNumber(value)} ${control.unit}`;
+    const x = Math.max(4, Math.min(stage.width - 104, labelRect.x + 4));
+    const y = Math.max(4, Math.min(stage.height - 24, labelRect.y + labelRect.height + 4));
+    parts.push(`<span class="preview-cue-label" style="left:${x}px;top:${y}px">${e(label)}</span>`);
+  }
+  layer.dataset.cueControl = id;
+  layer.innerHTML = parts.join("");
 }
 
 function previewHTML() {
@@ -140,8 +233,8 @@ function previewHTML() {
     <div class="preview-group">
     <div class="preview-tile preview-workspaces">
     <span class="preview-workspace">1</span>
-    <span class="preview-workspace is-focused">2</span>
-    <span class="preview-workspace is-visible">3</span>
+    <span class="preview-workspace is-focused">2<span class="preview-underline"></span></span>
+    <span class="preview-workspace is-visible">3<span class="preview-underline is-visible"></span></span>
     </div>
     <div class="preview-tile preview-app-menus">
     <span class="preview-app-name">Finder</span>${["File", "Edit", "View", "Go", "Window", "Help"].map(text => `<span class="preview-menu-entry">${text}</span>`).join("")}</div>
@@ -181,6 +274,7 @@ function previewHTML() {
     </div>
     </div>
     </div>
+    <div class="preview-cue" aria-hidden="true"></div>
     <p class="preview-caption">Bar, popup and tooltip</p>
     </div>
     <p class="font-note" hidden>macOS fonts show only on a Mac. Other systems use a fallback.</p>
@@ -235,6 +329,8 @@ function render() {
     </div>`;
   renderControls();
   refresh();
+  cueResizeObserver?.disconnect();
+  cueResizeObserver?.observe(root.querySelector(".preview-stage"));
 }
 
 function updateJSON() {
@@ -334,6 +430,7 @@ function refresh() {
   root.querySelector("[data-theme-id]").innerHTML = `Folder id: <code>${e(state.manifest.id)}</code>${mode === "update" ? " · Kept for this update" : ""}`;
   updateJSON();
   updateOutputs();
+  updateCue();
 }
 
 async function lookupStore(id) {
@@ -722,6 +819,7 @@ document.addEventListener("input", event => {
     return;
   }
   if (event.target.dataset.control && !["checkbox", "select-one"].includes(event.target.type)) changeControl(event.target);
+  if (event.target.dataset.control) updateCue();
   if (event.target.id === "new-theme-name") checkReopen();
 });
 document.addEventListener("change", event => {
@@ -745,6 +843,8 @@ document.addEventListener("change", event => {
   if (input.matches("[data-open-zip], [data-open-folder]")) openSelection([...input.files].map(file => ({ name: file.webkitRelativePath || file.name, file })));
 });
 document.addEventListener("focusin", event => {
+  focusedControl = cueControlID(event.target);
+  updateCue();
   if (!event.target.dataset.control) return;
   const control = controlsFor(state).find(control => control.id === event.target.dataset.control);
   if (!control) return;
@@ -753,6 +853,11 @@ document.addEventListener("focusin", event => {
   const pre = root.querySelector(".json-content"), mark = pre.querySelector(".is-focused");
   if (mark) pre.scrollTop = mark.offsetTop - 40;
 });
+document.addEventListener("focusout", event => {
+  focusedControl = cueControlID(event.relatedTarget);
+  updateCue();
+});
+window.addEventListener("resize", updateCue);
 document.addEventListener("click", async event => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
@@ -802,6 +907,7 @@ document.addEventListener("pointerdown", event => {
     x: event.clientX, pointerID: event.pointerId };
   handle.setPointerCapture(event.pointerId);
   root.classList.add("is-scrubbing");
+  updateCue();
 });
 document.addEventListener("pointermove", event => {
   if (!numberDrag || event.pointerId !== numberDrag.pointerID) return;
@@ -815,6 +921,8 @@ function endNumberDrag(event) {
   numberDrag = null;
   if (handle.hasPointerCapture(pointerID)) handle.releasePointerCapture(pointerID);
   root.classList.remove("is-scrubbing");
+  hoveredControl = cueControlID(root.querySelector(".control:hover"));
+  updateCue();
 }
 document.addEventListener("pointerup", endNumberDrag);
 document.addEventListener("pointercancel", endNumberDrag);

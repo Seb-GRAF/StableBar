@@ -72,9 +72,10 @@
 .theme-preview .preview-workspace.is-focused { color: var(--ws-on); }
 .theme-preview.preview-ws-fill .preview-workspace.is-focused { background: var(--ws-ind); }
 
-.theme-preview.preview-ws-under .preview-workspace.is-focused::after,
-.theme-preview.preview-ws-under .preview-workspace.is-visible::after {
-  content: "";
+.theme-preview .preview-underline { display: none; }
+
+.theme-preview.preview-ws-under .preview-underline {
+  display: block;
   position: absolute;
   left: 50%;
   bottom: calc(var(--w-py) - var(--ul-dy));
@@ -85,7 +86,7 @@
   background: var(--ws-ind);
 }
 
-.theme-preview.preview-ws-under .preview-workspace.is-visible::after { background: var(--ul-visible); }
+.theme-preview.preview-ws-under .preview-underline.is-visible { background: var(--ul-visible); }
 .theme-preview .preview-app-menus { display: flex; align-items: center; gap: 14px; padding-inline: 7px; }
 .theme-preview .preview-app-name { font-weight: 700; }
 .theme-preview .preview-battery { width: var(--battery-w); height: var(--battery-h); flex: none; color: var(--fg); }
@@ -127,4 +128,51 @@
   background: var(--pop-bg);
   border-radius: var(--pop-radius);
   box-shadow: inset 0 0 0 var(--pop-border-w) var(--pop-border), var(--pop-shadow), 0 8px 36px #00000047;
+}
+
+.preview-cue {
+  --cue-ink: #fff05a;
+  --cue-halo: #131209;
+  --cue-tint: #fff05a38;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.preview-cue, .preview-cue * { box-sizing: border-box; transition: none; }
+.preview-cue > span { position: absolute; }
+.preview-cue-outline {
+  border: 1.5px dashed var(--cue-ink);
+  box-shadow: 0 0 0 1px var(--cue-halo), inset 0 0 0 1px var(--cue-halo);
+}
+.preview-cue-band { background: var(--cue-tint); }
+.preview-cue-ruler {
+  background: var(--cue-tint);
+  border-inline: 1.5px solid var(--cue-ink);
+  box-shadow: 0 0 0 1px var(--cue-halo);
+}
+.preview-cue-ruler::before, .preview-cue-ruler::after {
+  content: "";
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 1.5px;
+  background: var(--cue-ink);
+  box-shadow: 0 0 0 1px var(--cue-halo);
+}
+.preview-cue-ruler::before { top: 0; }
+.preview-cue-ruler::after { bottom: 0; }
+.preview-cue-label {
+  padding: 2px 4px;
+  border-radius: 2px;
+  color: var(--cue-halo);
+  background: var(--cue-ink);
+  box-shadow: 0 0 0 1px var(--cue-halo);
+  font: 500 12px/16px var(--mono, monospace);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-cue, .preview-cue * { animation: none; transition: none; }
 }

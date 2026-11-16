@@ -12,7 +12,7 @@ import {
   ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
 } from "../../site/creator/files.mjs";
 import {
-  CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur,
+  CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur, affectedVariables, PREVIEW_TARGETS,
 } from "../../site/creator/preview.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -143,6 +143,97 @@ test("preview geometry follows the theme", () => {
   assert.equal(indicatorClass(resolveTheme(builtIn, theme("leman"), "dark")), "preview-ws-fill");
   assert.equal(indicatorClass(resolveTheme(builtIn, theme("nord"), "dark")), "preview-ws-under");
   assert.equal(indicatorClass(resolveTheme(builtIn, theme("notch"), "dark")), "preview-ws-text");
+});
+
+test("affected variables follow geometry controls without unrelated variables", () => {
+  const original = state("built-in");
+  assert.deepEqual(affectedVariables(original, "widgets.paddingHorizontal", "dark"), ["--w-px"]);
+  assert.deepEqual(affectedVariables(original, "popups.paddingVertical", "dark"), ["--pop-py"]);
+  assert.deepEqual(affectedVariables(original, "popups.gap", "dark"), ["--pop-offset"]);
+  assert.ok(affectedVariables(original, "bar.height", "dark").includes("--bar-h"));
+  assert.deepEqual(original, state("built-in"));
+});
+
+test("affected palette variables follow shared tokens for each base and appearance", () => {
+  for (const id of baseIDs) {
+    for (const appearance of ["light", "dark"]) {
+      const affected = affectedVariables(state(id), "palette.accent", appearance);
+      assert.ok(affected.includes("--accent"), `${id} ${appearance}`);
+      assert.ok(affected.includes("--pop-accent"), `${id} ${appearance}`);
+      assert.ok(!affected.includes("--w-px"), `${id} ${appearance}`);
+      assert.deepEqual(affected, [...affected].sort());
+    }
+  }
+  const surface = affectedVariables(state("built-in"), "palette.surface", "dark");
+  assert.ok(surface.includes("--w-bg"));
+  assert.ok(surface.includes("--pop-bg"));
+  assert.deepEqual(affectedVariables(state("built-in"), "palette.warning", "dark"), []);
+});
+
+test("two probes detect a control even when its current value equals a probe", () => {
+  for (const value of [3, 29]) {
+    const current = applyControl(state("built-in"), "widgets.paddingHorizontal", value, "dark");
+    assert.deepEqual(affectedVariables(current, "widgets.paddingHorizontal", "dark"), ["--w-px"]);
+  }
+  for (const value of ["#123456", "#654321"]) {
+    const current = applyControl(state("built-in"), "palette.accent", value, "dark");
+    assert.ok(affectedVariables(current, "palette.accent", "dark").includes("--accent"));
+  }
+});
+
+test("probes handle background, select, toggle and text controls", () => {
+  const original = state("built-in");
+  assert.deepEqual(affectedVariables(original, "bar.background", "dark"), ["--strip-bg"]);
+  assert.deepEqual(affectedVariables(original, "widgets.fontWeight", "dark"), ["--bar-font", "--pop-font"]);
+  assert.ok(affectedVariables(original, "widgets.tiles", "dark").includes("--w-bg"));
+  assert.deepEqual(affectedVariables(original, "widgets.fontName", "dark"), ["--bar-font", "--pop-font"]);
+});
+
+test("manifest and unknown controls have no preview targets, and invalid probes are ignored", () => {
+  assert.deepEqual(affectedVariables(state("built-in"), "about.name", "dark"), []);
+  assert.deepEqual(affectedVariables(state("built-in"), "missing.control", "dark"), []);
+  const invalid = state("built-in");
+  invalid.config.tokens.surface = "@token.missing";
+  assert.deepEqual(affectedVariables(invalid, "bar.background", "dark"), []);
+  const rejected = state("built-in");
+  rejected.config.roles.heading.foreground = "not-a-color";
+  assert.deepEqual(affectedVariables(rejected, "palette.accent", "dark"), []);
+});
+
+test("every preview variable has a target in the preview markup", () => {
+  const page = read("site/creator/page.mjs").toString();
+  const markup = page.slice(page.indexOf("function previewHTML()"), page.indexOf("function render()"));
+  const classes = [...markup.matchAll(/class="([^"]+)"/g)].map(([, value]) => new Set(value.split(/\s+/)));
+  for (const id of baseIDs) {
+    for (const appearance of ["light", "dark"]) {
+      for (const variable of Object.keys(cssVariables(resolveTheme(builtIn, theme(id), appearance)))) {
+        assert.ok(PREVIEW_TARGETS[variable], `${id} ${appearance} ${variable}`);
+      }
+    }
+  }
+  for (const [variable, { selector }] of Object.entries(PREVIEW_TARGETS)) {
+    for (const part of selector.split(",")) {
+      const required = [...part.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)].map(([, name]) => name);
+      assert.ok(required.length && classes.some(tokens => required.every(name => tokens.has(name))),
+        `${variable}: ${part}`);
+    }
+  }
+});
+
+test("preview target measurements use the agreed geometry", () => {
+  const expected = {
+    "--w-px": "padding-x", "--pop-px": "padding-x",
+    "--w-py": "padding-y", "--pop-py": "padding-y",
+    "--w-gap": "gap", "--bar-gap": "gap", "--pop-gap": "gap",
+    "--bar-h": "height", "--tile-h": "height", "--ul-h": "height",
+    "--strip-m": "offset", "--pop-offset": "offset", "--ul-dy": "offset", "--w-dy": "offset",
+  };
+  for (const [variable, measure] of Object.entries(expected)) {
+    assert.equal(PREVIEW_TARGETS[variable]?.measure, measure, variable);
+  }
+  for (const variable of ["--w-radius", "--pop-radius", "--w-border-w", "--bar-font", "--pop-font", "--w-shadow-box"]) {
+    assert.equal(PREVIEW_TARGETS[variable]?.measure, undefined, variable);
+  }
 });
 
 test("every config control is in the contract", () => {
