@@ -309,8 +309,14 @@ struct PopupBlockView: View {
         hovering.hover = true
         let current = hovered ? block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: hovering, roles: context.roles) : resting
         let stacksBlocks = if topLevel, case .column = block.content { true } else { false }
-        let appearance = WidgetAppearance(resting.text, defaults: WidgetStyle(spacing: stacksBlocks ? PopupConfiguration.blockSpacing : nil))
-        let box = current.box
+        var box = current.box
+        var drawn = resting
+        // A ring draws its hovered style too, and its background as its track, not behind its square.
+        if case .ring = block.content {
+            box.background = nil
+            drawn = current
+        }
+        let appearance = WidgetAppearance(drawn.text, defaults: WidgetStyle(spacing: stacksBlocks ? PopupConfiguration.blockSpacing : nil))
         let alignment: Alignment = switch block.alignment {
         case .leading: .leading
         case .center: .center
@@ -318,44 +324,44 @@ struct PopupBlockView: View {
         }
         return Group {
             if handlesInteraction {
-                boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
             } else if let command = block.onClickField.flatMap({ fields[$0] }) ?? block.onClick {
                 Button { context.runAction(command, [:]) } label: {
-                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let value = block.openField.flatMap({ fields[$0] }) ?? block.open {
                 Button { if let target = OpenTarget(value) { context.open(target) } } label: {
-                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let pid = block.quitField.flatMap({ fields[$0] }).flatMap({ pid_t($0) }) {
                 Button { context.quit(pid) } label: {
-                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let reference = block.openMenuBarItem {
                 Button { context.pressMenuBarItem(reference) } label: {
-                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
                 Button { context.selectInputSource(id) } label: {
-                    boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusHighlight(appearance: appearance))
             } else if block.keepsLineHeight {
                 boxed(ZStack {
                     Text(" ").hidden()
-                    content(resting, appearance: appearance)
+                    content(drawn, appearance: appearance)
                 }, box: box, alignment: alignment)
             } else {
-                boxed(content(resting, appearance: appearance), box: box, alignment: alignment)
+                boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
             }
         }
             .font(appearance.font)
@@ -579,6 +585,14 @@ struct PopupBlockView: View {
                          animation: block.animation ?? WidgetAnimation(), color: appearance.accent,
                          track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), cornerRadius: appearance.cornerRadius)
                 .frame(height: height)
+        case let .ring(source, lineWidth, children):
+            ZStack {
+                ProgressRing(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, animation: block.animation ?? WidgetAnimation(),
+                             color: appearance.accent, track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), lineWidth: lineWidth)
+                // Children take their content's width, as in the bar, so a popup centers them too.
+                ForEach(Array(children.enumerated()), id: \.offset) { _, item in child(item, of: style, fields: fields).fixedSize() }
+            }
+            .frame(width: appearance.iconSize, height: appearance.iconSize)
         case let .equalizer(source, height):
             Equalizer(playing: source.map { fields[$0] == "true" || fields[$0] == "1" || context.values[$0] == 1 } ?? true, height: height)
         case let .battery(source):
@@ -1351,6 +1365,29 @@ struct ProgressRule: View {
         }
         .accessibilityLabel("Progress")
         .accessibilityValue("\(Int(progressFraction(value) * 100)) percent")
+    }
+}
+
+struct ProgressRing: View {
+    let value: Double
+    let animation: WidgetAnimation
+    let color: Color
+    let track: AnyShapeStyle
+    let lineWidth: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let fraction = progressFraction(value)
+        ZStack {
+            Circle().strokeBorder(track, lineWidth: lineWidth)
+            Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction)
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(reduceMotion ? nil : animation.value, value: fraction)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int(fraction * 100)) percent")
     }
 }
 
