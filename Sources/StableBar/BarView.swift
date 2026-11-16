@@ -1017,11 +1017,17 @@ struct WorkspaceView: View {
                                                   cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
-                        Text(workspace.label)
+                        HStack(spacing: style.spacing ?? 4) {
+                            Text(workspace.label)
+                            if let layout = workspace.layout, let glyph = configuration?.layoutGlyphs?[layout] {
+                                Text(glyph)
+                            }
+                        }
                     }
                     .magnified(.label, by: magnifier, upTo: magnification)
                     .help("Switch to workspace \(workspace.label)")
                     .accessibilityLabel("Workspace \(workspace.label)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
+                    .accessibilityValue(layoutValue(for: workspace))
                     .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
                     if configuration?.showApps != false {
                         if configuration?.windows == true {
@@ -1030,6 +1036,9 @@ struct WorkspaceView: View {
                                     HStack(spacing: style.spacing ?? 4) {
                                         appIcon(window.app, style: glyph, spacing: style.spacing ?? 4,
                                                 highlight: window.isFocused ? highlight : nil)
+                                        if window.stackIndex > 0 {
+                                            Text(String(window.stackIndex)).magnified(.label, by: magnifier, upTo: magnification)
+                                        }
                                         if let length = configuration?.titleLength, length > 0 {
                                             Text(String(window.title.prefix(length))).magnified(.label, by: magnifier, upTo: magnification)
                                         }
@@ -1037,7 +1046,7 @@ struct WorkspaceView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .help(magnification == nil ? window.title : "")
-                                .accessibilityLabel("\(window.app.name): \(window.title)\(window.isFocused ? ", focused" : "")")
+                                .accessibilityLabel("\(window.app.name): \(window.title)\(window.stackIndex > 0 ? ", stack position \(window.stackIndex)" : "")\(window.isFocused ? ", focused" : "")")
                                 .accessibilityAddTraits(window.isFocused ? .isSelected : [])
                                 .accessibilityValue(badgeValue(for: window.app))
                             }
@@ -1147,6 +1156,11 @@ struct WorkspaceView: View {
             Button(action: action) { label().padding(.bottom, below).contentShape(Rectangle()) }
                 .padding(.bottom, -below)
         }
+    }
+
+    private func layoutValue(for workspace: Workspace) -> String {
+        guard let layout = workspace.layout, configuration?.layoutGlyphs?[layout] != nil else { return "" }
+        return "\(layout) layout"
     }
 
     private func badgeValue(for app: WorkspaceApp) -> String {

@@ -45,6 +45,12 @@ struct SceneFile: Decodable {
     var workspaces: [ConfigurationValue]?
     /// AeroSpace's `list-windows --json` objects.
     var windows: [ConfigurationValue]?
+    /// yabai's `query --spaces` objects, drawn in place of `workspaces`, every space on display 1.
+    var yabaiSpaces: [ConfigurationValue]?
+    /// yabai's `query --windows` objects.
+    var yabaiWindows: [ConfigurationValue]?
+    /// The bundle identifier of each yabai window's `pid`, which StableBar otherwise reads from the running apps.
+    var yabaiApps: [Int: String] = [:]
     /// Dock badge labels by bundle identifier.
     var dockBadges: [String: String] = [:]
     /// The `window-id` of the window the stand-in window manager reports as focused.
@@ -86,7 +92,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, view, section, tab, package, uninstall,
+        case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, view, section, tab, package, uninstall,
              themeLink, starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -161,6 +167,9 @@ struct SceneFile: Decodable {
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
         windows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .windows)
+        yabaiSpaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .yabaiSpaces)
+        yabaiWindows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .yabaiWindows)
+        yabaiApps = try values.decodeIfPresent([Int: String].self, forKey: .yabaiApps) ?? [:]
         dockBadges = try values.decodeIfPresent([String: String].self, forKey: .dockBadges) ?? [:]
         desktopShortcuts = try values.decodeIfPresent([Int].self, forKey: .desktopShortcuts) ?? []
         if desktopShortcuts.contains(where: { !DesktopShortcuts.desktops.contains($0) }) || Set(desktopShortcuts).count != desktopShortcuts.count {

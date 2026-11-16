@@ -70,6 +70,12 @@ enum SceneRenderer {
                                                                     windows: JSONEncoder().encode(scene.windows ?? []),
                                                                     focusedWindow: scene.focusedWindow)
         }
+        if let spaces = scene.yabaiSpaces {
+            store.workspaceStore.workspaces = try yabaiSnapshot(spaces: JSONEncoder().encode(spaces),
+                                                                windows: JSONEncoder().encode(scene.yabaiWindows ?? []),
+                                                                displays: Data(#"[{"id":1,"index":1}]"#.utf8), screenIDs: [1],
+                                                                bundleIDs: Dictionary(uniqueKeysWithValues: scene.yabaiApps.map { (Int32($0.key), $0.value) }))
+        }
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
