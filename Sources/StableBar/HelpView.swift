@@ -65,6 +65,11 @@ struct HelpView: View {
                 }
                 .disabled(starRequest.isStarring || starRequest.state == .checking)
                 .help(starRequest.help)
+                Button {
+                    NSWorkspace.shared.open(URL(string: "https://ko-fi.com/stablebar")!)
+                } label: {
+                    Label("Buy us a coffee", systemImage: "cup.and.saucer")
+                }
             }
             .buttonStyle(.plain)
             .foregroundStyle(.primary)
