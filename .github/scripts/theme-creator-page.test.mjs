@@ -481,7 +481,7 @@ test("a folder drop cannot supersede a newer import after slow enumeration", asy
   }
 });
 
-test("the font menu selects a listed font, keeps a custom one and offers another", () => {
+test("the font menu shows each font in its face, keeps a custom one and offers another", () => {
   const page = storePage();
   const html = config => {
     page.context.fontConfig = config;
@@ -489,22 +489,49 @@ test("the font menu selects a listed font, keeps a custom one and offers another
     return page.run("controlHTML(CONTROLS.find(control => control.id === 'widgets.fontName'), resolved())");
   };
   const monaco = html({ defaults: { fontName: "Monaco" } });
-  assert.match(monaco, /<option value="Monaco" selected>Monaco<\/option>/);
+  assert.match(monaco, /data-value="Monaco" aria-selected="true" style="font-family: &quot;Monaco&quot;, /);
+  assert.match(monaco, /aria-haspopup="listbox"[^>]*>Monaco<\/button>/);
   assert.match(monaco, /<input [^>]*class="font-other"[^>]*hidden/);
-  assert.match(monaco, /<option value="" data-other>Other font…<\/option>/);
-  assert.match(html({ defaults: { fontName: "JetBrains Mono" } }), /<option value="JetBrains Mono" selected>JetBrains Mono<\/option>/);
-  assert.match(html({ defaults: { fontName: "system" } }), /<option value="system" selected>System<\/option>/);
+  assert.match(monaco, /data-other aria-selected="false">Other font…<\/li>/);
+  assert.equal((monaco.match(/aria-selected="true"/g) ?? []).length, 1);
+  assert.match(html({ defaults: { fontName: "JetBrains Mono" } }), /data-value="JetBrains Mono" aria-selected="true"/);
+  assert.match(html({ defaults: { fontName: "system" } }), /data-value="system" aria-selected="true" style="font-family: -apple-system[^"]*">System<\/li>/);
+});
 
-  const change = value => page.events.get("change")({ target: {
-    dataset: { control: "widgets.fontName", fontSelect: "" }, type: "select-one", tagName: "SELECT", value, matches: () => false,
-  } });
-  change("Menlo");
-  assert.equal(page.run("state.config.defaults.fontName"), "Menlo");
+test("choosing from the font menu applies a font or opens the field for another", () => {
+  const page = storePage();
+  const list = "c-widgets-fontName-list";
+  const button = Object.assign(page.root.querySelector(`[aria-controls="${list}"]`), {
+    dataset: { control: "widgets.fontName", fontSelect: "" }, type: "button", tagName: "BUTTON", style: {},
+    getAttribute: () => list,
+  });
   const other = page.root.querySelector('.font-other[data-control="widgets.fontName"]');
+  const option = (value, active = false) => ({
+    id: value, dataset: { value }, textContent: value === "system" ? "System" : value || "Other font…",
+    setAttribute() {}, scrollIntoView() {},
+    classList: { active, toggle(_name, on) { this.active = on; }, contains() { return this.active; } },
+  });
+  const options = [option("system", true), option("Menlo"), option("Monaco"), option("")];
+  Object.assign(page.root.querySelector(`#${list}`), { id: list, querySelectorAll: () => options, setAttribute() {} });
+  page.context.fontList = page.root.querySelector(`#${list}`);
+  const key = name => page.run(`fontListKey(fontList, { key: ${JSON.stringify(name)}, preventDefault() {} })`);
+
+  key("ArrowDown");
+  assert.equal(options[1].classList.active, true);
+  key("End");
+  assert.equal(options[3].classList.active, true);
+  key("m"); key("o");
+  assert.equal(options[2].classList.active, true);
+  key("Enter");
+  assert.equal(page.run("state.config.defaults.fontName"), "Monaco");
+  assert.equal(button.textContent, "Monaco");
+  assert.match(button.style.fontFamily, /^"Monaco", /);
+
   other.hidden = true;
-  change("");
-  assert.equal(page.run("state.config.defaults.fontName"), "Menlo");
+  page.run(`chooseFont(root.querySelector('[aria-controls="${list}"]'), "")`);
+  assert.equal(page.run("state.config.defaults.fontName"), "Monaco");
   assert.equal(other.hidden, false);
+
   const type = value => page.events.get("input")({ target: { dataset: { control: "widgets.fontName" }, type: "text", value } });
   type("  JetBrains Mono ");
   assert.equal(page.run("state.config.defaults.fontName"), "JetBrains Mono");

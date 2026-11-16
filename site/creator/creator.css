@@ -56,6 +56,17 @@
 .number-unit { margin-left: 4px; color: var(--text-2); font: 400 12px/16px var(--body); }
 .scrub-handle { display: grid; place-items: center; align-self: stretch; flex: 0 0 32px; border-radius: 6px 0 0 6px; color: var(--text-2); font: 600 14px/20px var(--body); cursor: ew-resize; touch-action: none; user-select: none; -webkit-user-select: none; }
 .font-other { margin-top: 8px; }
+.font-picker { position: relative; }
+.font-picker > button { width: 100%; min-height: 40px; padding: 8px 36px 8px 10px; border: 1px solid #adada2; border-radius: 4px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23141414' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center / 12px 8px; color: #141414; font-size: 16px; line-height: 22px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.font-picker > button:hover { border-color: var(--link); }
+.font-picker > button:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.font-list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 300px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; border: 1px solid #adada2; border-radius: 6px; background: #fff; box-shadow: 0 8px 24px #0000002e; }
+.font-list:focus { outline: none; }
+.font-list [role="option"] { padding: 6px 10px 6px 28px; border-radius: 4px; color: #141414; font-size: 17px; line-height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.font-list [role="option"][aria-selected="true"] { background: no-repeat 9px center / 11px 9px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 9'%3E%3Cpath d='M1 4.5l3 3 6-6' fill='none' stroke='%23141414' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.font-list [role="option"]:hover, .font-list [role="option"].is-active { background-color: var(--hi); }
+.font-list [data-other] { margin-top: 4px; border-top: 1px solid #e3e3dc; border-radius: 0 0 4px 4px; font: 400 15px/24px var(--body); }
+.font-group { padding: 8px 10px 4px; color: var(--text-2); font: 600 12px/16px var(--body); }
 .scrub-handle svg { display: block; }
 .scrub-handle:hover { background: #efefe9; }
 .scrub-handle:active { background: var(--hi); }

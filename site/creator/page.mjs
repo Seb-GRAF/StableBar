@@ -1,7 +1,7 @@
 import builtIn from "./built-in.mjs";
 import { BASE_IDS, RESERVED_IDS, MAC_FONTS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
 import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
-import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS } from "./preview.mjs";
+import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS, fontFamily } from "./preview.mjs";
 import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
@@ -96,10 +96,13 @@ function controlHTML(control, r) {
     input = `<select ${attr}>${control.options.map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option[0].toUpperCase() + option.slice(1)}</option>`).join("")}</select>`;
   } else if (control.kind === "font") {
     const name = value ?? "system";
-    const option = font => `<option value="${e(font)}" ${font === name ? "selected" : ""}>${e(font)}</option>`;
-    input = `<select ${attr} data-font-select><option value="system" ${name === "system" ? "selected" : ""}>System</option>`
-      + (name === "system" || MAC_FONTS.includes(name) ? "" : option(name))
-      + `<optgroup label="On every Mac">${MAC_FONTS.map(option).join("")}</optgroup><option value="" data-other>Other font…</option></select>`
+    const label = font => font === "system" ? "System" : font;
+    const fonts = ["system", ...(name === "system" || MAC_FONTS.includes(name) ? [] : [name])];
+    const option = (font, index) => `<li role="option" id="${id}-font-${index}" data-value="${e(font)}" aria-selected="${font === name}" style="font-family: ${e(fontFamily(font))}">${e(label(font))}</li>`;
+    input = `<div class="font-picker"><button type="button" ${attr} data-font-select value="${e(name)}" aria-haspopup="listbox" aria-expanded="false" aria-controls="${id}-list" style="font-family: ${e(fontFamily(name))}">${e(label(name))}</button>`
+      + `<ul class="font-list" id="${id}-list" role="listbox" aria-label="${e(control.label)}" tabindex="-1" hidden>${fonts.map(option).join("")}`
+      + `<li role="presentation" class="font-group">On every Mac</li>${MAC_FONTS.map((font, index) => option(font, fonts.length + index)).join("")}`
+      + `<li role="option" id="${id}-other" data-value="" data-other aria-selected="false">Other font…</li></ul></div>`
       + `<input type="text" class="font-other" data-control="${control.id}" aria-label="Font name" placeholder="Name of a font you installed" autocomplete="off" spellcheck="false" value="${e(name === "system" ? "" : name)}" hidden>`;
   } else if (control.kind === "background") {
     const selected = value?.gradient ? "gradient" : value ? "color" : "none";
@@ -844,12 +847,7 @@ document.addEventListener("change", event => {
   const input = event.target;
   const control = numberControl(input);
   if (control) commitNumber(input, control);
-  else if (input.dataset.control && "fontSelect" in input.dataset) {
-    const other = root.querySelector(`.font-other[data-control="${input.dataset.control}"]`);
-    other.hidden = input.value !== "";
-    if (input.value === "") other.focus();
-    else changeControl(input);
-  } else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
+  else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
   if (input.id === "base-theme") {
     if (!bases.has(input.value)) return;
     baseID = input.value;
@@ -882,6 +880,81 @@ document.addEventListener("focusout", event => {
   updateCue();
 });
 window.addEventListener("resize", updateCue);
+// The font menu is a listbox, not a <select>: macOS draws select menus natively and ignores option fonts.
+const fontOptions = list => [...list.querySelectorAll('[role="option"]')];
+
+function setActiveFont(list, option) {
+  for (const other of fontOptions(list)) other.classList.toggle("is-active", other === option);
+  list.setAttribute("aria-activedescendant", option.id);
+  option.scrollIntoView({ block: "nearest" });
+}
+
+function openFontList(button) {
+  const list = root.querySelector(`#${button.getAttribute("aria-controls")}`);
+  list.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+  setActiveFont(list, fontOptions(list).find(option => option.dataset.value === button.value) ?? fontOptions(list)[0]);
+  list.focus();
+}
+
+function closeFontList(list, focusButton) {
+  if (list.hidden) return;
+  list.hidden = true;
+  const button = root.querySelector(`[aria-controls="${list.id}"]`);
+  button.setAttribute("aria-expanded", "false");
+  if (focusButton) button.focus();
+}
+
+function chooseFont(button, value) {
+  const other = root.querySelector(`.font-other[data-control="${button.dataset.control}"]`);
+  other.hidden = value !== "";
+  if (value === "") { other.focus(); return; }
+  button.value = value;
+  button.textContent = value === "system" ? "System" : value;
+  button.style.fontFamily = fontFamily(value);
+  const list = root.querySelector(`#${button.getAttribute("aria-controls")}`);
+  for (const option of fontOptions(list)) option.setAttribute("aria-selected", String(option.dataset.value === value));
+  changeControl(button);
+}
+
+function fontListKey(list, event) {
+  const options = fontOptions(list);
+  const index = Math.max(0, options.findIndex(option => option.classList.contains("is-active")));
+  const button = root.querySelector(`[aria-controls="${list.id}"]`);
+  const keys = { ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: options.length - 1, PageDown: index + 8, PageUp: index - 8 };
+  if (event.key in keys) setActiveFont(list, options[Math.min(options.length - 1, Math.max(0, keys[event.key]))]);
+  else if (event.key === "Enter" || event.key === " ") {
+    closeFontList(list, true);
+    chooseFont(button, options[index].dataset.value);
+  } else if (event.key === "Escape") closeFontList(list, true);
+  else if (event.key === "Tab") { closeFontList(list, false); return; }
+  else if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    fontTyped = Date.now() - fontTypedAt < 600 ? fontTyped + event.key.toLowerCase() : event.key.toLowerCase();
+    fontTypedAt = Date.now();
+    const match = options.find(option => option.textContent.toLowerCase().startsWith(fontTyped));
+    if (match) setActiveFont(list, match);
+  } else return;
+  event.preventDefault();
+}
+let fontTyped = "", fontTypedAt = 0;
+
+document.addEventListener("click", event => {
+  const option = event.target.closest?.('.font-list [role="option"]');
+  const button = event.target.closest?.("[data-font-select]");
+  for (const list of root.querySelectorAll(".font-list:not([hidden])")) {
+    if (!list.contains(event.target) && list.id !== button?.getAttribute("aria-controls")) closeFontList(list, false);
+  }
+  if (option) {
+    const list = option.closest(".font-list");
+    closeFontList(list, true);
+    chooseFont(root.querySelector(`[aria-controls="${list.id}"]`), option.dataset.value);
+  } else if (button) {
+    const list = root.querySelector(`#${button.getAttribute("aria-controls")}`);
+    if (list.hidden) openFontList(button);
+    else closeFontList(list, true);
+  }
+});
+
 document.addEventListener("click", async event => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
@@ -904,6 +977,12 @@ document.addEventListener("click", async event => {
   } catch (error) { notify(message(error)); }
 });
 document.addEventListener("keydown", event => {
+  if (event.target.matches?.(".font-list")) { fontListKey(event.target, event); return; }
+  if (event.target.matches?.("[data-font-select]") && ["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+    event.preventDefault();
+    openFontList(event.target);
+    return;
+  }
   const control = numberControl(event.target);
   if (control && ["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
     event.preventDefault();

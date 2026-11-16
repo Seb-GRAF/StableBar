@@ -12,7 +12,7 @@ import {
   ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
 } from "../../site/creator/files.mjs";
 import {
-  CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur, affectedVariables, PREVIEW_TARGETS,
+  CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur, affectedVariables, PREVIEW_TARGETS, fontFamily,
 } from "../../site/creator/preview.mjs";
 
 const root = new URL("../../", import.meta.url);
@@ -1732,4 +1732,10 @@ test("the font menu lists every font the bundled themes use, once and in order",
   for (const name of used) assert.ok(MAC_FONTS.includes(name), name);
   assert.deepEqual(MAC_FONTS, [...new Set(MAC_FONTS)].sort((a, b) => a.localeCompare(b, "en")));
   assert.equal(CONTROLS.find(control => control.id === "widgets.fontName").kind, "font");
+});
+
+test("a font name stays one quoted CSS string", () => {
+  assert.match(fontFamily("system"), /^-apple-system, /);
+  assert.match(fontFamily("Avenir Next"), /^"Avenir Next", -apple-system, /);
+  assert.match(fontFamily('x", url(https://example.com/a) "'), /^"x\\", url\(https:\/\/example\.com\/a\) \\"", -apple-system, /);
 });

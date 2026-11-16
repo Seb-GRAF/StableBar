@@ -31,9 +31,11 @@ const nonnegative = value => Math.max(0, value);
 const weights = { ultralight: 100, thin: 200, light: 300, regular: 400, medium: 500, semibold: 600, bold: 700 };
 const systemFont = '-apple-system, BlinkMacSystemFont, system-ui, sans-serif';
 
+// A quoted CSS string, so a font name can't add declarations of its own.
+export const fontFamily = name => name === "system" ? systemFont : `${JSON.stringify(String(name))}, ${systemFont}`;
+
 function font(style, lineHeight = px(Math.ceil(style.fontSize * 1.2))) {
-  const family = style.fontName === "system" ? systemFont : `${JSON.stringify(style.fontName)}, ${systemFont}`;
-  return `${weights[style.fontWeight] ?? 400} ${px(style.fontSize)}/${lineHeight} ${family}`;
+  return `${weights[style.fontWeight] ?? 400} ${px(style.fontSize)}/${lineHeight} ${fontFamily(style.fontName)}`;
 }
 
 function background(value) {
