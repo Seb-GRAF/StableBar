@@ -12,6 +12,27 @@ struct WidgetGroupConfiguration: Decodable, Sendable {
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? WidgetStyle()
         members = try values.decodeIfPresent([WidgetGroupMember].self, forKey: .members) ?? []
     }
+
+    /// `widgets`, each enabled one without a `group` in the group whose `members` match it best, unless that group's
+    /// widgets sit in another position. Widgets with their own `group` settle a group's position first.
+    static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration]) -> [WidgetConfiguration] {
+        var positions: [String: WidgetPosition] = [:]
+        for widget in widgets {
+            if let group = widget.group { positions[group] = widget.position }
+        }
+        var joined = widgets
+        for index in joined.indices where joined[index].group == nil && joined[index].enabled {
+            let widget = joined[index]
+            let matches = groups.sorted { $0.key < $1.key }.flatMap { id, group in
+                group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.id == nil ? 0 : 1, $0.keyCount)) }
+            }
+            guard let best = matches.first(where: { match in !matches.contains { $0.rank > match.rank } }),
+                  (positions[best.group] ?? widget.position) == widget.position else { continue }
+            positions[best.group] = widget.position
+            joined[index].group = best.group
+        }
+        return joined
+    }
 }
 
 /// A selector in a group's `members`: a widget matches when it has every key the selector names.

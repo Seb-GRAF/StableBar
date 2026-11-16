@@ -475,7 +475,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let timeout: Double
     let actions: WidgetActions?
     let enabled: Bool
-    let group: String?
+    var group: String?
     let priority: Int
     let overflow: WidgetOverflow
     let rules: [StyleRule]
@@ -899,6 +899,7 @@ struct Configuration: Decodable, Sendable {
         subscribedEvents = subscribed
         activeProviders = active
         groups = try values.decodeIfPresent([String: WidgetGroupConfiguration].self, forKey: .groups) ?? [:]
+        widgets = WidgetGroupConfiguration.joining(widgets, groups: groups)
         var groupPositions: [String: WidgetPosition] = [:]
         var ids = Set<String>()
         for widget in widgets {
