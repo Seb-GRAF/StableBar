@@ -25,7 +25,7 @@ Window dragging is enabled only for the AeroSpace, yabai and Rift workspace sour
 
 ## Essentials details and settings
 
-**Clock & date**, **Battery**, **System monitor**, **Network**, **Calendar** and **Disk** include detail popups when added from Essentials or **Add widget**. The first five replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed Store copies become built-in automatically and keep their saved settings and overrides; local folders and private sources can still offer packages with those IDs.
+**Clock & date**, **Battery**, **System monitor**, **Network**, **Calendar** and **Disk** include detail popups when added from **Settings → Store** or **Add widget**. The first five replace the Date, Battery status, System monitor, Network speed and Calendar agenda Store choices. Previously installed Store copies become built-in automatically and keep their saved settings and overrides; local folders and private sources can still offer packages with those IDs.
 
 Select a widget in **Settings → Bar → Content** to change what it shows. **Behavior → Details popup** turns its built-in popup on or off. Existing native widgets can opt in with `"details": true`. The five former Store packages gain Essentials details automatically when the app updates, while preserving saved settings and overrides. A custom `popup`, `popupName`, menu, `onClick` or `open` keeps its action instead of the built-in details.
 

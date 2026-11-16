@@ -268,15 +268,15 @@ struct ThemeLinkTests {
     }
 
     @Test(arguments: [
-        (ThemeLinkError.tooLong, "This theme link is too long. Install the theme's folder instead, with Open a folder… in Packages."),
+        (ThemeLinkError.tooLong, "This theme link is too long. Install the theme's folder instead, with Open a folder… in the Store."),
         (.unsupportedVersion("2"), "This theme link needs a newer version of StableBar."),
         (.damaged, "This theme link is damaged. Copy it again from the page."),
         (.tooLarge, "This theme is larger than a theme link can carry (32 KB)."),
         (.tooDeep, "This theme nests its settings more than 32 levels deep."),
         (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry."),
-        (.tooManySettings, "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in Packages."),
+        (.tooManySettings, "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in the Store."),
         (.indirectBar, "A theme link must set the bar's settings directly, not through a token or setting."),
-        (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in Packages."),
+        (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in the Store."),
         (.barValue("height"), "A theme link can't set the bar's height outside what Settings allows."),
         (.idTaken("Harbour-Test"), "Another package already uses the ID Harbour-Test. Rename the theme on the page.")
     ])

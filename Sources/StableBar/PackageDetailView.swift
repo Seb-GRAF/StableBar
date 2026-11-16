@@ -391,108 +391,6 @@ struct PackageDetailView: View {
     }
 }
 
-struct BuiltInPackagesView: View {
-    let store: BarStore
-    let gallery: ThemeGallery
-    let search: String
-    @State private var setup: WidgetSetup
-
-    init(store: BarStore, gallery: ThemeGallery, search: String) {
-        self.store = store
-        self.gallery = gallery
-        self.search = search
-        _setup = State(initialValue: WidgetSetup(store: store))
-    }
-
-    var body: some View {
-        let widgets = WidgetAddCatalog.builtIns.filter { $0.matches(search) }
-        let themes = gallery.choices.filter { $0.isBundled && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search)) }
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                BuiltInIcon()
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("StableBar Essentials").font(.system(size: 17, weight: .semibold))
-                    HStack(spacing: 6) {
-                        PackageOriginBadge(source: .included)
-                        Text("Widgets and themes by StableBar").lineLimit(1)
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(20)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Text("Ready to use. Included with the app and kept up to date with StableBar.")
-                        .font(.system(size: 13)).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Widgets").font(.system(size: 14, weight: .semibold))
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
-                            ForEach(widgets) { choice in
-                                VStack(alignment: .leading, spacing: 12) {
-                                    let tokens = (try? store.effectiveDocument["tokens"]?.decoded([String: ConfigurationValue].self)) ?? [:]
-                                    let widget = try? substituteConfigurationReferences(.object(choice.add(position: .right, id: choice.id)!.properties!),
-                                                                                        prefix: "@token.", values: tokens).decoded(WidgetConfiguration.self)
-                                    PackagePreview(screenshotData: nil, look: nil, widgets: widget.map { [$0] } ?? []).frame(height: 64)
-                                    HStack(spacing: 10) {
-                                        Image(systemName: choice.symbol)
-                                            .font(.system(size: 17))
-                                            .frame(width: 38, height: 38)
-                                            .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 10))
-                                        Text(choice.name).font(.system(size: 13, weight: .medium))
-                                        Spacer(minLength: 0)
-                                    }
-                                    Text(choice.description)
-                                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                                        .lineLimit(2, reservesSpace: true)
-                                    HStack {
-                                        Spacer()
-                                        Button("Add to bar") {
-                                            setup.beginSheet()
-                                            Task {
-                                                if await setup.add(choice, to: .right) != nil {
-                                                    store.customizationHistory.showNotice("\(choice.name) added to the right side of your bar.")
-                                                }
-                                            }
-                                        }
-                                        .controlSize(.small)
-                                        .disabled(setup.isAdding)
-                                        .accessibilityLabel("Add \(choice.name) to bar")
-                                    }
-                                }
-                                .padding(14)
-                                .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
-                                .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(SettingsPalette.groupBorder))
-                            }
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Themes").font(.system(size: 14, weight: .semibold))
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
-                            ForEach(themes, id: \.key) { choice in
-                                VStack(alignment: .leading, spacing: 6) {
-                                    ThemeCard(title: choice.title, look: gallery.previews[choice.key]?.configuration(for: gallery.previewAppearance),
-                                              appearance: gallery.previewAppearance, isSelected: choice.key == gallery.selectedKey,
-                                              error: gallery.error(for: choice.key), source: .included) { gallery.select(choice) }
-                                    if let error = gallery.error(for: choice.key) {
-                                        Text(error).font(.caption).foregroundStyle(.red)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let error = setup.error {
-                        Label(error, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.red)
-                    }
-                }
-                .padding(20)
-            }
-        }
-    }
-}
-
 struct PackagePreview: View {
     let screenshotData: Data?
     let look: Configuration?
@@ -541,16 +439,6 @@ struct PackageIcon: View {
             .background(Color(hue: Double(id.unicodeScalars.reduce(0) { ($0 * 31 + Int($1.value)) % 360 }) / 360,
                               saturation: 0.5, brightness: 0.78),
                         in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-struct BuiltInIcon: View {
-    var body: some View {
-        Image(systemName: "sparkle")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 34, height: 34)
-            .background(.gray, in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

@@ -30,7 +30,7 @@ final class PackagesViewTests: XCTestCase {
             XCTAssertEqual(store.builtInWidgetIDs, ["date"])
             XCTAssertEqual(library.origin(of: installed.manifest), .builtIn)
             XCTAssertTrue(library.installedPackages.isEmpty)
-            XCTAssertTrue(library.storeEntries(showingThemes: false, sourceID: nil).isEmpty)
+            XCTAssertTrue(library.storeEntries.isEmpty)
             XCTAssertTrue(library.updates.isEmpty)
             let editor = ConfigurationEditor(store: store)
             editor.editBar(for: "work")
@@ -65,7 +65,8 @@ final class PackagesViewTests: XCTestCase {
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        let host = NSHostingView(rootView: BuiltInPackagesView(store: store, gallery: ThemeGallery(store: store), search: "System monitor"))
+        store.packageLibrary.search = "System monitor"
+        let host = NSHostingView(rootView: PackagesView(store: store))
         host.sizingOptions = []
         window.contentView = host
         for _ in 0..<30 {
@@ -88,12 +89,12 @@ final class PackagesViewTests: XCTestCase {
         defer { library.stopUpdateChecks() }
         await library.loadInstalled()
         await library.loadStore()
-        XCTAssertTrue(library.storeEntries(showingThemes: false, sourceID: nil).isEmpty)
+        XCTAssertTrue(library.storeEntries.isEmpty)
         let old = try fixture.packages.install(fixture.directory.appending(path: "sources/date"))
         _ = try await index.add(id: "date", kind: "widgets", configuration: #"{"widgets":[]}"#, version: "2")
         await library.loadInstalled()
         await library.loadStore(reload: true)
-        XCTAssertEqual(library.storeEntries(showingThemes: false, sourceID: nil).map(\.id), ["date"])
+        XCTAssertEqual(library.storeEntries.map(\.id), ["date"])
         XCTAssertEqual(library.updates.map(\.id), ["date"])
         await library.update(old.manifest)
         XCTAssertNil(library.error)
@@ -136,11 +137,11 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertNotNil(reopened.updateWidget)
         var opened = false
         store.onCustomizePackages = { opened = true }
-        reopened.showingStore = true
+        reopened.filter = .themes
         reopened.search = "unrelated"
         reopened.openUpdates()
         XCTAssertTrue(opened)
-        XCTAssertFalse(reopened.showingStore)
+        XCTAssertEqual(reopened.filter, .updates)
         XCTAssertEqual(reopened.search, "")
         await reopened.update(old.manifest)
         XCTAssertNil(reopened.error)
@@ -400,7 +401,6 @@ final class PackagesViewTests: XCTestCase {
         library.search = "nothing matches"
         await library.open(PackageLink(id: "clock", sourceID: nil))
         XCTAssertEqual(library.search, "")
-        XCTAssertTrue(library.showingStore)
         XCTAssertEqual(library.draft?.sourceID, PackageSource.storeID)
         XCTAssertEqual(library.draft?.inspection.widgets.first?.content, .text("Store"))
         XCTAssertNil(library.linkError)
@@ -409,13 +409,11 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertEqual(library.draft?.inspection.widgets.first?.content, .text("Acme"))
         // An installed package opens its installed copy, whichever source the link names.
         await library.open(PackageLink(id: "note", sourceID: "acme"))
-        XCTAssertFalse(library.showingStore)
         let note = try XCTUnwrap(library.draft)
         XCTAssertNil(note.sourceID)
         XCTAssertTrue(library.isInstalledCopy(note.inspection.directory, of: note.inspection.manifest))
         // A package no source lists leaves the Store open with a message.
         await library.open(PackageLink(id: "missing", sourceID: nil))
-        XCTAssertTrue(library.showingStore)
         XCTAssertNil(library.draft)
         XCTAssertEqual(library.linkError, "No source you have lists the package “missing”.")
         await library.open(PackageLink(id: "missing", sourceID: "acme"))
@@ -425,7 +423,6 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertEqual(library.linkError, "The link is for a package from “team”, a source you haven’t added. Ask for its join link.")
         // A Store widget that Essentials replaced opens Essentials, whether or not the Store still lists it.
         await library.open(PackageLink(id: "battery-status", sourceID: nil))
-        XCTAssertFalse(library.showingStore)
         XCTAssertNil(library.draft)
         XCTAssertNil(library.linkError)
         // A source that doesn't load can't say whether it lists the package.
@@ -433,7 +430,6 @@ final class PackagesViewTests: XCTestCase {
         await library.open(PackageLink(id: "clock", sourceID: "down"))
         XCTAssertNotNil(library.sourceErrors["down"])
         XCTAssertEqual(library.linkError, "Down is unavailable, so the package “clock” can’t be shown.")
-        library.showingStore = false
         library.deselect()
         XCTAssertNil(library.linkError)
         // Opening a link never installs or adds anything.
@@ -499,7 +495,6 @@ final class PackagesViewTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNil(store.pendingLinks.package)
-        XCTAssertTrue(library.showingStore)
         XCTAssertEqual(library.draft?.inspection.manifest.id, "clock")
         XCTAssertEqual(library.draft?.sourceID, "acme")
         // A link that arrives while Packages is open is taken too.
@@ -510,7 +505,6 @@ final class PackagesViewTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNil(store.pendingLinks.package)
-        XCTAssertFalse(library.showingStore)
         XCTAssertEqual(library.draft?.inspection.manifest.id, "note")
         XCTAssertFalse(window.isVisible)
     }
@@ -720,7 +714,7 @@ final class PackagesViewTests: XCTestCase {
         await library.loadInstalled()
         await library.loadStore()
         // Both sources list the same ID: the keys stay unique, so the grid has no duplicate identities.
-        let keys = library.storeEntries(showingThemes: nil, sourceID: nil).map(\.key)
+        let keys = library.storeEntries.map(\.key)
         XCTAssertEqual(keys.count, 2)
         XCTAssertEqual(Set(keys).count, 2)
         XCTAssertEqual(PackageOrigin.privateSource("Acme").title, "Acme")
@@ -735,7 +729,6 @@ final class PackagesViewTests: XCTestCase {
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        library.showingStore = true
         let host = NSHostingView(rootView: PackagesView(store: store))
         host.sizingOptions = []
         window.contentView = host
@@ -747,7 +740,7 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertNotNil(host.subviews.first { String(describing: type(of: $0)).contains("PlatformContainer") })
         // The Store card says where Clock is installed from; Acme's card, which owns the install, says Installed.
         XCTAssertEqual(library.cardStatus(storeClock), .installedElsewhere("Acme"))
-        XCTAssertEqual(library.cardStatus(acmeClock), .installed)
+        XCTAssertEqual(library.cardStatus(acmeClock), .notOnBar)
         await library.uninstall(try XCTUnwrap(library.installed.first))
         XCTAssertEqual(library.cardStatus(storeClock), .get)
         XCTAssertEqual(library.cardStatus(acmeClock), .get)
@@ -777,14 +770,13 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertEqual(library.sources.map(\.id), ["stablebar", "acme"])
         XCTAssertEqual(library.sourceName("acme"), "Acme")
         XCTAssertTrue(library.sourceErrors.isEmpty)
-        XCTAssertEqual(library.storeEntries(showingThemes: nil, sourceID: "acme").map(\.sourceID), ["acme"])
-        XCTAssertEqual(library.storeEntries(showingThemes: nil, sourceID: nil).map(\.key), ["stablebar:clock/1", "acme:clock/1"])
-        XCTAssertTrue(library.storeEntries(showingThemes: true, sourceID: nil).isEmpty)
+        XCTAssertEqual(library.storeEntries.map(\.key), ["stablebar:clock/1", "acme:clock/1"])
+        XCTAssertEqual(library.unlistedPackages.map(\.id), ["note"])
         library.search = "acme"
-        XCTAssertEqual(Set(library.storeEntries(showingThemes: nil, sourceID: nil).map(\.sourceID)), ["acme"])
+        XCTAssertEqual(Set(library.storeEntries.map(\.sourceID)), ["acme"])
         XCTAssertTrue(library.matchesSearch(installedFromAcme.manifest))
         library.search = "stablebar store"
-        XCTAssertEqual(library.storeEntries(showingThemes: nil, sourceID: nil).map(\.sourceID), ["stablebar"])
+        XCTAssertEqual(library.storeEntries.map(\.sourceID), ["stablebar"])
         XCTAssertFalse(library.matchesSearch(installedFromAcme.manifest))
         library.search = ""
         XCTAssertEqual(library.origin(of: installedFromAcme.manifest), .privateSource("Acme"))
@@ -1064,7 +1056,7 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertEqual(library.origin(of: installed.manifest), .installed)
     }
 
-    @MainActor func testStoreListsUpdatesThenInstalledThenOtherPackagesByName() async throws {
+    @MainActor func testStoreListsPackagesByNameAndSuggestsThemForAppsOnTheMac() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let acme = PackageSource(id: "acme", name: "Acme", url: LocalPackageIndex(fixture: fixture, folder: "acme").url)
@@ -1076,15 +1068,17 @@ final class PackagesViewTests: XCTestCase {
             _ = try id == "agenda" ? fixture.packages.install(source, record: PackageInstallRecord(acme), requestedName: "Acme")
                 : fixture.packages.install(source)
         }
-        func index(_ url: URL, _ listed: [(String, String, String)]) throws {
+        func index(_ url: URL, _ listed: [(String, String, String)], suggestions: String = "[]") throws {
             let entries = listed.map { id, name, version in
                 #"{"id":"\#(id)","name":"\#(name)","version":"\#(version)","kind":"widgets","archive":"\#(id).tar.gz","sha256":"0","source":"https://example.com/\#(id)"}"#
             }
-            try fixture.write(#"{"packages":[\#(entries.joined(separator: ","))]}"#, to: url)
+            try fixture.write(#"{"packages":[\#(entries.joined(separator: ","))],"suggestions":\#(suggestions)}"#, to: url)
         }
         let store = LocalPackageIndex(fixture: fixture).url
         try index(store, [("zoom", "Zoom", "1"), ("notes", "Notes", "1"), ("weather", "weather", "2"),
-                          ("agenda", "agenda", "1"), ("battery", "Battery", "1"), ("clock", "Clock", "3")])
+                          ("agenda", "agenda", "1"), ("battery", "Battery", "1"), ("clock", "Clock", "3")],
+                  // Finder is on every Mac.
+                  suggestions: #"[{"when":{"apps":["com.apple.finder"]},"packages":["zoom","notes"]}]"#)
         try index(acme.url, [("zoom", "Zoom", "1"), ("agenda", "agenda", "1")])
         let bar = try fixture.store()
         defer { bar.stop() }
@@ -1094,12 +1088,12 @@ final class PackagesViewTests: XCTestCase {
         defer { library.stopUpdateChecks() }
         await library.loadInstalled()
         await library.loadStore()
-        // The Store's agenda card says Installed from Acme, so it sorts with the installed packages; same names follow the sources.
-        XCTAssertEqual(library.storeEntries(showingThemes: nil, sourceID: nil).map(\.key), [
-            "stablebar:clock/3", "stablebar:weather/2", "stablebar:agenda/1", "acme:agenda/1",
-            "stablebar:battery/1", "stablebar:notes/1", "stablebar:zoom/1", "acme:zoom/1"
+        // Same names follow the sources.
+        XCTAssertEqual(library.storeEntries.map(\.key), [
+            "stablebar:agenda/1", "acme:agenda/1", "stablebar:battery/1", "stablebar:clock/3",
+            "stablebar:notes/1", "stablebar:weather/2", "stablebar:zoom/1", "acme:zoom/1"
         ])
-        XCTAssertEqual(library.storeEntries(showingThemes: nil, sourceID: "acme").map(\.key), ["acme:agenda/1", "acme:zoom/1"])
+        XCTAssertEqual(library.suggested, ["zoom", "notes"])
     }
 
     @MainActor func testPackagesBrowserOpensInstalledPackageSettingsFromSelection() async throws {
@@ -1128,9 +1122,6 @@ final class PackagesViewTests: XCTestCase {
             if textFields(host).contains("Ready to customize") { break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        let table = try XCTUnwrap(tables(in: host).first)
-        XCTAssertEqual(table.numberOfRows, 3)
-        XCTAssertEqual(table.selectedRow, 2)
         XCTAssertTrue(textFields(host).contains("Ready to customize"))
         XCTAssertFalse(window.isVisible)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
@@ -1282,9 +1273,5 @@ final class PackagesViewTests: XCTestCase {
 
     @MainActor private func textFields(_ view: NSView) -> [String] {
         visibleText(view)
-    }
-
-    @MainActor private func tables(in view: NSView) -> [NSTableView] {
-        (view as? NSTableView).map { [$0] } ?? view.subviews.flatMap(tables)
     }
 }

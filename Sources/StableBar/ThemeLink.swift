@@ -206,7 +206,7 @@ enum ThemeLinkError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .tooLong: "This theme link is too long. Install the theme's folder instead, with Open a folder… in Packages."
+        case .tooLong: "This theme link is too long. Install the theme's folder instead, with Open a folder… in the Store."
         case .unsupportedVersion: "This theme link needs a newer version of StableBar."
         case .damaged: "This theme link is damaged. Copy it again from the page."
         case .tooLarge: "This theme is larger than a theme link can carry (32 KB)."
@@ -217,9 +217,9 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .extraFiles: "This theme refers to other files, such as a screenshot or an include, which a theme link can't carry."
         case .indirectBar: "A theme link must set the bar's settings directly, not through a token or setting."
         case .tooManyReferences:
-            "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in Packages."
+            "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in the Store."
         case .tooManySettings:
-            "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in Packages."
+            "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in the Store."
         case let .barProperty(key): "A theme link can't set the bar's \(key)."
         case let .barValue(key): "A theme link can't set the bar's \(key) outside what Settings allows."
         case let .reservedID(id): "\(id) is the ID of a theme that comes with StableBar. Rename the theme on the page."

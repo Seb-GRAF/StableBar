@@ -1,7 +1,7 @@
 import Foundation
 
 /// A `stablebar://package/<id>` link: what someone sends to point to one package in the Store or a private source.
-/// Opening one only shows the package in Settings › Packages; adding it still takes the usual review.
+/// Opening one only shows the package in Settings › Store; adding it still takes the usual review.
 struct PackageLink: Equatable, Sendable {
     var id: String
     /// The source that lists the package; nil for the Store, or the first source that lists it.

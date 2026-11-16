@@ -81,7 +81,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 }
 
 enum CustomizationSection: String, CaseIterable, Identifiable {
-    case general = "General", widgets = "Bar", appearance = "Theme", profiles = "Profiles", packages = "Packages", diagnostics = "Status", help = "Help"
+    case general = "General", widgets = "Bar", appearance = "Theme", packages = "Store", profiles = "Profiles", diagnostics = "Status", help = "Help"
 
     var id: Self { self }
 
@@ -101,7 +101,7 @@ enum CustomizationSection: String, CaseIterable, Identifiable {
         case .widgets: "menubar.rectangle"
         case .appearance: "paintpalette"
         case .profiles: "switch.2"
-        case .packages: "shippingbox"
+        case .packages: "bag"
         case .diagnostics: "waveform.path.ecg"
         case .help: "questionmark.circle"
         }

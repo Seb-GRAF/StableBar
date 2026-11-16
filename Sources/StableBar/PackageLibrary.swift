@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 
 struct PackagePreviewData: Sendable {
@@ -80,7 +80,9 @@ final class PackageLibrary {
     /// Why the last `stablebar://package` link found no package, shown above the Store.
     var linkError: String?
     var search = ""
-    var showingStore = false
+    var filter = PackageFilter.all
+    /// IDs of the packages the sources suggest for the tools and apps on this Mac.
+    private(set) var suggested: Set<String> = []
 
     init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false, preferences: UserDefaults = .standard) {
         self.store = store
@@ -135,7 +137,7 @@ final class PackageLibrary {
     }
 
     func openUpdates() {
-        showingStore = false
+        filter = .updates
         search = ""
         deselect()
         store?.onCustomizePackages?()
@@ -311,24 +313,29 @@ final class PackageLibrary {
         directory == packages.directory.appending(path: manifest.id).appending(path: manifest.version)
     }
 
-    /// Store entries of one kind (nil: both) and one source (nil: every source) that match the search
-    /// by name, description, ID or source name. Entries with an update come first, then installed packages,
-    /// including another source's copy, then the rest; each group by name, then in source order.
-    func storeEntries(showingThemes: Bool?, sourceID: String?) -> [PackageIndex.Entry] {
-        let updated = Set(updates.compactMap { update(for: $0)?.key }), owned = Set(installedPackages.map(\.id))
+    /// Every source's entries that match the search by name, description, ID or source name, by name, then in
+    /// source order.
+    var storeEntries: [PackageIndex.Entry] {
+        let owned = Set(installedPackages.map(\.id))
         let sourceOrder = Dictionary(sources.enumerated().map { ($1.id, $0) }, uniquingKeysWith: { first, _ in first })
-        func group(_ entry: PackageIndex.Entry) -> Int { updated.contains(entry.key) ? 0 : owned.contains(entry.id) ? 1 : 2 }
         return entries.filter { entry in
             (!WidgetAddCatalog.includes(entry) || owned.contains(entry.id))
-                && (showingThemes == nil || showingThemes == (entry.kind == .theme)) && (sourceID == nil || entry.sourceID == sourceID)
                 && matchesSearch(entry.name, entry.description, entry.id, sourceName(entry.sourceID))
         }.sorted {
-            if group($0) != group($1) { return group($0) < group($1) }
             let order = $0.name.localizedStandardCompare($1.name)
             if order != .orderedSame { return order == .orderedAscending }
             if $0.id != $1.id { return $0.id < $1.id }
             return sourceOrder[$0.sourceID, default: .max] < sourceOrder[$1.sourceID, default: .max]
         }
+    }
+
+    /// Installed packages that no loaded source lists, such as one opened from a folder, that match the search.
+    var unlistedPackages: [WidgetPackageManifest] {
+        installedPackages.filter { manifest in !entries.contains { $0.id == manifest.id } && matchesSearch(manifest) }
+    }
+
+    func hasUpdate(_ entry: PackageIndex.Entry) -> Bool {
+        updates.contains { update(for: $0)?.key == entry.key }
     }
 
     /// Matches an installed package by name, description, ID or the name of the source that installed it.
@@ -411,6 +418,11 @@ final class PackageLibrary {
         }
         sourceErrors = catalog.errors
         loadedSources = Set(sources.map(\.id).filter { catalog.errors[$0] == nil })
+        let path = shellEnvironment.withLock { $0["PATH", default: ""] }.split(separator: ":")
+        suggested = Set(catalog.suggestions.filter { suggestion in
+            suggestion.tools.contains { tool in path.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(tool)") } }
+                || suggestion.apps.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+        }.flatMap(\.packages))
     }
 
     func preview(_ manifest: WidgetPackageManifest) async throws -> PackagePreviewData {
@@ -454,7 +466,6 @@ final class PackageLibrary {
         search = ""
         await loadInstalled()
         if installedPackages.contains(where: { $0.id == link.id }) {
-            showingStore = false
             linkError = nil
             await selectPackage(link.id)
             return
@@ -462,11 +473,9 @@ final class PackageLibrary {
         // Essentials replaced some Store widgets: their links open Essentials, even once the Store stops listing them.
         if link.sourceID == nil || link.sourceID == PackageSource.storeID,
            WidgetAddCatalog.builtIns.contains(where: { $0.replacesPackage == link.id }) {
-            showingStore = false
             deselect()
             return
         }
-        showingStore = true
         deselect()
         await loadStore()
         if let entry = entries.first(where: { $0.id == link.id && (link.sourceID == nil || $0.sourceID == link.sourceID) }) {
@@ -708,7 +717,7 @@ final class PackageLibrary {
                 if let next = installedPackages.first(where: { $0.id == manifest.id }) { await selectInstalled(next) }
             }
         } catch {
-            draft?.error = errorMessage(error)
+            if let draft { draft.error = errorMessage(error) } else { self.error = errorMessage(error) }
         }
     }
 
@@ -796,4 +805,12 @@ extension PackageLibrary {
             "id": .string(source.id), "name": .string(source.name), "url": .string(source.url.absoluteString)
         ])
     }
+}
+
+/// What the Store page lists, as its sidebar picks it.
+enum PackageFilter: Hashable {
+    case all, updates, installed, included, themes
+    /// A package source, by its ID.
+    case source(String)
+    case category(WidgetCategory)
 }

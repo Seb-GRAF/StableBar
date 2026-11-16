@@ -233,6 +233,7 @@ private struct BarContextMenu: View {
             Label { Text("StableBar") } icon: { if let heading = MenuIcon.heading { Image(nsImage: heading) } }
             if store.barEditing.isAvailable { item(store.barEditing.menuTitle, store.barEditing.menuIcon, action: store.barEditing.toggle) }
             item("Try Themes…", .themes) { store.onTryThemes?(display) }
+            item("Get Widgets…", .store) { NSApp.sendAction(#selector(AppDelegate.getWidgets), to: NSApp.delegate, from: nil) }
             let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
             if error != nil || store.crashReports.note != nil { Divider() }
             if let error {

@@ -210,6 +210,7 @@ struct SavedSourceToken: Codable, Equatable, Sendable {
 /// The entries of every source that loaded, in source order, and the error of each source that didn't.
 struct PackageCatalog: Sendable {
     var entries: [PackageIndex.Entry] = []
+    var suggestions: [PackageIndex.Suggestion] = []
     /// Source ID → `sourceErrorDetail` of its failure.
     var errors: [String: String] = [:]
 
