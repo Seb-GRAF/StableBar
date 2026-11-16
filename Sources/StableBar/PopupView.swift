@@ -585,10 +585,11 @@ struct PopupBlockView: View {
                          animation: block.animation ?? WidgetAnimation(), color: appearance.accent,
                          track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), cornerRadius: appearance.cornerRadius)
                 .frame(height: height)
-        case let .ring(source, lineWidth, children):
+        case let .ring(source, lineWidth, gap, children):
             ZStack {
                 ProgressRing(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, animation: block.animation ?? WidgetAnimation(),
-                             color: appearance.accent, track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), lineWidth: lineWidth)
+                             color: appearance.accent, track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), lineWidth: lineWidth,
+                             gap: gap)
                 // Children take their content's width, as in the bar, so a popup centers them too.
                 ForEach(Array(children.enumerated()), id: \.offset) { _, item in child(item, of: style, fields: fields).fixedSize() }
             }
@@ -1374,17 +1375,21 @@ struct ProgressRing: View {
     let color: Color
     let track: AnyShapeStyle
     let lineWidth: Double
+    let gap: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let fraction = progressFraction(value)
+        let arc = 1 - gap / 360
         ZStack {
-            Circle().strokeBorder(track, lineWidth: lineWidth)
-            Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction)
+            Circle().inset(by: lineWidth / 2).trim(from: 0, to: arc)
+                .stroke(track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction * arc)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : animation.value, value: fraction)
         }
+        // A circle's path starts at three o'clock: turn its start to the top, or to the gap's left end.
+        .rotationEffect(.degrees(gap > 0 ? 90 + gap / 2 : -90))
         .accessibilityElement()
         .accessibilityLabel("Progress")
         .accessibilityValue("\(Int(fraction * 100)) percent")

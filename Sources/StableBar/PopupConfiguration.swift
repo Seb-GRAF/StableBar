@@ -118,8 +118,9 @@ indirect enum PopupContent: Sendable {
     case image(path: String, source: String?, fit: ImageFit)
     case symbol(name: String, source: String?)
     case progress(source: String, height: Double)
-    /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it.
-    case ring(source: String, lineWidth: Double, children: [PopupBlock])
+    /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it. A
+    /// `gap` leaves that many degrees open at the bottom, and the fill starts at the gap's left end.
+    case ring(source: String, lineWidth: Double, gap: Double, children: [PopupBlock])
     /// Bars that bounce while `fields[source]` is on, or always without a source.
     case equalizer(source: String?, height: Double)
     /// A battery filled to `values[source]` or `fields[source]`, showing charging, the adapter and a
@@ -181,7 +182,7 @@ struct PopupBlock: Decodable, Sendable {
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
-        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon
+        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -350,6 +351,7 @@ struct PopupBlock: Decodable, Sendable {
         case "ring":
             content = .ring(source: try values.decode(String.self, forKey: .source),
                             lineWidth: try values.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 2,
+                            gap: try values.decodeIfPresent(Double.self, forKey: .gap) ?? 0,
                             children: try values.decodeIfPresent([PopupBlock].self, forKey: .children) ?? [])
         case "equalizer":
             let height = try values.decodeIfPresent(Double.self, forKey: .height) ?? 12

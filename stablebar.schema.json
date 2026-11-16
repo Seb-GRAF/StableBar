@@ -1120,6 +1120,10 @@
         "lineWidth": {
           "$ref": "#/definitions/number"
         },
+        "gap": {
+          "anyOf": [{"type": "number", "minimum": 0, "maximum": 360}, {"$ref": "#/definitions/reference"}, {"type": "null"}],
+          "description": "For rings: the degrees left open at the bottom, centered on six o'clock. 0, the default, draws a full ring."
+        },
         "hideWhenEmpty": {
           "$ref": "#/definitions/string"
         },
