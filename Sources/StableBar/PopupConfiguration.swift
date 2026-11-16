@@ -4,6 +4,8 @@ struct PopupConfiguration: Decodable, Sendable {
     let height: Double?
     let style: WidgetStyle
     let layout: PopupBlock
+    /// Layouts a block's `view` shows in place of `layout`, by name.
+    var views: [String: PopupBlock] = [:]
     var alignment: PopupAlignment = .center
     /// The gap below the bar; `bar.popupOffset` when nil.
     var offset: Double?
@@ -16,7 +18,7 @@ struct PopupConfiguration: Decodable, Sendable {
     var onClose: String?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, style, layout, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation, onOpen, onClose
+        case height, style, layout, views, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation, onOpen, onClose
     }
 
     init(height: Double? = nil, style: WidgetStyle, layout: PopupBlock) {
@@ -47,6 +49,10 @@ struct PopupConfiguration: Decodable, Sendable {
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         style = try values.decode(WidgetStyle.self, forKey: .style)
         layout = try values.decode(PopupBlock.self, forKey: .layout)
+        views = try values.decodeIfPresent([String: PopupBlock].self, forKey: .views) ?? views
+        if let name = ([layout] + views.values).flatMap(\.openedViews).first(where: { views[$0] == nil }) {
+            throw DecodingError.dataCorruptedError(forKey: .views, in: values, debugDescription: "Unknown view: \(name).")
+        }
         alignment = try values.decodeIfPresent(PopupAlignment.self, forKey: .alignment) ?? alignment
         offset = try values.decodeIfPresent(Double.self, forKey: .offset)
         openOnHover = try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? openOnHover
@@ -97,12 +103,12 @@ indirect enum PopupContent: Sendable {
     case list(source: String, row: PopupBlock, orientation: ListOrientation)
     case button(title: String, command: String)
     /// A slider over `minimum`…`maximum`, and past a notch the `endStop` when it has one.
-    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
+    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, action: BlockAction)
     /// A slider drawn as a bar in the block's style, filled from the leading edge, with `icon` on the fill and past a
     /// notch the `endStop` when it has one.
     case filledSlider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?,
-                      icon: String?, command: String)
-    case toggle(title: String, source: String, command: String)
+                      icon: String?, action: BlockAction)
+    case toggle(title: String, source: String, action: BlockAction)
     case segmented(title: String, source: String, options: [PopupControlOption], command: String)
     /// A pill, or chips for the presets starred in `lists[stars.source]`, that opens a panel: the groups in
     /// `lists[groupsSource]` beside the chosen group's options and levels, rows of `lists[optionsSource]` and
@@ -117,9 +123,11 @@ indirect enum PopupContent: Sendable {
     case divider
     case image(path: String, source: String?, fit: ImageFit)
     case symbol(name: String, source: String?)
-    case progress(source: String, height: Double)
-    /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it.
-    case ring(source: String, lineWidth: Double, children: [PopupBlock])
+    /// A rule filled to `values[source]` or `fields[source]`, or with `segments`, that many equal pieces lit up to it.
+    case progress(source: String, height: Double, segments: Int?)
+    /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it. A
+    /// `gap` leaves that many degrees open at the bottom, and the fill starts at the gap's left end.
+    case ring(source: String, lineWidth: Double, gap: Double, children: [PopupBlock])
     /// Bars that bounce while `fields[source]` is on, or always without a source.
     case equalizer(source: String?, height: Double)
     /// A battery filled to `values[source]` or `fields[source]`, showing charging, the adapter and a
@@ -150,6 +158,9 @@ struct PopupBlock: Decodable, Sendable {
     let quitField: String?
     let openMenuBarItem: MenuBarItemReference?
     let selectInputSourceField: String?
+    let selectOutputDeviceField: String?
+    /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
+    let view: String?
     let hideWhenEmpty: String?
     let scrollSpeed: Double?
     /// Whether a field block shows all of its text over as many lines as it needs, selectable, and an input block
@@ -179,9 +190,9 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
+        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
-        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon
+        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -200,6 +211,8 @@ struct PopupBlock: Decodable, Sendable {
         quitField = nil
         openMenuBarItem = nil
         selectInputSourceField = nil
+        selectOutputDeviceField = nil
+        view = nil
         self.hideWhenEmpty = hideWhenEmpty
         scrollSpeed = nil
         wraps = false
@@ -244,6 +257,16 @@ struct PopupBlock: Decodable, Sendable {
         if selectInputSourceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil {
             throw DecodingError.dataCorruptedError(forKey: .selectInputSourceField, in: values, debugDescription: "A block cannot combine selectInputSourceField with onClick, onClickField, open, openField, quitField or openMenuBarItem.")
         }
+        selectOutputDeviceField = try values.decodeIfPresent(String.self, forKey: .selectOutputDeviceField)
+        if selectOutputDeviceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .selectOutputDeviceField, in: values, debugDescription: "A block cannot combine selectOutputDeviceField with onClick, onClickField, open, openField, quitField, openMenuBarItem or selectInputSourceField.")
+        }
+        view = try values.decodeIfPresent(String.self, forKey: .view)
+        if view != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil || selectOutputDeviceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
+        }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)
         if let scrollSpeed, scrollSpeed <= 0 {
@@ -261,6 +284,18 @@ struct PopupBlock: Decodable, Sendable {
         keepsLineHeight = false
         widestSymbol = nil
         transition = try values.decodeIfPresent(WidgetTransition.self, forKey: .transition)
+        func controlAction(_ settings: [NativeSetting]) throws -> BlockAction {
+            guard let setting = try values.decodeIfPresent(NativeSetting.self, forKey: .set) else {
+                return .command(try values.decode(String.self, forKey: .onChange))
+            }
+            if values.contains(.onChange) {
+                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A control cannot combine set with onChange.")
+            }
+            guard settings.contains(setting) else {
+                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A slider can set volume, and a toggle muted or wifiPower.")
+            }
+            return .set(setting)
+        }
         switch try values.decode(String.self, forKey: .type) {
         case "row": content = .row(try values.decode([PopupBlock].self, forKey: .children))
         case "column": content = .column(try values.decode([PopupBlock].self, forKey: .children))
@@ -295,15 +330,15 @@ struct PopupBlock: Decodable, Sendable {
             }
             let title = try values.decode(String.self, forKey: .title)
             let source = try values.decode(String.self, forKey: .source)
-            let command = try values.decode(String.self, forKey: .onChange)
+            let action = try controlAction([.volume])
             content = filled
                 ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
-                                icon: icon, command: command)
-                : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, command: command)
+                                icon: icon, action: action)
+                : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, action: action)
         case "toggle":
             content = .toggle(title: try values.decode(String.self, forKey: .title),
                               source: try values.decode(String.self, forKey: .source),
-                              command: try values.decode(String.self, forKey: .onChange))
+                              action: try controlAction([.muted, .wifiPower]))
         case "segmented":
             let options = try values.decode([PopupControlOption].self, forKey: .options)
             guard !options.isEmpty, Set(options.map(\.value)).count == options.count else {
@@ -345,11 +380,16 @@ struct PopupBlock: Decodable, Sendable {
             let source = try values.decodeIfPresent(String.self, forKey: .source)
             content = .symbol(name: source == nil ? try values.decode(String.self, forKey: .name) : "", source: source)
         case "progress":
+            let segments = try values.decodeIfPresent(Int.self, forKey: .segments)
+            if let segments, segments < 1 {
+                throw DecodingError.dataCorruptedError(forKey: .segments, in: values, debugDescription: "A progress block needs at least one segment.")
+            }
             content = .progress(source: try values.decode(String.self, forKey: .source),
-                                height: try values.decode(Double.self, forKey: .height))
+                                height: try values.decode(Double.self, forKey: .height), segments: segments)
         case "ring":
             content = .ring(source: try values.decode(String.self, forKey: .source),
                             lineWidth: try values.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 2,
+                            gap: try values.decodeIfPresent(Double.self, forKey: .gap) ?? 0,
                             children: try values.decodeIfPresent([PopupBlock].self, forKey: .children) ?? [])
         case "equalizer":
             let height = try values.decodeIfPresent(Double.self, forKey: .height) ?? 12
@@ -390,6 +430,18 @@ struct PopupBlock: Decodable, Sendable {
     }
 }
 
+extension PopupBlock {
+    /// The views this block and the blocks inside it open.
+    var openedViews: [String] {
+        let inside: [PopupBlock] = switch content {
+        case let .row(children), let .column(children), let .ring(_, _, _, children): children
+        case let .list(_, row, _), let .search(_, _, _, row): [row]
+        default: []
+        }
+        return (view.map { [$0] } ?? []) + inside.flatMap(\.openedViews)
+    }
+}
+
 enum ListOrientation: String, Decodable, Sendable {
     case horizontal, vertical
 }
@@ -400,6 +452,12 @@ enum ImageFit: String, Decodable, Sendable {
 
 enum PopupAlignment: String, Decodable, Sendable {
     case leading, center, trailing
+}
+
+/// What a block runs: a shell command, or for a slider or toggle with `set`, a setting StableBar changes itself.
+enum BlockAction: Sendable {
+    case command(String)
+    case set(NativeSetting)
 }
 
 struct PopupControlOption: Decodable, Sendable {

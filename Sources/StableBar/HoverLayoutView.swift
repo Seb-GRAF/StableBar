@@ -8,7 +8,7 @@ struct HoverLayoutView<Content: View>: View {
     let style: LayoutStyle
     let hovered: Bool
     let motion: BlockMotion
-    let runAction: (String, [String: String]) -> Void
+    let runAction: (BlockAction, [String: String]) -> Void
     @ViewBuilder let content: () -> Content
     @State private var editing = false
     @Environment(\.measuringBarWidths) private var measuring

@@ -133,6 +133,7 @@ func sceneRejectsUnsupportedMacOSVersions(version: Int) throws {
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "tab": "placement"}"#, "tab"),
     (#"{"configuration": {}, "draw": "settings", "widget": "clock", "tab": "placement"}"#, "tab"),
     (#"{"configuration": {}, "draw": "bar", "menu": [{"title": "Copy"}]}"#, "menu"),
+    (#"{"configuration": {}, "draw": "bar", "view": "network"}"#, "view"),
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "accessibilityDisplay": ["reduceTransparency"]}"#, "accessibilityDisplay"),
     (#"{"configuration": {}, "draw": "popup", "widget": "menus", "menu": [{"title": "Copy", "shortcut": "⌘C"}]}"#, "shortcut"),
     // As scene.schema.json says: a negative value would set every flag, fn and ⌃⌥⇧ without ⌘.

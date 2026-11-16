@@ -1,4 +1,5 @@
 import CoreAudio
+import CoreLocation
 import EventKit
 import Foundation
 import Observation
@@ -591,6 +592,42 @@ private extension DataSourceRegistry {
     #expect(store.providers.isEmpty)
 }
 
+@Test @MainActor func aMergeShowsEachTemporaryOutputItsInputsAccept() async throws {
+    let url = try writeTemporaryConfiguration(#"""
+    {"providers":{"saver":{"type":"system","events":["tick"]},"status":{"type":"merge","providers":["saver"]}},
+     "widgets":[{"id":"status","type":"provider","provider":"status","position":"right"}]}
+    """#)
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let reads = OSAllocatedUnfairLock(initialState: 0)
+    let store = BarStore(configurationURL: url, registry: DataSourceRegistry.builtIn.replacing("system") { _, _ in
+        PollingSource { _ in
+            let first = reads.withLock { $0 += 1; return $0 == 1 }
+            return .output(.success(ScriptOutput(text: "Saved", temporary: first ? nil : TemporaryOutput(fields: ["note": "Saved"], duration: 1))))
+        }
+    })
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let status = try #require(store.scripts["status"])
+    try await awaitCondition { status.output.fields?["saver.text"] == "Saved" }
+    let presentation = try #require(store.presentations["status"])
+    let clock = TestClock()
+    presentation.clock = clock
+    store.refreshScripts(for: "tick")
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(1))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    store.refreshScripts(for: "tick")
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(1))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    let saver = try #require(store.providers["saver"])
+    try saver.accept(ScriptOutput(text: "Saving", temporary: TemporaryOutput(fields: ["note": "Saving"], duration: 1)))
+    try saver.accept(ScriptOutput(text: "Saved"))
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saving"] }
+}
+
 @Test @MainActor func aMergeRunsItsInputsForItsWidgetsAndPublishesEachChangeUnderTheirNames() async throws {
     let url = try writeTemporaryConfiguration(#"""
     {"providers":{"power":{"type":"battery","whenVisible":true},"sound":{"type":"audio"},"meetings":{"type":"calendar","events":["tick"]},
@@ -600,7 +637,7 @@ private extension DataSourceRegistry {
                 {"id":"volume","type":"provider","provider":"sound","position":"right"}]}
     """#)
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let battery = FakeMonitor(ScriptOutput(text: "80%", values: ["percent": 0.8]))
+    let battery = FakeMonitor(ScriptOutput(text: "80%", icon: "battery.75percent", tooltip: "80%, 3:20 left", values: ["percent": 0.8]))
     let sound = FakeMonitor(audio(0.5))
     let calendarReads = OSAllocatedUnfairLock(initialState: 0)
     let store = BarStore(configurationURL: url, registry: DataSourceRegistry.builtIn
@@ -609,7 +646,8 @@ private extension DataSourceRegistry {
         .replacing("calendar") { _, _ in
             PollingSource { _ in
                 let reads = calendarReads.withLock { $0 += 1; return $0 }
-                return .output(.success(ScriptOutput(text: "No calendar access", fields: ["access": "denied", "reads": String(reads)])))
+                return .output(.success(ScriptOutput(text: "No calendar access", tooltip: "From its output",
+                                                     fields: ["access": "denied", "reads": String(reads), "tooltip": "Its own field"])))
             }
         })
     defer { store.stop() }
@@ -624,11 +662,28 @@ private extension DataSourceRegistry {
     #expect(store.providers["power"]?.diagnostics.suspended == true)
     store.setVisibleWidgets(ids: ["status"], displayID: 1)
     try await awaitCondition { status.output.values?["power.percent"] == 0.8 }
+    #expect(status.output.fields?["power.text"] == "80%")
+    #expect(status.output.fields?["power.icon"] == "battery.75percent")
+    #expect(status.output.fields?["power.tooltip"] == "80%, 3:20 left")
+    #expect(status.output.fields?["meetings.icon"] == nil)
+    #expect(status.output.fields?["meetings.tooltip"] == "Its own field")
+    #expect(status.output.icon == nil && status.output.tooltip == nil)
     battery.change(to: ScriptOutput(text: "10%", values: ["percent": 0.1]))
     try await awaitCondition { status.output.values?["power.percent"] == 0.1 }
     #expect(store.presentations["status"]?.style.state == "warning")
     sound.change(to: audio(0.7))
     try await awaitCondition { status.output.values?["sound.volume"] == 0.7 }
+    let presentation = try #require(store.presentations["status"])
+    let clock = TestClock()
+    presentation.clock = clock
+    sound.change(to: AudioMonitor.showingChange(to: audio(0.6), from: audio(0.7)))
+    try await awaitCondition { presentation.temporaryFields == ["sound.changedVolume": "60%"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(AudioMonitor.changedVolumeDuration))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    battery.change(to: ScriptOutput(text: "11%", values: ["percent": 0.11]))
+    try await awaitCondition { status.output.values?["power.percent"] == 0.11 }
+    #expect(presentation.temporaryFields == nil, "Another input's change doesn't show the volume again")
     let reads = Int(status.output.fields!["meetings.reads"]!)!
     store.refreshScripts(for: "tick")
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 1) }
@@ -847,6 +902,31 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(BuiltInEvent.privacyChange.variables(from: privacy(microphone: true, camera: true), to: privacy(microphone: true, camera: true)) == nil)
 }
 
+@Test func wifiNamesTheNetworkOnlyWithLocationAccess() {
+    let home = WiFiMonitor.output(WiFiState(interface: "en0", ssid: "Home", power: true, rssi: -60), access: .authorizedAlways)
+    #expect(home.text == "Home" && home.icon == "wifi")
+    #expect(home.fields == ["ssid": "Home", "interface": "en0", "power": "on", "rssi": "-60", "access": "granted"])
+    #expect(home.values == ["signal": 0.8, "power": 1])
+    let unnamed = WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -40), access: .denied)
+    #expect(unnamed.text == "" && unnamed.fields?["ssid"] == "" && unnamed.fields?["access"] == "denied")
+    #expect(unnamed.values == ["signal": 1, "power": 1])
+    #expect(WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -110), access: .notDetermined).fields?["access"] == "notDetermined")
+    #expect(WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -110), access: .restricted).values?["signal"] == 0)
+    let off = WiFiMonitor.output(WiFiState(interface: "en0", power: false), access: .authorizedAlways)
+    #expect(off.icon == "wifi.slash" && off.fields?["power"] == "off" && off.fields?["rssi"] == nil)
+    #expect(off.values == ["signal": 0, "power": 0])
+}
+
+@Test func wifiEventsFollowThePowerAndTheNetwork() {
+    func wifi(_ ssid: String?, power: Bool = true, rssi: Int? = -60) -> ScriptOutput {
+        WiFiMonitor.output(WiFiState(interface: "en0", ssid: ssid, power: power, rssi: rssi), access: ssid == nil ? .denied : .authorizedAlways)
+    }
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi("Office")) == ["INFO": "Office", "POWER": "on"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi(nil, power: false, rssi: nil)) == ["INFO": "", "POWER": "off"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi(nil), to: wifi(nil, rssi: nil)) == ["INFO": "", "POWER": "on"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi("Home", rssi: -70)) == nil)
+}
+
 @Test func thePrivacyWidgetHidesWhatIsNotInUseWhenAsked() throws {
     func icons(hideWhenIdle: Bool, microphone: Bool, camera: Bool) throws -> Int {
         let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(#"{"id":"p","type":"privacy","position":"right","hideWhenIdle":\#(hideWhenIdle)}"#.utf8))
@@ -886,12 +966,12 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(shown(audio(nil, device: "HDMI", id: "9"), after: audio(0.5)) == ["changedVolume": ""])
 }
 
-@Test func theDeviceListSkipsADeviceWhoseNameCannotBeRead() {
-    let rows = AudioMonitor.deviceRows([42, 77, 9]) { device in
+@Test func theDeviceListMarksTheDefaultDeviceAndSkipsADeviceWhoseNameCannotBeRead() {
+    let rows = AudioMonitor.deviceRows([42, 77, 9], selected: 9) { device in
         guard device != 77 else { throw CommandFailure(message: "Could not read audio device name (560947818).") }
         return device == 42 ? "Speakers" : "HDMI"
     }
-    #expect(rows == [["id": "42", "name": "Speakers"], ["id": "9", "name": "HDMI"]])
+    #expect(rows == [["id": "42", "name": "Speakers", "selected": ""], ["id": "9", "name": "HDMI", "selected": "true"]])
 }
 
 @Test func aDeviceListChangeMovesTheVolumeListenerUnlessItWatchesEveryPropertyOfTheDevice() {
@@ -1042,7 +1122,7 @@ private struct RelayProbe {
     {"providers":{"meetings":{"type":"calendar"},"status":{"type":"merge","providers":["meetings"]}},
      "widgets":[{"id":"status","type":"provider","provider":"status","position":"right"}]}
     """#)) == [.calendars])
-    #expect(DataSourceRegistry.builtIn.types.filter { $0.permission != nil }.map(\.name) == ["calendar"])
+    #expect(DataSourceRegistry.builtIn.types.filter { $0.permission != nil }.map(\.name) == ["wifi", "calendar"])
     let listed = ImageRenderer(content: VStack { SourcePermissionList(permissions: [calendars]) }.frame(width: 480))
     #expect((listed.nsImage?.size.height ?? 0) > 0)
     let empty = ImageRenderer(content: VStack { SourcePermissionList(permissions: []) }.frame(width: 480))

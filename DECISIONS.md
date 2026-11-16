@@ -53,6 +53,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
+- **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 - **Blocking work stays off Swift's shared pool** (2026-11-13, [#618]). The pool has one thread per core, three on CI, and never replaces a blocked one. A slow copy or a lookup that can stall runs through `BlockingWork.run` on a GCD queue, and tests that block such work check that it does. [AGENTS.md](AGENTS.md#writing-tests) has the rule for tests.
 - **Comments are for the next reader** (2026-11-10, [#533]). A comment says what the code can't, such as why it must be so, in a line or two. How the bug was found and fixed goes in the issue, the pull request and the commit message. [AGENTS.md](AGENTS.md#writing-comments) has the rule.
@@ -60,6 +61,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#3]: https://github.com/Seb-GRAF/StableBar/issues/3
 [#23]: https://github.com/Seb-GRAF/StableBar/pull/23
 [#100]: https://github.com/Seb-GRAF/StableBar/pull/100
+[#220]: https://github.com/Seb-GRAF/StableBar/issues/220
 [#223]: https://github.com/Seb-GRAF/StableBar/issues/223
 [#309]: https://github.com/Seb-GRAF/StableBar/pull/309
 [#335]: https://github.com/Seb-GRAF/StableBar/issues/335

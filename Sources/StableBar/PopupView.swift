@@ -6,12 +6,13 @@ struct PopupView: View {
     let store: BarStore
     let widget: WidgetConfiguration
     var backgrounds: PopupBackgrounds?
+    var navigation = PopupNavigation()
     @Environment(\.screenKind) private var screenKind
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var mode: ModePresentation {
         let roles = store.configuration?.look(on: screenKind).roles ?? [:]
-        guard style.usesModeStates || popup.layout.usesModeStates(roles: roles)
+        guard style.usesModeStates || popup.usesModeStates(roles: roles)
             || store.scripts[widget.id]?.output.styles?.values.contains(where: \.usesModeStates) == true else { return ModePresentation() }
         return store.modePresentation(on: screenKind)
     }
@@ -29,56 +30,72 @@ struct PopupView: View {
         let error = script?.error ?? store.actionErrors[widget.id]
         let fillsHeight = store.popup.pins.resized.contains(widget.id)
         let content = VStack(alignment: .leading, spacing: appearance.spacing) {
-                PopupBlockView(block: popup.layout, inheritedStyle: style, fields: fields,
-                               context: BlockContext(lists: lists, samples: samples, menu: menu,
-                                                     values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
-                                                     styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
-                                                     roles: store.configuration?.look(on: screenKind).roles ?? [:], open: { target in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    target.open()
-                }, quit: { pid in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    confirmQuit(pid)
-                }, eject: { path, scope in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    try await VolumeEjector.live.eject(path, scope)
-                }, stateAccents: popupStateAccents(style, mode: mode),
-                   dataState: dataState(script?.output, rules: widget.rules), pressMenuBarItem: { reference in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    store.appMenu.press(reference)
-                }, selectInputSource: { id in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    store.selectInputSource(id, widget: widget)
-                }, openSubmenu: { [screenKind] element, row in
-                    store.appMenu.openSubmenu(element, beside: row) { submenu in
-                        PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
+                // The layout always slides in from and out to the leading edge and a view the trailing one, so going in and
+                // coming back both read right, whatever each was last drawn with.
+                ZStack(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: appearance.spacing) {
+                        if navigation.view != nil {
+                            CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground) { navigation.view = nil }
+                        }
+                        PopupBlockView(block: navigation.view.map { popup.views[$0]! } ?? popup.layout, inheritedStyle: style, fields: fields,
+                                       context: BlockContext(lists: lists, samples: samples, menu: menu,
+                                                             values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
+                                                             styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
+                                                             roles: store.configuration?.look(on: screenKind).roles ?? [:], open: { target in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            target.open()
+                        }, openView: { navigation.view = $0 }, quit: { pid in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            confirmQuit(pid)
+                        }, eject: { path, scope in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            try await VolumeEjector.live.eject(path, scope)
+                        }, stateAccents: popupStateAccents(style, mode: mode),
+                           dataState: dataState(script?.output, rules: widget.rules), pressMenuBarItem: { reference in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.appMenu.press(reference)
+                        }, selectInputSource: { id in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.selectInputSource(id, widget: widget)
+                        }, selectOutputDevice: { id in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.selectOutputDevice(id, widget: widget)
+                        }, openSubmenu: { [screenKind] element, row in
+                            store.appMenu.openSubmenu(element, beside: row) { submenu in
+                                PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
+                            }
+                        }, pressMenuItem: { entry in
+                            store.popup.close()
+                            store.appMenu.press(entry)
+                        }, openMenuBarItem: { [screenKind] element, anchor in
+                            guard let element else { return store.innerPopup.close() }
+                            let look = store.configuration!.onScreen(screenKind)
+                            store.innerPopup.toggle(store.appMenu.popup(forMenuBarItem: element), widget: widget,
+                                                    defaults: look.popupDefaults.popupStyle(over: look.defaults), store: store, anchor: anchor)
+                        }, hoverMenuBarItem: { [screenKind] title, anchor, inside in
+                            let look = store.configuration!.onScreen(screenKind)
+                            store.innerPopup.hover(inside, store: store, anchor: anchor) {
+                                store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
+                                                             store: store, anchor: anchor)
+                            }
+                        }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
+                            store.popup.close()
+                            store.move(.item(item), to: placement, before: nil, in: widget)
+                        }, states: states, update: store.update) { action, environment in
+                            if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
+                            store.runAction(action, widget: widget,
+                                            event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
+                        }, topLevel: true)
                     }
-                }, pressMenuItem: { entry in
-                    store.popup.close()
-                    store.appMenu.press(entry)
-                }, openMenuBarItem: { [screenKind] element, anchor in
-                    guard let element else { return store.innerPopup.close() }
-                    let look = store.configuration!.onScreen(screenKind)
-                    store.innerPopup.toggle(store.appMenu.popup(forMenuBarItem: element), widget: widget,
-                                            defaults: look.popupDefaults.popupStyle(over: look.defaults), store: store, anchor: anchor)
-                }, hoverMenuBarItem: { [screenKind] title, anchor, inside in
-                    let look = store.configuration!.onScreen(screenKind)
-                    store.innerPopup.hover(inside, store: store, anchor: anchor) {
-                        store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
-                                                     store: store, anchor: anchor)
-                    }
-                }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
-                    store.popup.close()
-                    store.move(.item(item), to: placement, before: nil, in: widget)
-                }, states: states, update: store.update) { command, environment in
-                    if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
-                    store.runAction(command, widget: widget,
-                                    event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
-                }, topLevel: true)
+                    .id(navigation.view)
+                    .transition(reduceMotion ? .opacity : .move(edge: navigation.view == nil ? .leading : .trailing).combined(with: .opacity))
+                }
+                .clipped()
                 if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
                 }
@@ -93,6 +110,7 @@ struct PopupView: View {
             .environment(\.popupFillsHeight, fillsHeight)
             // With an animation of its own, a popup also animates what its data changes, as it animates its height.
             .animation(reduceMotion ? nil : popup.animation?.value, value: script?.outputNumber)
+            .animation((popup.animation ?? WidgetAnimation()).value, value: navigation.view)
         Group {
             // A popup resized by hand gives its height to the fields that scroll instead of scrolling as a whole.
             if fillsHeight {
@@ -170,6 +188,8 @@ struct BlockContext {
     var fillsWidth = true
     /// Opens an `open` or `openField` block's target; a popup's also closes the popup when its actions dismiss it.
     let open: (OpenTarget) -> Void
+    /// Shows the popup's view of this name in place of its layout.
+    var openView: (String) -> Void = { _ in }
     /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
     var quit: (pid_t) -> Void = { _ in }
     /// Ejects a disk block's volume; unlike the other actions it leaves the popup open and reports a refusal.
@@ -181,6 +201,8 @@ struct BlockContext {
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Selects a `selectInputSourceField` block's keyboard input source.
     var selectInputSource: (String) -> Void = { _ in }
+    /// Makes a `selectOutputDeviceField` block's audio device the default output.
+    var selectOutputDevice: (String) -> Void = { _ in }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
     /// beside the block.
     var openSubmenu: (AXUIElement?, NSView) -> Void = { _, _ in }
@@ -201,7 +223,7 @@ struct BlockContext {
     var update: AppUpdate?
     /// How text, field and symbol blocks without a transition of their own show changes.
     var motion = BlockMotion()
-    let runAction: (String, [String: String]) -> Void
+    let runAction: (BlockAction, [String: String]) -> Void
 }
 
 /// The transition and animation a widget gives its text, field and symbol blocks.
@@ -326,7 +348,7 @@ struct PopupBlockView: View {
             if handlesInteraction {
                 boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
             } else if let command = block.onClickField.flatMap({ fields[$0] }) ?? block.onClick {
-                Button { context.runAction(command, [:]) } label: {
+                Button { context.runAction(.command(command), [:]) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
@@ -351,6 +373,18 @@ struct PopupBlockView: View {
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
                 Button { context.selectInputSource(id) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
+            } else if let id = block.selectOutputDeviceField.flatMap({ fields[$0] }) {
+                Button { context.selectOutputDevice(id) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
+            } else if let view = block.view {
+                Button { context.openView(view) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
@@ -503,45 +537,45 @@ struct PopupBlockView: View {
                 }
             }
         case let .button(title, command):
-            Button { context.runAction(command, [:]) } label: {
+            Button { context.runAction(.command(command), [:]) } label: {
                 Text(title).frame(maxWidth: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .modifier(FocusHighlight(appearance: appearance))
-        case let .slider(title, source, minimum, maximum, step, endStop, command):
+        case let .slider(title, source, minimum, maximum, step, endStop, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             if let endStop {
                 EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
-                    context.runAction(command, ["VALUE": String($0)])
+                    context.runAction(action, ["VALUE": String($0)])
                 }
             } else {
                 PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
-                    context.runAction(command, ["VALUE": String($0)])
+                    context.runAction(action, ["VALUE": String($0)])
                 }
             }
-        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command):
+        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
             FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
                          height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
                          appearance: appearance) {
-                context.runAction(command, ["VALUE": String($0)])
+                context.runAction(action, ["VALUE": String($0)])
             }
-        case let .toggle(title, source, command):
+        case let .toggle(title, source, action):
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
-                context.runAction(command, ["VALUE": $0 ? "true" : "false"])
+                context.runAction(action, ["VALUE": $0 ? "true" : "false"])
             }
         case let .segmented(title, source, options, command):
             PopupSegmented(title: title, value: fields[source] ?? options[0].value, options: options) {
-                context.runAction(command, ["VALUE": $0])
+                context.runAction(.command(command), ["VALUE": $0])
             }
         case let .chooser(title, source, groupsSource, optionsSource, levelsSource, stars, command):
             PopupChooser(title: title, chosen: fields[source] ?? "", groups: context.lists[groupsSource] ?? [],
                          options: context.lists[optionsSource] ?? [], levels: levelsSource.flatMap { context.lists[$0] } ?? [],
                          stars: stars.map { context.lists[$0.source] ?? [] }) {
-                context.runAction(command, ["VALUE": $0, "OPTION": $1, "LEVEL": $2])
+                context.runAction(.command(command), ["VALUE": $0, "OPTION": $1, "LEVEL": $2])
             } onStar: {
-                if let stars { context.runAction(stars.command, ["VALUE": $0, "OPTION": $1, "LEVEL": $2, "STARRED": $3 ? "true" : "false"]) }
+                if let stars { context.runAction(.command(stars.command), ["VALUE": $0, "OPTION": $1, "LEVEL": $2, "STARRED": $3 ? "true" : "false"]) }
             }
         case let .search(title, source, searchFields, row):
             VStack(alignment: .leading, spacing: appearance.spacing) {
@@ -553,14 +587,14 @@ struct PopupBlockView: View {
         case let .input(title, placeholder, autofocus, sendButton, stop, command):
             PopupInput(title: title, placeholder: placeholder, autofocus: autofocus, wraps: block.wraps, sendButton: sendButton,
                        busy: stop.map { !fields[$0.busy, default: ""].isEmpty } ?? false) {
-                context.runAction(command, ["VALUE": $0])
+                context.runAction(.command(command), ["VALUE": $0])
             } onStop: {
-                if let stop { context.runAction(stop.command, [:]) }
+                if let stop { context.runAction(.command(stop.command), [:]) }
             }
         case .menu:
             VStack(spacing: appearance.spacing) {
                 ForEach(Array(context.menu.enumerated()), id: \.offset) { _, item in
-                    PopupMenuRow(item: item, appearance: appearance) { context.runAction($0, [:]) }
+                    PopupMenuRow(item: item, appearance: appearance) { context.runAction(.command($0), [:]) }
                 }
             }
         case .divider:
@@ -580,15 +614,21 @@ struct PopupBlockView: View {
                 .frame(width: style.box.width ?? 52, height: style.box.height ?? 52)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))
-        case let .progress(source, height):
+        case let .progress(source, height, segments?):
+            ProgressSegments(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, count: segments, color: appearance.accent,
+                             track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), spacing: style.box.spacing ?? 2,
+                             cornerRadius: appearance.cornerRadius)
+                .frame(height: height)
+        case let .progress(source, height, nil):
             ProgressRule(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, target: context.targets[source],
                          animation: block.animation ?? WidgetAnimation(), color: appearance.accent,
                          track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), cornerRadius: appearance.cornerRadius)
                 .frame(height: height)
-        case let .ring(source, lineWidth, children):
+        case let .ring(source, lineWidth, gap, children):
             ZStack {
                 ProgressRing(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, animation: block.animation ?? WidgetAnimation(),
-                             color: appearance.accent, track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), lineWidth: lineWidth)
+                             color: appearance.accent, track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), lineWidth: lineWidth,
+                             gap: gap)
                 // Children take their content's width, as in the bar, so a popup centers them too.
                 ForEach(Array(children.enumerated()), id: \.offset) { _, item in child(item, of: style, fields: fields).fixedSize() }
             }
@@ -1374,21 +1414,52 @@ struct ProgressRing: View {
     let color: Color
     let track: AnyShapeStyle
     let lineWidth: Double
+    let gap: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let fraction = progressFraction(value)
+        let arc = 1 - gap / 360
         ZStack {
-            Circle().strokeBorder(track, lineWidth: lineWidth)
-            Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction)
+            Circle().inset(by: lineWidth / 2).trim(from: 0, to: arc)
+                .stroke(track, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            Circle().inset(by: lineWidth / 2).trim(from: 0, to: fraction * arc)
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : animation.value, value: fraction)
         }
+        // A circle's path starts at three o'clock: turn its start to the top, or to the gap's left end.
+        .rotationEffect(.degrees(gap > 0 ? 90 + gap / 2 : -90))
         .accessibilityElement()
         .accessibilityLabel("Progress")
         .accessibilityValue("\(Int(fraction * 100)) percent")
     }
+}
+
+struct ProgressSegments: View {
+    let value: Double
+    let count: Int
+    let color: Color
+    let track: AnyShapeStyle
+    let spacing: Double
+    let cornerRadius: Double
+
+    var body: some View {
+        let lit = litSegments(value, of: count)
+        HStack(spacing: spacing) {
+            ForEach(0..<count, id: \.self) { index in
+                RoundedRectangle(cornerRadius: cornerRadius).fill(index < lit ? AnyShapeStyle(color) : track)
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int(progressFraction(value) * 100)) percent")
+    }
+}
+
+/// `ceil(value × count)`, compared piece by piece so that 0.3 of 10 lights 3 pieces: 0.3 × 10 is just over 3 in floating point.
+func litSegments(_ value: Double, of count: Int) -> Int {
+    let fraction = progressFraction(value)
+    return (0..<count).count { fraction > Double($0) / Double(count) }
 }
 
 func progressFraction(_ value: Double) -> Double {

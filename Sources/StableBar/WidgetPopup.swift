@@ -6,6 +6,7 @@ final class PopupPanel: NSPanel {
     /// Closes a pinned popup, which no event monitor watches, on Escape and ⌘W.
     var onEscape: (() -> Void)?
     let size = PopupSize()
+    let navigation = PopupNavigation()
     /// Opens above its anchor, from a bar at the bottom of the display: it grows and resizes from its top.
     var opensUpward = false
     /// What resizes a pinnable popup from its edges.
@@ -19,7 +20,11 @@ final class PopupPanel: NSPanel {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown, event.keyCode == 53, let onEscape { onEscape() } else { super.sendEvent(event) }
+        if event.type == .keyDown, event.keyCode == 53, let onEscape {
+            if navigation.view == nil { onEscape() } else { navigation.view = nil }
+        } else {
+            super.sendEvent(event)
+        }
     }
 
     /// AppKit turns Close off for a window without a title-bar close button.
@@ -165,6 +170,12 @@ struct PopupShadowView: View {
 @MainActor @Observable
 final class PopupSize {
     var height: CGFloat?
+}
+
+/// The view a popup shows in place of its layout, opened from a block's `view`; nil shows the layout.
+@MainActor @Observable
+final class PopupNavigation {
+    var view: String?
 }
 
 /// A popup, or its shadow, drawn at the top of its window, or at the bottom when it opens upward, at `size`'s height and
@@ -564,7 +575,7 @@ final class WidgetPopup {
                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.opensUpward = upward
         let host = NSHostingView(rootView: PopupCanvas(size: panel.size, inset: shadowInset, upward: upward) {
-            PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds)
+            PopupView(popup: popup, style: style, store: store, widget: widget, backgrounds: backgrounds, navigation: panel.navigation)
                 .environment(\.screenKind, ScreenKind(BarDisplay(screen: screen)))
                 .frame(idealWidth: width, maxWidth: .infinity)
                 .onPreferenceChange(PopupHeightPreference.self) { [weak self, weak panel] contentHeight in
@@ -579,7 +590,9 @@ final class WidgetPopup {
                     }
                     let height = min(contentHeight, maximumHeight).rounded(.up)
                     guard let shown = panel.size.height, abs(shown - height) > 0.5 else { return }
-                    self.resize(panel, shadow: shadow, to: height, inset: shadowInset, animation: popup.animation)
+                    // A popup with views resizes with the motion its views slide with, so switching doesn't snap.
+                    self.resize(panel, shadow: shadow, to: height, inset: shadowInset,
+                                animation: popup.views.isEmpty ? popup.animation : popup.animation ?? WidgetAnimation())
                 }
                 .padding(shadowInset)
         }
@@ -777,7 +790,8 @@ final class WidgetPopup {
                 guard let self, event.window?.parent == nil || event.window?.parent !== self.panel else { return false }
                 if event.type == .keyDown {
                     if event.keyCode == 53 {
-                        self.close()
+                        let navigation = self.panel!.navigation
+                        if navigation.view == nil { self.close() } else { navigation.view = nil }
                         return true
                     }
                 } else if event.type == .leftMouseUp {

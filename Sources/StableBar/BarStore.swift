@@ -246,6 +246,16 @@ final class BarStore: NSObject {
         }
     }
 
+    /// Makes the audio device with `id` the default output, for a click on `widget`.
+    func selectOutputDevice(_ id: String, widget: WidgetConfiguration) {
+        do {
+            try AudioMonitor.setOutputDevice(id)
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
     func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
         var nextWithSameApp = next
         nextWithSameApp.app = context.app
@@ -1197,6 +1207,12 @@ final class BarStore: NSObject {
     @discardableResult
     func runAction(_ command: String, widget: WidgetConfiguration,
                    event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
+        runAction(.command(command), widget: widget, event: event)
+    }
+
+    @discardableResult
+    func runAction(_ action: BlockAction, widget: WidgetConfiguration,
+                   event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
         guard barEditing.allowsWidgetActions else { return Task {} }
         let id = UUID()
         let script = scripts[widget.id]
@@ -1210,8 +1226,14 @@ final class BarStore: NSObject {
             }
             do {
                 try Task.checkCancellation()
-                _ = try await runCommand("/bin/zsh", arguments: ["-c", command],
-                                         timeout: widget.timeout, environment: event.commandEnvironment(environment))
+                switch action {
+                case let .command(command):
+                    _ = try await runCommand("/bin/zsh", arguments: ["-c", command],
+                                             timeout: widget.timeout, environment: event.commandEnvironment(environment))
+                case let .set(setting):
+                    let value = event.environment["VALUE"]!
+                    try await BlockingWork.run { try setting.set(value) }
+                }
                 if let script, scripts[widget.id] === script {
                     refresh(widget, event: ScriptEvent(sender: "action", environment: event.environment))
                 }

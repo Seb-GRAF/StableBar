@@ -1,0 +1,89 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "controls",
+        "type": "script",
+        "command": "true",
+        "position": "right",
+        "popup": {
+          "style": {
+            "width": 300
+          },
+          "layout": {
+            "type": "column",
+            "children": [
+              {
+                "type": "row",
+                "view": "wifi",
+                "children": [
+                  { "type": "symbol", "name": "wifi", "style": { "width": 20 } },
+                  { "type": "text", "text": "Wi-Fi" },
+                  { "type": "field", "field": "network", "alignment": "trailing" },
+                  { "type": "symbol", "name": "chevron.right", "style": { "width": 12 } }
+                ]
+              },
+              {
+                "type": "row",
+                "view": "bluetooth",
+                "children": [
+                  { "type": "symbol", "name": "dot.radiowaves.left.and.right", "style": { "width": 20 } },
+                  { "type": "text", "text": "Bluetooth" },
+                  { "type": "symbol", "name": "chevron.right", "style": { "width": 12 } }
+                ]
+              }
+            ]
+          },
+          "views": {
+            "wifi": {
+              "type": "column",
+              "children": [
+                { "type": "toggle", "title": "Wi-Fi", "source": "wifi", "onChange": "true" },
+                { "type": "divider" },
+                {
+                  "type": "list",
+                  "source": "networks",
+                  "row": {
+                    "type": "row",
+                    "children": [
+                      { "type": "symbol", "name": "wifi", "style": { "width": 20 } },
+                      { "type": "field", "field": "name" }
+                    ]
+                  }
+                }
+              ]
+            },
+            "bluetooth": {
+              "type": "column",
+              "children": [
+                { "type": "toggle", "title": "Bluetooth", "source": "bluetooth", "onChange": "true" }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "controls": {
+      "text": "Controls",
+      "fields": {
+        "network": "Home",
+        "wifi": "true",
+        "bluetooth": "true"
+      },
+      "lists": {
+        "networks": [
+          { "name": "Home" },
+          { "name": "Office" },
+          { "name": "Café" }
+        ]
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "controls",
+  "view": "wifi",
+  "height": 300
+}

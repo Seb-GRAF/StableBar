@@ -11,7 +11,7 @@ struct SoundWidgetView: View {
     let style: LayoutStyle
     let hovered: Bool
     let motion: BlockMotion
-    let runAction: (String, [String: String]) -> Void
+    let runAction: (BlockAction, [String: String]) -> Void
     @State private var dragging = false
     @Environment(\.measuringBarWidths) private var measuring
     @Environment(\.moreWidgetsAnchor) private var moreWidgetsAnchor

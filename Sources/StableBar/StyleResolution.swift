@@ -60,8 +60,8 @@ struct PartStates: Equatable, Sendable {
     func metrics(in block: PopupBlock) -> Set<String> {
         switch block.content {
         case let .row(children), let .column(children): children.reduce(into: []) { $0.formUnion(metrics(in: $1)) }
-        case let .ring(source, _, children): children.reduce(into: metric(of: source)) { $0.formUnion(metrics(in: $1)) }
-        case let .field(key), let .progress(key, _), let .battery(key), let .list(key, _, _): metric(of: key)
+        case let .ring(source, _, _, children): children.reduce(into: metric(of: source)) { $0.formUnion(metrics(in: $1)) }
+        case let .field(key), let .progress(key, _, _), let .battery(key), let .list(key, _, _): metric(of: key)
         case let .graph(_, source, _): metric(of: source ?? "value")
         case let .symbol(name, source): source.map(metric(of:)) ?? symbols[name].map { [$0] } ?? []
         case let .equalizer(source, _): source.map(metric(of:)) ?? []
@@ -228,7 +228,7 @@ extension PopupBlock {
     func usesModeStates(roles: [String: WidgetStyle]) -> Bool {
         if style.usesModeStates || role.flatMap({ roles[$0.rawValue] })?.usesModeStates == true { return true }
         switch content {
-        case let .row(children), let .column(children), let .ring(_, _, children): return children.contains { $0.usesModeStates(roles: roles) }
+        case let .row(children), let .column(children), let .ring(_, _, _, children): return children.contains { $0.usesModeStates(roles: roles) }
         case let .list(_, row, _), let .search(_, _, _, row): return row.usesModeStates(roles: roles)
         default: return false
         }
@@ -250,17 +250,23 @@ extension PopupBlock {
     }
 }
 
+extension PopupConfiguration {
+    func usesModeStates(roles: [String: WidgetStyle]) -> Bool {
+        style.usesModeStates || ([layout] + views.values).contains { $0.usesModeStates(roles: roles) }
+    }
+}
+
 extension Configuration {
     var needsModeConnection: Bool {
         subscribedEvents.contains(BuiltInEvent.aerospaceMode.rawValue) || bar.style.usesModeStates
             || defaults.usesModeStates || popupDefaults.usesModeStates
-            || popups.values.contains { $0.style.usesModeStates || $0.layout.usesModeStates(roles: roles) }
+            || popups.values.contains { $0.usesModeStates(roles: roles) }
             || widgets.contains { widget in
                 widget.enabled && (widget.style.usesModeStates || roleStyle(widget.role).usesModeStates
                     || widget.layout?.usesModeStates(roles: roles) == true
                     || widget.hoverLayout?.usesModeStates(roles: roles) == true
                     || widget.overlay?.usesModeStates(roles: roles) == true || widget.workspace?.usesModeStates == true
-                    || widget.popup.map { $0.style.usesModeStates || $0.layout.usesModeStates(roles: roles) } == true)
+                    || widget.popup?.usesModeStates(roles: roles) == true)
             }
     }
 }

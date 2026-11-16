@@ -45,7 +45,7 @@ Setup asks for these in its permissions step, and **Settings → General → Acc
 - **Automation**, to control System Events, which hides or shows the macOS menu bar.
 - **Calendars**, for Meetings and other calendar widgets.
 
-Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles, as does a menu bar item shown as in the menu bar. See [Install and set up](getting-started.md#install-and-set-up).
+Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles, as does a menu bar item shown as in the menu bar. Wi-Fi widgets ask for Location the first time they update, since macOS gives the network's name only to apps allowed to use Location Services; **Settings → General → Access** lists it too. See [Install and set up](getting-started.md#install-and-set-up).
 
 ## Where did my other apps' menu bar icons go?
 

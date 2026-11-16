@@ -3,7 +3,7 @@
 /// in the table under "Script events"; `builtInEventsMatchTheGuideTable` checks it.
 enum BuiltInEvent: String, CaseIterable, Sendable {
     case frontApp, workspace, aerospaceMode, wake, yabai, powerSourceChange, volumeChange, outputDeviceChange, inputSourceChange,
-         microphoneChange, inputDeviceChange, privacyChange
+         microphoneChange, inputDeviceChange, privacyChange, wifiChange
 
     /// When StableBar sends the event: the table's "Sent when" column.
     var trigger: String {
@@ -20,6 +20,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .microphoneChange: "The default input device's volume or mute state changes, or an app starts or stops recording from it"
         case .inputDeviceChange: "The default input device changes"
         case .privacyChange: "An app starts or stops using the microphone or a camera, or the microphone's mute state changes"
+        case .wifiChange: "Wi-Fi turns on or off, or joins or leaves a network"
         }
     }
 
@@ -37,6 +38,7 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
         case .inputSourceChange: "The source's ID, such as `com.apple.keylayout.ABC`"
         case .microphoneChange: "The volume as a whole percentage, empty without a volume control; `MUTED` and `IN_USE` are `true` or `false`"
         case .privacyChange: "`true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false`"
+        case .wifiChange: "The network's name, empty without a network or Location access; `POWER` is `on` or `off`"
         }
     }
 
@@ -67,6 +69,11 @@ enum BuiltInEvent: String, CaseIterable, Sendable {
             return ["INFO": String(output.fields?["microphone"] == "true" || output.fields?["camera"] == "true"),
                     "MICROPHONE": output.fields?["microphone"] ?? "false", "CAMERA": output.fields?["camera"] ?? "false",
                     "MUTED": output.fields?["muted"] ?? "false"]
+        case .wifiChange:
+            // `rssi` is left out while Wi-Fi isn't on a network, which is how a join or a leave shows without Location access.
+            guard previous.fields?["ssid"] != output.fields?["ssid"] || previous.fields?["power"] != output.fields?["power"]
+                    || (previous.fields?["rssi"] == nil) != (output.fields?["rssi"] == nil) else { return nil }
+            return ["INFO": output.fields?["ssid"] ?? "", "POWER": output.fields?["power"] ?? "off"]
         default:
             return nil
         }
