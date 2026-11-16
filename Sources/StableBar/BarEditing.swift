@@ -117,14 +117,17 @@ final class BarEditing {
     func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
         guard let store else { return BarWidgetVisibility(reasons: []) }
         let presentation = store.presentations[widget.id]
-        let activeID = store.workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? store.activeDisplayID
+        // The bar reads this while laying out every widget, so it observes `layout`, never `workspaces`.
+        let layout = store.workspaceStore.layout
         var reasons: [BarWidgetVisibility.Reason] = []
-        if !(presentation?.display ?? widget.display).includes(display, activeID: activeID) { reasons.append(.display) }
+        if !(presentation?.display ?? widget.display).includes(display, activeID: layout.focusedMonitor ?? store.activeDisplayID) {
+            reasons.append(.display)
+        }
         if presentation?.hidden == true { reasons.append(.output) }
         if widget.content == .workspaces && widget.layout == nil && store.workspaceStore.error == nil
-            && store.workspaceStore.workspaces(on: display.id, showEmpty: widget.workspace?.showEmpty == true,
-                                               hideApps: widget.workspace?.hideApps ?? [],
-                                               hideWorkspaces: widget.workspace?.hideWorkspaces ?? []).isEmpty {
+            && layout.isEmpty(WorkspaceFilter(monitor: display.id, showEmpty: widget.workspace?.showEmpty == true,
+                                              hideApps: widget.workspace?.hideApps ?? [],
+                                              hideWorkspaces: widget.workspace?.hideWorkspaces ?? [])) {
             reasons.append(.workspaces)
         }
         return BarWidgetVisibility(reasons: reasons)
