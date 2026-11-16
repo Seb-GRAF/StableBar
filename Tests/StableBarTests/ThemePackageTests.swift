@@ -1515,6 +1515,40 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     }
 }
 
+@Test func packageProvidersRequestOnlyTheirHostsAndSendTheirSecretAsTheToken() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let source = directory.appending(path: "source")
+    let store = WidgetPackageStore(directory: directory.appending(path: "packages"))
+    try writePackageFile(#"""
+    {"id":"github","name":"GitHub","version":"1","kind":"widgets","entry":"config.json","hosts":["api.github.com"],
+     "settings":{"token":{"type":"secret"}}}
+    """#, to: source.appending(path: "package.json"))
+    for (configuration, message) in [
+        (#"{"providers":{"issues":{"type":"http","url":"https://example.com/issues","output":{}}}}"#,
+         "Provider issues requests https://example.com/issues, but the package's hosts don't list its host."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com@example.com/issues","output":{}}}}"#,
+         "Provider issues requests https://api.github.com@example.com/issues, but the package's hosts don't list its host."),
+        (#"{"profiles":[{"name":"work","configuration":{"providers":{"issues":{"type":"http","url":"https://example.com","output":{}}}}}]}"#,
+         "Provider issues requests https://example.com, but the package's hosts don't list its host."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","headers":{"Authorization":"@setting.token"},"output":{}}}}"#,
+         "@secret.github/token can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines.")
+    ] {
+        try writePackageFile(configuration, to: source.appending(path: "config.json"))
+        let error = #expect(throws: WidgetPackageError.self) { try store.inspect(source) }
+        #expect(error?.localizedDescription == message)
+    }
+    try writePackageFile(#"""
+    {"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","token":"@setting.token",
+                            "output":{"text":"/0/title","lists":{"issues":""}}}},
+     "widgets":[{"id":"issues","type":"provider","provider":"issues","position":"right"}]}
+    """#, to: source.appending(path: "config.json"))
+    #expect(try store.install(source).commands.isEmpty)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"github","version":"1"}]}"#.utf8))
+    #expect(configuration.providers["issues"]?.token == "@secret.github/token")
+}
+
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

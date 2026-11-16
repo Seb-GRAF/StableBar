@@ -29,7 +29,7 @@ Define a provider once and reference it from several widgets. StableBar keeps on
 }
 ```
 
-Provider `type` is `command`, `stream`, `system`, `network`, `wifi`, `battery`, `bluetooth`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar`, `disk` or `merge`. `command` and `stream` require a shell `command`, and `merge` the `providers` it combines; see [Merge](#merge). `interval` defaults to 5 seconds: the polling interval for commands, `system` and `network` (60 seconds for `disk` and 120 for `bluetooth`), and for `calendar` until it has access; the first reconnect delay for streams; and for `wifi`, `audio`, `inputSource`, `microphone`, `privacy` and `battery`, which update when macOS reports a change, the first retry delay after a failure. That first delay is `interval`, or 1 second if `interval` is shorter. `timeout` defaults to 10 seconds and applies to command providers; streams remain running until they exit, fail, suspend or stop. Provider intervals and timeouts must be positive and finite.
+Provider `type` is `command`, `stream`, `http`, `system`, `network`, `wifi`, `battery`, `bluetooth`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar`, `disk` or `merge`. `command` and `stream` require a shell `command`, `http` a `url` and an `output` (see [HTTP](#http)), and `merge` the `providers` it combines (see [Merge](#merge)). `interval` defaults to 5 seconds: the polling interval for commands, `http`, `system` and `network` (60 seconds for `http` and `disk`, and 120 for `bluetooth`), and for `calendar` until it has access; the first reconnect delay for streams; and for `wifi`, `audio`, `inputSource`, `microphone`, `privacy` and `battery`, which update when macOS reports a change, the first retry delay after a failure. That first delay is `interval`, or 1 second if `interval` is shorter. `timeout` defaults to 10 seconds and applies to command and `http` providers; streams remain running until they exit, fail, suspend or stop. Provider intervals and timeouts must be positive and finite.
 
 A widget with `type` set to `system`, `network`, `wifi`, `battery`, `bluetooth`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar` or `disk` uses the provider of that name. Without a definition in `providers`, it is a native provider of that type with default settings, shared by every widget that names it. An implicit `system` provider uses a 2-second interval and lists 5 apps when a consumer enables Essentials details. Define a provider with the same name to change its interval or other settings. `{ "id": "power", "type": "battery", "position": "right" }` is enough for a battery widget.
 
@@ -148,6 +148,59 @@ With access, the provider updates at each minute and phase boundary and when you
   ]
 }
 ```
+
+## HTTP
+
+An `http` provider reads JSON from a web API without running a command, and copies the parts its `output` names into the output its widgets show. Each part is a [JSON Pointer](https://www.rfc-editor.org/rfc/rfc6901) into the response: `/current/temperature_2m` is the `temperature_2m` member of `current`, `/items/0/name` the `name` of the first item, and an empty pointer the whole response. In a member's name, `~1` stands for `/` and `~0` for `~`.
+
+```json
+{
+  "providers": {
+    "weather": {
+      "type": "http",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=47.37&longitude=8.54&current=temperature_2m",
+      "interval": 900,
+      "output": {
+        "text": "/current/temperature_2m",
+        "fields": { "unit": "/current_units/temperature_2m" },
+        "values": { "temperature": "/current/temperature_2m" }
+      }
+    }
+  },
+  "widgets": [
+    {
+      "id": "weather", "type": "provider", "provider": "weather", "position": "right",
+      "layout": {
+        "type": "row",
+        "children": [
+          { "type": "field", "field": "text" },
+          { "type": "field", "field": "unit" }
+        ]
+      }
+    }
+  ]
+}
+```
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `url` | required | The `https` URL to request |
+| `output` | required | `text`: a pointer; `fields`, `values` and `lists`: names and their pointers |
+| `headers` | none | Headers to send, such as `{ "Accept": "application/json" }` |
+| `token` | none | Sent as `Authorization: Bearer <token>`, unless it is empty |
+| `interval` | `60` | Seconds between requests |
+| `timeout` | `10` | Seconds to wait for the server |
+
+Output:
+
+- `text` and `fields`: a string as the response has it, a number as JSON writes it, such as `21.4`, or `true` or `false`. StableBar doesn't round numbers or add units; show a unit the API sends as a field of its own.
+- `values`: a number, or a string that holds one, as some price APIs send them.
+- `lists`: each object in the array becomes a row of its members that are strings, numbers or booleans. Nested objects and arrays, and items that aren't objects, are left out.
+- A pointer that finds nothing, or finds an object or an array where it needs text or a number, leaves its part out: `text` is then empty.
+
+An answer other than HTTP status 200, or one that isn't JSON, is a failure: the widget keeps its last output, shows the error and retries with backoff, as a command does. **Settings → Status** and `--query` show the last response as the provider's output. Requests keep no cookies or cache, and a redirect to another host drops the token. `whenVisible` and `events` work as for other providers.
+
+In a package, each `http` provider's `url` must be on one of the package's [`hosts`](packages.md#store), which StableBar checks when it reviews, installs and loads the package; your own configuration can still point a package's provider elsewhere. A package can set `token` to a [`secret` setting](packages.md#local-widget-packages), such as `"token": "@setting.token"`, so the token stays in the Keychain. A `"kind": "widgets"` package, which runs no commands, can define `http` providers: [examples/packages/weather](../examples/packages/weather/config.json) shows the temperature from Open-Meteo.
 
 ## Merge
 

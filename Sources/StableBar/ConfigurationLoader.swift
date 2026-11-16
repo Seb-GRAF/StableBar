@@ -856,6 +856,7 @@ struct ConfigurationLoader: Sendable {
             }
         }
         try validateSecretReferences(.object(layer.values), package: manifest.id)
+        try validatePackageHosts(layer.values, hosts: manifest.hosts)
         layer.values = try preparePackageDocument(layer.values, directory: directory)
         for source in layer.origins.values {
             packageNames[source.file] = manifest.name

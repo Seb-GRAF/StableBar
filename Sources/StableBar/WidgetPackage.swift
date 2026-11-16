@@ -169,6 +169,7 @@ enum WidgetPackageError: LocalizedError {
     case checksumMismatch(String)
     case archiveMismatch(String, String)
     case misplacedSecret(String)
+    case undeclaredHost(String, String)
 
     var errorDescription: String? {
         switch self {
@@ -193,7 +194,8 @@ enum WidgetPackageError: LocalizedError {
         case let .downloadFailed(url, status): "Downloading \(url) failed with HTTP status \(status)."
         case let .checksumMismatch(id): "The archive of package \(id) does not match the store's checksum."
         case let .archiveMismatch(id, version): "The archive of package \(id) \(version) contains a different id or version."
-        case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider that its own package defines."
+        case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines."
+        case let .undeclaredHost(provider, url): "Provider \(provider) requests \(url), but the package's hosts don't list its host."
         }
     }
 }
@@ -742,7 +744,9 @@ private func rejectCommandKeys(_ value: ConfigurationValue) throws {
 func validateSecretReferences(_ value: ConfigurationValue, package id: String, path: [String] = []) throws {
     switch value {
     case let .string(string) where string.hasPrefix("@secret."):
-        guard string.hasPrefix("@secret.\(id)/"), path.count == 4, ["widgets", "providers"].contains(path[0]), path[2] == "environment" else {
+        let environment = path.count == 4 && ["widgets", "providers"].contains(path[0]) && path[2] == "environment"
+        let token = path.count == 3 && path[0] == "providers" && path[2] == "token"
+        guard string.hasPrefix("@secret.\(id)/"), environment || token else {
             throw WidgetPackageError.misplacedSecret(string)
         }
     case let .object(object):
@@ -750,6 +754,17 @@ func validateSecretReferences(_ value: ConfigurationValue, package id: String, p
     case let .array(array):
         for (index, child) in array.enumerated() { try validateSecretReferences(child, package: id, path: path + [String(index)]) }
     default: break
+    }
+}
+
+/// Throws when a provider of the package, or of one of its profiles, requests a host that `hosts` doesn't list.
+func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [String]) throws {
+    for (name, provider) in try document["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
+        guard case let .string(url)? = provider["url"] else { continue }
+        guard let host = URL(string: url)?.host(), hosts.contains(host) else { throw WidgetPackageError.undeclaredHost(name, url) }
+    }
+    for profile in try document["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
+        try validatePackageHosts(profile.configuration, hosts: hosts)
     }
 }
 

@@ -1903,6 +1903,7 @@
               "enum": [
                 "command",
                 "stream",
+                "http",
                 "system",
                 "network",
                 "wifi",
@@ -1934,10 +1935,38 @@
         },
         "interval": {
           "$ref": "#/definitions/number",
-          "description": "Seconds between updates for command, system, network and disk providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second. Disk providers default to 60 seconds, the others to 5."
+          "description": "Seconds between updates for command, http, system, network and disk providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second. Http and disk providers default to 60 seconds, the others to 5."
         },
         "timeout": {
           "$ref": "#/definitions/number"
+        },
+        "url": {
+          "$ref": "#/definitions/string",
+          "description": "The https URL an http provider requests. In a package, its host must be in the package's hosts."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "HTTP headers an http provider sends with each request."
+        },
+        "token": {
+          "$ref": "#/definitions/string",
+          "description": "Sent by an http provider as Authorization: Bearer. A package can set it to a secret setting."
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/httpOutput"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "environment": {
           "$ref": "#/definitions/environment"
@@ -1962,6 +1991,37 @@
         },
         "processes": {
           "$ref": "#/definitions/number"
+        }
+      }
+    },
+    "httpOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The parts of an http provider's JSON response its output copies, each found by a JSON Pointer such as /current/temperature_2m.",
+      "properties": {
+        "text": {
+          "$ref": "#/definitions/string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Field names and the pointers to their values."
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Value names and the pointers to their numbers, or to strings that hold numbers."
+        },
+        "lists": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "List names and the pointers to their arrays. Each object in an array becomes a row of its string, number and boolean members."
         }
       }
     },

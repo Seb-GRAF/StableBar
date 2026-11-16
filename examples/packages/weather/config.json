@@ -1,0 +1,28 @@
+{
+  "providers": {
+    "weather": {
+      "type": "http",
+      "url": "https://api.open-meteo.com/v1/forecast?latitude=47.37&longitude=8.54&current=temperature_2m",
+      "interval": 900,
+      "output": {
+        "text": "/current/temperature_2m",
+        "fields": { "unit": "/current_units/temperature_2m" },
+        "values": { "temperature": "/current/temperature_2m" }
+      }
+    }
+  },
+  "widgets": [
+    {
+      "id": "weather", "type": "provider", "provider": "weather", "position": "right",
+      "layout": {
+        "type": "row", "style": { "spacing": 4 },
+        "children": [
+          { "type": "symbol", "name": "thermometer.medium" },
+          { "type": "field", "field": "text" },
+          { "type": "field", "field": "unit" }
+        ]
+      },
+      "rules": [{ "when": { "value": "temperature", "below": 0 }, "state": "warning" }]
+    }
+  ]
+}

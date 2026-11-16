@@ -22,16 +22,25 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let diskCritical: Double
     /// The providers a `merge` combines.
     let providers: [String]
+    /// What an `http` provider requests, with `headers` and a `token` sent as `Authorization: Bearer`.
+    let url: URL?
+    let headers: [String: String]
+    let token: String?
+    let output: HTTPOutput?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
-        case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical, providers
+        case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical, providers, url, headers, token, output
     }
 
     init(type: String) {
         self.type = type
         command = nil
         providers = []
+        url = nil
+        headers = [:]
+        token = nil
+        output = nil
         interval = DataSourceRegistry.builtIn[type]?.defaultInterval ?? 5
         timeout = 10
         environment = [:]
@@ -59,6 +68,10 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         }
         command = source.settings.contains(.command) ? try values.decode(String.self, forKey: .command) : nil
         providers = source.settings.contains(.providers) ? try values.decode([String].self, forKey: .providers) : []
+        url = source.settings.contains(.url) ? try values.decode(URL.self, forKey: .url) : nil
+        output = source.settings.contains(.output) ? try values.decode(HTTPOutput.self, forKey: .output) : nil
+        headers = try values.decodeIfPresent([String: String].self, forKey: .headers) ?? [:]
+        token = try values.decodeIfPresent(String.self, forKey: .token)
         interval = try values.decodeIfPresent(Double.self, forKey: .interval) ?? source.defaultInterval
         timeout = try values.decodeIfPresent(Double.self, forKey: .timeout) ?? 10
         environment = try values.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
@@ -85,6 +98,87 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         }
         guard processes >= 0 else {
             throw DecodingError.dataCorruptedError(forKey: .processes, in: values, debugDescription: "A provider's processes must be zero or more.")
+        }
+        if let url, url.scheme?.lowercased() != "https" {
+            throw DecodingError.dataCorruptedError(forKey: .url, in: values, debugDescription: "A provider url must use https.")
+        }
+    }
+}
+
+/// What an `http` provider copies from its JSON response, each part found by a JSON Pointer such as
+/// `/current/temperature_2m`. A pointer that finds nothing leaves its part out.
+struct HTTPOutput: Decodable, Equatable, Sendable {
+    let text: String?
+    let fields: [String: String]
+    let values: [String: String]
+    /// Pointers to arrays: each object in one becomes a row of its members that are strings, numbers or booleans.
+    let lists: [String: String]
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case text, fields, values, lists }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        fields = try container.decodeIfPresent([String: String].self, forKey: .fields) ?? [:]
+        values = try container.decodeIfPresent([String: String].self, forKey: .values) ?? [:]
+        lists = try container.decodeIfPresent([String: String].self, forKey: .lists) ?? [:]
+        for pointer in [text ?? ""] + fields.values + values.values + lists.values where !pointer.isEmpty && !pointer.hasPrefix("/") {
+            throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath,
+                                                                   debugDescription: "A JSON Pointer starts with /, unlike \(pointer)."))
+        }
+    }
+
+    func output(from response: ConfigurationValue) -> ScriptOutput {
+        ScriptOutput(text: text.flatMap { response.value(at: $0)?.text } ?? "",
+                     fields: fields.compactMapValues { response.value(at: $0)?.text },
+                     lists: lists.compactMapValues { pointer in
+                         guard case let .array(rows)? = response.value(at: pointer) else { return nil }
+                         return rows.compactMap { row in
+                             guard case let .object(members) = row else { return nil }
+                             return members.compactMapValues(\.text)
+                         }
+                     },
+                     values: values.compactMapValues { response.value(at: $0)?.number })
+    }
+}
+
+extension ConfigurationValue {
+    /// The value that a JSON Pointer (RFC 6901) such as `/items/0/name` finds, or nil when there is none.
+    func value(at pointer: String) -> ConfigurationValue? {
+        var value = self
+        for token in pointer.split(separator: "/", omittingEmptySubsequences: false).dropFirst() {
+            let key = token.replacingOccurrences(of: "~1", with: "/").replacingOccurrences(of: "~0", with: "~")
+            switch value {
+            case let .object(object):
+                guard let member = object[key] else { return nil }
+                value = member
+            case let .array(array):
+                guard let index = Int(key), array.indices.contains(index) else { return nil }
+                value = array[index]
+            default:
+                return nil
+            }
+        }
+        return value
+    }
+
+    /// A string, a number as JSON writes it, or `true` or `false`.
+    fileprivate var text: String? {
+        switch self {
+        case let .string(string): string
+        case let .number(number): Int(exactly: number).map(String.init) ?? String(number)
+        case let .bool(bool): String(bool)
+        default: nil
+        }
+    }
+
+    /// A number, or a string that holds one, as some APIs send prices.
+    fileprivate var number: Double? {
+        switch self {
+        case let .number(number): number
+        case let .string(string): Double(string)
+        default: nil
         }
     }
 }
