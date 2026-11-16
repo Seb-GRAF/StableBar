@@ -105,8 +105,10 @@ import SwiftUI
         var range = text.lineRange(for: NSRange(location: 0, length: 0))
         for _ in 1..<line {
             let next = NSMaxRange(range)
-            guard next < text.length else { return }
-            range = text.lineRange(for: NSRange(location: next, length: 0))
+            let following = text.lineRange(for: NSRange(location: next, length: 0))
+            // After a final newline, the empty last line is the empty range at the end.
+            guard next < text.length || (range.length > 0 && following.length == 0) else { return }
+            range = following
         }
         window?.makeFirstResponder(self)
         setSelectedRange(range)

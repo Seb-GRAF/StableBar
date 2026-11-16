@@ -104,6 +104,20 @@ import Testing
         textView.selectLine(9)
         #expect(textView.selectedRange() == NSRange(location: 2, length: 9))
     }
+
+    @Test func selectLineReachesAnEmptyLastLine() throws {
+        let text = "{\n  \"a\": 1\n"
+        #expect(jsonSyntaxProblem(in: text)?.line == 3)
+        let (window, _, textView) = try hostedTextView(text)
+        defer { closeEditorWindow(window) }
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        window.makeFirstResponder(nil)
+        textView.selectLine(3)
+        #expect(textView.selectedRange() == NSRange(location: 11, length: 0))
+        #expect(window.firstResponder === textView)
+        textView.selectLine(4)
+        #expect(textView.selectedRange() == NSRange(location: 11, length: 0))
+    }
 }
 
 struct JSONSyntaxProblemTests {
