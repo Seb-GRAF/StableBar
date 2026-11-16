@@ -14,11 +14,11 @@ struct PackagesView: View {
     @State private var library: PackageLibrary
     @State private var tab: PackageDetailTab
     @State private var additions: [String] = []
-    @State private var showingThemes: Bool?
-    @State private var sourceFilter: String?
     @State private var gallery: ThemeGallery
+    @State private var setup: WidgetSetup
     @State private var showsLoading = false
     @State private var showingSources = false
+    @State private var uninstalling: WidgetPackageManifest?
     @State private var sourceLink: PackageSourceLink?
     @FocusState private var searching: Bool
 
@@ -36,6 +36,7 @@ struct PackagesView: View {
         self.onWorkingChanged = onWorkingChanged
         _searchTarget = searchTarget
         _gallery = State(initialValue: ThemeGallery(store: store))
+        _setup = State(initialValue: WidgetSetup(store: store))
         _tab = State(initialValue: selectedPackageID == nil ? .overview : .settings)
         if reviewing != nil || indexURL != PackageIndex.url {
             let packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
@@ -52,30 +53,30 @@ struct PackagesView: View {
             if reviewing != nil {
                 detail
             } else {
+                let items = catalog
+                let owned = Set(library.installedPackages.map(\.id))
                 VStack(spacing: 0) {
                     topBar
                     Divider()
-                    if !library.showingStore {
-                        HStack(spacing: 0) {
-                            list
-                                .frame(width: 256)
-                                .background(SettingsPalette.sidebar)
-                                .disabled(busy)
-                            Divider()
-                            detail
+                    HStack(spacing: 0) {
+                        sidebar(items, owned: owned)
+                            .frame(width: 200)
+                            .background(SettingsPalette.sidebar)
+                            .disabled(busy)
+                        Divider()
+                        if library.draft != nil || library.loading {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Button("Store", systemImage: "chevron.left") { library.deselect() }
+                                    .buttonStyle(.borderless)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .disabled(busy)
+                                Divider()
+                                detail
+                            }
+                        } else {
+                            storeList(items, owned: owned).disabled(busy)
                         }
-                    } else if library.draft != nil || library.loading {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Button("Store", systemImage: "chevron.left") { library.deselect() }
-                                .buttonStyle(.borderless)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .disabled(busy)
-                            Divider()
-                            detail
-                        }
-                    } else {
-                        storeGrid.disabled(busy)
                     }
                 }
             }
@@ -87,7 +88,6 @@ struct PackagesView: View {
             } else {
                 await gallery.refresh()
                 if let selectedPackageID {
-                    library.showingStore = false
                     await library.selectPackage(selectedPackageID)
                 }
                 await library.loadStore()
@@ -98,7 +98,10 @@ struct PackagesView: View {
         }
         .task(id: searchTarget) {
             if let target = searchTarget {
-                showStore(target == SettingsSearchResult.store.id)
+                if target != SettingsSearchResult.packageSources.id {
+                    library.filter = target == SettingsSearchResult.library.id ? .installed : .all
+                    library.deselect()
+                }
                 showingSources = target == SettingsSearchResult.packageSources.id
                 searchTarget = nil
             }
@@ -109,6 +112,17 @@ struct PackagesView: View {
         } message: { _ in
             Text("This version adds:\n\(library.updateAdditions.joined(separator: "\n"))")
         }
+        .confirmationDialog(uninstalling.map { "Uninstall \($0.name)?" } ?? "",
+                            isPresented: Binding(get: { uninstalling != nil }, set: { if !$0 { uninstalling = nil } }),
+                            presenting: uninstalling) { manifest in
+            Button("Uninstall", role: .destructive) {
+                Task {
+                    for version in library.installed where version.id == manifest.id { await library.uninstall(version) }
+                }
+            }
+        } message: { _ in
+            Text("Its files will be deleted and its widgets removed from the bar. Its settings and saved credentials are kept. This cannot be undone.")
+        }
         .sheet(isPresented: $showingSources) { PackageSourcesView(library: library, link: $sourceLink) }
         .onAppear(perform: openPendingSourceLink)
         .onChange(of: store.pendingLinks.source) { openPendingSourceLink() }
@@ -117,12 +131,11 @@ struct PackagesView: View {
         .onChange(of: busy) { openPendingPackageLink() }
         .onChange(of: store.effectiveDocument) { library.configurationChanged() }
         .onChange(of: library.sources) {
-            if let sourceFilter, !library.sources.contains(where: { $0.id == sourceFilter }) { self.sourceFilter = nil }
+            if case let .source(id) = library.filter, !library.sources.contains(where: { $0.id == id }) { library.filter = .all }
         }
         .onChange(of: selectedPackageID) { _, id in
             if let id {
                 tab = .settings
-                library.showingStore = false
                 Task { await library.selectPackage(id) }
             }
         }
@@ -130,18 +143,15 @@ struct PackagesView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            SettingsSegments(selection: Binding(get: { library.showingStore }, set: { showStore($0) }),
-                             options: [(false, "Installed"), (true, "Store")], stretches: false)
-                .fixedSize()
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary)
-                TextField("Search packages", text: $library.search)
+                TextField("Search widgets and themes", text: $library.search)
                     .textFieldStyle(.plain)
                     .focused($searching)
                     .onExitCommand { library.search = "" }
             }
             .padding(.horizontal, 8)
-            .frame(width: 200, height: 26)
+            .frame(width: 240, height: 26)
             .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 7))
             .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(searching ? Color.accentColor : SettingsPalette.groupBorder,
                                                                      lineWidth: searching ? 2 : 1))
@@ -160,103 +170,102 @@ struct PackagesView: View {
         .disabled(library.draft?.working == true)
     }
 
-    private var list: some View {
-        let packages = library.installedPackages.filter(library.matchesSearch)
-        let reviewed = library.draft.flatMap { draft in
-            library.installed.contains { $0.id == draft.inspection.manifest.id } ? nil : draft
-        }
-        return VStack(spacing: 0) {
-            List(selection: selection) {
-                BuiltInRow(themes: gallery.choices.filter(\.isBundled).count).tag(LibraryRow.builtIn)
-                if let reviewed {
-                    Section("Not installed") {
-                        HStack(alignment: .top, spacing: 8) {
-                            PackagePreview(screenshotData: reviewed.screenshotData, look: reviewed.themePreview?.light,
-                                           widgets: reviewed.inspection.widgets)
-                                .frame(width: 128, height: 64).scaleEffect(0.5625).frame(width: 72, height: 36)
-                            PackageRow(manifest: reviewed.inspection.manifest)
-                        }
-                        .tag(LibraryRow.package(reviewed.inspection.manifest.id))
-                    }
-                }
-                rows("Updates available (\(library.updates.count))", packages.filter { library.update(for: $0) != nil })
-                rows("On your bar", packages.filter { $0.kind != .theme && library.isActive($0) && library.update(for: $0) == nil })
-                rows("Not on your bar", packages.filter { $0.kind != .theme && !library.isActive($0) && library.update(for: $0) == nil })
-                rows("Themes", packages.filter { $0.kind == .theme && library.update(for: $0) == nil })
-                if library.installed.isEmpty {
-                    Text("Nothing installed yet. Get packages from the Store or open a folder.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else if packages.isEmpty && !library.search.isEmpty {
-                    Text("No packages match your search.").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            ForEach(failedSources, id: \.self) { id in
-                Text(sourceErrorSummary(id))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-        }
-    }
-
-    @ViewBuilder private func rows(_ title: String, _ packages: [WidgetPackageManifest]) -> some View {
-        if !packages.isEmpty {
-            Section(title) {
-                ForEach(packages, id: \.id) { manifest in
-                    HStack(alignment: .top, spacing: 8) {
-                        PackageListPreview(key: manifest.versionKey) { try await library.preview(manifest) }
-                            .frame(width: 128).scaleEffect(0.5625).frame(width: 72, height: 36)
-                        PackageRow(manifest: manifest, origin: library.hasPrivateSources ? library.origin(of: manifest) : nil,
-                                   update: library.update(for: manifest)?.version,
-                                   updating: library.updating.contains(manifest.id), inUse: manifest.kind == .theme && library.isActive(manifest)) {
-                            Task { await library.update(manifest) }
-                        }
-                    }
-                    .tag(LibraryRow.package(manifest.id))
-                }
-            }
-        }
-    }
-
-    private var selection: Binding<LibraryRow?> {
-        Binding(get: {
-            library.selectedID.map { .package($0) } ?? (library.loading ? nil : .builtIn)
-        }, set: { row in
-            switch row {
-            case let .package(id)?:
-                Task {
-                    await library.selectPackage(id)
-                    tab = .overview
-                }
-            case .builtIn?: library.deselect()
-            case nil: break
-            }
-        })
-    }
-
     private var busy: Bool {
         library.draft?.working == true || !additions.isEmpty || library.pendingUpdate != nil
     }
 
-    private var storeGrid: some View {
-        let entries = library.storeEntries(showingThemes: showingThemes, sourceID: library.hasPrivateSources ? sourceFilter : nil)
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    SettingsSegments(selection: $showingThemes, options: [(nil, "All"), (false, "Widgets"), (true, "Themes")], stretches: false)
-                        .fixedSize()
-                    if library.hasPrivateSources {
-                        Picker("Source", selection: $sourceFilter) {
-                            Text("All sources").tag(String?.none)
-                            ForEach(library.sources) { source in Text(source.name).tag(String?.some(source.id)) }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
-                        .accessibilityLabel("Source")
-                    }
+    /// Everything the Store lists that matches the search, by name.
+    private var catalog: [StoreItem] {
+        let themes = gallery.choices.filter { $0.isBundled && (library.search.isEmpty || $0.title.localizedCaseInsensitiveContains(library.search)) }
+        let items = library.storeEntries.map(StoreItem.entry) + WidgetAddCatalog.builtIns.filter { $0.matches(library.search) }.map(StoreItem.builtIn)
+            + themes.map(StoreItem.theme) + library.unlistedPackages.map(StoreItem.unlisted)
+        // Entries keep their source order when they share a name.
+        return items.enumerated().sorted {
+            let order = $0.element.name.localizedStandardCompare($1.element.name)
+            return order == .orderedSame ? $0.offset < $1.offset : order == .orderedAscending
+        }.map(\.element)
+    }
+
+    private func items(in filter: PackageFilter, from items: [StoreItem], owned: Set<String>) -> [StoreItem] {
+        items.filter { item in
+            switch (filter, item) {
+            case (.all, _): true
+            case let (.updates, .entry(entry)): library.hasUpdate(entry)
+            case let (.installed, .entry(entry)): owned.contains(entry.id)
+            case (.installed, .unlisted), (.included, .builtIn), (.included, .theme): true
+            case let (.source(id), .entry(entry)): entry.sourceID == id
+            case (.themes, _): item.category == nil
+            case let (.category(category), _): item.category == category
+            default: false
+            }
+        }
+    }
+
+    private func sidebar(_ items: [StoreItem], owned: Set<String>) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                sidebarRow(.all, "All", "square.grid.2x2", count: items.count)
+                sidebarRow(.updates, "Updates", "arrow.down.circle", count: self.items(in: .updates, from: items, owned: owned).count)
+                sidebarRow(.installed, "Installed", "checkmark.circle", count: self.items(in: .installed, from: items, owned: owned).count)
+                sidebarHeader("Sources")
+                sidebarRow(.included, "Included", "sparkle", count: self.items(in: .included, from: items, owned: owned).count)
+                ForEach(library.sources) { source in
+                    sidebarRow(.source(source.id), source.isStore ? "Store" : source.name, source.isStore ? "bag" : "lock",
+                               count: self.items(in: .source(source.id), from: items, owned: owned).count)
                 }
+                sidebarHeader("Categories")
+                ForEach(WidgetCategory.allCases, id: \.self) { category in
+                    sidebarRow(.category(category), category.title, category.symbol,
+                               count: self.items(in: .category(category), from: items, owned: owned).count)
+                }
+                sidebarRow(.themes, "Themes", "paintpalette", count: self.items(in: .themes, from: items, owned: owned).count)
+            }
+            .padding(10)
+        }
+    }
+
+    private func sidebarHeader(_ title: String) -> some View {
+        Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            .padding(.horizontal, 8).padding(.top, 14).padding(.bottom, 4)
+    }
+
+    private func sidebarRow(_ filter: PackageFilter, _ title: String, _ symbol: String, count: Int) -> some View {
+        let selected = library.filter == filter
+        return Button {
+            library.filter = filter
+            library.deselect()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).frame(width: 18).foregroundStyle(selected ? Color.accentColor : .secondary)
+                Text(title).lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+            }
+            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(selected ? SettingsPalette.control : .clear, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func storeList(_ items: [StoreItem], owned: Set<String>) -> some View {
+        let shown = self.items(in: library.filter, from: items, owned: owned)
+        let suggested = library.filter == .all ? shown.filter { item in
+            if case let .entry(entry) = item { library.suggested.contains(entry.id) && !owned.contains(entry.id) } else { false }
+        } : []
+        let groups: [(title: String, items: [StoreItem])] = switch library.filter {
+        case .updates: [("Updates", shown)]
+        case .themes: [("Themes", shown)]
+        case let .category(category): [(category.title, shown)]
+        case .all, .installed, .included, .source:
+            WidgetCategory.allCases.map { category in (category.title, shown.filter { $0.category == category }) }
+                + [("Themes", shown.filter { $0.category == nil })]
+        }
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
                 if let linkError = library.linkError {
                     SettingsCallout(systemImage: "link", text: Text(linkError)).textSelection(.enabled)
                 }
@@ -265,34 +274,145 @@ struct PackagesView: View {
                                     text: Text(sourceErrorSummary(id) + "\n") + Text(library.sourceErrors[id] ?? "").font(.caption))
                         .textSelection(.enabled)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
-                    ForEach(entries, id: \.key) { entry in
-                        StoreCard(entry: entry, library: library) {
-                            Task {
-                                await library.selectStore(entry)
-                                tab = .overview
-                            }
-                        } get: {
-                            tab = .overview
-                            Task {
-                                if let manifest = library.updates.first(where: { library.update(for: $0)?.key == entry.key }) {
-                                    await library.update(manifest)
-                                }
-                                else { await library.get(entry) }
+                rows("Suggested for you", suggested, note: "For tools and apps on your Mac")
+                ForEach(groups, id: \.title) { group in rows(group.title, group.items) }
+                if shown.isEmpty {
+                    Text(library.search.isEmpty ? "Nothing here." : "No packages match your search.").font(.caption).foregroundStyle(.secondary)
+                }
+                if let error = library.error ?? setup.error { errorLabel(error) }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// A titled group of rows; a group without rows is left out.
+    @ViewBuilder private func rows(_ title: String, _ items: [StoreItem], note: String? = nil) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(title).font(.system(size: 14, weight: .semibold))
+                    Text(note ?? "\(items.count)").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { Divider() }
+                        row(item)
+                    }
+                }
+                .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
+            }
+        }
+    }
+
+    @ViewBuilder private func row(_ item: StoreItem) -> some View {
+        switch item {
+        case let .builtIn(choice):
+            StoreRow(name: choice.name, badge: nil, description: choice.description, open: nil) {
+                RowIcon(symbol: choice.symbol)
+            } trailing: {
+                if widgetTypes.contains(where: { $0 == choice.properties?["type"] }) {
+                    StatusLabel(status: .onBar)
+                } else {
+                    Button("Add to bar") {
+                        setup.beginSheet()
+                        Task {
+                            if await setup.add(choice, to: .right) != nil {
+                                store.customizationHistory.showNotice("\(choice.name) added to the right side of your bar.")
                             }
                         }
                     }
+                    .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+                    .disabled(setup.isAdding)
+                    .accessibilityLabel("Add \(choice.name) to bar")
                 }
-                if entries.isEmpty && !library.search.isEmpty && !library.entries.isEmpty {
-                    Text("No packages match your search.").font(.caption).foregroundStyle(.secondary)
-                }
-                if let error = library.error { errorLabel(error) }
             }
-            .padding(20)
+        case let .theme(choice):
+            StoreRow(name: choice.title, badge: nil, description: gallery.error(for: choice.key) ?? choice.manifest.description, open: nil) {
+                PackagePreview(screenshotData: nil, look: gallery.previews[choice.key]?.configuration(for: gallery.previewAppearance))
+                    .frame(width: 128, height: 64).scaleEffect(0.5625).frame(width: 72, height: 36)
+                    .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 6))
+            } trailing: {
+                if choice.key == gallery.selectedKey {
+                    StatusLabel(status: .inUse)
+                } else {
+                    Button("Use") { gallery.select(choice) }
+                        .buttonStyle(.bordered).buttonBorderShape(.capsule).controlSize(.small)
+                        .accessibilityLabel("Use \(choice.title)")
+                }
+            }
+        case let .entry(entry):
+            StoreRow(name: entry.name, badge: entry.sourceID == PackageSource.storeID ? nil : library.origin(of: entry), description: entry.description, open: {
+                Task {
+                    if library.installedPackages.contains(where: { $0.id == entry.id }) {
+                        await library.selectPackage(entry.id)
+                    } else {
+                        await library.selectStore(entry)
+                    }
+                    tab = .overview
+                }
+            }) {
+                if entry.kind == .theme {
+                    PackageListPreview(key: entry.key) { try await library.preview(entry) }
+                        .frame(width: 128).scaleEffect(0.5625).frame(width: 72, height: 36)
+                } else {
+                    RowIcon(symbol: entry.symbol ?? "shippingbox")
+                }
+            } trailing: {
+                if let manifest = library.installedPackages.first(where: { $0.id == entry.id }) { uninstallMenu(manifest) }
+                EntryStatus(entry: entry, library: library) {
+                    tab = .overview
+                    Task {
+                        if let manifest = library.updates.first(where: { library.update(for: $0)?.key == entry.key }) {
+                            await library.update(manifest)
+                        }
+                        else { await library.get(entry) }
+                    }
+                }
+            }
+        case let .unlisted(manifest):
+            let badge: PackageOrigin? = switch library.origin(of: manifest) {
+            case .local?: .local
+            case let .privateSource(name)?: .privateSource(name)
+            default: nil
+            }
+            StoreRow(name: manifest.name, badge: badge, description: manifest.description, open: {
+                Task {
+                    await library.selectPackage(manifest.id)
+                    tab = .overview
+                }
+            }) {
+                if manifest.kind == .theme {
+                    PackageListPreview(key: manifest.versionKey) { try await library.preview(manifest) }
+                        .frame(width: 128).scaleEffect(0.5625).frame(width: 72, height: 36)
+                } else {
+                    RowIcon(symbol: "shippingbox")
+                }
+            } trailing: {
+                uninstallMenu(manifest)
+                StatusLabel(status: library.installedStatus(manifest))
+            }
         }
-        .overlay {
-            if library.loadingStore && library.entries.isEmpty { ProgressView("Loading Store…") }
+    }
+
+    private func uninstallMenu(_ manifest: WidgetPackageManifest) -> some View {
+        Menu {
+            Button("Uninstall…", role: .destructive) { uninstalling = manifest }
+        } label: {
+            Image(systemName: "ellipsis.circle")
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("More actions for \(manifest.name)")
+    }
+
+    /// The types of the widgets the configuration defines, which built-in widgets show as on the bar.
+    private var widgetTypes: [ConfigurationValue] {
+        guard case let .array(widgets)? = store.effectiveDocument["widgets"] else { return [] }
+        return widgets.compactMap { if case let .object(widget) = $0 { widget["type"] } else { nil } }
     }
 
     /// The Store first, then the private sources in their configured order.
@@ -321,15 +441,6 @@ struct PackagesView: View {
         Task { await library.open(link) }
     }
 
-    private func showStore(_ showing: Bool) {
-        library.showingStore = showing
-        if showing {
-            library.deselect()
-        } else if let id = library.draft?.inspection.manifest.id, !library.installed.contains(where: { $0.id == id }) {
-            library.deselect()
-        }
-    }
-
     private var detail: some View {
         VStack(spacing: 0) {
             if let draft = library.draft {
@@ -344,8 +455,6 @@ struct PackagesView: View {
                         showsLoading = true
                     }
                     .onDisappear { showsLoading = false }
-            } else if reviewing == nil {
-                BuiltInPackagesView(store: store, gallery: gallery, search: library.search)
             } else {
                 Spacer()
             }
@@ -368,122 +477,117 @@ struct PackagesView: View {
         panel.prompt = "Review package"
         if panel.runModal() == .OK, let url = panel.url {
             tab = .overview
-            library.showingStore = false
             Task { await library.select(url) }
         }
     }
 }
 
-private enum LibraryRow: Hashable {
-    case package(String), builtIn
-}
+/// One row of the Store: a widget or theme included with StableBar, a source's package, or an installed package
+/// that no source lists.
+private enum StoreItem {
+    case builtIn(WidgetAddChoice), theme(ThemeChoice), entry(PackageIndex.Entry), unlisted(WidgetPackageManifest)
 
-private struct PackageRow: View {
-    let manifest: WidgetPackageManifest
-    /// Where it came from; nil hides the tag, as when no private source exists.
-    var origin: PackageOrigin?
-    var update: String?
-    var updating = false
-    var inUse = false
-    var onUpdate: (() -> Void)?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(manifest.name).fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
-            HStack(spacing: 5) {
-                Text(manifest.version).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                if let origin { PackageOriginBadge(source: origin) }
-                if inUse { PackageTag(title: "In use", tint: SettingsPalette.success) }
-            }
-            if let update {
-                Button(updating ? "Updating…" : "Update to \(update)") { onUpdate?() }
-                    .buttonStyle(.borderedProminent).controlSize(.mini)
-                    .disabled(updating)
-                    .accessibilityLabel("Update \(manifest.name) to \(update)")
-                    .padding(.top, 2)
-            }
+    var id: String {
+        switch self {
+        case let .builtIn(choice): "builtIn:\(choice.id)"
+        case let .theme(choice): "theme:\(choice.key)"
+        case let .entry(entry): entry.key
+        case let .unlisted(manifest): "unlisted:\(manifest.id)"
         }
-        .frame(height: update == nil ? 36 : 58, alignment: .top)
     }
-}
 
-private struct BuiltInRow: View {
-    let themes: Int
+    var name: String {
+        switch self {
+        case let .builtIn(choice): choice.name
+        case let .theme(choice): choice.title
+        case let .entry(entry): entry.name
+        case let .unlisted(manifest): manifest.name
+        }
+    }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "sparkle")
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 72, height: 36)
-                .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 5))
-            VStack(alignment: .leading, spacing: 2) {
-                Text("StableBar Essentials").fontWeight(.medium).foregroundStyle(.primary).lineLimit(1)
-                Text("\(WidgetAddCatalog.builtIns.count) widgets · \(themes) themes").font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-            }
+    /// nil for a theme.
+    var category: WidgetCategory? {
+        switch self {
+        case let .builtIn(choice): choice.category
+        case .theme: nil
+        case let .entry(entry): entry.kind == .theme ? nil : WidgetCategory(rawValue: entry.category ?? "") ?? .utilities
+        case let .unlisted(manifest): manifest.kind == .theme ? nil : .utilities
         }
     }
 }
 
-private struct StoreCard: View {
-    let entry: PackageIndex.Entry
-    let library: PackageLibrary
-    let open: () -> Void
-    let get: () -> Void
+/// A row of the Store, which opens its package when clicked; `open` is nil when it has nothing to open.
+/// `badge` names a private source or a local folder, which nobody at StableBar reviewed.
+private struct StoreRow<Leading: View, Trailing: View>: View {
+    let name: String
+    let badge: PackageOrigin?
+    let description: String?
+    let open: (() -> Void)?
+    @ViewBuilder let leading: Leading
+    @ViewBuilder let trailing: Trailing
     @State private var hovering = false
 
     var body: some View {
-        let status = library.cardStatus(entry)
-        VStack(alignment: .leading, spacing: 10) {
-            PackageListPreview(key: entry.key) { try await library.preview(entry) }
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(entry.description ?? "")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                    .lineLimit(2, reservesSpace: true)
+        HStack(spacing: 10) {
+            leading
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    if let badge { PackageOriginBadge(source: badge) }
+                }
+                if let description {
+                    Text(description).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
-            // The status never truncates: on a narrow card the row drops the author, then the kind,
-            // then the badge's name, keeping its icon, and last the badge.
-            ViewThatFits(in: .horizontal) {
-                bottomRow(status, kind: kindAndAuthor, badge: .full)
-                bottomRow(status, kind: kind, badge: .full)
-                bottomRow(status, kind: nil, badge: .full)
-                bottomRow(status, kind: nil, badge: .icon)
-                bottomRow(status, kind: nil, badge: nil)
-            }
-            .frame(height: 22)
+            .help(description ?? "")
+            Spacer(minLength: 8)
+            HStack(spacing: 10) { trailing }.fixedSize()
         }
-        .padding(14)
-        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
-        .overlay(RoundedRectangle(cornerRadius: 11)
-            .strokeBorder(hovering ? Color(nsColor: .tertiaryLabelColor) : SettingsPalette.groupBorder))
-        .contentShape(RoundedRectangle(cornerRadius: 11))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(hovering && open != nil ? SettingsPalette.control : Color.clear)
+        .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture(perform: open)
+        .onTapGesture { open?() }
     }
+}
 
-    private var kind: String { entry.kind == .theme ? "Theme" : "Widget" }
+private struct RowIcon: View {
+    let symbol: String
 
-    private var kindAndAuthor: String {
-        [kind, entry.author.map { "by \($0)" }].compactMap { $0 }.joined(separator: " · ")
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 14))
+            .frame(width: 30, height: 30)
+            .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 7))
     }
+}
 
-    /// Each piece at its full size, so `ViewThatFits` picks the first row that shows everything it holds.
-    private func bottomRow(_ status: StoreCardStatus, kind: String?, badge: PackageOriginBadge.Style?) -> some View {
-        HStack(spacing: 8) {
-            if let kind {
-                Text(kind).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).fixedSize()
+/// An installed package's state on its row.
+private struct StatusLabel: View {
+    let status: StoreCardStatus
+
+    var body: some View {
+        Group {
+            switch status {
+            case .onBar: Label("On your bar", systemImage: "checkmark").foregroundStyle(SettingsPalette.success)
+            case .inUse: Label("In use", systemImage: "checkmark").foregroundStyle(SettingsPalette.success)
+            case .notOnBar: Text("Not on your bar").foregroundStyle(.secondary)
+            default: Label("Installed", systemImage: "checkmark").foregroundStyle(.secondary)
             }
-            if library.hasPrivateSources, let badge {
-                PackageOriginBadge(source: library.origin(of: entry),
-                                   title: entry.sourceID == PackageSource.storeID ? "StableBar Store" : nil, style: badge)
-            }
-            Spacer(minLength: 0)
-            statusView(status).fixedSize()
         }
+        .font(.system(size: 11.5))
     }
+}
 
-    @ViewBuilder private func statusView(_ status: StoreCardStatus) -> some View {
-        switch status {
+/// What a Store entry's row offers: Get, Update, its progress or its installed state.
+private struct EntryStatus: View {
+    let entry: PackageIndex.Entry
+    let library: PackageLibrary
+    let get: () -> Void
+
+    var body: some View {
+        switch library.cardStatus(entry) {
         case let .working(updating):
             Text(updating ? "Updating…" : "Getting…").font(.system(size: 11.5)).foregroundStyle(.secondary)
         case .update:
@@ -491,30 +595,37 @@ private struct StoreCard: View {
                 .accessibilityLabel("Update \(entry.name)")
         case let .installedElsewhere(name):
             Text("Installed from \(name)").font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(1)
-        case .installed:
-            Label("Installed", systemImage: "checkmark").font(.system(size: 11.5)).foregroundStyle(.secondary)
         case .get:
             Button("Get", action: get)
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
                 .controlSize(.small)
                 .accessibilityLabel("Get \(entry.name)")
+        case let status:
+            StatusLabel(status: status)
         }
     }
 }
 
-/// What a Store card offers: its own install, or another source's, decides between Installed and Get.
+/// What a Store entry offers: its own install, or another source's, decides between an installed state and Get.
 enum StoreCardStatus: Equatable {
-    case working(updating: Bool), update, installedElsewhere(String), installed, get
+    case working(updating: Bool), update, installedElsewhere(String), installed, onBar, notOnBar, inUse, get
 }
 
 extension PackageLibrary {
     func cardStatus(_ entry: PackageIndex.Entry) -> StoreCardStatus {
-        let update = updates.contains { self.update(for: $0)?.key == entry.key }
+        let update = hasUpdate(entry)
         if getting.contains(entry.key) || (update && updating.contains(entry.id)) { return .working(updating: update) }
         if update { return .update }
         if let name = installedElsewhere(entry) { return .installedElsewhere(name) }
+        if let manifest = installedPackages.first(where: { $0.id == entry.id }) { return installedStatus(manifest) }
         return installed.contains { $0.id == entry.id } ? .installed : .get
+    }
+
+    /// A theme is in use or only installed; a widget package is on the bar or not.
+    func installedStatus(_ manifest: WidgetPackageManifest) -> StoreCardStatus {
+        if manifest.kind == .theme { return isActive(manifest) ? .inUse : .installed }
+        return isActive(manifest) ? .onBar : .notOnBar
     }
 }
 

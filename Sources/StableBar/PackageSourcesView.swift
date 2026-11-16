@@ -106,7 +106,7 @@ final class PackageSourceDraft {
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
-/// Settings › Packages › Sources…: the StableBar Store and the private sources, with their forms.
+/// Settings › Store › Sources…: the StableBar Store and the private sources, with their forms.
 struct PackageSourcesView: View {
     let library: PackageLibrary
     /// A join link to open the Add source form with; cleared once the form is open.

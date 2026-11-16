@@ -11,6 +11,7 @@ struct WidgetAddChoice: Identifiable, Sendable {
     var replacesPackage: String?
     /// The private source a package comes from; nil for built-ins and the Store.
     var sourceName: String?
+    var category = WidgetCategory.utilities
 
     func matches(_ search: String) -> Bool {
         search.isEmpty || "\(name) \(description) \(package == nil ? "Built in" : sourceName ?? "Store")".localizedCaseInsensitiveContains(search)
@@ -31,6 +32,33 @@ struct WidgetAddChoice: Identifiable, Sendable {
     }
 }
 
+/// What a widget is for. The Store lists widgets by it; a Store index entry names it in `category`.
+enum WidgetCategory: String, CaseIterable, Sendable {
+    case apps, system, time, developer, utilities, custom
+
+    var title: String {
+        switch self {
+        case .apps: "Apps & windows"
+        case .system: "System"
+        case .time: "Time & calendar"
+        case .developer: "Developer & AI"
+        case .utilities: "Utilities"
+        case .custom: "Build your own"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .apps: "macwindow"
+        case .system: "cpu"
+        case .time: "clock"
+        case .developer: "chevron.left.forwardslash.chevron.right"
+        case .utilities: "wrench.and.screwdriver"
+        case .custom: "textformat"
+        }
+    }
+}
+
 enum WidgetAddCatalog {
     /// Warning and critical colours shared by the widgets that report a usage state.
     static let warningStyle: ConfigurationValue = .object(["states": .object([
@@ -39,26 +67,26 @@ enum WidgetAddCatalog {
     ])])
 
     static let builtIns: [WidgetAddChoice] = [
-        .init(id: "clock", name: "Clock & date", symbol: "clock", description: "Time, date and a month calendar, in your time zone.", properties: ["type": .string("clock"), "format": .string("EEE d MMM  HH:mm"), "details": .bool(true)], replacesPackage: "date"),
-        .init(id: "activeApp", name: "Active app", symbol: "macwindow", description: "The frontmost app’s name and icon.", properties: ["type": .string("activeApp")]),
-        .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "Opens the Apple menu or System Settings, or locks the Mac. The menu needs Accessibility access.", properties: ["type": .string("appleMenu")]),
-        .init(id: "appMenu", name: "App menus", symbol: "menubar.rectangle", description: "The frontmost app’s menus. Needs Accessibility access.", properties: ["type": .string("appMenu")]),
-        .init(id: "controlCenter", name: "Control Center", symbol: "switch.2", description: "Opens macOS Control Center. Needs Accessibility access.", properties: ["type": .string("controlCenter")]),
-        .init(id: "stableBar", name: "StableBar", symbol: "gearshape", description: "StableBar’s menu bar icon. Clicking it opens Settings.", properties: ["type": .string("stableBar")]),
-        .init(id: "menuBarItems", name: "Menu bar items", symbol: "square.grid.2x2", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")]),
-        .init(id: "battery", name: "Battery", symbol: "battery.100percent", description: "The native battery indicator, with charge, power and health details.", properties: ["type": .string("battery"), "details": .bool(true)], replacesPackage: "battery-status"),
-        .init(id: "audio", name: "Sound", symbol: "speaker.wave.2", description: "The volume and current audio output.", properties: ["type": .string("audio")]),
-        .init(id: "inputSource", name: "Input source", symbol: "keyboard", description: "The keyboard input source. Clicking it switches to the next one.", properties: ["type": .string("inputSource")]),
-        .init(id: "privacy", name: "Microphone & camera", symbol: "hand.raised", description: "Lights up while an app uses the microphone or camera.", properties: ["type": .string("privacy")]),
+        .init(id: "clock", name: "Clock & date", symbol: "clock", description: "Time, date and a month calendar, in your time zone.", properties: ["type": .string("clock"), "format": .string("EEE d MMM  HH:mm"), "details": .bool(true)], replacesPackage: "date", category: .time),
+        .init(id: "activeApp", name: "Active app", symbol: "macwindow", description: "The frontmost app’s name and icon.", properties: ["type": .string("activeApp")], category: .apps),
+        .init(id: "appleMenu", name: "Apple menu", symbol: "apple.logo", description: "Opens the Apple menu or System Settings, or locks the Mac. The menu needs Accessibility access.", properties: ["type": .string("appleMenu")], category: .apps),
+        .init(id: "appMenu", name: "App menus", symbol: "menubar.rectangle", description: "The frontmost app’s menus. Needs Accessibility access.", properties: ["type": .string("appMenu")], category: .apps),
+        .init(id: "controlCenter", name: "Control Center", symbol: "switch.2", description: "Opens macOS Control Center. Needs Accessibility access.", properties: ["type": .string("controlCenter")], category: .apps),
+        .init(id: "stableBar", name: "StableBar", symbol: "gearshape", description: "StableBar’s menu bar icon. Clicking it opens Settings.", properties: ["type": .string("stableBar")], category: .apps),
+        .init(id: "menuBarItems", name: "Menu bar items", symbol: "square.grid.2x2", description: "Every item in the macOS menu bar, in a list. Needs Accessibility access.", properties: ["type": .string("menuBarItems")], category: .apps),
+        .init(id: "battery", name: "Battery", symbol: "battery.100percent", description: "The native battery indicator, with charge, power and health details.", properties: ["type": .string("battery"), "details": .bool(true)], replacesPackage: "battery-status", category: .system),
+        .init(id: "audio", name: "Sound", symbol: "speaker.wave.2", description: "The volume and current audio output.", properties: ["type": .string("audio")], category: .system),
+        .init(id: "inputSource", name: "Input source", symbol: "keyboard", description: "The keyboard input source. Clicking it switches to the next one.", properties: ["type": .string("inputSource")], category: .system),
+        .init(id: "privacy", name: "Microphone & camera", symbol: "hand.raised", description: "Lights up while an app uses the microphone or camera.", properties: ["type": .string("privacy")], category: .system),
         .init(id: "system", name: "System monitor", symbol: "cpu", description: "CPU, memory and the apps using them, with adjustable warnings.",
-              properties: ["type": .string("system"), "details": .bool(true), "style": warningStyle], replacesPackage: "system-monitor"),
-        .init(id: "network", name: "Network", symbol: "network", description: "Upload and download rates, with activity for each interface.", properties: ["type": .string("network"), "details": .bool(true)], replacesPackage: "network-speed"),
-        .init(id: "disk", name: "Disk", symbol: "internaldrive", description: "How full the startup disk is, with other drives you can eject.", properties: ["type": .string("disk"), "details": .bool(true), "style": warningStyle]),
-        .init(id: "calendar", name: "Calendar", symbol: "calendar", description: "Your next meeting and today’s agenda. Asks for Calendar access.", properties: ["type": .string("calendar"), "details": .bool(true)], replacesPackage: "calendar-agenda"),
-        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai, OmniWM, Rift or macOS Spaces.", properties: ["type": .string("workspaces")]),
-        .init(id: "text", name: "Text", symbol: "textformat", description: "Your own text and optional icon.", properties: ["type": .string("text"), "text": .string("New widget")]),
-        .init(id: "spacer", name: "Spacer", symbol: "arrow.left.and.right", description: "Space between widgets.", properties: ["type": .string("spacer")]),
-        .init(id: "script", name: "Script", symbol: "terminal", description: "Run a shell command on a schedule.", properties: ["type": .string("script"), "command": .string("date +%H:%M"), "interval": .number(30)], isScript: true)
+              properties: ["type": .string("system"), "details": .bool(true), "style": warningStyle], replacesPackage: "system-monitor", category: .system),
+        .init(id: "network", name: "Network", symbol: "network", description: "Upload and download rates, with activity for each interface.", properties: ["type": .string("network"), "details": .bool(true)], replacesPackage: "network-speed", category: .system),
+        .init(id: "disk", name: "Disk", symbol: "internaldrive", description: "How full the startup disk is, with other drives you can eject.", properties: ["type": .string("disk"), "details": .bool(true), "style": warningStyle], category: .system),
+        .init(id: "calendar", name: "Calendar", symbol: "calendar", description: "Your next meeting and today’s agenda. Asks for Calendar access.", properties: ["type": .string("calendar"), "details": .bool(true)], replacesPackage: "calendar-agenda", category: .time),
+        .init(id: "workspaces", name: "Workspaces", symbol: "rectangle.3.group", description: "Switch workspaces. Needs AeroSpace, yabai, OmniWM, Rift or macOS Spaces.", properties: ["type": .string("workspaces")], category: .apps),
+        .init(id: "text", name: "Text", symbol: "textformat", description: "Your own text and optional icon.", properties: ["type": .string("text"), "text": .string("New widget")], category: .custom),
+        .init(id: "spacer", name: "Spacer", symbol: "arrow.left.and.right", description: "Space between widgets.", properties: ["type": .string("spacer")], category: .custom),
+        .init(id: "script", name: "Script", symbol: "terminal", description: "Run a shell command on a schedule.", properties: ["type": .string("script"), "command": .string("date +%H:%M"), "interval": .number(30)], isScript: true, category: .custom)
     ]
 
     static func includes(_ entry: PackageIndex.Entry) -> Bool {

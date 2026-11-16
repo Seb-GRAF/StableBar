@@ -6,7 +6,7 @@ enum PackageStoreClientError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .reviewRequired: "Review this package’s commands, permissions, hosts, tools and secret settings in Packages before enabling it."
+        case .reviewRequired: "Review this package’s commands, permissions, hosts, tools and secret settings in the Store before enabling it."
         case .kindMismatch: "The package’s kind does not match its Store listing."
         }
     }
@@ -139,7 +139,9 @@ actor PackageStoreClient {
         var catalog = PackageCatalog(), errors: [Error] = []
         for (source, task) in pending {
             do {
-                catalog.entries += try await task.value.packages
+                let index = try await task.value
+                catalog.entries += index.packages
+                catalog.suggestions += index.suggestions
             } catch {
                 if indexTasks[source.id] == task { indexTasks[source.id] = nil }
                 catalog.errors[source.id] = sourceErrorDetail(error)

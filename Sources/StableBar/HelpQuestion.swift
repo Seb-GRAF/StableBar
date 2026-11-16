@@ -144,7 +144,7 @@ struct HelpQuestion: Identifiable {
 
     ## What can a package from the Store do on my Mac?
 
-    A package that runs commands runs them as you, so it can do anything a program you open can do. Before you add one, its page in **Settings → Packages** lists its widgets, the commands it runs, the hosts it contacts and the macOS permissions it uses. StableBar shows those lists but doesn't enforce them, so add packages with commands only from sources you trust.
+    A package that runs commands runs them as you, so it can do anything a program you open can do. Before you add one, its page in **Settings → Store** lists its widgets, the commands it runs, the hosts it contacts and the macOS permissions it uses. StableBar shows those lists but doesn't enforce them, so add packages with commands only from sources you trust.
 
     Themes never run commands. Every Store package is open source, the Store builds and publishes it rather than its author, and a maintainer reads each version of a package that runs commands before it goes out. Packages from a private source aren't reviewed by StableBar's maintainers.
 

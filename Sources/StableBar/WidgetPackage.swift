@@ -588,11 +588,15 @@ struct PackageIndex: Decodable, Sendable {
         let sha256: String
         /// The package's code repository. The JSON key stays `source`; private indexes may leave it out.
         let repository: URL?
+        /// A `WidgetCategory` raw value; the Store lists a widget without a known one under Utilities.
+        var category: String?
+        /// An SF Symbol for the package's row in the Store.
+        var symbol: String?
         /// The package source that listed this entry. Not part of the index.
         var sourceID = PackageSource.storeID
 
         enum CodingKeys: String, CodingKey {
-            case id, name, version, kind, description, author, minimumVersion, screenshot, archive, sha256
+            case id, name, version, kind, description, author, minimumVersion, screenshot, archive, sha256, category, symbol
             case repository = "source"
         }
 
@@ -602,14 +606,35 @@ struct PackageIndex: Decodable, Sendable {
 
     static let url = URL(string: "https://github.com/Seb-GRAF/stablebar-packages/releases/download/store/index.json")!
 
-    let packages: [Entry]
+    /// Packages the index suggests when one of `tools` is on the PATH or one of `apps` is installed.
+    struct Suggestion: Decodable, Sendable {
+        let tools: [String]
+        let apps: [String]
+        let packages: [String]
 
-    init(packages: [Entry]) {
+        private enum CodingKeys: String, CodingKey { case when, packages }
+        private enum When: String, CodingKey { case tools, apps }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let when = try container.nestedContainer(keyedBy: When.self, forKey: .when)
+            tools = try when.decodeIfPresent([String].self, forKey: .tools) ?? []
+            apps = try when.decodeIfPresent([String].self, forKey: .apps) ?? []
+            packages = try container.decode([String].self, forKey: .packages)
+        }
+    }
+
+    let packages: [Entry]
+    let suggestions: [Suggestion]
+
+    init(packages: [Entry], suggestions: [Suggestion] = []) {
         self.packages = packages
+        self.suggestions = suggestions
     }
 
     init(from decoder: Decoder) throws {
-        var entries = try decoder.container(keyedBy: ConfigurationKey.self).nestedUnkeyedContainer(forKey: ConfigurationKey(stringValue: "packages"))
+        let container = try decoder.container(keyedBy: ConfigurationKey.self)
+        var entries = try container.nestedUnkeyedContainer(forKey: ConfigurationKey(stringValue: "packages"))
         var packages: [Entry] = []
         while !entries.isAtEnd {
             let entry = try entries.superDecoder()
@@ -618,6 +643,7 @@ struct PackageIndex: Decodable, Sendable {
             packages.append(try Entry(from: entry))
         }
         self.packages = packages
+        suggestions = try container.decodeIfPresent([Suggestion].self, forKey: ConfigurationKey(stringValue: "suggestions")) ?? []
     }
 
     /// Tags every entry with the source, resolves relative screenshots and keeps the first entry for each ID.
@@ -625,14 +651,15 @@ struct PackageIndex: Decodable, Sendable {
         let data = try await fetch(sourceRequest(for: source.url, source: source, token: token), session: session)
         var seen: Set<String> = []
         var packages: [Entry] = []
-        for var entry in try JSONDecoder().decode(PackageIndex.self, from: data).packages where seen.insert(entry.id).inserted {
+        let index = try JSONDecoder().decode(PackageIndex.self, from: data)
+        for var entry in index.packages where seen.insert(entry.id).inserted {
             entry.sourceID = source.id
             if let screenshot = entry.screenshot, screenshot.scheme == nil {
                 entry.screenshot = URL(string: screenshot.relativeString, relativeTo: source.url)?.absoluteURL
             }
             packages.append(entry)
         }
-        return PackageIndex(packages: packages)
+        return PackageIndex(packages: packages, suggestions: index.suggestions)
     }
 
     static func load(from url: URL) async throws -> PackageIndex {

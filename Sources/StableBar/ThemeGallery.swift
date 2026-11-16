@@ -195,7 +195,7 @@ final class ThemeGallery {
         configurationChanged()
     }
 
-    /// Lists the themes of every source. Only the Store's failure is shown; private sources report theirs in Packages.
+    /// Lists the themes of every source. Only the Store's failure is shown; private sources report theirs in the Store.
     func loadStore() async {
         let catalog = await client.catalog()
         entries = catalog.entries

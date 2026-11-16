@@ -50,7 +50,7 @@ Run a command that prints text or JSON, and its output becomes a widget. Refresh
 
 <p><img src="docs/images/readme-store.gif" width="100%" alt="The pointer gets Weather from the Store, and its widget appears on the bar."></p>
 
-Find widgets and themes in **Settings → Packages → Store**. StableBar shows a package's commands, hosts and permissions before anything runs.
+Find widgets and themes in **Settings → Store**. StableBar shows a package's commands, hosts and permissions before anything runs.
 
 [Create a widget](docs/create-a-widget.md) · [Packages and the store](docs/packages.md#store)
 

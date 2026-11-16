@@ -62,7 +62,7 @@ struct SceneFile: Decodable {
     var section: Section?
     /// The tab of the widget's Settings page, or of the bar's when the scene opens the Bar section without a widget.
     var tab: Tab?
-    /// The installed package whose settings the Packages section shows.
+    /// The installed package whose settings the Store section shows.
     var package: String?
     /// A linked theme's folder, relative to the scene file, shown above the Theme gallery.
     var themeLink: String?
