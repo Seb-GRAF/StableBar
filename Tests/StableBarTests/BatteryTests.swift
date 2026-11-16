@@ -61,6 +61,37 @@ private func battery(_ extra: [String: Any] = [:]) -> [String: Any] {
     #expect(PowerMonitor.fields(smartBattery: [:]).isEmpty)
 }
 
+@Test func bluetoothListsTheConnectedDevicesWithTheirKindAndBattery() throws {
+    // Trimmed from `system_profiler SPBluetoothDataType -json`, with a speaker whose battery key is renamed.
+    let output = try Bluetooth.output(json: Data(#"""
+    {"SPBluetoothDataType": [{
+      "controller_properties": {"controller_state": "attrib_on"},
+      "device_connected": [
+        {"Air75 V3 ISO-1": {"device_batteryLevelMain": "100%", "device_minorType": "Keyboard", "device_services": "0x400020 < HID BLE >"}},
+        {"AirPods Pro": {"device_batteryLevelLeft": "76%", "device_batteryLevelRight": "77%", "device_batteryLevelCase": "40%",
+                         "device_minorType": "Headphones"}},
+        {"LIFT": {"device_minorType": "Mouse"}},
+        {"Magic Trackpad": {"device_batteryLevelMain": "55%", "device_minorType": "Magic Trackpad"}},
+        {"Speaker": {"device_batteryPercent": "30%"}}
+      ],
+      "device_not_connected": [{"MX Keys Mini": {"device_batteryLevelMain": "5%", "device_minorType": "Keyboard"}}]
+    }]}
+    """#.utf8))
+    #expect(output.text == "5")
+    #expect(output.lists?["devices"] == [
+        ["name": "Air75 V3 ISO-1", "kind": "keyboard", "icon": "keyboard", "battery": "100%", "level": "100", "fraction": "1.0"],
+        ["name": "AirPods Pro", "kind": "headphones", "icon": "airpodspro", "battery": "76% · 77% · 40%", "level": "40", "fraction": "0.4"],
+        ["name": "LIFT", "kind": "mouse", "icon": "computermouse", "battery": "", "level": "", "fraction": ""],
+        ["name": "Magic Trackpad", "kind": "trackpad", "icon": "rectangle.and.hand.point.up.left", "battery": "55%", "level": "55", "fraction": "0.55"],
+        ["name": "Speaker", "kind": "other", "icon": "dot.radiowaves.left.and.right", "battery": "", "level": "", "fraction": ""]
+    ])
+    #expect(output.fields?["summary"] == "Air75 V3 ISO-1 100% · AirPods Pro 40% · Magic Trackpad 55%")
+    #expect(output.values == ["lowestBattery": 0.4])
+
+    let off = try Bluetooth.output(json: Data(#"{"SPBluetoothDataType": [{"controller_properties": {"controller_state": "attrib_off"}}]}"#.utf8))
+    #expect(off.text == "" && off.lists?["devices"] == [] && off.fields?["summary"] == "" && off.values == nil)
+}
+
 @Test func batteryBlocksReadTheChargeFromTheirSource() throws {
     func source(_ json: String) throws -> String? {
         guard case let .battery(source) = try JSONDecoder().decode(PopupBlock.self, from: Data(json.utf8)).content else { return nil }

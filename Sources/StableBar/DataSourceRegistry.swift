@@ -115,8 +115,8 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .wifi, .disk, .audio, .inputSource, .microphone,
-                                                    .privacy, .calendar, .merge])
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .bluetooth, .system, .network, .wifi, .disk, .audio, .inputSource,
+                                                    .microphone, .privacy, .calendar, .merge])
 }
 
 extension DataSourceType {
@@ -133,6 +133,18 @@ extension DataSourceType {
     static let battery = DataSourceType(name: "battery", isNative: true, symbol: "battery.100percent", settings: [],
                                         continuous: true, events: [.powerSourceChange]) { _, _ in
         PushSource(monitor: PowerMonitor())
+    }
+
+    /// A device's charge changes over hours, so two minutes is soon enough to see one connect or run low.
+    static let bluetooth = DataSourceType(name: "bluetooth", isNative: true, symbol: "dot.radiowaves.left.and.right", settings: [],
+                                          continuous: false, defaultInterval: 120) { _, _ in
+        PollingSource { _ in
+            do {
+                return .output(.success(try await Bluetooth.read()))
+            } catch {
+                return .output(.failure(error))
+            }
+        }
     }
 
     /// With `processes`, its output also lists the apps and processes using the most memory and CPU.
