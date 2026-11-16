@@ -686,7 +686,7 @@ final class BarStore: NSObject {
         let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
         let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
-                                   context: context, previewTheme: layer)
+                                   context: context, previewTheme: PreviewTheme(id: choice.manifest.id, layer: layer))
         return (next, loader)
     }
 
@@ -718,7 +718,7 @@ final class BarStore: NSObject {
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
         adopt(loader)
-        if effectiveDocument == loader.document {
+        if effectiveDocument == loader.document, screenDocuments == loader.screenDocuments {
             origins = loader.origins
             activeProfiles = loader.activeProfiles
             configurationError = nil

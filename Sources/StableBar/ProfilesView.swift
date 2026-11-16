@@ -9,6 +9,7 @@ struct ProfilesView: View {
     @State private var editingJSON = false
     @State private var hovered: String?
     @State private var deleting: String?
+    @State private var themeOptions = [ProfileThemeOption(id: "built-in", name: "Built-in")]
 
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? {
@@ -54,6 +55,11 @@ struct ProfilesView: View {
         }
         .onChange(of: editor.searchTarget, initial: true) {
             if editor.searchTarget == SettingsSearchResult.profiles.id { editor.searchTarget = nil }
+        }
+        .task {
+            let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                       themesDirectory: store.themesDirectory)
+            themeOptions = await Task.detached { catalog.profileThemeOptions }.value
         }
     }
 
@@ -275,6 +281,12 @@ struct ProfilesView: View {
             Button(screenCount(screens)) { editor.setProfileCondition(profile.name, \.displayCount, value: screens, control: "displayCount") }
             Divider()
             Button("An app is in front…") { chooseApp(for: profile) }
+            Divider()
+            Menu("The theme is…") {
+                ForEach(themeOptions, id: \.id) { option in
+                    Button(option.name) { editor.setProfileCondition(profile.name, \.theme, value: option.id, control: "theme") }
+                }
+            }
         } label: {
             Label("Condition", systemImage: "plus")
         }
@@ -348,6 +360,12 @@ struct ProfilesView: View {
             let text = "\(NSWorkspace.shared.urlForApplication(withBundleIdentifier: app)?.deletingPathExtension().lastPathComponent ?? app) is in front"
             conditions.append(ProfileCondition(id: "app", text: text, phrase: text) {
                 editor.setProfileCondition(name, \.app, value: nil, control: "app")
+            })
+        }
+        if let theme = when.theme {
+            let text = "\(themeOptions.first { $0.id == theme }?.name ?? theme) is the theme"
+            conditions.append(ProfileCondition(id: "theme", text: text, phrase: text) {
+                editor.setProfileCondition(name, \.theme, value: nil, control: "theme")
             })
         }
         return conditions

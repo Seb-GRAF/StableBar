@@ -114,7 +114,9 @@ Define reusable JSON values in `tokens` and reference them with a whole string s
 
 A color token can hold a light and dark pair, as `accent` does here, so it follows the appearance without a profile.
 
-Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, and the focused app's bundle identifier in `app`. Conditions in one profile must all match.
+Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, the focused app's bundle identifier in `app`, and the ID of the theme the bar is drawn with in `theme`. Conditions in one profile must all match.
+
+`theme` matches any version of that theme, and `built-in` matches Built-in, including a selected theme turned off with `"enabled": false`. A theme set for one kind of screen under `screens`, the theme of a [screen setup](layout.md#screen-setups)'s own bar, and a theme you're trying each count as the theme on that bar. Use it to keep settings tuned for one theme from applying under the others: `{"name": "Fern", "when": {"theme": "fern"}, "configuration": {"widgetOverrides": {"date": {"background": "@token.accent"}}}}` applies only while Fern is the theme.
 
 Profiles merge by name across packages, themes, includes and the main file. Later values merge recursively into an existing profile without moving it; new names append in order. Matching profiles apply in that order after modules and the root configuration; later profiles win. Set `"enabled": false` on a profile to skip it, even when pinned, or `true` to enable it again. An override can contain only its `name` and the properties to change, for example `{"name":"dark","enabled":false}`.
 
