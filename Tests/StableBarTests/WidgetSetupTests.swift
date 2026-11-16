@@ -1,3 +1,4 @@
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -556,4 +557,57 @@ final class WidgetSetupTests: XCTestCase {
         return try setup.enable(inspection, settings: setup.savedSettings(for: inspection.manifest), position: position)
     }
 
+}
+
+/// Setup's Found on your Mac leaves out a package already on the bar. A suggestion goes on the bar only after its review,
+/// stays listed once added, comes off with a second click, and Finish setup saves it.
+@Test @MainActor func setupAddsSuggestedStorePackagesAfterTheirReview() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let index = LocalPackageIndex(fixture: fixture)
+    let onBar = try await LocalPackageIndex(fixture: fixture, folder: "earlier").add(id: "on-bar", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"on-bar","type":"text","text":"On","position":"right"}]}"#, name: "On bar")
+    let quota = try await index.add(id: "quota", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"quota","type":"text","text":"42%","position":"right"}]}"#, name: "Quota")
+    _ = try fixture.packages.install(fixture.directory.appending(path: "sources/on-bar"))
+    try fixture.write(#"{"widgets":[],"packages":[{"id":"on-bar","version":"1"}]}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+    var system = SetupSystem()
+    system.isTrusted = { true }
+    system.calendarAccess = { .fullAccess }
+    system.menuBarHides = { true }
+    system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    system.workspaceSource = { $0 ?? .spaces }
+    system.isInApplications = { false }
+    system.loginStatus = { .notRegistered }
+    system.suggestedPackages = { _ in [onBar, quota] }
+    let session = SetupSession(store: store, system: system)
+
+    await session.loadSuggestions()
+    #expect(session.suggestions.map(\.id) == ["quota"])
+    await session.pick(quota)
+    let review = try #require(session.review)
+    #expect(review.sourceID == PackageSource.storeID)
+    #expect(session.preferences.packages.isEmpty)
+    #expect(try fixture.packages.list().map(\.id) == ["on-bar"])
+    // The review installs the package before it hands it to setup.
+    let installed = try fixture.packages.install(review.inspection.directory)
+    session.add(installed, settings: [:])
+    #expect(store.configuration?.widgets.map(\.id) == ["on-bar", "quota"])
+    await session.loadSuggestions()
+    #expect(session.suggestions.map(\.id) == ["quota"])
+
+    await session.pick(quota)
+    #expect(session.preferences.packages.isEmpty)
+    #expect(store.configuration?.widgets.map(\.id) == ["on-bar"])
+    session.add(installed, settings: [:])
+    session.finish()
+    #expect(session.error == nil)
+    #expect(try fixture.document()["packages"] == .array([
+        .object(["id": .string("on-bar"), "version": .string("1")]),
+        .object(["id": .string("quota"), "version": .string("1"), "enabled": .bool(true), "settings": .object([:])])
+    ]))
 }

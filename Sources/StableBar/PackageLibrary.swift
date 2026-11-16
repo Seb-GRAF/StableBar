@@ -418,11 +418,7 @@ final class PackageLibrary {
         }
         sourceErrors = catalog.errors
         loadedSources = Set(sources.map(\.id).filter { catalog.errors[$0] == nil })
-        let path = shellEnvironment.withLock { $0["PATH", default: ""] }.split(separator: ":")
-        suggested = Set(catalog.suggestions.filter { suggestion in
-            suggestion.tools.contains { tool in path.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(tool)") } }
-                || suggestion.apps.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
-        }.flatMap(\.packages))
+        suggested = catalog.suggestedIDs
     }
 
     func preview(_ manifest: WidgetPackageManifest) async throws -> PackagePreviewData {
@@ -813,4 +809,15 @@ enum PackageFilter: Hashable {
     /// A package source, by its ID.
     case source(String)
     case category(WidgetCategory)
+}
+
+extension PackageCatalog {
+    /// IDs of the packages suggested for the tools on the login shell's PATH and the apps installed on this Mac.
+    var suggestedIDs: Set<String> {
+        let path = shellEnvironment.withLock { $0["PATH", default: ""] }.split(separator: ":")
+        return Set(suggestions.filter { suggestion in
+            suggestion.tools.contains { tool in path.contains { FileManager.default.isExecutableFile(atPath: "\($0)/\(tool)") } }
+                || suggestion.apps.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+        }.flatMap(\.packages))
+    }
 }

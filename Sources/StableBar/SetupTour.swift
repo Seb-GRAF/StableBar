@@ -22,6 +22,7 @@ struct SetupTourView: View {
     @State private var looks: [(name: String, look: Configuration)] = []
     @State private var previews: [String: ThemePreview] = [:]
     @State private var confirmingSkip = false
+    @State private var reviewIsWorking = false
     /// The menu bar's height as last read, so the pointer to the bar follows the bar when the menu bar hides or shows.
     @State private var currentMenuBarHeight: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -98,7 +99,7 @@ struct SetupTourView: View {
                         .transition(.opacity)
                 }
                 tour(size: size, bottom: bottom)
-                    .disabled(confirmingSkip || session.applicationMove.isBusy)
+                    .disabled(confirmingSkip || session.applicationMove.isBusy || session.review != nil)
                 ZStack {
                     if phase == .tour {
                         footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
@@ -107,11 +108,15 @@ struct SetupTourView: View {
                 .position(x: size.width / 2, y: size.height - bottom - 89)
                 .disabled(session.applicationMove.isBusy)
                 dots.position(x: size.width / 2, y: size.height - bottom - 44)
+                if let review = session.review {
+                    suggestionReview(review).transition(.opacity)
+                }
                 if confirmingSkip {
                     skipConfirmation.transition(.opacity)
                 }
             }
             .animation(.easeOut(duration: 0.2), value: confirmingSkip)
+            .animation(.easeOut(duration: 0.2), value: session.review == nil)
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
@@ -445,6 +450,7 @@ struct SetupTourView: View {
                             Text("Presets add widgets and never remove yours.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
                         } content: {
                             presets
+                            if !session.suggestions.isEmpty { suggestions }
                         }
                         section("Theme") {
                             HStack(spacing: 20) {
@@ -465,6 +471,7 @@ struct SetupTourView: View {
                             themes
                         }
                     }
+                    .task { await session.loadSuggestions() }
                 case .touches: access
                 case .permissions: permissions
                 default: hints
@@ -594,6 +601,70 @@ struct SetupTourView: View {
                 .help("Adds \(ListFormatter.localizedString(byJoining: sets.map(\.title))).")
                 .accessibilityLabel(preset.accessibilityLabel(widgetSets: sets, placement: session.presetPlacement))
             }
+        }
+    }
+
+    /// Store packages for tools found on this Mac. They run commands, so picking one opens its review first.
+    private var suggestions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Found on your Mac").font(.system(size: 13, weight: .semibold))
+                Text("Store widgets for tools you use. You review what each one runs before it's added.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
+            }
+            .padding(.top, 8)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
+                ForEach(session.suggestions, id: \.key) { entry in
+                    let added = session.preferences.packages.contains { $0.id == entry.id }
+                    SetupTile(selected: added) {
+                        Task { await session.pick(entry) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: entry.symbol ?? "shippingbox")
+                                .font(.system(size: 15))
+                                .frame(width: 32, height: 32)
+                                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.name).font(.system(size: 13, weight: .semibold))
+                                if let description = entry.description {
+                                    Text(description).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).lineLimit(2)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            if session.downloading == entry.key {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
+                                    .font(.system(size: 15))
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+                    }
+                    .disabled(session.downloading != nil)
+                }
+            }
+        }
+    }
+
+    /// The review Add here shows, for a suggestion picked under Found on your Mac.
+    private func suggestionReview(_ review: (inspection: WidgetPackageInspection, sourceID: String)) -> some View {
+        ZStack {
+            Color.black.opacity(0.55)
+            VStack(alignment: .leading, spacing: 10) {
+                PackagesView(store: session.store, reviewing: review.inspection, reviewingSourceID: review.sourceID,
+                             onEnable: { session.add($0, settings: $1) }, onAdded: { session.review = nil },
+                             onWorkingChanged: { reviewIsWorking = $0 })
+                Button("Back") { session.review = nil }
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(reviewIsWorking)
+            }
+            .padding(14)
+            .frame(width: 540, height: 540)
+            .background(Color(white: 0.11).opacity(0.96), in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12)))
         }
     }
 
@@ -1111,7 +1182,7 @@ struct SetupTourView: View {
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 96, alignment: .leading)
         }
-        .disabled(confirmingSkip)
+        .disabled(confirmingSkip || session.review != nil)
         .buttonStyle(.plain)
         .font(.system(size: 13))
         .foregroundStyle(.white.opacity(0.45))

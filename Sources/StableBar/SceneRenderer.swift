@@ -320,6 +320,7 @@ enum SceneRenderer {
             setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
         }
         system.yabaiSignalScript = YabaiSetupSignals.script()
+        system.suggestedPackages = { _ in setup.suggested }
         let session = SetupSession(store: store, system: system,
                                    applicationMove: .sample(move, inApplications: setup.inApplications))
         defer { session.workspaceConnection.hide() }
@@ -335,6 +336,7 @@ enum SceneRenderer {
         .task {
             if let placement = setup.placement { await session.place(placement) }
             if let preset = setup.preset { session.toggle(preset) }
+            await session.loadSuggestions()
             choices.made = true
         }
         try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: {

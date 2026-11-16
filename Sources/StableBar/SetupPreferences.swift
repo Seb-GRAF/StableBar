@@ -243,6 +243,14 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     var keepWindowsClear: Bool?
     var keepNotificationsClear: Bool?
     var deferMeetings = false
+    /// The Store packages picked under Found on your Mac, with the settings their review chose.
+    var packages: [Package] = []
+
+    struct Package: Equatable, Codable, Sendable {
+        let id: String
+        let version: String
+        let settings: [String: ConfigurationValue]
+    }
 
     /// Presets own appearance, theme and widget sets. Every other choice stays, even a clock or Meetings choice
     /// this preset doesn't use: it applies again after another change.
@@ -572,6 +580,11 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         }
         for source in sources where source != configuration.workspaceSource && WidgetSet.workspaces(source).state(in: target) != .conflict {
             edits.append(ConfigurationEdit(action: .workspaceSource, name: source.rawValue))
+        }
+        for package in packages {
+            edits.append(ConfigurationEdit(action: .package, properties: [
+                "id": .string(package.id), "version": .string(package.version), "enabled": .bool(true), "settings": .object(package.settings)
+            ]))
         }
         return edits
     }
