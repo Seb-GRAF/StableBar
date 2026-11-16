@@ -176,3 +176,25 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     #expect(store.configuration?.bar.height == 30)
     #expect(store.activeProfiles == ["tuned"])
 }
+
+@MainActor @Test func editingAProfileOnlyAScreensThemeMatchesUpdatesThatScreen() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(#"{"bar":{"margin":2}}"#)
+    func write(height: Int) throws {
+        try fixture.write(#"""
+        {"theme":{"id":"test-theme","version":"1"},"screens":{"laptop":{"theme":{"id":"nord"}}},"bar":{"height":40},"widgets":[],
+         "profiles":[{"name":"tuned","when":{"theme":"nord"},"configuration":{"bar":{"height":\#(height)}}}]}
+        """#, to: fixture.url)
+    }
+    try write(height: 30)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.configuration?.screenLooks["laptop"]?.bar.height == 30)
+
+    try write(height: 26)
+    store.reloadConfiguration()
+    #expect(store.configuration?.bar.height == 40)
+    #expect(store.configuration?.screenLooks["laptop"]?.bar.height == 26)
+}
