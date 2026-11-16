@@ -109,7 +109,7 @@ A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.re
 | An eligible app commit with `!` or a `BREAKING CHANGE:` footer | Major: 0.1.0 → 1.0.0 |
 | `build:`, `chore:`, `ci:`, `docs:`, `style:`, `test:` | None |
 
-Queued pushes skip builds when `main` has already moved on. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
+Queued pushes skip builds when `main` has already moved on. `main` goes first: GitHub runs only a few macOS jobs at once for the account, so a run on `main` cancels the pull request runs waiting or running when it starts, and **Resume pull requests** restarts their cancelled jobs once its own macOS jobs are done. A pull request that got a newer commit or was closed in the meantime isn't restarted. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
 
 Both release channels come from `main`:
 
@@ -197,6 +197,7 @@ Pull requests from forks get the same comment and status: the drawing runs in th
 
 - **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow. Each run's `test-results` artifact lists every Swift Testing test with its time and failures, kept 30 days, so the same test failing across runs is easy to spot.
 - **A crash that ends the test run** (`exited with unexpected signal code 6`). The log doesn't say where. After a local run, look for a `swiftpm-testing-helper` report in `~/Library/Logs/DiagnosticReports`: its crashing thread names the code. Then turn the crash into a test that fails every time.
+- **A run cancelled while `main` builds.** `main`'s run paused it and restarts its cancelled jobs when its macOS jobs are done, so wait for that rather than rerunning it.
 - **A job that never ran, or a check that stays in progress.** "The job was not acquired by Runner", or a required check still in progress after its steps finished, needs a rerun, not a fix.
 - **A failure only CI shows.** CI's Macs always show scroll bars: run the test with `-AppleShowScrollBars Always`. Locally, the popup tests that animate fail while the display sleeps or the screen is locked.
 - **Tests that don't match the branch.** `swift build` doesn't rebuild the tests: after switching branches, run `swift build --build-tests` before `swift test --skip-build`.
