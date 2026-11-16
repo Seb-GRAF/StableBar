@@ -95,9 +95,9 @@ enum LaunchCommand {
         case "--popup" where arguments.count == 3 && arguments[2] == "--open":
             self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1]))
         case "--popup" where arguments.count == 5 && arguments[2] == "--open" && arguments[3] == "--duration":
-            // Duration traps on more seconds than it can hold, such as inf, which would crash the running bar.
-            guard let seconds = Double(arguments[4]), seconds > 0, seconds <= 86_400 else {
-                throw CommandFailure(message: "--duration must be greater than zero and at most one day (86400 seconds).")
+            // JSON can't carry inf or nan; the bar checks the range.
+            guard let seconds = Double(arguments[4]), seconds.isFinite else {
+                throw CommandFailure(message: "--duration takes a number of seconds.")
             }
             self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1], duration: seconds))
         case "--focus" where arguments.count == 1:

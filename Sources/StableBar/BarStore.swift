@@ -1041,6 +1041,10 @@ final class BarStore: NSObject {
             guard let id = request.id, configuration?.widgets.contains(where: { $0.id == id }) == true else {
                 throw CommandFailure(message: "Unknown widget: \(request.id ?? "").")
             }
+            // Duration traps on more seconds than it can hold, which would crash the bar.
+            if let duration = request.duration, duration <= 0 || duration > 86_400 {
+                throw CommandFailure(message: "--duration must be greater than zero and at most one day (86400 seconds).")
+            }
             if popupWidgetID == id || popup.pins.ids.contains(id) {
                 if request.action == .openPopup { break }
                 if popupWidgetID == id { popup.close() } else { popup.closePinned(id) }

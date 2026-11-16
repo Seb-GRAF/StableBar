@@ -103,7 +103,8 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
-@Test @MainActor func popupCommandTogglesTheWidgetsPopupOnTheActiveDisplay() async throws {
+/// The bar rejects a duration it can't wait for.
+@Test @MainActor func popupCommandsOpenAndCloseTheWidgetsPopupOnTheActiveDisplay() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"agenda-command","type":"text","text":"Agenda","position":"right",
       "popup":{"style":{},"layout":{"type":"text","text":"Today"}}}]}
@@ -124,6 +125,10 @@ private var presentationRepository: URL {
     _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
     #expect(!popup.isOpen)
     #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .popup, id: "missing")) }
+    for duration in [0, -1, 1e300] {
+        #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .openPopup, id: "agenda-command", duration: duration)) }
+    }
+    #expect(!popup.isOpen)
 }
 
 /// VoiceOver reads each widget's name and what it shows, and a widget's popup as the open state of a button that

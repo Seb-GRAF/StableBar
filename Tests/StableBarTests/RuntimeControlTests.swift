@@ -285,7 +285,7 @@ import Testing
     }
 }
 
-@Test func popupCommandsOpenOrCloseAndRejectDurationsTheBarCannotWaitFor() throws {
+@Test func popupCommandsOpenOrCloseAndRejectDurationsThatArentNumbers() throws {
     func request(_ arguments: [String]) throws -> RuntimeRequest {
         guard case let .control(_, request) = try LaunchCommand(arguments: arguments) else { throw CommandFailure(message: "Expected a control command") }
         return request
@@ -296,7 +296,7 @@ import Testing
     #expect((any.action, any.id) == (.closePopup, nil))
     #expect(try request(["--popup", "agenda", "--close"]).action == .closePopup)
     #expect(try request(["--popup", "agenda"]).action == .popup)
-    for duration in ["0", "-1", "inf", "nan", "1e300", "soon"] {
+    for duration in ["inf", "nan", "soon"] {
         #expect(throws: CommandFailure.self) { try LaunchCommand(arguments: ["--popup", "agenda", "--open", "--duration", duration]) }
     }
 }
