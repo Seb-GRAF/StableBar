@@ -440,7 +440,13 @@ enum WidgetContent: Equatable, Sendable {
 }
 
 struct WidgetConfiguration: Decodable, Identifiable, Sendable {
+    /// The types besides those of native providers, such as `battery`.
+    private static let fixedTypeNames: Set<String> = ["spacer", "provider", "aerospace", "workspaces", "activeApp", "appMenu", "appleMenu",
+                                                      "controlCenter", "stableBar", "menuBarItems", "clock", "text", "script"]
+
     let id: String
+    /// The `type` the widget declares, with `aerospace` as `workspaces`.
+    let typeName: String
     let role: PresentationRole?
     var position: WidgetPosition
     let content: WidgetContent
@@ -532,7 +538,12 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         overflow = try values.decodeIfPresent(WidgetOverflow.self, forKey: .overflow) ?? .automatic
         rules = try values.decodeIfPresent([StyleRule].self, forKey: .rules) ?? []
         transition = try values.decodeIfPresent(WidgetTransition.self, forKey: .transition)
-        switch try values.decode(String.self, forKey: .type) {
+        let type = try values.decode(String.self, forKey: .type)
+        guard let typeName = Self.typeName(type) else {
+            throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
+        }
+        self.typeName = typeName
+        switch type {
         case "spacer": content = .spacer
         case "provider": content = .provider(try values.decode(String.self, forKey: .provider))
         case "aerospace", "workspaces": content = .workspaces
@@ -553,11 +564,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .interval, in: values, debugDescription: "A script interval must be greater than zero.")
             }
             content = .script(command: try values.decode(String.self, forKey: .command), interval: interval)
-        case let type:
-            guard DataSourceRegistry.builtIn[type]?.isNative == true else {
-                throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
-            }
-            content = .provider(type)
+        case let type: content = .provider(type)
         }
         if !rules.isEmpty {
             switch content {
@@ -570,6 +577,12 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
 }
 
 extension WidgetConfiguration {
+    /// `type` as a widget stores it, or nil when no widget has that type.
+    static func typeName(_ type: String) -> String? {
+        guard fixedTypeNames.contains(type) || DataSourceRegistry.builtIn[type]?.isNative == true else { return nil }
+        return type == "aerospace" ? "workspaces" : type
+    }
+
     /// The provider this widget shows: the one it names, or the native type it is.
     var providerName: String? {
         if case let .provider(name) = content { return name }

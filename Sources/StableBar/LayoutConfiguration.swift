@@ -2,13 +2,52 @@ import Foundation
 
 struct WidgetGroupConfiguration: Decodable, Sendable {
     var style: WidgetStyle
+    let members: [WidgetGroupMember]
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case style }
+    enum CodingKeys: String, CodingKey, CaseIterable { case style, members }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? WidgetStyle()
+        members = try values.decodeIfPresent([WidgetGroupMember].self, forKey: .members) ?? []
+    }
+}
+
+/// A selector in a group's `members`: a widget matches when it has every key the selector names.
+struct WidgetGroupMember: Decodable, Equatable, Sendable {
+    let type: String?
+    let role: PresentationRole?
+    let id: String?
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case type, role, id }
+
+    init(type: String?, role: PresentationRole?, id: String?) {
+        self.type = type
+        self.role = role
+        self.id = id
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        type = try values.decodeIfPresent(String.self, forKey: .type).map { name in
+            guard let type = WidgetConfiguration.typeName(name) else {
+                throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
+            }
+            return type
+        }
+        role = try values.decodeIfPresent(PresentationRole.self, forKey: .role)
+        id = try values.decodeIfPresent(String.self, forKey: .id)
+        guard keyCount > 0 else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Name a type, role or id."))
+        }
+    }
+
+    var keyCount: Int { [type != nil, role != nil, id != nil].filter { $0 }.count }
+
+    func matches(_ widget: WidgetConfiguration) -> Bool {
+        (type == nil || type == widget.typeName) && (role == nil || role == widget.role) && (id == nil || id == widget.id)
     }
 }
 
