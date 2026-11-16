@@ -80,9 +80,11 @@
 .segmented button { min-height: 30px; padding: 4px 12px; font: 500 14px/20px var(--body); border: 1px solid transparent; border-radius: 4px; }
 .segmented button[aria-pressed="true"] { background: #fff; color: var(--text); border-color: #adada2; }
 .segmented button:hover { background: #fff; }
-.preview-stage { position: relative; overflow: hidden; padding: 16px 12px 20px; min-height: 236px; background: #b9d6e1; }
+.preview-stage { --stage-top: 16px; --stage-side: 12px; position: relative; overflow: hidden; padding: var(--stage-top) var(--stage-side) 20px; min-height: 236px; background: #b9d6e1; }
+/* The stage's top edge is the screen's: the bar spans it edge to edge, and only a floating margin insets it. */
+.preview-stage .preview-bar { margin: calc(-1 * var(--stage-top)) calc(-1 * var(--stage-side)) 0; }
 .preview-stage::before { content: ""; position: absolute; inset: 0; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 300'%3E%3Cg fill='none' stroke='%23608ba1' stroke-width='.7' opacity='.25'%3E%3Cpath d='M-60 300C120 270 56 55 250 76S430 200 620 138 834 80 870-60M-30 330C145 282 84 77 251 99S442 221 636 157 866 111 900-31M-10 356C177 306 100 103 267 123S457 246 654 182 889 140 926-5M-79 268C98 245 34 26 229 50S410 177 600 112 810 57 844-85'/%3E%3Cpath d='M0 60h800M0 120h800M0 180h800M0 240h800M80 0v300M200 0v300M320 0v300M440 0v300M560 0v300M680 0v300' stroke-dasharray='2 6'/%3E%3C/g%3E%3C/svg%3E"); background-size: cover; }
-.preview-stage[data-appearance="dark"] { background-color: #202d3a; }
+.preview-stage[data-appearance="dark"] { background-color: #4a5b6b; }
 .theme-preview { position: relative; }
 .preview-below { display: flex; align-items: flex-start; justify-content: flex-end; gap: 16px; padding: 6px 20px 0; }
 .tooltip-example { margin-top: 16px; }
@@ -168,7 +170,7 @@
   .split .preview-card { order: -2; width: 100%; }
   .split .outputs { order: -1; width: 100%; }
   .split .json-panel { order: 1; width: 100%; }
-  .preview-stage { min-height: 216px; padding: 12px 6px; }
+  .preview-stage { --stage-top: 12px; --stage-side: 6px; min-height: 216px; padding: var(--stage-top) var(--stage-side); }
   .panel-heading { padding: 10px 12px; gap: 8px; }
   .panel-heading h2 { font-size: 14px; }
   .segmented button { padding-inline: 8px; min-height: 30px; font-size: 12px; }
