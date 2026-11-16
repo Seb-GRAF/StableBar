@@ -25,6 +25,34 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, a number that only goes down, allows no `unowned` reference ([#493]) and keeps private macOS API in `PrivateAPI.swift` ([#490]).
 - **Private macOS API is a maintainer's call** (2026-11-08, [#484], [#490]). Every call lives in `PrivateAPI.swift` and is looked up at runtime, never with `@_silgen_name`, so a macOS without one turns off only its feature.
 - **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. StableBar 0.9.0 and later, and betas built after [#337], skip the properties they don't know, with a warning, once the configuration says a newer release wrote it. Earlier versions stop at the first one. The [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations of an old form run in memory on every file the loader reads, so includes and packages stay as they are, and are saved into the main file and screen setups' own bars at launch. A migration of values people can still choose skips files pinned to a release ([#223]).
+- **Theme links carry only a theme** (2026-11-16, [#676]). A
+  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
+  most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
+  profiles and 372 JSON values across both files. Reference expansion shares a budget of 300,000
+  units and 8,000,000 bytes of reference origin paths; a link exceeding either is refused as too
+  many references. Theme configuration keys are `tokens`,
+  `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
+  keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
+  is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
+  `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,
+  `style`, `notchWidth`, `notchSpacing`, `fillNotch` and `popupOffset`. Inside `bar`, numbers must
+  be literal; colors may use tokens or settings with `choices`. Free-text string settings under
+  `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
+  from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
+  theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and
+  version are reused only when both files match byte for byte; otherwise the author raises the
+  version on the page. The app never renumbers a theme.
+- **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including
+  nested styles, states, gradients and every profile, must be a finite JSON number literal.
+  References that can supply numbers through tokens, combined profiles or setting choices are
+  refused. Bounds use the full property path: `bar.height` 16…100, `bar.inset` 0…100, `bar.spacing`
+  0…50, `bar.margin` 0…40 and `bar.popupOffset` 0…40 (its pending control in [#664]). Within
+  `bar.style` and its states, border width uses 0…6, corner radius 0…40, font size 6…40,
+  horizontal/vertical padding 0…40 and opacity 0…1. Gradients in `bar.background` and style
+  backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
+  Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
+  −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
+  padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 - **Blocking work stays off Swift's shared pool** (2026-11-13, [#618]). The pool has one thread per core, three on CI, and never replaces a blocked one. A slow copy or a lookup that can stall runs through `BlockingWork.run` on a GCD queue, and tests that block such work check that it does. [AGENTS.md](AGENTS.md#writing-tests) has the rule for tests.
 - **Comments are for the next reader** (2026-11-10, [#533]). A comment says what the code can't, such as why it must be so, in a line or two. How the bug was found and fixed goes in the issue, the pull request and the commit message. [AGENTS.md](AGENTS.md#writing-comments) has the rule.
@@ -48,3 +76,5 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#493]: https://github.com/Seb-GRAF/StableBar/pull/493
 [#533]: https://github.com/Seb-GRAF/StableBar/pull/533
 [#618]: https://github.com/Seb-GRAF/StableBar/issues/618
+[#664]: https://github.com/Seb-GRAF/StableBar/issues/664
+[#676]: https://github.com/Seb-GRAF/StableBar/issues/676

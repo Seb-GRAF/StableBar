@@ -58,6 +58,41 @@ private func scene(_ json: String) throws -> SceneFile {
     #expect(decoded.macOSMajorVersion == 26)
 }
 
+@Test func themeLinkScenesMustDrawTheThemePage() throws {
+    #expect(throws: Never.self) {
+        try scene(#"{"configuration": {}, "draw": "settings", "section": "theme", "themeLink": "../Tests/Fixtures/linked-theme"}"#)
+    }
+    for target in [#""draw":"bar""#, #""draw":"settings","section":"packages""#,
+                   #""draw":"settings","section":"theme","widget":"clock""#] {
+        let error = #expect(throws: (any Error).self) {
+            try scene(#"{"configuration": {}, \#(target), "themeLink": "../Tests/Fixtures/linked-theme"}"#)
+        }
+        #expect(errorMessage(try #require(error)).contains("themeLink"))
+    }
+}
+
+@Test @MainActor func themeLinkScenesReceiveTheFixtureWithoutInstallingIt() async throws {
+    let url = repository.appending(path: "scenes/settings-theme-link.json")
+    let decoded = try SceneFile.read(url)
+    #expect(decoded.themeLink == "../Tests/Fixtures/linked-theme")
+    let configuration = repository.appending(path: "Resources/config.json")
+    let original = try Data(contentsOf: configuration)
+    let work = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: work) }
+    let store = try SceneRenderer.store(for: decoded, at: url, in: work,
+                                       themes: repository.appending(path: "Resources/themes"))
+    defer { store.stop() }
+
+    let candidate = try #require(store.pendingLinks.theme)
+    #expect(candidate.choice.manifest.name == "Harbour Test")
+    #expect(candidate.state == .ready)
+    let fixture = repository.appending(path: "Tests/Fixtures/linked-theme")
+    #expect(candidate.link.configuration == (try Data(contentsOf: fixture.appending(path: "config.json"))))
+    let installed = try await store.packageStoreClient.installed()
+    #expect(installed.isEmpty)
+    #expect(try Data(contentsOf: configuration) == original)
+}
+
 @Test(arguments: [0, 13])
 func sceneRejectsUnsupportedMacOSVersions(version: Int) throws {
     let error = #expect(throws: (any Error).self) {

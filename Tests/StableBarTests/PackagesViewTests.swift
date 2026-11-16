@@ -484,7 +484,7 @@ final class PackagesViewTests: XCTestCase {
         let (store, library, _) = try await linkedLibrary(fixture)
         defer { store.stop(); library.stopUpdateChecks() }
         store.packageLibrary = library
-        store.pendingPackageLink = PackageLink(id: "clock", sourceID: "acme")
+        store.pendingLinks.package = PackageLink(id: "clock", sourceID: "acme")
         _ = NSApplication.shared
         let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 900, height: 620),
                               styleMask: [.borderless], backing: .buffered, defer: false)
@@ -498,18 +498,18 @@ final class PackagesViewTests: XCTestCase {
             if library.draft?.sourceID == "acme" { break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertNil(store.pendingPackageLink)
+        XCTAssertNil(store.pendingLinks.package)
         XCTAssertTrue(library.showingStore)
         XCTAssertEqual(library.draft?.inspection.manifest.id, "clock")
         XCTAssertEqual(library.draft?.sourceID, "acme")
         // A link that arrives while Packages is open is taken too.
-        store.pendingPackageLink = PackageLink(id: "note", sourceID: nil)
+        store.pendingLinks.package = PackageLink(id: "note", sourceID: nil)
         for _ in 0..<100 {
             host.layoutSubtreeIfNeeded()
             if library.draft?.inspection.manifest.id == "note" { break }
             try await Task.sleep(for: .milliseconds(10))
         }
-        XCTAssertNil(store.pendingPackageLink)
+        XCTAssertNil(store.pendingLinks.package)
         XCTAssertFalse(library.showingStore)
         XCTAssertEqual(library.draft?.inspection.manifest.id, "note")
         XCTAssertFalse(window.isVisible)

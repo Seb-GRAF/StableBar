@@ -161,6 +161,11 @@ private enum FillChoice: Equatable {
     }
 }
 
+func fillGradientAngle(_ angle: Double) -> Int {
+    guard angle.isFinite else { return 0 }
+    return (Int(angle.truncatingRemainder(dividingBy: 360)) + 360) % 360
+}
+
 private struct GradientChoice: Equatable, Decodable {
     struct Stop: Equatable {
         var color: FillChoice
@@ -180,9 +185,10 @@ private struct GradientChoice: Equatable, Decodable {
 
     init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
+        let angle = try values.decodeIfPresent(Double.self, forKey: .angle) ?? 90
         self.init(colors: try values.decode([ConfigurationValue].self, forKey: .colors).map(FillChoice.init),
                   locations: try values.decodeIfPresent([Double].self, forKey: .locations),
-                  angle: (Int(try values.decodeIfPresent(Double.self, forKey: .angle) ?? 90) % 360 + 360) % 360)
+                  angle: fillGradientAngle(angle))
     }
 
     var configurationValue: ConfigurationValue {

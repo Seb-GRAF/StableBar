@@ -1,6 +1,11 @@
 import Foundation
 import Observation
 
+let savedThemeBarProperties: Set<String> = [
+    "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch",
+    "popupOffset"
+]
+
 @MainActor @Observable
 final class ThemeGallery {
     private let store: BarStore
@@ -34,6 +39,18 @@ final class ThemeGallery {
 
     var selectedKey: String { store.selectedThemeKey }
 
+    var linkedThemeIsActive: Bool {
+        switch store.pendingLinks.theme?.state {
+        case .ready, .trying: true
+        default: false
+        }
+    }
+
+    var overrideTheme: ThemeChoice? {
+        if linkedThemeIsActive { return store.pendingLinks.theme?.choice }
+        return choices.first { $0.key == selectedKey }
+    }
+
     /// Store themes, without versions installed from their own source or from no source.
     /// Another source's copy of the same version keeps its card, whose Get explains the conflict.
     var storeThemes: [PackageIndex.Entry] {
@@ -57,7 +74,8 @@ final class ThemeGallery {
     }
 
     func error(for key: String) -> String? {
-        errors[key] ?? previewErrors[key] ?? (key == selectedKey ? overrideError : nil)
+        let overrideKey = linkedThemeIsActive ? store.pendingLinks.theme?.choice.linkedPreviewKey : overrideTheme?.key
+        return errors[key] ?? previewErrors[key] ?? (key == overrideKey ? overrideError : nil)
     }
 
     func configurationChanged() {
@@ -108,20 +126,40 @@ final class ThemeGallery {
             }
         }.value
         guard self.generation == generation, !Task.isCancelled else { return }
-        let available = Set(choices.map(\.key) + downloaded.keys)
+        let linked = store.pendingLinks.theme.map { [$0.choice.linkedPreviewKey] } ?? []
+        let available = Set(choices.map(\.key) + downloaded.keys + linked)
         previews = previews.filter { available.contains($0.key) }
         previewErrors = previewErrors.filter { available.contains($0.key) }
         for (key, result) in results { accept(result, key: key) }
         updateOverrides()
+        if let choice = store.pendingLinks.theme?.choice { await linkedPreview(for: choice) }
     }
 
     private func buildPreview(_ choice: ThemeChoice, key: String) async {
         let generation = generation
-        let loadPreview = loadPreview
-        let themesDirectory = store.themesDirectory
-        let result = await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
+        let result = await previewResult(for: choice)
         guard self.generation == generation, !Task.isCancelled else { return }
         accept(result, key: key)
+    }
+
+    private func previewResult(for choice: ThemeChoice) async -> Result<ThemePreview, Error> {
+        let loadPreview = loadPreview
+        let themesDirectory = store.themesDirectory
+        return await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
+    }
+
+    func linkedPreview(for choice: ThemeChoice) async {
+        guard previews[choice.linkedPreviewKey] == nil else { updateOverrides(); return }
+        let result = await previewResult(for: choice)
+        guard !Task.isCancelled, store.pendingLinks.theme?.choice.directory == choice.directory else { return }
+        accept(result, key: choice.linkedPreviewKey)
+        updateOverrides()
+    }
+
+    func dismissLinkedTheme(_ candidate: ThemeLinkCandidate) {
+        candidate.discard()
+        if store.pendingLinks.theme === candidate { store.pendingLinks.theme = nil }
+        configurationChanged()
     }
 
     private func accept(_ result: Result<ThemePreview, Error>, key: String) {
@@ -138,7 +176,7 @@ final class ThemeGallery {
     private func updateOverrides() {
         overrideError = nil
         overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
-        guard let selected = choices.first(where: { $0.key == selectedKey }) else { return }
+        guard let selected = overrideTheme else { return }
         do {
             let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument),
                                                    activeProfiles: store.activeProfiles)
@@ -152,16 +190,9 @@ final class ThemeGallery {
     }
 
     func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
-        perform(on: choice.key) { try apply(choice, on: kind, everyBar: everyBar) }
+        store.endThemeTrial()
+        perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
         configurationChanged()
-    }
-
-    private func apply(_ choice: ThemeChoice, on kind: ScreenKind?, everyBar: Bool) throws {
-        guard let kind else { return try store.customizationHistory.change(store.themeEdit(for: choice), everyBar: everyBar) }
-        try store.customizationHistory.change([
-            ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
-            ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
-        ], everyBar: everyBar)
     }
 
     /// Lists the themes of every source. Only the Store's failure is shown; private sources report theirs in Packages.
@@ -198,7 +229,7 @@ final class ThemeGallery {
             if !choices.contains(where: { $0.key == choice.key }) { choices.append(choice) }
             if previews[choice.key] == nil, let preview = previews[key] { previews[choice.key] = preview }
             progress[key] = "Applying…"
-            perform(on: choice.key) { try apply(choice, on: kind, everyBar: everyBar) }
+            perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
     }
 
@@ -218,7 +249,7 @@ final class ThemeGallery {
                 removal[property] = .null
             }
             let bar = try (main["bar"]?.decoded([String: ConfigurationValue].self) ?? [:]).filter {
-                ["height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset"].contains($0.key)
+                savedThemeBarProperties.contains($0.key)
             }
             if !bar.isEmpty {
                 moved["bar"] = .object(bar)
@@ -264,4 +295,9 @@ final class ThemeGallery {
 
 extension PackageIndex.Entry {
     var versionKey: String { "\(id)/\(version)" }
+}
+
+extension ThemeChoice {
+    // A link can carry different bytes for a version already installed or downloaded from a source.
+    var linkedPreviewKey: String { "linked:\(directory.path)" }
 }

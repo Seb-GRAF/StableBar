@@ -47,7 +47,7 @@ struct AppearanceView: View {
                                 .padding(.top, 10).padding(.bottom, 4)
                         }
                         themes(appearance)
-                        if screen == nil { overrides }
+                        if screen == nil, !gallery.linkedThemeIsActive { overrides }
                         colors(appearance)
                         HStack(alignment: .top, spacing: 20) {
                             VStack(spacing: 22) {
@@ -80,7 +80,7 @@ struct AppearanceView: View {
                     .padding(.bottom, 28)
                     .frame(maxWidth: .infinity)
                 }
-                .task {
+                .task(id: store.pendingLinks.theme?.choice.directory) {
                     fontFamilies = NSFontManager.shared.availableFontFamilies
                     await gallery.refresh()
                     await gallery.loadStore()
@@ -101,6 +101,8 @@ struct AppearanceView: View {
         .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
         .onChange(of: store.configurationError) { _, _ in gallery.contextChanged() }
         .onChange(of: store.context) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.pendingLinks.theme?.choice.directory) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.pendingLinks.theme?.state) { _, _ in gallery.contextChanged() }
     }
 
     private func themes(_ appearance: BarAppearance) -> some View {
@@ -158,6 +160,14 @@ struct AppearanceView: View {
             .padding(.top, 24)
             .padding(.horizontal, 2)
             .id(SettingsSearchResult.theme.id)
+            if let candidate = store.pendingLinks.theme, candidate.state != .used {
+                LinkedThemeCard(candidate: candidate, editor: editor, screen: screen, everyBar: editor.themeChangesEveryBar)
+                    .id(candidate.choice.directory)
+                    .padding(.bottom, 4)
+            } else if let message = store.pendingLinks.themeError {
+                LinkedThemeErrorCard(message: message) { store.pendingLinks.themeError = nil }
+                    .padding(.bottom, 4)
+            }
             SettingsSegments(selection: $filter, options: [(.all, "All"), (.included, "Included"), (.store, "Store")],
                              stretches: false)
                 .fixedSize()
@@ -210,23 +220,10 @@ struct AppearanceView: View {
     }
 
     @ViewBuilder private var overrides: some View {
-        if let theme = gallery.choices.first(where: { $0.key == gallery.selectedKey }) {
-            let tint = gallery.overrides.values.isEmpty ? Color.secondary : SettingsPalette.warning
-            HStack(spacing: 10) {
-                Text(gallery.overrides.notice(theme: theme.title)).fontWeight(.semibold)
-                Text(gallery.overrides.summary).foregroundStyle(.secondary).help(gallery.overrides.summary)
-                Spacer(minLength: 0)
-                Button("Reset them") { editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar) }
-                    .controlSize(.small)
-                    .disabled(gallery.overrides.values.isEmpty)
-                    .accessibilityLabel("Reset your settings that override this theme")
+        if let theme = gallery.overrideTheme {
+            ThemeOverrideNotice(overrides: gallery.overrides, name: theme.title) {
+                editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar)
             }
-            .lineLimit(1)
-            .font(.system(size: 12))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(0.3)))
             .padding(.top, 12)
         }
     }

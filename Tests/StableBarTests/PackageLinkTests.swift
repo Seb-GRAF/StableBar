@@ -31,13 +31,13 @@ struct PackageLinkTests {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        #expect(!store.receive([URL(string: "https://example.com")!, URL(string: "stablebar://other")!]))
-        #expect(store.pendingPackageLink == nil && store.pendingSourceLink == nil)
+        #expect(store.receive([URL(string: "https://example.com")!, URL(string: "stablebar://other")!]) == nil)
+        #expect(store.pendingLinks.package == nil && store.pendingLinks.source == nil)
         let join = PackageSourceLink(id: "acme", name: "Acme", url: URL(string: "https://a.example/index.json")!)
-        #expect(store.receive([join.link, URL(string: "stablebar://package/clock")!, URL(string: "stablebar://package/..")!]))
-        #expect(store.pendingPackageLink == PackageLink(id: "clock", sourceID: nil))
-        #expect(store.pendingSourceLink == nil)
-        #expect(store.receive([join.link]))
-        #expect(store.pendingSourceLink == join)
+        #expect(store.receive([join.link, URL(string: "stablebar://package/clock")!, URL(string: "stablebar://package/..")!]) == .packages)
+        #expect(store.pendingLinks.package == PackageLink(id: "clock", sourceID: nil))
+        #expect(store.pendingLinks.source == nil)
+        #expect(store.receive([join.link]) == .packages)
+        #expect(store.pendingLinks.source == join)
     }
 }
