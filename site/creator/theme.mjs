@@ -39,7 +39,7 @@ function overriding(earlier, next) {
   ]));
 }
 
-function substituteTokens(document, tokens = document.tokens ?? {}) {
+export function substituteTokens(document, tokens = document.tokens ?? {}) {
   const path = new Set();
   const encoder = new TextEncoder();
   let remaining = 100_000;
@@ -48,6 +48,11 @@ function substituteTokens(document, tokens = document.tokens ?? {}) {
     const reference = typeof value === "string" && value.startsWith("@token.");
     if (path.size > 0) {
       remaining--;
+      if (typeof value === "string" && !reference) remaining -= Math.floor(encoder.encode(value).length / 256);
+      else if (isObject(value)) {
+        for (const key of Object.keys(value)) remaining -= Math.floor(encoder.encode(key).length / 256);
+      }
+      if (remaining < 0) throw new Error("Configuration references expand to more than 100,000 values.");
       if (isObject(value) || Array.isArray(value) || reference) depth++;
       if (depth > 64) throw new Error("Configuration references nest more than 64 levels deep.");
     }

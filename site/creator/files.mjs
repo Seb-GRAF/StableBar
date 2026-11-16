@@ -8,6 +8,8 @@ const maximumFileBytes = 32_768;
 const maximumDepth = 32;
 const maximumProfiles = 16;
 const maximumValues = 372;
+export const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+const themeKeys = new Set(["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"]);
 // Keep this list aligned with ThemeLinkCandidate’s appearance-only bar properties.
 const barProperties = new Set([
   "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset",
@@ -16,24 +18,56 @@ const isObject = value => value !== null && typeof value === "object" && !Array.
 const withoutBOM = text => text.startsWith("\ufeff") ? text.slice(1) : text;
 const fail = reason => { throw new Error(reason); };
 
-function checkID(id) {
-  if (typeof id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(id)) {
+function checkID(id, { allowReserved = false } = {}) {
+  if (typeof id !== "string" || !ID_PATTERN.test(id)) {
     fail("invalidID");
   }
-  if (RESERVED_IDS.has(id.toLowerCase())) fail("reservedID");
+  if (!allowReserved && RESERVED_IDS.has(id.toLowerCase())) fail("reservedID");
 }
 
-export function themeFiles({ manifest, config }) {
-  checkID(manifest.id);
+function checkManifest(manifest, options) {
+  checkID(manifest.id, options);
   if (typeof manifest.name !== "string" || !manifest.name.trim()) fail("invalidName");
   if (!isVersion(manifest.version)) fail("invalidVersion");
+  for (const key of ["description", "author", "screenshot", "minimumVersion"]) {
+    if (manifest[key] != null && typeof manifest[key] !== "string") fail(key === "minimumVersion" ? "invalidMinimumVersion" : "damaged");
+  }
+  if (manifest.repository != null) {
+    try {
+      if (typeof manifest.repository !== "string" || new URL(manifest.repository).protocol !== "https:") fail("invalidRepository");
+    } catch { fail("invalidRepository"); }
+  }
+}
+
+export function themeFiles({ manifest, config }, { validate = true } = {}) {
+  if (validate) checkManifest(manifest);
   const fresh = {
     id: manifest.id, name: manifest.name, version: manifest.version, kind: "theme", entry: "config.json",
   };
-  for (const key of ["description", "author"]) {
-    if (manifest[key]) fresh[key] = manifest[key];
+  for (const key of ["description", "author", "minimumVersion", "repository"]) {
+    if (manifest[key] != null) fresh[key] = manifest[key];
   }
   return { manifestText: fileText(fresh), configText: fileText(config) };
+}
+
+export function parseTheme(files) {
+  const manifest = parseObject(files.manifestText), config = parseObject(files.configText);
+  if (manifest.kind !== "theme") fail("notTheme");
+  checkManifest(manifest, { allowReserved: true });
+  function check(document) {
+    if (!isObject(document)) fail("damaged");
+    if (Object.hasOwn(document, "includes")) fail("extraFiles");
+    if (Object.keys(document).some(key => !themeKeys.has(key))) fail("notTheme");
+    if (Object.hasOwn(document, "profiles")) {
+      if (!Array.isArray(document.profiles)) fail("damaged");
+      for (const profile of document.profiles) {
+        if (!isObject(profile) || typeof profile.name !== "string" || Object.keys(profile).some(key => !["name", "enabled", "when", "configuration"].includes(key))) fail("damaged");
+        if (Object.hasOwn(profile, "configuration")) check(profile.configuration);
+      }
+    }
+  }
+  check(config);
+  return { manifest, config };
 }
 
 function textBytes(text) {
@@ -364,14 +398,27 @@ async function zipFiles(bytes) {
     return decoder.decode(content);
   }
 
-  const manifests = [...entries.keys()].filter(name => name.split("/").at(-1) === "package.json");
-  if (manifests.length !== 1) fail("damagedZip");
-  const path = manifests[0];
-  const manifestText = await extract(path);
+  return packageFiles(entries.keys(), extract);
+}
+
+async function packageFiles(paths, readText) {
+  const visible = [...paths].filter(path => !path.split("/").some(part => part.startsWith(".") || part === "__MACOSX"));
+  const manifests = visible.filter(path => path.split("/").at(-1) === "package.json");
+  if (manifests.length !== 1) fail("damaged");
+  const path = manifests[0], manifestText = await readText(path);
   const { entry } = parseObject(manifestText);
-  if (!safePath(entry)) fail("damagedZip");
-  const configText = await extract(path.slice(0, path.lastIndexOf("/") + 1) + entry);
-  return { manifestText, configText };
+  if (!safePath(entry)) fail("damaged");
+  const entryPath = path.slice(0, path.lastIndexOf("/") + 1) + entry;
+  if (visible.filter(path => path === entryPath).length !== 1) fail("damaged");
+  return { manifestText, configText: await readText(entryPath) };
+}
+
+export async function folderFiles(files) {
+  return packageFiles(files.map(file => file.name), async name => {
+    const { file } = files.find(file => file.name === name);
+    if (file.size > 16 * 1024 * 1024) fail("importTooLarge");
+    return file.text();
+  });
 }
 
 export function readmeRow({ id, name, description }) {

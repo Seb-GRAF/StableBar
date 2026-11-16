@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, resolveTheme,
-  CONTROLS, controlsFor, applyControl, fileText,
+  CONTROLS, controlsFor, applyControl, fileText, substituteTokens,
 } from "../../site/creator/theme.mjs";
 import {
-  themeFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
+  ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
 } from "../../site/creator/files.mjs";
 import {
   CONTRACT, cssVariables, indicatorClass, keptFromBase, shadowBlur,
@@ -248,7 +248,8 @@ test("reserved ids are the app's", () => {
 test("site theme copies equal Resources", () => {
   for (const id of baseIDs) {
     for (const file of ["package.json", "config.json"]) {
-      assert.deepEqual(read(`site/creator/themes/${id}/${file}`), read(`Resources/themes/${id}/${file}`));
+      assert.deepEqual(read(`site/creator/themes/${id}/${file}`), read(`Resources/themes/${id}/${file}`),
+        "copy Resources/themes/<id> to site/creator/themes");
     }
   }
 });
@@ -398,6 +399,61 @@ test("the token expansion budget counts introduced values and is shared by uses"
   assert.throws(() => resolveTheme({}, {
     tokens: { list: Array(50_000).fill(0) }, groups: ["@token.list", "@token.list"],
   }, "dark"), /100,000/);
+});
+
+const budgetText = (bytes, multibyte) => multibyte
+  ? "é".repeat(Math.floor(bytes / 2)) + "x".repeat(bytes % 2) : "x".repeat(bytes);
+
+test("token expansion charges UTF-8 string bytes at the app's boundaries", () => {
+  for (const multibyte of [false, true]) {
+    for (const [bytes, copies] of [[255, 100_000], [256, 50_000], [20_000, 1_265]]) {
+      const tokens = { s: budgetText(bytes, multibyte) }, references = Array(copies).fill("@token.s");
+      assert.deepEqual(substituteTokens(references, tokens), Array(copies).fill(tokens.s));
+      references.push("@token.s");
+      assert.throws(() => substituteTokens(references, tokens), /100,000/, `${bytes} bytes`);
+    }
+  }
+});
+
+test("token expansion charges UTF-8 object keys at the app's boundaries", () => {
+  for (const multibyte of [false, true]) {
+    for (const [bytes, copies] of [[255, 50_000], [256, 33_333], [20_000, 1_250]]) {
+      const tokens = { s: { [budgetText(bytes, multibyte)]: 1 } }, references = Array(copies).fill("@token.s");
+      assert.deepEqual(substituteTokens(references, tokens), Array(copies).fill(tokens.s));
+      references.push("@token.s");
+      assert.throws(() => substituteTokens(references, tokens), /100,000/, `${bytes} bytes`);
+    }
+  }
+});
+
+test("token reference names cost only their UTF-8 name bytes on each hop", () => {
+  for (const multibyte of [false, true]) {
+    const name = budgetText(16_000, multibyte), reference = `@token.${name}`, tokens = { [name]: 1 };
+    assert.deepEqual(substituteTokens(Array(1_587).fill(reference), tokens), Array(1_587).fill(1));
+    assert.throws(() => substituteTokens(Array(1_588).fill(reference), tokens), /100,000/);
+    const replacement = Array(99_937).fill(1);
+    assert.deepEqual(substituteTokens(reference, { [name]: replacement }), replacement);
+    for (const bytes of [255, 256]) {
+      const name = budgetText(bytes, multibyte), reference = `@token.${name}`;
+      for (const nested of [false, true]) {
+        const leaves = 99_999 - Math.floor(bytes / 256) - (nested ? 1 : 0);
+        const replacement = Array(leaves).fill(1), value = nested ? "@token.alias" : reference;
+        const tokens = { alias: reference, [name]: replacement };
+        assert.deepEqual(substituteTokens(value, tokens), replacement);
+        replacement.push(1);
+        assert.throws(() => substituteTokens(value, tokens), /100,000/);
+      }
+    }
+  }
+});
+
+test("nested copies charge long strings and keys while literal data uses no reference budget", () => {
+  for (const s of ["x".repeat(25_000), { ["x".repeat(25_000)]: 1 }]) {
+    const tokens = { s, t1: Array(100).fill("@token.s"), t2: Array(295).fill("@token.t1") };
+    assert.throws(() => substituteTokens("@token.t2", tokens), /100,000/);
+  }
+  const literals = Array(1_500).fill("x".repeat(20_000));
+  assert.deepEqual(substituteTokens([literals, "@token.number"], { number: 1 }), [literals, 1]);
 });
 
 test("editing light leaves dark alone", () => {
@@ -715,6 +771,31 @@ test("theme files build a fresh manifest and use the shared serializer", () => {
   });
 });
 
+test("theme files retain the app's optional minimum version and HTTPS repository", () => {
+  const manifest = { id: "fern", name: "Fern", version: "1.0.0" };
+  for (const minimumVersion of ["0.9.0", "1.2", "", "nightly"]) {
+    const candidate = { ...manifest, minimumVersion, repository: "https://github.com/example/fern" };
+    const fresh = JSON.parse(themeFiles({ manifest: candidate, config: {} }).manifestText);
+    assert.equal(fresh.minimumVersion, minimumVersion);
+    assert.equal(fresh.repository, candidate.repository);
+  }
+  for (const minimumVersion of [0.9, [], {}]) {
+    assert.throws(() => themeFiles({ manifest: { ...manifest, minimumVersion }, config: {} }), /minimumVersion/i);
+  }
+  for (const repository of [42, "", "example.com/fern", "http://example.com/fern", "file:///tmp/fern", "javascript:alert(1)"]) {
+    assert.throws(() => themeFiles({ manifest: { ...manifest, repository }, config: {} }), /repository/i);
+  }
+  const optional = JSON.parse(themeFiles({ manifest: { ...manifest, minimumVersion: null, repository: null }, config: {} }).manifestText);
+  assert.equal(Object.hasOwn(optional, "minimumVersion"), false);
+  assert.equal(Object.hasOwn(optional, "repository"), false);
+});
+
+test("theme files drop the screenshot because neither exported file includes its image", async () => {
+  const files = themeFiles({ manifest: { id: "fern", name: "Fern", version: "1.0.0", screenshot: "preview.png" }, config: {} });
+  assert.equal(Object.hasOwn(JSON.parse(files.manifestText), "screenshot"), false);
+  assert.deepEqual(await readZip(writeZip("fern", files)), files);
+});
+
 test("theme files refuse empty and reserved ids with a message", () => {
   assert.throws(() => themeFiles({ manifest: { id: slug("日本") }, config: {} }), /id/i);
   for (const id of RESERVED_IDS) {
@@ -723,6 +804,35 @@ test("theme files refuse empty and reserved ids with a message", () => {
   }
   for (const id of ["", " ", "../escape", "a/b", "a\\b"]) {
     assert.throws(() => writeZip(id, linkedFiles), /id/i, id);
+  }
+});
+
+test("theme imports share the id and optional manifest validation with exports", () => {
+  const files = { manifestText: fileText({ id: "fern", name: "Fern", version: "1.0.0", kind: "theme" }), configText: "{}" };
+  for (const id of ["fern", "Fern_2.0", "0"]) assert.ok(ID_PATTERN.test(id), id);
+  for (const id of ["", "../fern", "/fern", ".fern", "fern/next", "fer n"]) {
+    assert.equal(ID_PATTERN.test(id), false, id);
+    assert.throws(() => parseTheme({ ...files, manifestText: fileText({ ...JSON.parse(files.manifestText), id }) }), /invalidID/);
+  }
+  assert.equal(parseTheme({ ...files, manifestText: fileText(state("nord").manifest) }).manifest.id, "nord");
+  for (const patch of [{ minimumVersion: 1 }, { repository: "http://example.com" }, { screenshot: [] }]) {
+    assert.throws(() => parseTheme({ ...files, manifestText: fileText({ ...JSON.parse(files.manifestText), ...patch }) }));
+  }
+});
+
+test("theme imports restrict settings at every profile layer and retain appearance data", () => {
+  const manifestText = fileText({ id: "fern", name: "Fern", version: "1.0.0", kind: "theme" });
+  const parse = config => parseTheme({ manifestText, configText: fileText(config) });
+  const allowed = { tokens: {}, defaults: {}, popupDefaults: {}, roles: {}, workspaceDefaults: {}, bar: {}, groups: [], profiles: [] };
+  assert.deepEqual(parse(allowed).config, allowed);
+  for (const forbidden of [{ widgets: [] }, { packages: [] }, { theme: "nord" }, { typo: {} }, { includes: [] }]) {
+    assert.throws(() => parse(forbidden), /notTheme|extraFiles/);
+    assert.throws(() => parse({ profiles: [{ name: "outer", configuration: {
+      profiles: [{ name: "inner", configuration: forbidden }],
+    } }] }), /notTheme|extraFiles/);
+  }
+  for (const profiles of [null, {}, [null], [{ name: 1 }], [{ name: "p", surprise: true }], [{ name: "p", configuration: [] }]]) {
+    assert.throws(() => parse({ profiles }), /damaged/);
   }
 });
 
@@ -936,6 +1046,37 @@ test("linked bar properties are restricted at the root and in every profile", ()
 test("crc32", () => {
   assert.equal(crc32(utf8("hello")), 0x3610a686);
   assert.equal(crc32(new Uint8Array()), 0);
+});
+
+const folderEntry = (name, text, size = Buffer.byteLength(text)) => ({ name, file: { size, text: async () => text } });
+
+test("folder and zip lookup share the package root and manifest entry rules", async () => {
+  const manifestText = fileText({ ...JSON.parse(linkedFiles.manifestText), entry: "nested/theme.json" });
+  const files = { manifestText, configText: linkedFiles.configText };
+  assert.deepEqual(await folderFiles([
+    folderEntry("fern/package.json", manifestText), folderEntry("fern/nested/theme.json", files.configText),
+    folderEntry("__MACOSX/fern/package.json", "{}"), folderEntry("fern/.ignored/package.json", "{}"),
+    folderEntry("fern/preview.png", "unused"),
+  ]), files);
+  const regular = [folderEntry("fern/package.json", linkedFiles.manifestText), folderEntry("fern/config.json", linkedFiles.configText)];
+  assert.deepEqual(await folderFiles(regular), await readZip(writeZip("fern", linkedFiles)));
+  assert.deepEqual(await folderFiles(regular.map(entry => ({ ...entry, name: entry.name.slice(5) }))), linkedFiles);
+  for (const entry of ["", "/config.json", "../config.json", "./config.json", "nested//config.json", "nested/../config.json", "nested\\config.json"]) {
+    const bad = { ...linkedFiles, manifestText: fileText({ entry }) };
+    await assert.rejects(() => folderFiles([folderEntry("fern/package.json", bad.manifestText), regular[1]]), /damaged/);
+    await assert.rejects(() => readZip(writeZip("fern", bad)), /damagedZip/);
+  }
+});
+
+test("folder lookup refuses missing, ambiguous and oversized package files", async () => {
+  const pkg = folderEntry("fern/package.json", linkedFiles.manifestText), config = folderEntry("fern/config.json", "{}");
+  for (const files of [[], [pkg], [config], [pkg, config, pkg], [pkg, config, config],
+    [pkg, config, folderEntry("other/package.json", "{}")], [pkg, folderEntry("other/config.json", "{}")],
+    [folderEntry("package.json", "null"), config]]) {
+    await assert.rejects(() => folderFiles(files), /damaged/);
+  }
+  await assert.rejects(() => folderFiles([{ ...pkg, file: { ...pkg.file, size: 16 * 1024 * 1024 + 1 } }, config]), /importTooLarge/);
+  await assert.rejects(() => folderFiles([pkg, { ...config, file: { ...config.file, size: 16 * 1024 * 1024 + 1 } }]), /importTooLarge/);
 });
 
 test("zip round trip", async () => {

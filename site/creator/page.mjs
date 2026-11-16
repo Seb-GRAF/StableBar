@@ -1,13 +1,13 @@
 import builtIn from "./built-in.mjs";
 import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
-import { themeFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
+import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
 import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
 const POPUP_SPACING = false;
 const flags = { popupSpacing: POPUP_SPACING };
 const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
-const baseNames = { "built-in": "Built-in", leman: "Léman", notch: "Notch", catppuccin: "Catppuccin", nord: "Nord", gruvbox: "Gruvbox", phosphor: "Phosphor" };
+const baseNames = new Map();
 const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colors and tiles", nord: "Cool colors and an underline", gruvbox: "Warm colors and stripes", phosphor: "Amber text with a glow" };
 const groupCopy = {
   palette: "Each color has a light and a dark value. Edit the appearance shown in the preview.",
@@ -22,6 +22,8 @@ const messages = {
   reservedID: "That id belongs to a theme that comes with StableBar. Choose another name.",
   invalidName: "Give your theme a name.",
   invalidVersion: "Use a version with three numbers, such as 1.0.0.",
+  invalidMinimumVersion: "Use text for the minimum StableBar version.",
+  invalidRepository: "Use an https URL for the theme repository.",
   descriptionRequired: "Add a description in About before copying the Store README row.",
   storeUnavailable: "Store couldn't be checked. Check the id and version in the Store before submitting.",
   damaged: "This theme could not be read. Open a theme zip, its folder or a complete share link.",
@@ -41,11 +43,11 @@ const messages = {
   importTooLarge: "This file is too large to reopen here. Choose a theme with JSON files under 16 MB each.",
   copyFailed: "Copy is unavailable in this browser. Allow clipboard access and try again.",
 };
-const message = error => Object.hasOwn(messages, error?.message) ? messages[error.message] : messages.damaged;
+const message = error => Object.hasOwn(messages, error?.message) ? messages[error.message] :
+  (error instanceof Error && !(error instanceof DOMException) && error.message.endsWith(".") ? error.message : messages.damaged);
 const fail = code => { throw new Error(code); };
 const e = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
-const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const isReserved = id => RESERVED_IDS.has(id.toLowerCase());
 const root = document.querySelector("#creator");
 const dialog = document.querySelector("#theme-dialog");
@@ -54,7 +56,7 @@ const fieldErrors = new Map();
 const storeCache = new Map();
 let state, baseID = "built-in", baseGradient, mode = "new", sourceID;
 let appearance = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-let jsonFile = "config", activePaths = [], store = { status: "checking" }, storeTimer, storeRequest = 0;
+let jsonFile = "config", activePaths = [], store = { status: "unchecked" }, storeTimer, storeRequest = 0;
 let pendingTheme, importRequest = 0;
 const resolved = () => resolveTheme(builtIn, state.config, appearance);
 
@@ -185,7 +187,7 @@ function render() {
     <div class="editor-column">
     <div class="base-block">
     <label class="base-label" for="base-theme">Base theme</label>
-    <select class="base-select" id="base-theme">${BASE_IDS.map(id => `<option value="${id}">${baseNames[id]}</option>`).join("")}</select>
+    <select class="base-select" id="base-theme">${BASE_IDS.map(id => `<option value="${id}">${e(baseNames.get(id))}</option>`).join("")}</select>
     <p class="base-help">Choose a starting point. Changing it replaces your color and shape edits.</p>
     <p class="base-meta"></p>
     </div>${Object.entries(names).map(([group, name], index) => `<details class="group" data-control-section="${group}" ${group === "palette" ? "open" : ""}>
@@ -221,6 +223,7 @@ function render() {
     <p class="output-note" id="output-note" role="status"></p>
     <p class="store-note small" role="status"></p>
     <p class="file-note">The zip and link carry the same two files.</p>
+    <p class="file-note" data-screenshot-note hidden>The original screenshot is omitted because this zip has no preview image.</p>
     <p class="feedback" role="status"></p>
     </section>
     </aside>
@@ -229,14 +232,9 @@ function render() {
   refresh();
 }
 
-function draftManifest() {
-  const { id, name, version, description, author } = state.manifest;
-  return { id, name, version, kind: "theme", entry: "config.json", ...(description ? { description } : {}), ...(author ? { author } : {}) };
-}
-
 function updateJSON() {
   const kept = keptFromBase(state.config), manifest = jsonFile === "package";
-  const object = manifest ? draftManifest() : state.config;
+  const object = manifest ? JSON.parse(themeFiles(state, { validate: false }).manifestText) : state.config;
   const paths = activePaths.filter(path => manifest === path.startsWith("manifest.")).map(path => path.replace(/^manifest\./, ""));
   const lines = [];
   function line(text, path, key) {
@@ -327,6 +325,7 @@ function refresh() {
   const mac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) && !/iPhone|iPad|iPod/.test(navigator.userAgent) && navigator.maxTouchPoints < 2;
   root.querySelector(".font-note").hidden = mac || ![r.defaults.fontName, r.popupDefaults.fontName].some(font => font && font !== "system");
   root.querySelector(".base-meta").textContent = baseDescriptions[baseID] ?? "Settings from the theme you opened";
+  root.querySelector("[data-screenshot-note]").hidden = !state.manifest.screenshot;
   root.querySelector("[data-theme-id]").innerHTML = `Folder id: <code>${e(state.manifest.id)}</code>${mode === "update" ? " · Kept for this update" : ""}`;
   updateJSON();
   updateOutputs();
@@ -341,20 +340,39 @@ async function lookupStore(id) {
   return storeCache.get(id);
 }
 
-function scheduleStoreCheck() {
+function resetStoreCheck() {
   clearTimeout(storeTimer);
-  const request = ++storeRequest, id = state.manifest.id;
-  if (!id || isReserved(id) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(id)) {
-    store = { status: "unchecked" };
-    return;
-  }
+  storeRequest++;
+  store = { status: "unchecked" };
+}
+
+function canCheckStore() {
+  const id = state.manifest.id;
+  return ID_PATTERN.test(id) && !isReserved(id);
+}
+
+async function checkStore(id, request) {
+  const result = await lookupStore(id);
+  if (request !== storeRequest) return;
+  store = result;
+  updateOutputs();
+}
+
+function scheduleStoreCheck() {
+  resetStoreCheck();
+  if (!canCheckStore()) return;
   store = { status: "checking" };
-  storeTimer = setTimeout(async () => {
-    const result = await lookupStore(id);
-    if (request !== storeRequest) return;
-    store = result;
-    updateOutputs();
-  }, 300);
+  const request = storeRequest, id = state.manifest.id;
+  storeTimer = setTimeout(() => checkStore(id, request), 300);
+}
+
+function requestStoreCheck() {
+  if (!canCheckStore() || !["unchecked", "checking"].includes(store.status)) return Promise.resolve();
+  clearTimeout(storeTimer);
+  store = { status: "checking" };
+  const request = ++storeRequest;
+  updateOutputs();
+  return checkStore(state.manifest.id, request);
 }
 
 function changeControl(input) {
@@ -385,7 +403,7 @@ function changeControl(input) {
     resolveTheme(builtIn, next.config, appearance);
     state = next;
   } catch (error) { fieldErrors.set(control.id, message(error)); updateOutputs(); return; }
-  if (state.manifest.id !== oldID) scheduleStoreCheck();
+  if (control.id === "about.name") scheduleStoreCheck();
   activePaths = control.paths;
   jsonFile = control.group === "about" ? "package" : "config";
   // Keep the input being typed into in place; token edits can change the other controls' resolved values.
@@ -420,38 +438,10 @@ function openFiles() {
   showDialog(`${dialogHead("Open a theme")}<p class="dialog-intro">Reopen a zip or folder. A shared link opens here when you visit it.</p><div class="drop-zone"><p>Drop a theme zip or folder here.</p><div class="file-inputs"><label class="btn">Choose zip<input type="file" accept=".zip,application/zip" data-open-zip></label><label class="btn">Choose folder<input type="file" webkitdirectory multiple data-open-folder></label></div></div><p class="field-error" data-import-error role="status"></p><div class="dialog-actions"><button class="btn" data-action="close">Cancel</button></div>`);
 }
 
-function checkTheme(files) {
-  let manifest, config;
-  try { manifest = JSON.parse(files.manifestText.replace(/^\ufeff/, "")); config = JSON.parse(files.configText.replace(/^\ufeff/, "")); }
-  catch { fail("damaged"); }
-  if (!isObject(manifest) || !isObject(config)) fail("damaged");
-  if (manifest.kind !== "theme") fail("notTheme");
-  if (typeof manifest.id !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(manifest.id)) fail("invalidID");
-  if (typeof manifest.name !== "string" || !manifest.name.trim()) fail("invalidName");
-  if (!isVersion(manifest.version)) fail("invalidVersion");
-  for (const key of ["description", "author"]) if (Object.hasOwn(manifest, key) && typeof manifest[key] !== "string") fail("damaged");
-  const allowed = ["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"];
-  function check(document) {
-    if (!isObject(document)) fail("damaged");
-    if (Object.hasOwn(document, "includes")) fail("extraFiles");
-    if (Object.keys(document).some(key => !allowed.includes(key))) fail("notTheme");
-    if (Object.hasOwn(document, "profiles")) {
-      if (!Array.isArray(document.profiles)) fail("damaged");
-      for (const profile of document.profiles) {
-        if (!isObject(profile) || typeof profile.name !== "string" || Object.keys(profile).some(key => !["name", "enabled", "when", "configuration"].includes(key))) fail("damaged");
-        if (Object.hasOwn(profile, "configuration")) check(profile.configuration);
-      }
-    }
-  }
-  check(config);
-  const candidate = { manifest, config };
-  cssVariables(resolveTheme(builtIn, config, "light"), flags);
-  cssVariables(resolveTheme(builtIn, config, "dark"), flags);
-  return candidate;
-}
-
 function offerReopen(files) {
-  pendingTheme = checkTheme(files);
+  pendingTheme = parseTheme(files);
+  cssVariables(resolveTheme(builtIn, pendingTheme.config, "light"), flags);
+  cssVariables(resolveTheme(builtIn, pendingTheme.config, "dark"), flags);
   document.querySelector("#page-message").textContent = "";
   const { name, version, id } = pendingTheme.manifest;
   showDialog(`${dialogHead("Update it or make a new theme?", `${name} · ${version}`)}<p class="dialog-intro">You opened ${e(name)}. Is it your theme, or a starting point for a new one?</p>
@@ -505,12 +495,15 @@ function continueReopen() {
     state.manifest.id = slug(state.manifest.name);
     state.manifest.version = "1.0.0";
     delete state.manifest.author;
+    delete state.manifest.minimumVersion;
+    delete state.manifest.repository;
   }
   baseGradient = at(state.config, "bar.style.background")?.gradient ? structuredClone(state.config.bar.style.background) : undefined;
   baseID = "opened";
   bases.set(baseID, structuredClone(state.config));
   fieldErrors.clear();
-  scheduleStoreCheck();
+  resetStoreCheck();
+  if (mode === "new") scheduleStoreCheck();
   dialog.close();
   renderControls();
   const baseSelect = root.querySelector("#base-theme");
@@ -520,24 +513,6 @@ function continueReopen() {
   root.querySelector('[data-control-section="about"]').open = true;
   root.querySelector('#c-about-name').focus();
   notify(mode === "update" ? `Ready to edit version ${state.manifest.version}.` : `Ready to edit ${state.manifest.name}.`);
-}
-
-async function folderFiles(files) {
-  const visible = files.filter(file => !file.name.split("/").some(part => part.startsWith(".") || part === "__MACOSX"));
-  const manifests = visible.filter(file => file.name.split("/").at(-1) === "package.json");
-  if (manifests.length !== 1) fail("damaged");
-  const manifestFile = manifests[0];
-  if (manifestFile.file.size > 16 * 1024 * 1024) fail("importTooLarge");
-  const manifestText = await manifestFile.file.text();
-  let manifest;
-  try { manifest = JSON.parse(manifestText.replace(/^\ufeff/, "")); } catch { fail("damaged"); }
-  const entry = manifest?.entry;
-  if (typeof entry !== "string" || !entry.split("/").every(part => part && part !== "." && part !== "..") || entry.includes("\\")) fail("damaged");
-  const entryPath = manifestFile.name.slice(0, manifestFile.name.lastIndexOf("/") + 1) + entry;
-  const matching = visible.filter(file => file.name === entryPath);
-  if (matching.length !== 1) fail("damaged");
-  if (matching[0].file.size > 16 * 1024 * 1024) fail("importTooLarge");
-  return { manifestText, configText: await matching[0].file.text() };
 }
 
 async function openSelection(files) {
@@ -579,20 +554,28 @@ async function droppedFiles(transfer) {
 function updateStoreGuide() {
   const rowSection = dialog.querySelector("[data-store-row]");
   if (!dialog.open || !rowSection) return;
-  let row = "", reason = exportProblem();
+  let row = "", reason = exportProblem(), control;
+  if ([messages.invalidID, messages.reservedID, messages.invalidName, messages.sameID, messages.takenID].includes(reason)) control = "name";
+  else if (reason === messages.invalidVersion) control = "version";
   if (!reason) {
     try { row = readmeRow(JSON.parse(themeFiles(state).manifestText)); }
-    catch (error) { reason = message(error); }
+    catch (error) {
+      reason = message(error);
+      if (reason === messages.descriptionRequired) control = "description";
+    }
   }
-  rowSection.innerHTML = reason ? `<p class="field-error" role="status">${e(reason)}</p>
-    <button class="btn" data-action="about">Edit About</button>` : `<div class="readme-box">
-    <pre tabindex="0" aria-label="Row for the Store README">${e(row)}</pre>
-    <button class="btn" data-action="row">Copy table row</button>
-    </div>`;
+  rowSection.querySelector("[data-store-error]").textContent = reason;
+  const editAbout = rowSection.querySelector('[data-action="about"]');
+  editAbout.hidden = !control || store.status === "checking";
+  editAbout.dataset.aboutField = control ?? "";
+  rowSection.querySelector(".readme-box").hidden = !!reason;
+  const preview = rowSection.querySelector("pre");
+  if (preview.textContent !== row) preview.textContent = row;
   dialog.querySelector('[data-action="download"]').disabled = !!exportProblem({ waitForStore: false });
 }
 
 function storeGuide() {
+  void requestStoreCheck();
   showDialog(`${dialogHead("Submit to the Store", "Share your theme")}<div class="dialog-intro">
     <p class="small muted">Download and unzip your theme first. The rest happens in your browser.</p>
     <ol class="guide-steps">
@@ -606,8 +589,14 @@ function storeGuide() {
     </li>
     <li>
     <strong>Add your theme to <code>README.md</code>.</strong>
-    <p>Edit it in the browser. Paste this row in alphabetical order.</p>
-    <div data-store-row></div></li>
+    <p>Edit it in the browser. Paste this row in order by folder name.</p>
+    <div data-store-row>
+    <p class="field-error" role="status" data-store-error></p>
+    <button class="btn" data-action="about" hidden>Edit About</button>
+    <div class="readme-box" hidden>
+    <pre tabindex="0" aria-label="Row for the Store README"></pre>
+    <button class="btn" data-action="row">Copy table row</button>
+    </div></div></li>
     <li>
     <strong>Open a pull request.</strong>
     <p>Send your changes back to stablebar-packages.</p>
@@ -635,6 +624,9 @@ async function copyText(text) {
 }
 
 async function output(action) {
+  const id = state.manifest.id, check = requestStoreCheck();
+  if (action !== "download") await check;
+  if (id !== state.manifest.id) return;
   if (exportProblem({ waitForStore: action !== "download" })) { updateOutputs(); return; }
   const files = themeFiles(state);
   if (action === "download") {
@@ -662,12 +654,15 @@ function loadHash() {
 
 async function start() {
   await Promise.all(BASE_IDS.map(async id => {
-    const response = await fetch(`creator/themes/${id}/config.json`);
-    if (!response.ok) throw new Error(`Could not load ${baseNames[id]}. Reload the page to try again.`);
-    bases.set(id, await response.json());
+    const [config, manifest] = await Promise.all(["config.json", "package.json"].map(async file => {
+      const response = await fetch(`creator/themes/${id}/${file}`);
+      if (!response.ok) throw new Error(`Could not load ${id}. Reload the page to try again.`);
+      return response.json();
+    }));
+    bases.set(id, config);
+    baseNames.set(id, manifest.name);
   }));
   state = { manifest: { id: "my-theme", name: "My theme", version: "1.0.0" }, config: structuredClone(builtIn) };
-  scheduleStoreCheck();
   render();
   document.querySelector('[data-action="open"]').disabled = false;
   loadHash();
@@ -721,7 +716,7 @@ document.addEventListener("click", async event => {
     else if (action === "store") storeGuide();
     else if (action === "about") {
       dialog.close(); root.querySelector('[data-control-section="about"]').open = true;
-      root.querySelector("#c-about-description").focus();
+      root.querySelector(`#c-about-${button.dataset.aboutField}`).focus();
     } else if (["download", "share", "try", "row"].includes(action)) await output(action);
   } catch (error) { notify(message(error)); }
 });

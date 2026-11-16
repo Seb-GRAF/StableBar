@@ -16,7 +16,11 @@ if (document.documentElement.dataset.mode === "dark") document.querySelector('me
 </script>
 <link rel="stylesheet" href="creator/preview.css">
 <link rel="stylesheet" href="creator/creator.css">
-<script type="module" src="creator/page.mjs"></script>
+<script type="module">
+import("./creator/page.mjs").catch(() => {
+  document.querySelector("#creator").textContent = "The themes could not be loaded. Reload the page to try again.";
+});
+</script>
 </head>
 <body class="doc creator">
 <a class="skip" href="#main">Skip to content</a>
@@ -29,10 +33,10 @@ if (document.documentElement.dataset.mode === "dark") document.querySelector('me
     </nav>
   </header>
   <main id="main">
-    <div class="intro">
+    <div class="creator-intro">
       <div><p class="eyebrow">StableBar themes</p><h1>Make a theme</h1>
       <p>Start with a theme you like. Change its colors and shape, see the result, then download it or share it.</p></div>
-      <div class="intro-side"><button class="btn" data-action="open" disabled>Open a theme</button><p>Reopen a zip, folder or shared link.</p></div>
+      <div class="creator-intro-side"><button class="btn" data-action="open" disabled>Open a theme</button><p>Reopen a zip, folder or shared link.</p></div>
     </div>
     <p id="page-message" role="status"></p>
     <div id="creator"><p class="loading">Loading themes…</p></div>
