@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -78,4 +79,77 @@ private let minutes = EndStopSliderTrack(width: 104, knobWidth: 10, minimum: 15,
 
 @Test func stepsTooCloseForDotsDrawNone() {
     #expect(EndStopSliderTrack(width: 104, knobWidth: 10, minimum: 0, maximum: 1, step: 0.01).ticks.isEmpty)
+}
+
+@MainActor @Observable private final class HostedSlider {
+    var value = 60.0
+    var disabled = false
+    var editing = false
+    var sent: [Double] = []
+}
+
+private struct HostedSliderView: View {
+    let slider: HostedSlider
+
+    var body: some View {
+        EndStopSlider(title: "Minutes", value: slider.value, minimum: 15, maximum: 240, step: 15,
+                      endStop: SliderEndStop(value: 0, label: "∞")) {
+            slider.sent.append($0)
+            slider.value = $0
+        }
+        .labelsHidden()
+        .controlSize(.small)
+        .disabled(slider.disabled)
+        .onPreferenceChange(ControlEditingPreference.self) { slider.editing = $0 }
+        .frame(width: 104, height: 20)
+    }
+}
+
+/// SwiftUI skips `onEnded` for a drag it cancels, as disabling the slider mid-drag does. The slider must then stop
+/// editing, so hover controls can collapse, and send nothing.
+@Test @MainActor func aCancelledDragStopsEditingAndSendsNothing() async throws {
+    let slider = HostedSlider()
+    let host = NSHostingView(rootView: HostedSliderView(slider: slider))
+    _ = NSApplication.shared
+    // SwiftUI needs an ordered window for hit testing. Keep it invisible.
+    let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 104, height: 20), styleMask: [.borderless],
+                          backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.alphaValue = 0
+    window.contentView = host
+    window.orderFrontRegardless()
+    defer { window.close() }
+
+    func poll(until condition: () -> Bool) async -> Bool {
+        for _ in 0..<100 {
+            host.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            await Task.yield()
+        }
+        return false
+    }
+    func send(_ type: NSEvent.EventType, x: Double) throws {
+        let event = try #require(NSEvent.mouseEvent(with: type, location: CGPoint(x: x, y: 10), modifierFlags: [],
+            timestamp: 0, windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        window.sendEvent(event)
+    }
+    try #require(await poll { window.isVisible && host.hitTest(CGPoint(x: 52, y: 10)) != nil })
+
+    // On the 104-point track with a 10-point knob, 60 sits at x 19 and x 40 picks 135.
+    try send(.leftMouseDown, x: 19)
+    try send(.leftMouseDragged, x: 40)
+    #expect(await poll { slider.editing })
+    try send(.leftMouseUp, x: 40)
+    #expect(await poll { !slider.editing })
+    #expect(slider.sent == [135], "A completed drag sends its value")
+
+    try send(.leftMouseDown, x: 40)
+    try send(.leftMouseDragged, x: 60)
+    #expect(await poll { slider.editing })
+    slider.disabled = true
+    #expect(await poll { !slider.editing }, "A cancelled drag stops editing")
+    slider.disabled = false
+    try send(.leftMouseUp, x: 60)
+    _ = await poll { false } // Gives a stray `onEnded` its chance to send.
+    #expect(slider.sent == [135], "A cancelled drag sends nothing")
 }
