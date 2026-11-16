@@ -60,7 +60,7 @@ function hasPaint(value) {
 export const shadowBlur = radius => nonnegative(radius) * 2;
 const shadow = (radius, tint) => `0 1px ${px(shadowBlur(radius))} ${color(tint)}`;
 
-export function cssVariables(resolved, { popupSpacing = false } = {}) {
+export function cssVariables(resolved) {
   const { defaults: widget, popupDefaults: popup, tokens = {}, bar, workspaceDefaults: workspace } = resolved;
   const strip = bar.style ?? {};
   const focused = workspace.style.states.focused;
@@ -117,10 +117,10 @@ export function cssVariables(resolved, { popupSpacing = false } = {}) {
     "--pop-border-w": px(nonnegative(popup.borderWidth)),
     "--pop-radius": px(nonnegative(popup.cornerRadius)),
     "--pop-shadow": shadow(popup.shadowRadius, popup.shadowColor),
-    "--pop-px": px(popupSpacing ? popup.paddingHorizontal : 10),
-    "--pop-py": px(popupSpacing ? popup.paddingVertical : 6),
-    "--pop-gap": px(popupSpacing ? popup.spacing : 6),
-    "--pop-offset": px(popupSpacing ? bar.popupOffset ?? 6 : 6),
+    "--pop-px": px(popup.paddingHorizontal ?? 16),
+    "--pop-py": px(popup.paddingVertical ?? 16),
+    "--pop-gap": px(popup.spacing ?? 12),
+    "--pop-offset": px(bar.popupOffset ?? 6),
     "--bar-font": font(widget),
     "--pop-font": font(popup, popupLineHeight),
   };
@@ -130,10 +130,8 @@ export function indicatorClass(resolved) {
   return { background: "preview-ws-fill", underline: "preview-ws-under", none: "preview-ws-text" }[resolved.workspaceDefaults.indicator] ?? "preview-ws-fill";
 }
 
-export function keptFromBase(config, { popupSpacing = false } = {}) {
-  const spacing = new Set(["popupDefaults.paddingHorizontal", "popupDefaults.paddingVertical",
-    "popupDefaults.spacing", "bar.popupOffset"]);
-  const rendered = new Set(CONTRACT.filter(path => popupSpacing || !spacing.has(path)));
+export function keptFromBase(config) {
+  const rendered = new Set(CONTRACT);
   const visitedTokens = new Set();
   function references(value) {
     if (typeof value === "string" && value.startsWith("@token.")) {
@@ -151,7 +149,12 @@ export function keptFromBase(config, { popupSpacing = false } = {}) {
   }
   const paths = [...rendered];
   const kept = [];
+  function isEmptyObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+      && Object.values(value).every(isEmptyObject);
+  }
   function visit(value, path) {
+    if (isEmptyObject(value)) return;
     if (rendered.has(path)) {
       if (!isExactBackground(value)) kept.push(path);
       return;

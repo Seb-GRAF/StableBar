@@ -60,6 +60,31 @@ function storePage(patch = {}) {
   return page;
 }
 
+test("the kept-settings note uses singular and plural wording", () => {
+  for (const [config, expected] of [
+    [{ roles: { time: { foreground: "#ffffff" } } },
+      "1 setting stays in your files. This preview does not show it exactly."],
+    [{ roles: { time: { foreground: "#ffffff" } }, groups: [] },
+      "2 settings stay in your files. This preview does not show them exactly."],
+  ]) {
+    const page = storePage();
+    page.context.keptConfig = config;
+    page.run("state.config = keptConfig; updateJSON()");
+    const html = page.root.querySelector(".kept").innerHTML;
+    assert.equal(html.match(/<summary>(.*?)<\/summary>/)[1], expected);
+  }
+});
+
+test("popup spacing controls display the effective defaults", () => {
+  const page = storePage();
+  for (const [id, expected] of [
+    ["popups.paddingHorizontal", 16], ["popups.paddingVertical", 16], ["popups.spacing", 12], ["popups.gap", 6],
+  ]) {
+    const actual = page.run(`controlValue(CONTROLS.find(control => control.id === '${id}'), resolved())`);
+    assert.equal(actual, expected, id);
+  }
+});
+
 test("the Store guide refuses pipes and line breaks in either text field without blocking download or share", async () => {
   const reason = "The Store's table can't show a | or a line break in the name or description. Remove it to submit.";
   for (const field of ["name", "description"]) {

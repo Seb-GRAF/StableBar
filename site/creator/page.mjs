@@ -4,8 +4,6 @@ import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, enc
 import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
-const POPUP_SPACING = false;
-const flags = { popupSpacing: POPUP_SPACING };
 const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
 const baseNames = new Map();
 const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colors and tiles", nord: "Cool colors and an underline", gruvbox: "Warm colors and stripes", phosphor: "Amber text with a glow" };
@@ -71,7 +69,7 @@ function colorInput(control, value, suffix = "") {
 function controlValue(control, r) {
   if (control.group === "about") return state.manifest[control.id.split(".")[1]] ?? "";
   const fallbacks = { "bar.height": 40, "bar.margin": 0, "bar.cornerRadius": 0, "bar.borderWidth": 0,
-    "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0 };
+    "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0, "popups.gap": 6 };
   const value = at(r, control.paths[0]) ?? fallbacks[control.id];
   const colors = value?.gradient?.colors;
   if (colors && (control.kind === "color" || colors.every(color => color === colors[0]))) return colors[0];
@@ -107,7 +105,7 @@ function renderControls() {
   const focusedID = focused?.id;
   const selection = focused?.type === "text" ? [focused.selectionStart, focused.selectionEnd] : null;
   const drafts = new Map([...fieldErrors.keys()].map(id => [id, (root.querySelector(`[data-control="${id}"][data-color-text]`) ?? root.querySelector(`[data-control="${id}"]`))?.value]));
-  const r = resolved(), controls = controlsFor(state, flags);
+  const r = resolved(), controls = controlsFor(state);
   for (const key of fieldErrors.keys()) if (!controls.some(control => control.id === key)) fieldErrors.delete(key);
   for (const group of Object.keys(names)) {
     root.querySelector(`[data-group="${group}"]`).innerHTML = controls.filter(control => control.group === group).map(control => controlHTML(control, r)).join("");
@@ -237,7 +235,7 @@ function render() {
 }
 
 function updateJSON() {
-  const kept = keptFromBase(state.config, flags), manifest = jsonFile === "package";
+  const kept = keptFromBase(state.config), manifest = jsonFile === "package";
   const object = manifest ? JSON.parse(themeFiles(state, { validate: false }).manifestText) : state.config;
   const paths = activePaths.filter(path => manifest === path.startsWith("manifest.")).map(path => path.replace(/^manifest\./, ""));
   const lines = [];
@@ -268,7 +266,7 @@ function updateJSON() {
     button.tabIndex = selected ? 0 : -1;
   });
   root.querySelector(".active-path").textContent = activePaths.length ? `Control in focus: ${activePaths.join(", ")}` : "Focus a control to find its key here.";
-  root.querySelector(".kept").innerHTML = `<strong>Kept from the base theme</strong>${kept.length ? `<details><summary>${kept.length} ${kept.length === 1 ? "setting stays" : "settings stay"} in your files. This preview does not show them exactly.</summary><ul>${kept.map(path => `<li><code>${e(path)}</code></li>`).join("")}</ul></details>` : "No extra settings in this base theme."}`;
+  root.querySelector(".kept").innerHTML = `<strong>Kept from the base theme</strong>${kept.length ? `<details><summary>${kept.length} ${kept.length === 1 ? "setting stays" : "settings stay"} in your files. This preview does not show ${kept.length === 1 ? "it" : "them"} exactly.</summary><ul>${kept.map(path => `<li><code>${e(path)}</code></li>`).join("")}</ul></details>` : "No extra settings in this base theme."}`;
 }
 
 function exportProblem({ waitForStore = true } = {}) {
@@ -302,7 +300,7 @@ function updateOutputs() {
   root.querySelector(".output-note").textContent = problem || linkProblem;
   const updateWarning = mode === "update" && store.status === "found" && isVersion(state.manifest.version) && !higherVersion(state.manifest.version, store.manifest.version);
   root.querySelector(".store-note").textContent = store.status === "unavailable" ? messages.storeUnavailable : updateWarning ? `The Store has ${store.manifest.version}. Raise your version above it before submitting.` : "";
-  for (const control of controlsFor(state, flags)) {
+  for (const control of controlsFor(state)) {
     const error = root.querySelector(`#c-${control.id.replaceAll(".", "-")}-error`);
     let reason = fieldErrors.get(control.id) ?? "";
     if (control.id === "about.name") {
@@ -321,7 +319,7 @@ function updateOutputs() {
 function refresh() {
   const r = resolved(), preview = root.querySelector(".theme-preview");
   preview.className = "theme-preview " + indicatorClass(r);
-  for (const [key, value] of Object.entries(cssVariables(r, flags))) preview.style.setProperty(key, value);
+  for (const [key, value] of Object.entries(cssVariables(r))) preview.style.setProperty(key, value);
   root.querySelectorAll(".preview-stage, .json-panel").forEach(element => element.dataset.appearance = appearance);
   root.querySelectorAll("[data-appearance]").forEach(button => {
     if (button.tagName === "BUTTON") button.setAttribute("aria-pressed", String(button.dataset.appearance === appearance));
@@ -380,7 +378,7 @@ function requestStoreCheck() {
 }
 
 function changeControl(input) {
-  const control = controlsFor(state, flags).find(control => control.id === input.dataset.control);
+  const control = controlsFor(state).find(control => control.id === input.dataset.control);
   if (!control) return;
   let value = input.type === "checkbox" ? input.checked : input.value;
   const color = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
@@ -412,7 +410,7 @@ function changeControl(input) {
   jsonFile = control.group === "about" ? "package" : "config";
   // Keep the input being typed into in place; token edits can change the other controls' resolved values.
   const r = resolved();
-  for (const other of controlsFor(state, flags)) {
+  for (const other of controlsFor(state)) {
     if (other.id === control.id || fieldErrors.has(other.id)) continue;
     const value = controlValue(other, r);
     root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
@@ -444,8 +442,8 @@ function openFiles() {
 
 function offerReopen(files) {
   pendingTheme = parseTheme(files);
-  cssVariables(resolveTheme(builtIn, pendingTheme.config, "light"), flags);
-  cssVariables(resolveTheme(builtIn, pendingTheme.config, "dark"), flags);
+  cssVariables(resolveTheme(builtIn, pendingTheme.config, "light"));
+  cssVariables(resolveTheme(builtIn, pendingTheme.config, "dark"));
   document.querySelector("#page-message").textContent = "";
   const { name, version, id } = pendingTheme.manifest;
   showDialog(`${dialogHead("Update it or make a new theme?", `${name} · ${version}`)}<p class="dialog-intro">You opened ${e(name)}. Is it your theme, or a starting point for a new one?</p>
@@ -704,7 +702,7 @@ document.addEventListener("change", event => {
 });
 document.addEventListener("focusin", event => {
   if (!event.target.dataset.control) return;
-  const control = controlsFor(state, flags).find(control => control.id === event.target.dataset.control);
+  const control = controlsFor(state).find(control => control.id === event.target.dataset.control);
   if (!control) return;
   activePaths = control.paths; jsonFile = control.group === "about" ? "package" : "config";
   updateJSON();
@@ -716,7 +714,7 @@ document.addEventListener("click", async event => {
   if (!button || button.disabled) return;
   if (button.dataset.appearance) {
     appearance = button.dataset.appearance;
-    fieldErrors.forEach((_value, key) => { if (["color", "background"].includes(controlsFor(state, flags).find(control => control.id === key)?.kind)) fieldErrors.delete(key); });
+    fieldErrors.forEach((_value, key) => { if (["color", "background"].includes(controlsFor(state).find(control => control.id === key)?.kind)) fieldErrors.delete(key); });
     renderControls(); refresh();
   }
   if (button.dataset.json) { jsonFile = button.dataset.json; updateJSON(); }

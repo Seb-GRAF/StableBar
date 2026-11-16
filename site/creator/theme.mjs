@@ -169,7 +169,14 @@ export function resolveTheme(base, config, appearance) {
   const resolved = forAppearance(substituteTokens(overriding(base, config)), appearance);
   const defaults = resolved.defaults;
   resolved.defaults = resolvedStyle(defaults);
-  resolved.popupDefaults = resolvedStyle(resolved.popupDefaults, defaults);
+  const popup = resolved.popupDefaults;
+  // Popup geometry is independent of the bar widgets' padding and spacing.
+  resolved.popupDefaults = resolvedStyle({
+    ...popup,
+    paddingHorizontal: popup?.paddingHorizontal ?? 16,
+    paddingVertical: popup?.paddingVertical ?? 16,
+    spacing: popup?.spacing ?? 12,
+  }, defaults);
   resolved.bar ??= {};
 
   const workspace = resolved.workspaceDefaults ?? {};
@@ -200,7 +207,6 @@ export function resolveTheme(base, config, appearance) {
 
 const docs = "https://github.com/Seb-GRAF/StableBar/blob/main/docs/";
 const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
-const popupSpacing = (_state, flags) => flags.popupSpacing === true;
 
 function control(id, label, kind, paths, help, guide, appliesWhen) {
   return {
@@ -296,15 +302,15 @@ export const CONTROLS = [
     ["paddingHorizontal", "Horizontal padding"], ["paddingVertical", "Vertical padding"], ["spacing", "Spacing"],
   ].map(([key, label]) => control(`popups.${key}`, label, "number", [`popupDefaults.${key}`],
     "Tooltips, hover controls and More stay compact; app menus and a popup's own padding take precedence.",
-    "popups.md", popupSpacing)),
+    "popups.md")),
   control("popups.gap", "Gap below bar", "number", ["bar.popupOffset"],
     "Set the gap below the bar; tooltips, hover controls, More and app menus keep their own spacing.",
-    "popups.md", popupSpacing),
+    "popups.md"),
 ];
 
-export function controlsFor(state, flags = {}) {
+export function controlsFor(state) {
   const resolvedState = { ...state, config: resolveTheme(builtIn, state.config, "light") };
-  return CONTROLS.filter(control => !control.appliesWhen || control.appliesWhen(resolvedState, flags));
+  return CONTROLS.filter(control => !control.appliesWhen || control.appliesWhen(resolvedState));
 }
 
 function pathLocation(object, path) {

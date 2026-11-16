@@ -22,7 +22,7 @@ const baseIDs = ["built-in", "leman", "notch", "catppuccin", "nord", "gruvbox", 
 const builtIn = json("Resources/themes/built-in/config.json");
 const theme = id => json(`Resources/themes/${id}/config.json`);
 const state = id => ({ manifest: json(`Resources/themes/${id}/package.json`), config: theme(id) });
-const idsFor = (s, flags = {}) => controlsFor(s, flags).map(control => control.id);
+const idsFor = s => controlsFor(s).map(control => control.id);
 const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
 
 test("preview colors match the site's hand-checked ones", () => {
@@ -111,7 +111,7 @@ test("every non-token contract path feeds the renderer", () => {
   };
   const draw = config => {
     const resolved = resolveTheme(builtIn, config, "dark");
-    return { ...cssVariables(resolved, { popupSpacing: true }), indicator: indicatorClass(resolved) };
+    return { ...cssVariables(resolved), indicator: indicatorClass(resolved) };
   };
   for (const path of CONTRACT.filter(path => !path.startsWith("tokens."))) {
     const config = { bar: { style: { borderColor: "#abcdef", borderWidth: 1 } } };
@@ -152,7 +152,6 @@ test("palette consumption follows the actual base-theme references", () => {
 });
 
 test("kept keys are listed", () => {
-  assert.deepEqual(keptFromBase(builtIn), ["roles"]);
   assert.deepEqual(keptFromBase(theme("gruvbox")), ["workspaceDefaults.style.states.visible"]);
   const config = {
     tokens: { custom: "#123456" }, defaults: { states: { hover: { background: "#123456" } } },
@@ -161,6 +160,15 @@ test("kept keys are listed", () => {
   assert.deepEqual(keptFromBase(config), [
     "tokens.custom", "defaults.states", "bar.style.opacity", "groups", "profiles",
   ]);
+});
+
+test("kept settings skip empty objects", () => {
+  assert.deepEqual(keptFromBase(builtIn), []);
+  for (const roles of [{}, { time: {} }, { time: { states: { hover: {} } } }]) {
+    assert.deepEqual(keptFromBase({ roles }), []);
+  }
+  assert.deepEqual(keptFromBase({ roles: { time: { foreground: "#ffffff" }, primary: {} } }), ["roles"]);
+  assert.deepEqual(keptFromBase({ roles: { time: { foreground: null } } }), ["roles"]);
 });
 
 test("tokens referenced by rendered properties are not marked as kept", () => {
@@ -201,40 +209,66 @@ test("Fern marks only its undrawn custom tokens as kept", () => {
   assert.deepEqual(keptFromBase(config), ["tokens.outline", "workspaceDefaults.style.states.visible"]);
 });
 
-test("popup spacing waits for its flag while tooltip padding stays compact", () => {
+test("popup spacing falls back to the app's defaults", () => {
+  for (const popupDefaults of [undefined, {}, { paddingHorizontal: null, paddingVertical: null, spacing: null }]) {
+    const config = { defaults: { paddingHorizontal: 4, paddingVertical: 3, spacing: 2 }, popupDefaults };
+    for (const appearance of ["light", "dark"]) {
+      const resolved = resolveTheme(builtIn, config, appearance);
+      const variables = cssVariables(resolved);
+      assert.equal(variables["--pop-px"], "16px");
+      assert.equal(variables["--pop-py"], "16px");
+      assert.equal(variables["--pop-gap"], "12px");
+      assert.equal(variables["--pop-offset"], "6px");
+      assert.equal(resolved.popupDefaults.paddingHorizontal, 16);
+      assert.equal(resolved.popupDefaults.paddingVertical, 16);
+      assert.equal(resolved.popupDefaults.spacing, 12);
+    }
+  }
+});
+
+test("popup spacing follows popupDefaults and bar.popupOffset", () => {
   const resolved = resolveTheme(builtIn, {
-    popupDefaults: { paddingHorizontal: 22, paddingVertical: 18, spacing: 16 }, bar: { popupOffset: 12 },
+    defaults: { paddingHorizontal: 4, paddingVertical: 3, spacing: 2 },
+    popupDefaults: { paddingHorizontal: 9, paddingVertical: 7, spacing: 5 }, bar: { popupOffset: 11 },
   }, "dark");
   const before = structuredClone(resolved);
-  const off = cssVariables(resolved);
-  const on = cssVariables(resolved, { popupSpacing: true });
-  for (const [key, fixed, configured] of [
-    ["--pop-px", "10px", "22px"], ["--pop-py", "6px", "18px"],
-    ["--pop-gap", "6px", "16px"], ["--pop-offset", "6px", "12px"],
+  const variables = cssVariables(resolved);
+  for (const [key, configured] of [
+    ["--pop-px", "9px"], ["--pop-py", "7px"], ["--pop-gap", "5px"], ["--pop-offset", "11px"],
   ]) {
-    assert.equal(off[key], fixed, key);
-    assert.equal(on[key], configured, key);
+    assert.equal(variables[key], configured, key);
   }
   assert.deepEqual(resolved, before);
+});
+
+test("popup spacing preserves zero and falls back per property", () => {
+  const resolved = resolveTheme(builtIn, {
+    defaults: { paddingHorizontal: 4, paddingVertical: 3, spacing: 2 },
+    popupDefaults: { paddingHorizontal: 0, paddingVertical: null, spacing: 0 }, bar: { popupOffset: 0 },
+  }, "dark");
+  const variables = cssVariables(resolved);
+  assert.equal(variables["--pop-px"], "0px");
+  assert.equal(variables["--pop-py"], "16px");
+  assert.equal(variables["--pop-gap"], "0px");
+  assert.equal(variables["--pop-offset"], "0px");
+});
+
+test("the tooltip stays compact", () => {
   const css = read("site/creator/preview.css").toString();
   const tooltip = css.match(/\.theme-preview \.preview-tooltip\s*\{([^}]+)\}/)[1];
   assert.match(tooltip, /padding: 6px 10px;/);
   assert.doesNotMatch(tooltip, /var\(--pop-p[xy]\)/);
 });
 
-test("disabled popup spacing and its otherwise unused tokens are marked as kept", () => {
+test("popup spacing and its referenced tokens are not marked as kept", () => {
   const config = {
     tokens: { inset: 24 },
     popupDefaults: { paddingHorizontal: "@token.inset", paddingVertical: 18, spacing: 16 },
     bar: { popupOffset: 12 },
   };
-  const kept = ["tokens.inset", "popupDefaults.paddingHorizontal", "popupDefaults.paddingVertical",
-    "popupDefaults.spacing", "bar.popupOffset"];
-  assert.deepEqual(keptFromBase(config), kept);
-  assert.deepEqual(keptFromBase(config, { popupSpacing: false }), kept);
-  assert.deepEqual(keptFromBase(config, { popupSpacing: true }), []);
+  assert.deepEqual(keptFromBase(config), []);
   config.defaults = { paddingHorizontal: "@token.inset" };
-  assert.deepEqual(keptFromBase(config), kept.slice(1));
+  assert.deepEqual(keptFromBase(config), []);
 });
 
 test("tiles use box shadows and bare widgets keep their glow", () => {
@@ -759,12 +793,10 @@ test("workspace indicator and its controls write the app's paths", () => {
   assert.ok(!idsFor(edited).includes("workspaces.underlineWidth"));
 });
 
-test("popup spacing waits for its flag", () => {
+test("popup spacing controls always show", () => {
   const spacing = ["popups.paddingHorizontal", "popups.paddingVertical", "popups.spacing", "popups.gap"];
-  for (const flags of [{}, { popupSpacing: false }]) {
-    assert.ok(spacing.every(id => !idsFor(state("built-in"), flags).includes(id)));
-  }
-  assert.ok(spacing.every(id => idsFor(state("built-in"), { popupSpacing: true }).includes(id)));
+  const ids = controlsFor(state("built-in")).map(control => control.id);
+  for (const id of spacing) assert.ok(ids.includes(id), id);
   const edited = applyControl(state("built-in"), "popups.gap", 8, "dark");
   assert.equal(edited.config.bar.popupOffset, 8);
 });
