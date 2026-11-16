@@ -251,7 +251,8 @@ final class PushSource: DataSource {
 }
 
 /// Combines other providers: their `values`, `fields`, `lists` and `series` under each one's name, such as
-/// `power.percent`, without text of its own. Its run stays open and sends again whenever one of them changes.
+/// `power.percent`, and their `text`, `icon` and `tooltip` as fields, such as `power.icon`, without text of
+/// its own. Its run stays open and sends again whenever one of them changes.
 @MainActor
 final class MergeSource: DataSource {
     private let inputs: [String]
@@ -289,7 +290,13 @@ final class MergeSource: DataSource {
                 (output[keyPath: entries] ?? [:]).map { ("\(name).\($0.key)", $0.value) }
             }, uniquingKeysWith: { $1 })
         }
-        emit(.output(.success(ScriptOutput(text: "", fields: prefixed(\.fields), lists: prefixed(\.lists),
+        var fields = prefixed(\.fields)
+        for (name, output) in outputs {
+            // An input's own field of the same name keeps its value, as layouts read it before these were passed on.
+            let passed = ["text": output.text, "icon": output.icon, "tooltip": output.tooltip].compactMapValues { $0 }
+            fields.merge(passed.map { ("\(name).\($0.key)", $0.value) }) { own, _ in own }
+        }
+        emit(.output(.success(ScriptOutput(text: "", fields: fields, lists: prefixed(\.lists),
                                            values: prefixed(\.values), series: prefixed(\.series)))))
     }
 }

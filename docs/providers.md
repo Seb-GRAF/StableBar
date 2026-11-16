@@ -149,7 +149,7 @@ With access, the provider updates at each minute and phase boundary and when you
 
 ## Merge
 
-A `merge` provider combines the providers it names in `providers`, so one widget can show several of them, such as the battery, the network and the volume. Its output holds each one's `values`, `fields`, `lists` and `series` under the provider's name and a dot, such as `power.percent`, `net.downloadRate` and `sound.volume`. It has no `text`, `icon` or `tooltip` of its own, so give its widget a `layout`. Layouts, popups, `hoverLayout` and `rules` read these names as they read any other.
+A `merge` provider combines the providers it names in `providers`, so one widget can show several of them, such as the battery, the network and the volume. Its output holds each one's `values`, `fields`, `lists` and `series` under the provider's name and a dot, such as `power.percent`, `net.downloadRate` and `sound.volume`. Each one's `text`, and its `icon` and `tooltip` when it has them, become fields under its name too, unless it has a field of that name: `power.icon` is the battery's own symbol, which shows the charge in quarters and a bolt while charging, and `power.tooltip` its percentage with the time left. The merge has no `text`, `icon` or `tooltip` of its own, so give its widget a `layout`. Layouts, popups, `hoverLayout` and `rules` read these names as they read any other.
 
 ```json
 {
@@ -165,6 +165,7 @@ A `merge` provider combines the providers it names in `providers`, so one widget
       "layout": {
         "type": "row", "style": { "spacing": 6 },
         "children": [
+          { "type": "symbol", "source": "power.icon" },
           { "type": "field", "field": "power.percent" },
           { "type": "field", "field": "net.downloadRate" },
           { "type": "progress", "source": "sound.volume", "height": 4, "style": { "width": 40 } }

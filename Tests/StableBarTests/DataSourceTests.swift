@@ -600,7 +600,7 @@ private extension DataSourceRegistry {
                 {"id":"volume","type":"provider","provider":"sound","position":"right"}]}
     """#)
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
-    let battery = FakeMonitor(ScriptOutput(text: "80%", values: ["percent": 0.8]))
+    let battery = FakeMonitor(ScriptOutput(text: "80%", icon: "battery.75percent", tooltip: "80%, 3:20 left", values: ["percent": 0.8]))
     let sound = FakeMonitor(audio(0.5))
     let calendarReads = OSAllocatedUnfairLock(initialState: 0)
     let store = BarStore(configurationURL: url, registry: DataSourceRegistry.builtIn
@@ -609,7 +609,8 @@ private extension DataSourceRegistry {
         .replacing("calendar") { _, _ in
             PollingSource { _ in
                 let reads = calendarReads.withLock { $0 += 1; return $0 }
-                return .output(.success(ScriptOutput(text: "No calendar access", fields: ["access": "denied", "reads": String(reads)])))
+                return .output(.success(ScriptOutput(text: "No calendar access", tooltip: "From its output",
+                                                     fields: ["access": "denied", "reads": String(reads), "tooltip": "Its own field"])))
             }
         })
     defer { store.stop() }
@@ -624,6 +625,12 @@ private extension DataSourceRegistry {
     #expect(store.providers["power"]?.diagnostics.suspended == true)
     store.setVisibleWidgets(ids: ["status"], displayID: 1)
     try await awaitCondition { status.output.values?["power.percent"] == 0.8 }
+    #expect(status.output.fields?["power.text"] == "80%")
+    #expect(status.output.fields?["power.icon"] == "battery.75percent")
+    #expect(status.output.fields?["power.tooltip"] == "80%, 3:20 left")
+    #expect(status.output.fields?["meetings.icon"] == nil)
+    #expect(status.output.fields?["meetings.tooltip"] == "Its own field")
+    #expect(status.output.icon == nil && status.output.tooltip == nil)
     battery.change(to: ScriptOutput(text: "10%", values: ["percent": 0.1]))
     try await awaitCondition { status.output.values?["power.percent"] == 0.1 }
     #expect(store.presentations["status"]?.style.state == "warning")
