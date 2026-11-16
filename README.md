@@ -1,8 +1,33 @@
-# StableBar
+<p align="center">
+  <img src="docs/images/icon.png" width="128" height="128" alt="StableBar's lighthouse icon">
+</p>
 
-A native, configurable menu bar for macOS and an alternative to SketchyBar. Built with Swift, AppKit and SwiftUI.
+<h1 align="center">StableBar</h1>
 
-[**Download for Mac**](https://github.com/Seb-GRAF/StableBar/releases/latest) · [Website](https://stablebar.app/) · [User guide](docs/README.md) · [Widget store](https://github.com/Seb-GRAF/stablebar-packages)
+<p align="center">
+  A native, configurable menu bar for macOS and an alternative to SketchyBar.<br>
+  Themes, widgets, popups and workspaces, set up without writing scripts.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Seb-GRAF/StableBar/releases/latest"><img src="https://img.shields.io/github/v/release/Seb-GRAF/StableBar?label=release&color=F0883E" alt="Latest release"></a>
+  <a href="https://github.com/Seb-GRAF/StableBar/releases"><img src="https://img.shields.io/github/downloads/Seb-GRAF/StableBar/total?color=58A6FF" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-lightgrey?logo=apple" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Seb-GRAF/StableBar?color=56D364" alt="MIT License"></a>
+  <a href="https://github.com/Seb-GRAF/StableBar/stargazers"><img src="https://img.shields.io/github/stars/Seb-GRAF/StableBar?style=flat&color=FFD33D" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Seb-GRAF/StableBar/releases/latest"><b>Download for Mac</b></a> ·
+  <a href="https://stablebar.app/">Website</a> ·
+  <a href="docs/README.md">User guide</a> ·
+  <a href="https://github.com/Seb-GRAF/stablebar-packages">Widget store</a> ·
+  <a href="https://github.com/Seb-GRAF/StableBar/discussions">Discussions</a>
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/stablebar"><img src="https://img.shields.io/badge/Support_us_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support us on Ko-fi"></a>
+</p>
 
 <p><img src="docs/images/readme-hero.gif" width="100%" alt="The top of your bar. A closer look at the widgets: Made yours. The camera pulls back and the intro loops."></p>
 
