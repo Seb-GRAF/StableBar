@@ -220,6 +220,12 @@ struct ConfigurationOrigin: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
+/// A theme shown in place of the selected one, such as one being tried.
+struct PreviewTheme {
+    let id: String
+    let layer: ConfigurationLayer
+}
+
 struct ConfigurationLayer {
     var values: [String: ConfigurationValue]
     var origins: [String: ConfigurationOrigin]
@@ -448,7 +454,7 @@ struct ConfigurationLoader: Sendable {
 
     mutating func load(_ url: URL, data: Data? = nil,
                        context: ConfigurationContext = ConfigurationContext(),
-                       previewTheme: ConfigurationLayer? = nil) throws -> Configuration {
+                       previewTheme: PreviewTheme? = nil) throws -> Configuration {
         try readingNewerFiles { loader in
             var configuration = try ConfigurationValue.object(loader.compose(url, data: data, context: context, previewTheme: previewTheme))
                 .decoded(Configuration.self)
@@ -467,7 +473,7 @@ struct ConfigurationLoader: Sendable {
 
     mutating func compose(_ url: URL, data: Data? = nil,
                           context: ConfigurationContext = ConfigurationContext(),
-                          previewTheme: ConfigurationLayer? = nil, screen: ScreenKind? = nil) throws -> [String: ConfigurationValue] {
+                          previewTheme: PreviewTheme? = nil, screen: ScreenKind? = nil) throws -> [String: ConfigurationValue] {
         try readingNewerFiles { try $0.composeFiles(url, data: data, context: context, previewTheme: previewTheme, screen: screen) }
     }
 
@@ -491,7 +497,7 @@ struct ConfigurationLoader: Sendable {
     }
 
     private mutating func composeFiles(_ url: URL, data: Data?, context: ConfigurationContext,
-                                       previewTheme: ConfigurationLayer?, screen: ScreenKind?) throws -> [String: ConfigurationValue] {
+                                       previewTheme: PreviewTheme?, screen: ScreenKind?) throws -> [String: ConfigurationValue] {
         dependencies = []
         activeProfiles = []
         packageBoundaries = [:]
@@ -521,10 +527,14 @@ struct ConfigurationLoader: Sendable {
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
+        var context = context
+        context.theme = "built-in"
         if let previewTheme {
-            try layer.merge(previewTheme)
+            try layer.merge(previewTheme.layer)
+            context.theme = previewTheme.id
         } else if let theme = try theme?.decoded(WidgetPackageSelection.self, at: "theme"), theme.enabled {
             try layer.merge(theme.version == nil ? readBundledTheme(theme) : readSelectedPackage(theme, from: packageStore, theme: true))
+            context.theme = theme.id
         }
         try layer.merge(base)
         return try finish(layer, context: context)

@@ -16,8 +16,12 @@ struct ThemePreview: Sendable {
         if !choice.isBuiltIn || themesDirectory == nil {
             try layer.merge(loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: [:]))
         }
-        light = try ConfigurationValue.object(loader.finish(layer, context: ConfigurationContext(appearance: "light"))).decoded(Configuration.self)
-        dark = try ConfigurationValue.object(loader.finish(layer, context: ConfigurationContext(appearance: "dark"))).decoded(Configuration.self)
+        func drawn(_ appearance: String) throws -> Configuration {
+            let context = ConfigurationContext(appearance: appearance, theme: choice.manifest.id)
+            return try ConfigurationValue.object(loader.finish(layer, context: context)).decoded(Configuration.self)
+        }
+        light = try drawn("light")
+        dark = try drawn("dark")
     }
 
     func configuration(for appearance: BarAppearance) -> Configuration {

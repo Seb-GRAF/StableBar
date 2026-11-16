@@ -10,6 +10,8 @@ struct ConfigurationContext: Sendable, Equatable {
     var displayCount = 1
     var externalDisplay = false
     var app = ""
+    /// The ID of the theme the bar is drawn with, set by the loader once it has settled the theme.
+    var theme = "built-in"
 }
 
 struct ConfigurationProfile: Codable, Equatable, Sendable {
@@ -42,10 +44,11 @@ struct ProfileConditions: Codable, Equatable, Sendable {
     var displayCount: Int?
     var externalDisplay: Bool?
     var app: String?
+    var theme: String?
     /// A condition from a newer release, which this one can't check, so the profile never matches on its own.
     var unknownCondition = false
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app }
+    enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app, theme }
 
     init() {}
 
@@ -57,6 +60,7 @@ struct ProfileConditions: Codable, Equatable, Sendable {
         displayCount = try values.decodeIfPresent(Int.self, forKey: .displayCount)
         externalDisplay = try values.decodeIfPresent(Bool.self, forKey: .externalDisplay)
         app = try values.decodeIfPresent(String.self, forKey: .app)
+        theme = try values.decodeIfPresent(String.self, forKey: .theme)
     }
 
     func matches(_ context: ConfigurationContext) -> Bool {
@@ -66,6 +70,7 @@ struct ProfileConditions: Codable, Equatable, Sendable {
             && (displayCount == nil || displayCount == context.displayCount)
             && (externalDisplay == nil || externalDisplay == context.externalDisplay)
             && (app == nil || app == context.app)
+            && (theme == nil || theme == context.theme)
     }
 }
 

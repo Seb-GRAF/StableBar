@@ -677,7 +677,7 @@ final class BarStore: NSObject {
         let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
         let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
-                                   context: context, previewTheme: layer)
+                                   context: context, previewTheme: PreviewTheme(id: choice.manifest.id, layer: layer))
         return (next, loader)
     }
 
