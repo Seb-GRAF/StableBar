@@ -49,7 +49,7 @@ Opening Status does not resume a hidden provider. **Resume for testing** keeps a
 
 **Report a problem**, at the bottom of the Status overview, gathers what a bug report needs: StableBar's version and build, macOS, your Mac, each display (built-in or external, size, scale, notch), the configuration file and whether it's valid, the theme and turned-on packages with their versions, the workspace manager with its version and connection, Accessibility and Calendars access, active profiles, configuration and widget errors, and crashes from the last 30 days. Your home folder is written as `~`, and no configuration values are included, so package secrets stay out; widget errors show what their scripts printed, so check them before sharing. **Copy bug report** copies it as Markdown, and **Send feedback…** opens Send feedback in Help, with the report attached. `StableBar --report` prints the same report in a terminal.
 
-**Help** answers common questions and sends feedback. **Help…** in the menu-bar icon's menu opens it. Its sidebar also opens the user guide, runs setup again and stars StableBar on GitHub.
+**Help** answers common questions and sends feedback. **Help…** in the menu-bar icon's menu opens it. Its sidebar also opens the user guide, runs setup again, stars StableBar on GitHub and opens StableBar's Ko-fi page, to buy its makers a coffee.
 
 **Questions** shows the guide's [Questions](questions.md) page as it was when this version of StableBar was built. Search filters the questions, and each answer links to the guide's full section.
 

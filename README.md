@@ -107,5 +107,7 @@ Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING
 
 Available under the [MIT License](LICENSE), including commercial use and redistribution.
 
+If StableBar is useful to you, you can [buy us a coffee on Ko-fi](https://ko-fi.com/stablebar).
+
 [![Latest release](https://img.shields.io/github/v/release/Seb-GRAF/StableBar?label=release&color=ffe04a&labelColor=1d1813)](https://github.com/Seb-GRAF/StableBar/releases/latest)
 [![CI](https://github.com/Seb-GRAF/StableBar/actions/workflows/ci.yml/badge.svg)](https://github.com/Seb-GRAF/StableBar/actions/workflows/ci.yml)
