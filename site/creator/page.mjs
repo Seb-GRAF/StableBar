@@ -624,10 +624,11 @@ async function copyText(text) {
 }
 
 async function output(action) {
-  const id = state.manifest.id, check = requestStoreCheck();
-  if (action !== "download") await check;
+  // Clipboard writes must stay inside the click in Safari, so only Try waits for the Store check.
+  const id = state.manifest.id, check = requestStoreCheck(), waits = action === "try";
+  if (waits) await check;
   if (id !== state.manifest.id) return;
-  if (exportProblem({ waitForStore: action !== "download" })) { updateOutputs(); return; }
+  if (exportProblem({ waitForStore: waits })) { updateOutputs(); return; }
   const files = themeFiles(state);
   if (action === "download") {
     const url = URL.createObjectURL(new Blob([writeZip(state.manifest.id, files)], { type: "application/zip" }));

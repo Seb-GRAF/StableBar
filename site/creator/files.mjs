@@ -34,7 +34,9 @@ function checkManifest(manifest, options) {
   }
   if (manifest.repository != null) {
     try {
-      if (typeof manifest.repository !== "string" || new URL(manifest.repository).protocol !== "https:") fail("invalidRepository");
+      // The app compares the scheme case by case, so "HTTPS://" is refused there too.
+      if (typeof manifest.repository !== "string" || !manifest.repository.startsWith("https:")
+        || new URL(manifest.repository).protocol !== "https:") fail("invalidRepository");
     } catch { fail("invalidRepository"); }
   }
 }

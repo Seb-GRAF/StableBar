@@ -782,7 +782,7 @@ test("theme files retain the app's optional minimum version and HTTPS repository
   for (const minimumVersion of [0.9, [], {}]) {
     assert.throws(() => themeFiles({ manifest: { ...manifest, minimumVersion }, config: {} }), /minimumVersion/i);
   }
-  for (const repository of [42, "", "example.com/fern", "http://example.com/fern", "file:///tmp/fern", "javascript:alert(1)"]) {
+  for (const repository of [42, "", "example.com/fern", "http://example.com/fern", "HTTPS://example.com/fern", "file:///tmp/fern", "javascript:alert(1)"]) {
     assert.throws(() => themeFiles({ manifest: { ...manifest, repository }, config: {} }), /repository/i);
   }
   const optional = JSON.parse(themeFiles({ manifest: { ...manifest, minimumVersion: null, repository: null }, config: {} }).manifestText);
