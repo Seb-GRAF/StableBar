@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, resolveTheme,
-  CONTROLS, controlsFor, applyControl, fileText, substituteTokens, validateThemeColors, MAC_FONTS,
+  CONTROLS, controlsFor, applyControl, differsFromBase, resetControl, fileText, substituteTokens, validateThemeColors, MAC_FONTS,
 } from "../../site/creator/theme.mjs";
 import {
   ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
@@ -95,6 +95,39 @@ test("nudgeValue respects the step, Shift multiplier and range", async () => {
   assert.equal(nudgeValue(40, 1, options), 40);
   assert.equal(nudgeValue(5, -1, options, true), 0);
   assert.equal(nudgeValue(2, -1, { range: [0, 6], step: 0.5 }), 1.5);
+});
+
+test("hex colors survive the picker's HSV and keep their opacity", async () => {
+  const { hsvFromHex, hexFromHSV } = await import("../../site/creator/color-field.mjs");
+  for (const color of ["#0a84ff", "#1d1d1f26", "#ffffff", "#000000", "#ff0000", "#00ff00", "#0000ff", "#ff00ff80", "#7f7f7f"]) {
+    assert.equal(hexFromHSV(hsvFromHex(color)), color);
+  }
+  assert.equal(hexFromHSV({ h: 360, s: 1, v: 1, a: 255 }), "#ff0000");
+  assert.equal(hexFromHSV({ ...hsvFromHex("#0a84ff"), a: 0 }), "#0a84ff00");
+});
+
+test("recent colors put the newest first, once, and keep eight", async () => {
+  const { addRecentColor } = await import("../../site/creator/color-field.mjs");
+  const colors = ["#111111", "#222222", "#333333", "#444444", "#555555", "#666666", "#777777", "#888888"];
+  assert.deepEqual(addRecentColor(colors, "#999999"), ["#999999", ...colors.slice(0, 7)]);
+  assert.deepEqual(addRecentColor(colors, "#555555"), ["#555555", ...colors.filter(color => color !== "#555555")]);
+  assert.deepEqual(addRecentColor([], "#ABCDEF"), ["#abcdef"]);
+});
+
+test("resetting a control restores the base's own settings in both appearances", () => {
+  for (const id of baseIDs) {
+    const original = state(id);
+    let edited = applyControl(original, "palette.accent", "#ff0000", "light");
+    edited = applyControl(edited, "bar.background", "#123456", "dark");
+    edited = applyControl(edited, "widgets.tiles", !resolveTheme(builtIn, original.config, "light").defaults.background, "light");
+    edited = applyControl(edited, "bar.height", 52, "light");
+    for (const control of ["palette.accent", "bar.background", "widgets.tiles", "bar.height"]) {
+      assert.equal(differsFromBase(edited, control, original.config), true, `${id}: ${control}`);
+      edited = resetControl(edited, control, original.config);
+      assert.equal(differsFromBase(edited, control, original.config), false, `${id}: ${control}`);
+    }
+    assert.deepEqual(edited.config, original.config, id);
+  }
 });
 
 test("preview colors match the site's hand-checked ones", () => {

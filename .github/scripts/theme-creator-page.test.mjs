@@ -7,6 +7,7 @@ import * as theme from "../../site/creator/theme.mjs";
 import * as files from "../../site/creator/files.mjs";
 import * as preview from "../../site/creator/preview.mjs";
 import * as numbers from "../../site/creator/number-field.mjs";
+import * as colors from "../../site/creator/color-field.mjs";
 
 const source = readFileSync(new URL("../../site/creator/page.mjs", import.meta.url), "utf8")
   .replace(/^import .*\n/gm, "").replace(/\nstart\(\)\.catch\([^\n]+\);\s*$/, "");
@@ -38,7 +39,7 @@ function pageHarness() {
     addEventListener: (type, handler) => dialogEvents.set(type, handler),
   };
   const context = {
-    ...theme, ...files, ...preview, ...numbers, builtIn, structuredClone, Event,
+    ...theme, ...files, ...preview, ...numbers, ...colors, builtIn, structuredClone, Event,
     navigator: { platform: "MacIntel", userAgent: "Mac", maxTouchPoints: 0 },
     matchMedia: () => ({ matches: false }),
     document: {

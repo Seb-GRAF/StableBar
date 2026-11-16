@@ -430,3 +430,29 @@ export function applyControl(state, id, value, appearance) {
   if (["color", "background"].includes(control.kind)) validateThemeColors(next.config);
   return next;
 }
+
+const valueAt = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
+
+export function differsFromBase(state, id, base) {
+  const control = CONTROLS.find(control => control.id === id);
+  return control.paths.some(path => JSON.stringify(valueAt(state.config, path)) !== JSON.stringify(valueAt(base, path)));
+}
+
+export function resetControl(state, id, base) {
+  const control = CONTROLS.find(control => control.id === id);
+  const next = structuredClone(state);
+  for (const path of control.paths) {
+    const value = valueAt(base, path);
+    if (value !== undefined) {
+      writePath(next.config, path, value);
+      continue;
+    }
+    const keys = path.split(".");
+    while (keys.length) {
+      const key = keys.pop(), parent = keys.length ? valueAt(next.config, keys.join(".")) : next.config;
+      delete parent[key];
+      if (Object.keys(parent).length || valueAt(base, keys.join(".")) !== undefined) break;
+    }
+  }
+  return next;
+}
