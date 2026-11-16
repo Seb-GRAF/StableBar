@@ -84,6 +84,7 @@ final class ThemeLinkCandidate {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
+        let trialDirectory = store.themeTrialDirectory
         do {
             let client = store.packageStoreClient
             let packages = client.packages
@@ -107,8 +108,10 @@ final class ThemeLinkCandidate {
             try? FileManager.default.removeItem(at: choice.directory)
         } catch {
             guard !discarded else { return }
-            store.onEndThemeTrial?()
-            store.endThemeTrial()
+            if let trialDirectory, store.themeTrialDirectory == trialDirectory {
+                store.onEndThemeTrial?()
+                store.endThemeTrial()
+            }
             candidateState = .failed(errorMessage(error))
         }
     }

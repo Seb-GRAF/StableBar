@@ -435,6 +435,65 @@ struct ThemeLinkCandidateTests {
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
+    @Test(arguments: [false, true], [false, true])
+    func anInstallationErrorKeepsANewerTrial(tryFirst: Bool, linkedTrial: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        let newerCandidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { newerCandidate.discard() }
+        let trial = ThemeTrial(store: store)
+        defer { trial.cancel() }
+        if tryFirst { candidate.tryOnBar() }
+        try fixture.write("not a directory", to: fixture.packages.directory)
+        let replacement = Task { @MainActor in
+            #expect(candidate.state == (tryFirst ? .trying : .ready))
+            if linkedTrial { newerCandidate.tryOnBar() } else { trial.next() }
+            store.onEndThemeTrial = { trial.cancel() }
+        }
+
+        await candidate.use()
+        await replacement.value
+
+        guard case .failed = candidate.state else {
+            Issue.record("Expected installation to fail")
+            return
+        }
+        let directory = linkedTrial ? newerCandidate.choice.directory : trial.choice?.directory
+        #expect(store.themeTrialDirectory == directory)
+        #expect(trial.isActive)
+        if linkedTrial { #expect(newerCandidate.state == .trying) }
+        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.customizationHistory.undoSteps.isEmpty)
+    }
+
+    @Test func selectingAGalleryThemeEndsALinkedThemeTrial() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let selected = try fixture.theme(#"{"bar":{"height":42}}"#)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let gallery = ThemeGallery(store: store)
+        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configuration?.bar.height == 30)
+
+        gallery.select(selected)
+
+        #expect(gallery.errors[selected.key] == nil)
+        #expect(store.selectedThemeKey == selected.key)
+        #expect(try fixture.document()["theme"] == .object(selected.selection))
+        #expect(store.themeTrialDirectory == nil)
+        #expect(candidate.state == .ready)
+        #expect(store.configuration?.bar.height == 42)
+        #expect(store.customizationHistory.undoSteps.count == 1)
+    }
+
     @Test(arguments: ["2", ".2"], ["theme", "widgets"])
     func aPackageIDWithDifferentCaseFollowsTheFilesystem(version: String, kind: String) throws {
         let fixture = try ThemeGalleryFixture()

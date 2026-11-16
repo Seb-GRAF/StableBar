@@ -28,7 +28,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Theme links carry only a theme** (2026-11-16, [#676]). A
   `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
   most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
-  profiles and 372 JSON values across both files. Theme configuration keys are `tokens`,
+  profiles and 372 JSON values across both files. Reference expansion shares a budget of 300,000
+  units and 8,000,000 bytes of reference origin paths; a link exceeding either is refused as too
+  many references. Theme configuration keys are `tokens`,
   `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
   keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
   is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,

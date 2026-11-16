@@ -189,6 +189,7 @@ final class ThemeGallery {
     }
 
     func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
+        store.endThemeTrial()
         perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
         configurationChanged()
     }
