@@ -74,9 +74,9 @@ struct PopupView: View {
                 }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
                     store.popup.close()
                     store.move(.item(item), to: placement, before: nil, in: widget)
-                }, states: states, update: store.update) { command, environment in
+                }, states: states, update: store.update) { action, environment in
                     if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
-                    store.runAction(command, widget: widget,
+                    store.runAction(action, widget: widget,
                                     event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
                 }, topLevel: true)
                 if let error {
@@ -201,7 +201,7 @@ struct BlockContext {
     var update: AppUpdate?
     /// How text, field and symbol blocks without a transition of their own show changes.
     var motion = BlockMotion()
-    let runAction: (String, [String: String]) -> Void
+    let runAction: (BlockAction, [String: String]) -> Void
 }
 
 /// The transition and animation a widget gives its text, field and symbol blocks.
@@ -326,7 +326,7 @@ struct PopupBlockView: View {
             if handlesInteraction {
                 boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
             } else if let command = block.onClickField.flatMap({ fields[$0] }) ?? block.onClick {
-                Button { context.runAction(command, [:]) } label: {
+                Button { context.runAction(.command(command), [:]) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
@@ -503,45 +503,45 @@ struct PopupBlockView: View {
                 }
             }
         case let .button(title, command):
-            Button { context.runAction(command, [:]) } label: {
+            Button { context.runAction(.command(command), [:]) } label: {
                 Text(title).frame(maxWidth: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .modifier(FocusHighlight(appearance: appearance))
-        case let .slider(title, source, minimum, maximum, step, endStop, command):
+        case let .slider(title, source, minimum, maximum, step, endStop, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             if let endStop {
                 EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
-                    context.runAction(command, ["VALUE": String($0)])
+                    context.runAction(action, ["VALUE": String($0)])
                 }
             } else {
                 PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
-                    context.runAction(command, ["VALUE": String($0)])
+                    context.runAction(action, ["VALUE": String($0)])
                 }
             }
-        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command):
+        case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
             FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
                          height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
                          appearance: appearance) {
-                context.runAction(command, ["VALUE": String($0)])
+                context.runAction(action, ["VALUE": String($0)])
             }
-        case let .toggle(title, source, command):
+        case let .toggle(title, source, action):
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
-                context.runAction(command, ["VALUE": $0 ? "true" : "false"])
+                context.runAction(action, ["VALUE": $0 ? "true" : "false"])
             }
         case let .segmented(title, source, options, command):
             PopupSegmented(title: title, value: fields[source] ?? options[0].value, options: options) {
-                context.runAction(command, ["VALUE": $0])
+                context.runAction(.command(command), ["VALUE": $0])
             }
         case let .chooser(title, source, groupsSource, optionsSource, levelsSource, stars, command):
             PopupChooser(title: title, chosen: fields[source] ?? "", groups: context.lists[groupsSource] ?? [],
                          options: context.lists[optionsSource] ?? [], levels: levelsSource.flatMap { context.lists[$0] } ?? [],
                          stars: stars.map { context.lists[$0.source] ?? [] }) {
-                context.runAction(command, ["VALUE": $0, "OPTION": $1, "LEVEL": $2])
+                context.runAction(.command(command), ["VALUE": $0, "OPTION": $1, "LEVEL": $2])
             } onStar: {
-                if let stars { context.runAction(stars.command, ["VALUE": $0, "OPTION": $1, "LEVEL": $2, "STARRED": $3 ? "true" : "false"]) }
+                if let stars { context.runAction(.command(stars.command), ["VALUE": $0, "OPTION": $1, "LEVEL": $2, "STARRED": $3 ? "true" : "false"]) }
             }
         case let .search(title, source, searchFields, row):
             VStack(alignment: .leading, spacing: appearance.spacing) {
@@ -553,14 +553,14 @@ struct PopupBlockView: View {
         case let .input(title, placeholder, autofocus, sendButton, stop, command):
             PopupInput(title: title, placeholder: placeholder, autofocus: autofocus, wraps: block.wraps, sendButton: sendButton,
                        busy: stop.map { !fields[$0.busy, default: ""].isEmpty } ?? false) {
-                context.runAction(command, ["VALUE": $0])
+                context.runAction(.command(command), ["VALUE": $0])
             } onStop: {
-                if let stop { context.runAction(stop.command, [:]) }
+                if let stop { context.runAction(.command(stop.command), [:]) }
             }
         case .menu:
             VStack(spacing: appearance.spacing) {
                 ForEach(Array(context.menu.enumerated()), id: \.offset) { _, item in
-                    PopupMenuRow(item: item, appearance: appearance) { context.runAction($0, [:]) }
+                    PopupMenuRow(item: item, appearance: appearance) { context.runAction(.command($0), [:]) }
                 }
             }
         case .divider:

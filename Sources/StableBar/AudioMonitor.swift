@@ -116,11 +116,13 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             }
         }
         let volume = volumes.isEmpty ? nil : Double(volumes.reduce(0, +) / Float32(volumes.count))
+        let percent = volume.map { String(Int(($0 * 100).rounded())) }
         var muteAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         var muted: UInt32 = 0
         var muteSize = UInt32(MemoryLayout<UInt32>.size)
         let muteStatus = AudioObjectGetPropertyData(device, &muteAddress, 0, nil, &muteSize, &muted)
         var fields = ["device": name, "deviceID": String(device), "volumeAvailable": String(volume != nil)]
+        fields["volume"] = percent
         if muteStatus == noErr { fields["muted"] = String(muted != 0) }
         var icon = Self.icon(volume: volume, muted: muted != 0)
         if input {
@@ -128,7 +130,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             fields["inUse"] = String(inUse)
             icon = muted != 0 ? "mic.slash" : inUse ? "mic.fill" : "mic"
         }
-        return ScriptOutput(text: volume.map { "\(Int(($0 * 100).rounded()))%" } ?? name, icon: icon,
+        return ScriptOutput(text: percent.map { "\($0)%" } ?? name, icon: icon,
                             value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope)], values: volume.map { ["volume": $0] })
     }
 
@@ -269,6 +271,19 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             var unmuted: UInt32 = 0
             AudioObjectSetPropertyData(device, &mute, 0, nil, UInt32(MemoryLayout<UInt32>.size), &unmuted)
         }
+    }
+
+    /// Mutes or unmutes the default output device.
+    static func setMuted(_ muted: Bool) throws {
+        let device = try defaultDevice(input: false)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: kAudioDevicePropertyScopeOutput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        guard device != kAudioObjectUnknown, AudioObjectHasProperty(device, &address) else {
+            throw CommandFailure(message: "The audio output can't be muted.")
+        }
+        var value: UInt32 = muted ? 1 : 0
+        let status = AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+        guard status == noErr else { throw CommandFailure(message: "Could not set the mute state (\(status)).") }
     }
 
     private static func defaultDevice(input: Bool) throws -> AudioDeviceID {

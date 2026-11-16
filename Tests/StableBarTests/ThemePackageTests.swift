@@ -1493,9 +1493,12 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try writePackageFile(#"""
     {"tokens":{"surface":"#222222"},
      "providers":{"system":{"type":"system","interval":2},"power":{"type":"battery"},"status":{"type":"merge","providers":["system","power"]}},
-     "popups":{"usage":{"style":{},"layout":{"type":"field","field":"text","open":"com.apple.ActivityMonitor"}}},
+     "popups":{"usage":{"style":{},"layout":{"type":"field","field":"text","open":"com.apple.ActivityMonitor"}},
+               "controls":{"style":{},"layout":{"type":"column","children":[
+                 {"type":"slider","title":"Volume","source":"volume","set":"volume"},
+                 {"type":"toggle","title":"Wi-Fi","source":"power","set":"wifiPower"}]}}},
      "widgets":[{"id":"cpu","type":"system","position":"right","popupName":"usage","style":{"background":"@token.surface"}},
-                {"id":"status","type":"provider","provider":"status","position":"right"}]}
+                {"id":"status","type":"provider","provider":"status","position":"right","popupName":"controls"}]}
     """#, to: source.appending(path: "config.json"))
     #expect(try store.install(source).commands.isEmpty)
     var loader = ConfigurationLoader()
@@ -1504,6 +1507,11 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     #expect(configuration.widgets.map(\.id) == ["cpu", "status"])
     #expect(configuration.activeProviders == ["system", "power", "status"])
     #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(#"{"theme":{"id":"monitor","version":"1"}}"#.utf8)) }
+    guard case let .column(controls) = configuration.popups["controls"]?.layout.content,
+          case .slider(_, _, _, _, _, _, .set(.volume)) = controls[0].content, case .toggle(_, _, .set(.wifiPower)) = controls[1].content else {
+        Issue.record("Expected a slider that sets the volume and a toggle that turns Wi-Fi on or off")
+        return
+    }
 }
 
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {

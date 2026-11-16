@@ -97,12 +97,12 @@ indirect enum PopupContent: Sendable {
     case list(source: String, row: PopupBlock, orientation: ListOrientation)
     case button(title: String, command: String)
     /// A slider over `minimum`…`maximum`, and past a notch the `endStop` when it has one.
-    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, command: String)
+    case slider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?, action: BlockAction)
     /// A slider drawn as a bar in the block's style, filled from the leading edge, with `icon` on the fill and past a
     /// notch the `endStop` when it has one.
     case filledSlider(title: String, source: String, minimum: Double, maximum: Double, step: Double, endStop: SliderEndStop?,
-                      icon: String?, command: String)
-    case toggle(title: String, source: String, command: String)
+                      icon: String?, action: BlockAction)
+    case toggle(title: String, source: String, action: BlockAction)
     case segmented(title: String, source: String, options: [PopupControlOption], command: String)
     /// A pill, or chips for the presets starred in `lists[stars.source]`, that opens a panel: the groups in
     /// `lists[groupsSource]` beside the chosen group's options and levels, rows of `lists[optionsSource]` and
@@ -183,7 +183,7 @@ struct PopupBlock: Decodable, Sendable {
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
-        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments
+        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -263,6 +263,18 @@ struct PopupBlock: Decodable, Sendable {
         keepsLineHeight = false
         widestSymbol = nil
         transition = try values.decodeIfPresent(WidgetTransition.self, forKey: .transition)
+        func controlAction(_ settings: [NativeSetting]) throws -> BlockAction {
+            guard let setting = try values.decodeIfPresent(NativeSetting.self, forKey: .set) else {
+                return .command(try values.decode(String.self, forKey: .onChange))
+            }
+            if values.contains(.onChange) {
+                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A control cannot combine set with onChange.")
+            }
+            guard settings.contains(setting) else {
+                throw DecodingError.dataCorruptedError(forKey: .set, in: values, debugDescription: "A slider can set volume, and a toggle muted or wifiPower.")
+            }
+            return .set(setting)
+        }
         switch try values.decode(String.self, forKey: .type) {
         case "row": content = .row(try values.decode([PopupBlock].self, forKey: .children))
         case "column": content = .column(try values.decode([PopupBlock].self, forKey: .children))
@@ -297,15 +309,15 @@ struct PopupBlock: Decodable, Sendable {
             }
             let title = try values.decode(String.self, forKey: .title)
             let source = try values.decode(String.self, forKey: .source)
-            let command = try values.decode(String.self, forKey: .onChange)
+            let action = try controlAction([.volume])
             content = filled
                 ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
-                                icon: icon, command: command)
-                : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, command: command)
+                                icon: icon, action: action)
+                : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, action: action)
         case "toggle":
             content = .toggle(title: try values.decode(String.self, forKey: .title),
                               source: try values.decode(String.self, forKey: .source),
-                              command: try values.decode(String.self, forKey: .onChange))
+                              action: try controlAction([.muted, .wifiPower]))
         case "segmented":
             let options = try values.decode([PopupControlOption].self, forKey: .options)
             guard !options.isEmpty, Set(options.map(\.value)).count == options.count else {
@@ -407,6 +419,12 @@ enum ImageFit: String, Decodable, Sendable {
 
 enum PopupAlignment: String, Decodable, Sendable {
     case leading, center, trailing
+}
+
+/// What a block runs: a shell command, or for a slider or toggle with `set`, a setting StableBar changes itself.
+enum BlockAction: Sendable {
+    case command(String)
+    case set(NativeSetting)
 }
 
 struct PopupControlOption: Decodable, Sendable {

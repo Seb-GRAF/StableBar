@@ -11,7 +11,7 @@ private func volume(_ slider: String) -> String {
     let url = FileManager.default.temporaryDirectory.appending(path: "filled-slider.json")
     var loader = ConfigurationLoader()
     let configuration = try loader.load(url, data: Data(volume(#""filled":true,"icon":"speaker.wave.2.fill","step":0.05"#).utf8))
-    guard case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, command) = configuration.widgets.first?.popup?.layout.content else {
+    guard case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, .command(command)) = configuration.widgets.first?.popup?.layout.content else {
         Issue.record("Expected a filled slider")
         return
     }

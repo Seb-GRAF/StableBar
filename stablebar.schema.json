@@ -1150,6 +1150,24 @@
         "onChange": {
           "$ref": "#/definitions/string"
         },
+        "set": {
+          "anyOf": [
+            {
+              "enum": [
+                "volume",
+                "muted",
+                "wifiPower"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "In place of onChange, what a slider or toggle changes without a command: volume for a slider, muted or wifiPower for a toggle."
+        },
         "endStop": {
           "$ref": "#/definitions/sliderEndStop",
           "description": "For sliders: one more stop past max, set apart by a notch, such as ∞. Its value must be outside min…max."
