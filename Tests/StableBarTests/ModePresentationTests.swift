@@ -244,6 +244,24 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     #expect(workspace.mode == nil)
 }
 
+@Test @MainActor func aModeOnlySubscriptionThatDroppedIsNotReportedAsConnected() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let executable = directory.appending(path: "aerospace-fixture")
+    try Data("#!/bin/sh\nprintf '%s\\n' '{\"_event\":\"mode-changed\",\"mode\":\"main\"}'\n".utf8).write(to: executable)
+    try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+    let workspace = WorkspaceStore()
+    workspace.executablePath = { executable.path }
+    workspace.log = { _ in }
+    workspace.reconnectDelay = 30
+    defer { workspace.stop() }
+    workspace.configure(source: .aerospace, workspaces: false, mode: true)
+    try await awaitCondition { workspace.connectionError != nil }
+    #expect(workspace.isRunning)
+    #expect(workspace.connectionStatus == .failed("AeroSpace disconnected. Reconnecting…"))
+}
+
 @Test func workspaceModeStatesApplyAfterWorkspaceStateAndBeforeHover() throws {
     let workspace = try JSONDecoder().decode(WorkspaceConfiguration.self, from: Data(##"""
     {"style":{"states":{"focused":{"foreground":"#111111"},"mode":{"foreground":"#222222"},"hover":{"foreground":"#333333"}}},

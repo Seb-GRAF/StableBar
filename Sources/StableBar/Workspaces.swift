@@ -218,6 +218,14 @@ final class WorkspaceStore {
     var log: (String) -> Void = { FileHandle.standardError.write(Data("StableBar: \($0)\n".utf8)) }
     private(set) var tracksWorkspaces = true
     var isRunning: Bool { task != nil }
+
+    enum ConnectionStatus: Equatable { case notInUse, connected, failed(String) }
+
+    /// What Settings and bug reports show. `isRunning` stays true while the subscription waits to reconnect.
+    var connectionStatus: ConnectionStatus {
+        if let message = error ?? connectionError { return .failed(message) }
+        return isRunning ? .connected : .notInUse
+    }
     private var refreshTask: Task<Void, Never>?
     private(set) var moveTask: Task<Void, Never>?
     private var refreshPending = false
@@ -462,6 +470,9 @@ final class WorkspaceStore {
         if workspaces != snapshot { workspaces = snapshot }
         if previousWorkspace != workspaces.first(where: \.isFocused)?.name { onWorkspaceChange?() }
         error = nil
+        // Rift's subscription sends nothing when it connects, so a query that works while it runs is the first
+        // sign it's back. Between attempts its process has exited, and the disconnect stays.
+        if source == .rift, process?.isRunning == true { connectionError = nil }
     }
 
     func select(_ workspace: Workspace) {

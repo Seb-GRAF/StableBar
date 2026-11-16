@@ -1363,9 +1363,14 @@ extension BarStore {
             guard case let .failed(error) = widgetStatus(for: widget) else { return nil }
             return "Widget \(names[widget.id] ?? widget.id): \(error)"
         }
-        let workspaces = widgets.contains { $0.content == .workspaces }
-            ? (workspaceStore.error ?? workspaceStore.connectionError).map { "error: \($0)" } ?? (workspaceStore.isRunning ? "connected" : "not connected")
-            : ""
+        let workspaces = if !widgets.contains(where: { $0.content == .workspaces }) { "" }
+            else {
+                switch workspaceStore.connectionStatus {
+                case let .failed(error): "error: \(error)"
+                case .connected: "connected"
+                case .notInUse: "not connected"
+                }
+            }
         return BugReport.Live(access: BugReport.access(), workspaces: workspaces, profiles: activeProfiles,
                               problems: [configurationError, configurationWarning].compactMap { $0 } + failures)
     }

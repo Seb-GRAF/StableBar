@@ -142,9 +142,11 @@ struct GeneralSettingsView: View {
 
     private var connection: some View {
         let workspaces = store.workspaceStore
-        let (status, color): (String, Color) = if let error = workspaces.error { (error, .red) }
-            else if workspaces.isRunning { ("Connected", SettingsPalette.success) }
-            else { ("Not in use", .secondary) }
+        let (status, color): (String, Color) = switch workspaces.connectionStatus {
+        case let .failed(error): (error, .red)
+        case .connected: ("Connected", SettingsPalette.success)
+        case .notInUse: ("Not in use", .secondary)
+        }
         return row {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 8, height: 8)
