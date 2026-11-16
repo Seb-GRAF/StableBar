@@ -131,6 +131,26 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(frameClearOfBar(window, displays: []) == nil)
 }
 
+@Test func managerGapMeasuresTheBarAsEachManagerMeasuresItsGaps() {
+    let belowMenuBar = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 863),
+        barFrame: CGRect(x: 0, y: 823, width: 1440, height: 40), position: .top, desktopTop: 900)
+    let tiled = CGRect(x: 0, y: 37, width: 1440, height: 863)
+    #expect(managerGap(.aerospace, windows: [tiled], displays: [belowMenuBar]) == ManagerGap(manager: .aerospace, position: .top, points: 40))
+    #expect(managerGap(.yabai, windows: [tiled], displays: [belowMenuBar]) == ManagerGap(manager: .yabai, position: .top, points: 77))
+    #expect(managerGap(.aerospace, windows: [CGRect(x: 0, y: 77, width: 1440, height: 823)], displays: [belowMenuBar]) == nil)
+}
+
+@Test func managerGapFindsWindowsUnderABarAtTheBottomButNotWindowsHiddenPastTheEdge() {
+    let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
+        barFrame: CGRect(x: 0, y: 6, width: 1440, height: 40), position: .bottom, desktopTop: 900)
+    let hidden = CGRect(x: 1439, y: 899, width: 800, height: 600)
+    #expect(managerGap(.omniwm, windows: [hidden], displays: [display]) == nil)
+    #expect(managerGap(.omniwm, windows: [hidden, CGRect(x: 0, y: 0, width: 1440, height: 900)], displays: [display])
+            == ManagerGap(manager: .omniwm, position: .bottom, points: 46))
+}
+
 @Test func notificationClearanceMovesBannerWindowsBelowTheBarOnce() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1800, height: 1169),
         visibleFrame: CGRect(x: 0, y: 0, width: 1800, height: 1131),

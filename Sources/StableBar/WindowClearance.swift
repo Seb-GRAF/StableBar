@@ -53,6 +53,41 @@ func frameClearOfBar(_ frame: CGRect, displays: [WindowClearanceDisplay]) -> CGR
     return CGRect(x: frame.minX, y: top, width: frame.width, height: height)
 }
 
+/// The gap a window manager needs between the display's edge and its windows to keep them clear of the bar.
+struct ManagerGap: Equatable {
+    let manager: WorkspaceSource
+    let position: BarPosition
+    let points: Int
+
+    var warning: String { "\(manager.title) leaves windows under the bar." }
+
+    var setting: String {
+        let edge = position.rawValue
+        return switch manager {
+        case .yabai: "Run yabai -m config external_bar all:\(position == .top ? "\(points):0" : "0:\(points)"), and add it to your yabai configuration."
+        case .omniwm: "Set gaps.outer.\(edge) to \(points) in OmniWM’s settings.toml."
+        default: "Set outer.\(edge) = \(points) under [gaps] in ~/.aerospace.toml, then run aerospace reload-config."
+        }
+    }
+}
+
+/// The gap `manager` needs when one of `windows` starts under the bar, measured as the manager measures its gaps:
+/// AeroSpace from the area macOS leaves for windows, which leaves out a menu bar that shows, yabai and OmniWM from
+/// the display's edge. A window past the display's edge, where AeroSpace hides other workspaces' windows, doesn't count.
+func managerGap(_ manager: WorkspaceSource, windows: [CGRect], displays: [WindowClearanceDisplay]) -> ManagerGap? {
+    for window in windows {
+        guard let display = barDisplay(for: window, in: displays) else { continue }
+        let area = manager == .aerospace ? display.visibleFrame : display.frame
+        if display.position == .bottom, window.maxY > display.barFrame.minY, window.maxY <= display.frame.maxY {
+            return ManagerGap(manager: manager, position: .bottom, points: Int((area.maxY - display.barFrame.minY).rounded(.up)))
+        }
+        if display.position == .top, window.minY < display.barFrame.maxY, window.minY >= display.frame.minY {
+            return ManagerGap(manager: manager, position: .top, points: Int((display.barFrame.maxY - area.minY).rounded(.up)))
+        }
+    }
+    return nil
+}
+
 func originBelowBar(_ window: CGRect, bannerTop: CGFloat, displays: [WindowClearanceDisplay]) -> CGPoint? {
     guard let display = barDisplay(for: window, in: displays), display.position == .top, window.origin == display.frame.origin else { return nil }
     let bannerMargin = 16.0
@@ -105,6 +140,31 @@ final class WindowClearance: NSObject {
     private var task: Task<Void, Never>?
 
     var isRunning: Bool { permissionTimer != nil }
+
+    /// The gap the running AeroSpace, yabai or OmniWM needs when one of its windows starts under `configuration`'s bar.
+    /// Scenes replace it, so drawing never reads this Mac's windows.
+    @ObservationIgnored var checkManagerGap: @MainActor (_ configuration: Configuration) async -> ManagerGap? = { configuration in
+        guard AXIsProcessTrusted(), let manager = [WorkspaceSource.aerospace, .yabai, .omniwm].first(where: \.isRunning) else { return nil }
+        let screens = NSScreen.screens
+        let displays = screens.map {
+            WindowClearanceDisplay(frame: $0.frame, visibleFrame: $0.visibleFrame, configuration: configuration,
+                                   display: BarDisplay(screen: $0), desktopTop: screens[0].frame.maxY)
+        }
+        let pids = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && !$0.isHidden && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
+        }.map(\.processIdentifier)
+        let windows = try? await BlockingWork.run {
+            pids.flatMap { pid in
+                let application = AXUIElementCreateApplication(pid)
+                AXUIElementSetMessagingTimeout(application, 0.1)
+                return (attribute(kAXWindowsAttribute, of: application) as? [AXUIElement] ?? []).compactMap { window in
+                    AXUIElementSetMessagingTimeout(window, 0.1)
+                    return ordinaryWindowFrame(window)
+                }
+            }
+        }
+        return managerGap(manager, windows: windows ?? [], displays: displays)
+    }
 
     private struct WatchedApplication {
         let element: AXUIElement
@@ -275,10 +335,7 @@ final class WindowClearance: NSObject {
                                               Unmanaged.passUnretained(self).toOpaque())
                 }
             }
-            guard attribute(kAXSubroleAttribute, of: window) as? String == kAXStandardWindowSubrole,
-                  attribute(kAXMinimizedAttribute, of: window) as? Bool == false,
-                  attribute("AXFullScreen", of: window) as? Bool != true,
-                  let frame = windowFrame(window) else { continue }
+            guard let frame = ordinaryWindowFrame(window) else { continue }
             guard let target = frameClearOfBar(frame, displays: displays) else {
                 application.adjustedFrames.removeValue(forKey: window)
                 continue
@@ -305,22 +362,6 @@ final class WindowClearance: NSObject {
         applications[pid] = application
     }
 
-    private func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
-        return value
-    }
-
-    private func windowFrame(_ window: AXUIElement) -> CGRect? {
-        guard let position = attribute(kAXPositionAttribute, of: window), CFGetTypeID(position) == AXValueGetTypeID(),
-              let size = attribute(kAXSizeAttribute, of: window), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
-        var point = CGPoint.zero
-        var dimensions = CGSize.zero
-        guard AXValueGetValue(position as! AXValue, .cgPoint, &point),
-              AXValueGetValue(size as! AXValue, .cgSize, &dimensions) else { return nil }
-        return CGRect(origin: point, size: dimensions)
-    }
-
     private func removeObservers() {
         task?.cancel()
         task = nil
@@ -342,4 +383,27 @@ final class WindowClearance: NSObject {
         removeObservers()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
+}
+
+private func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+    return value
+}
+
+private func windowFrame(_ window: AXUIElement) -> CGRect? {
+    guard let position = attribute(kAXPositionAttribute, of: window), CFGetTypeID(position) == AXValueGetTypeID(),
+          let size = attribute(kAXSizeAttribute, of: window), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+    var point = CGPoint.zero
+    var dimensions = CGSize.zero
+    guard AXValueGetValue(position as! AXValue, .cgPoint, &point),
+          AXValueGetValue(size as! AXValue, .cgSize, &dimensions) else { return nil }
+    return CGRect(origin: point, size: dimensions)
+}
+
+private func ordinaryWindowFrame(_ window: AXUIElement) -> CGRect? {
+    guard attribute(kAXSubroleAttribute, of: window) as? String == kAXStandardWindowSubrole,
+          attribute(kAXMinimizedAttribute, of: window) as? Bool == false,
+          attribute("AXFullScreen", of: window) as? Bool != true else { return nil }
+    return windowFrame(window)
 }
