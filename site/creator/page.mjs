@@ -101,7 +101,7 @@ function controlHTML(control, r) {
   } else if (control.kind === "number") {
     const [min, max] = control.range, text = value == null ? "" : formatNumber(value);
     const slider = control.slider ? `<input type="range" min="${min}" max="${max}" step="${control.step}" aria-label="${e(control.label)}" data-slider-for="${control.id}" value="${e(text)}">` : "";
-    input = `<div class="number-control">${slider}<div class="number-field"><span class="scrub-handle" aria-hidden="true" title="Drag to change. Hold Shift for steps of 10.">⟷</span><input ${attr} type="text" ${min < 0 ? "" : 'inputmode="decimal" '}value="${e(text)}" autocomplete="off" spellcheck="false"><span class="number-unit">${e(control.unit)}</span></div></div>`;
+    input = `<div class="number-control">${slider}<div class="number-field"><span class="scrub-handle" aria-hidden="true" title="Drag to change. Hold Shift for steps of 10."><svg viewBox="0 0 16 8" width="16" height="8" focusable="false"><path d="M4 1 1 4l3 3M12 1l3 3-3 3M1.5 4h13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span><input ${attr} type="text" ${min < 0 ? "" : 'inputmode="decimal" '}value="${e(text)}" autocomplete="off" spellcheck="false"><span class="number-unit">${e(control.unit)}</span></div></div>`;
   } else input = `<input ${attr} type="text" value="${e(value ?? "")}" autocomplete="off">`;
   const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
   const helpText = control.help.slice(control.help.indexOf(": ") + 2);
