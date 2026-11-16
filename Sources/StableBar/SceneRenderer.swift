@@ -71,10 +71,14 @@ enum SceneRenderer {
                                                                     focusedWindow: scene.focusedWindow)
         }
         if let spaces = scene.yabaiSpaces {
+            let bundleIDs = try Dictionary(uniqueKeysWithValues: scene.yabaiApps.map { key, bundleID in
+                guard let pid = Int32(exactly: key) else { throw CommandFailure(message: "yabaiApps: \(key) isn't a process ID.") }
+                return (pid, bundleID)
+            })
             store.workspaceStore.workspaces = try yabaiSnapshot(spaces: JSONEncoder().encode(spaces),
                                                                 windows: JSONEncoder().encode(scene.yabaiWindows ?? []),
                                                                 displays: Data(#"[{"id":1,"index":1}]"#.utf8), screenIDs: [1],
-                                                                bundleIDs: Dictionary(uniqueKeysWithValues: scene.yabaiApps.map { (Int32($0.key), $0.value) }))
+                                                                bundleIDs: bundleIDs)
         }
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
