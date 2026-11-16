@@ -47,6 +47,9 @@ When your main file sets values that the selected theme also sets, Theme names t
 
 **Theme links** (`stablebar://theme?v=1&package=…&config=…`) carry a theme's `package.json` and `config.json`. Opening one shows a banner card above the gallery in **Settings → Theme**; nothing is installed and your bar stays as it is. **Try on Bar** previews it temporarily. **Keep** after trying, or **Use theme** directly, installs and saves it like a Store theme, following the gallery's screen and **All setups**/**This setup only**/**Shared bar only** choice. **Cancel** returns to your saved theme and keeps the card; **Dismiss** removes the card and deletes the linked copy. Your own settings still override the theme; **Reset them** removes those overrides with **Every screen** selected. If your Mac doesn't have a font the theme uses, the text appears in the system font.
 
+If you choose or try another theme while a linked theme installs, your newer choice is kept.
+The linked theme stays installed, with its card ready to use again.
+
 Links accept `tokens`, `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups`
 and `profiles`. Other keys are refused, including legacy `customization` and `removedWidgets`; an
 empty `widgets` list is ignored. Includes, screenshots and extra files are refused. At the root and

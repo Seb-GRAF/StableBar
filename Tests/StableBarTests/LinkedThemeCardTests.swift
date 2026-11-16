@@ -109,6 +109,118 @@ struct LinkedThemeCardTests {
         #expect(gallery.overrideTheme?.key == store.selectedThemeKey)
     }
 
+    @Test(arguments: [false, true], [false, true])
+    func aGallerySelectionSurvivesALinkedThemeInstallation(tryFirst: Bool, onScreen: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let selected = try fixture.theme(#"{"bar":{"height":42}}"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let client = store.packageStoreClient
+        let started = AsyncStream.makeStream(of: Void.self)
+        let release = AsyncStream.makeStream(of: Void.self)
+        defer { started.continuation.finish(); release.continuation.finish() }
+        let candidate = try ThemeLinkCandidate(link: link(), store: store) { directory in
+            started.continuation.yield(())
+            for await _ in release.stream { break }
+            return try await client.install(directory, from: nil)
+        }
+        store.pendingLinks.theme = candidate
+        let editor = ConfigurationEditor(store: store)
+        let screen: ScreenKind? = onScreen ? .monitor : nil
+        let card = LinkedThemeCard(candidate: candidate, editor: editor, screen: screen)
+        if tryFirst { candidate.tryOnBar() }
+
+        let use = Task { await card.useTheme() }
+        for await _ in started.stream { break }
+        editor.gallery.select(selected, on: screen)
+        #expect(editor.gallery.errors[selected.key] == nil)
+        let chosenDocument = try fixture.document()
+        let undoCount = store.customizationHistory.undoSteps.count
+        #expect(undoCount == 1)
+        release.continuation.yield(())
+        await use.value
+
+        #expect(try fixture.document() == chosenDocument)
+        #expect(store.selectedThemeKey == (onScreen ? "built-in" : selected.key))
+        #expect(store.themeTrialDirectory == nil)
+        #expect(store.customizationHistory.undoSteps.count == undoCount)
+        #expect(candidate.state == .ready)
+        #expect(store.pendingLinks.theme === candidate)
+        #expect(FileManager.default.fileExists(atPath: candidate.choice.directory.path))
+        let installed = try fixture.packages.directory(id: candidate.choice.manifest.id,
+                                                      version: candidate.choice.manifest.version)
+        #expect(try Data(contentsOf: installed.appending(path: "config.json")) == candidate.link.configuration)
+        #expect(try Data(contentsOf: installed.appending(path: "package.json")) == candidate.link.manifest)
+
+        await card.useTheme()
+
+        #expect(candidate.state == .used)
+        #expect(store.pendingLinks.theme == nil)
+        #expect(store.customizationHistory.undoSteps.count == undoCount + 1)
+        #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
+    }
+
+    enum TrialChange: CaseIterable { case tryAnother, cancel, saveAnother }
+
+    @Test(arguments: TrialChange.allCases)
+    func aChangedTrialSurvivesALinkedThemeInstallation(change: TrialChange) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let selected = try fixture.theme(#"{"bar":{"height":42}}"#)
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let client = store.packageStoreClient
+        let started = AsyncStream.makeStream(of: Void.self)
+        let release = AsyncStream.makeStream(of: Void.self)
+        defer { started.continuation.finish(); release.continuation.finish() }
+        let candidate = try ThemeLinkCandidate(link: link(), store: store) { directory in
+            started.continuation.yield(())
+            for await _ in release.stream { break }
+            return try await client.install(directory, from: nil)
+        }
+        store.pendingLinks.theme = candidate
+        let card = LinkedThemeCard(candidate: candidate, editor: ConfigurationEditor(store: store))
+        candidate.tryOnBar()
+        var endedTrial = false
+        store.onEndThemeTrial = { endedTrial = true }
+
+        let use = Task { await card.useTheme() }
+        for await _ in started.stream { break }
+        switch change {
+        case .tryAnother: try store.tryTheme(selected)
+        case .cancel: candidate.cancelTrial()
+        case .saveAnother: try store.applyTheme(selected)
+        }
+        let chosenDocument = try fixture.document()
+        let selectedKey = store.selectedThemeKey
+        let undoCount = store.customizationHistory.undoSteps.count
+        let trialDirectory = store.themeTrialDirectory
+        let height = store.configuration?.bar.height
+        release.continuation.yield(())
+        await use.value
+
+        #expect(try fixture.document() == chosenDocument)
+        #expect(store.selectedThemeKey == selectedKey)
+        #expect(store.themeTrialDirectory == trialDirectory)
+        #expect(store.configuration?.bar.height == height)
+        #expect(!endedTrial)
+        #expect(store.customizationHistory.undoSteps.count == undoCount)
+        #expect(candidate.state == (change == .saveAnother ? .trying : .ready))
+        #expect(store.pendingLinks.theme === candidate)
+        let installed = try fixture.packages.directory(id: candidate.choice.manifest.id,
+                                                      version: candidate.choice.manifest.version)
+        #expect(FileManager.default.fileExists(atPath: installed.path))
+
+        card.dismiss()
+
+        #expect(store.themeTrialDirectory == (change == .tryAnother ? selected.directory : nil))
+        #expect(store.pendingLinks.theme == nil)
+        #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
+    }
+
     @Test(arguments: [false, true])
     func theCardTracksTrialsEndedElsewhere(tryThemes: Bool) async throws {
         let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40},"widgets":[]}"#)

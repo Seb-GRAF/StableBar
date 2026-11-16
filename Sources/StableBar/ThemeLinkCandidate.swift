@@ -15,10 +15,12 @@ final class ThemeLinkCandidate {
         return candidateState
     }
     private weak var store: BarStore?
+    private let install: @Sendable (URL) async throws -> WidgetPackageInspection
     private var discarded = false
     private var using = false
 
-    init(link: ThemeLink, store: BarStore) throws {
+    init(link: ThemeLink, store: BarStore,
+         install: (@Sendable (URL) async throws -> WidgetPackageInspection)? = nil) throws {
         try link.validateFiles()
         let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
         let packages = store.packageStoreClient.packages
@@ -54,6 +56,9 @@ final class ThemeLinkCandidate {
             validationExpansionUnits = budget.consumed
             validationOriginPathBytes = budget.consumedOriginPathBytes
             self.store = store
+            self.install = install ?? { [client = store.packageStoreClient] directory in
+                try await client.install(directory, from: nil)
+            }
         } catch {
             try? FileManager.default.removeItem(at: directory)
             if error is DecodingError { throw ThemeLinkError.damaged }
@@ -84,8 +89,11 @@ final class ThemeLinkCandidate {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
+        let configurationURL = store.configurationURL
+        let selectedKey = store.selectedThemeKey
         let trialDirectory = store.themeTrialDirectory
         do {
+            let screenTheme = try selectedScreenTheme(on: kind, in: store)
             let client = store.packageStoreClient
             let packages = client.packages
             try Self.checkInstalledID(choice.manifest.id, packages: packages)
@@ -97,10 +105,17 @@ final class ThemeLinkCandidate {
                 }
                 installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
             } else {
-                let inspection = try await client.install(choice.directory, from: nil)
+                let inspection = try await install(choice.directory)
                 installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
             }
             guard !discarded else { return }
+            guard store.configurationURL == configurationURL,
+                  store.selectedThemeKey == selectedKey,
+                  store.themeTrialDirectory == trialDirectory,
+                  try selectedScreenTheme(on: kind, in: store) == screenTheme else {
+                candidateState = store.themeTrialDirectory == choice.directory ? .trying : .ready
+                return
+            }
             try store.applyTheme(installed, on: kind, everyBar: everyBar)
             store.onEndThemeTrial?()
             store.endThemeTrial()
@@ -121,6 +136,12 @@ final class ThemeLinkCandidate {
         discarded = true
         cancelTrial()
         try? FileManager.default.removeItem(at: choice.directory)
+    }
+
+    private func selectedScreenTheme(on kind: ScreenKind?, in store: BarStore) throws -> ConfigurationValue? {
+        guard let kind else { return nil }
+        let screens = try store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self)
+        return screens?[kind.rawValue]?["theme"]
     }
 
     private func sameFiles(at directory: URL) throws -> Bool {
