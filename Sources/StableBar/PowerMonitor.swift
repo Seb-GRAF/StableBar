@@ -1,13 +1,18 @@
 import Foundation
+import IOKit
 import IOKit.ps
 
-/// The internal battery's charge and state from IOKit. Its run loop source fires when the power
-/// source, the charge or the time remaining changes.
+/// The internal battery's charge and state from IOKit, and whether Low Power Mode is on. Its run
+/// loop source fires when the power source, the charge or the time remaining changes, and macOS
+/// posts a notification when Low Power Mode changes.
 final class PowerMonitor: ChangeMonitor, @unchecked Sendable {
     // `start` and `stop` run on the main actor, and the run loop source calls back on the main run
-    // loop, so `source` and `changed` are only touched on the main thread.
+    // loop, so `source`, `changed` and `lowPowerObserver` are only touched on the main thread. The
+    // Low Power Mode notification can arrive on any thread, and `relay` hops to the main queue.
     private var source: CFRunLoopSource?
     private var changed: (@Sendable () -> Void)?
+    private let relay = MainQueueRelay()
+    private var lowPowerObserver: NSObjectProtocol?
 
     deinit { stop() }
 
@@ -16,13 +21,43 @@ final class PowerMonitor: ChangeMonitor, @unchecked Sendable {
               let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
             throw CommandFailure(message: "Could not read power sources.")
         }
+        var output = ScriptOutput(text: "AC", icon: "powerplug", fields: ["state": "ac", "present": "false"], values: [:])
         for source in sources {
             if let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-               let output = Self.output(battery: description) {
-                return output
+               let battery = Self.output(battery: description) {
+                output = battery
+                output.fields?.merge(Self.fields(smartBattery: Self.smartBatteryProperties())) { $1 }
+                break
             }
         }
-        return ScriptOutput(text: "AC", icon: "powerplug", fields: ["state": "ac", "present": "false"])
+        let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        output.fields?["lowPower"] = String(lowPower)
+        output.values?["lowPower"] = lowPower ? 1 : 0
+        return output
+    }
+
+    /// The cycle count and the maximum capacity that System Settings shows under Battery Health, from
+    /// the `AppleSmartBattery` registry entry's `properties`. The capacity is the charge the battery
+    /// holds when full as a whole percentage of its design capacity, rounded up as System Settings does.
+    static func fields(smartBattery properties: [String: Any]) -> [String: String] {
+        // Recent macOS releases keep the capacities only under `BatteryData`, earlier ones at the top level.
+        func number(_ key: String) -> Int? {
+            (properties["BatteryData"] as? [String: Any])?[key] as? Int ?? properties[key] as? Int
+        }
+        var fields: [String: String] = [:]
+        if let cycles = number("CycleCount") { fields["cycles"] = String(cycles) }
+        if let nominal = number("NominalChargeCapacity"), let design = number("DesignCapacity"), design > 0 {
+            fields["capacity"] = String(Int((Double(nominal * 100) / Double(design)).rounded(.up)))
+        }
+        return fields
+    }
+
+    private static func smartBatteryProperties() -> [String: Any] {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        defer { IOObjectRelease(service) }
+        var properties: Unmanaged<CFMutableDictionary>?
+        IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0)
+        return properties?.takeRetainedValue() as? [String: Any] ?? [:]
     }
 
     /// Whether this Mac has an internal battery. A Mac mini, Mac Studio, iMac or Mac Pro has none, at most a UPS.
@@ -87,10 +122,14 @@ final class PowerMonitor: ChangeMonitor, @unchecked Sendable {
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         self.source = source
+        relay.start(changed)
+        lowPowerObserver = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: nil) { [weak self] _ in
+            self?.relay.notify()
+        }
     }
 
-    /// Removes and invalidates the run loop source. Stopping a monitor that isn't listening does
-    /// nothing, and `start` listens again with a new source.
+    /// Removes and invalidates the run loop source and stops watching Low Power Mode. Stopping a
+    /// monitor that isn't listening does nothing, and `start` listens again with a new source.
     func stop() {
         if let source {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
@@ -98,5 +137,8 @@ final class PowerMonitor: ChangeMonitor, @unchecked Sendable {
         }
         source = nil
         changed = nil
+        relay.stop()
+        if let lowPowerObserver { NotificationCenter.default.removeObserver(lowPowerObserver) }
+        lowPowerObserver = nil
     }
 }

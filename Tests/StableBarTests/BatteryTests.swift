@@ -51,6 +51,16 @@ private func battery(_ extra: [String: Any] = [:]) -> [String: Any] {
     }
 }
 
+@Test func batteryConditionReadsTheCycleCountAndMaximumCapacityWhereverMacOSKeepsThem() {
+    // The figures of a battery that System Settings shows at 389 cycles and 90 %.
+    let capacities: [String: Any] = ["DesignCapacity": NSNumber(value: 6249), "NominalChargeCapacity": NSNumber(value: 5577)]
+    let expected = ["cycles": "389", "capacity": "90"]
+    #expect(PowerMonitor.fields(smartBattery: ["CycleCount": NSNumber(value: 389), "BatteryData": capacities]) == expected)
+    #expect(PowerMonitor.fields(smartBattery: capacities.merging(["CycleCount": NSNumber(value: 389)]) { $1 }) == expected)
+    #expect(PowerMonitor.fields(smartBattery: ["DesignCapacity": NSNumber(value: 5000), "NominalChargeCapacity": NSNumber(value: 4500)]) == ["capacity": "90"])
+    #expect(PowerMonitor.fields(smartBattery: [:]).isEmpty)
+}
+
 @Test func batteryBlocksReadTheChargeFromTheirSource() throws {
     func source(_ json: String) throws -> String? {
         guard case let .battery(source) = try JSONDecoder().decode(PopupBlock.self, from: Data(json.utf8)).content else { return nil }
