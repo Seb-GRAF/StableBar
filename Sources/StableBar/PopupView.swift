@@ -289,7 +289,7 @@ struct PopupBlockView: View {
 
     @ViewBuilder
     var body: some View {
-        if let field = block.hideWhenEmpty, fields[field, default: ""].isEmpty {
+        if block.isHidden(fields: fields, values: context.values) {
             EmptyView()
         } else {
             styledContent

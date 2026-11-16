@@ -151,6 +151,10 @@ struct PopupBlock: Decodable, Sendable {
     let openMenuBarItem: MenuBarItemReference?
     let selectInputSourceField: String?
     let hideWhenEmpty: String?
+    /// Conditions of which one must match for the block to show; nil shows it whatever the output.
+    let showWhen: [RuleCondition]?
+    /// Conditions any of which hides the block.
+    let hideWhen: [RuleCondition]?
     let scrollSpeed: Double?
     /// Whether a field block shows all of its text over as many lines as it needs, selectable, and an input block
     /// runs its text onto more lines as it grows.
@@ -179,7 +183,8 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
+        case hideWhenEmpty, showWhen, hideWhen, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField
+        case openMenuBarItem, selectInputSourceField, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon
     }
@@ -201,6 +206,8 @@ struct PopupBlock: Decodable, Sendable {
         openMenuBarItem = nil
         selectInputSourceField = nil
         self.hideWhenEmpty = hideWhenEmpty
+        showWhen = nil
+        hideWhen = nil
         scrollSpeed = nil
         wraps = false
         maxHeight = nil
@@ -245,6 +252,8 @@ struct PopupBlock: Decodable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .selectInputSourceField, in: values, debugDescription: "A block cannot combine selectInputSourceField with onClick, onClickField, open, openField, quitField or openMenuBarItem.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
+        showWhen = try Self.conditions(in: values, forKey: .showWhen)
+        hideWhen = try Self.conditions(in: values, forKey: .hideWhen)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)
         if let scrollSpeed, scrollSpeed <= 0 {
             throw DecodingError.dataCorruptedError(forKey: .scrollSpeed, in: values, debugDescription: "Scroll speed must be greater than zero.")
@@ -387,6 +396,25 @@ struct PopupBlock: Decodable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .shimmer, in: values, debugDescription: "shimmer applies to text and field blocks.")
             }
         }
+    }
+
+    /// One condition, or a list of them.
+    private static func conditions(in values: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> [RuleCondition]? {
+        guard values.contains(key), try !values.decodeNil(forKey: key) else { return nil }
+        guard (try? values.nestedUnkeyedContainer(forKey: key)) != nil else { return [try values.decode(RuleCondition.self, forKey: key)] }
+        let conditions = try values.decode([RuleCondition].self, forKey: key)
+        guard !conditions.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: values, debugDescription: "List at least one condition, or leave \(key.stringValue) out.")
+        }
+        return conditions
+    }
+
+    /// Whether the block shows nothing and takes no space for these fields: its `hideWhenEmpty` field is empty,
+    /// none of its `showWhen` conditions match, or one of its `hideWhen` conditions does.
+    func isHidden(fields: [String: String], values: [String: Double]) -> Bool {
+        if let field = hideWhenEmpty, fields[field, default: ""].isEmpty { return true }
+        if let showWhen, !showWhen.contains(where: { $0.matches(fields: fields, values: values) }) { return true }
+        return hideWhen?.contains { $0.matches(fields: fields, values: values) } == true
     }
 }
 
