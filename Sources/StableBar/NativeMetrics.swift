@@ -22,6 +22,13 @@ struct SystemWarnings: Equatable {
 
     /// The state of a widget that warns as a whole.
     var any: String? { severest(cpu, memory) }
+
+    /// The metric that warns the most: `critical` before `warning`, then heat, memory and CPU. Heat
+    /// folds into the CPU and memory states, which then tie it, so only critical memory pressure beats it.
+    var strain: String? {
+        let states = [("heat", heat), ("memory", memory), ("cpu", cpu)]
+        return (states.first { $0.1 == "critical" } ?? states.first { $0.1 == "warning" })?.0
+    }
 }
 
 /// The most severe of `states`: `critical`, then `warning`.
@@ -227,10 +234,12 @@ final class NativeMetrics {
     private var cpu: CPUTicks?
     private var cpuHistory: [Double] = []
     private var memoryHistory: [Double] = []
+    private var strain: String?
+    private var strainHistory: [String?] = []
     private var network: [String: NetworkCounters] = [:]
     private var networkTime: ContinuousClock.Instant?
 
-    func system() throws -> ScriptOutput {
+    func system(_ provider: ProviderConfiguration) throws -> ScriptOutput {
         let host = mach_host_self()
         defer { mach_port_deallocate(mach_task_self_, host) }
         var load = host_cpu_load_info()
@@ -293,7 +302,25 @@ final class NativeMetrics {
             output.fields!["gpu"] = String(Int((gpu * 100).rounded()))
             output.values!["gpu"] = gpu
         }
+        addStrain(to: &output, provider: provider)
         return output
+    }
+
+    /// Adds the metric under strain. A change applies once it holds for 3 samples in a row, so a
+    /// widget following it doesn't flicker between metrics.
+    func addStrain(to output: inout ScriptOutput, provider: ProviderConfiguration) {
+        let latest = SystemWarnings(output, provider: provider)!.strain
+        strainHistory = Array((strainHistory + [latest]).suffix(3))
+        if strainHistory.count == 3, strainHistory.allSatisfy({ $0 == latest }) { strain = latest }
+        let (icon, level): (String, Double) = switch strain {
+        case "heat": ("thermometer.high", ["serious": 0.67, "critical": 1][output.fields!["thermal"]!, default: 0])
+        case "memory": ("memorychip", output.values!["memory"]!)
+        case "cpu": ("cpu", output.values!["cpu"]!)
+        default: ("", 0)
+        }
+        output.fields!["strain"] = strain ?? ""
+        output.fields!["strainIcon"] = icon
+        output.values!["strain"] = level
     }
 
     /// The busiest GPU's utilization, so an idle integrated GPU doesn't hide a busy discrete one.

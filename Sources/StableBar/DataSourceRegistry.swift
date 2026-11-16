@@ -140,7 +140,7 @@ extension DataSourceType {
         return PollingSource { _ in
             let lists = provider.processes > 0 ? await processes.lists(count: provider.processes) : nil
             return .output(Result {
-                var output = try metrics.system()
+                var output = try metrics.system(provider)
                 output.lists = lists
                 output.lists?["apps"] = lists?[provider.sortBy.rawValue]
                 return output

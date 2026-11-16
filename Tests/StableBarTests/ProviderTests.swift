@@ -480,16 +480,47 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     var output = ScriptOutput(text: "", fields: ["pressure": "normal", "thermal": "nominal"], values: ["cpu": 0.95, "memory": 0.5])
     func warnings() throws -> [String?] {
         let warnings = try #require(SystemWarnings(output, provider: provider))
-        return [warnings.heat, warnings.cpu, warnings.memory]
+        return [warnings.heat, warnings.cpu, warnings.memory, warnings.strain]
     }
-    #expect(try warnings() == [nil, "warning", nil])
+    #expect(try warnings() == [nil, "warning", nil, "cpu"])
     output.values = ["cpu": 0.1, "memory": 0.95]
-    #expect(try warnings() == [nil, nil, "warning"])
-    output.values!["memory"] = 0.5
+    #expect(try warnings() == [nil, nil, "warning", "memory"])
+    output.values!["cpu"] = 0.95
+    #expect(try warnings() == [nil, "warning", "warning", "memory"])
+    output.values = ["cpu": 0.1, "memory": 0.5]
     output.fields!["pressure"] = "critical"
-    #expect(try warnings() == [nil, nil, "critical"])
+    #expect(try warnings() == [nil, nil, "critical", "memory"])
     output.fields!["thermal"] = "serious"
-    #expect(try warnings() == ["warning", "warning", "critical"])
+    #expect(try warnings() == ["warning", "warning", "critical", "memory"])
+    output.fields!["pressure"] = "warning"
+    #expect(try warnings() == ["warning", "warning", "warning", "heat"])
+    output.fields!["thermal"] = "critical"
+    output.fields!["pressure"] = "critical"
+    #expect(try warnings() == ["critical", "critical", "critical", "heat"])
+    output.fields = ["pressure": "normal", "thermal": "fair"]
+    #expect(try warnings() == [nil, nil, nil, nil])
+}
+
+@Test @MainActor func systemStrainChangesOnlyOnceItHoldsForThreeSamples() throws {
+    let metrics = NativeMetrics()
+    let provider = try ConfigurationValue.object(["type": .string("system")]).decoded(ProviderConfiguration.self)
+    func strain(cpu: Double, thermal: String = "nominal") -> (String, String, Double) {
+        var output = ScriptOutput(text: "", fields: ["pressure": "normal", "thermal": thermal], values: ["cpu": cpu, "memory": 0.5])
+        metrics.addStrain(to: &output, provider: provider)
+        return (output.fields!["strain"]!, output.fields!["strainIcon"]!, output.values!["strain"]!)
+    }
+    #expect(strain(cpu: 0.95) == ("", "", 0))
+    #expect(strain(cpu: 0.95) == ("", "", 0))
+    #expect(strain(cpu: 0.96) == ("cpu", "cpu", 0.96))
+    #expect(strain(cpu: 0.5, thermal: "serious") == ("cpu", "cpu", 0.5))
+    #expect(strain(cpu: 0.5, thermal: "serious") == ("cpu", "cpu", 0.5))
+    #expect(strain(cpu: 0.95) == ("cpu", "cpu", 0.95))
+    #expect(strain(cpu: 0.5, thermal: "serious") == ("cpu", "cpu", 0.5))
+    #expect(strain(cpu: 0.5, thermal: "critical") == ("cpu", "cpu", 0.5))
+    #expect(strain(cpu: 0.5, thermal: "serious") == ("heat", "thermometer.high", 0.67))
+    #expect(strain(cpu: 0.5) == ("heat", "thermometer.high", 0))
+    #expect(strain(cpu: 0.5) == ("heat", "thermometer.high", 0))
+    #expect(strain(cpu: 0.5) == ("", "", 0))
 }
 
 @Test func aSystemMonitorShowingCPUAndMemoryWarnsOnlyThePartOverItsThreshold() throws {
