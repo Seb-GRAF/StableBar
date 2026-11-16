@@ -103,6 +103,8 @@ StableBar shows `requires`, `permissions` and `hosts` but does not enforce them.
 
 **Copy link** on a package's page copies a `stablebar://package` link to it, such as `stablebar://package/nord`, or `stablebar://package/clock?source=acme` for a package from a [private source](#private-sources). Put it in a README, a web page or a team chat: opening it in macOS opens **Settings → Packages** on that package. An installed package opens its installed copy, and a Store widget that is now part of StableBar Essentials opens **StableBar Essentials**. Otherwise the link opens the package's page in the source it names; a link without a source opens the Store's page, or the first private source that lists the package. Nothing is installed until you review the page and choose **Add to bar** or **Use theme**. When none of your sources lists the package, or the source the link names is unavailable or not added, the Store says so above its cards; for a source you haven't added, ask for its [join link](#joining-with-a-link). **Copy link** appears on packages that a source lists, not on folders, and you can write a link by hand from a package's `id`.
 
+A [`stablebar://theme` link](themes.md) carries a theme's two files and opens a preview card in **Settings → Theme**, where you can try it before installing it.
+
 ## Private sources
 
 A private source is a package index that your team hosts, for packages that can't go in the public Store, such as widgets for an internal GitLab or company tools. Its packages appear in Packages, **Settings → Theme** and **Add widget** beside the Store's. The StableBar Store is always on.

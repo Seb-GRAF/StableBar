@@ -111,9 +111,9 @@ struct PackagesView: View {
         }
         .sheet(isPresented: $showingSources) { PackageSourcesView(library: library, link: $sourceLink) }
         .onAppear(perform: openPendingSourceLink)
-        .onChange(of: store.pendingSourceLink) { openPendingSourceLink() }
+        .onChange(of: store.pendingLinks.source) { openPendingSourceLink() }
         .onAppear(perform: openPendingPackageLink)
-        .onChange(of: store.pendingPackageLink) { openPendingPackageLink() }
+        .onChange(of: store.pendingLinks.package) { openPendingPackageLink() }
         .onChange(of: busy) { openPendingPackageLink() }
         .onChange(of: store.effectiveDocument) { library.configurationChanged() }
         .onChange(of: library.sources) {
@@ -307,16 +307,16 @@ struct PackagesView: View {
 
     /// A join link opens the sources sheet with its Add source form; the store's copy is cleared once taken.
     private func openPendingSourceLink() {
-        guard reviewing == nil, let link = store.pendingSourceLink else { return }
-        store.pendingSourceLink = nil
+        guard reviewing == nil, let link = store.pendingLinks.source else { return }
+        store.pendingLinks.source = nil
         sourceLink = link
         showingSources = true
     }
 
     /// A package link shows its package once nothing is being added or updated; the store's copy is cleared once taken.
     private func openPendingPackageLink() {
-        guard reviewing == nil, !busy, let link = store.pendingPackageLink else { return }
-        store.pendingPackageLink = nil
+        guard reviewing == nil, !busy, let link = store.pendingLinks.package else { return }
+        store.pendingLinks.package = nil
         tab = .overview
         Task { await library.open(link) }
     }

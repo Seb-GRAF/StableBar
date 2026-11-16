@@ -220,6 +220,12 @@ struct ConfigurationOrigin: Equatable, Sendable, CustomStringConvertible {
     }
 }
 
+/// A theme shown in place of the selected one, such as one being tried.
+struct PreviewTheme {
+    let id: String
+    let layer: ConfigurationLayer
+}
+
 struct ConfigurationLayer {
     var values: [String: ConfigurationValue]
     var origins: [String: ConfigurationOrigin]
@@ -332,8 +338,14 @@ private func visitConfigurationValues(_ value: ConfigurationValue, path: String 
 private struct ConfigurationOriginPathBudget {
     private static let maximumProcessedPathBytes = 4_000_000
     private var remaining = Self.maximumProcessedPathBytes
+    private let shared: ConfigurationReferenceExpansionBudget?
+
+    init(shared: ConfigurationReferenceExpansionBudget? = nil) {
+        self.shared = shared
+    }
 
     mutating func record(_ path: String, token: String) throws {
+        try shared?.recordOriginPath(path, token: token)
         remaining -= path.utf8.count
         guard remaining >= 0 else { throw ThemeConfigurationError.referenceOriginsTooLarge(token) }
     }
@@ -409,6 +421,7 @@ let bundledThemesDirectory = Bundle.main.url(forResource: "themes", withExtensio
 
 struct ConfigurationLoader: Sendable {
     var themesDirectory = bundledThemesDirectory
+    var referenceExpansionBudget: ConfigurationReferenceExpansionBudget?
     /// The release that reads the configuration; without one, as in development builds, every file is read strictly.
     var appVersion = AppVersion.release
     /// The newest release a file of the configuration was written for, when it's newer than `appVersion`.
@@ -448,7 +461,7 @@ struct ConfigurationLoader: Sendable {
 
     mutating func load(_ url: URL, data: Data? = nil,
                        context: ConfigurationContext = ConfigurationContext(),
-                       previewTheme: ConfigurationLayer? = nil) throws -> Configuration {
+                       previewTheme: PreviewTheme? = nil) throws -> Configuration {
         try readingNewerFiles { loader in
             var configuration = try ConfigurationValue.object(loader.compose(url, data: data, context: context, previewTheme: previewTheme))
                 .decoded(Configuration.self)
@@ -467,7 +480,7 @@ struct ConfigurationLoader: Sendable {
 
     mutating func compose(_ url: URL, data: Data? = nil,
                           context: ConfigurationContext = ConfigurationContext(),
-                          previewTheme: ConfigurationLayer? = nil, screen: ScreenKind? = nil) throws -> [String: ConfigurationValue] {
+                          previewTheme: PreviewTheme? = nil, screen: ScreenKind? = nil) throws -> [String: ConfigurationValue] {
         try readingNewerFiles { try $0.composeFiles(url, data: data, context: context, previewTheme: previewTheme, screen: screen) }
     }
 
@@ -491,7 +504,7 @@ struct ConfigurationLoader: Sendable {
     }
 
     private mutating func composeFiles(_ url: URL, data: Data?, context: ConfigurationContext,
-                                       previewTheme: ConfigurationLayer?, screen: ScreenKind?) throws -> [String: ConfigurationValue] {
+                                       previewTheme: PreviewTheme?, screen: ScreenKind?) throws -> [String: ConfigurationValue] {
         dependencies = []
         activeProfiles = []
         packageBoundaries = [:]
@@ -521,10 +534,14 @@ struct ConfigurationLoader: Sendable {
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
+        var context = context
+        context.theme = "built-in"
         if let previewTheme {
-            try layer.merge(previewTheme)
+            try layer.merge(previewTheme.layer)
+            context.theme = previewTheme.id
         } else if let theme = try theme?.decoded(WidgetPackageSelection.self, at: "theme"), theme.enabled {
             try layer.merge(theme.version == nil ? readBundledTheme(theme) : readSelectedPackage(theme, from: packageStore, theme: true))
+            context.theme = theme.id
         }
         try layer.merge(base)
         return try finish(layer, context: context)
@@ -567,7 +584,8 @@ struct ConfigurationLoader: Sendable {
         profileAppearance = nil
         if case let .object(bar) = layer.values["bar"], let appearance = bar["appearance"],
            case let .string(name) = try substituteConfigurationReferences(appearance, prefix: "@token.",
-                                                                          values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]) {
+                                                                          values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:],
+                                                                          budget: referenceExpansionBudget) {
             context.appearance = name
             profileAppearance = name
         }
@@ -609,9 +627,10 @@ struct ConfigurationLoader: Sendable {
         for key in ["profiles", "profile"] { layer.values.removeValue(forKey: key) }
         let tokens = try layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
         let beforeTokens = layer.values
-        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens)
+        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens,
+                                                            budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
-        var originBudget = ConfigurationOriginPathBudget()
+        var originBudget = ConfigurationOriginPathBudget(shared: referenceExpansionBudget)
         let tokenSources = layer.origins
         try tokenOrigins(.object(beforeTokens), origins: tokenSources, tokens: tokens, into: &layer.origins, budget: &originBudget)
         templates = try layer.values["templates"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
@@ -716,7 +735,8 @@ struct ConfigurationLoader: Sendable {
         switch value {
         case let .string(reference) where reference.hasPrefix("@token."):
             let name = String(reference.dropFirst(7))
-            let resolved = try substituteConfigurationReferences(value, prefix: "@token.", values: tokens)
+            let resolved = try substituteConfigurationReferences(value, prefix: "@token.", values: tokens,
+                                                                budget: referenceExpansionBudget)
             var origin = source
             origin.token = name
             origin.tokenSource = origins["tokens.\(name)"]!.description
@@ -816,12 +836,22 @@ struct ConfigurationLoader: Sendable {
         for (name, setting) in manifest.settings where setting.type == "secret" {
             values[name] = .string("@secret.\(manifest.id)/\(name)")
         }
-        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@setting.", values: values)
+        layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@setting.", values: values,
+                                                            budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
-        layer.contributions = layer.contributions.mapValues { entries in
-            entries.map {
+        layer.contributions = try layer.contributions.mapValues { entries in
+            try entries.map {
                 var entry = $0
-                entry.settingValue = try? substituteConfigurationReferences(entry.value, prefix: "@setting.", values: values)
+                do {
+                    entry.settingValue = try substituteConfigurationReferences(entry.value, prefix: "@setting.", values: values,
+                                                                              budget: referenceExpansionBudget)
+                } catch {
+                    entry.settingValue = nil
+                    if referenceExpansionBudget != nil,
+                       case .referenceExpansionTooLarge? = error as? ThemeConfigurationError {
+                        throw error
+                    }
+                }
                 return entry
             }
         }

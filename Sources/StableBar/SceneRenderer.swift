@@ -84,6 +84,13 @@ enum SceneRenderer {
         store.crashReports = CrashReports(directories: [crashes], defaults: crashDefaults, now: { now })
         try DocsImages.offline(store, in: directory)
         store.preparePresentations()
+        if let path = scene.themeLink {
+            let source = URL(filePath: path, relativeTo: folder).standardizedFileURL
+            let link = ThemeLink(manifest: try Data(contentsOf: source.appending(path: "package.json")),
+                                 configuration: try Data(contentsOf: source.appending(path: "config.json")))
+            _ = store.receive([link.link])
+            if let message = store.pendingLinks.themeError { throw CommandFailure(message: "themeLink: \(message)") }
+        }
         return store
     }
 
@@ -249,6 +256,7 @@ enum SceneRenderer {
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
                 (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
+                    && (store.pendingLinks.theme.map { editor.gallery.previews[$0.choice.linkedPreviewKey] != nil } ?? true)
                     // Crashes marks what it shows as seen once it has read the reports.
                     && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
                     && (scene.package == nil || library.draft?.inspection.manifest.id == scene.package)

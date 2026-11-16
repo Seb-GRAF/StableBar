@@ -1,8 +1,47 @@
 import Foundation
+import os
 
 let configurationReferenceExpansionLimit = 100_000
 // Keeps reference recursion within a worker thread's stack.
 let configurationReferenceDepthLimit = 64
+
+final class ConfigurationReferenceExpansionBudget: Sendable {
+    let limit: Int
+    let originPathByteLimit: Int?
+    private let remaining: OSAllocatedUnfairLock<Int>
+    private let remainingOriginPathBytes: OSAllocatedUnfairLock<Int>
+
+    init(limit: Int, originPathByteLimit: Int? = nil) {
+        self.limit = limit
+        self.originPathByteLimit = originPathByteLimit
+        remaining = OSAllocatedUnfairLock(initialState: limit)
+        remainingOriginPathBytes = OSAllocatedUnfairLock(initialState: originPathByteLimit ?? 0)
+    }
+
+    var consumed: Int { limit - remaining.withLock { $0 } }
+    var consumedOriginPathBytes: Int { (originPathByteLimit ?? 0) - remainingOriginPathBytes.withLock { $0 } }
+
+    func recordOriginPath(_ path: String, token: String) throws {
+        guard originPathByteLimit != nil else { return }
+        let bytes = path.utf8.count
+        try remainingOriginPathBytes.withLock { remaining in
+            guard bytes <= remaining else {
+                remaining = 0
+                throw ThemeConfigurationError.referenceOriginsTooLarge(token)
+            }
+            remaining -= bytes
+        }
+    }
+
+    fileprivate func withRemaining<T>(_ body: (inout Int) throws -> T) rethrows -> T {
+        try remaining.withLockUnchecked { remaining in
+            let available = min(remaining, configurationReferenceExpansionLimit)
+            var callRemaining = available
+            defer { remaining -= available - max(0, callRemaining) }
+            return try body(&callRemaining)
+        }
+    }
+}
 
 struct ConfigurationContext: Sendable, Equatable {
     var appearance = "light"
@@ -10,6 +49,8 @@ struct ConfigurationContext: Sendable, Equatable {
     var displayCount = 1
     var externalDisplay = false
     var app = ""
+    /// The ID of the theme the bar is drawn with, set by the loader once it has settled the theme.
+    var theme = "built-in"
 }
 
 struct ConfigurationProfile: Codable, Equatable, Sendable {
@@ -42,10 +83,11 @@ struct ProfileConditions: Codable, Equatable, Sendable {
     var displayCount: Int?
     var externalDisplay: Bool?
     var app: String?
+    var theme: String?
     /// A condition from a newer release, which this one can't check, so the profile never matches on its own.
     var unknownCondition = false
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app }
+    enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app, theme }
 
     init() {}
 
@@ -57,6 +99,7 @@ struct ProfileConditions: Codable, Equatable, Sendable {
         displayCount = try values.decodeIfPresent(Int.self, forKey: .displayCount)
         externalDisplay = try values.decodeIfPresent(Bool.self, forKey: .externalDisplay)
         app = try values.decodeIfPresent(String.self, forKey: .app)
+        theme = try values.decodeIfPresent(String.self, forKey: .theme)
     }
 
     func matches(_ context: ConfigurationContext) -> Bool {
@@ -66,6 +109,7 @@ struct ProfileConditions: Codable, Equatable, Sendable {
             && (displayCount == nil || displayCount == context.displayCount)
             && (externalDisplay == nil || externalDisplay == context.externalDisplay)
             && (app == nil || app == context.app)
+            && (theme == nil || theme == context.theme)
     }
 }
 
@@ -99,13 +143,18 @@ enum ThemeConfigurationError: LocalizedError {
 
 func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: String,
                                        values: [String: ConfigurationValue],
-                                       path: [String] = []) throws -> ConfigurationValue {
-    var remaining = configurationReferenceExpansionLimit
+                                       path: [String] = [],
+                                       budget: ConfigurationReferenceExpansionBudget? = nil) throws -> ConfigurationValue {
     var path = path
     var namesOnPath = Set(path)
-    return try substituteReferences(value, prefix: prefix, values: values,
-                                    path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
-                                    depth: max(0, path.count - 1))
+    func resolve(_ remaining: inout Int) throws -> ConfigurationValue {
+        try substituteReferences(value, prefix: prefix, values: values,
+                                 path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
+                                 depth: max(0, path.count - 1))
+    }
+    if let budget { return try budget.withRemaining(resolve) }
+    var remaining = configurationReferenceExpansionLimit
+    return try resolve(&remaining)
 }
 
 private func substituteReferences(_ value: ConfigurationValue, prefix: String,

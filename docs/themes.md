@@ -47,6 +47,26 @@ When your main file sets values that the selected theme also sets, Theme names t
 
 [Make a theme on the website](https://stablebar.app/create-theme.html) to change a theme's colors and shape. Download the zip, which holds a folder with `package.json` and `config.json`. Unzip it, open **Settings → Packages → Open a folder…**, choose the folder and select **Use theme**. To share it in the [Store](https://github.com/Seb-GRAF/stablebar-packages), choose **Submit to the Store** on the website for the steps to open a pull request. The Store's table requires a name and description with no `|` or line breaks; you can still download and share the theme.
 
+**Theme links** (`stablebar://theme?v=1&package=…&config=…`) carry a theme's `package.json` and `config.json`. Opening one shows a banner card above the gallery in **Settings → Theme**; nothing is installed and your bar stays as it is. **Try on Bar** previews it temporarily. **Keep** after trying, or **Use theme** directly, installs and saves it like a Store theme, following the gallery's screen and **All setups**/**This setup only**/**Shared bar only** choice. **Cancel** returns to your saved theme and keeps the card; **Dismiss** removes the card and deletes the linked copy. Your own settings still override the theme; **Reset them** removes those overrides with **Every screen** selected. If your Mac doesn't have a font the theme uses, the text appears in the system font.
+
+If you choose or try another theme while a linked theme installs, your newer choice is kept.
+The linked theme stays installed, with its card ready to use again.
+
+Links accept `tokens`, `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups`
+and `profiles`. Other keys are refused, including legacy `customization` and `removedWidgets`; an
+empty `widgets` list is ignored. Includes, screenshots and extra files are refused. At the root and
+in every profile, `bar` must be an object written out with only `height`, `margin`, `inset`,
+`spacing`, `background`, `style`, `notchWidth`, `notchSpacing`, `fillNotch` and `popupOffset`.
+Colors inside it may use tokens or settings with `choices`; free-text string settings under `bar`
+are refused. Every numeric value under `bar`, including nested styles, states and gradients, must
+be a finite JSON number literal within its permitted range; references that can supply numbers are
+refused. Bounds follow the full property path: `bar.height` uses 16…100, while `bar.style.height`
+uses 0…1,000. Properties with Settings controls follow those ranges, and other numeric values have
+conservative bounds; [the decision](../DECISIONS.md#code) lists them. A link cannot change the bar's
+edge, its offset or the menu bar's auto-hide.
+
+Links have limits on their length, decoded file size, nesting, profiles and total JSON values; [the decision](../DECISIONS.md#code) records the exact limits. For a theme that exceeds a link's limits, install the theme's folder instead, with **Open a folder…** in **Settings → Packages**. Installed versions are immutable: different file contents under the same ID and version are refused, so raise the version on the page and open the new link.
+
 [Tonhalle Line](../examples/packages/tonhalle-line) is an installable theme with a 38 pt Helvetica strip in forest ink and warm paper, a matching light palette, and brass warning colors. Version **1.1.0** adds a Light 16 pt `time` role, popup heading/key/value/button/meter roles, a 2 pt workspace underline below the strip, and a four-edge brass outline for `mode.command`. Version **1.1.1** marks the focused window in workspace widgets with a soft box, its corners rounded 4 pt, reaching 2 pt past the icon on each side and 1 pt above and below; set the widget's `focusedWindowStyle` to `null` to turn it off. Other labels remain 13 pt regular; a `secondary` date stays smaller. Install its folder through **Settings → Packages**, then select it in Theme:
 
 ```json

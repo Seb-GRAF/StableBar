@@ -588,8 +588,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// `stablebar://add-source` opens Settings › Packages with the Add source form filled in, and `stablebar://package`
     /// opens it on a package; nothing is added until the user confirms.
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard store.receive(urls) else { return }
-        customization.show(store: store, section: .packages)
+        guard let section = store.receive(urls) else { return }
+        customization.show(store: store, section: section)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

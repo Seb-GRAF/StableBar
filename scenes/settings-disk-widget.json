@@ -17,7 +17,7 @@
     "disk": {
       "text": "59%",
       "icon": "internaldrive",
-      "tooltip": "412 GB available on Macintosh HD",
+      "tooltip": "412 GB free on Macintosh HD",
       "fields": {
         "format": "APFS",
         "free": "412 GB",

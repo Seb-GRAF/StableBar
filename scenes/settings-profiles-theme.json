@@ -1,0 +1,26 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": { "id": "nord" },
+    "widgets": [
+      { "id": "clock", "type": "clock", "position": "right" },
+      { "id": "date", "type": "clock", "format": "EEE d MMM", "position": "right" }
+    ],
+    "profiles": [
+      {
+        "name": "Nord tweaks",
+        "when": { "theme": "nord" },
+        "configuration": {
+          "widgetOverrides": { "date": { "background": "@token.accent" } }
+        }
+      },
+      {
+        "name": "Laptop",
+        "when": { "displayCount": 1 },
+        "configuration": { "bar": { "height": 30 } }
+      }
+    ]
+  },
+  "draw": "settings",
+  "section": "profiles"
+}

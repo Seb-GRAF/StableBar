@@ -38,10 +38,7 @@ final class BarStore: NSObject {
     var onShowCrashes: (() -> Void)?
     var onCustomizeWidget: ((String) -> Void)?
     var onCustomizePackages: (() -> Void)?
-    /// A `stablebar://add-source` link waiting for Settings › Packages to open its form.
-    var pendingSourceLink: PackageSourceLink?
-    /// A `stablebar://package` link waiting for Settings › Packages to show its package.
-    var pendingPackageLink: PackageLink?
+    let pendingLinks = PendingLinks()
     var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
     var onTryThemes: ((Int) -> Void)?
@@ -623,6 +620,8 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
+    var themeTrialDirectory: URL? { triedTheme?.directory }
+
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
         let document = try previewDocument ?? editedMainDocument(replaying: customizationEdits)
@@ -652,6 +651,15 @@ final class BarStore: NSObject {
         return edit
     }
 
+    func applyTheme(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) throws {
+        pendingLinks.theme?.noteThemeChoice()
+        guard let kind else { return try customizationHistory.change(themeEdit(for: choice), everyBar: everyBar) }
+        try customizationHistory.change([
+            ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
+            ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
+        ], everyBar: everyBar)
+    }
+
     var clearanceConfiguration: Configuration? {
         if let hold = windowClearance.hold { return hold.configuration }
         return normalComposition?.configuration ?? configuration
@@ -661,6 +669,7 @@ final class BarStore: NSObject {
         guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
+        pendingLinks.theme?.noteThemeChoice()
         let (next, loader) = try configurationTryingTheme(choice)
         triedTheme = choice
         display(next, loader: loader)
@@ -677,7 +686,7 @@ final class BarStore: NSObject {
         let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
         let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
-                                   context: context, previewTheme: layer)
+                                   context: context, previewTheme: PreviewTheme(id: choice.manifest.id, layer: layer))
         return (next, loader)
     }
 
@@ -709,7 +718,7 @@ final class BarStore: NSObject {
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
         adopt(loader)
-        if effectiveDocument == loader.document {
+        if effectiveDocument == loader.document, screenDocuments == loader.screenDocuments {
             origins = loader.origins
             activeProfiles = loader.activeProfiles
             configurationError = nil
@@ -1196,25 +1205,40 @@ final class BarStore: NSObject {
         NSWorkspace.shared.open(configurationURL)
     }
 
-    /// Keeps the last `stablebar://` link StableBar opens for Settings › Packages; false when none is one.
-    func receive(_ urls: [URL]) -> Bool {
+    /// Keeps the last `stablebar://` link StableBar opens for Settings and returns its section.
+    func receive(_ urls: [URL]) -> CustomizationSection? {
         for url in urls.reversed() {
+            do {
+                if let link = try ThemeLink(url: url) {
+                    pendingLinks.theme?.discard()
+                    pendingLinks.theme = try ThemeLinkCandidate(link: link, store: self)
+                    pendingLinks.themeError = nil
+                    return .appearance
+                }
+            } catch {
+                pendingLinks.theme?.discard()
+                pendingLinks.theme = nil
+                pendingLinks.themeError = errorMessage(error)
+                return .appearance
+            }
             if let link = PackageSourceLink(url: url) {
-                pendingSourceLink = link
+                pendingLinks.source = link
             } else if let link = PackageLink(url: url) {
-                pendingPackageLink = link
+                pendingLinks.package = link
             } else {
                 continue
             }
-            return true
+            return .packages
         }
-        return false
+        return nil
     }
 
     func stop() {
         packageLibrary.stopUpdateChecks()
         barEditing.end()
         endThemeTrial()
+        pendingLinks.theme?.discard()
+        pendingLinks.theme = nil
         flushCustomization()
         managesConnections = false
         popup.closeAll()
