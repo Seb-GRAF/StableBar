@@ -83,6 +83,37 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     #expect(abs(startup.available - free) < startup.total / 100, "\(startup.available) against statfs \(free)")
 }
 
+@Test func diskDisplayOffersMeterAndValueButNoGraph() throws {
+    #expect(WidgetMetricDisplay.choices(for: "disk") == [.standard, .icon, .value, .meter, .custom])
+    #expect(WidgetMetricDisplay.standard.layout(for: ["disk"]) == .null)
+    #expect(WidgetMetricDisplay.current(nil, sources: ["disk"]) == .standard)
+    for choice in WidgetMetricDisplay.choices(for: "disk") where choice != .custom {
+        #expect(WidgetMetricDisplay.current(choice.layout(for: ["disk"]), sources: ["disk"]) == choice)
+    }
+    guard case let .object(meter)? = WidgetMetricDisplay.meter.layout(for: ["disk"]),
+          case let .array(children)? = meter["children"], case let .object(progress)? = children.first else {
+        Issue.record("Expected a row starting with a meter")
+        return
+    }
+    #expect(progress["type"] == .string("progress") && progress["source"] == .string("disk"))
+}
+
+@Test func diskMeterTakesTheWarningState() throws {
+    let configuration = try ConfigurationValue.object([
+        "widgets": .array([.object(["id": .string("disk"), "type": .string("disk"), "position": .string("right"), "details": .bool(true),
+                                    "layout": try #require(WidgetMetricDisplay.meter.layout(for: ["disk"]))])])
+    ]).decoded(Configuration.self)
+    let widget = configuration.widgets[0]
+    guard case let .row(blocks)? = widget.layout?.content else { Issue.record("Expected a row"); return }
+    var output = diskOutput(fixture, warning: 0.5, critical: 0.95)
+    #expect(output.state == .string("warning"))
+    let states = widgetDataStates(output, widget: widget, providers: configuration.providers)
+    #expect(StyleStates(data: states.widget, parts: states.parts).scoped(to: blocks[0]).data == "warning")
+    output.state = nil
+    let calm = widgetDataStates(output, widget: widget, providers: configuration.providers)
+    #expect(StyleStates(data: calm.widget, parts: calm.parts).scoped(to: blocks[0]).data == nil)
+}
+
 @Test func diskThresholdsAbove100PercentTurnWarningsOff() {
     let startup = volume("Macintosh HD", total: 1_000_000_000_000, available: 10_000_000_000)
     let output = diskOutput(DiskVolumes(startup: startup, others: [startup]), warning: 1.01, critical: 1.01)

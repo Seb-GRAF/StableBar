@@ -388,7 +388,7 @@ struct BarInspector: View {
 
     @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
         if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
-           let source = ["battery": "percent", "audio": "volume", "system": "cpu"][type] {
+           let source = ["battery": "percent", "audio": "volume", "system": "cpu", "disk": "disk"][type] {
             let layout = editor.properties(for: widget.id)["layout"]
             let metrics = type == "system" ? WidgetSystemMetrics.current(layout) : nil
             let sources = metrics?.sources ?? [source]
