@@ -591,6 +591,55 @@ private extension DataSourceRegistry {
     #expect(store.providers.isEmpty)
 }
 
+@Test @MainActor func aMergeRunsItsInputsForItsWidgetsAndPublishesEachChangeUnderTheirNames() async throws {
+    let url = try writeTemporaryConfiguration(#"""
+    {"providers":{"power":{"type":"battery","whenVisible":true},"sound":{"type":"audio"},"meetings":{"type":"calendar","events":["tick"]},
+                  "status":{"type":"merge","providers":["power","sound","meetings"]}},
+     "widgets":[{"id":"status","type":"provider","provider":"status","position":"right","events":["repaint"],
+                 "rules":[{"when":{"value":"power.percent","below":0.2},"state":"warning"}]},
+                {"id":"volume","type":"provider","provider":"sound","position":"right"}]}
+    """#)
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let battery = FakeMonitor(ScriptOutput(text: "80%", values: ["percent": 0.8]))
+    let sound = FakeMonitor(audio(0.5))
+    let calendarReads = OSAllocatedUnfairLock(initialState: 0)
+    let store = BarStore(configurationURL: url, registry: DataSourceRegistry.builtIn
+        .replacing("battery") { _, _ in PushSource(monitor: battery) }
+        .replacing("audio") { _, _ in PushSource(monitor: sound) }
+        .replacing("calendar") { _, _ in
+            PollingSource { _ in
+                let reads = calendarReads.withLock { $0 += 1; return $0 }
+                return .output(.success(ScriptOutput(text: "No calendar access", fields: ["access": "denied", "reads": String(reads)])))
+            }
+        })
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(Set(store.providers.keys) == ["power", "sound", "meetings", "status"])
+    #expect(store.scripts["volume"] === store.providers["sound"])
+    let status = try #require(store.scripts["status"])
+    try await awaitCondition { status.output.values?["sound.volume"] == 0.5 && status.output.fields?["meetings.access"] == "denied" }
+    #expect(status.output.text.isEmpty)
+    #expect(status.output.fields?["sound.device"] == "Speakers")
+    #expect(store.widgetStatus(for: store.configuration!.widgets[0]) == .accessNeeded(.calendars))
+    #expect(store.providers["power"]?.diagnostics.suspended == true)
+    store.setVisibleWidgets(ids: ["status"], displayID: 1)
+    try await awaitCondition { status.output.values?["power.percent"] == 0.8 }
+    battery.change(to: ScriptOutput(text: "10%", values: ["percent": 0.1]))
+    try await awaitCondition { status.output.values?["power.percent"] == 0.1 }
+    #expect(store.presentations["status"]?.style.state == "warning")
+    sound.change(to: audio(0.7))
+    try await awaitCondition { status.output.values?["sound.volume"] == 0.7 }
+    let reads = Int(status.output.fields!["meetings.reads"]!)!
+    store.refreshScripts(for: "tick")
+    try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 1) }
+    store.refresh(store.configuration!.widgets[0], event: ScriptEvent(sender: "manual"))
+    try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 2) }
+    store.refreshScripts(for: "repaint")
+    try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 3) }
+    await store.runAction("true", widget: store.configuration!.widgets[0]).value
+    try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 4) }
+}
+
 @Test @MainActor func aMonitorThatCannotStartShowsItsErrorRetriesAndHoldsNoRunOpen() async throws {
     let monitor = FakeMonitor(ScriptOutput(text: "80%"))
     monitor.failToStart(with: CommandFailure(message: "No listener."))
@@ -989,6 +1038,10 @@ private struct RelayProbe {
     #expect(DataSourceRegistry.builtIn.permissions(for: try configuration(#"""
     {"providers":{"meetings":{"type":"calendar"}},"widgets":[{"id":"cpu","type":"system","position":"right"}]}
     """#)).isEmpty)
+    #expect(DataSourceRegistry.builtIn.permissions(for: try configuration(#"""
+    {"providers":{"meetings":{"type":"calendar"},"status":{"type":"merge","providers":["meetings"]}},
+     "widgets":[{"id":"status","type":"provider","provider":"status","position":"right"}]}
+    """#)) == [.calendars])
     #expect(DataSourceRegistry.builtIn.types.filter { $0.permission != nil }.map(\.name) == ["calendar"])
     let listed = ImageRenderer(content: VStack { SourcePermissionList(permissions: [calendars]) }.frame(width: 480))
     #expect((listed.nsImage?.size.height ?? 0) > 0)

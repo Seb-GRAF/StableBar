@@ -20,15 +20,18 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let memoryWarning: Double
     let diskWarning: Double
     let diskCritical: Double
+    /// The providers a `merge` combines.
+    let providers: [String]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
-        case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical
+        case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical, providers
     }
 
     init(type: String) {
         self.type = type
         command = nil
+        providers = []
         interval = DataSourceRegistry.builtIn[type]?.defaultInterval ?? 5
         timeout = 10
         environment = [:]
@@ -55,6 +58,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown provider type.")
         }
         command = source.settings.contains(.command) ? try values.decode(String.self, forKey: .command) : nil
+        providers = source.settings.contains(.providers) ? try values.decode([String].self, forKey: .providers) : []
         interval = try values.decodeIfPresent(Double.self, forKey: .interval) ?? source.defaultInterval
         timeout = try values.decodeIfPresent(Double.self, forKey: .timeout) ?? 10
         environment = try values.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]

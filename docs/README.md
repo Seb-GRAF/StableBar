@@ -11,7 +11,7 @@ StableBar reads one JSON configuration, by default `~/.config/stablebar/config.j
 | [Themes](themes.md) | The included themes, making and sharing your own, and Liquid Glass |
 | [Built-in widgets](widgets.md) | Workspaces, app menus, tooltips and mouse actions |
 | [Create a widget](create-a-widget.md) | Script output, events, widget layouts, animation and controls on hover |
-| [Shared providers and native data](providers.md) | Data sources shared by several widgets, system data and the calendar |
+| [Shared providers and native data](providers.md) | Data sources shared by several widgets, system data, the calendar and merged providers |
 | [Custom popups](popups.md) | Popup layouts, blocks and controls |
 | [Displays and layout](layout.md) | Notch placement, screen setups, overflow and groups |
 | [Packages and the store](packages.md) | Installing, reviewing, writing and publishing packages |

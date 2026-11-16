@@ -1491,15 +1491,18 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         #expect(error?.localizedDescription == message)
     }
     try writePackageFile(#"""
-    {"tokens":{"surface":"#222222"},"providers":{"system":{"type":"system","interval":2}},
+    {"tokens":{"surface":"#222222"},
+     "providers":{"system":{"type":"system","interval":2},"power":{"type":"battery"},"status":{"type":"merge","providers":["system","power"]}},
      "popups":{"usage":{"style":{},"layout":{"type":"field","field":"text","open":"com.apple.ActivityMonitor"}}},
-     "widgets":[{"id":"cpu","type":"system","position":"right","popupName":"usage","style":{"background":"@token.surface"}}]}
+     "widgets":[{"id":"cpu","type":"system","position":"right","popupName":"usage","style":{"background":"@token.surface"}},
+                {"id":"status","type":"provider","provider":"status","position":"right"}]}
     """#, to: source.appending(path: "config.json"))
     #expect(try store.install(source).commands.isEmpty)
     var loader = ConfigurationLoader()
     let root = directory.appending(path: "config.json")
     let configuration = try loader.load(root, data: Data(#"{"packages":[{"id":"monitor","version":"1"}]}"#.utf8))
-    #expect(configuration.widgets.map(\.id) == ["cpu"])
+    #expect(configuration.widgets.map(\.id) == ["cpu", "status"])
+    #expect(configuration.activeProviders == ["system", "power", "status"])
     #expect(throws: WidgetPackageError.self) { try loader.load(root, data: Data(#"{"theme":{"id":"monitor","version":"1"}}"#.utf8)) }
 }
 

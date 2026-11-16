@@ -118,6 +118,8 @@ indirect enum PopupContent: Sendable {
     case image(path: String, source: String?, fit: ImageFit)
     case symbol(name: String, source: String?)
     case progress(source: String, height: Double)
+    /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it.
+    case ring(source: String, lineWidth: Double, children: [PopupBlock])
     /// Bars that bounce while `fields[source]` is on, or always without a source.
     case equalizer(source: String?, height: Double)
     /// A battery filled to `values[source]` or `fields[source]`, showing charging, the adapter and a
@@ -345,6 +347,10 @@ struct PopupBlock: Decodable, Sendable {
         case "progress":
             content = .progress(source: try values.decode(String.self, forKey: .source),
                                 height: try values.decode(Double.self, forKey: .height))
+        case "ring":
+            content = .ring(source: try values.decode(String.self, forKey: .source),
+                            lineWidth: try values.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 2,
+                            children: try values.decodeIfPresent([PopupBlock].self, forKey: .children) ?? [])
         case "equalizer":
             let height = try values.decodeIfPresent(Double.self, forKey: .height) ?? 12
             guard height > 0, height.isFinite else {

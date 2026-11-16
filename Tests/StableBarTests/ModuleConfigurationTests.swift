@@ -426,6 +426,10 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
         (#"{"providers":{"feed":{"type":"stream"}},"widgets":[]}"#, "providers.feed: Missing property command."),
         (#"{"widgets":[{"id":"disk","type":"teleport","position":"right"}]}"#, "widgets.disk: type: Unknown widget type."),
         (#"{"widgets":[{"id":"disk","type":"provider","provider":"teleport","position":"right"}]}"#, "Unknown provider: teleport."),
+        (#"{"providers":{"status":{"type":"merge","providers":["battery"]}},"widgets":[{"id":"power","type":"battery","position":"right"}]}"#,
+         "providers.status: Unknown provider: battery."),
+        (#"{"providers":{"power":{"type":"battery"},"status":{"type":"merge","providers":["power"]},"all":{"type":"merge","providers":["power","status"]}},"widgets":[]}"#,
+         "providers.all: status is a merge provider, which a merge can't include."),
         (#"{"widgets":[],"profiles":[{"name":"work","configuration":{"providers":{"machine":{"type":"command"}}}}]}"#,
          "providers.machine: Missing property command.")
     ] {

@@ -1,0 +1,49 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "battery-ring",
+        "type": "battery",
+        "position": "right",
+        "layout": {
+          "type": "ring",
+          "source": "percent",
+          "lineWidth": 2,
+          "style": { "iconSize": 18, "accent": "#30d158", "background": "#8e8e9340" },
+          "children": [{ "type": "symbol", "name": "bolt.fill", "style": { "iconSize": 9 } }]
+        }
+      },
+      {
+        "id": "cpu-ring",
+        "type": "system",
+        "position": "right",
+        "layout": {
+          "type": "row",
+          "style": { "spacing": 6 },
+          "children": [
+            { "type": "ring", "source": "cpu", "style": { "iconSize": 14, "background": "#8e8e9340" } },
+            { "type": "field", "field": "text" }
+          ]
+        }
+      },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "outputs": {
+    "battery": {
+      "text": "62%",
+      "values": { "percent": 0.62 },
+      "fields": { "percent": "62", "state": "charging" }
+    },
+    "system": {
+      "text": "38%",
+      "icon": "cpu",
+      "value": 0.38,
+      "fields": { "cpu": "38", "memory": "61" },
+      "values": { "cpu": 0.38, "memory": 0.61 }
+    }
+  },
+  "draw": "bar",
+  "width": 500
+}

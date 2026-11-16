@@ -65,7 +65,7 @@ struct NativeWidgetSettings: View {
             default: EmptyView()
             }
             if ["system", "network", "disk", "calendar"].contains(provider.type),
-               editor.store.configuration!.widgets.filter({ $0.providerName == widget.providerName }).count > 1 {
+               editor.store.configuration!.widgets.filter({ editor.store.configuration!.providerNames(readBy: $0).contains(widget.providerName!) }).count > 1 {
                 SettingsCallout(systemImage: "link", text: Text("These data settings apply to every widget using **\(widget.providerName!)**."))
                     .padding(.top, 12)
             }

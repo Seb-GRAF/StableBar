@@ -760,7 +760,13 @@ final class BarStore: NSObject {
                     }
                 }
             }
-            script.start(provider: provider, registry: registry, environment: environment)
+            if provider.type == DataSourceType.merge.name {
+                script.start(schedule: SourceSchedule(continuous: true)) { [weak self] in
+                    MergeSource(inputs: provider.providers) { self?.providers[$0] }
+                }
+            } else {
+                script.start(provider: provider, registry: registry, environment: environment)
+            }
             providers[name] = script
         }
         for widget in next.widgets where widget.enabled {
@@ -934,14 +940,21 @@ final class BarStore: NSObject {
         if let error = actionErrors[widget.id] { return .failed("Click action: \(error)") }
         let script = scripts[widget.id]
         if let error = script?.error { return .failed(error) }
+        for input in configuration?.providerNames(readBy: widget).dropFirst() ?? [] {
+            if let error = providers[input]?.error { return .failed("\(input): \(error)") }
+        }
         if widget.content == .workspaces, let error = workspaceStore.error { return .failed(error) }
         if !widget.permissions(source: configuration?.workspaceSource ?? .aerospace).isEmpty, !appMenu.isTrusted {
             return .accessNeeded(.accessibility)
         }
-        if let name = widget.providerName, let provider = configuration?.providers[name],
-           let permission = registry[provider.type]?.permission,
-           let access = script?.output.fields?["access"], access != "granted" {
-            return .accessNeeded(permission)
+        if let name = widget.providerName, let provider = configuration?.providers[name] {
+            let sources = provider.type == DataSourceType.merge.name
+                ? provider.providers.map { ("\($0).access", configuration!.providers[$0]!.type) } : [("access", provider.type)]
+            for (field, type) in sources {
+                if let permission = registry[type]?.permission, let access = script?.output.fields?[field], access != "granted" {
+                    return .accessNeeded(permission)
+                }
+            }
         }
         if script?.diagnostics.suspended == true { return .paused }
         if let script {
@@ -979,7 +992,7 @@ final class BarStore: NSObject {
             let sendsSubscribedEvents = registry[definition?.type ?? ""]?.events
                 .contains { configuration?.subscribedEvents.contains($0.rawValue) == true } == true
             let hidden = definition?.whenVisible == true && !sendsSubscribedEvents
-                && !(configuration?.widgets.contains { $0.content == .provider(name) && visible.contains($0.id) } ?? false)
+                && !(configuration?.widgets.contains { configuration!.providerNames(readBy: $0).contains(name) && visible.contains($0.id) } ?? false)
             if !pauses.isEmpty || hidden { provider.suspend() } else { provider.resume() }
         }
         for widget in configuration?.widgets ?? [] {
@@ -1011,7 +1024,7 @@ final class BarStore: NSObject {
             guard !script.diagnostics.suspended else {
                 throw CommandFailure(message: "Widget is suspended. Choose Resume for testing in Status or make a consumer visible before refreshing.")
             }
-            script.refresh(ScriptEvent(sender: "manual"))
+            refresh(configuration!.widgets.first { $0.id == id }!, event: ScriptEvent(sender: "manual"))
         case .popup:
             guard let id = request.id, configuration?.widgets.contains(where: { $0.id == id }) == true else {
                 throw CommandFailure(message: "Unknown widget: \(request.id ?? "").")
@@ -1158,15 +1171,27 @@ final class BarStore: NSObject {
         if event == BuiltInEvent.yabai.rawValue { workspaceStore.trigger() }
         var refreshed = Set<ObjectIdentifier>()
         if let sender { refreshed.insert(ObjectIdentifier(sender)) }
-        for widget in configuration?.widgets ?? [] {
+        for widget in configuration?.widgets ?? [] where widget.enabled {
             let providerEvents: [String]
             if case let .provider(name) = widget.content { providerEvents = configuration!.providers[name]!.events }
             else { providerEvents = [] }
-            if (widget.events + providerEvents).contains(event), let script = scripts[widget.id],
-               refreshed.insert(ObjectIdentifier(script)).inserted {
+            let subscribed = (widget.events + providerEvents).contains(event)
+            if subscribed, let script = scripts[widget.id], refreshed.insert(ObjectIdentifier(script)).inserted {
                 script.refresh(ScriptEvent(sender: event, environment: environment))
             }
+            for input in configuration!.providerNames(readBy: widget).dropFirst()
+            where subscribed || configuration!.providers[input]!.events.contains(event) {
+                if let script = providers[input], refreshed.insert(ObjectIdentifier(script)).inserted {
+                    script.refresh(ScriptEvent(sender: event, environment: environment))
+                }
+            }
         }
+    }
+
+    /// Refreshes `widget` and, for a merge, the providers it combines, which hold its data.
+    func refresh(_ widget: WidgetConfiguration, event: ScriptEvent) {
+        scripts[widget.id]?.refresh(event)
+        for input in configuration!.providerNames(readBy: widget).dropFirst() { providers[input]?.refresh(event) }
     }
 
     @discardableResult
@@ -1188,7 +1213,7 @@ final class BarStore: NSObject {
                 _ = try await runCommand("/bin/zsh", arguments: ["-c", command],
                                          timeout: widget.timeout, environment: event.commandEnvironment(environment))
                 if let script, scripts[widget.id] === script {
-                    script.refresh(ScriptEvent(sender: "action", environment: event.environment))
+                    refresh(widget, event: ScriptEvent(sender: "action", environment: event.environment))
                 }
                 if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
             } catch {

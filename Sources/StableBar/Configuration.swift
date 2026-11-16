@@ -601,6 +601,11 @@ extension Configuration {
     func providerType(of widget: WidgetConfiguration) -> String? {
         widget.providerName.flatMap { providers[$0]?.type }
     }
+
+    /// The providers `widget` reads: the one it shows and, for a merge, its inputs.
+    func providerNames(readBy widget: WidgetConfiguration) -> [String] {
+        widget.providerName.map { [$0] + providers[$0]!.providers } ?? []
+    }
 }
 
 enum BarAppearance: String, Decodable, Sendable {
@@ -783,8 +788,9 @@ struct Configuration: Decodable, Sendable {
     let groups: [String: WidgetGroupConfiguration]
     /// Events that enabled widgets, and the providers they show, subscribe to.
     let subscribedEvents: Set<String>
-    /// The providers to run: those enabled widgets show and, for each subscribed event a data
-    /// source sends, a provider of that source, unless a provider of another type has its name.
+    /// The providers to run: those enabled widgets show, with the inputs of a merge among them, and,
+    /// for each subscribed event a data source sends, a provider of that source, unless a provider of
+    /// another type has its name.
     let activeProviders: Set<String>
 
     enum CodingKeys: String, CodingKey, CaseIterable { case workspaceSource, modeAliases, bar, defaults, popupDefaults, roles, workspaceDefaults, widgets, screens, popups, templates, widgetOverrides, environment, providers, groups }
@@ -847,6 +853,14 @@ struct Configuration: Decodable, Sendable {
         environment = try values.decodeIfPresent([String: String].self, forKey: .environment) ?? [:]
         popups = try values.decodeIfPresent([String: PopupConfiguration].self, forKey: .popups) ?? [:]
         var providers = try values.decodeIfPresent([String: ProviderConfiguration].self, forKey: .providers) ?? [:]
+        for (name, provider) in providers.sorted(by: { $0.key < $1.key }) {
+            for input in provider.providers {
+                guard let type = providers[input]?.type else { throw CommandFailure(message: "providers.\(name): Unknown provider: \(input).") }
+                guard type != DataSourceType.merge.name else {
+                    throw CommandFailure(message: "providers.\(name): \(input) is a merge provider, which a merge can't include.")
+                }
+            }
+        }
         for widget in widgets {
             if case let .provider(name) = widget.content, providers[name] == nil {
                 guard DataSourceRegistry.builtIn[name]?.isNative == true else { throw CommandFailure(message: "Unknown provider: \(name).") }
@@ -858,7 +872,7 @@ struct Configuration: Decodable, Sendable {
                 }
             }
         }
-        let shown = Set(widgets.filter(\.enabled).compactMap(\.providerName))
+        let shown = Set(widgets.filter(\.enabled).compactMap(\.providerName).flatMap { [$0] + providers[$0]!.providers })
         let subscribed = Set(widgets.filter(\.enabled).flatMap(\.events) + shown.flatMap { providers[$0]?.events ?? [] })
         var active = shown
         for type in DataSourceRegistry.builtIn.types {

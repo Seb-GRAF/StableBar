@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import os
 
 /// Where a widget's output comes from: a command, a stream, a native reading or a native listener.
@@ -246,5 +247,49 @@ final class PushSource: DataSource {
     func stop() {
         monitor.stop()
         emit = nil
+    }
+}
+
+/// Combines other providers: their `values`, `fields`, `lists` and `series` under each one's name, such as
+/// `power.percent`, without text of its own. Its run stays open and sends again whenever one of them changes.
+@MainActor
+final class MergeSource: DataSource {
+    private let inputs: [String]
+    /// The runner of a provider while it runs.
+    private let runner: @MainActor (String) -> ScriptWidget?
+    private var emit: (@Sendable (SourceUpdate) -> Void)?
+
+    init(inputs: [String], runner: @escaping @MainActor (String) -> ScriptWidget?) {
+        self.inputs = inputs
+        self.runner = runner
+    }
+
+    func start(emit: @escaping @Sendable (SourceUpdate) -> Void) {
+        self.emit = emit
+    }
+
+    func refresh(event: ScriptEvent) {
+        send()
+    }
+
+    func stop() {
+        emit = nil
+    }
+
+    private func send() {
+        guard let emit else { return }
+        let outputs = withObservationTracking {
+            inputs.compactMap { name in runner(name).map { (name, $0.output) } }
+        } onChange: { [weak self] in
+            // Observation reports a change before it's made.
+            Task { @MainActor in self?.send() }
+        }
+        func prefixed<Value>(_ entries: KeyPath<ScriptOutput, [String: Value]?>) -> [String: Value] {
+            Dictionary(outputs.flatMap { name, output in
+                (output[keyPath: entries] ?? [:]).map { ("\(name).\($0.key)", $0.value) }
+            }, uniquingKeysWith: { $1 })
+        }
+        emit(.output(.success(ScriptOutput(text: "", fields: prefixed(\.fields), lists: prefixed(\.lists),
+                                           values: prefixed(\.values), series: prefixed(\.series)))))
     }
 }
