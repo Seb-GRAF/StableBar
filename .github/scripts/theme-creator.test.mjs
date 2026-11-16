@@ -1682,3 +1682,19 @@ test("groups and states named like color properties are not mistaken for colors"
   assert.doesNotThrow(() => validateThemeColors({ defaults: { states: { accent: { foreground: "#112233" } } } }));
   assert.throws(() => validateThemeColors({ defaults: { states: { accent: { foreground: "url(x)" } } } }));
 });
+
+test("a gradient with a null angle draws at the default 90 degrees", () => {
+  const config = { bar: { style: { background: { gradient: { colors: ["#000000", "#ffffff"], angle: null } } } } };
+  const background = cssVariables(resolveTheme(builtIn, config, "light"))["--strip-bg"];
+  assert.match(background, /^linear-gradient\(90deg, /);
+});
+
+test("editing a section that names an inherited token keeps the built-in palette in scope", () => {
+  const state = {
+    manifest: { id: "tiles", name: "Tiles", version: "1.0.0", kind: "theme", entry: "config.json" },
+    config: { tokens: { tile: { background: "@token.surface", fontSize: 12 } }, defaults: "@token.tile" },
+  };
+  const edited = applyControl(state, "widgets.fontSize", 14, "light");
+  assert.equal(edited.config.defaults.fontSize, 14);
+  assert.deepEqual(edited.config.defaults.background, builtIn.tokens.surface);
+});

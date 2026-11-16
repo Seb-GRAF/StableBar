@@ -39,9 +39,9 @@ function font(style, lineHeight = px(Math.ceil(style.fontSize * 1.2))) {
 function background(value) {
   if (!isBackground(value)) return "transparent";
   if (!value?.gradient) return color(value);
-  const { colors, locations, angle = 90 } = value.gradient;
+  const { colors, locations, angle } = value.gradient;
   const stops = colors.map((value, index) => `${color(value)}${locations ? ` ${locations[index] * 100}%` : ""}`);
-  return `linear-gradient(${angle}deg, ${stops.join(", ")})`;
+  return `linear-gradient(${angle ?? 90}deg, ${stops.join(", ")})`;
 }
 
 // CSS angles approximate SwiftUI's oblique unit-square gradients on a strip.

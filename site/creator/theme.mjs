@@ -323,7 +323,8 @@ function pathLocation(object, path) {
   let target = object;
   for (const key of keys) {
     if (typeof target[key] === "string" && target[key].startsWith("@token.")) {
-      target[key] = substituteTokens(target[key], object.tokens ?? {});
+      // Resolve with the same palette resolveTheme uses: the theme's tokens over Built-in's.
+      target[key] = substituteTokens(target[key], overriding(builtIn, object).tokens ?? {});
     }
     if (!isObject(target[key])) target[key] = {};
     target = target[key];
