@@ -101,6 +101,8 @@ Change content, appearance and behavior in Settings, with undo and redo. Or edit
 
 ## Contributing
 
+<a href="https://github.com/Seb-GRAF/StableBar/graphs/contributors"><img src="https://contrib.rocks/image?repo=Seb-GRAF/StableBar" alt="Avatars of StableBar's contributors"></a>
+
 Built by [Sebastien Graf](https://github.com/Seb-GRAF) and [Steve Mendes Reis](https://github.com/M4n0x), with help from [everyone who has contributed](https://github.com/Seb-GRAF/StableBar/graphs/contributors).
 
 Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build StableBar, run the tests and open a pull request. Report security issues privately through [SECURITY.md](.github/SECURITY.md).
