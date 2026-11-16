@@ -6,6 +6,7 @@ import builtIn from "../../site/creator/built-in.mjs";
 import * as theme from "../../site/creator/theme.mjs";
 import * as files from "../../site/creator/files.mjs";
 import * as preview from "../../site/creator/preview.mjs";
+import * as numbers from "../../site/creator/number-field.mjs";
 
 const source = readFileSync(new URL("../../site/creator/page.mjs", import.meta.url), "utf8")
   .replace(/^import .*\n/gm, "").replace(/\nstart\(\)\.catch\([^\n]+\);\s*$/, "");
@@ -13,10 +14,14 @@ const source = readFileSync(new URL("../../site/creator/page.mjs", import.meta.u
 function pageHarness() {
   const events = new Map(), dialogEvents = new Map(), fields = new Map();
   const element = () => {
-    const children = new Map();
+    const children = new Map(), classes = new Set();
     return {
-      value: "", disabled: false, textContent: "", dataset: {}, focus() {}, setAttribute() {},
-      classList: { add() {}, remove() {} }, querySelectorAll: () => [],
+      value: "", type: "text", tagName: "INPUT", disabled: false, textContent: "", dataset: {},
+      validity: { valid: true }, focus() {}, setAttribute() {}, hasAttribute: () => false,
+      matches: () => false, closest: () => null, style: { setProperty() {} },
+      dispatchEvent(event) { events.get(event.type)?.({ target: this }); return true; },
+      classList: { add: name => classes.add(name), remove: name => classes.delete(name),
+        contains: name => classes.has(name) }, querySelectorAll: () => [],
       querySelector(selector) {
         if (!children.has(selector)) children.set(selector, element());
         return children.get(selector);
@@ -33,7 +38,8 @@ function pageHarness() {
     addEventListener: (type, handler) => dialogEvents.set(type, handler),
   };
   const context = {
-    ...theme, ...files, ...preview, builtIn, structuredClone,
+    ...theme, ...files, ...preview, ...numbers, builtIn, structuredClone, Event,
+    navigator: { platform: "MacIntel", userAgent: "Mac", maxTouchPoints: 0 },
     matchMedia: () => ({ matches: false }),
     document: {
       querySelector: selector => selector === "#creator" ? root : selector === "#theme-dialog" ? dialog : element(),
@@ -59,6 +65,158 @@ function storePage(patch = {}) {
   page.dialog.open = true;
   return page;
 }
+
+function numberPage(id, config = {}) {
+  const page = storePage();
+  page.context.numberConfig = config;
+  page.run("state.config = numberConfig");
+  const input = page.root.querySelector(`[data-control="${id}"]`);
+  input.dataset.control = id;
+  input.value = String(page.run(`controlValue(CONTROLS.find(control => control.id === '${id}'), resolved())`) ?? "");
+  return {
+    ...page, input,
+    type(value) { input.value = value; page.events.get("input")({ target: input }); },
+    commit() { page.events.get("change")({ target: input }); },
+    error: () => page.run(`fieldErrors.get('${id}')`),
+    key(key, shiftKey = false) {
+      let prevented = false;
+      page.events.get("keydown")({ target: input, key, shiftKey, preventDefault() { prevented = true; } });
+      return prevented;
+    },
+  };
+}
+
+test("number typing accepts unfinished decimals and commas without errors", () => {
+  const page = numberPage("widgets.paddingHorizontal");
+  page.type("1.");
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 1);
+  assert.equal(page.input.value, "1.");
+  page.type("1,5");
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 1.5);
+  assert.equal(page.error(), undefined);
+  page.type("-");
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 1.5);
+  assert.equal(page.error(), undefined);
+});
+
+test("out-of-range number typing stays quiet and clamps on blur", () => {
+  const page = numberPage("widgets.paddingHorizontal", { defaults: { paddingHorizontal: 12 } });
+  page.type("55");
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 12);
+  assert.equal(page.input.value, "55");
+  assert.equal(page.error(), undefined);
+  page.commit();
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 40);
+  assert.equal(page.input.value, "40");
+  assert.equal(page.error(), undefined);
+});
+
+test("an invalid number reports its range on blur and clears the error on input", () => {
+  const page = numberPage("widgets.paddingHorizontal");
+  page.type("abc");
+  assert.equal(page.error(), undefined);
+  page.commit();
+  assert.equal(page.error(), "Enter a number from 0 to 40.");
+  page.type("-");
+  assert.equal(page.error(), undefined);
+});
+
+test("empty underline width stores null and ArrowUp starts one step above the minimum", () => {
+  const page = numberPage("workspaces.underlineWidth", {
+    workspaceDefaults: { indicator: "underline", indicatorStyle: { width: 12 } },
+  });
+  page.type("");
+  assert.equal(page.run("state.config.workspaceDefaults.indicatorStyle.width"), null);
+  page.commit();
+  assert.equal(page.error(), undefined);
+  assert.equal(page.key("ArrowUp"), true);
+  assert.equal(page.run("state.config.workspaceDefaults.indicatorStyle.width"), 1);
+  assert.equal(page.input.value, "1");
+});
+
+test("Shift ArrowUp nudges height by ten points through the input handler", () => {
+  const page = numberPage("bar.height", { bar: { height: 40 } });
+  assert.equal(page.key("ArrowUp", true), true);
+  assert.equal(page.run("state.config.bar.height"), 50);
+  assert.equal(page.input.value, "50");
+});
+
+test("Enter commits and formats a number without requiring blur", () => {
+  const page = numberPage("widgets.paddingHorizontal");
+  page.type("55");
+  assert.equal(page.key("Enter"), true);
+  assert.equal(page.run("state.config.defaults.paddingHorizontal"), 40);
+  assert.equal(page.input.value, "40");
+});
+
+test("slider and field changes keep each other in sync through field input events", () => {
+  const page = numberPage("bar.height", { bar: { height: 40 } });
+  const slider = page.root.querySelector('[data-slider-for="bar.height"]');
+  slider.dataset.sliderFor = "bar.height";
+  slider.value = "63";
+  let fieldInputs = 0;
+  const onInput = page.events.get("input");
+  page.events.set("input", event => { if (event.target === page.input) fieldInputs++; onInput(event); });
+  page.events.get("input")({ target: slider });
+  assert.equal(fieldInputs, 1);
+  assert.equal(page.input.value, "63");
+  assert.equal(page.run("state.config.bar.height"), 63);
+  page.type("70");
+  assert.equal(slider.value, "70");
+  page.key("ArrowDown", true);
+  assert.equal(slider.value, "60");
+  assert.equal(fieldInputs, 3);
+  page.type("120");
+  assert.equal(slider.value, "60");
+  page.commit();
+  assert.equal(slider.value, "100");
+  assert.equal(fieldInputs, 5);
+});
+
+test("scrubbing captures the pointer, emits changed values and ends on release or cancellation", () => {
+  for (const end of ["pointerup", "pointercancel", "lostpointercapture"]) {
+    const page = numberPage("widgets.paddingHorizontal", { defaults: { paddingHorizontal: 10 } });
+    const captured = new Set();
+    const handle = {
+      parentElement: { querySelector: () => page.input },
+      setPointerCapture: id => captured.add(id), hasPointerCapture: id => captured.has(id),
+      releasePointerCapture: id => captured.delete(id),
+    };
+    let prevented = false, fieldInputs = 0;
+    const onInput = page.events.get("input");
+    page.events.set("input", event => { if (event.target === page.input) fieldInputs++; onInput(event); });
+    const pointer = (type, clientX, shiftKey = false, pointerId = 7) => page.events.get(type)({
+      target: { closest: () => handle }, button: 0, isPrimary: true, pointerId, clientX, shiftKey,
+      preventDefault() { prevented = true; },
+    });
+    pointer("pointerdown", 100);
+    assert.equal(prevented, true);
+    assert.equal(captured.has(7), true);
+    assert.equal(page.root.classList.contains("is-scrubbing"), true);
+    pointer("pointermove", 101);
+    assert.equal(fieldInputs, 0);
+    pointer("pointermove", 130);
+    assert.equal(page.run("state.config.defaults.paddingHorizontal"), 20);
+    assert.equal(fieldInputs, 1);
+    pointer("pointermove", 130);
+    assert.equal(fieldInputs, 1);
+    pointer("pointermove", 106, true);
+    assert.equal(page.run("state.config.defaults.paddingHorizontal"), 30);
+    assert.equal(fieldInputs, 2);
+    pointer("pointermove", 160, false, 8);
+    pointer(end, 106, false, 8);
+    assert.equal(captured.has(7), true);
+    pointer(end, 106);
+    assert.equal(captured.has(7), false);
+    assert.equal(page.root.classList.contains("is-scrubbing"), false);
+    pointer("pointermove", 160);
+    assert.equal(fieldInputs, 2);
+    pointer("pointerdown", 100);
+    pointer("pointermove", 103);
+    assert.equal(page.run("state.config.defaults.paddingHorizontal"), 31);
+    pointer("pointerup", 103);
+  }
+});
 
 test("the kept-settings note uses singular and plural wording", () => {
   for (const [config, expected] of [

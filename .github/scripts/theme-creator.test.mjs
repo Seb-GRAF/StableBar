@@ -25,6 +25,78 @@ const state = id => ({ manifest: json(`Resources/themes/${id}/package.json`), co
 const idsFor = s => controlsFor(s).map(control => control.id);
 const at = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
 
+test("every number control has a range, step, unit and slider flag", () => {
+  const expected = {
+    "bar.height": [[16, 100], 1, true],
+    "bar.margin": [[0, 40], 1, false],
+    "bar.cornerRadius": [[0, 40], 1, true],
+    "bar.borderWidth": [[0, 6], 0.5, false],
+    "widgets.fontSize": [[6, 40], 1, true],
+    "widgets.cornerRadius": [[0, 40], 1, false],
+    "widgets.paddingHorizontal": [[0, 40], 1, false],
+    "widgets.paddingVertical": [[0, 40], 1, false],
+    "widgets.shadowRadius": [[0, 1000], 1, false],
+    "workspaces.cornerRadius": [[0, 1000], 1, false],
+    "workspaces.underlineWidth": [[0, 1000], 1, false],
+    "workspaces.underlineHeight": [[0, 1000], 1, false],
+    "workspaces.underlineCornerRadius": [[0, 1000], 1, false],
+    "workspaces.underlineOffsetY": [[-200, 200], 1, false],
+    "popups.cornerRadius": [[0, 40], 1, false],
+    "popups.paddingHorizontal": [[0, 40], 1, false],
+    "popups.paddingVertical": [[0, 40], 1, false],
+    "popups.spacing": [[0, 40], 1, false],
+    "popups.gap": [[0, 40], 1, false],
+  };
+  const numbers = CONTROLS.filter(control => control.kind === "number");
+  assert.deepEqual(numbers.map(control => control.id), Object.keys(expected));
+  for (const control of numbers) {
+    assert.deepEqual([control.range, control.step, control.slider], expected[control.id], control.id);
+    assert.equal(control.unit, "pt", control.id);
+  }
+});
+
+test("parseNumber accepts finite numbers and decimal commas", async () => {
+  const { parseNumber } = await import("../../site/creator/number-field.mjs");
+  for (const [text, expected] of [
+    ["12", 12], [" 1,5 ", 1.5], ["-3", -3], ["", null], [" ", null], ["-", null],
+    ["1.", 1], ["abc", null], ["1e3", 1000], ["Infinity", null], ["1,2,3", null], ["NaN", null],
+  ]) assert.equal(parseNumber(text), expected, text);
+});
+
+test("formatNumber keeps at most two decimals without grouping or negative zero", async () => {
+  const { formatNumber } = await import("../../site/creator/number-field.mjs");
+  for (const [value, expected] of [[12, "12"], [1.5, "1.5"], [1.234, "1.23"], [1000, "1000"], [-0, "0"]]) {
+    assert.equal(formatNumber(value), expected);
+  }
+});
+
+test("clampNumber keeps values inside the field's range", async () => {
+  const { clampNumber } = await import("../../site/creator/number-field.mjs");
+  const options = { range: [-200, 200] };
+  assert.equal(clampNumber(-300, options), -200);
+  assert.equal(clampNumber(300, options), 200);
+  assert.equal(clampNumber(1.5, options), 1.5);
+});
+
+test("scrubValue moves one step per three pixels and Shift uses ten steps", async () => {
+  const { scrubValue } = await import("../../site/creator/number-field.mjs");
+  const options = { range: [0, 40], step: 1 };
+  assert.equal(scrubValue(10, 9, options), 13);
+  assert.equal(scrubValue(10, 9, options, true), 40);
+  assert.equal(scrubValue(10, -100, options), 0);
+  assert.equal(scrubValue(2, 4, { range: [0, 6], step: 0.5 }), 2.5);
+  assert.equal(scrubValue(10, 1, options), 10);
+});
+
+test("nudgeValue respects the step, Shift multiplier and range", async () => {
+  const { nudgeValue } = await import("../../site/creator/number-field.mjs");
+  const options = { range: [0, 40], step: 1 };
+  assert.equal(nudgeValue(39, 1, options), 40);
+  assert.equal(nudgeValue(40, 1, options), 40);
+  assert.equal(nudgeValue(5, -1, options, true), 0);
+  assert.equal(nudgeValue(2, -1, { range: [0, 6], step: 0.5 }), 1.5);
+});
+
 test("preview colors match the site's hand-checked ones", () => {
   const css = read("site/style.css").toString().replace(/\/\*[\s\S]*?\*\//g, "");
   for (const id of baseIDs) {

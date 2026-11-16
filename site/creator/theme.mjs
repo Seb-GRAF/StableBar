@@ -208,11 +208,13 @@ export function resolveTheme(base, config, appearance) {
 const docs = "https://github.com/Seb-GRAF/StableBar/blob/main/docs/";
 const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
 
-function control(id, label, kind, paths, help, guide, appliesWhen) {
+function control(id, label, kind, paths, help, guide, appliesWhen,
+  { range = [0, 40], step = 1, unit = "pt", slider = false } = {}) {
   return {
     id, group: id.split(".")[0], label, kind, paths,
     help: `${paths.join(", ")}: ${help}`, docs: docs + guide,
     ...(appliesWhen ? { appliesWhen } : {}),
+    ...(kind === "number" ? { range, step, unit, slider } : {}),
   };
 }
 
@@ -237,17 +239,17 @@ export const CONTROLS = [
   control("palette.accentText", "Text on accent", "color", ["defaults.accentText"],
     "Set text drawn on the accent color.", "styling.md#widget-styles"),
   control("bar.height", "Height", "number", ["bar.height"],
-    "Set the bar height in points.", "layout.md"),
+    "Set the bar height in points.", "layout.md", undefined, { range: [16, 100], slider: true }),
   control("bar.margin", "Floating margin", "number", ["bar.margin"],
     "Inset the strip from the screen edges.", "layout.md"),
   control("bar.background", "Strip background", "background", ["bar.style.background"],
     "Choose no strip, a color, or keep the base theme's gradient.", "layout.md"),
   control("bar.cornerRadius", "Strip corners", "number", ["bar.style.cornerRadius"],
-    "Round the strip's corners in points.", "layout.md"),
+    "Round the strip's corners in points.", "layout.md", undefined, { slider: true }),
   control("bar.borderColor", "Strip border", "color", ["bar.style.borderColor"],
     "Set the strip's border color.", "layout.md"),
   control("bar.borderWidth", "Border width", "number", ["bar.style.borderWidth"],
-    "Set the strip's border width in points.", "layout.md"),
+    "Set the strip's border width in points.", "layout.md", undefined, { range: [0, 6], step: 0.5 }),
   select("bar.borderEdges", "Border edges", ["bar.style.borderEdges"],
     "Choose which strip edges have a border.", "layout.md", ["bottom", "all"]),
   control("widgets.tiles", "Tiles", "toggle", ["defaults.background", "defaults.borderColor", "defaults.shadowColor"],
@@ -255,7 +257,7 @@ export const CONTROLS = [
   control("widgets.fontName", "Font", "text", ["defaults.fontName"],
     "Use system or the name of a font installed on your Mac.", "styling.md#widget-styles"),
   control("widgets.fontSize", "Font size", "number", ["defaults.fontSize"],
-    "Set the widget font size in points.", "styling.md#widget-styles"),
+    "Set the widget font size in points.", "styling.md#widget-styles", undefined, { range: [6, 40], slider: true }),
   select("widgets.fontWeight", "Font weight", ["defaults.fontWeight"],
     "Choose the widget font weight.", "styling.md#widget-styles", fontWeights),
   control("widgets.cornerRadius", "Tile corners", "number", ["defaults.cornerRadius"],
@@ -269,7 +271,7 @@ export const CONTROLS = [
   control("widgets.shadowColor", "Shadow or glow", "color", ["defaults.shadowColor"],
     "Set the widget shadow or, without tiles, its glow.", "styling.md#widget-styles"),
   control("widgets.shadowRadius", "Shadow radius", "number", ["defaults.shadowRadius"],
-    "Set the shadow or glow radius in points.", "styling.md#widget-styles"),
+    "Set the shadow or glow radius in points.", "styling.md#widget-styles", undefined, { range: [0, 1000] }),
   select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
     "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
   control("workspaces.foreground", "Unfocused text", "color", ["workspaceDefaults.style.foreground"],
@@ -279,13 +281,15 @@ export const CONTROLS = [
   control("workspaces.focusedFill", "Focused fill", "color", ["workspaceDefaults.style.states.focused.background"],
     "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background")),
   control("workspaces.cornerRadius", "Indicator corners", "number", ["workspaceDefaults.style.cornerRadius"],
-    "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background")),
+    "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background"),
+    { range: [0, 1000] }),
   ...[
     ["Width", "width", "Underline width"], ["Height", "height", "Underline height"],
     ["CornerRadius", "cornerRadius", "Underline corners"], ["OffsetY", "offsetY", "Underline position"],
   ].map(([name, key, label]) => control(`workspaces.underline${name}`, label, "number",
     [`workspaceDefaults.indicatorStyle.${key}`], "Set the underline's geometry in points.",
-    "widgets.md#workspace-appearance", indicatorIs("underline"))),
+    "widgets.md#workspace-appearance", indicatorIs("underline"),
+    { range: name === "OffsetY" ? [-200, 200] : [0, 1000] })),
   control("workspaces.underlineBackground", "Underline color", "color", ["workspaceDefaults.indicatorStyle.background"],
     "Set the focused workspace's underline color.", "widgets.md#workspace-appearance", indicatorIs("underline")),
   control("workspaces.underlineVisibleBackground", "Visible underline", "color",

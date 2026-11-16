@@ -2,6 +2,7 @@ import builtIn from "./built-in.mjs";
 import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
 import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
 import { cssVariables, indicatorClass, keptFromBase } from "./preview.mjs";
+import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
 
 const TRY_LINK_MIN_VERSION = null;
 const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
@@ -57,6 +58,7 @@ let state, baseID = "built-in", baseGradient, mode = "new", sourceID;
 let appearance = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
 let jsonFile = "config", activePaths = [], store = { status: "unchecked" }, storeTimer, storeRequest = 0;
 let pendingTheme, importRequest = 0;
+let numberDrag;
 const resolved = () => resolveTheme(builtIn, state.config, appearance);
 
 function colorInput(control, value, suffix = "") {
@@ -91,10 +93,11 @@ function controlHTML(control, r) {
     const selected = value?.gradient ? "gradient" : value ? "color" : "none";
     input = `<select ${attr}>${[["none", "None"], ["color", "A color"], ...(baseGradient ? [["gradient", "Keep the base gradient"]] : [])].map(([key, label]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`).join("")}</select>`;
     if (selected === "color") input += `<div class="background-color">${colorInput(control, value, "-color")}</div>`;
-  } else {
-    const number = control.kind === "number";
-    input = `<input ${attr} type="${number ? "number" : "text"}" value="${e(value ?? "")}" ${number ? `step="0.5" ${control.id.endsWith("OffsetY") ? "" : 'min="0"'}` : 'autocomplete="off"'}>`;
-  }
+  } else if (control.kind === "number") {
+    const [min, max] = control.range, text = value == null ? "" : formatNumber(value);
+    const slider = control.slider ? `<input type="range" min="${min}" max="${max}" step="${control.step}" aria-label="${e(control.label)}" data-slider-for="${control.id}" value="${e(text)}">` : "";
+    input = `<div class="number-control">${slider}<div class="number-field"><span class="scrub-handle" aria-hidden="true" title="Drag to change. Hold Shift for steps of 10.">⟷</span><input ${attr} type="text" inputmode="decimal" value="${e(text)}" autocomplete="off" spellcheck="false"><span class="number-unit">${e(control.unit)}</span></div></div>`;
+  } else input = `<input ${attr} type="text" value="${e(value ?? "")}" autocomplete="off">`;
   const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
   const helpText = control.help.slice(control.help.indexOf(": ") + 2);
   return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><label for="${id}">${e(control.label)}</label>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
@@ -377,6 +380,35 @@ function requestStoreCheck() {
   return checkStore(state.manifest.id, request);
 }
 
+function numberControl(input) {
+  if (!input?.dataset.control) return;
+  return controlsFor(state).find(control => control.id === input.dataset.control && control.kind === "number");
+}
+
+function writeNumber(input, value) {
+  input.value = formatNumber(value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function commitNumber(input, control) {
+  const value = parseNumber(input.value);
+  if (value === null) {
+    if (!input.value.trim() && control.id === "workspaces.underlineWidth") {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    } else {
+      const [min, max] = control.range;
+      fieldErrors.set(control.id, `Enter a number from ${min} to ${max}.`);
+      updateOutputs();
+    }
+  } else writeNumber(input, clampNumber(value, control));
+}
+
+function updateNumberSlider(id, value) {
+  const slider = root.querySelector(`[data-slider-for="${id}"]`);
+  if (slider && value != null) slider.value = formatNumber(value);
+}
+
 function changeControl(input) {
   const control = controlsFor(state).find(control => control.id === input.dataset.control);
   if (!control) return;
@@ -391,9 +423,11 @@ function changeControl(input) {
       fieldErrors.set(control.id, "Use #RRGGBB or #RRGGBBAA for this color."); updateOutputs(); return;
     }
   } else if (control.kind === "number") {
-    value = input.value === "" && control.id === "workspaces.underlineWidth" ? null : Number(input.value);
-    if ((input.value === "" && value !== null) || !input.validity.valid || (value !== null && !Number.isFinite(value))) {
-      fieldErrors.set(control.id, "Enter a valid number of points."); updateOutputs(); return;
+    value = parseNumber(input.value);
+    fieldErrors.delete(control.id);
+    const emptyWidth = !input.value.trim() && control.id === "workspaces.underlineWidth";
+    if (!emptyWidth && (value === null || value < control.range[0] || value > control.range[1])) {
+      updateOutputs(); return;
     }
   }
   fieldErrors.delete(control.id);
@@ -410,14 +444,17 @@ function changeControl(input) {
   jsonFile = control.group === "about" ? "package" : "config";
   // Keep the input being typed into in place; token edits can change the other controls' resolved values.
   const r = resolved();
+  if (control.kind === "number") updateNumberSlider(control.id, value);
   for (const other of controlsFor(state)) {
     if (other.id === control.id || fieldErrors.has(other.id)) continue;
     const value = controlValue(other, r);
     root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
       if (element.type === "color") element.value = typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : "#000000";
       else if (element.hasAttribute("data-color-text")) element.value = value ?? "#00000000";
+      else if (other.kind === "number") element.value = value == null ? "" : formatNumber(value);
       else if (other.kind !== "toggle" && other.kind !== "background") element.value = value ?? "";
     });
+    if (other.kind === "number") updateNumberSlider(other.id, value);
   }
   if (color) {
     input.parentElement.querySelector("[data-color-text]").value = value;
@@ -679,12 +716,19 @@ async function start() {
 }
 
 document.addEventListener("input", event => {
+  if (event.target.dataset.sliderFor) {
+    const input = root.querySelector(`[data-control="${event.target.dataset.sliderFor}"]`);
+    writeNumber(input, Number(event.target.value));
+    return;
+  }
   if (event.target.dataset.control && !["checkbox", "select-one"].includes(event.target.type)) changeControl(event.target);
   if (event.target.id === "new-theme-name") checkReopen();
 });
 document.addEventListener("change", event => {
   const input = event.target;
-  if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
+  const control = numberControl(input);
+  if (control) commitNumber(input, control);
+  else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
   if (input.id === "base-theme") {
     if (!bases.has(input.value)) return;
     baseID = input.value;
@@ -731,6 +775,16 @@ document.addEventListener("click", async event => {
   } catch (error) { notify(message(error)); }
 });
 document.addEventListener("keydown", event => {
+  const control = numberControl(event.target);
+  if (control && ["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
+    event.preventDefault();
+    if (event.key === "Enter") commitNumber(event.target, control);
+    else {
+      const value = controlValue(control, resolved()) ?? control.range[0];
+      writeNumber(event.target, nudgeValue(value, event.key === "ArrowUp" ? 1 : -1, control, event.shiftKey));
+    }
+    return;
+  }
   const tab = event.target.closest('[role="tab"]');
   if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
@@ -738,6 +792,33 @@ document.addEventListener("keydown", event => {
   const index = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (tabs.indexOf(tab) + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
   tabs[index].click(); tabs[index].focus();
 });
+document.addEventListener("pointerdown", event => {
+  const handle = event.target.closest(".scrub-handle");
+  if (!handle || event.button !== 0 || event.isPrimary === false || numberDrag) return;
+  const input = handle.parentElement.querySelector("[data-control]"), control = numberControl(input);
+  if (!control) return;
+  event.preventDefault();
+  numberDrag = { handle, input, control, origin: controlValue(control, resolved()) ?? control.range[0],
+    x: event.clientX, pointerID: event.pointerId };
+  handle.setPointerCapture(event.pointerId);
+  root.classList.add("is-scrubbing");
+});
+document.addEventListener("pointermove", event => {
+  if (!numberDrag || event.pointerId !== numberDrag.pointerID) return;
+  const { input, control, origin, x } = numberDrag;
+  const value = scrubValue(origin, event.clientX - x, control, event.shiftKey);
+  if (value !== parseNumber(input.value)) writeNumber(input, value);
+});
+function endNumberDrag(event) {
+  if (!numberDrag || event.pointerId !== numberDrag.pointerID) return;
+  const { handle, pointerID } = numberDrag;
+  numberDrag = null;
+  if (handle.hasPointerCapture(pointerID)) handle.releasePointerCapture(pointerID);
+  root.classList.remove("is-scrubbing");
+}
+document.addEventListener("pointerup", endNumberDrag);
+document.addEventListener("pointercancel", endNumberDrag);
+document.addEventListener("lostpointercapture", endNumberDrag);
 dialog.addEventListener("close", () => {
   // A queued close event can arrive after another import has opened the dialog again.
   if (dialog.open) return;
