@@ -2004,7 +2004,11 @@
     "groupMember": {
       "type": "object",
       "additionalProperties": false,
-      "minProperties": 1,
+      "anyOf": [
+        { "required": ["type"], "properties": { "type": { "not": { "type": "null" } } } },
+        { "required": ["role"], "properties": { "role": { "not": { "type": "null" } } } },
+        { "required": ["id"] }
+      ],
       "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID.",
       "properties": {
         "type": {
