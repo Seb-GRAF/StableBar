@@ -250,6 +250,22 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(countdown(1_780).target == 0)
 }
 
+@Test func agendaEventsArePastOnceTheyEndAndOtherwiseTakeTheirCountdownsPhase() {
+    let start = Date(timeIntervalSinceReferenceDate: 3_600)
+    let end = start.addingTimeInterval(1_800)
+    let phase = { (offset: Double) in agendaPhase(start: start, end: end, at: start.addingTimeInterval(offset), soon: 15, now: 5) }
+    #expect([-901, -900, -300, 0, 1_799, 1_800, 7_200].map(phase) == ["later", "soon", "now", "live", "live", "past", "past"])
+}
+
+@Test func meetingServicesFollowTheLinksHost() {
+    #expect(meetingService("https://meet.google.com/abc-defg-hij?authuser=0") == "Google Meet")
+    #expect(meetingService("https://zoom.us/j/1") == "Zoom")
+    #expect(meetingService("https://us02web.zoom.us/j/123456789?pwd=abc.DEF") == "Zoom")
+    #expect(meetingService("https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0") == "Microsoft Teams")
+    #expect(meetingService("https://teams.live.com/meet/9") == "Microsoft Teams")
+    #expect(meetingService("https://example.com/j/1") == nil)
+}
+
 @Test func meetingLinksKeepOnlyMeetZoomAndTeamsURLsAndStopAtShellSyntax() {
     #expect(meetingLink(["Room 4", "Join: https://us02web.zoom.us/j/123456789?pwd=abc.DEF"]) == "https://us02web.zoom.us/j/123456789?pwd=abc.DEF")
     #expect(meetingLink(["https://meet.google.com/abc-defg-hij?authuser=0", "https://zoom.us/j/1"]) == "https://meet.google.com/abc-defg-hij?authuser=0")
