@@ -52,6 +52,23 @@ struct ThemeCatalog {
     }
 }
 
+/// A theme a profile can match, by ID whatever its version.
+struct ProfileThemeOption: Equatable {
+    let id: String
+    let name: String
+}
+
+extension ThemeCatalog {
+    /// Built-in first, even without the bundled themes, then each other theme once.
+    var profileThemeOptions: [ProfileThemeOption] {
+        var options = [ProfileThemeOption(id: "built-in", name: "Built-in")]
+        for choice in choices where !choice.isLegacy && !options.contains(where: { $0.id == choice.manifest.id }) {
+            options.append(ProfileThemeOption(id: choice.manifest.id, name: choice.manifest.name))
+        }
+        return options
+    }
+}
+
 extension ThemeChoice {
     var isBuiltIn: Bool { isBundled && manifest.id == "built-in" }
     var edit: ConfigurationEdit { ConfigurationEdit(action: .theme, properties: isBuiltIn ? nil : selection) }

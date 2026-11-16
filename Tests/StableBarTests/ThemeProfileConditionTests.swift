@@ -113,3 +113,43 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     store.endThemeTrial()
     #expect(store.configuration?.bar.height == 40)
 }
+
+@Test func profileThemeOptionsListBuiltInFirstAndEachThemeOnce() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(#"{"bar":{"margin":2}}"#)
+    let second = fixture.directory.appending(path: "sources/test-theme-2")
+    try fixture.write(#"{"id":"test-theme","name":"Test theme","version":"2","kind":"theme","entry":"config.json"}"#,
+                      to: second.appending(path: "package.json"))
+    try fixture.write(#"{"bar":{"margin":2}}"#, to: second.appending(path: "config.json"))
+    _ = try fixture.packages.install(second)
+
+    let options = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: fixture.themes)
+        .profileThemeOptions
+    #expect(options.first == ProfileThemeOption(id: "built-in", name: "Built-in"))
+    #expect(options.filter { $0.id == "built-in" }.count == 1)
+    #expect(options.filter { $0.id == "test-theme" } == [ProfileThemeOption(id: "test-theme", name: "Test theme")])
+    #expect(options.contains { $0.id == "nord" })
+
+    let withoutBundled = ThemeCatalog(packages: fixture.directory.appending(path: "packages"), themesDirectory: nil)
+        .profileThemeOptions
+    #expect(withoutBundled == [ProfileThemeOption(id: "built-in", name: "Built-in"),
+                               ProfileThemeOption(id: "test-theme", name: "Test theme")])
+}
+
+@MainActor @Test func choosingAThemeConditionSavesItAsOneUndoableChange() throws {
+    let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"Fern","configuration":{}}]}"#)
+    defer { fixture.close() }
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let editor = ConfigurationEditor(store: store)
+
+    editor.setProfileCondition("Fern", \.theme, value: "fern", control: "theme")
+    #expect(editor.error == nil)
+    #expect(store.profiles.first?.when?.theme == "fern")
+    store.flushCustomization()
+    let saved = try #require(fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self).first)
+    #expect(saved["when"] == .object(["theme": .string("fern")]))
+    #expect(editor.undoSteps.count == 1)
+}
