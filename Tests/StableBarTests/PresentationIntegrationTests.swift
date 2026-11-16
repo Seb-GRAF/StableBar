@@ -70,7 +70,7 @@ private var presentationRepository: URL {
     let text = long ? Array(repeating: "Will not sleep for 1 hour", count: 20).joined(separator: " ") : "Will not sleep for 1 hour"
     func hover(_ inside: Bool) {
         popup.hover(inside, store: store, anchor: anchor) {
-            popup.showTooltip(text, widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults),
+            popup.showTooltip(text, widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults),
                               store: store, anchor: anchor)
         }
     }
@@ -642,7 +642,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
     defer { bar.close() }
     await bar.settle()
-    popup.showWidgets(defaults: configuration.popupDefaults.inheriting(configuration.defaults), store: store,
+    popup.showWidgets(defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults), store: store,
                       anchor: try #require(bar.anchors("awake").first)) { Text("Awake") }
     defer { popup.close() }
     let screen = try #require(menuBarScreen)
@@ -675,10 +675,10 @@ func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async 
     await bar.settle()
     let widget = configuration.widgets[0]
     let anchor = try #require(bar.anchors(widget.id).first)
-    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
     switch kind {
     case "controls": popup.showControls(widget: widget, defaults: defaults, store: store, anchor: anchor) { _ in Text("Volume") }
-    case "row": popup.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor) { Text("Items") }
+    case "row": popup.showRow(widget: widget, defaults: defaults, store: store, anchor: anchor, sidePadding: 10) { Text("Items") }
     default: popup.showWidgets(defaults: defaults, store: store, anchor: anchor) { Text("Widgets") }
     }
     defer { popup.close() }
@@ -1030,7 +1030,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
         let widget = try #require(configuration.widgets.first { $0.id == id })
         let anchor = try #require(external.anchors(id).first)
         popup.toggle(try #require(configuration.popups[popupName]), widget: widget,
-            defaults: configuration.popupDefaults.inheriting(configuration.defaults), store: store, anchor: anchor)
+            defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults), store: store, anchor: anchor)
         await external.settle()
         let panel = try #require(popupPanel)
         #expect(!panel.isVisible && popup.isOpen)
@@ -1057,7 +1057,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     #expect(source.starts == 1)
     let time = try #require(configuration.widgets.first { $0.id == "time" })
     popup.toggle(try #require(time.popupName.flatMap { configuration.popups[$0] }), widget: time,
-        defaults: configuration.popupDefaults.inheriting(configuration.defaults), store: store, anchor: try #require(external.anchors("time").first))
+        defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults), store: store, anchor: try #require(external.anchors("time").first))
     #expect(popup.isOpen)
     try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
     #expect(!popup.isOpen)
@@ -1070,7 +1070,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     for (id, popupName) in [("music", "music"), ("cpu", "system"), ("meeting", "agenda"), ("time", "clock")] {
         let widget = try #require(light.widgets.first { $0.id == id })
         popup.toggle(try #require(light.popups[popupName]), widget: widget,
-            defaults: light.popupDefaults.inheriting(light.defaults), store: store, anchor: try #require(external.anchors(id).first))
+            defaults: light.popupDefaults.popupStyle(over: light.defaults), store: store, anchor: try #require(external.anchors(id).first))
         await external.settle()
         try capturePopup(try #require(popupPanel), name: "tonhalle-light-\(popupName)-popup")
         popup.close()
@@ -1081,7 +1081,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     _ = try external.bitmap(name: "tonhalle-light-2560-main")
     store.workspaceStore.acceptMode("tailing")
     let music = try #require(light.widgets.first { $0.id == "music" })
-    popup.toggle(try #require(light.popups["music"]), widget: music, defaults: light.popupDefaults.inheriting(light.defaults),
+    popup.toggle(try #require(light.popups["music"]), widget: music, defaults: light.popupDefaults.popupStyle(over: light.defaults),
                  store: store, anchor: try #require(external.anchors("music").first))
     #expect(popup.isOpen)
     try store.applyEdits([ConfigurationEdit(action: .theme)], persist: false)
@@ -1098,7 +1098,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     for (id, popupName) in [("music", "music"), ("cpu", "system"), ("meeting", "agenda"), ("time", "clock")] {
         let widget = try #require(builtIn.widgets.first { $0.id == id })
         popup.toggle(try #require(builtIn.popups[popupName]), widget: widget,
-            defaults: builtIn.popupDefaults.inheriting(builtIn.defaults), store: store, anchor: try #require(external.anchors(id).first))
+            defaults: builtIn.popupDefaults.popupStyle(over: builtIn.defaults), store: store, anchor: try #require(external.anchors(id).first))
         await external.settle()
         try capturePopup(try #require(popupPanel), name: "built-in-light-\(popupName)-popup")
         popup.close()

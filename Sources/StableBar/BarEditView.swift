@@ -160,7 +160,7 @@ struct BarEditView: View {
                     store.popup.close()
                     return
                 }
-                store.popup.showTooltip(position.title, widget: widget, defaults: config.popupDefaults.inheriting(config.defaults),
+                store.popup.showTooltip(position.title, widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults),
                                         store: store, anchor: zoneAnchors[position]!)
             }
             .alert("Couldn’t change widget", isPresented: Binding(get: {

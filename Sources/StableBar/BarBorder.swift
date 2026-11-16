@@ -18,7 +18,7 @@ struct BarSurface: ViewModifier {
                 // A see-through strip shows the popups' surface, which the theme pairs with its text.
                 if reduceTransparency {
                     let look = store.configuration!.look(on: kind)
-                    Color.clear.modifier(GlassBackground(fill: look.popupDefaults.inheriting(look.defaults).background, glass: settings.glass,
+                    Color.clear.modifier(GlassBackground(fill: look.popupDefaults.popupStyle(over: look.defaults).background, glass: settings.glass,
                                                          surface: \.popups, shape: RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0))))
                 }
             }

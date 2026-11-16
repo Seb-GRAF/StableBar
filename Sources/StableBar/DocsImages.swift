@@ -115,8 +115,9 @@ enum DocsImages {
     /// The bar with the meeting's agenda open below it, centered under the widget as `WidgetPopup` places it.
     private static func hero(_ store: BarStore) -> some View {
         let configuration = store.configuration!
+        let look = configuration.look(on: .monitor)
         let popupTop = configuration.barGeometry(for: display).drawingBottom
-            + configuration.look(on: .monitor).widgets.first { $0.id == "meeting" }!.popup!.offset
+            + look.widgets.first { $0.id == "meeting" }!.popup!.gap(below: look.bar)
         return bar(store)
             .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
                 GeometryReader { proxy in
@@ -150,7 +151,7 @@ enum DocsImages {
         let configuration = store.configuration!.look(on: .monitor)
         let widget = configuration.widgets.first { $0.id == id }!
         let popup = widget.popup!
-        let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults))
+        let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults))
         return PopupView(popup: popup, style: style, store: store, widget: widget)
             .environment(\.screenKind, .monitor)
             .frame(width: CGFloat(popup.style.width ?? 360))
@@ -164,7 +165,7 @@ enum DocsImages {
         let popup = widgetPopup(widget, store: store)!
         VStack(alignment: .leading, spacing: 8) {
             Text(WidgetDisplayName.title(for: widget.content, providers: configuration.providers)).font(.system(size: 12, weight: .semibold))
-            PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults)),
+            PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults)),
                       store: store, widget: widget)
                 .frame(width: popup.style.width!)
                 .fixedSize(horizontal: false, vertical: true)

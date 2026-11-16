@@ -5,7 +5,8 @@ struct PopupConfiguration: Decodable, Sendable {
     let style: WidgetStyle
     let layout: PopupBlock
     var alignment: PopupAlignment = .center
-    var offset = 6.0
+    /// The gap below the bar; `bar.popupOffset` when nil.
+    var offset: Double?
     var openOnHover = false
     var dismissOnAction = true
     var dismissOnControl = false
@@ -24,10 +25,20 @@ struct PopupConfiguration: Decodable, Sendable {
         self.layout = layout
     }
 
-    /// `defaults` already includes popupDefaults. A widget's explicit style reaches its popup;
-    /// its bar role deliberately does not.
+    /// The padding of a popup that neither it nor `popupDefaults` sets.
+    static let defaultPadding = WidgetStyle(paddingHorizontal: 16, paddingVertical: 16)
+    /// The gap between the blocks of a popup's top-level column when nothing sets `spacing`. Everything else keeps 6.
+    static let blockSpacing = 12.0
+
+    /// `defaults` is `popupDefaults.popupStyle(over: defaults)`. A widget's explicit style reaches its popup, except its
+    /// padding and spacing, which are the bar widget's; its bar role deliberately does not.
     func baseStyle(widget: WidgetConfiguration, defaults: WidgetStyle) -> WidgetStyle {
-        resolveStyle([defaults, widget.style, style, WidgetStyle(background: widget.popupBackground)])
+        resolveStyle([Self.defaultPadding, defaults, widget.style.withoutSpacing, style, WidgetStyle(background: widget.popupBackground)])
+    }
+
+    /// The gap below what the popup opens from: the bar, or with `inPopup` a row of another popup.
+    func gap(below bar: BarSettings, inPopup: Bool = false) -> Double {
+        offset ?? bar.popupGap(inPopup: inPopup)
     }
 
     init(from decoder: Decoder) throws {
@@ -37,7 +48,7 @@ struct PopupConfiguration: Decodable, Sendable {
         style = try values.decode(WidgetStyle.self, forKey: .style)
         layout = try values.decode(PopupBlock.self, forKey: .layout)
         alignment = try values.decodeIfPresent(PopupAlignment.self, forKey: .alignment) ?? alignment
-        offset = try values.decodeIfPresent(Double.self, forKey: .offset) ?? offset
+        offset = try values.decodeIfPresent(Double.self, forKey: .offset)
         openOnHover = try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? openOnHover
         dismissOnAction = try values.decodeIfPresent(Bool.self, forKey: .dismissOnAction) ?? dismissOnAction
         dismissOnControl = try values.decodeIfPresent(Bool.self, forKey: .dismissOnControl) ?? dismissOnControl
@@ -45,6 +56,35 @@ struct PopupConfiguration: Decodable, Sendable {
         animation = try values.decodeIfPresent(WidgetAnimation.self, forKey: .animation)
         onOpen = try values.decodeIfPresent(String.self, forKey: .onOpen)
         onClose = try values.decodeIfPresent(String.self, forKey: .onClose)
+    }
+}
+
+extension WidgetStyle {
+    /// This style without its padding, in its states too.
+    var withoutPadding: WidgetStyle {
+        var style = self
+        style.paddingHorizontal = nil
+        style.paddingVertical = nil
+        style.paddingLeading = nil
+        style.paddingTrailing = nil
+        style.paddingTop = nil
+        style.paddingBottom = nil
+        style.states = states?.mapValues(\.withoutPadding)
+        return style
+    }
+
+    /// This style without its padding and spacing, in its states too.
+    var withoutSpacing: WidgetStyle {
+        var style = withoutPadding
+        style.spacing = nil
+        style.states = style.states?.mapValues(\.withoutSpacing)
+        return style
+    }
+
+    /// This popupDefaults style over the bar's `defaults`, whose padding and spacing are the bar widgets' and don't
+    /// reach popups or tooltips.
+    func popupStyle(over defaults: WidgetStyle) -> WidgetStyle {
+        inheriting(defaults.withoutSpacing)
     }
 }
 

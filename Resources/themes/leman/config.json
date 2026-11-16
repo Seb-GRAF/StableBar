@@ -34,7 +34,6 @@
     "fontWeight": "regular"
   },
   "popupDefaults": {
-    "paddingVertical": 6,
     "background": "@token.surface",
     "borderColor": "@token.hairline",
     "shadowColor": { "light": "#0000001a", "dark": "#00000059" }

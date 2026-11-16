@@ -1,0 +1,36 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "defaults": { "paddingHorizontal": 4, "paddingVertical": 2, "spacing": 4 },
+    "widgets": [
+      { "id": "time", "type": "clock", "format": "EEE d MMM  HH:mm", "position": "right" },
+      {
+        "id": "focus",
+        "type": "script",
+        "command": "true",
+        "icon": "moon.fill",
+        "position": "center",
+        "popup": {
+          "style": { "width": 300 },
+          "layout": {
+            "type": "column",
+            "children": [
+              { "type": "text", "text": "Focus session", "style": { "fontWeight": "bold", "fontSize": 15 } },
+              { "type": "field", "field": "status" },
+              { "type": "toggle", "title": "Keep the screen awake", "source": "awake", "onChange": "true" },
+              { "type": "divider" },
+              { "type": "row", "children": [{ "type": "button", "title": "Stop", "onClick": "true" }, { "type": "button", "title": "Extend 1 h", "onClick": "true" }] }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "focus": { "text": "Focus", "fields": { "status": "Running · 2 h left", "awake": "true" } }
+  },
+  "draw": "bar",
+  "widget": "focus",
+  "width": 900,
+  "height": 360
+}

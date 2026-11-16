@@ -14,9 +14,9 @@ Unknown properties are errors, so a misspelled key cannot be silently ignored. T
 
 Saving from Settings, setup or the command line pins it to the version that saved the file.
 
-- `bar`: `height`, `position` (`top`, the default, or `bottom`: the edge of each display the bar sits on), `offset` (points from that edge; at the bottom, from the display's bottom edge), `belowMenuBar` (a top bar only: start the bar under each display's macOS menu bar; `offset` then counts from the bottom of that menu bar, and a display whose menu bar hides keeps the bar on its top edge), `margin`, `inset`, `spacing`, `background`, `motion`, `popupTransition` and `morphPopups` (see [Animation](create-a-widget.md#animation)), `inlineHoverControls` (see [Controls on hover](create-a-widget.md#controls-on-hover)), `hoverDelay` (milliseconds, see [Tooltips](widgets.md#tooltips)), `animationDuration` (seconds), `appearance` (`light` or `dark` keeps the bar and its popups in that appearance; omit it to follow the system).
+- `bar`: `height`, `position` (`top`, the default, or `bottom`: the edge of each display the bar sits on), `offset` (points from that edge; at the bottom, from the display's bottom edge), `belowMenuBar` (a top bar only: start the bar under each display's macOS menu bar; `offset` then counts from the bottom of that menu bar, and a display whose menu bar hides keeps the bar on its top edge), `margin`, `inset`, `spacing`, `background`, `motion`, `popupTransition` and `morphPopups` (see [Animation](create-a-widget.md#animation)), `popupOffset` (the gap in points between the bar and its popups, tooltips and hover controls, `6` by default; a popup's own `offset` wins), `inlineHoverControls` (see [Controls on hover](create-a-widget.md#controls-on-hover)), `hoverDelay` (milliseconds, see [Tooltips](widgets.md#tooltips)), `animationDuration` (seconds), `appearance` (`light` or `dark` keeps the bar and its popups in that appearance; omit it to follow the system).
 - `defaults`: styles inherited by every widget.
-- `popupDefaults`: styles inherited by every popup, over `defaults`.
+- `popupDefaults`: styles inherited by every popup, over `defaults`. Its `paddingHorizontal`, `paddingVertical` and `spacing` set every popup's padding and spacing, which never come from `defaults` (see [Popups](popups.md)).
 - `workspaceSource`: `aerospace` (default), `yabai`, `omniwm` (see [OmniWM workspaces](widgets.md#omniwm-workspaces)), `rift` (see [Rift workspaces](widgets.md#rift-workspaces)) or `spaces` (macOS Spaces, see [macOS Spaces workspaces](widgets.md#macos-spaces-workspaces)), for workspace widgets and active-display tracking.
 - `packageSources`: [private package sources](packages.md#private-sources), each with an `id`, a `name` and an `https` index `url`.
 - `widgets`: ordered widget definitions with unique `id`, `type`, `position` and optional `style`, `icon`, `onClick` or `open`, `menu`, `popup`.
@@ -95,7 +95,7 @@ From another terminal, run `./dist/StableBar.app/Contents/MacOS/StableBar --trig
 
 ## Theme tokens and automatic profiles
 
-Define reusable JSON values in `tokens` and reference them with a whole string such as `"@token.accent"`. Values retain their type: a token can supply a number, boolean, array, object, or string. Tokens can reference other tokens; unknown names and cycles reject the change while the current configuration keeps running. References are not interpolated inside shell commands or other strings.
+Define reusable JSON values in `tokens` and reference them with a whole string such as `"@token.accent"`. Values retain their type: a token can supply a number, boolean, array, object, or string. Tokens can reference other tokens; unknown names and cycles reject the change while the current configuration keeps running. StableBar also rejects references nested more than 64 levels deep, references whose expansion is too large, and references that need more tracking than StableBar allows. References are not interpolated inside shell commands or other strings.
 
 ```json
 {

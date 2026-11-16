@@ -108,7 +108,7 @@ func widgetBackgroundsOverrideOnlyTheirOwnSurface(properties: String, bar: UInt3
        "style":{"background":"#111111","fontSize":17}\##(properties)}]}
     """##.utf8))
     let widget = configuration.widgets[0]
-    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
     let barStyle = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, widgets: configuration.widgets, output: { _ in nil }))
     let popupStyle = try #require(configuration.popups["details"]).baseStyle(widget: widget, defaults: defaults)
     let tooltipStyle = resolveStyle([defaults, widget.tooltipStyle])
@@ -126,7 +126,7 @@ func widgetBackgroundsOverrideOnlyTheirOwnSurface(properties: String, bar: UInt3
        "popup":{"style":{},"layout":{"type":"text","text":"Details"}}}]}
     """##.utf8))
     let widget = configuration.widgets[0]
-    let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+    let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
     let barStyle = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, widgets: configuration.widgets, output: { _ in nil }))
     #expect(barStyle.background == .color(HexColor(0)))
     #expect(widget.popup?.baseStyle(widget: widget, defaults: defaults).background == .color(HexColor(0x999999ff)))
