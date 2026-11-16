@@ -168,6 +168,15 @@ func networkCounters(_ data: Data) -> [UInt16: NetworkCounters] {
     return counters
 }
 
+/// The local day `date` falls in, and the time the next meeting must start before: `lookahead` hours
+/// after `date`, or with `todayOnly` the end of the day when that comes first.
+func meetingWindow(at date: Date, lookahead: Double, todayOnly: Bool, calendar: Calendar) -> (today: Date, tomorrow: Date, horizon: Date) {
+    let today = calendar.startOfDay(for: date)
+    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let horizon = date.addingTimeInterval(lookahead * 3600)
+    return (today, tomorrow, todayOnly ? min(horizon, tomorrow) : horizon)
+}
+
 func meetingCountdown(start: Date, end: Date, at date: Date, soon: Int, now: Int)
     -> (phase: String, minutes: Int, remaining: Double, target: Double, delay: Double) {
     let live = start <= date
@@ -198,9 +207,7 @@ actor CalendarMetrics {
             return ScriptOutput(text: "No calendar access", icon: "calendar", fields: ["access": access == .notDetermined ? "notDetermined" : "denied"])
         }
         let now = Date()
-        let today = Calendar.current.startOfDay(for: now)
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-        let horizon = now.addingTimeInterval(provider.lookahead * 3600)
+        let (today, tomorrow, horizon) = meetingWindow(at: now, lookahead: provider.lookahead, todayOnly: provider.todayOnly, calendar: .current)
         let events = store.events(matching: store.predicateForEvents(withStart: today, end: max(tomorrow, horizon), calendars: nil))
             .filter { !$0.isAllDay && (provider.calendars.isEmpty || provider.calendars.contains($0.calendar.title)) }
             .sorted { $0.startDate < $1.startDate }

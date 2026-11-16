@@ -11,6 +11,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let events: [String]
     let calendars: [String]
     let lookahead: Double
+    let todayOnly: Bool
     let soon: Int
     let now: Int
     let processes: Int
@@ -24,7 +25,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let providers: [String]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, soon, now, processes
+        case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, todayOnly, soon, now, processes
         case sortBy, units, cpuWarning, memoryWarning, diskWarning, diskCritical, providers
     }
 
@@ -39,6 +40,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         events = []
         calendars = []
         lookahead = 24
+        todayOnly = false
         soon = 15
         now = 5
         processes = 0
@@ -66,6 +68,7 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
         events = try values.decodeIfPresent([String].self, forKey: .events) ?? []
         calendars = try values.decodeIfPresent([String].self, forKey: .calendars) ?? []
         lookahead = try values.decodeIfPresent(Double.self, forKey: .lookahead) ?? 24
+        todayOnly = try values.decodeIfPresent(Bool.self, forKey: .todayOnly) ?? false
         soon = try values.decodeIfPresent(Int.self, forKey: .soon) ?? 15
         now = try values.decodeIfPresent(Int.self, forKey: .now) ?? 5
         processes = try values.decodeIfPresent(Int.self, forKey: .processes) ?? 0

@@ -1954,6 +1954,9 @@
         "lookahead": {
           "$ref": "#/definitions/number"
         },
+        "todayOnly": {
+          "$ref": "#/definitions/boolean"
+        },
         "soon": {
           "$ref": "#/definitions/number"
         },

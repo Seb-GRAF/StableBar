@@ -262,6 +262,18 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(meetingLink(["https://teams.live.com/meet/9`id`;ls|cat>x\"y\nhttps://zoom.us/j/2"]) == "https://teams.live.com/meet/9")
 }
 
+@Test func todayOnlyLooksForTheNextMeetingUntilLocalMidnightWhenTheClocksChange() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+    // 00:30 on the day the clocks go forward an hour, then on the day they go back.
+    let spring = try Date("2026-03-08T05:30:00Z", strategy: .iso8601)
+    let autumn = try Date("2026-11-01T04:30:00Z", strategy: .iso8601)
+    #expect(meetingWindow(at: spring, lookahead: 48, todayOnly: true, calendar: calendar).horizon == spring.addingTimeInterval(22.5 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 48, todayOnly: true, calendar: calendar).horizon == autumn.addingTimeInterval(24.5 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 2, todayOnly: true, calendar: calendar).horizon == autumn.addingTimeInterval(2 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 48, todayOnly: false, calendar: calendar).horizon == autumn.addingTimeInterval(48 * 3600))
+}
+
 @Test @MainActor func sharedProvidersRunOncePerEventAndSurviveIndependentWidgetEdits() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
