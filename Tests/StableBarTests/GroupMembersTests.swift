@@ -131,3 +131,82 @@ private func groupsByWidget(_ json: String) throws -> [String: String] {
     #expect(config.widgets.map(\.id).sorted() == ["clock", "now-playing"])
     #expect(config.widgets.first { $0.id == "now-playing" }?.group == "media")
 }
+
+private let pillTheme = #"{"groups":{"pill":{"style":{"cornerRadius":12},"members":[{"type":"clock"}]}}}"#
+private let clocks = #"""
+"widgets":[{"id":"time","type":"clock","role":"time","position":"right"},
+           {"id":"note","type":"text","text":"Note","position":"right"},
+           {"id":"date","type":"clock","position":"right"}]
+"""#
+
+private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = fixture.themes
+    return try loader.load(fixture.url)
+}
+
+private func inPill(_ configuration: Configuration?) -> [String] {
+    configuration?.widgets.filter { $0.group == "pill" }.map(\.id) ?? []
+}
+
+@MainActor @Test func aThemesMembersJoinWhileItIsSelectedAndLeaveWithIt() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(pillTheme)
+    let other = try fixture.theme(#"{"bar":{"margin":2}}"#, id: "other-theme")
+    try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},\#(clocks)}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.configurationError == nil)
+    #expect(inPill(store.configuration) == ["time", "date"])
+
+    try store.tryTheme(other)
+    #expect(store.configurationError == nil)
+    #expect(inPill(store.configuration) == [])
+    store.endThemeTrial()
+    #expect(inPill(store.configuration) == ["time", "date"])
+
+    try fixture.write(#"{"theme":{"id":"test-theme","version":"1","enabled":false},\#(clocks)}"#, to: fixture.url)
+    #expect(inPill(try loaded(fixture)) == [])
+}
+
+@Test(arguments: [(#"[{"type":"clock","role":"time"}]"#, ["time"]), ("[]", []), ("null", [])])
+func aThemeProfileNarrowsOrClearsTheThemesMembers(members: String, joined: [String]) throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(pillTheme)
+    try fixture.write(#"""
+    {"theme":{"id":"test-theme","version":"1"},\#(clocks),
+     "profiles":[{"name":"narrow","when":{"theme":"test-theme"},"configuration":{"groups":{"pill":{"members":\#(members)}}}}]}
+    """#, to: fixture.url)
+    #expect(inPill(try loaded(fixture)) == joined)
+}
+
+@Test func aScreensOwnThemeFillsItsGroupsOnlyOnThatScreen() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(pillTheme)
+    try fixture.write(#"{"screens":{"laptop":{"theme":{"id":"test-theme","version":"1"}}},\#(clocks)}"#, to: fixture.url)
+    let configuration = try loaded(fixture)
+    #expect(inPill(configuration) == [])
+    #expect(inPill(configuration.screenLooks["laptop"]) == ["time", "date"])
+}
+
+@Test func movingAWidgetAThemePlacedMovesItsGroupAndSavesNoGroup() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    _ = try fixture.theme(pillTheme)
+    try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},\#(clocks)}"#, to: fixture.url)
+    let edits = try WidgetPlacement.move("time", to: .left, widgets: try loaded(fixture).widgets)
+    #expect(edits.filter { $0.action == .set }.compactMap(\.id) == ["time", "date"])
+    #expect(edits.allSatisfy { $0.properties?["group"] == nil })
+}
+
+@Test func aMembersListInTheMainFileIsOneReadableOverride() throws {
+    let main = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(#"""
+    {"groups":{"pill":{"members":[{"type":"clock","role":"time"}]}}}
+    """#.utf8))
+    let theme = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(pillTheme.utf8))
+    #expect(ThemeOverrides(main: main, theme: theme, widgets: []).values.map(\.title) == ["Pill group: members"])
+}

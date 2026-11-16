@@ -73,6 +73,24 @@ Use `"overflow": "never"` for essential widgets. If these alone exceed the avail
 
 A named group has one shared background, padding, border and spacing. Members must use the same `position`; their first appearance places the group. A group overflows as one unit, takes its highest member priority, and stays visible if any member sets `overflow` to `never`.
 
+A group can also list its `members`, so widgets join it without a `group` of their own. A theme drawn as pills uses them to fill its pills while it's selected; under another theme, the widgets leave them.
+
+```json
+"groups": {
+  "clock":  { "style": { "background": "@token.accent" },        "members": [{ "type": "clock" }] },
+  "status": { "style": { "background": "@token.surfaceRaised" }, "members": [{ "type": "battery" }, { "type": "network" }] },
+  "media":  { "style": { "background": "@token.surfaceRaised" }, "members": [{ "id": "now-playing" }] }
+}
+```
+
+Each selector names a widget `type` (`aerospace` counts as `workspaces`), a `role`, an `id`, or several of them, and a widget matches when it has every one. Use `id` for a package's widgets, whose IDs the package sets, such as `now-playing`; an `id` that matches no widget isn't an error, since the package may not be installed.
+
+- A widget's own `group` always wins, and the widgets that set one decide where their groups sit.
+- Each enabled widget without a `group` then joins the group that matches it best, in list order. If that group's widgets are in another position, it stays out.
+- A selector naming `id` beats one that doesn't, then the selector naming more keys wins. On a tie, the group whose ID sorts first wins.
+
+Members gather where the first one appears, as in any group. Moving one moves the whole group, and StableBar saves only positions and order, never the membership. To keep widgets out of a theme's group, set its `members` in your main file or in a [profile](configuration.md#theme-tokens-and-automatic-profiles) with `"when": { "theme": "<id>" }`: your list replaces the theme's. Narrow it, as with `[{ "type": "clock", "role": "time" }]`, or empty it with `[]` or `null`.
+
 Set `flare` in a group's style to square its top corners and curve them outward past its sides with that radius, the way the MacBook notch meets the top of the screen. `cornerRadius` then rounds only the bottom corners; `0` keeps the top corners square without a curve. Use it on a group that reaches the top of the bar, such as a black group beside the notch or a notch of your own on another display. The curves draw into the spacing beside the group. A flared group draws no border.
 
 ```json
