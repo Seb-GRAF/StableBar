@@ -592,6 +592,42 @@ private extension DataSourceRegistry {
     #expect(store.providers.isEmpty)
 }
 
+@Test @MainActor func aMergeShowsEachTemporaryOutputItsInputsAccept() async throws {
+    let url = try writeTemporaryConfiguration(#"""
+    {"providers":{"saver":{"type":"system","events":["tick"]},"status":{"type":"merge","providers":["saver"]}},
+     "widgets":[{"id":"status","type":"provider","provider":"status","position":"right"}]}
+    """#)
+    defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    let reads = OSAllocatedUnfairLock(initialState: 0)
+    let store = BarStore(configurationURL: url, registry: DataSourceRegistry.builtIn.replacing("system") { _, _ in
+        PollingSource { _ in
+            let first = reads.withLock { $0 += 1; return $0 == 1 }
+            return .output(.success(ScriptOutput(text: "Saved", temporary: first ? nil : TemporaryOutput(fields: ["note": "Saved"], duration: 1))))
+        }
+    })
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let status = try #require(store.scripts["status"])
+    try await awaitCondition { status.output.fields?["saver.text"] == "Saved" }
+    let presentation = try #require(store.presentations["status"])
+    let clock = TestClock()
+    presentation.clock = clock
+    store.refreshScripts(for: "tick")
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(1))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    store.refreshScripts(for: "tick")
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(1))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    let saver = try #require(store.providers["saver"])
+    try saver.accept(ScriptOutput(text: "Saving", temporary: TemporaryOutput(fields: ["note": "Saving"], duration: 1)))
+    try saver.accept(ScriptOutput(text: "Saved"))
+    try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saving"] }
+}
+
 @Test @MainActor func aMergeRunsItsInputsForItsWidgetsAndPublishesEachChangeUnderTheirNames() async throws {
     let url = try writeTemporaryConfiguration(#"""
     {"providers":{"power":{"type":"battery","whenVisible":true},"sound":{"type":"audio"},"meetings":{"type":"calendar","events":["tick"]},
@@ -637,6 +673,17 @@ private extension DataSourceRegistry {
     #expect(store.presentations["status"]?.style.state == "warning")
     sound.change(to: audio(0.7))
     try await awaitCondition { status.output.values?["sound.volume"] == 0.7 }
+    let presentation = try #require(store.presentations["status"])
+    let clock = TestClock()
+    presentation.clock = clock
+    sound.change(to: AudioMonitor.showingChange(to: audio(0.6), from: audio(0.7)))
+    try await awaitCondition { presentation.temporaryFields == ["sound.changedVolume": "60%"] }
+    try await clock.waitForSleepers()
+    clock.advance(by: .seconds(AudioMonitor.changedVolumeDuration))
+    try await awaitCondition { presentation.temporaryFields == nil }
+    battery.change(to: ScriptOutput(text: "11%", values: ["percent": 0.11]))
+    try await awaitCondition { status.output.values?["power.percent"] == 0.11 }
+    #expect(presentation.temporaryFields == nil, "Another input's change doesn't show the volume again")
     let reads = Int(status.output.fields!["meetings.reads"]!)!
     store.refreshScripts(for: "tick")
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 1) }

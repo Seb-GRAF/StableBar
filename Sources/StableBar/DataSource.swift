@@ -251,14 +251,17 @@ final class PushSource: DataSource {
 }
 
 /// Combines other providers: their `values`, `fields`, `lists` and `series` under each one's name, such as
-/// `power.percent`, and their `text`, `icon` and `tooltip` as fields, such as `power.icon`, without text of
-/// its own. Its run stays open and sends again whenever one of them changes.
+/// `power.percent`, their `text`, `icon` and `tooltip` as fields, such as `power.icon`, and their
+/// `temporary` fields, such as `sound.changedVolume`, without text of its own. Its run stays open and sends
+/// again whenever one of them changes.
 @MainActor
 final class MergeSource: DataSource {
     private let inputs: [String]
     /// The runner of a provider while it runs.
     private let runner: @MainActor (String) -> ScriptWidget?
     private var emit: (@Sendable (SourceUpdate) -> Void)?
+    /// The number of each input's `lastTemporary` that the merge last saw, so it passes each one on once.
+    private var temporaryNumbers: [String: Int] = [:]
 
     init(inputs: [String], runner: @escaping @MainActor (String) -> ScriptWidget?) {
         self.inputs = inputs
@@ -267,6 +270,8 @@ final class MergeSource: DataSource {
 
     func start(emit: @escaping @Sendable (SourceUpdate) -> Void) {
         self.emit = emit
+        temporaryNumbers = Dictionary(inputs.compactMap { name in runner(name).map { (name, $0.lastTemporary?.number ?? 0) } },
+                                      uniquingKeysWith: { $1 })
     }
 
     func refresh(event: ScriptEvent) {
@@ -280,23 +285,30 @@ final class MergeSource: DataSource {
     private func send() {
         guard let emit else { return }
         let outputs = withObservationTracking {
-            inputs.compactMap { name in runner(name).map { (name, $0.output) } }
+            inputs.compactMap { name in runner(name).map { (name, $0.output, $0.lastTemporary) } }
         } onChange: { [weak self] in
             // Observation reports a change before it's made.
             Task { @MainActor in self?.send() }
         }
         func prefixed<Value>(_ entries: KeyPath<ScriptOutput, [String: Value]?>) -> [String: Value] {
-            Dictionary(outputs.flatMap { name, output in
+            Dictionary(outputs.flatMap { name, output, _ in
                 (output[keyPath: entries] ?? [:]).map { ("\(name).\($0.key)", $0.value) }
             }, uniquingKeysWith: { $1 })
         }
         var fields = prefixed(\.fields)
-        for (name, output) in outputs {
+        var temporary: TemporaryOutput?
+        for (name, output, last) in outputs {
             // An input's own field of the same name keeps its value, as layouts read it before these were passed on.
             let passed = ["text": output.text, "icon": output.icon, "tooltip": output.tooltip].compactMapValues { $0 }
             fields.merge(passed.map { ("\(name).\($0.key)", $0.value) }) { own, _ in own }
+            if let last, last.number != temporaryNumbers[name] {
+                let fields = Dictionary(uniqueKeysWithValues: last.output.fields.map { ("\(name).\($0.key)", $0.value) })
+                temporary = TemporaryOutput(fields: fields.merging(temporary?.fields ?? [:]) { new, _ in new },
+                                            duration: max(last.output.duration, temporary?.duration ?? 0))
+                temporaryNumbers[name] = last.number
+            }
         }
         emit(.output(.success(ScriptOutput(text: "", fields: fields, lists: prefixed(\.lists),
-                                           values: prefixed(\.values), series: prefixed(\.series)))))
+                                           values: prefixed(\.values), series: prefixed(\.series), temporary: temporary))))
     }
 }
