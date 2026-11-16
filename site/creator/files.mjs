@@ -1,4 +1,4 @@
-import { RESERVED_IDS, fileText, isVersion } from "./theme.mjs";
+import { RESERVED_IDS, fileText, isVersion, validateThemeColors } from "./theme.mjs";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -69,6 +69,7 @@ export function parseTheme(files) {
     }
   }
   check(config);
+  validateThemeColors(config);
   return { manifest, config };
 }
 
@@ -425,7 +426,8 @@ export async function folderFiles(files) {
 
 export function readmeRow({ id, name, description }) {
   if (typeof description !== "string" || !description.trim()) fail("descriptionRequired");
-  return `|  | **[${name}](packages/${id})**<br>${description} | No commands |`;
+  const cell = text => text.replaceAll("\\", "\\\\").replaceAll("|", "\\|");
+  return `|  | **[${cell(name)}](packages/${id})**<br>${cell(description)} | No commands |`;
 }
 
 export async function storeManifest(id, fetchImpl = fetch) {

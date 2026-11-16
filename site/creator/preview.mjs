@@ -1,3 +1,5 @@
+import { isColor, isBackground } from "./theme.mjs";
+
 // Token paths are honored wherever the config references them; unused palette colors stay unused.
 export const CONTRACT = [
   "tokens.surface", "tokens.surfaceRaised", "tokens.text", "tokens.textMuted", "tokens.accent",
@@ -23,7 +25,7 @@ export const CONTRACT = [
 ];
 
 const px = value => `${value}px`;
-const color = value => typeof value === "string" ? value : "transparent";
+const color = value => isColor(value) ? value : "transparent";
 const nonnegative = value => Math.max(0, value);
 const weights = { ultralight: 100, thin: 200, light: 300, regular: 400, medium: 500, semibold: 600, bold: 700 };
 const systemFont = '-apple-system, BlinkMacSystemFont, system-ui, sans-serif';
@@ -34,6 +36,7 @@ function font(style, lineHeight = px(Math.ceil(style.fontSize * 1.2))) {
 }
 
 function background(value) {
+  if (!isBackground(value)) return "transparent";
   if (!value?.gradient) return color(value);
   const { colors, locations, angle = 90 } = value.gradient;
   const stops = colors.map((value, index) => `${color(value)}${locations ? ` ${locations[index] * 100}%` : ""}`);
@@ -48,6 +51,7 @@ function isExactBackground(value) {
 }
 
 function hasPaint(value) {
+  if (!isBackground(value)) return false;
   if (value?.gradient) return value.gradient.colors.some(hasPaint);
   return typeof value === "string" && value !== "transparent" && !/^#[\da-f]{6}00$/i.test(value);
 }
@@ -126,8 +130,10 @@ export function indicatorClass(resolved) {
   return { background: "preview-ws-fill", underline: "preview-ws-under", none: "preview-ws-text" }[resolved.workspaceDefaults.indicator] ?? "preview-ws-fill";
 }
 
-export function keptFromBase(config) {
-  const rendered = new Set(CONTRACT);
+export function keptFromBase(config, { popupSpacing = false } = {}) {
+  const spacing = new Set(["popupDefaults.paddingHorizontal", "popupDefaults.paddingVertical",
+    "popupDefaults.spacing", "bar.popupOffset"]);
+  const rendered = new Set(CONTRACT.filter(path => popupSpacing || !spacing.has(path)));
   const visitedTokens = new Set();
   function references(value) {
     if (typeof value === "string" && value.startsWith("@token.")) {
@@ -140,7 +146,7 @@ export function keptFromBase(config) {
       for (const child of Object.values(value)) references(child);
     }
   }
-  for (const path of CONTRACT) {
+  for (const path of [...rendered]) {
     references(path.split(".").reduce((value, key) => value?.[key], config));
   }
   const paths = [...rendered];

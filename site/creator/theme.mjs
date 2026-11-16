@@ -30,6 +30,49 @@ export function fileText(object) {
 const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const isGradient = value => isObject(value?.gradient) && Object.hasOwn(value.gradient, "colors");
 
+export function isColor(value) {
+  return typeof value === "string" && [7, 9].includes(value.length) && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value);
+}
+
+export function isBackground(value) {
+  if (isColor(value)) return true;
+  if (!isGradient(value)) return false;
+  const { colors, locations, angle } = value.gradient;
+  return Array.isArray(colors) && colors.length >= 2 && colors.every(isColor)
+    && (angle == null || Number.isFinite(angle))
+    && (locations == null || (Array.isArray(locations) && locations.length === colors.length
+      && locations.every((stop, index) => Number.isFinite(stop) && stop >= 0 && stop <= 1
+        && (index === 0 || stop >= locations[index - 1]))));
+}
+
+const colorProperties = new Set([
+  "foreground", "background", "hoverBackground", "hoverForeground", "borderColor", "shadowColor", "accent", "accentText",
+]);
+const colorError = () => { throw new Error("Use #RRGGBB or #RRGGBBAA for colors."); };
+
+export function validateThemeColors(config) {
+  const expanded = substituteTokens(overriding(builtIn, config));
+  function visit(value) {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "tokens") continue;
+      if (key === "roles" && isObject(child)) Object.values(child).forEach(visit);
+      else if (colorProperties.has(key) && child != null) {
+        const valid = key === "background" || key === "hoverBackground" ? isBackground(child) : isColor(child);
+        if (!valid) colorError();
+      } else visit(child);
+    }
+  }
+  for (const appearance of ["light", "dark"]) {
+    const resolved = forAppearance(expanded, appearance);
+    visit(resolved);
+    // These palette values feed the preview directly, without a style reference.
+    for (const key of ["surfaceRaised", "textMuted", "track"]) {
+      if (resolved.tokens?.[key] != null && !isColor(resolved.tokens[key])) colorError();
+    }
+  }
+}
+
 function overriding(earlier, next) {
   if (!isObject(earlier) || !isObject(next) || isGradient(earlier) || isGradient(next)) {
     return structuredClone(next);
@@ -264,7 +307,7 @@ export function controlsFor(state, flags = {}) {
   return CONTROLS.filter(control => !control.appliesWhen || control.appliesWhen(resolvedState, flags));
 }
 
-function writePath(object, path, value) {
+function pathLocation(object, path) {
   const keys = path.split(".");
   const last = keys.pop();
   let target = object;
@@ -275,7 +318,12 @@ function writePath(object, path, value) {
     if (!isObject(target[key])) target[key] = {};
     target = target[key];
   }
-  target[last] = structuredClone(value);
+  return { target, key: last };
+}
+
+function writePath(object, path, value) {
+  const { target, key } = pathLocation(object, path);
+  target[key] = structuredClone(value);
 }
 
 function colorValue(value) {
@@ -287,14 +335,22 @@ function editedColor(config, path, value, appearance) {
   const other = appearance === "light" ? "dark" : "light";
   const resolved = resolveTheme(builtIn, config, other);
   const old = path.split(".").reduce((object, key) => object?.[key], resolved);
-  return appearance === "light"
-    ? { light: value, dark: colorValue(old) }
-    : { light: colorValue(old), dark: value };
+  const pair = kept => appearance === "light" ? { light: value, dark: kept } : { light: kept, dark: value };
+  if (isGradient(old)) {
+    const kept = structuredClone(old);
+    // BackgroundFill accepts appearance pairs on stops, not around an entire gradient.
+    kept.gradient.colors = kept.gradient.colors.map(color => pair(colorValue(color)));
+    return kept;
+  }
+  return pair(colorValue(old));
 }
 
 export function applyControl(state, id, value, appearance) {
   const control = CONTROLS.find(control => control.id === id);
   if (!control) throw new Error(`Unknown theme control: ${id}.`);
+  if (control.kind === "color" && !isColor(value)) colorError();
+  if (control.kind === "background" && typeof value === "string"
+      && !["none", "color"].includes(value) && !isColor(value)) colorError();
   const next = structuredClone(state);
   if (control.group === "about") {
     const key = id.slice("about.".length);
@@ -309,7 +365,8 @@ export function applyControl(state, id, value, appearance) {
     }
   } else if (id === "bar.background") {
     if (value === "none") {
-      if (isObject(next.config.bar?.style)) delete next.config.bar.style.background;
+      const { target, key } = pathLocation(next.config, control.paths[0]);
+      delete target[key];
     } else if (isGradient(value)) {
       // The page keeps the original base gradient and passes it back for the base-gradient choice.
       writePath(next.config, control.paths[0], value);
@@ -322,5 +379,6 @@ export function applyControl(state, id, value, appearance) {
     const path = control.paths[0];
     writePath(next.config, path, control.kind === "color" ? editedColor(state.config, path, value, appearance) : value);
   }
+  if (["color", "background"].includes(control.kind)) validateThemeColors(next.config);
   return next;
 }

@@ -83,7 +83,7 @@ test("every config control is in the contract", () => {
   }
 });
 
-test("every contract path feeds the renderer", () => {
+test("every non-token contract path feeds the renderer", () => {
   const edits = {
     "defaults.foreground": "#123456", "defaults.accent": "#123456", "defaults.accentText": "#123456",
     "defaults.offsetY": 3, "defaults.background": "#123456", "defaults.borderColor": "#123456",
@@ -113,20 +113,41 @@ test("every contract path feeds the renderer", () => {
     const resolved = resolveTheme(builtIn, config, "dark");
     return { ...cssVariables(resolved, { popupSpacing: true }), indicator: indicatorClass(resolved) };
   };
-  for (const path of CONTRACT) {
+  for (const path of CONTRACT.filter(path => !path.startsWith("tokens."))) {
     const config = { bar: { style: { borderColor: "#abcdef", borderWidth: 1 } } };
-    if (path.startsWith("tokens.")) {
-      config.defaults = { foreground: `@token.${path.slice("tokens.".length)}` };
-    } else {
-      assert.ok(Object.hasOwn(edits, path), `Missing consumption check for ${path}`);
-    }
+    assert.ok(Object.hasOwn(edits, path), `Missing consumption check for ${path}`);
     const before = draw(config);
     const keys = path.split(".");
     const last = keys.pop();
     let target = config;
     for (const key of keys) target = target[key] ??= {};
-    target[last] = path.startsWith("tokens.") ? "#123456" : edits[path];
+    target[last] = edits[path];
     assert.notDeepEqual(draw(config), before, path);
+  }
+});
+
+test("palette tokens substitute without implying renderer consumption", () => {
+  for (const path of CONTRACT.filter(path => path.startsWith("tokens."))) {
+    const name = path.slice("tokens.".length);
+    assert.equal(substituteTokens(`@token.${name}`, { [name]: "#123456" }), "#123456", path);
+  }
+});
+
+test("palette consumption follows the actual base-theme references", () => {
+  const unused = new Set(["warning", "critical"]);
+  const unusedHairline = new Set(["built-in", "phosphor"]);
+  for (const id of baseIDs) {
+    for (const appearance of ["light", "dark"]) {
+      const original = state(id);
+      const before = cssVariables(resolveTheme(builtIn, original.config, appearance));
+      for (const control of CONTROLS.filter(control => control.paths[0].startsWith("tokens."))) {
+        const name = control.paths[0].slice("tokens.".length);
+        const edited = applyControl(original, control.id, "#123456", appearance);
+        const after = cssVariables(resolveTheme(builtIn, edited.config, appearance));
+        const consumed = !unused.has(name) && !(name === "hairline" && unusedHairline.has(id));
+        assert.equal(JSON.stringify(after) !== JSON.stringify(before), consumed, `${id} ${appearance} ${name}`);
+      }
+    }
   }
 });
 
@@ -199,6 +220,21 @@ test("popup spacing waits for its flag while tooltip padding stays compact", () 
   const tooltip = css.match(/\.theme-preview \.preview-tooltip\s*\{([^}]+)\}/)[1];
   assert.match(tooltip, /padding: 6px 10px;/);
   assert.doesNotMatch(tooltip, /var\(--pop-p[xy]\)/);
+});
+
+test("disabled popup spacing and its otherwise unused tokens are marked as kept", () => {
+  const config = {
+    tokens: { inset: 24 },
+    popupDefaults: { paddingHorizontal: "@token.inset", paddingVertical: 18, spacing: 16 },
+    bar: { popupOffset: 12 },
+  };
+  const kept = ["tokens.inset", "popupDefaults.paddingHorizontal", "popupDefaults.paddingVertical",
+    "popupDefaults.spacing", "bar.popupOffset"];
+  assert.deepEqual(keptFromBase(config), kept);
+  assert.deepEqual(keptFromBase(config, { popupSpacing: false }), kept);
+  assert.deepEqual(keptFromBase(config, { popupSpacing: true }), []);
+  config.defaults = { paddingHorizontal: "@token.inset" };
+  assert.deepEqual(keptFromBase(config), kept.slice(1));
 });
 
 test("tiles use box shadows and bare widgets keep their glow", () => {
@@ -474,6 +510,109 @@ test("color edits preserve the other appearance of token references and single c
   assert.deepEqual(dark.config.popupDefaults.background, { light: "#eceff4ee", dark: "#00ff00" });
 });
 
+test("color edits keep the opposite appearance's full gradient", () => {
+  const original = state("gruvbox");
+  const before = structuredClone(original);
+  for (const appearance of ["light", "dark"]) {
+    const other = appearance === "light" ? "dark" : "light";
+    const gradient = resolveTheme(builtIn, original.config, other).bar.style.background;
+    const edited = applyControl(original, "bar.background", "#123456", appearance);
+    const shown = resolveTheme(builtIn, edited.config, appearance).bar.style.background;
+    assert.deepEqual(shown, { gradient: { ...gradient.gradient, colors: gradient.gradient.colors.map(() => "#123456") } });
+    assert.deepEqual(resolveTheme(builtIn, edited.config, other).bar.style.background, gradient);
+    assert.deepEqual(Object.keys(edited.config.bar.style.background), ["gradient"]);
+  }
+  assert.deepEqual(original, before);
+});
+
+const unsafeColors = [
+  "url(https://example.com/x)", "red;}", 'image-set("https://example.com/x" 1x)',
+  'u\\72l(https://example.com/x)', "var(--remote)", "#123456; background: red", "#123456\n", "#12345\n", "#1234567\n",
+  "red", "transparent", "#123", "#1234", "#12345g", "#123456789", "rgb(1, 2, 3)",
+];
+
+test("color edits reject anything outside the app's hex color forms", () => {
+  const original = state("built-in");
+  for (const control of CONTROLS.filter(control => ["color", "background"].includes(control.kind))) {
+    for (const color of unsafeColors) {
+      assert.throws(() => applyControl(original, control.id, color, "light"), /color/i, `${control.id}: ${color}`);
+    }
+  }
+  for (const color of ["#123456", "#aBcDeF80", "#00000000"]) {
+    const edited = applyControl(original, "palette.accent", color, "light");
+    assert.equal(resolveTheme(builtIn, edited.config, "light").defaults.accent, color);
+  }
+  assert.deepEqual(original, state("built-in"));
+});
+
+test("reopened themes reject unsafe colors in both appearances, aliases, styles and gradients", () => {
+  const manifestText = fileText({ id: "color-test", name: "Color test", version: "1.0.0", kind: "theme" });
+  for (const color of unsafeColors) {
+    for (const config of [
+      { defaults: { background: color } },
+      { defaults: { foreground: { light: "#123456", dark: color } } },
+      { tokens: { remote: color, alias: "@token.remote" }, popupDefaults: { background: "@token.alias" } },
+      { tokens: { textMuted: color } },
+      { bar: { style: { background: { gradient: { colors: ["#123456", color] } } } } },
+      { roles: { heading: { foreground: color } } },
+      { profiles: [{ name: "other", configuration: { defaults: { borderColor: color } } }] },
+    ]) {
+      assert.throws(() => parseTheme({ manifestText, configText: fileText(config) }), /color/i, JSON.stringify(config));
+    }
+  }
+  for (const id of baseIDs) {
+    const original = state(id);
+    assert.deepEqual(parseTheme(themeFiles(original, { validate: false })), original);
+  }
+});
+
+test("color validation treats role names as names and checks their style values", () => {
+  const manifestText = fileText({ id: "roles-test", name: "Roles test", version: "1.0.0", kind: "theme" });
+  const config = { roles: { background: { foreground: "#123456" }, accent: { background: "#aBcDeF80" } } };
+  assert.deepEqual(parseTheme({ manifestText, configText: fileText(config) }).config, config);
+  config.roles.background.foreground = "url(https://example.com/x)";
+  assert.throws(() => parseTheme({ manifestText, configText: fileText(config) }), /color/i);
+});
+
+test("gradient validation bounds the numbers interpolated into CSS", () => {
+  const manifestText = fileText({ id: "gradient-test", name: "Gradient test", version: "1.0.0", kind: "theme" });
+  for (const gradient of [
+    { colors: ["#123456", "#abcdef"], angle: "0deg, red);background:url(https://example.com/x)" },
+    { colors: ["#123456", "#abcdef"], locations: ["0%;}", 1] },
+    { colors: ["#123456", "#abcdef"], locations: [1, 0] },
+    { colors: ["#123456", "#abcdef"], locations: [0] },
+    { colors: "url(https://example.com/x)" },
+    { colors: ["#123456"] },
+  ]) {
+    const background = { gradient }, config = { bar: { style: { background } } };
+    assert.throws(() => parseTheme({ manifestText, configText: fileText(config) }), /color/i);
+    assert.throws(() => applyControl(state("built-in"), "bar.background", background, "light"), /color/i);
+    assert.equal(cssVariables(resolveTheme(builtIn, config, "light"))["--strip-bg"], "transparent");
+  }
+});
+
+test("CSS color variables reject resource loads and declaration escapes even without import validation", () => {
+  for (const color of unsafeColors) {
+    const resolved = resolveTheme(builtIn, {}, "dark");
+    for (const style of [resolved.defaults, resolved.popupDefaults, resolved.workspaceDefaults.style,
+      resolved.workspaceDefaults.style.states.focused, resolved.workspaceDefaults.indicatorStyle,
+      resolved.workspaceDefaults.indicatorStyle.states.visible, resolved.bar.style ??= {}]) {
+      for (const key of ["background", "foreground", "hoverBackground", "borderColor", "shadowColor", "accent", "accentText"]) {
+        style[key] = color;
+      }
+    }
+    for (const key of ["textMuted", "surfaceRaised", "track"]) resolved.tokens[key] = color;
+    const css = cssVariables(resolved);
+    for (const key of ["--w-bg", "--w-hover", "--fg", "--w-border", "--accent", "--accent-text",
+      "--muted", "--raised", "--track", "--ws-ind", "--ul-visible", "--strip-bg", "--pop-bg", "--pop-fg"]) {
+      assert.equal(css[key], "transparent", `${key}: ${color}`);
+    }
+    if (color !== "transparent") assert.ok(Object.values(css).every(value => !value.includes(color)), color);
+    resolved.bar.style.background = { gradient: { colors: ["#123456", color] } };
+    assert.equal(cssVariables(resolved)["--strip-bg"], "transparent");
+  }
+});
+
 test("color edits use inherited popup and workspace colors", () => {
   const popup = applyControl(state("built-in"), "popups.background", "#ff0000", "light");
   assert.deepEqual(popup.config.popupDefaults.background, { light: "#ff0000", dark: "#242629ee" });
@@ -642,6 +781,30 @@ test("strip background can be removed, colored, or restored from the base gradie
   const restored = applyControl(edited, "bar.background", gradient, "light");
   assert.deepEqual(restored.config.bar.style.background, gradient);
   assert.deepEqual(original, state("gruvbox"));
+});
+
+test("removing a token-backed strip preserves its other style properties and source tokens", () => {
+  for (const tokenBar of [false, true]) {
+    const original = state("built-in");
+    original.config.tokens.strip = { background: "@token.surface", cornerRadius: 9, borderColor: "#123456" };
+    original.config.tokens.alias = "@token.strip";
+    original.config.bar = { height: 36, style: "@token.alias" };
+    if (tokenBar) {
+      original.config.tokens.bar = original.config.bar;
+      original.config.bar = "@token.bar";
+    }
+    const before = structuredClone(original);
+    const edited = applyControl(original, "bar.background", "none", "dark");
+    for (const appearance of ["light", "dark"]) {
+      const bar = resolveTheme(builtIn, edited.config, appearance).bar;
+      assert.equal(bar.style.background, undefined);
+      assert.equal(bar.style.cornerRadius, 9);
+      assert.equal(bar.style.borderColor, "#123456");
+      assert.equal(bar.height, 36);
+    }
+    assert.deepEqual(edited.config.tokens, before.config.tokens);
+    assert.deepEqual(original, before);
+  }
 });
 
 test("choosing a colored strip follows the surface in both appearances", () => {
@@ -1149,6 +1312,12 @@ test("readme row matches the Store's script", () => {
   for (const description of [undefined, null, "", "   "]) {
     assert.throws(() => readmeRow({ ...manifest, description }), /description/i);
   }
+});
+
+test("readme rows escape pipes after doubling backslashes in both text fields", () => {
+  const { manifest, row } = json(".github/scripts/fixtures/theme-creator-readme-row.json");
+  assert.equal(readmeRow(manifest), row);
+  assert.equal(row.split(/(?<!\\)\|/).length, 5);
 });
 
 test("store lookup", async () => {

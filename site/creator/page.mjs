@@ -71,7 +71,10 @@ function controlValue(control, r) {
   if (control.group === "about") return state.manifest[control.id.split(".")[1]] ?? "";
   const fallbacks = { "bar.height": 40, "bar.margin": 0, "bar.cornerRadius": 0, "bar.borderWidth": 0,
     "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0 };
-  return at(r, control.paths[0]) ?? fallbacks[control.id];
+  const value = at(r, control.paths[0]) ?? fallbacks[control.id];
+  const colors = value?.gradient?.colors;
+  if (colors && (control.kind === "color" || colors.every(color => color === colors[0]))) return colors[0];
+  return value;
 }
 
 function controlHTML(control, r) {
@@ -233,7 +236,7 @@ function render() {
 }
 
 function updateJSON() {
-  const kept = keptFromBase(state.config), manifest = jsonFile === "package";
+  const kept = keptFromBase(state.config, flags), manifest = jsonFile === "package";
   const object = manifest ? JSON.parse(themeFiles(state, { validate: false }).manifestText) : state.config;
   const paths = activePaths.filter(path => manifest === path.startsWith("manifest.")).map(path => path.replace(/^manifest\./, ""));
   const lines = [];
@@ -495,7 +498,6 @@ function continueReopen() {
     state.manifest.id = slug(state.manifest.name);
     state.manifest.version = "1.0.0";
     delete state.manifest.author;
-    delete state.manifest.minimumVersion;
     delete state.manifest.repository;
   }
   baseGradient = at(state.config, "bar.style.background")?.gradient ? structuredClone(state.config.bar.style.background) : undefined;
@@ -515,8 +517,7 @@ function continueReopen() {
   notify(mode === "update" ? `Ready to edit version ${state.manifest.version}.` : `Ready to edit ${state.manifest.name}.`);
 }
 
-async function openSelection(files) {
-  const request = ++importRequest;
+async function openSelection(files, request = ++importRequest) {
   if (!dialog.open || !dialog.querySelector(".drop-zone")) openFiles();
   dialog.querySelector("[data-import-error]").textContent = "Opening theme…";
   try {
@@ -747,10 +748,16 @@ document.addEventListener("dragleave", event => {
 document.addEventListener("drop", async event => {
   if (![...event.dataTransfer.types].includes("Files")) return;
   event.preventDefault();
+  const request = ++importRequest;
   if (!dialog.querySelector(".drop-zone") || !dialog.open) openFiles();
-  try { await openSelection(await droppedFiles(event.dataTransfer)); }
-  catch (error) { dialog.querySelector("[data-import-error]").textContent = message(error); }
-  dialog.querySelector(".drop-zone")?.classList.remove("is-over");
+  try {
+    const files = await droppedFiles(event.dataTransfer);
+    if (request !== importRequest || !dialog.open) return;
+    await openSelection(files, request);
+  } catch (error) {
+    if (request === importRequest && dialog.open) dialog.querySelector("[data-import-error]").textContent = message(error);
+  }
+  if (request === importRequest) dialog.querySelector(".drop-zone")?.classList.remove("is-over");
 });
 window.addEventListener("hashchange", loadHash);
 start().catch(() => { root.textContent = "The themes could not be loaded. Reload the page to try again."; });
