@@ -158,6 +158,7 @@ export const PREVIEW_TARGETS = {
   "--ws-off": { selector: ".preview-workspace:not(.is-focused)" },
   "--ws-on": { selector: ".preview-workspace.is-focused" },
   "--ws-ind": { selector: ".preview-workspace.is-focused" },
+  "--ws-indicator": { selector: ".preview-workspaces" },
   "--ws-r": { selector: ".preview-workspace" },
   "--ul-w": { selector: ".preview-underline" },
   "--ul-h": { selector: ".preview-underline", measure: "height" },
@@ -197,8 +198,10 @@ export function affectedVariables(state, controlId, appearance) {
   for (const probe of probes) {
     try {
       const next = applyControl(state, controlId, probe, appearance);
-      const variables = cssVariables(resolveTheme(builtIn, next.config, appearance));
+      const nextResolved = resolveTheme(builtIn, next.config, appearance);
+      const variables = cssVariables(nextResolved);
       for (const key of Object.keys(current)) if (variables[key] !== current[key]) affected.add(key);
+      if (indicatorClass(nextResolved) !== indicatorClass(resolved)) affected.add("--ws-indicator");
     } catch { /* A rejected probe cannot contribute preview targets. */ }
   }
   return [...affected].sort();

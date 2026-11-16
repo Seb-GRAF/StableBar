@@ -154,6 +154,15 @@ test("affected variables follow geometry controls without unrelated variables", 
   assert.deepEqual(original, state("built-in"));
 });
 
+test("indicator class changes cue the workspaces tile without affecting other controls", () => {
+  const original = state("built-in");
+  const affected = affectedVariables(original, "workspaces.indicator", "light");
+  assert.ok(affected.includes("--ws-indicator"));
+  assert.deepEqual(affected, [...affected].sort());
+  assert.deepEqual(affectedVariables(original, "widgets.paddingHorizontal", "light"), ["--w-px"]);
+  assert.deepEqual(PREVIEW_TARGETS["--ws-indicator"], { selector: ".preview-workspaces" });
+});
+
 test("affected palette variables follow shared tokens for each base and appearance", () => {
   for (const id of baseIDs) {
     for (const appearance of ["light", "dark"]) {
@@ -211,6 +220,7 @@ test("every preview variable has a target in the preview markup", () => {
       }
     }
   }
+  assert.ok(PREVIEW_TARGETS["--ws-indicator"]);
   for (const [variable, { selector }] of Object.entries(PREVIEW_TARGETS)) {
     for (const part of selector.split(",")) {
       const required = [...part.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)].map(([, name]) => name);
