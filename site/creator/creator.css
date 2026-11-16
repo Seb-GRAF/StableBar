@@ -55,6 +55,7 @@
 .control .number-field input { flex: 1; width: 0; min-width: 0; padding: 8px 0; border: 0; outline: none; background: transparent; text-align: right; font-variant-numeric: tabular-nums; }
 .number-unit { margin-left: 4px; color: var(--text-2); font: 400 12px/16px var(--body); }
 .scrub-handle { display: grid; place-items: center; align-self: stretch; flex: 0 0 32px; border-radius: 6px 0 0 6px; color: var(--text-2); font: 600 14px/20px var(--body); cursor: ew-resize; touch-action: none; user-select: none; -webkit-user-select: none; }
+.font-other { margin-top: 8px; }
 .scrub-handle svg { display: block; }
 .scrub-handle:hover { background: #efefe9; }
 .scrub-handle:active { background: var(--hi); }

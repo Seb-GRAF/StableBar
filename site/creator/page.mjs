@@ -1,5 +1,5 @@
 import builtIn from "./built-in.mjs";
-import { BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
+import { BASE_IDS, RESERVED_IDS, MAC_FONTS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
 import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
 import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS } from "./preview.mjs";
 import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
@@ -94,6 +94,13 @@ function controlHTML(control, r) {
     input = `<div class="toggle"><span>${on ? "On" : "Off"}</span><input type="checkbox" ${attr} ${on ? "checked" : ""}></div>`;
   } else if (control.kind === "select") {
     input = `<select ${attr}>${control.options.map(option => `<option value="${option}" ${option === value ? "selected" : ""}>${option[0].toUpperCase() + option.slice(1)}</option>`).join("")}</select>`;
+  } else if (control.kind === "font") {
+    const name = value ?? "system";
+    const option = font => `<option value="${e(font)}" ${font === name ? "selected" : ""}>${e(font)}</option>`;
+    input = `<select ${attr} data-font-select><option value="system" ${name === "system" ? "selected" : ""}>System</option>`
+      + (name === "system" || MAC_FONTS.includes(name) ? "" : option(name))
+      + `<optgroup label="On every Mac">${MAC_FONTS.map(option).join("")}</optgroup><option value="" data-other>Other font…</option></select>`
+      + `<input type="text" class="font-other" data-control="${control.id}" aria-label="Font name" placeholder="Name of a font you installed" autocomplete="off" spellcheck="false" value="${e(name === "system" ? "" : name)}" hidden>`;
   } else if (control.kind === "background") {
     const selected = value?.gradient ? "gradient" : value ? "color" : "none";
     input = `<select ${attr}>${[["none", "None"], ["color", "A color"], ...(baseGradient ? [["gradient", "Keep the base gradient"]] : [])].map(([key, label]) => `<option value="${key}" ${selected === key ? "selected" : ""}>${label}</option>`).join("")}</select>`;
@@ -514,6 +521,10 @@ function changeControl(input) {
   const control = controlsFor(state).find(control => control.id === input.dataset.control);
   if (!control) return;
   let value = input.type === "checkbox" ? input.checked : input.value;
+  if (control.kind === "font") {
+    value = value.trim();
+    if (!value) return;
+  }
   const color = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
   if (color) {
     if (input.type === "color") {
@@ -550,6 +561,8 @@ function changeControl(input) {
     if (other.id === control.id || fieldErrors.has(other.id)) continue;
     const value = controlValue(other, r);
     root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
+      // Only the font control changes the font; its menu may rest on Other font… while a typed name applies.
+      if ("fontSelect" in element.dataset) return;
       if (element.type === "color") element.value = typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : "#000000";
       else if (element.hasAttribute("data-color-text")) element.value = value ?? "#00000000";
       else if (other.kind === "number") element.value = value == null ? "" : formatNumber(value);
@@ -831,7 +844,12 @@ document.addEventListener("change", event => {
   const input = event.target;
   const control = numberControl(input);
   if (control) commitNumber(input, control);
-  else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
+  else if (input.dataset.control && "fontSelect" in input.dataset) {
+    const other = root.querySelector(`.font-other[data-control="${input.dataset.control}"]`);
+    other.hidden = input.value !== "";
+    if (input.value === "") other.focus();
+    else changeControl(input);
+  } else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
   if (input.id === "base-theme") {
     if (!bases.has(input.value)) return;
     baseID = input.value;

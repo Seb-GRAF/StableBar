@@ -480,3 +480,34 @@ test("a folder drop cannot supersede a newer import after slow enumeration", asy
     assert.equal(page.dialog.querySelector("[data-import-error]").textContent, "Opening theme…");
   }
 });
+
+test("the font menu selects a listed font, keeps a custom one and offers another", () => {
+  const page = storePage();
+  const html = config => {
+    page.context.fontConfig = config;
+    page.run("state.config = fontConfig");
+    return page.run("controlHTML(CONTROLS.find(control => control.id === 'widgets.fontName'), resolved())");
+  };
+  const monaco = html({ defaults: { fontName: "Monaco" } });
+  assert.match(monaco, /<option value="Monaco" selected>Monaco<\/option>/);
+  assert.match(monaco, /<input [^>]*class="font-other"[^>]*hidden/);
+  assert.match(monaco, /<option value="" data-other>Other font…<\/option>/);
+  assert.match(html({ defaults: { fontName: "JetBrains Mono" } }), /<option value="JetBrains Mono" selected>JetBrains Mono<\/option>/);
+  assert.match(html({ defaults: { fontName: "system" } }), /<option value="system" selected>System<\/option>/);
+
+  const change = value => page.events.get("change")({ target: {
+    dataset: { control: "widgets.fontName", fontSelect: "" }, type: "select-one", tagName: "SELECT", value, matches: () => false,
+  } });
+  change("Menlo");
+  assert.equal(page.run("state.config.defaults.fontName"), "Menlo");
+  const other = page.root.querySelector('.font-other[data-control="widgets.fontName"]');
+  other.hidden = true;
+  change("");
+  assert.equal(page.run("state.config.defaults.fontName"), "Menlo");
+  assert.equal(other.hidden, false);
+  const type = value => page.events.get("input")({ target: { dataset: { control: "widgets.fontName" }, type: "text", value } });
+  type("  JetBrains Mono ");
+  assert.equal(page.run("state.config.defaults.fontName"), "JetBrains Mono");
+  type("   ");
+  assert.equal(page.run("state.config.defaults.fontName"), "JetBrains Mono");
+});

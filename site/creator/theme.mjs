@@ -248,6 +248,17 @@ function select(id, label, paths, help, guide, options) {
   return { ...control(id, label, "select", paths, help, guide), options };
 }
 
+// Families that ship with macOS. The app lists every installed font, which a web page can't read.
+export const MAC_FONTS = [
+  "American Typewriter", "Andale Mono", "Arial", "Arial Black", "Arial Narrow", "Arial Rounded MT Bold", "Avenir",
+  "Avenir Next", "Avenir Next Condensed", "Baskerville", "Big Caslon", "Bradley Hand", "Chalkboard SE", "Chalkduster",
+  "Charter", "Cochin", "Comic Sans MS", "Copperplate", "Courier New", "Didot", "DIN Alternate", "DIN Condensed", "Futura",
+  "Geneva", "Georgia", "Gill Sans", "Helvetica", "Helvetica Neue", "Herculanum", "Hiragino Mincho ProN", "Hiragino Sans",
+  "Hoefler Text", "Impact", "Lucida Grande", "Marker Felt", "Menlo", "Monaco", "Noteworthy", "Optima", "Palatino",
+  "Papyrus", "Phosphate", "Silom", "Skia", "Snell Roundhand", "Tahoma", "Times New Roman", "Trattatello", "Trebuchet MS",
+  "Verdana", "Zapfino",
+];
+
 export const CONTROLS = [
   control("about.name", "Name", "text", ["manifest.name", "manifest.id"],
     "Name your theme; its name also gives its folder id.", "themes.md"),
@@ -280,8 +291,8 @@ export const CONTROLS = [
     "Choose which strip edges have a border.", "layout.md", ["bottom", "all"]),
   control("widgets.tiles", "Tiles", "toggle", ["defaults.background", "defaults.borderColor", "defaults.shadowColor"],
     "Turn widget tiles on or off, keeping any existing shadow or glow.", "themes.md"),
-  control("widgets.fontName", "Font", "text", ["defaults.fontName"],
-    "Use system or the name of a font installed on your Mac.", "styling.md#widget-styles"),
+  control("widgets.fontName", "Font", "font", ["defaults.fontName"],
+    "Choose a font every Mac has, or Other font… for one you installed.", "styling.md#widget-styles"),
   control("widgets.fontSize", "Font size", "number", ["defaults.fontSize"],
     "Set the widget font size in points.", "styling.md#widget-styles", undefined, { range: [6, 40], slider: true }),
   select("widgets.fontWeight", "Font weight", ["defaults.fontWeight"],

@@ -192,7 +192,7 @@ export function affectedVariables(state, controlId, appearance) {
   const probes = {
     number: [3, 29], color: ["#123456", "#654321"], background: ["#123456", "#654321"],
     select: control.options?.filter(option => option !== value).slice(0, 2),
-    toggle: [true, false], text: ["Probe A", "Probe B"],
+    toggle: [true, false], text: ["Probe A", "Probe B"], font: ["Probe A", "Probe B"],
   }[control.kind] ?? [];
   const affected = new Set();
   for (const probe of probes) {

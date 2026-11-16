@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import {
   BASE_IDS, RESERVED_IDS, slug, isVersion, nextPatch, resolveTheme,
-  CONTROLS, controlsFor, applyControl, fileText, substituteTokens, validateThemeColors,
+  CONTROLS, controlsFor, applyControl, fileText, substituteTokens, validateThemeColors, MAC_FONTS,
 } from "../../site/creator/theme.mjs";
 import {
   ID_PATTERN, themeFiles, parseTheme, folderFiles, encodeLink, decodeLink, shareURL, crc32, writeZip, readZip, readmeRow, storeManifest,
@@ -1714,4 +1714,22 @@ test("profiles expand with their own tokens over the root's, as the app does", (
   nested.profiles[0].configuration.profiles[0].configuration.defaults.background = "@token.base";
   const inner = resolveTheme(builtIn, nested, "dark").profiles[0].configuration.profiles[0].configuration;
   assert.deepEqual([inner.defaults.foreground, inner.defaults.background], ["#ff0000", "#0000ff"]);
+});
+
+test("the font menu lists every font the bundled themes use, once and in order", () => {
+  const used = new Set();
+  const visit = value => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "fontName" && typeof child === "string") used.add(child);
+      else visit(child);
+    }
+  };
+  for (const id of readdirSync(new URL("Resources/themes/", root))) {
+    if (!id.startsWith(".")) visit(json(`Resources/themes/${id}/config.json`));
+  }
+  used.delete("system");
+  for (const name of used) assert.ok(MAC_FONTS.includes(name), name);
+  assert.deepEqual(MAC_FONTS, [...new Set(MAC_FONTS)].sort((a, b) => a.localeCompare(b, "en")));
+  assert.equal(CONTROLS.find(control => control.id === "widgets.fontName").kind, "font");
 });
