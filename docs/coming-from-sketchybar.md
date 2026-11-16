@@ -118,7 +118,7 @@ Save the plugin as `~/.config/stablebar/plugins/battery.sh` and make it executab
 ```sh
 #!/bin/sh
 
-PERCENTAGE="$(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)"
+PERCENTAGE="$(pmset -g batt | grep -Eo "[0-9]+%" | cut -d% -f1)"
 CHARGING="$(pmset -g batt | grep 'AC Power')"
 
 if [ "$PERCENTAGE" = "" ]; then
@@ -144,4 +144,4 @@ fi
 printf '{"text":"%s%%","icon":"%s"}\n' "$PERCENTAGE" "$ICON"
 ```
 
-On a Mac without a battery, the script prints nothing and the widget takes no space. StableBar's built-in battery widget does the same without a script: `{ "id": "battery", "type": "battery", "position": "right" }`.
+On a Mac without a battery, the script prints nothing and the widget takes no space. StableBar's built-in battery widget needs no script, but on a Mac without a battery it shows a plug and AC instead: `{ "id": "battery", "type": "battery", "position": "right" }`.
