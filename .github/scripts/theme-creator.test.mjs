@@ -1438,8 +1438,10 @@ test("popup accent and line metrics belong to the popup style", () => {
   assert.match(style, /var\(--pop-shadow\), 0 8px 36px #00000047/);
 });
 
-test("groups named like color properties are not mistaken for colors", async () => {
+test("groups and states named like color properties are not mistaken for colors", async () => {
   const { validateThemeColors } = await import("../../site/creator/theme.mjs");
   assert.doesNotThrow(() => validateThemeColors({ groups: { accent: {}, background: { style: { background: "#112233" } } } }));
   assert.throws(() => validateThemeColors({ groups: { accent: { style: { background: "url(x)" } } } }));
+  assert.doesNotThrow(() => validateThemeColors({ defaults: { states: { accent: { foreground: "#112233" } } } }));
+  assert.throws(() => validateThemeColors({ defaults: { states: { accent: { foreground: "url(x)" } } } }));
 });
