@@ -29,7 +29,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     #expect(store.presentations["explicit"]?.style.base.fontSize == 19)
     let time = config.widgets[0]
     let popup = try #require(time.popup)
-    let defaults = config.popupDefaults.inheriting(config.defaults)
+    let defaults = config.popupDefaults.popupStyle(over: config.defaults)
     #expect(popup.baseStyle(widget: time, defaults: defaults).fontSize == 13)
     #expect(popup.baseStyle(widget: time, defaults: defaults).fontWeight == "regular")
     #expect(popup.baseStyle(widget: config.widgets[3], defaults: defaults).fontSize == 19)
@@ -179,7 +179,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     store.preparePresentations()
     defer { store.stop() }
     let widget = config.widgets[0], popup = try #require(widget.popup)
-    let view = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: config.popupDefaults.inheriting(config.defaults)), store: store, widget: widget)
+    let view = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults)), store: store, widget: widget)
     #expect(view.presentationStyle.background == .color(HexColor(0x222222ff)))
     #expect(view.presentationStyle.fontSize == 13)
     store.workspaceStore.acceptMode("tailing")

@@ -376,14 +376,15 @@ enum SceneRenderer {
         guard let popup = widgetPopup(widget, store: store) else { throw CommandFailure(message: "widget: \(id) has no popup.") }
         let geometry = configuration.barGeometry(for: display)
         let upward = look.bar.position == .bottom
-        let edge = upward ? geometry.panelHeight - geometry.drawingBottom - popup.offset : geometry.drawingBottom + popup.offset
+        let gap = popup.gap(below: look.bar)
+        let edge = upward ? geometry.panelHeight - geometry.drawingBottom - gap : geometry.drawingBottom + gap
         return BarView(store: store, display: display)
             .environment(\.screenKind, .monitor)
             .frame(height: geometry.panelHeight)
             .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
                 GeometryReader { proxy in
                     if let anchor = anchors.widgets[id] {
-                        PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
+                        PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
                                   store: store, widget: widget)
                             .environment(\.screenKind, .monitor)
                             .frame(width: CGFloat(popup.style.width ?? 360))
@@ -402,7 +403,7 @@ enum SceneRenderer {
                                   dark: Bool, accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
-        let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.inheriting(look.defaults)),
+        let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
                                 store: store, widget: widget)
             .environment(\.screenKind, .monitor)
             .frame(width: popupWidth)

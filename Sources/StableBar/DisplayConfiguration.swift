@@ -61,10 +61,11 @@ enum DisplaySelection: Decodable, Equatable, Sendable {
         }
     }
 
-    func includes(_ display: BarDisplay, activeID: Int) -> Bool {
+    /// `activeID` is read only for `active`, so other selections don't depend on which display has focus.
+    func includes(_ display: BarDisplay, activeID: @autoclosure () -> Int) -> Bool {
         switch self {
         case .all: true
-        case .active: display.id == activeID
+        case .active: display.id == activeID()
         case .main: display.isMain
         case .builtIn: display.isBuiltIn
         case .external: !display.isBuiltIn
@@ -73,7 +74,7 @@ enum DisplaySelection: Decodable, Equatable, Sendable {
         case .notched: display.notch != nil
         case .unnotched: display.notch == nil
         case let .ids(ids): ids.contains(display.id)
-        case let .any(kinds): kinds.contains { $0.includes(display, activeID: activeID) }
+        case let .any(kinds): kinds.contains { $0.includes(display, activeID: activeID()) }
         }
     }
 }

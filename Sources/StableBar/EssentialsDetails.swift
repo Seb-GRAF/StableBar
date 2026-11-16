@@ -9,8 +9,7 @@ enum EssentialsPopup: String, Sendable {
     }
 
     func popup(timeZone: String?) -> PopupConfiguration {
-        PopupConfiguration(style: WidgetStyle(fontSize: 13, paddingHorizontal: 18, paddingVertical: 18,
-                                               spacing: 14, width: self == .system ? 360 : 320),
+        PopupConfiguration(style: WidgetStyle(fontSize: 13, width: self == .system ? 360 : 320),
                            layout: PopupBlock(content: .essentials(self, timeZone: timeZone)))
     }
 }
@@ -228,7 +227,7 @@ struct EssentialsDetails: View {
             }
             VStack(spacing: 8) {
                 detail("Used", fields["used"] ?? "—")
-                detail("Available", fields["free"] ?? "—")
+                detail("Free", fields["free"] ?? "—")
                 detail("Capacity", fields["total"] ?? "—")
             }
             if let volumes = context.lists["volumes"], !volumes.isEmpty {

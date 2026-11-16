@@ -163,7 +163,6 @@ final class ThemeLinkCandidate {
         return true
     }
 
-    private static let barProperties = savedThemeBarProperties.union(["popupOffset"])
     private static let barNumberRanges: [String: ClosedRange<Double>] = {
         var ranges: [String: ClosedRange<Double>] = [
             "bar.height": 16...100, "bar.inset": 0...100, "bar.spacing": 0...50,
@@ -292,7 +291,7 @@ final class ThemeLinkCandidate {
         if let value = document["bar"] {
             // Profiles and setting choices must never supply the bar's keys or numbers.
             guard case let .object(bar) = value else { throw ThemeLinkError.indirectBar }
-            for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
+            for key in bar.keys.sorted() where !savedThemeBarProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
             try checkBarNumbers(value, path: ["bar"], numericReferences: numericReferences)
         }
         let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []

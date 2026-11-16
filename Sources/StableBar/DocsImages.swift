@@ -115,8 +115,9 @@ enum DocsImages {
     /// The bar with the meeting's agenda open below it, centered under the widget as `WidgetPopup` places it.
     private static func hero(_ store: BarStore) -> some View {
         let configuration = store.configuration!
+        let look = configuration.look(on: .monitor)
         let popupTop = configuration.barGeometry(for: display).drawingBottom
-            + configuration.look(on: .monitor).widgets.first { $0.id == "meeting" }!.popup!.offset
+            + look.widgets.first { $0.id == "meeting" }!.popup!.gap(below: look.bar)
         return bar(store)
             .overlayPreferenceValue(BarAnchorPreference.self) { anchors in
                 GeometryReader { proxy in
@@ -150,7 +151,7 @@ enum DocsImages {
         let configuration = store.configuration!.look(on: .monitor)
         let widget = configuration.widgets.first { $0.id == id }!
         let popup = widget.popup!
-        let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults))
+        let style = popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults))
         return PopupView(popup: popup, style: style, store: store, widget: widget)
             .environment(\.screenKind, .monitor)
             .frame(width: CGFloat(popup.style.width ?? 360))
@@ -164,7 +165,7 @@ enum DocsImages {
         let popup = widgetPopup(widget, store: store)!
         VStack(alignment: .leading, spacing: 8) {
             Text(WidgetDisplayName.title(for: widget.content, providers: configuration.providers)).font(.system(size: 12, weight: .semibold))
-            PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.inheriting(configuration.defaults)),
+            PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults)),
                       store: store, widget: widget)
                 .frame(width: popup.style.width!)
                 .fixedSize(horizontal: false, vertical: true)
@@ -267,7 +268,7 @@ enum DocsImages {
         """#,
         "network": #"{"text":"↓1.2 MiB/s ↑240 KiB/s","icon":"network","fields":{"interface":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"},"lists":{"interfaces":[{"name":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"}]},"values":{"download":1258291,"upload":245760}}"#,
         "disk": #"""
-        {"text":"59%","icon":"internaldrive","tooltip":"412 GB available on Macintosh HD",
+        {"text":"59%","icon":"internaldrive","tooltip":"412 GB free on Macintosh HD",
          "fields":{"percent":"59","volume":"Macintosh HD","format":"APFS","used":"582 GB","free":"412 GB","total":"994 GB"},
          "values":{"disk":0.5855,"used":582000000000,"free":412000000000,"total":994000000000},
          "lists":{"volumes":[{"name":"Backup","path":"/Volumes/Backup","symbol":"externaldrive","percent":"41","fraction":"0.41",

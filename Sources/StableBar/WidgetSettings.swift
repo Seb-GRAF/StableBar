@@ -142,9 +142,9 @@ struct WidgetClockFormat {
     }
 }
 
-/// How a battery, sound or system widget shows its values. `sources` names them: `percent` for
-/// battery, whose icon is its battery block, `volume` for sound, and `cpu`, `memory` or both, in
-/// order, for system.
+/// How a battery, sound, system or disk widget shows its values. `sources` names them: `percent` for
+/// battery, whose icon is its battery block, `volume` for sound, `cpu`, `memory` or both, in
+/// order, for system, and `disk` for disk.
 enum WidgetMetricDisplay: String, CaseIterable {
     case standard, changes, icon, value, meter, graph, custom
 
@@ -162,12 +162,14 @@ enum WidgetMetricDisplay: String, CaseIterable {
 
     /// The choices for `source`, its default first: battery's shows only its battery, with the
     /// percentage in its tooltip, sound's shows the volume only after a change, so it adds that, and
-    /// system's draws a graph. The others keep icon and value as a layout of their own.
+    /// system's draws a graph. Disk keeps no history to graph. The others keep icon and value as a
+    /// layout of their own.
     static func choices(for source: String) -> [Self] {
         switch source {
         case "percent": [.icon] + allCases.filter { $0 != .changes && $0 != .icon }
         case "volume": [.changes] + allCases.filter { $0 != .changes }
         case "cpu", "memory": [.graph] + allCases.filter { $0 != .changes && $0 != .graph }
+        case "disk": allCases.filter { $0 != .changes && $0 != .graph }
         default: allCases.filter { $0 != .changes }
         }
     }
@@ -178,6 +180,7 @@ enum WidgetMetricDisplay: String, CaseIterable {
         case .changes: return .null
         case .graph where sources == ["cpu"]: return .null
         case .icon where sources == ["percent"]: return .null
+        case .standard where sources == ["disk"]: return .null
         case .custom: return nil
         default: return .object(["type": .string("row"), "children": .array(sources.flatMap(blocks))])
         }

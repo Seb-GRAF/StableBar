@@ -300,7 +300,7 @@ struct BarInspector: View {
             style.color("Text", "foreground")
             if let widget {
                 let configuration = store.configuration!.onScreen(screen)
-                let defaults = configuration.popupDefaults.inheriting(configuration.defaults)
+                let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
                 let popup = widgetPopup(widget, store: store)
                 let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
                     "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,
@@ -388,7 +388,7 @@ struct BarInspector: View {
 
     @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
         if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
-           let source = ["battery": "percent", "audio": "volume", "system": "cpu"][type] {
+           let source = ["battery": "percent", "audio": "volume", "system": "cpu", "disk": "disk"][type] {
             let layout = editor.properties(for: widget.id)["layout"]
             let metrics = type == "system" ? WidgetSystemMetrics.current(layout) : nil
             let sources = metrics?.sources ?? [source]

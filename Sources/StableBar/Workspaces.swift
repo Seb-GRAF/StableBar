@@ -184,8 +184,11 @@ final class WorkspaceStore {
     var workspaces: [Workspace] = [] {
         didSet {
             if workspaces.map(\.name) != oldValue.map(\.name) { refreshDesktopShortcuts() }
+            layout.update(workspaces)
         }
     }
+    /// What the bar's layout needs from `workspaces`, observable on its own.
+    let layout = WorkspaceLayout()
     let windowDrag = WorkspaceWindowDragSession()
     let dockBadges = DockBadges()
     var desktopShortcuts = DesktopShortcuts()
@@ -233,13 +236,7 @@ final class WorkspaceStore {
     }
 
     func workspaces(on monitor: Int, showEmpty: Bool, hideApps: [String] = [], hideWorkspaces: [String] = []) -> [Workspace] {
-        workspaces.compactMap { workspace in
-            guard workspace.monitor == monitor, workspace.isFocused || !hideWorkspaces.contains(workspace.name) else { return nil }
-            var workspace = workspace
-            workspace.apps.removeAll { app in hideApps.contains { appMatches(app, key: $0) } }
-            workspace.windows.removeAll { window in hideApps.contains { appMatches(window.app, key: $0) } }
-            return showEmpty || workspace.isVisible || !workspace.apps.isEmpty ? workspace : nil
-        }
+        WorkspaceFilter(monitor: monitor, showEmpty: showEmpty, hideApps: hideApps, hideWorkspaces: hideWorkspaces).apply(to: workspaces)
     }
 
     /// Retain the same subscription while either workspaces or presentation needs it.

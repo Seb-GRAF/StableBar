@@ -132,7 +132,7 @@ func styleTitle(_ path: [String]) -> String {
          "paddingLeading": "Leading padding", "paddingTrailing": "Trailing padding", "paddingTop": "Top padding",
          "paddingBottom": "Bottom padding", "offsetX": "Horizontal offset", "offsetY": "Vertical offset",
          "minWidth": "Minimum width", "maxWidth": "Maximum width", "cornerRadius": "Corner radius",
-         "offset": "Offset from top", "surface": "Surface", "surfaceRaised": "Raised surface", "text": "Text",
+         "offset": "Offset from top", "popupOffset": "Popup gap below the bar", "surface": "Surface", "surfaceRaised": "Raised surface", "text": "Text",
          "textMuted": "Muted text", "hairline": "Hairline", "accentText": "Accent text color"][key] ?? friendly(key)
     }.joined(separator: ": ")
     return appearanceTitle(title, appearance: appearance)
