@@ -13,7 +13,7 @@
 | `text` | Static text and optional icon | `text` |
 | `script` | Output of a shell command | `command`, `interval` in seconds or `null` for event-only updates |
 | `provider` | Shared command, stream or native data | `provider`: key from the top-level `providers` object |
-| `system`, `network`, `battery`, `audio`, `microphone`, `calendar`, `disk` | Native CPU and memory, network, battery, audio output, microphone, calendar or disk data | — |
+| `system`, `network`, `wifi`, `battery`, `audio`, `microphone`, `calendar`, `disk` | Native CPU and memory, network, Wi-Fi, battery, audio output, microphone, calendar or disk data | — |
 | `inputSource` | The keyboard input source, such as `FR`; clicking it switches to the next enabled one, unless it has its own `onClick`, `open`, popup or menu | — |
 | `privacy` | A microphone and a camera, lit orange and green while an app records from the default input device or uses a camera, as macOS's privacy indicators show; see [`privacy`](providers.md) for macOS 14.0 and 14.1 | `hideWhenIdle`: show only what is in use, and hide while nothing is (default `false`) |
 

@@ -61,6 +61,9 @@ extension SourcePermission {
     static let screenRecording = SourcePermission(title: "Screen Recording",
                                                   detail: "Menu bar items shown as in the menu bar are copied from it. StableBar records nothing else.",
                                                   symbol: "rectangle.dashed.badge.record", privacyPane: "Privacy_ScreenCapture")
+    static let location = SourcePermission(title: "Location",
+                                           detail: "Wi-Fi widgets show your network's name, which macOS shares only with apps allowed to use Location Services. macOS asks for access the first time one updates.",
+                                           symbol: "location", privacyPane: "Privacy_LocationServices")
 }
 
 extension WidgetContent {
@@ -112,8 +115,8 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .disk, .audio, .inputSource, .microphone, .privacy,
-                                                    .calendar, .merge])
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .system, .network, .wifi, .disk, .audio, .inputSource, .microphone,
+                                                    .privacy, .calendar, .merge])
 }
 
 extension DataSourceType {
@@ -158,6 +161,11 @@ extension DataSourceType {
                 return output
             })
         }
+    }
+
+    static let wifi = DataSourceType(name: "wifi", isNative: true, symbol: "wifi", settings: [], continuous: true,
+                                     events: [.wifiChange], permission: .location) { _, _ in
+        PushSource(monitor: WiFiMonitor())
     }
 
     static let disk = disk()

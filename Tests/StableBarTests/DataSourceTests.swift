@@ -1,4 +1,5 @@
 import CoreAudio
+import CoreLocation
 import EventKit
 import Foundation
 import Observation
@@ -854,6 +855,31 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(BuiltInEvent.privacyChange.variables(from: privacy(microphone: true, camera: true), to: privacy(microphone: true, camera: true)) == nil)
 }
 
+@Test func wifiNamesTheNetworkOnlyWithLocationAccess() {
+    let home = WiFiMonitor.output(WiFiState(interface: "en0", ssid: "Home", power: true, rssi: -60), access: .authorizedAlways)
+    #expect(home.text == "Home" && home.icon == "wifi")
+    #expect(home.fields == ["ssid": "Home", "interface": "en0", "power": "on", "rssi": "-60", "access": "granted"])
+    #expect(home.values == ["signal": 0.8, "power": 1])
+    let unnamed = WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -40), access: .denied)
+    #expect(unnamed.text == "" && unnamed.fields?["ssid"] == "" && unnamed.fields?["access"] == "denied")
+    #expect(unnamed.values == ["signal": 1, "power": 1])
+    #expect(WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -110), access: .notDetermined).fields?["access"] == "notDetermined")
+    #expect(WiFiMonitor.output(WiFiState(interface: "en0", power: true, rssi: -110), access: .restricted).values?["signal"] == 0)
+    let off = WiFiMonitor.output(WiFiState(interface: "en0", power: false), access: .authorizedAlways)
+    #expect(off.icon == "wifi.slash" && off.fields?["power"] == "off" && off.fields?["rssi"] == nil)
+    #expect(off.values == ["signal": 0, "power": 0])
+}
+
+@Test func wifiEventsFollowThePowerAndTheNetwork() {
+    func wifi(_ ssid: String?, power: Bool = true, rssi: Int? = -60) -> ScriptOutput {
+        WiFiMonitor.output(WiFiState(interface: "en0", ssid: ssid, power: power, rssi: rssi), access: ssid == nil ? .denied : .authorizedAlways)
+    }
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi("Office")) == ["INFO": "Office", "POWER": "on"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi(nil, power: false, rssi: nil)) == ["INFO": "", "POWER": "off"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi(nil), to: wifi(nil, rssi: nil)) == ["INFO": "", "POWER": "on"])
+    #expect(BuiltInEvent.wifiChange.variables(from: wifi("Home"), to: wifi("Home", rssi: -70)) == nil)
+}
+
 @Test func thePrivacyWidgetHidesWhatIsNotInUseWhenAsked() throws {
     func icons(hideWhenIdle: Bool, microphone: Bool, camera: Bool) throws -> Int {
         let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(#"{"id":"p","type":"privacy","position":"right","hideWhenIdle":\#(hideWhenIdle)}"#.utf8))
@@ -1049,7 +1075,7 @@ private struct RelayProbe {
     {"providers":{"meetings":{"type":"calendar"},"status":{"type":"merge","providers":["meetings"]}},
      "widgets":[{"id":"status","type":"provider","provider":"status","position":"right"}]}
     """#)) == [.calendars])
-    #expect(DataSourceRegistry.builtIn.types.filter { $0.permission != nil }.map(\.name) == ["calendar"])
+    #expect(DataSourceRegistry.builtIn.types.filter { $0.permission != nil }.map(\.name) == ["wifi", "calendar"])
     let listed = ImageRenderer(content: VStack { SourcePermissionList(permissions: [calendars]) }.frame(width: 480))
     #expect((listed.nsImage?.size.height ?? 0) > 0)
     let empty = ImageRenderer(content: VStack { SourcePermissionList(permissions: []) }.frame(width: 480))
