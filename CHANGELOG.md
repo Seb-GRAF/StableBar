@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.17.0](https://github.com/Seb-GRAF/StableBar/compare/v0.16.0...v0.17.0) (2026-11-16)
+
+### Features
+
+* add a Wi-Fi provider with the network name, signal and power by @Seb-GRAF ([41515b4](https://github.com/Seb-GRAF/StableBar/commit/41515b499f6ef4c87116f5ab8281cbe7f2998dd6))
+* build a theme on the website and download it for StableBar ([#682](https://github.com/Seb-GRAF/StableBar/issues/682)) by @M4n0x ([8d3088d](https://github.com/Seb-GRAF/StableBar/commit/8d3088dc96b3d6a61b0dd56fcadaedf1965172ab))
+* choose the audio output device from a popup by @Seb-GRAF ([f4be3f7](https://github.com/Seb-GRAF/StableBar/commit/f4be3f773f2176c281e6d1c12db78426d38bf46d))
+* draw a progress block as dots or segments by @Seb-GRAF ([27360e3](https://github.com/Seb-GRAF/StableBar/commit/27360e300a829490168f3c5dd036b0470653133e))
+* leave a gap at the bottom of a ring by @Seb-GRAF ([f0bce8c](https://github.com/Seb-GRAF/StableBar/commit/f0bce8c2aea3439ee8920585194c2a0036c86a91))
+* link StableBar's Ko-fi page from GitHub, the README, the website and Help ([#717](https://github.com/Seb-GRAF/StableBar/issues/717)) by @Seb-GRAF ([c109e59](https://github.com/Seb-GRAF/StableBar/commit/c109e591db77121a8dd17d99f59fcbc0fda1e393)), closes [#716](https://github.com/Seb-GRAF/StableBar/issues/716)
+* list connected Bluetooth devices with their battery by @Seb-GRAF ([9ab0161](https://github.com/Seb-GRAF/StableBar/commit/9ab016174531b9d8087c695acbf0b097ed6148e0))
+* list every widget by category in a Store tab, and open it from the bar ([#711](https://github.com/Seb-GRAF/StableBar/issues/711)) by @Seb-GRAF ([e3adeb1](https://github.com/Seb-GRAF/StableBar/commit/e3adeb1495226c8ef614709049d1f2eb17c4fc3c))
+* open a detail view inside a popup, with a back arrow by @Seb-GRAF ([135ac07](https://github.com/Seb-GRAF/StableBar/commit/135ac072fab156f74b81d0dfe5e4adf102ac6224))
+* pass merged providers' temporary output on, so a merge can flash the volume by @Seb-GRAF ([1a5ea5d](https://github.com/Seb-GRAF/StableBar/commit/1a5ea5d077dd2a370eec3e8c8a9adadd46fbe63e))
+* pass merged providers' text, icon and tooltip on as fields by @Seb-GRAF ([6b75b37](https://github.com/Seb-GRAF/StableBar/commit/6b75b379bef31f02508f9af98e2007bc378edb56))
+* pick theme colors from the base and recent colors, and reset settings to the base theme ([#726](https://github.com/Seb-GRAF/StableBar/issues/726)) by @Seb-GRAF ([ba02ebe](https://github.com/Seb-GRAF/StableBar/commit/ba02ebe07ae80208c9b52be96b5bdab81fe4c7b0))
+* report the battery's cycle count, maximum capacity and Low Power Mode by @Seb-GRAF ([51b0aff](https://github.com/Seb-GRAF/StableBar/commit/51b0affbd8f0835ffde92c27ce45a0159395a534))
+* set the volume, mute and Wi-Fi power from popup controls by @Seb-GRAF ([69fed2e](https://github.com/Seb-GRAF/StableBar/commit/69fed2ed8abb32d5fec2e997d9b66c4e4a9f36c5))
+
+### Bug Fixes
+
+* keep the bar above the menu bar strip when a full-screen window sits at the menu bar level by [@alexandrebucci](https://github.com/alexandrebucci) ([3f069d5](https://github.com/Seb-GRAF/StableBar/commit/3f069d5cd09fa0c42c030b27a6b83adaf509c259)), closes [#728](https://github.com/Seb-GRAF/StableBar/issues/728)
+* stop a cancelled drag from leaving the end-stop slider editing by @Jonathanm10 ([c9cca2e](https://github.com/Seb-GRAF/StableBar/commit/c9cca2e55a5508c713ce3ed1f9f75b41c094e840))
+
 ## [0.16.0](https://github.com/Seb-GRAF/StableBar/compare/v0.15.0...v0.16.0) (2026-11-16)
 
 ### Features
