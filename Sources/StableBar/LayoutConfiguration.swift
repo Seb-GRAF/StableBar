@@ -2,13 +2,75 @@ import Foundation
 
 struct WidgetGroupConfiguration: Decodable, Sendable {
     var style: WidgetStyle
+    let members: [WidgetGroupMember]
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case style }
+    enum CodingKeys: String, CodingKey, CaseIterable { case style, members }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
         let values = try decoder.container(keyedBy: CodingKeys.self)
         style = try values.decodeIfPresent(WidgetStyle.self, forKey: .style) ?? WidgetStyle()
+        members = try values.decodeIfPresent([WidgetGroupMember].self, forKey: .members) ?? []
+    }
+
+    /// `widgets`, each enabled one without a `group` in the group whose `members` match it best, unless that group's
+    /// widgets sit in another position. Widgets with their own `group` settle a group's position first.
+    static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration]) -> [WidgetConfiguration] {
+        var positions: [String: WidgetPosition] = [:]
+        for widget in widgets {
+            if let group = widget.ownGroup, positions[group] == nil { positions[group] = widget.position }
+        }
+        var joined = widgets
+        for index in joined.indices {
+            joined[index].joinedGroup = nil
+            let widget = joined[index]
+            guard widget.ownGroup == nil, widget.enabled else { continue }
+            let matches = groups.sorted { $0.key < $1.key }.flatMap { id, group in
+                group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.id == nil ? 0 : 1, $0.keyCount)) }
+            }
+            guard let best = matches.first(where: { match in !matches.contains { $0.rank > match.rank } }),
+                  (positions[best.group] ?? widget.position) == widget.position else { continue }
+            positions[best.group] = widget.position
+            joined[index].joinedGroup = best.group
+        }
+        return joined
+    }
+}
+
+/// A selector in a group's `members`: a widget matches when it has every key the selector names.
+struct WidgetGroupMember: Decodable, Equatable, Sendable {
+    let type: String?
+    let role: PresentationRole?
+    let id: String?
+
+    enum CodingKeys: String, CodingKey, CaseIterable { case type, role, id }
+
+    init(type: String?, role: PresentationRole?, id: String?) {
+        self.type = type
+        self.role = role
+        self.id = id
+    }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        type = try values.decodeIfPresent(String.self, forKey: .type).map { name in
+            guard let type = WidgetConfiguration.typeName(name) else {
+                throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
+            }
+            return type
+        }
+        role = try values.decodeIfPresent(PresentationRole.self, forKey: .role)
+        id = try values.decodeIfPresent(String.self, forKey: .id)
+        guard keyCount > 0 else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Name a type, role or id."))
+        }
+    }
+
+    var keyCount: Int { [type != nil, role != nil, id != nil].filter { $0 }.count }
+
+    func matches(_ widget: WidgetConfiguration) -> Bool {
+        (type == nil || type == widget.typeName) && (role == nil || role == widget.role) && (id == nil || id == widget.id)
     }
 }
 
