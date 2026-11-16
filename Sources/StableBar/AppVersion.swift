@@ -38,6 +38,12 @@ struct AppVersion {
         return prerelease == "beta" || prerelease.hasPrefix("beta.") ? .beta : .prerelease
     }
 
+    /// What `--query` and `--status` report about the running bar.
+    var fields: [String: ConfigurationValue] {
+        ["version": version.map(ConfigurationValue.string) ?? .null, "build": build.map(ConfigurationValue.string) ?? .null,
+         "channel": .string(channel.rawValue)]
+    }
+
     /// The release that stamps the configuration files it saves and reads newer ones leniently. Development
     /// builds and tests have none: their version names the last stable release, not what they can read.
     static let release: String? = {

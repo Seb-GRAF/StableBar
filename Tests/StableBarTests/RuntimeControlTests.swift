@@ -285,6 +285,11 @@ import Testing
     }
 }
 
+@Test @MainActor func liveCommandsTellAMissingBarFromAFailedCommand() {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/config.json")
+    #expect(throws: BarNotRunning.self) { try RuntimeControl.send(RuntimeRequest(action: .status), url: url) }
+}
+
 @Test @MainActor func acceptedSessionEditsSurviveAutomaticProfileChanges() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
