@@ -215,19 +215,51 @@ test("every preview variable has a target in the preview markup", () => {
   const classes = [...markup.matchAll(/class="([^"]+)"/g)].map(([, value]) => new Set(value.split(/\s+/)));
   for (const id of baseIDs) {
     for (const appearance of ["light", "dark"]) {
-      for (const variable of Object.keys(cssVariables(resolveTheme(builtIn, theme(id), appearance)))) {
+      const resolved = resolveTheme(builtIn, theme(id), appearance);
+      classes.find(tokens => tokens.has("theme-preview")).add(indicatorClass(resolved));
+      for (const variable of Object.keys(cssVariables(resolved))) {
         assert.ok(PREVIEW_TARGETS[variable], `${id} ${appearance} ${variable}`);
       }
     }
   }
   assert.ok(PREVIEW_TARGETS["--ws-indicator"]);
   for (const [variable, { selector }] of Object.entries(PREVIEW_TARGETS)) {
+    if (!selector) continue;
     for (const part of selector.split(",")) {
-      const required = [...part.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)].map(([, name]) => name);
-      assert.ok(required.length && classes.some(tokens => required.every(name => tokens.has(name))),
-        `${variable}: ${part}`);
+      for (const component of part.trim().split(/\s+/)) {
+        const required = [...component.replace(/:not\([^)]*\)/g, "").matchAll(/\.([\w-]+)/g)].map(([, name]) => name);
+        assert.ok(required.length && classes.some(tokens => required.every(name => tokens.has(name))),
+          `${variable}: ${component}`);
+      }
     }
   }
+});
+
+test("unused and hover-only preview variables have no outline target", () => {
+  for (const variable of ["--accent", "--accent-text", "--raised", "--w-hover"]) {
+    assert.deepEqual(PREVIEW_TARGETS[variable], { selector: null }, variable);
+  }
+});
+
+test("every outline target consumes its variable in a resting preview style", () => {
+  const css = read("site/creator/preview.css").toString().replace(/\/\*[\s\S]*?\*\//g, "");
+  const normalize = selector => selector.replace(/\.theme-preview\b/g, "")
+    .replace(/::(?:before|after)\b/g, "").replace(/:not\([^)]*\)/g, "").trim().replace(/\s+/g, " ");
+  const uses = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(([, selectors, body]) => {
+    const variables = [...body.matchAll(/var\(\s*(--[\w-]+)/g)].map(([, variable]) => variable);
+    return selectors.split(",").filter(selector => !/:(?:hover|active|focus)\b/.test(selector))
+      .map(selector => ({ selector: normalize(selector), variables }));
+  });
+  const invalid = [];
+  for (const [variable, { selector }] of Object.entries(PREVIEW_TARGETS)) {
+    if (!selector || variable === "--ws-indicator") continue;
+    for (const part of selector.split(",")) {
+      if (!uses.some(use => use.selector === normalize(part) && use.variables.includes(variable))) {
+        invalid.push(`${variable}: ${part.trim()}`);
+      }
+    }
+  }
+  assert.deepEqual(invalid, [], "Targets must use their variable on that element or its painted pseudo-element.");
 });
 
 test("preview target measurements use the agreed geometry", () => {

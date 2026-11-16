@@ -147,7 +147,7 @@ function updateCue() {
   const preview = root.querySelector(".theme-preview"), targets = new Map();
   for (const variable of affectedVariables(state, id, appearance)) {
     const target = PREVIEW_TARGETS[variable];
-    if (!target) continue;
+    if (!target?.selector) continue;
     for (const element of preview.querySelectorAll(target.selector)) {
       if (!element.getClientRects().length) continue;
       if (!targets.has(element)) targets.set(element, []);
