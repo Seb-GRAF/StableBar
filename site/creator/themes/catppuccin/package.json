@@ -1,0 +1,10 @@
+{
+  "id": "catppuccin",
+  "name": "Catppuccin",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Colors from the Catppuccin palette, Latte in light and Mocha in dark: rounded pills on a solid strip, with a Mauve pill for the focused workspace.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/Seb-GRAF/StableBar"
+}

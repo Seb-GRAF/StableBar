@@ -170,7 +170,7 @@ A change you can see extends the scene that shows its area, or adds one when non
 On a pull request, CI draws the screens twice, from the pull request and from its base, and a bot posts what changed.
 
 - **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
-- **Draw website screens** captures the four pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
+- **Draw website screens** captures the five pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
 
 Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too. A screen whose height changed, such as a website page that grew, is compared from the top: its crop starts at the first change and runs across the full width. A crop shows at most 1,600 rows of a change, and the comment says so when it stops short; the approval still covers the whole image.
 

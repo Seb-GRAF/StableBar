@@ -1,0 +1,432 @@
+import builtIn from "./built-in.mjs";
+
+export const BASE_IDS = ["built-in", "leman", "notch", "catppuccin", "nord", "gruvbox", "phosphor"];
+
+export const RESERVED_IDS = new Set([
+  ...BASE_IDS,
+  "graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal",
+  "blueprint", "broadsheet", "brutalist", "everforest", "handheld", "kanagawa", "platinum", "rose-pine", "synthwave",
+]);
+
+export function slug(name) {
+  return name.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+    .split(/[^a-z0-9]+/).filter(Boolean).join("-");
+}
+
+export function isVersion(value) {
+  return typeof value === "string" && /^\d+\.\d+\.\d+$/.test(value);
+}
+
+export function nextPatch(version) {
+  if (!isVersion(version)) throw new Error("Use an x.y.z version.");
+  const [major, minor, patch] = version.split(".");
+  return `${major}.${minor}.${BigInt(patch) + 1n}`;
+}
+
+export function fileText(object) {
+  return JSON.stringify(object, null, 2) + "\n";
+}
+
+const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
+const isGradient = value => isObject(value?.gradient) && Object.hasOwn(value.gradient, "colors");
+
+export function isColor(value) {
+  return typeof value === "string" && [7, 9].includes(value.length) && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value);
+}
+
+export function isBackground(value) {
+  if (isColor(value)) return true;
+  if (!isGradient(value)) return false;
+  const { colors, locations, angle } = value.gradient;
+  return Array.isArray(colors) && colors.length >= 2 && colors.every(isColor)
+    && (angle == null || Number.isFinite(angle))
+    && (locations == null || (Array.isArray(locations) && locations.length === colors.length
+      && locations.every((stop, index) => Number.isFinite(stop) && stop >= 0 && stop <= 1
+        && (index === 0 || stop >= locations[index - 1]))));
+}
+
+const colorProperties = new Set([
+  "foreground", "background", "hoverBackground", "hoverForeground", "borderColor", "shadowColor", "accent", "accentText",
+]);
+const colorError = () => { throw new Error("Use #RRGGBB or #RRGGBBAA for colors."); };
+
+export function validateThemeColors(config) {
+  const expanded = expandDocument(overriding(builtIn, config));
+  function visit(value) {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "tokens") continue;
+      if ((key === "roles" || key === "groups" || key === "states") && isObject(child)) Object.values(child).forEach(visit);
+      else if (colorProperties.has(key) && child != null) {
+        const valid = key === "background" || key === "hoverBackground" ? isBackground(child) : isColor(child);
+        if (!valid) colorError();
+      } else visit(child);
+    }
+  }
+  for (const appearance of ["light", "dark"]) {
+    const resolved = forAppearance(expanded, appearance);
+    visit(resolved);
+    // These palette values feed the preview directly, without a style reference.
+    for (const key of ["surfaceRaised", "textMuted", "track"]) {
+      if (resolved.tokens?.[key] != null && !isColor(resolved.tokens[key])) colorError();
+    }
+  }
+}
+
+// The app expands a profile, at any depth, with its own tokens over those around it, never the reverse.
+function expandDocument(document, inherited = {}) {
+  const { profiles, ...rest } = document;
+  const tokens = overriding(inherited, isObject(rest.tokens) ? rest.tokens : {});
+  const expanded = substituteTokens(rest, tokens);
+  if (profiles === undefined) return expanded;
+  expanded.profiles = !Array.isArray(profiles) ? profiles : profiles.map(profile =>
+    isObject(profile) && isObject(profile.configuration)
+      ? { ...profile, configuration: expandDocument(profile.configuration, tokens) }
+      : profile);
+  return expanded;
+}
+
+// Follows a section's own alias chain, keeping the references inside it so later palette edits reach them.
+function aliasValue(value, tokens) {
+  const seen = new Set();
+  while (typeof value === "string" && value.startsWith("@token.")) {
+    const name = value.slice("@token.".length);
+    if (seen.has(name)) throw new Error(`Configuration reference cycle: ${[...seen, name].join(" → ")}.`);
+    if (!Object.hasOwn(tokens, name)) throw new Error(`Unknown configuration reference: ${value}.`);
+    seen.add(name);
+    value = tokens[name];
+  }
+  return structuredClone(value);
+}
+
+function overriding(earlier, next) {
+  if (!isObject(earlier) || !isObject(next) || isGradient(earlier) || isGradient(next)) {
+    return structuredClone(next);
+  }
+  return Object.fromEntries(Object.keys({ ...earlier, ...next }).map(key => [key,
+    Object.hasOwn(next, key) ? overriding(earlier[key], next[key]) : structuredClone(earlier[key]),
+  ]));
+}
+
+export function substituteTokens(document, tokens = document.tokens ?? {}) {
+  const path = new Set();
+  const encoder = new TextEncoder();
+  let remaining = 100_000;
+
+  function visit(value, depth = 0) {
+    const reference = typeof value === "string" && value.startsWith("@token.");
+    if (path.size > 0) {
+      remaining--;
+      if (typeof value === "string" && !reference) remaining -= Math.floor(encoder.encode(value).length / 256);
+      else if (isObject(value)) {
+        for (const key of Object.keys(value)) remaining -= Math.floor(encoder.encode(key).length / 256);
+      }
+      if (remaining < 0) throw new Error("Configuration references expand to more than 100,000 values.");
+      if (isObject(value) || Array.isArray(value) || reference) depth++;
+      if (depth > 64) throw new Error("Configuration references nest more than 64 levels deep.");
+    }
+    if (reference) {
+      const name = value.slice("@token.".length);
+      if (path.has(name)) throw new Error(`Configuration reference cycle: ${[...path, name].join(" → ")}.`);
+      if (!Object.hasOwn(tokens, name)) throw new Error(`Unknown configuration reference: ${value}.`);
+      remaining -= Math.floor(encoder.encode(name).length / 256);
+      if (remaining < 0) throw new Error("Configuration references expand to more than 100,000 values.");
+      path.add(name);
+      try { return visit(tokens[name], depth); }
+      finally { path.delete(name); }
+    }
+    if (remaining < 0) throw new Error("Configuration references expand to more than 100,000 values.");
+    if (Array.isArray(value)) return value.map(child => visit(child, depth));
+    if (isObject(value)) return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, visit(child, depth)]));
+    return value;
+  }
+
+  return visit(document);
+}
+
+function forAppearance(value, appearance) {
+  if (Array.isArray(value)) return value.map(child => forAppearance(child, appearance));
+  if (!isObject(value)) return value;
+  if (Object.hasOwn(value, "light") && Object.hasOwn(value, "dark")) {
+    return forAppearance(value[appearance], appearance);
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, forAppearance(child, appearance)]));
+}
+
+const fontWeights = ["ultralight", "thin", "light", "regular", "medium", "semibold", "bold"];
+
+const appearanceDefaults = {
+  accent: "#f7821b", accentText: "#ffffff", borderWidth: 1, cornerRadius: 14,
+  paddingHorizontal: 10, paddingVertical: 6, spacing: 6, shadowRadius: 2,
+  fontSize: 13, fontName: "system", fontWeight: "regular", iconSize: 13,
+};
+
+function inheriting(own, defaults) {
+  return Object.fromEntries(Object.keys({ ...defaults, ...own }).map(key => {
+    const value = own[key] ?? defaults[key] ?? null;
+    if (key === "states" && isObject(value)) {
+      return [key, Object.fromEntries(Object.keys({ ...defaults.states, ...own.states }).map(state =>
+        [state, inheriting(own.states?.[state] ?? {}, defaults.states?.[state] ?? {})]))];
+    }
+    return [key, structuredClone(value)];
+  }));
+}
+
+function withHover(style) {
+  const result = structuredClone(style ?? {});
+  const aliases = {};
+  if (result.hoverBackground != null) aliases.background = result.hoverBackground;
+  if (result.hoverForeground != null) aliases.foreground = result.hoverForeground;
+  if (Object.keys(aliases).length) {
+    result.states = { ...result.states, hover: inheriting(result.states?.hover ?? {}, aliases) };
+  }
+  return result;
+}
+
+function resolvedStyle(style, defaults) {
+  const resolved = inheriting(inheriting(withHover(style), withHover(defaults)), appearanceDefaults);
+  resolved.hoverBackground = resolved.states?.hover?.background ?? resolved.hoverBackground ?? resolved.background;
+  resolved.hoverForeground = resolved.states?.hover?.foreground ?? resolved.hoverForeground ?? resolved.foreground;
+  if (!fontWeights.includes(resolved.fontWeight)) resolved.fontWeight = "regular";
+  return resolved;
+}
+
+export function resolveTheme(base, config, appearance) {
+  const resolved = forAppearance(expandDocument(overriding(base, config)), appearance);
+  const defaults = resolved.defaults;
+  resolved.defaults = resolvedStyle(defaults);
+  const popup = resolved.popupDefaults;
+  // Popup geometry is independent of the bar widgets' padding and spacing.
+  resolved.popupDefaults = resolvedStyle({
+    ...popup,
+    paddingHorizontal: popup?.paddingHorizontal ?? 16,
+    paddingVertical: popup?.paddingVertical ?? 16,
+    spacing: popup?.spacing ?? 12,
+  }, defaults);
+  resolved.bar ??= {};
+
+  const workspace = resolved.workspaceDefaults ?? {};
+  const style = withHover(workspace.style);
+  const indicator = workspace.indicator ?? "background";
+  const focusedForeground = style.states?.focused?.foreground ?? style.foreground ?? resolved.defaults.accentText;
+  style.cornerRadius ??= Math.max(resolved.defaults.cornerRadius - 4, 0);
+  style.foreground ??= resolved.defaults.foreground;
+  style.states ??= {};
+  style.states.focused = {
+    ...style.states.focused,
+    background: style.states.focused?.background ?? style.background ?? resolved.defaults.accent,
+    foreground: focusedForeground,
+  };
+  workspace.indicator = indicator;
+  workspace.style = style;
+  workspace.indicatorStyle = inheriting(withHover(workspace.indicatorStyle), {
+    height: 2, cornerRadius: 0, background: resolved.defaults.accent,
+  });
+  workspace.indicatorStyle.states ??= {};
+  workspace.indicatorStyle.states.visible = {
+    ...workspace.indicatorStyle.states.visible,
+    background: workspace.indicatorStyle.states.visible?.background ?? workspace.indicatorStyle.background,
+  };
+  resolved.workspaceDefaults = workspace;
+  return resolved;
+}
+
+const docs = "https://github.com/Seb-GRAF/StableBar/blob/main/docs/";
+const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
+
+function control(id, label, kind, paths, help, guide, appliesWhen,
+  { range = [0, 40], step = 1, unit = "pt", slider = false } = {}) {
+  return {
+    id, group: id.split(".")[0], label, kind, paths,
+    help: `${paths.join(", ")}: ${help}`, docs: docs + guide,
+    ...(appliesWhen ? { appliesWhen } : {}),
+    ...(kind === "number" ? { range, step, unit, slider } : {}),
+  };
+}
+
+function select(id, label, paths, help, guide, options) {
+  return { ...control(id, label, "select", paths, help, guide), options };
+}
+
+// Families that ship with macOS. The app lists every installed font, which a web page can't read.
+export const MAC_FONTS = [
+  "American Typewriter", "Andale Mono", "Arial", "Arial Black", "Arial Narrow", "Arial Rounded MT Bold", "Avenir",
+  "Avenir Next", "Avenir Next Condensed", "Baskerville", "Big Caslon", "Bradley Hand", "Chalkboard SE", "Chalkduster",
+  "Charter", "Cochin", "Comic Sans MS", "Copperplate", "Courier New", "Didot", "DIN Alternate", "DIN Condensed", "Futura",
+  "Geneva", "Georgia", "Gill Sans", "Helvetica", "Helvetica Neue", "Herculanum", "Hiragino Mincho ProN", "Hiragino Sans",
+  "Hoefler Text", "Impact", "Lucida Grande", "Marker Felt", "Menlo", "Monaco", "Noteworthy", "Optima", "Palatino",
+  "Papyrus", "Phosphate", "Silom", "Skia", "Snell Roundhand", "Tahoma", "Times New Roman", "Trattatello", "Trebuchet MS",
+  "Verdana", "Zapfino",
+];
+
+export const CONTROLS = [
+  control("about.name", "Name", "text", ["manifest.name", "manifest.id"],
+    "Name your theme; its name also gives its folder id.", "themes.md"),
+  control("about.description", "Description", "text", ["manifest.description"],
+    "Describe the theme in one line.", "themes.md"),
+  control("about.author", "Author", "text", ["manifest.author"],
+    "Use your GitHub username when submitting to the Store.", "packages.md"),
+  control("about.version", "Version", "text", ["manifest.version"],
+    "Use an x.y.z version, starting at 1.0.0.", "packages.md"),
+  ...[
+    ["surface", "Surface"], ["surfaceRaised", "Raised surface"], ["text", "Text"], ["textMuted", "Muted text"],
+    ["accent", "Accent"], ["track", "Track"], ["hairline", "Hairline"], ["warning", "Warning"], ["critical", "Critical"],
+  ].map(([name, label]) => control(`palette.${name}`, label, "color", [`tokens.${name}`],
+    "Edit this palette color for the appearance shown.", "themes.md")),
+  control("palette.accentText", "Text on accent", "color", ["defaults.accentText"],
+    "Set text drawn on the accent color.", "styling.md#widget-styles"),
+  control("bar.height", "Height", "number", ["bar.height"],
+    "Set the bar height in points.", "layout.md", undefined, { range: [16, 100], slider: true }),
+  control("bar.margin", "Floating margin", "number", ["bar.margin"],
+    "Inset the strip from the screen edges.", "layout.md"),
+  control("bar.background", "Strip background", "background", ["bar.style.background"],
+    "Choose no strip, a color, or keep the base theme's gradient.", "layout.md"),
+  control("bar.cornerRadius", "Strip corners", "number", ["bar.style.cornerRadius"],
+    "Round the strip's corners in points.", "layout.md", undefined, { slider: true }),
+  control("bar.borderColor", "Strip border", "color", ["bar.style.borderColor"],
+    "Set the strip's border color.", "layout.md"),
+  control("bar.borderWidth", "Border width", "number", ["bar.style.borderWidth"],
+    "Set the strip's border width in points.", "layout.md", undefined, { range: [0, 6], step: 0.5 }),
+  select("bar.borderEdges", "Border edges", ["bar.style.borderEdges"],
+    "Choose which strip edges have a border.", "layout.md", ["bottom", "all"]),
+  control("widgets.tiles", "Tiles", "toggle", ["defaults.background", "defaults.borderColor", "defaults.shadowColor"],
+    "Turn widget tiles on or off, keeping any existing shadow or glow.", "themes.md"),
+  control("widgets.fontName", "Font", "font", ["defaults.fontName"],
+    "Used by every widget on the bar, and by popups unless they set their own. Other font… takes one you installed.",
+    "styling.md#widget-styles"),
+  control("widgets.fontSize", "Font size", "number", ["defaults.fontSize"],
+    "Set the widget font size in points.", "styling.md#widget-styles", undefined, { range: [6, 40], slider: true }),
+  select("widgets.fontWeight", "Font weight", ["defaults.fontWeight"],
+    "Choose the widget font weight.", "styling.md#widget-styles", fontWeights),
+  control("widgets.cornerRadius", "Tile corners", "number", ["defaults.cornerRadius"],
+    "Round widget tile corners in points.", "styling.md#widget-styles"),
+  control("widgets.paddingHorizontal", "Horizontal padding", "number", ["defaults.paddingHorizontal"],
+    "Set padding beside each widget's content.", "styling.md#widget-styles"),
+  control("widgets.paddingVertical", "Vertical padding", "number", ["defaults.paddingVertical"],
+    "Set padding above and below each widget's content.", "styling.md#widget-styles"),
+  control("widgets.hoverBackground", "Hover color", "color", ["defaults.hoverBackground"],
+    "Set the color shown while hovering a widget.", "styling.md#states"),
+  control("widgets.shadowColor", "Shadow or glow", "color", ["defaults.shadowColor"],
+    "Set the widget shadow or, without tiles, its glow.", "styling.md#widget-styles"),
+  control("widgets.shadowRadius", "Shadow radius", "number", ["defaults.shadowRadius"],
+    "Set the shadow or glow radius in points.", "styling.md#widget-styles", undefined, { range: [0, 1000] }),
+  select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
+    "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
+  control("workspaces.foreground", "Unfocused text", "color", ["workspaceDefaults.style.foreground"],
+    "Set the text color of unfocused workspaces.", "widgets.md#workspace-appearance"),
+  control("workspaces.focusedForeground", "Focused text", "color", ["workspaceDefaults.style.states.focused.foreground"],
+    "Set the text color of the focused workspace.", "widgets.md#workspace-appearance"),
+  control("workspaces.focusedFill", "Focused fill", "color", ["workspaceDefaults.style.states.focused.background"],
+    "Set the focused workspace's background.", "widgets.md#workspace-appearance", indicatorIs("background")),
+  control("workspaces.cornerRadius", "Indicator corners", "number", ["workspaceDefaults.style.cornerRadius"],
+    "Round the background indicator's corners.", "widgets.md#workspace-appearance", indicatorIs("background"),
+    { range: [0, 1000] }),
+  ...[
+    ["Width", "width", "Underline width"], ["Height", "height", "Underline height"],
+    ["CornerRadius", "cornerRadius", "Underline corners"], ["OffsetY", "offsetY", "Underline position"],
+  ].map(([name, key, label]) => control(`workspaces.underline${name}`, label, "number",
+    [`workspaceDefaults.indicatorStyle.${key}`], "Set the underline's geometry in points.",
+    "widgets.md#workspace-appearance", indicatorIs("underline"),
+    { range: name === "OffsetY" ? [-200, 200] : [0, 1000] })),
+  control("workspaces.underlineBackground", "Underline color", "color", ["workspaceDefaults.indicatorStyle.background"],
+    "Set the focused workspace's underline color.", "widgets.md#workspace-appearance", indicatorIs("underline")),
+  control("workspaces.underlineVisibleBackground", "Visible underline", "color",
+    ["workspaceDefaults.indicatorStyle.states.visible.background"],
+    "Set the underline color for a workspace visible on another screen.",
+    "widgets.md#workspace-appearance", indicatorIs("underline")),
+  ...[
+    ["background", "Background"], ["borderColor", "Border"], ["shadowColor", "Shadow"],
+  ].map(([key, label]) => control(`popups.${key}`, label, "color", [`popupDefaults.${key}`],
+    "Set this popup color for the appearance shown.", "styling.md#widget-styles")),
+  control("popups.cornerRadius", "Popup corners", "number", ["popupDefaults.cornerRadius"],
+    "Round popup corners in points.", "styling.md#widget-styles"),
+  ...[
+    ["paddingHorizontal", "Horizontal padding"], ["paddingVertical", "Vertical padding"], ["spacing", "Spacing"],
+  ].map(([key, label]) => control(`popups.${key}`, label, "number", [`popupDefaults.${key}`],
+    "Tooltips, hover controls and More stay compact; app menus and a popup's own padding take precedence.",
+    "popups.md")),
+  control("popups.gap", "Gap below bar", "number", ["bar.popupOffset"],
+    "Set the gap below the bar; tooltips, hover controls, More and app menus keep their own spacing.",
+    "popups.md"),
+];
+
+export function controlsFor(state) {
+  const resolvedState = { ...state, config: resolveTheme(builtIn, state.config, "light") };
+  return CONTROLS.filter(control => !control.appliesWhen || control.appliesWhen(resolvedState));
+}
+
+function pathLocation(object, path) {
+  const keys = path.split(".");
+  const last = keys.pop();
+  let target = object;
+  for (const key of keys) {
+    if (typeof target[key] === "string" && target[key].startsWith("@token.")) {
+      target[key] = aliasValue(target[key], overriding(builtIn, object).tokens ?? {});
+    }
+    if (!isObject(target[key])) target[key] = {};
+    target = target[key];
+  }
+  return { target, key: last };
+}
+
+function writePath(object, path, value) {
+  const { target, key } = pathLocation(object, path);
+  target[key] = structuredClone(value);
+}
+
+function colorValue(value) {
+  if (isGradient(value)) return colorValue(value.gradient.colors[0]);
+  return value ?? "#00000000";
+}
+
+function editedColor(config, path, value, appearance) {
+  const other = appearance === "light" ? "dark" : "light";
+  const resolved = resolveTheme(builtIn, config, other);
+  const old = path.split(".").reduce((object, key) => object?.[key], resolved);
+  const pair = kept => appearance === "light" ? { light: value, dark: kept } : { light: kept, dark: value };
+  if (isGradient(old)) {
+    const kept = structuredClone(old);
+    // BackgroundFill accepts appearance pairs on stops, not around an entire gradient.
+    kept.gradient.colors = kept.gradient.colors.map(color => pair(colorValue(color)));
+    return kept;
+  }
+  return pair(colorValue(old));
+}
+
+export function applyControl(state, id, value, appearance) {
+  const control = CONTROLS.find(control => control.id === id);
+  if (!control) throw new Error(`Unknown theme control: ${id}.`);
+  if (control.kind === "color" && !isColor(value)) colorError();
+  if (control.kind === "background" && typeof value === "string"
+      && !["none", "color"].includes(value) && !isColor(value)) colorError();
+  const next = structuredClone(state);
+  if (control.group === "about") {
+    const key = id.slice("about.".length);
+    if ((key === "author" || key === "description") && !value) delete next.manifest[key];
+    else next.manifest[key] = value;
+    if (key === "name") next.manifest.id = slug(value);
+  } else if (id === "widgets.tiles") {
+    writePath(next.config, "defaults.background", value ? "@token.surface" : null);
+    writePath(next.config, "defaults.borderColor", value ? builtIn.defaults.borderColor : null);
+    if (value && next.config.defaults.shadowColor === null) {
+      next.config.defaults.shadowColor = structuredClone(builtIn.defaults.shadowColor);
+    }
+  } else if (id === "bar.background") {
+    if (value === "none") {
+      const { target, key } = pathLocation(next.config, control.paths[0]);
+      delete target[key];
+    } else if (isGradient(value)) {
+      // The page keeps the original base gradient and passes it back for the base-gradient choice.
+      writePath(next.config, control.paths[0], value);
+    } else if (value === "color") {
+      writePath(next.config, control.paths[0], "@token.surface");
+    } else {
+      writePath(next.config, control.paths[0], editedColor(state.config, control.paths[0], value, appearance));
+    }
+  } else {
+    const path = control.paths[0];
+    writePath(next.config, path, control.kind === "color" ? editedColor(state.config, path, value, appearance) : value);
+  }
+  if (["color", "background"].includes(control.kind)) validateThemeColors(next.config);
+  return next;
+}
