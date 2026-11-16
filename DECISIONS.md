@@ -25,8 +25,29 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, a number that only goes down, allows no `unowned` reference ([#493]) and keeps private macOS API in `PrivateAPI.swift` ([#490]).
 - **Private macOS API is a maintainer's call** (2026-11-08, [#484], [#490]). Every call lives in `PrivateAPI.swift` and is looked up at runtime, never with `@_silgen_name`, so a macOS without one turns off only its feature.
 - **The configuration file is public API** (2026-10-26, [#337]). People's files, Store packages and themes depend on it, so changes are additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. StableBar 0.9.0 and later, and betas built after [#337], skip the properties they don't know, with a warning, once the configuration says a newer release wrote it. Earlier versions stop at the first one. The [guide](docs/configuration.md#files-from-a-newer-stablebar) has the exact rules. Migrations of an old form run in memory on every file the loader reads, so includes and packages stay as they are, and are saved into the main file and screen setups' own bars at launch. A migration of values people can still choose skips files pinned to a release ([#223]).
-- **Theme links carry only a theme** (2026-11-16, [#676]). A `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16 profiles and 372 JSON values across both files. Only theme configuration keys are accepted, with no screenshots, includes or extra files. At the root and in every profile, `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`, `style`, `notchWidth`, `notchSpacing`, `fillNotch` and `popupOffset`. Tokens and settings may supply values, never the `bar` object or its keys. This keeps links from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and version are reused only when both files match byte for byte; otherwise the author raises the version on the page. The app never renumbers a theme.
-- **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including resolved tokens/settings, nested styles and every profile, must be finite. Bounds follow Settings: height 16…100, inset 0…100, spacing 0…50, margin 0…40, border width 0…6, corner radius 0…40, font size 6…40, horizontal/vertical padding 0…40, edge padding 0…30, opacity and gradient locations 0…1, gradient angle 0…360, and popup offset 0…40 (its pending control in [#664]). With no Settings controls, notch width uses 0…1,000, notch spacing 0…100, style offsets −1,000…1,000 and other numeric style values 0…1,000. These refusals apply to links; folder themes keep the ordinary configuration rules.
+- **Theme links carry only a theme** (2026-11-16, [#676]). A
+  `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
+  most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
+  profiles and 372 JSON values across both files. Only theme configuration keys are accepted, with
+  no screenshots, includes or extra files. At the root and in every profile, `bar` must be a literal
+  object with only `height`, `margin`, `inset`, `spacing`, `background`, `style`, `notchWidth`,
+  `notchSpacing`, `fillNotch` and `popupOffset`. Inside `bar`, tokens and settings may supply
+  non-numeric values, never numbers, the `bar` object or its keys. This keeps links from changing
+  the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled theme IDs are
+  reserved, and a non-theme package's ID cannot be reused. An installed ID and version are reused
+  only when both files match byte for byte; otherwise the author raises the version on the page. The
+  app never renumbers a theme.
+- **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including
+  nested styles, states, gradients and every profile, must be a finite JSON number literal.
+  References that can supply numbers through tokens, combined profiles or setting choices are
+  refused. Bounds use the full property path: `bar.height` 16…100, `bar.inset` 0…100, `bar.spacing`
+  0…50, `bar.margin` 0…40 and `bar.popupOffset` 0…40 (its pending control in [#664]). Within
+  `bar.style` and its states, border width uses 0…6, corner radius 0…40, font size 6…40,
+  horizontal/vertical padding 0…40 and opacity 0…1. Gradients in `bar.background` and style
+  backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
+  Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
+  −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
+  padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 - **Blocking work stays off Swift's shared pool** (2026-11-13, [#618]). The pool has one thread per core, three on CI, and never replaces a blocked one. A slow copy or a lookup that can stall runs through `BlockingWork.run` on a GCD queue, and tests that block such work check that it does. [AGENTS.md](AGENTS.md#writing-tests) has the rule for tests.
 - **Comments are for the next reader** (2026-11-10, [#533]). A comment says what the code can't, such as why it must be so, in a line or two. How the bug was found and fixed goes in the issue, the pull request and the commit message. [AGENTS.md](AGENTS.md#writing-comments) has the rule.

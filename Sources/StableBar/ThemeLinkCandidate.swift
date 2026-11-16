@@ -29,7 +29,9 @@ final class ThemeLinkCandidate {
             guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
             if manifest["screenshot"] != nil { throw ThemeLinkError.extraFiles }
             var profileCount = 0
-            try Self.checkDocument(document, profileCount: &profileCount)
+            let numericReferences = Self.numericReferences(in: document, manifest: manifest)
+            try Self.checkDocument(document, profileCount: &profileCount,
+                                   numericReferences: numericReferences)
 
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             try link.manifest.write(to: directory.appending(path: "package.json"))
@@ -131,27 +133,105 @@ final class ThemeLinkCandidate {
     }
 
     private static let barProperties = savedThemeBarProperties.union(["popupOffset"])
-    private static let barNumberRanges: [String: ClosedRange<Double>] = [
-        "height": 16...100, "inset": 0...100, "spacing": 0...50, "margin": 0...40,
-        "borderWidth": 0...6, "cornerRadius": 0...40, "fontSize": 6...40,
-        "paddingHorizontal": 0...40, "paddingVertical": 0...40,
-        "paddingLeading": 0...30, "paddingTrailing": 0...30, "paddingTop": 0...30, "paddingBottom": 0...30,
-        "opacity": 0...1, "locations": 0...1, "angle": 0...360, "popupOffset": 0...40,
-        // Notch dimensions and other style numbers have no Settings control.
-        "notchWidth": 0...1_000, "notchSpacing": 0...100, "offsetX": -1_000...1_000, "offsetY": -1_000...1_000
-    ]
+    private static let barNumberRanges: [String: ClosedRange<Double>] = {
+        var ranges: [String: ClosedRange<Double>] = [
+            "bar.height": 16...100, "bar.inset": 0...100, "bar.spacing": 0...50,
+            "bar.margin": 0...40, "bar.style.borderWidth": 0...6, "bar.style.cornerRadius": 0...40,
+            "bar.style.fontSize": 6...40,
+            "bar.style.paddingHorizontal": 0...40, "bar.style.paddingVertical": 0...40,
+            "bar.style.opacity": 0...1, "bar.popupOffset": 0...40,
+            // Notch dimensions and other style numbers have no Settings control.
+            "bar.notchWidth": 0...1_000, "bar.notchSpacing": 0...100,
+            "bar.style.offsetX": -1_000...1_000, "bar.style.offsetY": -1_000...1_000
+        ]
+        for fill in ["bar.background", "bar.style.background", "bar.style.hoverBackground"] {
+            ranges["\(fill).gradient.angle"] = 0...360
+            ranges["\(fill).gradient.locations"] = 0...1
+        }
+        return ranges
+    }()
 
-    private static func checkBarNumbers(_ value: ConfigurationValue, path: [String]) throws {
+    private static func barNumberRange(at path: [String]) -> ClosedRange<Double> {
+        var path = path
+        if path.starts(with: ["bar", "style"]) {
+            while path.count > 3, path[2] == "states" { path.removeSubrange(2...3) }
+        }
+        return barNumberRanges[path.joined(separator: ".")] ?? 0...1_000
+    }
+
+    private static func checkBarNumbers(
+        _ value: ConfigurationValue, path: [String], numericReferences: Set<String>
+    ) throws {
         switch value {
         case let .number(number):
-            let range = barNumberRanges[path.last ?? ""] ?? 0...1_000
-            guard number.isFinite, range.contains(number) else { throw ThemeLinkError.barValue(path.joined(separator: ".")) }
+            guard number.isFinite, barNumberRange(at: path).contains(number) else {
+                throw ThemeLinkError.barValue(path.dropFirst().joined(separator: "."))
+            }
+        case let .string(reference) where numericReferences.contains(reference):
+            throw ThemeLinkError.indirectBar
         case let .object(values):
-            for (key, value) in values.sorted(by: { $0.key < $1.key }) { try checkBarNumbers(value, path: path + [key]) }
+            for (key, value) in values.sorted(by: { $0.key < $1.key }) {
+                try checkBarNumbers(value, path: path + [key], numericReferences: numericReferences)
+            }
         case let .array(values):
-            for value in values { try checkBarNumbers(value, path: path) }
+            for value in values {
+                try checkBarNumbers(value, path: path, numericReferences: numericReferences)
+            }
         default: break
         }
+    }
+
+    private static func numericReferences(
+        in document: [String: ConfigurationValue], manifest: [String: ConfigurationValue]
+    ) -> Set<String> {
+        var sources: [String: [ConfigurationValue]] = [:]
+        func collect(_ document: [String: ConfigurationValue]) {
+            if case let .object(tokens)? = document["tokens"] {
+                for (name, value) in tokens { sources["@token.\(name)", default: []].append(value) }
+            }
+            if case let .array(profiles)? = document["profiles"] {
+                for case let .object(profile) in profiles {
+                    if case let .object(configuration)? = profile["configuration"] {
+                        collect(configuration)
+                    }
+                }
+            }
+        }
+        collect(document)
+        var numeric: Set<String> = []
+        var freeStrings: Set<String> = []
+        if case let .object(settings)? = manifest["settings"] {
+            for (name, value) in settings {
+                guard case let .object(setting) = value else { continue }
+                let reference = "@setting.\(name)"
+                if setting["type"] == .string("number") { numeric.insert(reference) }
+                if let value = setting["default"] { sources[reference, default: []].append(value) }
+                if case let .array(choices)? = setting["choices"] {
+                    sources[reference, default: []] += choices
+                } else if setting["type"] == .string("string") {
+                    freeStrings.insert(reference)
+                }
+            }
+        }
+        func containsNumber(_ value: ConfigurationValue) -> Bool {
+            switch value {
+            case .number: true
+            case let .string(reference): numeric.contains(reference)
+            case let .object(values): values.values.contains(where: containsNumber)
+            case let .array(values): values.contains(where: containsNumber)
+            default: false
+            }
+        }
+        // Profiles combine and choices change later; follow every source without expanding it.
+        var previous: Set<String>
+        repeat {
+            previous = numeric
+            for (reference, values) in sources where values.contains(where: containsNumber) {
+                numeric.insert(reference)
+            }
+            if !numeric.isEmpty { numeric.formUnion(freeStrings) }
+        } while numeric != previous
+        return numeric
     }
 
     private static func checkInstalledID(_ id: String, packages: WidgetPackageStore) throws {
@@ -172,18 +252,24 @@ final class ThemeLinkCandidate {
         }
     }
 
-    private static func checkDocument(_ document: [String: ConfigurationValue], profileCount: inout Int) throws {
+    private static func checkDocument(
+        _ document: [String: ConfigurationValue], profileCount: inout Int,
+        numericReferences: Set<String> = []
+    ) throws {
         if document["includes"] != nil { throw ThemeLinkError.extraFiles }
         if let value = document["bar"] {
-            // References may supply allowed values, but profile and setting choices must never supply the bar's keys.
+            // Profiles and setting choices must never supply the bar's keys or numbers.
             guard case let .object(bar) = value else { throw ThemeLinkError.indirectBar }
             for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
-            try checkBarNumbers(value, path: [])
+            try checkBarNumbers(value, path: ["bar"], numericReferences: numericReferences)
         }
         let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []
         profileCount += profiles.count
         guard profileCount <= ThemeLink.maximumProfiles else { throw ThemeLinkError.tooManyProfiles }
-        for profile in profiles { try checkDocument(profile.configuration, profileCount: &profileCount) }
+        for profile in profiles {
+            try checkDocument(profile.configuration, profileCount: &profileCount,
+                              numericReferences: numericReferences)
+        }
     }
 
     private static func checkReferences(_ layer: ConfigurationLayer, budget: ConfigurationReferenceExpansionBudget) throws {

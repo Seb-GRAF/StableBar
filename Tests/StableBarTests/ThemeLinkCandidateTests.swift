@@ -578,7 +578,7 @@ struct ThemeLinkCandidateTests {
             try fixture.write(#"{"widgets":[]}"#, to: source.appending(path: "config.json"))
             _ = try fixture.packages.install(source)
         case .doublingTokens:
-            configuration["tokens"] = .object(doublingTokens(levels: 17))
+            configuration["tokens"] = .object(doublingTokens(levels: 17, value: .string("#123456")))
             configuration["bar"] = .object(["style": .object(["background": .string("@token.t17")])])
         case .profileExpansion, .nestedProfileExpansion:
             let colors = ConfigurationValue.array(Array(repeating: .string("#123456"), count: 100))
@@ -632,7 +632,7 @@ struct ThemeLinkCandidateTests {
             for level in 1...66 { tokens["t\(level)"] = .string("@token.t\(level - 1)") }
             configuration["tokens"] = .object(tokens)
         case .referenceOrigins:
-            var tokens: [String: ConfigurationValue] = ["t0": .number(1)]
+            var tokens: [String: ConfigurationValue] = ["t0": .string("#123456")]
             for level in 1...12 {
                 tokens["t\(level)"] = .object([
                     String(repeating: "A", count: 1_300) + String(level): .string("@token.t\(level - 1)"),
@@ -714,7 +714,7 @@ struct ThemeLinkCandidateTests {
         link.manifest = try configurationData(manifest)
         link.configuration = Data(##"""
         {"tokens":{"base":"#123456"},"defaults":{"fontSize":"@setting.size"},
-         "bar":{"height":"@setting.size","style":{"background":"@token.base"}},"profiles":[
+         "bar":{"height":19,"style":{"background":"@token.base"}},"profiles":[
           {"name":"Local tokens","configuration":{"tokens":{"color":"@token.base"},"defaults":{"foreground":"@token.color"}}}
         ]}
         """##.utf8)
@@ -924,21 +924,26 @@ struct ThemeLinkCandidateTests {
     @Test(arguments: [
         ("height", 16.0, 100.0), ("inset", 0, 100), ("spacing", 0, 50), ("margin", 0, 40),
         ("style.borderWidth", 0, 6), ("style.cornerRadius", 0, 40), ("style.fontSize", 6, 40),
-        ("style.paddingHorizontal", 0, 40), ("notchWidth", 0, 1_000), ("notchSpacing", 0, 100),
-        ("style.states.hover.borderWidth", 0, 6), ("style.offsetY", -1_000, 1_000)
-    ], [(false, false), (false, true), (true, false), (true, true)])
-    func barNumbersStayWithinTheirSettingsRanges(range: (String, Double, Double), placement: (Bool, Bool)) throws {
+        ("style.paddingHorizontal", 0, 40), ("style.paddingVertical", 0, 40),
+        ("notchWidth", 0, 1_000), ("notchSpacing", 0, 100),
+        ("style.states.hover.borderWidth", 0, 6), ("style.offsetY", -1_000, 1_000),
+        ("style.height", 0, 1_000), ("style.spacing", 0, 1_000),
+        ("style.paddingLeading", 0, 1_000), ("style.paddingTrailing", 0, 1_000),
+        ("style.paddingTop", 0, 1_000), ("style.paddingBottom", 0, 1_000),
+        ("style.states.hover.height", 0, 1_000), ("style.states.height.spacing", 0, 1_000),
+        ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1)
+    ], [false, true])
+    func barNumbersStayWithinTheirSettingsRanges(
+        range: (String, Double, Double), inProfile: Bool
+    ) throws {
         let (path, lower, upper) = range
-        let (inProfile, token) = placement
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         for number in [lower - 1, lower, upper, upper + 1] {
-            var value = token ? ConfigurationValue.string("@token.value") : .number(number)
-            for key in path.split(separator: ".").reversed() { value = .object([String(key): value]) }
+            let value = barValue(.number(number), at: path)
             var document: [String: ConfigurationValue] = ["bar": value]
-            if token { document["tokens"] = .object(["value": .number(number)]) }
             if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
             var link = try linkedTheme()
             link.configuration = try configurationData(document)
@@ -950,7 +955,7 @@ struct ThemeLinkCandidateTests {
                     let candidate = try ThemeLinkCandidate(link: link, store: store)
                     candidate.discard()
                 }
-                #expect(error.map(errorMessage) == "A theme link can't set the bar's \(path) outside what Settings allows.")
+                #expect(error as? ThemeLinkError == .barValue(path))
             }
         }
     }
@@ -972,7 +977,7 @@ struct ThemeLinkCandidateTests {
     }
 
     @Test(arguments: [false, true])
-    func numericSettingsMustRespectBarBounds(inProfile: Bool) throws {
+    func numericBarSettingsMustBeLiterals(inProfile: Bool) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
@@ -985,15 +990,150 @@ struct ThemeLinkCandidateTests {
             var document: [String: ConfigurationValue] = ["bar": .object(["height": .string("@setting.size")])]
             if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
             link.configuration = try configurationData(document)
-            if height == 30 {
+            #expect(throws: ThemeLinkError.indirectBar) {
                 let candidate = try ThemeLinkCandidate(link: link, store: store)
                 candidate.discard()
-            } else {
-                #expect(throws: ThemeLinkError.barValue("height")) {
-                    let candidate = try ThemeLinkCandidate(link: link, store: store)
-                    candidate.discard()
-                }
             }
+        }
+    }
+
+    @Test(arguments: [
+        "height", "style.fontSize", "style.states.hover.height", "style",
+        "style.states", "style.states.hover", "background", "style.background",
+        "style.states.hover.background.gradient.angle",
+        "style.states.hover.background.gradient.locations"
+    ], [false, true])
+    func numericBarTokensMustBeLiterals(path: String, inProfile: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let value: ConfigurationValue
+        switch path {
+        case "style": value = .object(["fontSize": .number(12)])
+        case "style.states": value = .object(["hover": .object(["fontSize": .number(12)])])
+        case "style.states.hover": value = .object(["fontSize": .number(12)])
+        case "background", "style.background": value = barValue(.number(90), at: "gradient.angle")
+        case "style.states.hover.background.gradient.locations":
+            value = .array([.number(0), .number(1)])
+        default: value = .number(path == "height" ? 30 : 12)
+        }
+        let bar = barValue(.string("@token.value"), at: path)
+        var document: [String: ConfigurationValue] = ["bar": bar]
+        if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+        document["tokens"] = .object(["value": value])
+        var link = try linkedTheme()
+        link.configuration = try configurationData(document)
+        #expect(throws: ThemeLinkError.indirectBar) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func combinedProfilesCannotSupplyNumericBarValues(firstIsUnconditional: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let firstWhen = firstIsUnconditional ? "" : #","when":{"appearance":"dark"}"#
+        var link = try linkedTheme()
+        link.configuration = Data(#"""
+        {"tokens":{"h":30},"profiles":[
+          {"name":"A"\#(firstWhen),"configuration":{"bar":{"height":"@token.h"}}},
+          {"name":"B","when":{"appearance":"dark"},"configuration":{"tokens":{"h":4000}}}
+        ]}
+        """#.utf8)
+        #expect(throws: ThemeLinkError.indirectBar) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: ["height", "style", "style.background"], [
+        (false, false), (false, true), (true, false), (true, true)
+    ])
+    func settingChoicesCannotSupplyNumericBarValues(
+        path: String, placement: (Bool, Bool)
+    ) throws {
+        let (inProfile, freeString) = placement
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        var manifest = try JSONDecoder().decode(
+            [String: ConfigurationValue].self, from: link.manifest)
+        var setting: [String: ConfigurationValue] = [
+            "type": .string("string"), "default": .string("@token.small")
+        ]
+        if !freeString {
+            setting["choices"] = .array([.string("@token.small"), .string("@token.big")])
+        }
+        manifest["settings"] = .object(["size": .object(setting)])
+        link.manifest = try configurationData(manifest)
+        let small: ConfigurationValue
+        let big: ConfigurationValue
+        switch path {
+        case "height":
+            small = .number(30)
+            big = .number(4_000)
+        case "style":
+            small = .object(["foreground": .string("#123456")])
+            big = .object(["height": .number(4_000)])
+        default:
+            small = .string("#123456")
+            big = barValue(.number(4_000), at: "gradient.angle")
+        }
+        var document: [String: ConfigurationValue] = [
+            "bar": barValue(.string("@setting.size"), at: path)
+        ]
+        if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+        document["tokens"] = .object(["small": small, "big": big])
+        link.configuration = try configurationData(document)
+        #expect(throws: ThemeLinkError.indirectBar) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func barStyleColorsMayStillUseReferences(inProfile: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        var document: [String: ConfigurationValue] = [
+            "bar": barValue(.string("@token.color"), at: "style.states.hover.foreground")
+        ]
+        if inProfile { document = ["profiles": .array([profile(document)])] }
+        document["tokens"] = .object(["color": .string("#123456")])
+        link.configuration = try configurationData(document)
+        let candidate = try ThemeLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configuration?.bar.style.states?["hover"]?.foreground == HexColor(0x123456ff))
+    }
+
+    @Test func combinedProfilesCannotHideNumbersInsideColorReferences() throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        link.configuration = Data(##"""
+        {"tokens":{"color":"#123456","alias":"@token.color"},"profiles":[
+          {"name":"A","when":{"appearance":"dark"},"configuration":{
+            "bar":{"style":{"background":"@token.alias"}}}},
+          {"name":"B","when":{"appearance":"dark"},"configuration":{"tokens":{
+            "color":{"gradient":{"colors":["#000000","#ffffff"],"angle":4000}}}}}
+        ]}
+        """##.utf8)
+        #expect(throws: ThemeLinkError.indirectBar) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
         }
     }
 
@@ -1009,14 +1149,16 @@ struct ThemeLinkCandidateTests {
             "bar": .object(["height": token ? .string("@token.size") : .number(4_000)]),
             "profiles": .array([profile(["bar": .object(["height": .number(30)])])])
         ])
-        #expect(throws: ThemeLinkError.barValue("height")) {
+        #expect(throws: token ? ThemeLinkError.indirectBar : .barValue("height")) {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             candidate.discard()
         }
     }
 
-    @Test(arguments: [false, true])
-    func gradientNumbersAreBoundedInsideBarValues(inProfile: Bool) throws {
+    @Test(arguments: [false, true], [
+        "background", "style.background", "style.hoverBackground", "style.states.hover.background"
+    ])
+    func gradientNumbersAreBoundedInsideBarValues(inProfile: Bool, path: String) throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
@@ -1028,12 +1170,13 @@ struct ThemeLinkCandidateTests {
                     "angle": .number(360), "locations": .array([.number(0), .number(1)])
                 ]
                 if invalid { gradient[key] = key == "angle" ? .number(361) : .array([.number(0), .number(1.1)]) }
-                var document: [String: ConfigurationValue] = ["bar": .object(["background": .object(["gradient": .object(gradient)])])]
+                let bar = barValue(.object(["gradient": .object(gradient)]), at: path)
+                var document: [String: ConfigurationValue] = ["bar": bar]
                 if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
                 var link = try linkedTheme()
                 link.configuration = try configurationData(document)
                 if invalid {
-                    #expect(throws: ThemeLinkError.barValue("background.gradient.\(key)")) {
+                    #expect(throws: ThemeLinkError.barValue("\(path).gradient.\(key)")) {
                         let candidate = try ThemeLinkCandidate(link: link, store: store)
                         candidate.discard()
                     }
@@ -1062,6 +1205,16 @@ struct ThemeLinkCandidateTests {
     private func linkedTheme() throws -> ThemeLink {
         ThemeLink(manifest: try Data(contentsOf: linkedThemeDirectory.appending(path: "package.json")),
                   configuration: try Data(contentsOf: linkedThemeDirectory.appending(path: "config.json")))
+    }
+
+    private func barValue(_ value: ConfigurationValue, at path: String) -> ConfigurationValue {
+        path.split(separator: ".").reversed().reduce(value) { value, key in
+            if key == "gradient", case var .object(gradient) = value {
+                gradient["colors"] = .array([.string("#000000"), .string("#ffffff")])
+                return .object([String(key): .object(gradient)])
+            }
+            return .object([String(key): value])
+        }
     }
 
     private func valueCount(_ data: Data) throws -> Int {
@@ -1110,8 +1263,10 @@ struct ThemeLinkCandidateTests {
         .object(["name": .string(name), "enabled": .bool(enabled), "configuration": .object(configuration)])
     }
 
-    private func doublingTokens(levels: Int) -> [String: ConfigurationValue] {
-        var tokens: [String: ConfigurationValue] = ["t0": .array([.number(1), .number(1)])]
+    private func doublingTokens(
+        levels: Int, value: ConfigurationValue = .number(1)
+    ) -> [String: ConfigurationValue] {
+        var tokens: [String: ConfigurationValue] = ["t0": .array([value, value])]
         for level in 1...levels {
             let reference = ConfigurationValue.string("@token.t\(level - 1)")
             tokens["t\(level)"] = .array([reference, reference])
