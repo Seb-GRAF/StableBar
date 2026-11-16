@@ -274,7 +274,7 @@ struct DiagnosticsView: View {
                             }
                         }
                         Button(refreshTitle(widget)) {
-                            script.refresh(ScriptEvent(sender: "manual"))
+                            store.refresh(widget, event: ScriptEvent(sender: "manual"))
                             notice = continuous(widget) ? "Connection restart requested." : "Refresh requested."
                         }
                         .disabled(script.diagnostics.suspended)
@@ -305,7 +305,7 @@ struct DiagnosticsView: View {
                 .padding(.bottom, 6)
             }
             if let name = widget.providerName {
-                let consumers = widgets.filter { $0.enabled && $0.providerName == name }
+                let consumers = widgets.filter { $0.enabled && store.configuration!.providerNames(readBy: $0).contains(name) }
                 if consumers.count > 1 {
                     Section {
                         Text("Refreshing, restarting or testing this source also affects \(consumers.map { names[$0.id]! }.joined(separator: ", ")).")

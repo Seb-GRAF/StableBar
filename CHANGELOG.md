@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.16.0](https://github.com/Seb-GRAF/StableBar/compare/v0.15.0...v0.16.0) (2026-11-16)
+
+### Features
+
+* add a built-in Disk widget with a popup to eject drives ([#680](https://github.com/Seb-GRAF/StableBar/issues/680)) by @M4n0x ([de1cb14](https://github.com/Seb-GRAF/StableBar/commit/de1cb146953d2c6b45b1b2b154ab44cbd8415ae2)), closes [#222](https://github.com/Seb-GRAF/StableBar/issues/222)
+* add a ring block and combine providers for compact status widgets ([#699](https://github.com/Seb-GRAF/StableBar/issues/699)) by @Seb-GRAF ([e05956c](https://github.com/Seb-GRAF/StableBar/commit/e05956c6a44c9d69c3c686367bd0821e506ef957))
+* delete a profile from Settings → Profiles ([#668](https://github.com/Seb-GRAF/StableBar/issues/668)) by @M4n0x ([c2d43d4](https://github.com/Seb-GRAF/StableBar/commit/c2d43d4ad51fd030d54c0ee5dd1a9614d62c75ae)), closes [#667](https://github.com/Seb-GRAF/StableBar/issues/667)
+* let a popup slider draw as a filled pill in the theme's colors ([#644](https://github.com/Seb-GRAF/StableBar/issues/644)) by @M4n0x ([f0d2f2c](https://github.com/Seb-GRAF/StableBar/commit/f0d2f2c6adc16a237871c5e7a2ac23ce050f8943)), closes [#642](https://github.com/Seb-GRAF/StableBar/issues/642) [#642](https://github.com/Seb-GRAF/StableBar/issues/642)
+* let a symbol fill, or take another variant, while a state is active ([#650](https://github.com/Seb-GRAF/StableBar/issues/650)) by @M4n0x ([b57ad13](https://github.com/Seb-GRAF/StableBar/commit/b57ad13613ca08ea7fde8add14604f8b36f4b109)), closes [#649](https://github.com/Seb-GRAF/StableBar/issues/649)
+* match profiles to the theme the bar is drawn with ([#697](https://github.com/Seb-GRAF/StableBar/issues/697)) by @M4n0x ([8e98afd](https://github.com/Seb-GRAF/StableBar/commit/8e98afdc98d7aae37c31442b271d3d1c01476036))
+* open themes from stablebar links to try and install them ([#683](https://github.com/Seb-GRAF/StableBar/issues/683)) by @M4n0x ([b45ecee](https://github.com/Seb-GRAF/StableBar/commit/b45ecee3080c8fd25c7f2642d6f1a225929bc2db))
+* share one padding, spacing and gap across popups ([#665](https://github.com/Seb-GRAF/StableBar/issues/665)) by @M4n0x ([65c6a73](https://github.com/Seb-GRAF/StableBar/commit/65c6a738a4311ce8e920d26672a683f77864392b)), closes [#664](https://github.com/Seb-GRAF/StableBar/issues/664)
+* show a menu bar item on the bar as macOS draws it ([#640](https://github.com/Seb-GRAF/StableBar/issues/640)) by @Jonathanm10 ([47a0286](https://github.com/Seb-GRAF/StableBar/commit/47a02864ea4671c315255f047c10f70b0f4229f8)), closes [#639](https://github.com/Seb-GRAF/StableBar/issues/639)
+* show Disk Utility's free space and offer a meter on the Disk widget ([#688](https://github.com/Seb-GRAF/StableBar/issues/688)) by @M4n0x ([6c3c16b](https://github.com/Seb-GRAF/StableBar/commit/6c3c16b3f5b8285dae8bc359fa4d4efe800245d6))
+* undo, find and keep quotes straight when editing as JSON ([#685](https://github.com/Seb-GRAF/StableBar/issues/685)) by @M4n0x ([4066c68](https://github.com/Seb-GRAF/StableBar/commit/4066c6873e84cac4ffa6ff2b1285f9d443367e62))
+
+### Bug Fixes
+
+* keep a workspace switch from redrawing every widget on the bar by @M4n0x ([e5a4ebb](https://github.com/Seb-GRAF/StableBar/commit/e5a4ebb134bbe91ee40a9cd41766d7677bb49cba)), closes [#670](https://github.com/Seb-GRAF/StableBar/issues/670)
+* keep popups under the bar when their shadow reaches into the menu bar by @M4n0x ([ba2edab](https://github.com/Seb-GRAF/StableBar/commit/ba2edab4cc3c6c0f527d650916d330cca05790d5)), closes [#643](https://github.com/Seb-GRAF/StableBar/issues/643)
+* keep the shadow margin of hover controls and trays from catching clicks on the bar ([#661](https://github.com/Seb-GRAF/StableBar/issues/661)) by @M4n0x ([8196fd9](https://github.com/Seb-GRAF/StableBar/commit/8196fd9838a9b1e5bce6c9c1395b913b094d8554)), closes [#660](https://github.com/Seb-GRAF/StableBar/issues/660)
+* keep the update popup on the newest release while an update waits ([#654](https://github.com/Seb-GRAF/StableBar/issues/654)) by @M4n0x ([8c78bd4](https://github.com/Seb-GRAF/StableBar/commit/8c78bd49bbcc060b10775a717b7265a013de2aac)), closes [#653](https://github.com/Seb-GRAF/StableBar/issues/653)
+* keep workspace numbers in step with the bar's light or dark appearance ([#672](https://github.com/Seb-GRAF/StableBar/issues/672)) by @M4n0x ([3866e2c](https://github.com/Seb-GRAF/StableBar/commit/3866e2c59ad2b1d26433e4dac6262f884e5665b2)), closes [#669](https://github.com/Seb-GRAF/StableBar/issues/669)
+* leave Option-key alternates out of app menus ([#655](https://github.com/Seb-GRAF/StableBar/issues/655)) by [@amar9elbeg](https://github.com/amar9elbeg) ([f65703c](https://github.com/Seb-GRAF/StableBar/commit/f65703c646a4bc4ef72b8860d22a9ec27cc97b67))
+* open menu bar items on the bar on right-click and keep Edit Widget… on the grid symbol ([#663](https://github.com/Seb-GRAF/StableBar/issues/663)) by @M4n0x ([10c09ef](https://github.com/Seb-GRAF/StableBar/commit/10c09ef764ca577e296fca883815595a8bb384d0)), closes [#662](https://github.com/Seb-GRAF/StableBar/issues/662) [#662](https://github.com/Seb-GRAF/StableBar/issues/662)
+* reopen an app when OmniWM can't focus a window it still lists by @Jonathanm10 ([5dda2f4](https://github.com/Seb-GRAF/StableBar/commit/5dda2f40ba857bb124d27df7ecb49f3f097f37bd)), closes [#651](https://github.com/Seb-GRAF/StableBar/issues/651)
+* show a dropped workspace connection in Settings while reconnecting ([#694](https://github.com/Seb-GRAF/StableBar/issues/694)) by @Jonathanm10 ([f630ba8](https://github.com/Seb-GRAF/StableBar/commit/f630ba844624048ca9f780c68ec6567eecfd8f68)), closes [#693](https://github.com/Seb-GRAF/StableBar/issues/693)
+* stop a closed Settings window from redrawing with every bar update ([#674](https://github.com/Seb-GRAF/StableBar/issues/674)) by @M4n0x ([77b5383](https://github.com/Seb-GRAF/StableBar/commit/77b538371f37553ba410ebc2a8605040ecca1756)), closes [#671](https://github.com/Seb-GRAF/StableBar/issues/671)
+* stop crafted tokens and settings from freezing StableBar while it loads ([#678](https://github.com/Seb-GRAF/StableBar/issues/678)) by @M4n0x ([435881d](https://github.com/Seb-GRAF/StableBar/commit/435881d1f3073afa540aff633b0b476139ac9b10))
+* warn only the part of a System monitor that is over its threshold ([#646](https://github.com/Seb-GRAF/StableBar/issues/646)) by @M4n0x ([388115b](https://github.com/Seb-GRAF/StableBar/commit/388115b910b31147a45f4eacc7a84533327a6650)), closes [#645](https://github.com/Seb-GRAF/StableBar/issues/645) [#645](https://github.com/Seb-GRAF/StableBar/issues/645)
+
+### Performance Improvements
+
+* tell whether a display has workspaces without filtering their windows by @M4n0x ([391b899](https://github.com/Seb-GRAF/StableBar/commit/391b899411b30cedd150a121db88883504084958))
+
 ## [0.15.0](https://github.com/Seb-GRAF/StableBar/compare/v0.14.0...v0.15.0) (2026-11-14)
 
 ### Features

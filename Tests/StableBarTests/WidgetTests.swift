@@ -361,6 +361,41 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(fixture.store.error == message)
 }
 
+@Test @MainActor func riftIsConnectedAgainOnceItReconnectsWithoutAnEvent() async throws {
+    let fixture = try omniwmFixture("""
+    case "$1 $2" in
+      "subscribe mach")
+        [ -f "${0%/*}/dropped" ] && exec /usr/bin/tail -f /dev/null
+        : > "${0%/*}/dropped" ;;
+      "query displays") echo '[]' ;;
+    esac
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    fixture.store.reconnectDelay = 0
+    fixture.store.log = { _ in }
+    fixture.store.configure(source: .rift, workspaces: true, mode: false)
+    for _ in 0..<500 where calls(fixture.log).filter({ $0.hasPrefix("subscribe") }).count < 2 {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    // A second subscribe means the first one dropped and the store reconnected.
+    try #require(calls(fixture.log).filter({ $0.hasPrefix("subscribe") }).count >= 2)
+    for _ in 0..<500 where fixture.store.connectionStatus != .connected { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(fixture.store.connectionStatus == .connected)
+}
+
+@Test @MainActor func aRiftRefreshWhileWaitingToReconnectKeepsTheDisconnect() async throws {
+    let fixture = try omniwmFixture("""
+    [ "$1 $2" = "query displays" ] && echo '[]'
+    """)
+    defer { fixture.store.stop(); try? FileManager.default.removeItem(at: fixture.directory) }
+    fixture.store.log = { _ in }
+    fixture.store.configure(source: .rift, workspaces: true, mode: false)
+    try await awaitCondition { fixture.store.connectionError != nil }
+    fixture.store.refreshForDisplayChange()
+    try await awaitCondition { fixture.store.error == nil }
+    #expect(fixture.store.connectionStatus == .failed("Rift disconnected. Reconnecting…"))
+}
+
 @Test @MainActor func riftShowsManagedDisplaysAndRunsCommandsOnTheClickedDisplay() async throws {
     let fixture = try omniwmFixture("""
     case "$1 $2 $4" in
