@@ -6,9 +6,6 @@ let configurationReferenceExpansionLimit = 100_000
 let configurationReferenceDepthLimit = 64
 
 final class ConfigurationReferenceExpansionBudget: Sendable {
-    // Trial and use create loaders across the history and package-client boundaries.
-    @TaskLocal static var current: ConfigurationReferenceExpansionBudget?
-
     let limit: Int
     let originPathByteLimit: Int?
     private let remaining: OSAllocatedUnfairLock<Int>
@@ -150,7 +147,7 @@ func substituteConfigurationReferences(_ value: ConfigurationValue, prefix: Stri
                                  path: &path, namesOnPath: &namesOnPath, remaining: &remaining,
                                  depth: max(0, path.count - 1))
     }
-    if let budget = budget ?? ConfigurationReferenceExpansionBudget.current { return try budget.withRemaining(resolve) }
+    if let budget { return try budget.withRemaining(resolve) }
     var remaining = configurationReferenceExpansionLimit
     return try resolve(&remaining)
 }

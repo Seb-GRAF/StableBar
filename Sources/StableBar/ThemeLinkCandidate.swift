@@ -8,9 +8,12 @@ final class ThemeLinkCandidate {
     let link: ThemeLink
     let choice: ThemeChoice
     let validationExpansionUnits: Int
-    var validationOriginPathBytes: Int { validationBudget.consumedOriginPathBytes }
-    private(set) var state: State = .ready
-    private let validationBudget: ConfigurationReferenceExpansionBudget
+    let validationOriginPathBytes: Int
+    private var candidateState: State = .ready
+    var state: State {
+        if candidateState == .trying, store?.themeTrialDirectory != choice.directory { return .ready }
+        return candidateState
+    }
     private weak var store: BarStore?
     private var discarded = false
     private var using = false
@@ -23,10 +26,10 @@ final class ThemeLinkCandidate {
         do {
             let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
             let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
+            guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
             if manifest["screenshot"] != nil { throw ThemeLinkError.extraFiles }
             var profileCount = 0
             try Self.checkDocument(document, profileCount: &profileCount)
-            guard manifest["kind"] == .string("theme") else { throw ThemeLinkError.notATheme }
 
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
             try link.manifest.write(to: directory.appending(path: "package.json"))
@@ -47,7 +50,7 @@ final class ThemeLinkCandidate {
             self.link = link
             choice = ThemeChoice(manifest: inspection.manifest, directory: directory, isBundled: false)
             validationExpansionUnits = budget.consumed
-            validationBudget = budget
+            validationOriginPathBytes = budget.consumedOriginPathBytes
             self.store = store
         } catch {
             try? FileManager.default.removeItem(at: directory)
@@ -61,52 +64,50 @@ final class ThemeLinkCandidate {
         store.barEditing.end()
         store.onEndThemeTrial?()
         do {
-            try store.tryTheme(choice, referenceExpansionBudget: validationBudget)
-            state = .trying
+            try store.tryTheme(choice)
+            candidateState = .trying
         } catch {
             store.endThemeTrial()
-            state = .failed(errorMessage(validationBudget.themeLinkError(error)))
+            candidateState = .failed(errorMessage(error))
         }
     }
 
     func cancelTrial() {
         guard state == .trying else { return }
         if store?.themeTrialDirectory == choice.directory { store?.endThemeTrial() }
-        state = .ready
+        candidateState = .ready
     }
 
     func use(on kind: ScreenKind? = nil, everyBar: Bool = false) async {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
-        await ConfigurationReferenceExpansionBudget.$current.withValue(validationBudget) {
-            do {
-                let client = store.packageStoreClient
-                let packages = client.packages
-                try Self.checkInstalledID(choice.manifest.id, packages: packages)
-                let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
-                let installed: ThemeChoice
-                if FileManager.default.fileExists(atPath: directory.path) {
-                    guard try sameFiles(at: directory) else {
-                        throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
-                    }
-                    installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
-                } else {
-                    let inspection = try await client.install(choice.directory, from: nil)
-                    installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
+        do {
+            let client = store.packageStoreClient
+            let packages = client.packages
+            try Self.checkInstalledID(choice.manifest.id, packages: packages)
+            let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
+            let installed: ThemeChoice
+            if FileManager.default.fileExists(atPath: directory.path) {
+                guard try sameFiles(at: directory) else {
+                    throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
                 }
-                guard !discarded else { return }
-                try store.applyTheme(installed, on: kind, everyBar: everyBar)
-                store.onEndThemeTrial?()
-                store.endThemeTrial()
-                state = .used
-                try? FileManager.default.removeItem(at: choice.directory)
-            } catch {
-                guard !discarded else { return }
-                store.onEndThemeTrial?()
-                store.endThemeTrial()
-                state = .failed(errorMessage(validationBudget.themeLinkError(error)))
+                installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
+            } else {
+                let inspection = try await client.install(choice.directory, from: nil)
+                installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
             }
+            guard !discarded else { return }
+            try store.applyTheme(installed, on: kind, everyBar: everyBar)
+            store.onEndThemeTrial?()
+            store.endThemeTrial()
+            candidateState = .used
+            try? FileManager.default.removeItem(at: choice.directory)
+        } catch {
+            guard !discarded else { return }
+            store.onEndThemeTrial?()
+            store.endThemeTrial()
+            candidateState = .failed(errorMessage(error))
         }
     }
 
@@ -130,6 +131,28 @@ final class ThemeLinkCandidate {
     }
 
     private static let barProperties = savedThemeBarProperties.union(["popupOffset"])
+    private static let barNumberRanges: [String: ClosedRange<Double>] = [
+        "height": 16...100, "inset": 0...100, "spacing": 0...50, "margin": 0...40,
+        "borderWidth": 0...6, "cornerRadius": 0...40, "fontSize": 6...40,
+        "paddingHorizontal": 0...40, "paddingVertical": 0...40,
+        "paddingLeading": 0...30, "paddingTrailing": 0...30, "paddingTop": 0...30, "paddingBottom": 0...30,
+        "opacity": 0...1, "locations": 0...1, "angle": 0...360, "popupOffset": 0...40,
+        // Notch dimensions and other style numbers have no Settings control.
+        "notchWidth": 0...1_000, "notchSpacing": 0...100, "offsetX": -1_000...1_000, "offsetY": -1_000...1_000
+    ]
+
+    private static func checkBarNumbers(_ value: ConfigurationValue, path: [String]) throws {
+        switch value {
+        case let .number(number):
+            let range = barNumberRanges[path.last ?? ""] ?? 0...1_000
+            guard number.isFinite, range.contains(number) else { throw ThemeLinkError.barValue(path.joined(separator: ".")) }
+        case let .object(values):
+            for (key, value) in values.sorted(by: { $0.key < $1.key }) { try checkBarNumbers(value, path: path + [key]) }
+        case let .array(values):
+            for value in values { try checkBarNumbers(value, path: path) }
+        default: break
+        }
+    }
 
     private static func checkInstalledID(_ id: String, packages: WidgetPackageStore) throws {
         let directory = packages.directory.appending(path: id)
@@ -155,6 +178,7 @@ final class ThemeLinkCandidate {
             // References may supply allowed values, but profile and setting choices must never supply the bar's keys.
             guard case let .object(bar) = value else { throw ThemeLinkError.indirectBar }
             for key in bar.keys.sorted() where !barProperties.contains(key) { throw ThemeLinkError.barProperty(key) }
+            try checkBarNumbers(value, path: [])
         }
         let profiles = try document["profiles"]?.decoded([ConfigurationProfile].self) ?? []
         profileCount += profiles.count

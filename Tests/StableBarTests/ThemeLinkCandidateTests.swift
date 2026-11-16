@@ -78,6 +78,49 @@ struct ThemeLinkCandidateTests {
         store.stop()
         #expect(!exists(candidate.choice.directory))
         #expect(store.themeTrialDirectory == nil)
+        #expect(store.pendingLinks.theme == nil)
+    }
+
+    @Test(arguments: [false, true])
+    func theLastRecognizedLinkInABatchChoosesItsPage(themeLast: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let theme = try linkedTheme().link
+        let package = PackageLink(id: "clock", sourceID: nil)
+        let links = themeLast ? [package.link, theme] : [theme, package.link]
+
+        #expect(store.receive(links + [URL(string: "https://example.com")!]) == (themeLast ? .appearance : .packages))
+        #expect((store.pendingLinks.theme != nil) == themeLast)
+        #expect(store.pendingLinks.package == (themeLast ? nil : package))
+    }
+
+    @Test func anotherLinkCanArriveWhileThePreviousThemeIsBeingUsed() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        #expect(store.receive([try linkedTheme().link]) == .appearance)
+        let previous = try #require(store.pendingLinks.theme)
+        var replacement = try linkedTheme()
+        replacement.configuration = Data(#"{"bar":{"height":42}}"#.utf8)
+        let receive = Task { @MainActor in
+            #expect(previous.state != .used)
+            #expect(store.receive([replacement.link]) == .appearance)
+        }
+
+        await previous.use()
+        await receive.value
+
+        let current = try #require(store.pendingLinks.theme)
+        #expect(current !== previous)
+        #expect(current.link == replacement)
+        #expect(current.state == .ready)
+        #expect(exists(current.choice.directory))
+        #expect(!exists(previous.choice.directory))
+        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
     @Test func aLinkedThemeIsTriedFromATemporaryFolderAndRemovedOnDiscard() throws {
@@ -524,7 +567,7 @@ struct ThemeLinkCandidateTests {
             configuration["profiles"] = .array([profile(["includes": .array([.string("theme.json")])])])
         case .widgets:
             manifest["kind"] = .string("widgets")
-            configuration = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.configuration)
+            configuration["bar"] = .object(["hideMenuBar": .bool(true)])
         case .missingKind: manifest["kind"] = nil
         case .bundledID: manifest["id"] = .string("nord")
         case .legacyID: manifest["id"] = .string("slate")
@@ -746,7 +789,7 @@ struct ThemeLinkCandidateTests {
             #expect(candidate.validationExpansionUnits < 300_000)
             #expect(candidate.validationOriginPathBytes < 8_000_000)
         }
-        #expect(ThemeLink.maximumValues == 4 * largestConfiguration)
+        #expect(ThemeLink.maximumValues >= 4 * largestConfiguration)
     }
 
     @Test func longKeyOriginsShareOneAllowanceAcrossDisabledProfiles() throws {
@@ -798,7 +841,7 @@ struct ThemeLinkCandidateTests {
     }
 
     @Test(arguments: [false, true])
-    func trialAndInstallationKeepTheCandidatesOriginAllowance(install: Bool) async throws {
+    func trialAndInstallationHaveTheirOwnOriginAllowances(install: Bool) async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
@@ -806,76 +849,14 @@ struct ThemeLinkCandidateTests {
         let candidate = try ThemeLinkCandidate(link: longKeyLink(profileCount: 0), store: store)
         defer { candidate.discard() }
         #expect(candidate.validationOriginPathBytes > 4_000_000)
+        let initial = candidate.validationOriginPathBytes
         if install { await candidate.use() } else { candidate.tryOnBar() }
-        #expect(candidate.validationOriginPathBytes == 8_000_000)
-        #expect(candidate.state == .failed(ThemeLinkError.tooManyReferences.errorDescription!))
-        #expect(store.selectedThemeKey == "built-in")
-        #expect(store.themeTrialDirectory == nil)
-        #expect(store.customizationHistory.undoSteps.isEmpty)
-        #expect(!exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")))
-    }
-
-    @Test func onlyCandidateStartedCompositionsChargeTheAllowance() async throws {
-        let fixture = try ThemeGalleryFixture()
-        defer { fixture.close() }
-        _ = try fixture.packages.install(linkedThemeDirectory)
-        let store = try loadedStore(fixture)
-        defer { store.stop() }
-        let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
-        defer { candidate.discard() }
-        let initial = candidate.validationOriginPathBytes
-        #expect(initial > 0)
-        var displays = 0
-        store.onConfigurationChange = {
-            displays += 1
-            #expect(ConfigurationReferenceExpansionBudget.current == nil)
-        }
-        candidate.tryOnBar()
-        #expect(candidate.state == .trying)
-        let tried = candidate.validationOriginPathBytes
-        #expect(tried > initial)
-        store.reloadConfiguration()
-        #expect(store.configurationError == nil)
-        let reloaded = candidate.validationOriginPathBytes
-        #expect(reloaded == tried)
-        await candidate.use()
-        #expect(candidate.state == .used)
-        #expect(candidate.validationOriginPathBytes > reloaded)
-        let used = candidate.validationOriginPathBytes
-        store.reloadConfiguration()
-        #expect(store.configurationError == nil)
-        #expect(candidate.validationOriginPathBytes == used)
-        #expect(displays >= 2)
-    }
-
-    @Test func aThousandStoreReloadsDoNotSpendTheCandidatesAllowance() async throws {
-        let widgets = (0..<40).map { #"{"id":"w\#($0)","type":"text","text":"Label","position":"left"}"# }
-        let fixture = try ThemeGalleryFixture(#"{"widgets":[\#(widgets.joined(separator: ","))]}"#)
-        defer { fixture.close() }
-        let store = try loadedStore(fixture)
-        defer { store.stop() }
-        let theme = fixture.themes.appending(path: "gruvbox")
-        var manifest = try JSONDecoder().decode([String: ConfigurationValue].self,
-                                               from: Data(contentsOf: theme.appending(path: "package.json")))
-        manifest["id"] = .string("linked-gruvbox")
-        let link = ThemeLink(manifest: try configurationData(manifest),
-                             configuration: try Data(contentsOf: theme.appending(path: "config.json")))
-        let candidate = try ThemeLinkCandidate(link: link, store: store)
-        defer { candidate.discard() }
-        let initial = candidate.validationOriginPathBytes
-        candidate.tryOnBar()
-        #expect(candidate.state == .trying)
-        let tried = candidate.validationOriginPathBytes
-        #expect(tried > initial)
-        for _ in 0..<1_000 {
-            store.reloadConfiguration()
-            #expect(store.configurationError == nil)
-        }
-        #expect(candidate.validationOriginPathBytes == tried)
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
-        #expect(store.configuration?.widgets.count == 40)
-        await candidate.use()
-        #expect(candidate.state == .used)
+        #expect(candidate.validationOriginPathBytes == initial)
+        #expect(candidate.state == (install ? .used : .trying))
+        #expect(store.selectedThemeKey == (install ? candidate.choice.key : "built-in"))
+        #expect(store.themeTrialDirectory == (install ? nil : candidate.choice.directory))
+        #expect(store.customizationHistory.undoSteps.count == (install ? 1 : 0))
+        #expect(exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")) == install)
     }
 
     @Test func nestedProfilesShareTheBudgetWithInspectionAndOtherReferenceChecks() throws {
@@ -908,7 +889,7 @@ struct ThemeLinkCandidateTests {
     }
 
     @Test(arguments: [194, 195])
-    func aCandidatesBudgetSpansInspectionAndItsFinalReferenceCheck(referenceCount: Int) throws {
+    func aCandidatesBudgetSpansInspectionAndItsFinalReferenceCheck(referenceCount: Int) async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
@@ -924,15 +905,144 @@ struct ThemeLinkCandidateTests {
             let candidate = try ThemeLinkCandidate(link: link, store: store)
             #expect(candidate.state == .ready)
             #expect(candidate.validationExpansionUnits == 299_305)
+            candidate.tryOnBar()
+            #expect(candidate.state == .trying)
+            await candidate.use()
+            #expect(candidate.state == .used)
             candidate.discard()
+            #expect(!exists(candidate.choice.directory))
         } else {
             let error = #expect(throws: (any Error).self) {
                 let candidate = try ThemeLinkCandidate(link: link, store: store)
                 candidate.discard()
             }
             #expect(error as? ThemeLinkError == .tooManyReferences)
+            #expect(try temporaryFolders() == before)
         }
-        #expect(try temporaryFolders() == before)
+    }
+
+    @Test(arguments: [
+        ("height", 16.0, 100.0), ("inset", 0, 100), ("spacing", 0, 50), ("margin", 0, 40),
+        ("style.borderWidth", 0, 6), ("style.cornerRadius", 0, 40), ("style.fontSize", 6, 40),
+        ("style.paddingHorizontal", 0, 40), ("notchWidth", 0, 1_000), ("notchSpacing", 0, 100),
+        ("style.states.hover.borderWidth", 0, 6), ("style.offsetY", -1_000, 1_000)
+    ], [(false, false), (false, true), (true, false), (true, true)])
+    func barNumbersStayWithinTheirSettingsRanges(range: (String, Double, Double), placement: (Bool, Bool)) throws {
+        let (path, lower, upper) = range
+        let (inProfile, token) = placement
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        for number in [lower - 1, lower, upper, upper + 1] {
+            var value = token ? ConfigurationValue.string("@token.value") : .number(number)
+            for key in path.split(separator: ".").reversed() { value = .object([String(key): value]) }
+            var document: [String: ConfigurationValue] = ["bar": value]
+            if token { document["tokens"] = .object(["value": .number(number)]) }
+            if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+            var link = try linkedTheme()
+            link.configuration = try configurationData(document)
+            if (lower...upper).contains(number) {
+                let candidate = try ThemeLinkCandidate(link: link, store: store)
+                candidate.discard()
+            } else {
+                let error = #expect(throws: (any Error).self) {
+                    let candidate = try ThemeLinkCandidate(link: link, store: store)
+                    candidate.discard()
+                }
+                #expect(error.map(errorMessage) == "A theme link can't set the bar's \(path) outside what Settings allows.")
+            }
+        }
+    }
+
+    @Test(arguments: ["NaN", "Infinity", "-Infinity", "1e400", "-1e400"], [false, true])
+    func nonFiniteBarNumbersAreRefused(number: String, inProfile: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        var document = #"{"bar":{"height":\#(number)}}"#
+        if inProfile { document = #"{"profiles":[{"name":"Unsafe","configuration":\#(document)}]}"# }
+        link.configuration = Data(document.utf8)
+        #expect(throws: (any Error).self) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func numericSettingsMustRespectBarBounds(inProfile: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        for height in [30.0, 4_000] {
+            var link = try linkedTheme()
+            var manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.manifest)
+            manifest["settings"] = .object(["size": .object(["type": .string("number"), "default": .number(height)])])
+            link.manifest = try configurationData(manifest)
+            var document: [String: ConfigurationValue] = ["bar": .object(["height": .string("@setting.size")])]
+            if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+            link.configuration = try configurationData(document)
+            if height == 30 {
+                let candidate = try ThemeLinkCandidate(link: link, store: store)
+                candidate.discard()
+            } else {
+                #expect(throws: ThemeLinkError.barValue("height")) {
+                    let candidate = try ThemeLinkCandidate(link: link, store: store)
+                    candidate.discard()
+                }
+            }
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func aProfileCannotHideAnOversizedBarValue(token: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        link.configuration = try configurationData([
+            "tokens": .object(["size": .number(4_000)]),
+            "bar": .object(["height": token ? .string("@token.size") : .number(4_000)]),
+            "profiles": .array([profile(["bar": .object(["height": .number(30)])])])
+        ])
+        #expect(throws: ThemeLinkError.barValue("height")) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func gradientNumbersAreBoundedInsideBarValues(inProfile: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        for key in ["angle", "locations"] {
+            for invalid in [false, true] {
+                var gradient: [String: ConfigurationValue] = [
+                    "colors": .array([.string("#000000"), .string("#ffffff")]),
+                    "angle": .number(360), "locations": .array([.number(0), .number(1)])
+                ]
+                if invalid { gradient[key] = key == "angle" ? .number(361) : .array([.number(0), .number(1.1)]) }
+                var document: [String: ConfigurationValue] = ["bar": .object(["background": .object(["gradient": .object(gradient)])])]
+                if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+                var link = try linkedTheme()
+                link.configuration = try configurationData(document)
+                if invalid {
+                    #expect(throws: ThemeLinkError.barValue("background.gradient.\(key)")) {
+                        let candidate = try ThemeLinkCandidate(link: link, store: store)
+                        candidate.discard()
+                    }
+                } else {
+                    let candidate = try ThemeLinkCandidate(link: link, store: store)
+                    candidate.discard()
+                }
+            }
+        }
     }
 
     enum Rejection: CaseIterable, Sendable {

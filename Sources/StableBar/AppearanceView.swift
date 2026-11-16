@@ -80,7 +80,7 @@ struct AppearanceView: View {
                     .padding(.bottom, 28)
                     .frame(maxWidth: .infinity)
                 }
-                .task {
+                .task(id: store.pendingLinks.theme?.choice.directory) {
                     fontFamilies = NSFontManager.shared.availableFontFamilies
                     await gallery.refresh()
                     await gallery.loadStore()
@@ -161,7 +161,7 @@ struct AppearanceView: View {
             .padding(.horizontal, 2)
             .id(SettingsSearchResult.theme.id)
             if let candidate = store.pendingLinks.theme, candidate.state != .used {
-                LinkedThemeCard(candidate: candidate, gallery: gallery, screen: screen, everyBar: editor.themeChangesEveryBar)
+                LinkedThemeCard(candidate: candidate, editor: editor, screen: screen, everyBar: editor.themeChangesEveryBar)
                     .id(candidate.choice.directory)
                     .padding(.bottom, 4)
             } else if let message = store.pendingLinks.themeError {
@@ -221,22 +221,9 @@ struct AppearanceView: View {
 
     @ViewBuilder private var overrides: some View {
         if let theme = gallery.overrideTheme {
-            let tint = gallery.overrides.values.isEmpty ? Color.secondary : SettingsPalette.warning
-            HStack(spacing: 10) {
-                Text(gallery.overrides.notice(theme: theme.title)).fontWeight(.semibold)
-                Text(gallery.overrides.summary).foregroundStyle(.secondary).help(gallery.overrides.summary)
-                Spacer(minLength: 0)
-                Button("Reset them") { editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar) }
-                    .controlSize(.small)
-                    .disabled(gallery.overrides.values.isEmpty)
-                    .accessibilityLabel("Reset your settings that override this theme")
+            ThemeOverrideNotice(overrides: gallery.overrides, name: theme.title) {
+                editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar)
             }
-            .lineLimit(1)
-            .font(.system(size: 12))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(tint.opacity(0.3)))
             .padding(.top, 12)
         }
     }

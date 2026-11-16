@@ -147,28 +147,17 @@ struct ThemeLinkTests {
 
         let extra = Data(#"{"x":0}"#.utf8)
         let overflow = ThemeLink(manifest: inManifest ? full : extra, configuration: inManifest ? extra : full)
-        var reachedDecoder = false
-        let error = #expect(throws: (any Error).self) {
-            try ThemeLink(url: overflow.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
-        }
-        #expect(error as? ThemeLinkError == .tooManySettings)
-        #expect(!reachedDecoder)
+
+        #expect(throws: ThemeLinkError.tooManySettings) { try ThemeLink(url: overflow.link) }
     }
 
     @Test func duplicateKeysCannotHideValuesFromTheRawLimit() {
         let entries = Array(repeating: #""x":{}"#, count: 371).joined(separator: ",")
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: Data(("{" + entries + "}").utf8))
-        var reachedDecoder = false
+
         #expect(throws: ThemeLinkError.tooManySettings) {
-            try ThemeLink(url: link.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
+            try ThemeLink(url: link.link)
         }
-        #expect(!reachedDecoder)
     }
 
     @Test(arguments: [false, true])
@@ -178,15 +167,9 @@ struct ThemeLinkTests {
         let link = ThemeLink(manifest: inManifest ? nested : empty, configuration: inManifest ? empty : nested)
         #expect(nested.count < 32_768)
         #expect(link.link.absoluteString.utf8.count < 65_536)
-        #expect(throws: ThemeLinkError.tooDeep) { try ThemeLink(url: link.link) }
-        var reachedDecoder = false
         #expect(throws: ThemeLinkError.tooDeep) {
-            try ThemeLink(url: link.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
+            try ThemeLink(url: link.link)
         }
-        #expect(!reachedDecoder)
     }
 
     @Test func depthCountsObjectsAndArraysButNotTheirStringContents() throws {
@@ -206,14 +189,10 @@ struct ThemeLinkTests {
         let empty = Data("{}".utf8)
         for inManifest in [false, true] {
             let link = ThemeLink(manifest: inManifest ? data : empty, configuration: inManifest ? empty : data)
-            var reachedDecoder = false
+
             #expect(throws: ThemeLinkError.damaged) {
-                try ThemeLink(url: link.link, decode: { _ in
-                    reachedDecoder = true
-                    return .object([:])
-                })
+                try ThemeLink(url: link.link)
             }
-            #expect(!reachedDecoder)
         }
     }
 
@@ -229,14 +208,10 @@ struct ThemeLinkTests {
     @Test func excessiveDepthIsRefusedBeforeTheJSONParsersDepthLimit() {
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: nestedObject(levels: 5_001))
         #expect(link.configuration.count < 32_768)
-        var reachedDecoder = false
+
         #expect(throws: ThemeLinkError.tooDeep) {
-            try ThemeLink(url: link.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
+            try ThemeLink(url: link.link)
         }
-        #expect(!reachedDecoder)
     }
 
     @Test(arguments: [false, true])
@@ -246,14 +221,10 @@ struct ThemeLinkTests {
         let ordered = deepValueFirst ? entries : entries.reversed().map { $0 }
         let configuration = Data(("{" + ordered.joined(separator: ",") + "}").utf8)
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: configuration)
-        var reachedDecoder = false
+
         #expect(throws: ThemeLinkError.tooDeep) {
-            try ThemeLink(url: link.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
+            try ThemeLink(url: link.link)
         }
-        #expect(!reachedDecoder)
     }
 
     @Test(arguments: [false, true])
@@ -263,14 +234,10 @@ struct ThemeLinkTests {
         let ordered = extraProfilesFirst ? entries : entries.reversed().map { $0 }
         let configuration = Data(("{" + ordered.joined(separator: ",") + "}").utf8)
         let link = ThemeLink(manifest: Data("{}".utf8), configuration: configuration)
-        var reachedDecoder = false
+
         #expect(throws: ThemeLinkError.tooManyProfiles) {
-            try ThemeLink(url: link.link, decode: { _ in
-                reachedDecoder = true
-                return .object([:])
-            })
+            try ThemeLink(url: link.link)
         }
-        #expect(!reachedDecoder)
     }
 
     @Test func themeLinksLimitProfilesBeforeConfigurationValueDecoding() throws {
@@ -278,14 +245,10 @@ struct ThemeLinkTests {
         #expect(try ThemeLink(url: sixteen.link) == sixteen)
         for count in [17, 1_900] {
             let link = ThemeLink(manifest: Data("{}".utf8), configuration: profiles(count: count))
-            var reachedDecoder = false
+
             #expect(throws: ThemeLinkError.tooManyProfiles) {
-                try ThemeLink(url: link.link, decode: { _ in
-                    reachedDecoder = true
-                    return .object([:])
-                })
+                try ThemeLink(url: link.link)
             }
-            #expect(!reachedDecoder)
         }
     }
 
@@ -305,15 +268,16 @@ struct ThemeLinkTests {
     }
 
     @Test(arguments: [
-        (ThemeLinkError.tooLong, "This theme link is too long. Download the theme as a zip from the page instead."),
+        (ThemeLinkError.tooLong, "This theme link is too long. Install the theme's folder instead, with Open a folder… in Packages."),
         (.unsupportedVersion("2"), "This theme link needs a newer version of StableBar."),
         (.damaged, "This theme link is damaged. Copy it again from the page."),
         (.tooLarge, "This theme is larger than a theme link can carry (32 KB)."),
         (.tooDeep, "This theme nests its settings more than 32 levels deep."),
         (.tooManyProfiles, "This theme has more than 16 profiles, which a theme link can't carry."),
-        (.tooManySettings, "This theme has more settings than a link can carry. Download it as a zip instead."),
+        (.tooManySettings, "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in Packages."),
         (.indirectBar, "A theme link must set the bar's settings directly, not through a token or setting."),
-        (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Download it as a zip instead."),
+        (.tooManyReferences, "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in Packages."),
+        (.barValue("height"), "A theme link can't set the bar's height outside what Settings allows."),
         (.idTaken("Harbour-Test"), "Another package already uses the ID Harbour-Test. Rename the theme on the page.")
     ])
     func themeLinkErrorsExplainWhatHappened(error: ThemeLinkError, message: String) {

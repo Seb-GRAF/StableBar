@@ -620,7 +620,7 @@ struct ConfigurationLoader: Sendable {
         layer.values = try substituteConfigurationReferences(.object(layer.values), prefix: "@token.", values: tokens,
                                                             budget: referenceExpansionBudget)
             .decoded([String: ConfigurationValue].self)
-        var originBudget = ConfigurationOriginPathBudget(shared: referenceExpansionBudget ?? ConfigurationReferenceExpansionBudget.current)
+        var originBudget = ConfigurationOriginPathBudget(shared: referenceExpansionBudget)
         let tokenSources = layer.origins
         try tokenOrigins(.object(beforeTokens), origins: tokenSources, tokens: tokens, into: &layer.origins, budget: &originBudget)
         templates = try layer.values["templates"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
@@ -837,7 +837,7 @@ struct ConfigurationLoader: Sendable {
                                                                               budget: referenceExpansionBudget)
                 } catch {
                     entry.settingValue = nil
-                    if referenceExpansionBudget != nil || ConfigurationReferenceExpansionBudget.current != nil,
+                    if referenceExpansionBudget != nil,
                        case .referenceExpansionTooLarge? = error as? ThemeConfigurationError {
                         throw error
                     }

@@ -16,11 +16,6 @@ struct ThemeLink: Equatable, Sendable {
     }
 
     init?(url: URL) throws(ThemeLinkError) {
-        try self.init(url: url, decode: { try JSONDecoder().decode(ConfigurationValue.self, from: $0) })
-    }
-
-    // The decoder is injectable so tests can verify that limits are checked before decoding.
-    init?(url: URL, decode: (Data) throws -> ConfigurationValue) throws(ThemeLinkError) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               components.scheme?.lowercased() == "stablebar", components.host?.lowercased() == "theme" else { return nil }
         guard url.absoluteString.utf8.count <= Self.maximumLength else { throw .tooLong }
@@ -42,12 +37,7 @@ struct ThemeLink: Equatable, Sendable {
               let configuration = Self.decoded(try item("config")) else { throw .damaged }
         let link = Self(manifest: manifest, configuration: configuration)
         try link.validateFiles()
-        do {
-            for file in [manifest, configuration] {
-                guard case .object = try decode(file) else { throw ThemeLinkError.damaged }
-            }
-        } catch { throw .damaged }
-        self.init(manifest: manifest, configuration: configuration)
+        self = link
     }
 
     func validateFiles() throws(ThemeLinkError) {
@@ -211,12 +201,12 @@ struct ThemeLink: Equatable, Sendable {
 enum ThemeLinkError: LocalizedError, Equatable {
     case tooLong, unsupportedVersion(String), damaged, tooLarge, tooDeep, tooManyProfiles
     case notATheme, needsReview, extraFiles, indirectBar, tooManyReferences, tooManySettings
-    case barProperty(String), reservedID(String), idTaken(String)
+    case barProperty(String), barValue(String), reservedID(String), idTaken(String)
     case versionTaken(id: String, version: String)
 
     var errorDescription: String? {
         switch self {
-        case .tooLong: "This theme link is too long. Download the theme as a zip from the page instead."
+        case .tooLong: "This theme link is too long. Install the theme's folder instead, with Open a folder… in Packages."
         case .unsupportedVersion: "This theme link needs a newer version of StableBar."
         case .damaged: "This theme link is damaged. Copy it again from the page."
         case .tooLarge: "This theme is larger than a theme link can carry (32 KB)."
@@ -227,10 +217,11 @@ enum ThemeLinkError: LocalizedError, Equatable {
         case .extraFiles: "This theme refers to other files, such as a screenshot or an include, which a theme link can't carry."
         case .indirectBar: "A theme link must set the bar's settings directly, not through a token or setting."
         case .tooManyReferences:
-            "This theme refers to its own values too many times to open from a link. Download it as a zip instead."
+            "This theme refers to its own values too many times to open from a link. Install the theme's folder instead, with Open a folder… in Packages."
         case .tooManySettings:
-            "This theme has more settings than a link can carry. Download it as a zip instead."
+            "This theme has more settings than a link can carry. Install the theme's folder instead, with Open a folder… in Packages."
         case let .barProperty(key): "A theme link can't set the bar's \(key)."
+        case let .barValue(key): "A theme link can't set the bar's \(key) outside what Settings allows."
         case let .reservedID(id): "\(id) is the ID of a theme that comes with StableBar. Rename the theme on the page."
         case let .idTaken(id): "Another package already uses the ID \(id). Rename the theme on the page."
         case let .versionTaken(id, version):

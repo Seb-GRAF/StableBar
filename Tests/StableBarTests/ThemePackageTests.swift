@@ -927,32 +927,6 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         #expect(try ordinary.finish(layer, context: ConfigurationContext()) == expected)
     }
 
-    @Test func aScopedBudgetReachesFreshLoadersAndLeavesTheirLaterLoadsAlone() throws {
-        let values: [String: ConfigurationValue] = [
-            "widgets": .array([]), "tokens": .object(["s": .number(1), "t": .string("@token.s")])
-        ]
-        let layer = ConfigurationLayer(values: values,
-                                       origins: configurationOrigins(.object(values), source: ConfigurationOrigin(file: "theme.json")))
-        let budget = ConfigurationReferenceExpansionBudget(limit: 300_000, originPathByteLimit: "tokens.t".utf8.count)
-        var loader = ConfigurationLoader()
-        try ConfigurationReferenceExpansionBudget.$current.withValue(budget) {
-            _ = try loader.finish(layer, context: ConfigurationContext())
-            #expect(budget.consumed > 0)
-            #expect(budget.consumedOriginPathBytes == budget.originPathByteLimit)
-            let error = #expect(throws: ThemeConfigurationError.self) {
-                try loader.finish(layer, context: ConfigurationContext())
-            }
-            guard case .referenceOriginsTooLarge("s")? = error else {
-                Issue.record("Expected the scoped origin-path limit, got \(String(describing: error))")
-                return
-            }
-        }
-        let consumed = budget.consumed
-        _ = try loader.finish(layer, context: ConfigurationContext())
-        #expect(budget.consumed == consumed)
-        #expect(ConfigurationReferenceExpansionBudget.current == nil)
-    }
-
     @Test func templateCopiesChargeTheirDestinationPathsToTheSharedAllowance() throws {
         let values: [String: ConfigurationValue] = [
             "tokens": .object(["s": .object(["fontSize": .number(12)])]),
@@ -974,8 +948,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     }
 }
 
-@Test(arguments: [false, true])
-func settingContributionsCannotSwallowTheSharedBudgetError(scoped: Bool) throws {
+@Test func settingContributionsCannotSwallowTheSharedBudgetError() throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     let source = fixture.directory.appending(path: "source")
@@ -986,11 +959,9 @@ func settingContributionsCannotSwallowTheSharedBudgetError(scoped: Bool) throws 
     var loader = ConfigurationLoader()
     _ = try loader.readPackage(at: source, manifest: manifest, settings: [:])
     let budget = ConfigurationReferenceExpansionBudget(limit: 1)
-    loader.referenceExpansionBudget = scoped ? nil : budget
+    loader.referenceExpansionBudget = budget
     let error = #expect(throws: ThemeConfigurationError.self) {
-        try ConfigurationReferenceExpansionBudget.$current.withValue(scoped ? budget : nil) {
-            try loader.readPackage(at: source, manifest: manifest, settings: [:])
-        }
+        try loader.readPackage(at: source, manifest: manifest, settings: [:])
     }
     guard case .referenceExpansionTooLarge? = error else {
         Issue.record("Expected setting contributions to propagate the shared limit, got \(String(describing: error))")

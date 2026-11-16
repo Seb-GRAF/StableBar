@@ -607,9 +607,7 @@ final class BarStore: NSObject {
         normalComposition = (next, configurationLoader)
         if let triedTheme {
             do {
-                let (preview, loader) = try ConfigurationReferenceExpansionBudget.$current.withValue(nil) {
-                    try configurationTryingTheme(triedTheme)
-                }
+                let (preview, loader) = try configurationTryingTheme(triedTheme)
                 display(preview, loader: loader)
             } catch { configurationError = errorMessage(error) }
         } else {
@@ -666,11 +664,11 @@ final class BarStore: NSObject {
         return normalComposition?.configuration ?? configuration
     }
 
-    func tryTheme(_ choice: ThemeChoice, referenceExpansionBudget: ConfigurationReferenceExpansionBudget? = nil) throws {
+    func tryTheme(_ choice: ThemeChoice) throws {
         guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
-        let (next, loader) = try configurationTryingTheme(choice, referenceExpansionBudget: referenceExpansionBudget)
+        let (next, loader) = try configurationTryingTheme(choice)
         triedTheme = choice
         display(next, loader: loader)
     }
@@ -681,21 +679,13 @@ final class BarStore: NSObject {
         if let normalComposition { display(normalComposition.configuration, loader: normalComposition.loader) }
     }
 
-    private func configurationTryingTheme(_ choice: ThemeChoice,
-                                         referenceExpansionBudget: ConfigurationReferenceExpansionBudget? = nil) throws -> (Configuration, ConfigurationLoader) {
-        let budget = referenceExpansionBudget ?? ConfigurationReferenceExpansionBudget.current
-        do {
-            return try ConfigurationReferenceExpansionBudget.$current.withValue(budget) {
-                var loader = newLoader()
-                let settings = try themeSettings(for: choice, in: configurationLoader.document)
-                let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
-                let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
-                                           context: context, previewTheme: layer)
-                return (next, loader)
-            }
-        } catch {
-            throw budget?.themeLinkError(error) ?? error
-        }
+    private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
+        var loader = newLoader()
+        let settings = try themeSettings(for: choice, in: configurationLoader.document)
+        let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
+        let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
+                                   context: context, previewTheme: layer)
+        return (next, loader)
     }
 
     /// Takes what `loader` read besides the configuration itself: profiles, packages and contributions.
@@ -725,13 +715,6 @@ final class BarStore: NSObject {
     }
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
-        // Background tasks started by display must not inherit a linked theme's validation allowance.
-        ConfigurationReferenceExpansionBudget.$current.withValue(nil) {
-            displayWithoutReferenceBudget(next, loader: loader)
-        }
-    }
-
-    private func displayWithoutReferenceBudget(_ next: Configuration, loader: ConfigurationLoader) {
         adopt(loader)
         if effectiveDocument == loader.document {
             origins = loader.origins
@@ -1253,6 +1236,7 @@ final class BarStore: NSObject {
         barEditing.end()
         endThemeTrial()
         pendingLinks.theme?.discard()
+        pendingLinks.theme = nil
         flushCustomization()
         managesConnections = false
         popup.closeAll()

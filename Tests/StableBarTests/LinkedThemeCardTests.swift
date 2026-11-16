@@ -1,5 +1,7 @@
 import Foundation
+import SwiftUI
 import Testing
+import Vision
 @testable import StableBar
 
 @MainActor
@@ -10,7 +12,8 @@ struct LinkedThemeCardTests {
         let store = try fixture.store()
         defer { store.stop() }
         store.reloadConfiguration()
-        let gallery = ThemeGallery(store: store)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
         await gallery.refresh()
         #expect(store.receive([try link().link]) == .appearance)
 
@@ -39,8 +42,8 @@ struct LinkedThemeCardTests {
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
 
-        let gallery = ThemeGallery(store: store)
-        let card = LinkedThemeCard(candidate: candidate, gallery: gallery, everyBar: true)
+        let editor = ConfigurationEditor(store: store)
+        let card = LinkedThemeCard(candidate: candidate, editor: editor, everyBar: true)
         await card.useTheme()
 
         #expect(candidate.state == .used)
@@ -66,7 +69,7 @@ struct LinkedThemeCardTests {
         store.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
-        let card = LinkedThemeCard(candidate: candidate, gallery: ThemeGallery(store: store), screen: .monitor, everyBar: false)
+        let card = LinkedThemeCard(candidate: candidate, editor: ConfigurationEditor(store: store), screen: .monitor, everyBar: false)
 
         await card.useTheme()
 
@@ -85,8 +88,10 @@ struct LinkedThemeCardTests {
         store.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
-        let gallery = ThemeGallery(store: store)
-        let card = LinkedThemeCard(candidate: candidate, gallery: gallery)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
+        await gallery.refresh()
+        let card = LinkedThemeCard(candidate: candidate, editor: editor)
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
 
@@ -101,6 +106,60 @@ struct LinkedThemeCardTests {
 
         #expect(store.pendingLinks.theme == nil)
         #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
+        #expect(gallery.overrideTheme?.key == store.selectedThemeKey)
+    }
+
+    @Test(arguments: [false, true])
+    func theCardTracksTrialsEndedElsewhere(tryThemes: Bool) async throws {
+        let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40},"widgets":[]}"#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        #expect(store.receive([try link().link]) == .appearance)
+        let candidate = try #require(store.pendingLinks.theme)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
+        await gallery.refresh()
+        candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        if tryThemes {
+            let trial = ThemeTrial(store: store)
+            trial.next()
+            #expect(store.themeTrialDirectory != candidate.choice.directory)
+            #expect(candidate.state == .ready)
+            candidate.cancelTrial()
+            #expect(store.themeTrialDirectory == trial.choice?.directory)
+            trial.cancel()
+        } else {
+            store.barEditing.begin()
+            #expect(store.themeTrialDirectory == nil)
+            #expect(candidate.state == .ready)
+        }
+        gallery.contextChanged()
+        #expect(gallery.linkedThemeIsActive)
+        #expect(gallery.overrideTheme?.directory == candidate.choice.directory)
+        #expect(store.pendingLinks.theme === candidate)
+    }
+
+    @Test func theErrorCardShowsItsMessage() async throws {
+        let message = "This theme link needs a newer version of StableBar."
+        let host = NSHostingView(rootView: LinkedThemeErrorCard(message: message, dismiss: {}).frame(width: 600))
+        host.frame = CGRect(x: 0, y: 0, width: 600, height: 100)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try #require(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 1200, pixelsHigh: 200,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .calibratedRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        bitmap.size = host.bounds.size
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        let image = try #require(bitmap.cgImage)
+        let text = try await BlockingWork.run {
+            let request = VNRecognizeTextRequest()
+            request.recognitionLanguages = ["en-US"]
+            try VNImageRequestHandler(cgImage: image).perform([request])
+            return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        }
+        #expect(text.contains(message))
     }
 
     @Test func aFailedCandidateLeavesTheOverrideNoticeWithTheSelectedTheme() async throws {
@@ -109,7 +168,8 @@ struct LinkedThemeCardTests {
         let store = try fixture.store()
         defer { store.stop() }
         store.reloadConfiguration()
-        let gallery = ThemeGallery(store: store)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
         await gallery.refresh()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
@@ -117,7 +177,7 @@ struct LinkedThemeCardTests {
         #expect(!gallery.overrides.values.isEmpty)
         try fixture.write("not a directory", to: fixture.packages.directory)
 
-        await LinkedThemeCard(candidate: candidate, gallery: gallery).useTheme()
+        await LinkedThemeCard(candidate: candidate, editor: editor).useTheme()
 
         guard case .failed = candidate.state else { Issue.record("Expected an installation error"); return }
         #expect(store.pendingLinks.theme === candidate)
@@ -131,7 +191,8 @@ struct LinkedThemeCardTests {
         defer { store.stop() }
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
-        let gallery = ThemeGallery(store: store)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
 
         await gallery.linkedPreview(for: candidate.choice)
         await gallery.refresh()
@@ -153,7 +214,8 @@ struct LinkedThemeCardTests {
         _ = try fixture.packages.install(source)
         let store = try fixture.store()
         defer { store.stop() }
-        let gallery = ThemeGallery(store: store)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
         await gallery.refresh()
         var changed = try link()
         changed.configuration = Data(#"{"bar":{"height":32}}"#.utf8)
@@ -167,6 +229,31 @@ struct LinkedThemeCardTests {
         #expect(gallery.previews[candidate.choice.key]?.light.bar.height == 30)
     }
 
+    @Test(arguments: [false, true])
+    func linkedPreviewErrorsBelongOnlyToThatCopy(linkedFails: Bool) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let source = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appending(path: "Fixtures/linked-theme")
+        _ = try fixture.packages.install(source)
+        let store = try fixture.store()
+        defer { store.stop() }
+        #expect(store.receive([try link().link]) == .appearance)
+        let candidate = try #require(store.pendingLinks.theme)
+        let directory = candidate.choice.directory
+        let gallery = ThemeGallery(store: store, loadPreview: { choice, themes in
+            if choice.key == "harbour-test/1.0.0", (choice.directory == directory) == linkedFails {
+                throw CommandFailure(message: "This copy's preview failed.")
+            }
+            return try ThemePreview(choice: choice, themesDirectory: themes)
+        })
+
+        await gallery.refresh()
+
+        #expect(gallery.error(for: candidate.choice.linkedPreviewKey) == (linkedFails ? "This copy's preview failed." : nil))
+        #expect(gallery.error(for: candidate.choice.key) == (linkedFails ? nil : "This copy's preview failed."))
+    }
+
     @Test func resettingLinkedOverridesKeepsOtherSettingsAndIsUndoable() async throws {
         let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40,"margin":12},"widgets":[]}"#)
         defer { fixture.close() }
@@ -174,12 +261,14 @@ struct LinkedThemeCardTests {
         let store = try fixture.store()
         defer { store.stop() }
         store.reloadConfiguration()
-        let gallery = ThemeGallery(store: store)
+        let editor = ConfigurationEditor(store: store)
+        let gallery = editor.gallery
         await gallery.refresh()
         #expect(store.receive([try link().link]) == .appearance)
         gallery.contextChanged()
 
-        gallery.resetOverrides(everyBar: false)
+        editor.change(gallery.overrides.resetEdit, everyBar: false)
+        gallery.contextChanged()
 
         #expect(try fixture.document()["bar"] == .object(["margin": .number(12)]))
         #expect(gallery.overrides.values.isEmpty)
@@ -196,7 +285,7 @@ struct LinkedThemeCardTests {
         defer { store.stop() }
         #expect(store.receive([try link().link]) == .appearance)
         let old = try #require(store.pendingLinks.theme)
-        let card = LinkedThemeCard(candidate: old, gallery: ThemeGallery(store: store))
+        let card = LinkedThemeCard(candidate: old, editor: ConfigurationEditor(store: store))
         #expect(store.receive([try link().link]) == .appearance)
         let current = try #require(store.pendingLinks.theme)
 

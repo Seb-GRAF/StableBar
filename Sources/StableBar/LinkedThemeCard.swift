@@ -2,11 +2,12 @@ import SwiftUI
 
 struct LinkedThemeCard: View {
     let candidate: ThemeLinkCandidate
-    let gallery: ThemeGallery
+    let editor: ConfigurationEditor
     var screen: ScreenKind? = nil
     var everyBar = false
     @State private var using = false
 
+    private var gallery: ThemeGallery { editor.gallery }
     private var name: String { candidate.choice.manifest.name }
     private var trying: Bool { candidate.state == .trying }
 
@@ -18,6 +19,7 @@ struct LinkedThemeCard: View {
                     .foregroundStyle(Color.accentColor)
                     .frame(width: 34, height: 34)
                     .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(name).font(.system(size: 14, weight: .semibold))
                     if let author = candidate.choice.manifest.author {
@@ -33,16 +35,19 @@ struct LinkedThemeCard: View {
                 Text(description)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             preview
             switch candidate.state {
             case .ready, .trying:
-                if let error = gallery.previewErrors[candidate.choice.linkedPreviewKey] ?? gallery.error(for: candidate.choice.key) {
+                if let error = gallery.error(for: candidate.choice.linkedPreviewKey) {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
-                LinkedThemeOverrideNotice(overrides: gallery.overrides, name: name) {
-                    gallery.resetOverrides(everyBar: everyBar)
+                if screen == nil {
+                    ThemeOverrideNotice(overrides: gallery.overrides, name: name) {
+                        editor.change(gallery.overrides.resetEdit, everyBar: everyBar)
+                    }
                 }
                 HStack(spacing: 10) {
                     Text(trying ? "Cancel returns to your saved theme." : "Your bar hasn’t changed.")
@@ -50,9 +55,13 @@ struct LinkedThemeCard: View {
                     Spacer(minLength: 10)
                     if trying {
                         Button("Cancel", action: cancelTrial)
-                        Button("Keep", action: use).buttonStyle(.borderedProminent)
+                            .accessibilityLabel("Cancel trying \(name)")
+                        Button("Keep", action: use)
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityLabel("Keep \(name)")
                     } else {
                         Button("Dismiss", action: dismiss).buttonStyle(.link)
+                            .accessibilityLabel("Dismiss \(name)")
                         Button("Try on Bar") {
                             candidate.tryOnBar()
                             gallery.contextChanged()
@@ -65,6 +74,7 @@ struct LinkedThemeCard: View {
                     Text(message).font(.callout).foregroundStyle(.red).textSelection(.enabled)
                     Spacer(minLength: 10)
                     Button("Dismiss", action: dismiss).buttonStyle(.link)
+                        .accessibilityLabel("Dismiss \(name)")
                 }
             case .used: EmptyView()
             }
@@ -72,7 +82,6 @@ struct LinkedThemeCard: View {
         .padding(14)
         .modifier(LinkedThemeCardStyle())
         .disabled(using)
-        .task(id: candidate.choice.directory) { await gallery.linkedPreview(for: candidate.choice) }
     }
 
     private var preview: some View {
@@ -136,7 +145,7 @@ private struct LinkedThemeCardStyle: ViewModifier {
     }
 }
 
-private struct LinkedThemeOverrideNotice: View {
+struct ThemeOverrideNotice: View {
     let overrides: ThemeOverrides
     let name: String
     let reset: () -> Void
@@ -146,7 +155,7 @@ private struct LinkedThemeOverrideNotice: View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(overrides.notice(theme: name)).fontWeight(.semibold)
-                if !overrides.values.isEmpty { Text(overrides.summary).foregroundStyle(.secondary) }
+                if !overrides.values.isEmpty { Text(overrides.summary).foregroundStyle(.secondary).help(overrides.summary) }
             }
             Spacer(minLength: 0)
             Button("Reset them", action: reset)

@@ -73,7 +73,8 @@ final class ThemeGallery {
     }
 
     func error(for key: String) -> String? {
-        errors[key] ?? previewErrors[key] ?? (key == overrideTheme?.key ? overrideError : nil)
+        let overrideKey = linkedThemeIsActive ? store.pendingLinks.theme?.choice.linkedPreviewKey : overrideTheme?.key
+        return errors[key] ?? previewErrors[key] ?? (key == overrideKey ? overrideError : nil)
     }
 
     func configurationChanged() {
@@ -157,12 +158,6 @@ final class ThemeGallery {
     func dismissLinkedTheme(_ candidate: ThemeLinkCandidate) {
         candidate.discard()
         if store.pendingLinks.theme === candidate { store.pendingLinks.theme = nil }
-        configurationChanged()
-    }
-
-    func resetOverrides(everyBar: Bool) {
-        do { try store.customizationHistory.change(overrides.resetEdit, everyBar: everyBar) }
-        catch { store.customizationHistory.error = errorMessage(error) }
         configurationChanged()
     }
 
