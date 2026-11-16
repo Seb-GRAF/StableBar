@@ -77,7 +77,7 @@ A `calendar` provider reads your calendars through EventKit. It asks for Calenda
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `calendars` | all | Calendar names to include, as shown in Calendar |
+| `calendars` | all | Calendar names to include, as shown in Calendar. **Calendars** in the widget's Content lists them to choose from |
 | `lookahead` | `24` | Hours ahead to look for the next meeting |
 | `soon` | `15` | Whole minutes before the start when the `soon` phase begins |
 | `now` | `5` | Whole minutes before the start when the `now` phase begins |

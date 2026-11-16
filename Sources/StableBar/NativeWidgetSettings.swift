@@ -53,6 +53,9 @@ struct NativeWidgetSettings: View {
                     number("Upcoming warning", "soon", Double(provider.soon), in: 1...120, unit: "min")
                     number("Starting warning", "now", Double(provider.now), in: 0...60, unit: "min")
                 }
+                SettingsGroup("Calendars") {
+                    CalendarsSettings(editor: editor, widget: widget, selected: provider.calendars)
+                }
             case "privacy":
                 SettingsGroup("Microphone & camera") {
                     SettingRow(title: "Hide when not in use", hint: "Shows only what is in use") {
