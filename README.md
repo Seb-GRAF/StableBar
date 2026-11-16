@@ -101,7 +101,14 @@ Change content, appearance and behavior in Settings, with undo and redo. Or edit
 
 ## Contributing
 
-<a href="https://github.com/Seb-GRAF/StableBar/graphs/contributors"><img src="https://contrib.rocks/image?repo=Seb-GRAF/StableBar" alt="Avatars of StableBar's contributors"></a>
+<p>
+  <a href="https://github.com/M4n0x"><img src="https://github.com/M4n0x.png?size=96" width="48" height="48" alt="M4n0x"></a>
+  <a href="https://github.com/Seb-GRAF"><img src="https://github.com/Seb-GRAF.png?size=96" width="48" height="48" alt="Seb-GRAF"></a>
+  <a href="https://github.com/Jonathanm10"><img src="https://github.com/Jonathanm10.png?size=96" width="48" height="48" alt="Jonathanm10"></a>
+  <a href="https://github.com/albucci"><img src="https://github.com/albucci.png?size=96" width="48" height="48" alt="albucci"></a>
+  <a href="https://github.com/amar9elbeg"><img src="https://github.com/amar9elbeg.png?size=96" width="48" height="48" alt="amar9elbeg"></a>
+  <a href="https://github.com/sailedev"><img src="https://github.com/sailedev.png?size=96" width="48" height="48" alt="sailedev"></a>
+</p>
 
 Built by [Sebastien Graf](https://github.com/Seb-GRAF) and [Steve Mendes Reis](https://github.com/M4n0x), with help from [everyone who has contributed](https://github.com/Seb-GRAF/StableBar/graphs/contributors).
 
