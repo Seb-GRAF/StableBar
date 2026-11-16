@@ -34,7 +34,7 @@ struct HelpQuestion: Identifiable {
     static let page = #"""
     # Questions
 
-    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page.
+    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page. If yours isn't here, ask it in [Q&A](https://github.com/Seb-GRAF/StableBar/discussions/categories/q-a).
 
     ## Why do windows go under the bar?
 
