@@ -250,17 +250,23 @@ extension PopupBlock {
     }
 }
 
+extension PopupConfiguration {
+    func usesModeStates(roles: [String: WidgetStyle]) -> Bool {
+        style.usesModeStates || ([layout] + views.values).contains { $0.usesModeStates(roles: roles) }
+    }
+}
+
 extension Configuration {
     var needsModeConnection: Bool {
         subscribedEvents.contains(BuiltInEvent.aerospaceMode.rawValue) || bar.style.usesModeStates
             || defaults.usesModeStates || popupDefaults.usesModeStates
-            || popups.values.contains { $0.style.usesModeStates || $0.layout.usesModeStates(roles: roles) }
+            || popups.values.contains { $0.usesModeStates(roles: roles) }
             || widgets.contains { widget in
                 widget.enabled && (widget.style.usesModeStates || roleStyle(widget.role).usesModeStates
                     || widget.layout?.usesModeStates(roles: roles) == true
                     || widget.hoverLayout?.usesModeStates(roles: roles) == true
                     || widget.overlay?.usesModeStates(roles: roles) == true || widget.workspace?.usesModeStates == true
-                    || widget.popup.map { $0.style.usesModeStates || $0.layout.usesModeStates(roles: roles) } == true)
+                    || widget.popup?.usesModeStates(roles: roles) == true)
             }
     }
 }

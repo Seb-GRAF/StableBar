@@ -1117,6 +1117,10 @@
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },
+        "view": {
+          "$ref": "#/definitions/string",
+          "description": "In a popup: the name of one of its views, which a click shows in place of its layout, under a back arrow."
+        },
         "lineWidth": {
           "$ref": "#/definitions/number"
         },
@@ -1274,6 +1278,13 @@
         },
         "layout": {
           "$ref": "#/definitions/block"
+        },
+        "views": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/block"
+          },
+          "description": "Layouts by name, each a block like layout, that a block's view shows in place of the layout. The back arrow or Escape returns to the layout."
         },
         "alignment": {
           "$ref": "#/definitions/alignment"

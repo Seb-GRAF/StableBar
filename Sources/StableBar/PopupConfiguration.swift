@@ -4,6 +4,8 @@ struct PopupConfiguration: Decodable, Sendable {
     let height: Double?
     let style: WidgetStyle
     let layout: PopupBlock
+    /// Layouts a block's `view` shows in place of `layout`, by name.
+    var views: [String: PopupBlock] = [:]
     var alignment: PopupAlignment = .center
     /// The gap below the bar; `bar.popupOffset` when nil.
     var offset: Double?
@@ -16,7 +18,7 @@ struct PopupConfiguration: Decodable, Sendable {
     var onClose: String?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case height, style, layout, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation, onOpen, onClose
+        case height, style, layout, views, alignment, offset, openOnHover, dismissOnAction, dismissOnControl, pinnable, animation, onOpen, onClose
     }
 
     init(height: Double? = nil, style: WidgetStyle, layout: PopupBlock) {
@@ -47,6 +49,10 @@ struct PopupConfiguration: Decodable, Sendable {
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         style = try values.decode(WidgetStyle.self, forKey: .style)
         layout = try values.decode(PopupBlock.self, forKey: .layout)
+        views = try values.decodeIfPresent([String: PopupBlock].self, forKey: .views) ?? views
+        if let name = ([layout] + views.values).flatMap(\.openedViews).first(where: { views[$0] == nil }) {
+            throw DecodingError.dataCorruptedError(forKey: .views, in: values, debugDescription: "Unknown view: \(name).")
+        }
         alignment = try values.decodeIfPresent(PopupAlignment.self, forKey: .alignment) ?? alignment
         offset = try values.decodeIfPresent(Double.self, forKey: .offset)
         openOnHover = try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? openOnHover
@@ -152,6 +158,8 @@ struct PopupBlock: Decodable, Sendable {
     let quitField: String?
     let openMenuBarItem: MenuBarItemReference?
     let selectInputSourceField: String?
+    /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
+    let view: String?
     let hideWhenEmpty: String?
     let scrollSpeed: Double?
     /// Whether a field block shows all of its text over as many lines as it needs, selectable, and an input block
@@ -181,7 +189,7 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
+        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
@@ -202,6 +210,7 @@ struct PopupBlock: Decodable, Sendable {
         quitField = nil
         openMenuBarItem = nil
         selectInputSourceField = nil
+        view = nil
         self.hideWhenEmpty = hideWhenEmpty
         scrollSpeed = nil
         wraps = false
@@ -245,6 +254,11 @@ struct PopupBlock: Decodable, Sendable {
         selectInputSourceField = try values.decodeIfPresent(String.self, forKey: .selectInputSourceField)
         if selectInputSourceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil {
             throw DecodingError.dataCorruptedError(forKey: .selectInputSourceField, in: values, debugDescription: "A block cannot combine selectInputSourceField with onClick, onClickField, open, openField, quitField or openMenuBarItem.")
+        }
+        view = try values.decodeIfPresent(String.self, forKey: .view)
+        if view != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem or selectInputSourceField.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)
@@ -406,6 +420,18 @@ struct PopupBlock: Decodable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .shimmer, in: values, debugDescription: "shimmer applies to text and field blocks.")
             }
         }
+    }
+}
+
+extension PopupBlock {
+    /// The views this block and the blocks inside it open.
+    var openedViews: [String] {
+        let inside: [PopupBlock] = switch content {
+        case let .row(children), let .column(children), let .ring(_, _, _, children): children
+        case let .list(_, row, _), let .search(_, _, _, row): [row]
+        default: []
+        }
+        return (view.map { [$0] } ?? []) + inside.flatMap(\.openedViews)
     }
 }
 

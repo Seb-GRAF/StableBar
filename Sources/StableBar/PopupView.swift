@@ -6,12 +6,13 @@ struct PopupView: View {
     let store: BarStore
     let widget: WidgetConfiguration
     var backgrounds: PopupBackgrounds?
+    var navigation = PopupNavigation()
     @Environment(\.screenKind) private var screenKind
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var mode: ModePresentation {
         let roles = store.configuration?.look(on: screenKind).roles ?? [:]
-        guard style.usesModeStates || popup.layout.usesModeStates(roles: roles)
+        guard style.usesModeStates || popup.usesModeStates(roles: roles)
             || store.scripts[widget.id]?.output.styles?.values.contains(where: \.usesModeStates) == true else { return ModePresentation() }
         return store.modePresentation(on: screenKind)
     }
@@ -29,56 +30,68 @@ struct PopupView: View {
         let error = script?.error ?? store.actionErrors[widget.id]
         let fillsHeight = store.popup.pins.resized.contains(widget.id)
         let content = VStack(alignment: .leading, spacing: appearance.spacing) {
-                PopupBlockView(block: popup.layout, inheritedStyle: style, fields: fields,
-                               context: BlockContext(lists: lists, samples: samples, menu: menu,
-                                                     values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
-                                                     styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
-                                                     roles: store.configuration?.look(on: screenKind).roles ?? [:], open: { target in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    target.open()
-                }, quit: { pid in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    confirmQuit(pid)
-                }, eject: { path, scope in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    try await VolumeEjector.live.eject(path, scope)
-                }, stateAccents: popupStateAccents(style, mode: mode),
-                   dataState: dataState(script?.output, rules: widget.rules), pressMenuBarItem: { reference in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    store.appMenu.press(reference)
-                }, selectInputSource: { id in
-                    guard store.barEditing.allowsWidgetActions else { return }
-                    if popup.dismissOnAction { store.popup.close() }
-                    store.selectInputSource(id, widget: widget)
-                }, openSubmenu: { [screenKind] element, row in
-                    store.appMenu.openSubmenu(element, beside: row) { submenu in
-                        PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
+                // The layout always slides in from and out to the leading edge and a view the trailing one, so going in and
+                // coming back both read right, whatever each was last drawn with.
+                ZStack(alignment: .topLeading) {
+                    VStack(alignment: .leading, spacing: appearance.spacing) {
+                        if navigation.view != nil {
+                            CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground) { navigation.view = nil }
+                        }
+                        PopupBlockView(block: navigation.view.map { popup.views[$0]! } ?? popup.layout, inheritedStyle: style, fields: fields,
+                                       context: BlockContext(lists: lists, samples: samples, menu: menu,
+                                                             values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
+                                                             styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
+                                                             roles: store.configuration?.look(on: screenKind).roles ?? [:], open: { target in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            target.open()
+                        }, openView: { navigation.view = $0 }, quit: { pid in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            confirmQuit(pid)
+                        }, eject: { path, scope in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            try await VolumeEjector.live.eject(path, scope)
+                        }, stateAccents: popupStateAccents(style, mode: mode),
+                           dataState: dataState(script?.output, rules: widget.rules), pressMenuBarItem: { reference in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.appMenu.press(reference)
+                        }, selectInputSource: { id in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.selectInputSource(id, widget: widget)
+                        }, openSubmenu: { [screenKind] element, row in
+                            store.appMenu.openSubmenu(element, beside: row) { submenu in
+                                PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
+                            }
+                        }, pressMenuItem: { entry in
+                            store.popup.close()
+                            store.appMenu.press(entry)
+                        }, openMenuBarItem: { [screenKind] element, anchor in
+                            guard let element else { return store.innerPopup.close() }
+                            let look = store.configuration!.onScreen(screenKind)
+                            store.innerPopup.toggle(store.appMenu.popup(forMenuBarItem: element), widget: widget,
+                                                    defaults: look.popupDefaults.popupStyle(over: look.defaults), store: store, anchor: anchor)
+                        }, hoverMenuBarItem: { [screenKind] title, anchor, inside in
+                            let look = store.configuration!.onScreen(screenKind)
+                            store.innerPopup.hover(inside, store: store, anchor: anchor) {
+                                store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
+                                                             store: store, anchor: anchor)
+                            }
+                        }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
+                            store.popup.close()
+                            store.move(.item(item), to: placement, before: nil, in: widget)
+                        }, states: states, update: store.update) { action, environment in
+                            if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
+                            store.runAction(action, widget: widget,
+                                            event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
+                        }, topLevel: true)
                     }
-                }, pressMenuItem: { entry in
-                    store.popup.close()
-                    store.appMenu.press(entry)
-                }, openMenuBarItem: { [screenKind] element, anchor in
-                    guard let element else { return store.innerPopup.close() }
-                    let look = store.configuration!.onScreen(screenKind)
-                    store.innerPopup.toggle(store.appMenu.popup(forMenuBarItem: element), widget: widget,
-                                            defaults: look.popupDefaults.popupStyle(over: look.defaults), store: store, anchor: anchor)
-                }, hoverMenuBarItem: { [screenKind] title, anchor, inside in
-                    let look = store.configuration!.onScreen(screenKind)
-                    store.innerPopup.hover(inside, store: store, anchor: anchor) {
-                        store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
-                                                     store: store, anchor: anchor)
-                    }
-                }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
-                    store.popup.close()
-                    store.move(.item(item), to: placement, before: nil, in: widget)
-                }, states: states, update: store.update) { action, environment in
-                    if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
-                    store.runAction(action, widget: widget,
-                                    event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
-                }, topLevel: true)
+                    .id(navigation.view)
+                    .transition(reduceMotion ? .opacity : .move(edge: navigation.view == nil ? .leading : .trailing).combined(with: .opacity))
+                }
+                .clipped()
                 if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
                 }
@@ -93,6 +106,7 @@ struct PopupView: View {
             .environment(\.popupFillsHeight, fillsHeight)
             // With an animation of its own, a popup also animates what its data changes, as it animates its height.
             .animation(reduceMotion ? nil : popup.animation?.value, value: script?.outputNumber)
+            .animation((popup.animation ?? WidgetAnimation()).value, value: navigation.view)
         Group {
             // A popup resized by hand gives its height to the fields that scroll instead of scrolling as a whole.
             if fillsHeight {
@@ -170,6 +184,8 @@ struct BlockContext {
     var fillsWidth = true
     /// Opens an `open` or `openField` block's target; a popup's also closes the popup when its actions dismiss it.
     let open: (OpenTarget) -> Void
+    /// Shows the popup's view of this name in place of its layout.
+    var openView: (String) -> Void = { _ in }
     /// Asks to quit a `quitField` block's process; a popup's also closes the popup when its actions dismiss it.
     var quit: (pid_t) -> Void = { _ in }
     /// Ejects a disk block's volume; unlike the other actions it leaves the popup open and reports a refusal.
@@ -351,6 +367,12 @@ struct PopupBlockView: View {
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
                 Button { context.selectInputSource(id) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
+            } else if let view = block.view {
+                Button { context.openView(view) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
