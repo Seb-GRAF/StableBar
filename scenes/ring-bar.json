@@ -38,7 +38,16 @@
           "gap": 90,
           "lineWidth": 1.5,
           "style": { "iconSize": 20, "accent": "#0a84ff", "background": "#8e8e9340" },
-          "children": [{ "type": "symbol", "name": "speaker.wave.2.fill", "style": { "iconSize": 8 } }]
+          "children": [
+            { "type": "symbol", "name": "speaker.wave.2.fill", "style": { "iconSize": 8 } },
+            {
+              "type": "progress",
+              "source": "volume",
+              "height": 2,
+              "segments": 4,
+              "style": { "width": 11, "spacing": 1, "cornerRadius": 1, "offsetY": 8.5 }
+            }
+          ]
         }
       },
       { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }

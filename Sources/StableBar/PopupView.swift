@@ -580,7 +580,12 @@ struct PopupBlockView: View {
                 .frame(width: style.box.width ?? 52, height: style.box.height ?? 52)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))
-        case let .progress(source, height):
+        case let .progress(source, height, segments?):
+            ProgressSegments(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, count: segments, color: appearance.accent,
+                             track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), spacing: style.box.spacing ?? 2,
+                             cornerRadius: appearance.cornerRadius)
+                .frame(height: height)
+        case let .progress(source, height, nil):
             ProgressRule(value: context.values[source] ?? Double(fields[source] ?? "") ?? 0, target: context.targets[source],
                          animation: block.animation ?? WidgetAnimation(), color: appearance.accent,
                          track: style.text.background?.shapeStyle ?? AnyShapeStyle(Color.clear), cornerRadius: appearance.cornerRadius)
@@ -1394,6 +1399,33 @@ struct ProgressRing: View {
         .accessibilityLabel("Progress")
         .accessibilityValue("\(Int(fraction * 100)) percent")
     }
+}
+
+struct ProgressSegments: View {
+    let value: Double
+    let count: Int
+    let color: Color
+    let track: AnyShapeStyle
+    let spacing: Double
+    let cornerRadius: Double
+
+    var body: some View {
+        let lit = litSegments(value, of: count)
+        HStack(spacing: spacing) {
+            ForEach(0..<count, id: \.self) { index in
+                RoundedRectangle(cornerRadius: cornerRadius).fill(index < lit ? AnyShapeStyle(color) : track)
+            }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int(progressFraction(value) * 100)) percent")
+    }
+}
+
+/// `ceil(value × count)`, compared piece by piece so that 0.3 of 10 lights 3 pieces: 0.3 × 10 is just over 3 in floating point.
+func litSegments(_ value: Double, of count: Int) -> Int {
+    let fraction = progressFraction(value)
+    return (0..<count).count { fraction > Double($0) / Double(count) }
 }
 
 func progressFraction(_ value: Double) -> Double {

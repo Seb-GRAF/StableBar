@@ -117,7 +117,8 @@ indirect enum PopupContent: Sendable {
     case divider
     case image(path: String, source: String?, fit: ImageFit)
     case symbol(name: String, source: String?)
-    case progress(source: String, height: Double)
+    /// A rule filled to `values[source]` or `fields[source]`, or with `segments`, that many equal pieces lit up to it.
+    case progress(source: String, height: Double, segments: Int?)
     /// A ring filled clockwise from the top to `values[source]` or `fields[source]`, with `children` centered in it. A
     /// `gap` leaves that many degrees open at the bottom, and the fill starts at the gap's left end.
     case ring(source: String, lineWidth: Double, gap: Double, children: [PopupBlock])
@@ -182,7 +183,7 @@ struct PopupBlock: Decodable, Sendable {
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
-        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap
+        case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments
     }
 
     init(content: PopupContent, role: PresentationRole? = nil, style: WidgetStyle = WidgetStyle(), hideWhenEmpty: String? = nil, monospacedDigits: Bool = true,
@@ -346,8 +347,12 @@ struct PopupBlock: Decodable, Sendable {
             let source = try values.decodeIfPresent(String.self, forKey: .source)
             content = .symbol(name: source == nil ? try values.decode(String.self, forKey: .name) : "", source: source)
         case "progress":
+            let segments = try values.decodeIfPresent(Int.self, forKey: .segments)
+            if let segments, segments < 1 {
+                throw DecodingError.dataCorruptedError(forKey: .segments, in: values, debugDescription: "A progress block needs at least one segment.")
+            }
             content = .progress(source: try values.decode(String.self, forKey: .source),
-                                height: try values.decode(Double.self, forKey: .height))
+                                height: try values.decode(Double.self, forKey: .height), segments: segments)
         case "ring":
             content = .ring(source: try values.decode(String.self, forKey: .source),
                             lineWidth: try values.decodeIfPresent(Double.self, forKey: .lineWidth) ?? 2,

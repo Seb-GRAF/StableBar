@@ -61,7 +61,7 @@ struct PartStates: Equatable, Sendable {
         switch block.content {
         case let .row(children), let .column(children): children.reduce(into: []) { $0.formUnion(metrics(in: $1)) }
         case let .ring(source, _, _, children): children.reduce(into: metric(of: source)) { $0.formUnion(metrics(in: $1)) }
-        case let .field(key), let .progress(key, _), let .battery(key), let .list(key, _, _): metric(of: key)
+        case let .field(key), let .progress(key, _, _), let .battery(key), let .list(key, _, _): metric(of: key)
         case let .graph(_, source, _): metric(of: source ?? "value")
         case let .symbol(name, source): source.map(metric(of:)) ?? symbols[name].map { [$0] } ?? []
         case let .equalizer(source, _): source.map(metric(of:)) ?? []
