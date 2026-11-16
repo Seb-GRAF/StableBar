@@ -103,7 +103,7 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
-/// The bar rejects a duration it can't wait for.
+/// `--popup --close` without an ID closes pinned popups too, and the bar rejects a duration it can't wait for.
 @Test @MainActor func popupCommandsOpenAndCloseTheWidgetsPopupOnTheActiveDisplay() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"agenda-command","type":"text","text":"Agenda","position":"right",
@@ -129,6 +129,11 @@ private var presentationRepository: URL {
         #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .openPopup, id: "agenda-command", duration: duration)) }
     }
     #expect(!popup.isOpen)
+    _ = try store.handle(RuntimeRequest(action: .openPopup, id: "agenda-command"))
+    popup.pin()
+    #expect(popup.pins.ids == ["agenda-command"])
+    _ = try store.handle(RuntimeRequest(action: .closePopup))
+    #expect(popup.pins.ids.isEmpty)
 }
 
 /// VoiceOver reads each widget's name and what it shows, and a widget's popup as the open state of a button that

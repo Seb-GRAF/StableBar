@@ -1036,7 +1036,7 @@ final class BarStore: NSObject {
             }
             refresh(configuration!.widgets.first { $0.id == id }!, event: ScriptEvent(sender: "manual"))
         case .closePopup where request.id == nil:
-            popup.close()
+            popup.closeAll()
         case .popup, .openPopup, .closePopup:
             guard let id = request.id, configuration?.widgets.contains(where: { $0.id == id }) == true else {
                 throw CommandFailure(message: "Unknown widget: \(request.id ?? "").")
