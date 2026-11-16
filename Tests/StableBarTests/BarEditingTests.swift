@@ -500,7 +500,7 @@ final class BarEditingTests: XCTestCase {
                 store.configurationError = error
                 delegate.menuWillOpen(menu)
                 var expected = ["StableBar", "separator"]
-                if hasBar { expected += ["Edit Bar in Place", "Try Themes…", "separator"] }
+                if hasBar { expected += ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "separator"] }
                 expected += ["Getting Started…", "Help…", "Send Feedback…"]
                 if let error { expected += ["separator", error] }
                 expected += ["separator", "Settings…", "Quit StableBar"]

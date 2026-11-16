@@ -514,6 +514,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 addItem(store.barEditing.menuTitle, icon: store.barEditing.menuIcon, action: #selector(editBar), to: menu)
             }
             addItem("Try Themes…", icon: .themes, action: #selector(tryThemes), to: menu)
+            addItem("Get Widgets…", icon: .store, action: #selector(getWidgets), to: menu)
             menu.addItem(.separator())
         }
         addItem("Getting Started…", icon: .setup, action: #selector(showSetup), to: menu)
@@ -551,6 +552,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func showFeedback() { customization.showFeedback(store: store) }
     @objc private func showHelp() { customization.show(store: store, section: .help) }
     @objc func showStatus() { customization.show(store: store, section: .diagnostics) }
+    @objc func getWidgets() {
+        customization.editor?.selectedPackageID = nil
+        customization.show(store: store)
+        customization.editor?.showSetting(.store)
+    }
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func tryThemes() {
         let screens = NSScreen.screens
@@ -585,7 +591,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     @objc private func quit() { NSApp.terminate(nil) }
 
-    /// `stablebar://add-source` opens Settings › Packages with the Add source form filled in, and `stablebar://package`
+    /// `stablebar://add-source` opens Settings › Store with the Add source form filled in, and `stablebar://package`
     /// opens it on a package; nothing is added until the user confirms.
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let section = store.receive(urls) else { return }

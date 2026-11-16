@@ -770,7 +770,7 @@ struct SetupTourView: View {
         VStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 20) {
                 hint("cursorarrow.click", "Click a widget", "Opens its details and actions.")
-                hint("contextualmenu.and.cursorarrow", "Right-click the bar", "Edit Bar in Place, Try Themes and Settings.")
+                hint("contextualmenu.and.cursorarrow", "Right-click the bar", "Edit Bar in Place, Try Themes, Get Widgets and Settings.")
                 hint("menubar.rectangle", "Use the menu-bar icon", "Opens Settings and this guide again.")
             }
             .padding(24)
