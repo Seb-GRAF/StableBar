@@ -309,7 +309,7 @@ jobs:
     needs: [current, build]
     if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:
@@ -324,7 +324,7 @@ jobs:
       # The scenes and the comparison scripts are kept aside before the checkout moves to the base.
       # A scene that fails to draw is reported in scenes.json, and later in the comparison.
       - name: Draw the pull request's screens
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           mkdir release-build
           tar -xf release-build.tar -C release-build
@@ -353,7 +353,7 @@ jobs:
       # When the app didn't change, the pull request's app draws the base too, and the docs images
       # are the same. A base that can't draw scenes leaves no scenes.json; the comparison says so.
       - name: Draw the base's screens
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           APP: ${{ needs.current.outputs.app }}
         run: |
