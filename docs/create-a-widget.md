@@ -65,7 +65,18 @@ Add `events` to a script widget to refresh it on named events, alongside its int
 | `privacyChange` | An app starts or stops using the microphone or a camera, or the microphone's mute state changes | `true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false` |
 | `wifiChange` | Wi-Fi turns on or off, or joins or leaves a network | The network's name, empty without a network or Location access; `POWER` is `on` or `off` |
 
-`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
+`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting.
+
+Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`. These work on current macOS:
+
+| Notification | Sent when | `INFO` |
+| --- | --- | --- |
+| `com.apple.screenIsLocked` | The screen locks | Not set |
+| `com.apple.screenIsUnlocked` | The screen unlocks | Not set |
+| `AppleInterfaceThemeChangedNotification` | The appearance switches between light and dark | Not set |
+| `com.apple.Music.playerInfo` | Music starts, pauses or stops playing, or changes track while playing | The track and its `Player State`, such as `Playing`, as JSON |
+
+These names belong to macOS and the apps that send them, which can change them in an update.
 
 External hooks can trigger an event without launching another bar:
 
@@ -74,7 +85,7 @@ External hooks can trigger an event without launching another bar:
 /path/to/StableBar.app/Contents/MacOS/StableBar --trigger build_finished 'INFO=Build passed' STATUS=success
 ```
 
-Use that event name in the widget's `events`. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
+Use that event name in the widget's `events`. A trigger posts a distributed notification with that name, so trigger names share one space with the names macOS and your apps send. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
 
 Commands inherit your login shell's environment, then top-level `environment`, then the widget's `environment`, then event data. Values must be strings. StableBar supplies these variables:
 
