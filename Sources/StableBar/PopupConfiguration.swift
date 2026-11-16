@@ -158,6 +158,7 @@ struct PopupBlock: Decodable, Sendable {
     let quitField: String?
     let openMenuBarItem: MenuBarItemReference?
     let selectInputSourceField: String?
+    let selectOutputDeviceField: String?
     /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
     let view: String?
     let hideWhenEmpty: String?
@@ -189,7 +190,7 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, view, transition
+        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
@@ -210,6 +211,7 @@ struct PopupBlock: Decodable, Sendable {
         quitField = nil
         openMenuBarItem = nil
         selectInputSourceField = nil
+        selectOutputDeviceField = nil
         view = nil
         self.hideWhenEmpty = hideWhenEmpty
         scrollSpeed = nil
@@ -255,10 +257,15 @@ struct PopupBlock: Decodable, Sendable {
         if selectInputSourceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil {
             throw DecodingError.dataCorruptedError(forKey: .selectInputSourceField, in: values, debugDescription: "A block cannot combine selectInputSourceField with onClick, onClickField, open, openField, quitField or openMenuBarItem.")
         }
+        selectOutputDeviceField = try values.decodeIfPresent(String.self, forKey: .selectOutputDeviceField)
+        if selectOutputDeviceField != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .selectOutputDeviceField, in: values, debugDescription: "A block cannot combine selectOutputDeviceField with onClick, onClickField, open, openField, quitField, openMenuBarItem or selectInputSourceField.")
+        }
         view = try values.decodeIfPresent(String.self, forKey: .view)
         if view != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
-            || selectInputSourceField != nil {
-            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem or selectInputSourceField.")
+            || selectInputSourceField != nil || selectOutputDeviceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)

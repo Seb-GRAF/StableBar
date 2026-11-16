@@ -246,6 +246,16 @@ final class BarStore: NSObject {
         }
     }
 
+    /// Makes the audio device with `id` the default output, for a click on `widget`.
+    func selectOutputDevice(_ id: String, widget: WidgetConfiguration) {
+        do {
+            try AudioMonitor.setOutputDevice(id)
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
     func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
         var nextWithSameApp = next
         nextWithSameApp.app = context.app

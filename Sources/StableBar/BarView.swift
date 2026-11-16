@@ -954,6 +954,7 @@ struct WidgetBlocks: View {
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
                                                  selectInputSource: { if store.barEditing.allowsWidgetActions { store.selectInputSource($0, widget: widget) } },
+                                                 selectOutputDevice: { if store.barEditing.allowsWidgetActions { store.selectOutputDevice($0, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }

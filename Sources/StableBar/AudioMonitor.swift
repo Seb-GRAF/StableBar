@@ -131,7 +131,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             icon = muted != 0 ? "mic.slash" : inUse ? "mic.fill" : "mic"
         }
         return ScriptOutput(text: percent.map { "\($0)%" } ?? name, icon: icon,
-                            value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope)], values: volume.map { ["volume": $0] })
+                            value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope, selected: device)], values: volume.map { ["volume": $0] })
     }
 
     /// Whether any process records from `device`, or before macOS 14.2 whether any uses it at all.
@@ -286,6 +286,15 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         guard status == noErr else { throw CommandFailure(message: "Could not set the mute state (\(status)).") }
     }
 
+    /// Makes the device with `id` the default output device.
+    static func setOutputDevice(_ id: String) throws {
+        guard var device = AudioDeviceID(id) else { throw CommandFailure(message: "\(id) isn't an audio device ID.") }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &device)
+        guard status == noErr else { throw CommandFailure(message: "Could not switch the audio output (\(status)).") }
+    }
+
     private static func defaultDevice(input: Bool) throws -> AudioDeviceID {
         var address = AudioObjectPropertyAddress(mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -332,7 +341,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         return name.takeRetainedValue() as String
     }
 
-    private static func devices(scope: AudioObjectPropertyScope) throws -> [[String: String]] {
+    private static func devices(scope: AudioObjectPropertyScope, selected: AudioDeviceID) throws -> [[String: String]] {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
@@ -341,13 +350,15 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         var devices = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
         let readStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devices)
         guard readStatus == noErr else { throw CommandFailure(message: "Could not read audio devices (\(readStatus)).") }
-        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, name: name(of:))
+        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, selected: selected, name: name(of:))
     }
 
-    /// A row for each of `devices` whose name can be read. A device that is being unplugged may no
-    /// longer tell its name, and the list leaves it out.
-    static func deviceRows(_ devices: [AudioDeviceID], name: (AudioDeviceID) throws -> String) -> [[String: String]] {
-        devices.compactMap { device in (try? name(device)).map { ["id": String(device), "name": $0] } }
+    /// A row for each of `devices` whose name can be read, `selected` for the default device. A device
+    /// that is being unplugged may no longer tell its name, and the list leaves it out.
+    static func deviceRows(_ devices: [AudioDeviceID], selected: AudioDeviceID, name: (AudioDeviceID) throws -> String) -> [[String: String]] {
+        devices.compactMap { device in
+            (try? name(device)).map { ["id": String(device), "name": $0, "selected": device == selected ? "true" : ""] }
+        }
     }
 
     private static func hasStreams(_ device: AudioDeviceID, scope: AudioObjectPropertyScope) -> Bool {

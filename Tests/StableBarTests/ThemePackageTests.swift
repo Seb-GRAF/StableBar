@@ -1496,7 +1496,8 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
      "popups":{"usage":{"style":{},"layout":{"type":"field","field":"text","open":"com.apple.ActivityMonitor"}},
                "controls":{"style":{},"layout":{"type":"column","children":[
                  {"type":"slider","title":"Volume","source":"volume","set":"volume"},
-                 {"type":"toggle","title":"Wi-Fi","source":"power","set":"wifiPower"}]}}},
+                 {"type":"toggle","title":"Wi-Fi","source":"power","set":"wifiPower"},
+                 {"type":"list","source":"devices","row":{"type":"field","field":"name","selectOutputDeviceField":"id"}}]}}},
      "widgets":[{"id":"cpu","type":"system","position":"right","popupName":"usage","style":{"background":"@token.surface"}},
                 {"id":"status","type":"provider","provider":"status","position":"right","popupName":"controls"}]}
     """#, to: source.appending(path: "config.json"))

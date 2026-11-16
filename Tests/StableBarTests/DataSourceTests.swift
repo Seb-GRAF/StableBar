@@ -919,12 +919,12 @@ private func audio(_ volume: Double?, muted: Bool = false, device: String = "Spe
     #expect(shown(audio(nil, device: "HDMI", id: "9"), after: audio(0.5)) == ["changedVolume": ""])
 }
 
-@Test func theDeviceListSkipsADeviceWhoseNameCannotBeRead() {
-    let rows = AudioMonitor.deviceRows([42, 77, 9]) { device in
+@Test func theDeviceListMarksTheDefaultDeviceAndSkipsADeviceWhoseNameCannotBeRead() {
+    let rows = AudioMonitor.deviceRows([42, 77, 9], selected: 9) { device in
         guard device != 77 else { throw CommandFailure(message: "Could not read audio device name (560947818).") }
         return device == 42 ? "Speakers" : "HDMI"
     }
-    #expect(rows == [["id": "42", "name": "Speakers"], ["id": "9", "name": "HDMI"]])
+    #expect(rows == [["id": "42", "name": "Speakers", "selected": ""], ["id": "9", "name": "HDMI", "selected": "true"]])
 }
 
 @Test func aDeviceListChangeMovesTheVolumeListenerUnlessItWatchesEveryPropertyOfTheDevice() {

@@ -61,6 +61,10 @@ struct PopupView: View {
                             guard store.barEditing.allowsWidgetActions else { return }
                             if popup.dismissOnAction { store.popup.close() }
                             store.selectInputSource(id, widget: widget)
+                        }, selectOutputDevice: { id in
+                            guard store.barEditing.allowsWidgetActions else { return }
+                            if popup.dismissOnAction { store.popup.close() }
+                            store.selectOutputDevice(id, widget: widget)
                         }, openSubmenu: { [screenKind] element, row in
                             store.appMenu.openSubmenu(element, beside: row) { submenu in
                                 PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
@@ -197,6 +201,8 @@ struct BlockContext {
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Selects a `selectInputSourceField` block's keyboard input source.
     var selectInputSource: (String) -> Void = { _ in }
+    /// Makes a `selectOutputDeviceField` block's audio device the default output.
+    var selectOutputDevice: (String) -> Void = { _ in }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
     /// beside the block.
     var openSubmenu: (AXUIElement?, NSView) -> Void = { _, _ in }
@@ -367,6 +373,12 @@ struct PopupBlockView: View {
                     .modifier(FocusHighlight(appearance: appearance))
             } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
                 Button { context.selectInputSource(id) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusHighlight(appearance: appearance))
+            } else if let id = block.selectOutputDeviceField.flatMap({ fields[$0] }) {
+                Button { context.selectOutputDevice(id) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)

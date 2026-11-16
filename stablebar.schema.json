@@ -1114,6 +1114,9 @@
         "selectInputSourceField": {
           "$ref": "#/definitions/string"
         },
+        "selectOutputDeviceField": {
+          "$ref": "#/definitions/string"
+        },
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },

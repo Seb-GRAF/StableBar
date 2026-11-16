@@ -1,0 +1,46 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right",
+        "popup": {
+          "style": { "width": 220 },
+          "layout": {
+            "type": "list",
+            "source": "devices",
+            "row": {
+              "type": "row",
+              "selectOutputDeviceField": "id",
+              "children": [
+                { "type": "field", "field": "name" },
+                { "type": "symbol", "name": "checkmark", "hideWhenEmpty": "selected", "fitWidth": true }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2",
+      "value": 0.45,
+      "fields": { "device": "AirPods Pro", "deviceID": "77", "volumeAvailable": "true", "volume": "45", "muted": "false" },
+      "values": { "volume": 0.45 },
+      "lists": {
+        "devices": [
+          { "id": "42", "name": "MacBook Pro Speakers", "selected": "" },
+          { "id": "77", "name": "AirPods Pro", "selected": "true" },
+          { "id": "9", "name": "LG HDR 4K", "selected": "" }
+        ]
+      }
+    }
+  },
+  "draw": "popup",
+  "widget": "sound",
+  "height": 128
+}
