@@ -24,7 +24,7 @@ private let fixture = DiskVolumes(
     #expect(output.text == "59%")
     #expect(output.icon == "internaldrive")
     #expect(output.value == nil)
-    #expect(output.tooltip == "\(diskSize(412_000_000_000)) available on Macintosh HD")
+    #expect(output.tooltip == "\(diskSize(412_000_000_000)) free on Macintosh HD")
     #expect(output.fields == ["percent": "59", "volume": "Macintosh HD", "format": "APFS",
                               "used": diskSize(582_000_000_000), "free": diskSize(412_000_000_000),
                               "total": diskSize(994_000_000_000)])
@@ -74,10 +74,44 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     #expect(row?["percent"] == "100" && row?["free"] == diskSize(0) && row?["total"] == diskSize(200_000_000))
 }
 
-@Test(arguments: [(0, 30_000_000_000, 30_000_000_000), (44_000_000_000, 30_000_000_000, 44_000_000_000),
-                  (nil, 30_000_000_000, 30_000_000_000), (nil, nil, 0), (0, nil, 0)] as [(Int64?, Int64?, Int64)])
-func availableSpacePrefersImportantUsageOnlyWhenTheVolumeReportsIt(important: Int64?, plain: Int64?, expected: Int64) {
-    #expect(diskAvailable(important: important, plain: plain) == expected)
+/// Disk Utility and `df` count purgeable space as used; the tolerance covers writes between the two reads.
+@Test func startupDiskFreeSpaceMatchesWhatStatfsReports() throws {
+    let startup = try SystemVolumes().read().startup
+    var stats = statfs()
+    #expect(statfs("/", &stats) == 0)
+    let free = Int64(stats.f_bavail) * Int64(stats.f_bsize)
+    #expect(abs(startup.available - free) < startup.total / 100, "\(startup.available) against statfs \(free)")
+}
+
+@Test func diskDisplayOffersMeterAndValueButNoGraph() throws {
+    #expect(WidgetMetricDisplay.choices(for: "disk") == [.standard, .icon, .value, .meter, .custom])
+    #expect(WidgetMetricDisplay.standard.layout(for: ["disk"]) == .null)
+    #expect(WidgetMetricDisplay.current(nil, sources: ["disk"]) == .standard)
+    for choice in WidgetMetricDisplay.choices(for: "disk") where choice != .custom {
+        #expect(WidgetMetricDisplay.current(choice.layout(for: ["disk"]), sources: ["disk"]) == choice)
+    }
+    guard case let .object(meter)? = WidgetMetricDisplay.meter.layout(for: ["disk"]),
+          case let .array(children)? = meter["children"], case let .object(progress)? = children.first else {
+        Issue.record("Expected a row starting with a meter")
+        return
+    }
+    #expect(progress["type"] == .string("progress") && progress["source"] == .string("disk"))
+}
+
+@Test func diskMeterTakesTheWarningState() throws {
+    let configuration = try ConfigurationValue.object([
+        "widgets": .array([.object(["id": .string("disk"), "type": .string("disk"), "position": .string("right"), "details": .bool(true),
+                                    "layout": try #require(WidgetMetricDisplay.meter.layout(for: ["disk"]))])])
+    ]).decoded(Configuration.self)
+    let widget = configuration.widgets[0]
+    guard case let .row(blocks)? = widget.layout?.content else { Issue.record("Expected a row"); return }
+    var output = diskOutput(fixture, warning: 0.5, critical: 0.95)
+    #expect(output.state == .string("warning"))
+    let states = widgetDataStates(output, widget: widget, providers: configuration.providers)
+    #expect(StyleStates(data: states.widget, parts: states.parts).scoped(to: blocks[0]).data == "warning")
+    output.state = nil
+    let calm = widgetDataStates(output, widget: widget, providers: configuration.providers)
+    #expect(StyleStates(data: calm.widget, parts: calm.parts).scoped(to: blocks[0]).data == nil)
 }
 
 @Test func diskThresholdsAbove100PercentTurnWarningsOff() {

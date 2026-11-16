@@ -268,7 +268,7 @@ enum DocsImages {
         """#,
         "network": #"{"text":"↓1.2 MiB/s ↑240 KiB/s","icon":"network","fields":{"interface":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"},"lists":{"interfaces":[{"name":"en0","downloadRate":"1.2 MiB/s","uploadRate":"240 KiB/s"}]},"values":{"download":1258291,"upload":245760}}"#,
         "disk": #"""
-        {"text":"59%","icon":"internaldrive","tooltip":"412 GB available on Macintosh HD",
+        {"text":"59%","icon":"internaldrive","tooltip":"412 GB free on Macintosh HD",
          "fields":{"percent":"59","volume":"Macintosh HD","format":"APFS","used":"582 GB","free":"412 GB","total":"994 GB"},
          "values":{"disk":0.5855,"used":582000000000,"free":412000000000,"total":994000000000},
          "lists":{"volumes":[{"name":"Backup","path":"/Volumes/Backup","symbol":"externaldrive","percent":"41","fraction":"0.41",
