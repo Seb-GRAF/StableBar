@@ -1,8 +1,9 @@
 import builtIn from "./built-in.mjs";
-import { BASE_IDS, RESERVED_IDS, MAC_FONTS, slug, isVersion, nextPatch, controlsFor, applyControl, resolveTheme } from "./theme.mjs";
+import { BASE_IDS, RESERVED_IDS, MAC_FONTS, slug, isVersion, isColor, nextPatch, controlsFor, applyControl, resolveTheme, differsFromBase, resetControl } from "./theme.mjs";
 import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, encodeLink, decodeLink, shareURL, readmeRow, storeManifest } from "./files.mjs";
 import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS, fontFamily } from "./preview.mjs";
 import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
+import { hsvFromHex, hexFromHSV, addRecentColor } from "./color-field.mjs";
 
 const TRY_LINK_MIN_VERSION = "0.16.0";
 const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
@@ -66,7 +67,7 @@ function colorInput(control, value, suffix = "") {
   const helpID = `c-${control.id.replaceAll(".", "-")}`;
   const id = helpID + suffix;
   const color = typeof value === "string" && /^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value) ? value : "#00000000";
-  return `<div class="color-input"><input type="color" id="${id}" data-control="${control.id}" aria-label="${e(control.label)} color" aria-describedby="${helpID}-help" value="${color.slice(0, 7)}"><input type="text" id="${id}-hex" data-control="${control.id}" data-color-text aria-label="${e(control.label)} hex value" aria-describedby="${helpID}-help ${helpID}-error" value="${e(color)}" spellcheck="false" autocomplete="off"></div>`;
+  return `<div class="color-picker"><div class="color-input"><button type="button" class="color-swatch" id="${id}" data-control="${control.id}" data-color-button aria-label="${e(control.label)} color" aria-describedby="${helpID}-help" aria-haspopup="dialog" aria-expanded="false" style="--swatch: ${color}"></button><input type="text" id="${id}-hex" data-control="${control.id}" data-color-text aria-label="${e(control.label)} hex value" aria-describedby="${helpID}-help ${helpID}-error" value="${e(color)}" spellcheck="false" autocomplete="off"></div></div>`;
 }
 
 function controlValue(control, r) {
@@ -115,7 +116,8 @@ function controlHTML(control, r) {
   } else input = `<input ${attr} type="text" value="${e(value ?? "")}" autocomplete="off">`;
   const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
   const helpText = control.help.slice(control.help.indexOf(": ") + 2);
-  return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><label for="${id}">${e(control.label)}</label>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
+  const reset = control.group === "about" ? "" : `<button type="button" class="reset" data-action="reset" data-reset="${control.id}" aria-label="Reset ${e(control.label)}" title="Use the base theme's value" hidden>Reset</button>`;
+  return `<div class="control ${["about.name", "about.description"].includes(control.id) ? "wide" : ""}"><div class="control-head"><label for="${id}">${e(control.label)}</label>${reset}</div>${input}<span class="help" id="${id}-help">${e(helpText)} <a href="${control.docs}"><code>${e(paths.join(", "))}</code></a></span><p class="control-error" id="${id}-error"></p>${control.id === "about.name" ? '<span class="base-help" data-theme-id></span>' : ""}</div>`;
 }
 
 function renderControls() {
@@ -442,6 +444,7 @@ function refresh() {
   root.querySelector(".base-meta").textContent = baseDescriptions[baseID] ?? "Settings from the theme you opened";
   root.querySelector("[data-screenshot-note]").hidden = !state.manifest.screenshot;
   root.querySelector("[data-theme-id]").innerHTML = `Folder id: <code>${e(state.manifest.id)}</code>${mode === "update" ? " · Kept for this update" : ""}`;
+  root.querySelectorAll("[data-reset]").forEach(button => button.hidden = !differsFromBase(state, button.dataset.reset, bases.get(baseID)));
   updateJSON();
   updateOutputs();
   updateCue();
@@ -530,10 +533,6 @@ function changeControl(input) {
   }
   const color = control.kind === "color" || (control.kind === "background" && input.tagName !== "SELECT");
   if (color) {
-    if (input.type === "color") {
-      const previous = controlValue(control, resolved());
-      if (typeof previous === "string" && /^#[\da-f]{8}$/i.test(previous) && previous.slice(7) !== "00") value += previous.slice(7);
-    }
     if (!/^#[\da-f]{6}(?:[\da-f]{2})?$/i.test(value)) {
       fieldErrors.set(control.id, "Use #RRGGBB or #RRGGBBAA for this color."); updateOutputs(); return;
     }
@@ -566,7 +565,7 @@ function changeControl(input) {
     root.querySelectorAll(`[data-control="${other.id}"]`).forEach(element => {
       // Only the font control changes the font; its menu may rest on Other font… while a typed name applies.
       if ("fontSelect" in element.dataset) return;
-      if (element.type === "color") element.value = typeof value === "string" && value.startsWith("#") ? value.slice(0, 7) : "#000000";
+      if ("colorButton" in element.dataset) element.style.setProperty("--swatch", typeof value === "string" && value.startsWith("#") ? value : "#00000000");
       else if (element.hasAttribute("data-color-text")) element.value = value ?? "#00000000";
       else if (other.kind === "number") element.value = value == null ? "" : formatNumber(value);
       else if (other.kind !== "toggle" && other.kind !== "background") element.value = value ?? "";
@@ -575,11 +574,19 @@ function changeControl(input) {
   }
   if (color) {
     input.parentElement.querySelector("[data-color-text]").value = value;
-    input.parentElement.querySelector('[type="color"]').value = value.slice(0, 7);
+    input.parentElement.querySelector("[data-color-button]").style.setProperty("--swatch", value);
   }
   if (input.type === "checkbox") input.closest(".toggle").querySelector("span").textContent = input.checked ? "On" : "Off";
   if (control.id === "workspaces.indicator" || (control.id === "bar.background" && input.tagName === "SELECT")) renderControls();
   refresh();
+}
+
+function resetToBase(id) {
+  state = resetControl(state, id, bases.get(baseID));
+  fieldErrors.delete(id);
+  renderControls();
+  refresh();
+  root.querySelector(`#c-${id.replaceAll(".", "-")}`).focus();
 }
 
 function showDialog(html) {
@@ -832,6 +839,104 @@ async function start() {
   loadHash();
 }
 
+let picker;
+const clampUnit = value => Math.min(1, Math.max(0, value));
+const recentColors = () => JSON.parse(localStorage.getItem("recent-colors") ?? "[]");
+const swatchHTML = (color, label) => `<button type="button" class="color-swatch" data-swatch="${color}" aria-label="${label} ${color}" title="${color}" style="--swatch: ${color}"></button>`;
+
+function openColorPicker(button) {
+  const control = controlsFor(state).find(control => control.id === button.dataset.control);
+  const value = controlValue(control, resolved());
+  const base = controlValue(control, resolveTheme(builtIn, bases.get(baseID), appearance));
+  const recent = recentColors();
+  const wrapper = button.closest(".color-picker");
+  wrapper.insertAdjacentHTML("beforeend", `<div class="color-popover" role="dialog" aria-label="${e(control.label)} color">
+    <div class="color-area" role="slider" tabindex="0" aria-label="Saturation and brightness"><span class="color-area-thumb"></span></div>
+    <input type="range" class="color-hue" data-channel="h" min="0" max="360" aria-label="Hue">
+    <input type="range" class="color-alpha" data-channel="a" min="0" max="255" aria-label="Opacity">
+    ${isColor(base) ? `<p class="color-heading">Base theme</p><div class="color-swatches">${swatchHTML(base, "Base theme color")}<code>${base}</code></div>` : ""}
+    <p class="color-heading">Recent</p>
+    ${recent.length ? `<div class="color-swatches">${recent.map(color => swatchHTML(color, "Recent color")).join("")}</div>` : '<p class="color-empty">Colors you pick show here.</p>'}
+    </div>`);
+  picker = { button, popover: wrapper.lastElementChild, text: button.nextElementSibling, color: hsvFromHex(isColor(value) ? value : "#00000000") };
+  button.setAttribute("aria-expanded", "true");
+  if (picker.popover.getBoundingClientRect().right > document.documentElement.clientWidth) picker.popover.classList.add("is-end");
+  paintColorPicker();
+  picker.popover.querySelector(".color-area").focus();
+}
+
+function paintColorPicker() {
+  const { popover, color } = picker;
+  const area = popover.querySelector(".color-area"), alpha = popover.querySelector(".color-alpha");
+  area.style.setProperty("--hue", color.h);
+  area.style.setProperty("--s", color.s);
+  area.style.setProperty("--v", color.v);
+  area.setAttribute("aria-valuetext", `Saturation ${Math.round(color.s * 100)}%, brightness ${Math.round(color.v * 100)}%`);
+  popover.querySelector(".color-hue").value = color.h;
+  alpha.value = color.a;
+  alpha.setAttribute("aria-valuetext", `${Math.round(color.a / 2.55)}%`);
+  alpha.style.setProperty("--opaque", hexFromHSV({ ...color, a: 255 }));
+}
+
+function pickColor(color) {
+  picker.color = color;
+  picker.picked = hexFromHSV(color);
+  picker.text.value = picker.picked;
+  changeControl(picker.text);
+  paintColorPicker();
+}
+
+function pickFromArea(area, event) {
+  const rect = area.getBoundingClientRect();
+  pickColor({ ...picker.color, s: clampUnit((event.clientX - rect.left) / rect.width),
+    v: clampUnit(1 - (event.clientY - rect.top) / rect.height), a: picker.color.a || 255 });
+}
+
+function saveRecentColor(color) {
+  localStorage.setItem("recent-colors", JSON.stringify(addRecentColor(recentColors(), color)));
+}
+
+function closeColorPicker(focusButton) {
+  const { button, popover, picked } = picker;
+  picker = undefined;
+  popover.remove();
+  button.setAttribute("aria-expanded", "false");
+  if (picked) saveRecentColor(picked);
+  if (focusButton) button.focus();
+}
+
+document.addEventListener("click", event => {
+  const swatch = event.target.closest("[data-swatch]"), button = event.target.closest("[data-color-button]");
+  if (swatch) pickColor(hsvFromHex(swatch.dataset.swatch));
+  else if (button && picker?.button === button) closeColorPicker(true);
+  else if (button) openColorPicker(button);
+});
+document.addEventListener("input", event => {
+  if (!picker?.popover.contains(event.target)) return;
+  const value = Number(event.target.value);
+  pickColor(event.target.dataset.channel === "h" ? { ...picker.color, h: value, a: picker.color.a || 255 } : { ...picker.color, a: value });
+});
+document.addEventListener("keydown", event => {
+  if (!picker?.popover.contains(event.target)) return;
+  if (event.key === "Escape") closeColorPicker(true);
+  else if (event.target.matches(".color-area") && event.key.startsWith("Arrow")) {
+    const step = event.shiftKey ? 0.1 : 0.01, { s, v, a } = picker.color;
+    const [nextS, nextV] = { ArrowLeft: [s - step, v], ArrowRight: [s + step, v], ArrowDown: [s, v - step], ArrowUp: [s, v + step] }[event.key];
+    pickColor({ ...picker.color, s: clampUnit(nextS), v: clampUnit(nextV), a: a || 255 });
+  } else return;
+  event.preventDefault();
+});
+document.addEventListener("pointerdown", event => {
+  if (picker && !picker.button.closest(".color-picker").contains(event.target)) closeColorPicker(false);
+  const area = event.target.closest(".color-area");
+  if (!area || event.button !== 0) return;
+  area.setPointerCapture(event.pointerId);
+  pickFromArea(area, event);
+});
+document.addEventListener("pointermove", event => {
+  if (event.target.matches(".color-area") && event.target.hasPointerCapture(event.pointerId)) pickFromArea(event.target, event);
+});
+
 document.addEventListener("input", event => {
   if (event.target.dataset.control || event.target.dataset.sliderFor) hoveredControl = undefined;
   if (event.target.dataset.sliderFor) {
@@ -848,6 +953,7 @@ document.addEventListener("change", event => {
   const control = numberControl(input);
   if (control) commitNumber(input, control);
   else if (input.dataset.control && ["checkbox", "select-one"].includes(input.type)) changeControl(input);
+  else if (input.hasAttribute("data-color-text") && !fieldErrors.has(input.dataset.control)) saveRecentColor(input.value);
   if (input.id === "base-theme") {
     if (!bases.has(input.value)) return;
     baseID = input.value;
@@ -864,6 +970,7 @@ document.addEventListener("change", event => {
   if (input.matches("[data-open-zip], [data-open-folder]")) openSelection([...input.files].map(file => ({ name: file.webkitRelativePath || file.name, file })));
 });
 document.addEventListener("focusin", event => {
+  if (picker && !picker.popover.contains(event.target) && event.target !== picker.button) closeColorPicker(false);
   focusedControl = cueControlID(event.target);
   if (event.target.closest(".control")) hoveredControl = undefined;
   updateCue();
@@ -969,6 +1076,7 @@ document.addEventListener("click", async event => {
     if (action === "open") openFiles();
     else if (action === "close") { importRequest++; dialog.close(); }
     else if (action === "continue") continueReopen();
+    else if (action === "reset") resetToBase(button.dataset.reset);
     else if (action === "store") storeGuide();
     else if (action === "about") {
       dialog.close(); root.querySelector('[data-control-section="about"]').open = true;

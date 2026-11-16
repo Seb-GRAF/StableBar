@@ -116,11 +116,13 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             }
         }
         let volume = volumes.isEmpty ? nil : Double(volumes.reduce(0, +) / Float32(volumes.count))
+        let percent = volume.map { String(Int(($0 * 100).rounded())) }
         var muteAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: scope, mElement: kAudioObjectPropertyElementMain)
         var muted: UInt32 = 0
         var muteSize = UInt32(MemoryLayout<UInt32>.size)
         let muteStatus = AudioObjectGetPropertyData(device, &muteAddress, 0, nil, &muteSize, &muted)
         var fields = ["device": name, "deviceID": String(device), "volumeAvailable": String(volume != nil)]
+        fields["volume"] = percent
         if muteStatus == noErr { fields["muted"] = String(muted != 0) }
         var icon = Self.icon(volume: volume, muted: muted != 0)
         if input {
@@ -128,8 +130,8 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
             fields["inUse"] = String(inUse)
             icon = muted != 0 ? "mic.slash" : inUse ? "mic.fill" : "mic"
         }
-        return ScriptOutput(text: volume.map { "\(Int(($0 * 100).rounded()))%" } ?? name, icon: icon,
-                            value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope)], values: volume.map { ["volume": $0] })
+        return ScriptOutput(text: percent.map { "\($0)%" } ?? name, icon: icon,
+                            value: volume, fields: fields, lists: ["devices": try Self.devices(scope: scope, selected: device)], values: volume.map { ["volume": $0] })
     }
 
     /// Whether any process records from `device`, or before macOS 14.2 whether any uses it at all.
@@ -271,6 +273,28 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         }
     }
 
+    /// Mutes or unmutes the default output device.
+    static func setMuted(_ muted: Bool) throws {
+        let device = try defaultDevice(input: false)
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute, mScope: kAudioDevicePropertyScopeOutput,
+                                                 mElement: kAudioObjectPropertyElementMain)
+        guard device != kAudioObjectUnknown, AudioObjectHasProperty(device, &address) else {
+            throw CommandFailure(message: "The audio output can't be muted.")
+        }
+        var value: UInt32 = muted ? 1 : 0
+        let status = AudioObjectSetPropertyData(device, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &value)
+        guard status == noErr else { throw CommandFailure(message: "Could not set the mute state (\(status)).") }
+    }
+
+    /// Makes the device with `id` the default output device.
+    static func setOutputDevice(_ id: String) throws {
+        guard var device = AudioDeviceID(id) else { throw CommandFailure(message: "\(id) isn't an audio device ID.") }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let status = AudioObjectSetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, UInt32(MemoryLayout<AudioDeviceID>.size), &device)
+        guard status == noErr else { throw CommandFailure(message: "Could not switch the audio output (\(status)).") }
+    }
+
     private static func defaultDevice(input: Bool) throws -> AudioDeviceID {
         var address = AudioObjectPropertyAddress(mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
                                                  mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -317,7 +341,7 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         return name.takeRetainedValue() as String
     }
 
-    private static func devices(scope: AudioObjectPropertyScope) throws -> [[String: String]] {
+    private static func devices(scope: AudioObjectPropertyScope, selected: AudioDeviceID) throws -> [[String: String]] {
         var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
                                                 mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var size: UInt32 = 0
@@ -326,13 +350,15 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         var devices = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
         let readStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devices)
         guard readStatus == noErr else { throw CommandFailure(message: "Could not read audio devices (\(readStatus)).") }
-        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, name: name(of:))
+        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, selected: selected, name: name(of:))
     }
 
-    /// A row for each of `devices` whose name can be read. A device that is being unplugged may no
-    /// longer tell its name, and the list leaves it out.
-    static func deviceRows(_ devices: [AudioDeviceID], name: (AudioDeviceID) throws -> String) -> [[String: String]] {
-        devices.compactMap { device in (try? name(device)).map { ["id": String(device), "name": $0] } }
+    /// A row for each of `devices` whose name can be read, `selected` for the default device. A device
+    /// that is being unplugged may no longer tell its name, and the list leaves it out.
+    static func deviceRows(_ devices: [AudioDeviceID], selected: AudioDeviceID, name: (AudioDeviceID) throws -> String) -> [[String: String]] {
+        devices.compactMap { device in
+            (try? name(device)).map { ["id": String(device), "name": $0, "selected": device == selected ? "true" : ""] }
+        }
     }
 
     private static func hasStreams(_ device: AudioDeviceID, scope: AudioObjectPropertyScope) -> Bool {

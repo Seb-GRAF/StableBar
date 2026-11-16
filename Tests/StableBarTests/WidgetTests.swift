@@ -43,6 +43,20 @@ import Testing
     #expect(progressFraction(.nan) == 0)
 }
 
+@Test func segmentsLightEveryPieceTheValueReaches() {
+    #expect(litSegments(0, of: 4) == 0)
+    #expect(litSegments(0.01, of: 4) == 1)
+    #expect(litSegments(0.5, of: 4) == 2)
+    #expect(litSegments(0.62, of: 4) == 3)
+    #expect(litSegments(1, of: 4) == 4)
+    #expect(litSegments(0.3, of: 10) == 3)
+    #expect(litSegments(0.7, of: 10) == 7)
+    #expect(litSegments(.nan, of: 4) == 0)
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(PopupBlock.self, from: Data(#"{"type":"progress","source":"volume","height":2,"segments":-1}"#.utf8))
+    }
+}
+
 @Test func triggerArgumentsPreserveLiteralValuesWithoutShellExpansion() throws {
     let command = try LaunchCommand(arguments: ["--trigger", "build", "INFO=hello = 'world' $(date)", "EMPTY="])
     guard case let .trigger(name, environment) = command else {

@@ -1,0 +1,29 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [questions](https://github.com/Seb-GRAF/StableBar/blob/main/docs/questions.md) and the [user guide](https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md) first; **Settings → Help** in StableBar shows the same answers. If StableBar does something the guide says it shouldn't, [report a bug](https://github.com/Seb-GRAF/StableBar/issues/new?template=bug_report.yml) instead.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What you are trying to do, what you tried and what happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: Configuration
+      description: The relevant part of your configuration or script. Redact tokens, keys and personal details.
+      render: json
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Paste the report from Settings → Status → Report a problem → Copy bug report, or from `stablebar --report`, in place of these lines.
+      value: |
+        StableBar:
+        macOS:

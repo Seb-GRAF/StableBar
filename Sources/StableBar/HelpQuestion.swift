@@ -34,7 +34,7 @@ struct HelpQuestion: Identifiable {
     static let page = #"""
     # Questions
 
-    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page.
+    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page. If yours isn't here, ask it in [Q&A](https://github.com/Seb-GRAF/StableBar/discussions/categories/q-a).
 
     ## Why do windows go under the bar?
 
@@ -79,7 +79,7 @@ struct HelpQuestion: Identifiable {
     - **Automation**, to control System Events, which hides or shows the macOS menu bar.
     - **Calendars**, for Meetings and other calendar widgets.
 
-    Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles, as does a menu bar item shown as in the menu bar. See [Install and set up](getting-started.md#install-and-set-up).
+    Scripts that control other apps ask for their own Automation access when they run, and Workspaces on macOS Spaces needs Screen Recording to show window titles, as does a menu bar item shown as in the menu bar. Wi-Fi widgets ask for Location the first time they update, since macOS gives the network's name only to apps allowed to use Location Services; **Settings → General → Access** lists it too. See [Install and set up](getting-started.md#install-and-set-up).
 
     ## Where did my other apps' menu bar icons go?
 

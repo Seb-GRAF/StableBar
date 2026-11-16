@@ -878,6 +878,67 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     #expect(closed.contains(ObjectIdentifier(draggedAway)))
 }
 
+/// A popup resizes to the view it shows and opens at its layout again after it closes. A pinned popup keeps its view until
+/// Escape returns it to its layout, from which Escape closes it. Escape reaches an open popup through an event monitor that
+/// would also take other tests' events, so the pinned popup's own window stands in for it.
+@Test @MainActor func popupViewsReturnToTheirLayoutOnEscapeAndClose() async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data("""
+    {"widgets":[{"id":"controls","type":"text","text":"Controls","position":"right","popup":{"pinnable":true,"style":{"width":300},
+        "layout":{"type":"text","text":"Wi-Fi","view":"wifi"},
+        "views":{"wifi":{"type":"column","children":[{"type":"text","text":"Home"},{"type":"text","text":"Office"},{"type":"text","text":"Café"}]}}}}]}
+    """.utf8))
+    var presented: [PopupPanel] = []
+    let popup = WidgetPopup(present: { panel, _ in presented.append(panel) })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let widget = configuration.widgets[0]
+    func open() throws -> PopupPanel {
+        popup.toggle(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: try #require(bar.anchors(widget.id).first))
+        return try #require(presented.last)
+    }
+    // A popup with views animates its height, so lay it out until it has the height the test expects.
+    func layOut(_ panel: PopupPanel, until done: () -> Bool) async throws {
+        try await awaitCondition {
+            panel.contentView!.layoutSubtreeIfNeeded()
+            let host = panel.contentView!.subviews[0]
+            if let image = host.bitmapImageRepForCachingDisplay(in: host.bounds) { host.cacheDisplay(in: host.bounds, to: image) }
+            return done()
+        }
+    }
+    func escape(_ panel: PopupPanel) throws -> NSEvent {
+        try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: panel.windowNumber,
+                                      context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53))
+    }
+
+    let panel = try open()
+    var previous: NSRect?
+    try await layOut(panel) { defer { previous = panel.frame }; return panel.frame == previous }
+    let layout = panel.frame
+    panel.navigation.view = "wifi"
+    try await layOut(panel) { panel.frame.height > layout.height }
+    popup.close()
+
+    let reopened = try open()
+    #expect(reopened !== panel)
+    #expect(reopened.navigation.view == nil)
+    reopened.navigation.view = "wifi"
+    popup.pin()
+    #expect(reopened.navigation.view == "wifi")
+    try await layOut(reopened) { reopened.frame.height > layout.height }
+    reopened.sendEvent(try escape(reopened))
+    #expect(reopened.navigation.view == nil)
+    #expect(popup.pins.ids == ["controls"])
+    try await layOut(reopened) { abs(reopened.frame.height - layout.height) < 0.5 }
+    reopened.sendEvent(try escape(reopened))
+    #expect(popup.pins.ids.isEmpty)
+}
+
 /// macOS outlines a window and shapes its shadow from what the window draws, so a popup's own shadow, drawn in the
 /// popup's window, got an outline near its outer edge (#180). That shadow is drawn in a window behind the popup instead.
 @Test(arguments: [nil, "#00000000", "#00000059"] as [String?]) @MainActor

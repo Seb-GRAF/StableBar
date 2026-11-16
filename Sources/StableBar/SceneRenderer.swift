@@ -196,7 +196,12 @@ enum SceneRenderer {
             guard let popup = scene.menu.map({ AppMenu.popup($0.map(menuEntry)) }) ?? widgetPopup(widget, store: store) else {
                 throw CommandFailure(message: "widget: \(id) has no popup.")
             }
-            try await drawPopup(popup, of: widget, store: store, height: CGFloat(scene.height ?? 600), dark: dark,
+            let navigation = PopupNavigation()
+            if let view = scene.view {
+                guard popup.views[view] != nil else { throw CommandFailure(message: "view: \(id)'s popup has no view \(view).") }
+                navigation.view = view
+            }
+            try await drawPopup(popup, of: widget, store: store, navigation: navigation, height: CGFloat(scene.height ?? 600), dark: dark,
                                 accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
         case .update:
             store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
@@ -399,12 +404,13 @@ enum SceneRenderer {
     }
 
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
-    private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore, height: CGFloat,
-                                  dark: Bool, accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
+    private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore,
+                                  navigation: PopupNavigation = PopupNavigation(), height: CGFloat, dark: Bool,
+                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
-                                store: store, widget: widget)
+                                store: store, widget: widget, navigation: navigation)
             .environment(\.screenKind, .monitor)
             .frame(width: popupWidth)
             .fixedSize(horizontal: false, vertical: true)

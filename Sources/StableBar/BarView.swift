@@ -516,7 +516,7 @@ struct WidgetView: View {
             .buttonStyle(.plain)
             pressable(buttons, click: store.packageLibrary.openUpdates)
         } else if widget.hoverLayout != nil, let command = output?.onClick ?? widget.onClick {
-            let click = { runAction(command, sender: "mouse.clicked", button: "left") }
+            let click = { runAction(.command(command), sender: "mouse.clicked", button: "left") }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if let popup = widgetPopup(widget, store: store) {
             let click = {
@@ -525,7 +525,7 @@ struct WidgetView: View {
             }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
         } else if let command = output?.onClick ?? widget.onClick {
-            let click = { runAction(command, sender: "mouse.clicked", button: "left") }
+            let click = { runAction(.command(command), sender: "mouse.clicked", button: "left") }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if let open = widget.open {
             let click = { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } }
@@ -622,7 +622,7 @@ struct WidgetView: View {
             }
         }
         if let command = inside ? widget.actions?.mouseEntered : widget.actions?.mouseExited {
-            runAction(command, sender: inside ? "mouse.entered" : "mouse.exited")
+            runAction(.command(command), sender: inside ? "mouse.entered" : "mouse.exited")
         }
     }
 
@@ -793,9 +793,9 @@ struct WidgetView: View {
         }
     }
 
-    private func runAction(_ command: String, sender: String, button: String? = nil) {
+    private func runAction(_ action: BlockAction, sender: String, button: String? = nil) {
         let context = WidgetActionContext(sender: sender, button: button, modifiers: NSEvent.modifierFlags, display: monitor)
-        store.runAction(command, widget: widget, event: ScriptEvent(sender: sender, environment: context.environment))
+        store.runAction(action, widget: widget, event: ScriptEvent(sender: sender, environment: context.environment))
     }
 
     @ViewBuilder
@@ -916,11 +916,11 @@ struct WidgetView: View {
             .accessibilityValue(accessibilityValue(date: date))
     }
 
-    private func blockAction(_ command: String, _ environment: [String: String]) {
+    private func blockAction(_ action: BlockAction, _ environment: [String: String]) {
         if environment.isEmpty {
-            runAction(command, sender: "mouse.clicked", button: "left")
+            runAction(action, sender: "mouse.clicked", button: "left")
         } else {
-            store.runAction(command, widget: widget,
+            store.runAction(action, widget: widget,
                             event: ScriptEvent(sender: "control.changed", environment: environment.merging(["SID": String(monitor)]) { first, _ in first }))
         }
     }
@@ -936,7 +936,7 @@ struct WidgetBlocks: View {
     var date = Date.now
     var fillsWidth = false
     var motion = BlockMotion()
-    let runAction: (String, [String: String]) -> Void
+    let runAction: (BlockAction, [String: String]) -> Void
     @Environment(\.screenKind) private var screenKind
 
     var body: some View {
@@ -954,6 +954,7 @@ struct WidgetBlocks: View {
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
                                                  selectInputSource: { if store.barEditing.allowsWidgetActions { store.selectInputSource($0, widget: widget) } },
+                                                 selectOutputDevice: { if store.barEditing.allowsWidgetActions { store.selectOutputDevice($0, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }

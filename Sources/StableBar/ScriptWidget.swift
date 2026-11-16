@@ -117,6 +117,9 @@ final class ScriptWidget {
     /// Numbers each accepted output, unique across scripts, so the store can tell a new output from
     /// one it applies again. 0 before the first.
     @ObservationIgnored private(set) var outputNumber = 0
+    /// The last `temporary` accepted, with its output's `outputNumber`. A merge observes it, since an output
+    /// that repeats the current one isn't assigned, and a later output without one clears `output.temporary`.
+    private(set) var lastTemporary: (number: Int, output: TemporaryOutput)?
     private static var acceptedOutputs = 0
     private var task: Task<Void, Never>?
     private var timer: Task<Void, Never>?
@@ -280,6 +283,7 @@ final class ScriptWidget {
         diagnostics.lastUpdated = Date()
         Self.acceptedOutputs += 1
         outputNumber = Self.acceptedOutputs
+        if let temporary = next.temporary { lastTemporary = (outputNumber, temporary) }
         if changed || next.temporary != nil { onUpdate?() }
         if let previous, outputChanged { onOutputChange?(previous, next) }
     }

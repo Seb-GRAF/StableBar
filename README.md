@@ -1,8 +1,33 @@
-# StableBar
+<p align="center">
+  <img src="docs/images/icon.png" width="128" height="128" alt="StableBar's lighthouse icon">
+</p>
 
-A native, configurable menu bar for macOS and an alternative to SketchyBar. Built with Swift, AppKit and SwiftUI.
+<h1 align="center">StableBar</h1>
 
-[**Download for Mac**](https://github.com/Seb-GRAF/StableBar/releases/latest) · [Website](https://stablebar.app/) · [User guide](docs/README.md) · [Widget store](https://github.com/Seb-GRAF/stablebar-packages)
+<p align="center">
+  A native, configurable menu bar for macOS and an alternative to SketchyBar.<br>
+  Themes, widgets, popups and workspaces, set up without writing scripts.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Seb-GRAF/StableBar/releases/latest"><img src="https://img.shields.io/github/v/release/Seb-GRAF/StableBar?label=release&color=F0883E" alt="Latest release"></a>
+  <a href="https://github.com/Seb-GRAF/StableBar/releases"><img src="https://img.shields.io/github/downloads/Seb-GRAF/StableBar/total?color=58A6FF" alt="Downloads"></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-lightgrey?logo=apple" alt="macOS 14 or later">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Seb-GRAF/StableBar?color=56D364" alt="MIT License"></a>
+  <a href="https://github.com/Seb-GRAF/StableBar/stargazers"><img src="https://img.shields.io/github/stars/Seb-GRAF/StableBar?style=flat&color=FFD33D" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Seb-GRAF/StableBar/releases/latest"><b>Download for Mac</b></a> ·
+  <a href="https://stablebar.app/">Website</a> ·
+  <a href="docs/README.md">User guide</a> ·
+  <a href="https://github.com/Seb-GRAF/stablebar-packages">Widget store</a> ·
+  <a href="https://github.com/Seb-GRAF/StableBar/discussions">Discussions</a>
+</p>
+
+<p align="center">
+  <a href="https://ko-fi.com/stablebar"><img src="https://img.shields.io/badge/Support_us_on_Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Support us on Ko-fi"></a>
+</p>
 
 <p><img src="docs/images/readme-hero.gif" width="100%" alt="The top of your bar. A closer look at the widgets: Made yours. The camera pulls back and the intro loops."></p>
 
@@ -101,11 +126,22 @@ Change content, appearance and behavior in Settings, with undo and redo. Or edit
 
 ## Contributing
 
+<p>
+  <a href="https://github.com/M4n0x"><img src="https://github.com/M4n0x.png?size=96" width="48" height="48" alt="M4n0x"></a>
+  <a href="https://github.com/Seb-GRAF"><img src="https://github.com/Seb-GRAF.png?size=96" width="48" height="48" alt="Seb-GRAF"></a>
+  <a href="https://github.com/Jonathanm10"><img src="https://github.com/Jonathanm10.png?size=96" width="48" height="48" alt="Jonathanm10"></a>
+  <a href="https://github.com/albucci"><img src="https://github.com/albucci.png?size=96" width="48" height="48" alt="albucci"></a>
+  <a href="https://github.com/amar9elbeg"><img src="https://github.com/amar9elbeg.png?size=96" width="48" height="48" alt="amar9elbeg"></a>
+  <a href="https://github.com/sailedev"><img src="https://github.com/sailedev.png?size=96" width="48" height="48" alt="sailedev"></a>
+</p>
+
 Built by [Sebastien Graf](https://github.com/Seb-GRAF) and [Steve Mendes Reis](https://github.com/M4n0x), with help from [everyone who has contributed](https://github.com/Seb-GRAF/StableBar/graphs/contributors).
 
-Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build StableBar, run the tests and open a pull request. Report security issues privately through [SECURITY.md](.github/SECURITY.md).
+Questions, ideas and setups to share go in [Discussions](https://github.com/Seb-GRAF/StableBar/discussions). Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build StableBar, run the tests and open a pull request. Report security issues privately through [SECURITY.md](.github/SECURITY.md).
 
 Available under the [MIT License](LICENSE), including commercial use and redistribution.
+
+If StableBar is useful to you, you can [buy us a coffee on Ko-fi](https://ko-fi.com/stablebar).
 
 [![Latest release](https://img.shields.io/github/v/release/Seb-GRAF/StableBar?label=release&color=ffe04a&labelColor=1d1813)](https://github.com/Seb-GRAF/StableBar/releases/latest)
 [![CI](https://github.com/Seb-GRAF/StableBar/actions/workflows/ci.yml/badge.svg)](https://github.com/Seb-GRAF/StableBar/actions/workflows/ci.yml)

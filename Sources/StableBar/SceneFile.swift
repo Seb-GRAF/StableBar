@@ -58,6 +58,8 @@ struct SceneFile: Decodable {
     var draw: Draw
     /// The widget whose popup or Settings page to draw, or whose popup the bar shows open.
     var widget: String?
+    /// The view of the widget's popup to draw in place of its layout, for `popup`.
+    var view: String?
     /// The Settings section to draw when no widget is named.
     var section: Section?
     /// The tab of the widget's Settings page, or of the bar's when the scene opens the Bar section without a widget.
@@ -84,7 +86,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, section, tab, package, uninstall,
+        case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, view, section, tab, package, uninstall,
              themeLink, starRequest, setup, applicationMove, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -170,6 +172,7 @@ struct SceneFile: Decodable {
         menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
         draw = try values.decode(Draw.self, forKey: .draw)
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
+        view = try values.decodeIfPresent(String.self, forKey: .view)
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         package = try values.decodeIfPresent(String.self, forKey: .package)
@@ -222,6 +225,9 @@ struct SceneFile: Decodable {
         }
         if menu != nil, draw != .popup {
             throw DecodingError.dataCorruptedError(forKey: .menu, in: values, debugDescription: "A menu belongs to a popup scene.")
+        }
+        if view != nil, draw != .popup {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A view belongs to a popup scene.")
         }
         if uninstall != nil, draw != .uninstall {
             throw DecodingError.dataCorruptedError(forKey: .uninstall, in: values, debugDescription: "uninstall belongs to an uninstall scene.")

@@ -1114,11 +1114,26 @@
         "selectInputSourceField": {
           "$ref": "#/definitions/string"
         },
+        "selectOutputDeviceField": {
+          "$ref": "#/definitions/string"
+        },
         "openMenuBarItem": {
           "$ref": "#/definitions/menuBarItem"
         },
+        "view": {
+          "$ref": "#/definitions/string",
+          "description": "In a popup: the name of one of its views, which a click shows in place of its layout, under a back arrow."
+        },
         "lineWidth": {
           "$ref": "#/definitions/number"
+        },
+        "gap": {
+          "anyOf": [{"type": "number", "minimum": 0, "maximum": 360}, {"$ref": "#/definitions/reference"}, {"type": "null"}],
+          "description": "For rings: the degrees left open at the bottom, centered on six o'clock. 0, the default, draws a full ring."
+        },
+        "segments": {
+          "anyOf": [{"type": "integer", "minimum": 1}, {"$ref": "#/definitions/reference"}, {"type": "null"}],
+          "description": "For progress blocks: draw this many equal pieces instead of one rule, lighting ceil(value × segments) of them."
         },
         "hideWhenEmpty": {
           "$ref": "#/definitions/string"
@@ -1149,6 +1164,24 @@
         },
         "onChange": {
           "$ref": "#/definitions/string"
+        },
+        "set": {
+          "anyOf": [
+            {
+              "enum": [
+                "volume",
+                "muted",
+                "wifiPower"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "In place of onChange, what a slider or toggle changes without a command: volume for a slider, muted or wifiPower for a toggle."
         },
         "endStop": {
           "$ref": "#/definitions/sliderEndStop",
@@ -1256,6 +1289,13 @@
         },
         "layout": {
           "$ref": "#/definitions/block"
+        },
+        "views": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/block"
+          },
+          "description": "Layouts by name, each a block like layout, that a block's view shows in place of the layout. The back arrow or Escape returns to the layout."
         },
         "alignment": {
           "$ref": "#/definitions/alignment"
@@ -1519,8 +1559,10 @@
                 "spacer",
                 "system",
                 "network",
+                "wifi",
                 "disk",
                 "battery",
+                "bluetooth",
                 "audio",
                 "inputSource",
                 "microphone",
@@ -1878,8 +1920,10 @@
                 "stream",
                 "system",
                 "network",
+                "wifi",
                 "disk",
                 "battery",
+                "bluetooth",
                 "audio",
                 "inputSource",
                 "microphone",
@@ -1952,6 +1996,78 @@
               "type": "null"
             }
           ]
+        },
+        "members": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/groupMember"
+              }
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Selectors for widgets that join the group without a group of their own. A widget in another position than the group stays out."
+        }
+      }
+    },
+    "groupMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["type"], "properties": { "type": { "not": { "type": "null" } } } },
+        { "required": ["role"], "properties": { "role": { "not": { "type": "null" } } } },
+        { "required": ["id"] }
+      ],
+      "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID.",
+      "properties": {
+        "type": {
+          "anyOf": [
+            {
+              "enum": [
+                "aerospace",
+                "workspaces",
+                "activeApp",
+                "appMenu",
+                "appleMenu",
+                "controlCenter",
+                "stableBar",
+                "menuBarItems",
+                "clock",
+                "text",
+                "script",
+                "provider",
+                "spacer",
+                "system",
+                "network",
+                "wifi",
+                "disk",
+                "battery",
+                "bluetooth",
+                "audio",
+                "inputSource",
+                "microphone",
+                "privacy",
+                "calendar"
+              ]
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "id": {
+          "type": "string",
+          "description": "A widget ID, such as one a package fixes."
         }
       }
     },

@@ -1,5 +1,6 @@
 import AppKit
 @preconcurrency import ApplicationServices
+import CoreLocation
 import EventKit
 import SwiftUI
 
@@ -9,6 +10,7 @@ struct SourcePermissionList: View {
     @State private var calendarAccess = EKEventStore.authorizationStatus(for: .event)
     @State private var accessibilityAccess = AXIsProcessTrusted()
     @State private var screenRecordingAccess = CGPreflightScreenCaptureAccess()
+    @State private var locationAccess = CLAuthorizationStatus.notDetermined
     @State private var requestingCalendar = false
     @State private var error: String?
 
@@ -59,6 +61,15 @@ struct SourcePermissionList: View {
                     } else {
                         Button("Allow…") { requestScreenRecording() }
                     }
+                case "Privacy_LocationServices":
+                    Group {
+                        if locationAccess == .authorizedAlways {
+                            allowed
+                        } else {
+                            Button("Open Settings…") { openPrivacyPane(permission.privacyPane) }
+                        }
+                    }
+                    .onAppear { locationAccess = CLLocationManager().authorizationStatus }
                 default:
                     Button("Open Settings…") { openPrivacyPane(permission.privacyPane) }
                 }
@@ -68,6 +79,7 @@ struct SourcePermissionList: View {
             calendarAccess = EKEventStore.authorizationStatus(for: .event)
             accessibilityAccess = AXIsProcessTrusted()
             screenRecordingAccess = CGPreflightScreenCaptureAccess()
+            if permissions.contains(.location) { locationAccess = CLLocationManager().authorizationStatus }
             accessChanged()
         }
         if let error {
