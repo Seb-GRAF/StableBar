@@ -2,13 +2,15 @@ import Foundation
 import CryptoKit
 
 struct RuntimeRequest: Codable {
-    enum Action: String, Codable { case query, batch, reset, refresh, popup, focus, trigger, reload, customize, uninstallPackage, report }
+    enum Action: String, Codable { case query, batch, reset, refresh, popup, openPopup, closePopup, focus, trigger, reload, customize, uninstallPackage, report }
     let action: Action
     var id: String?
     var version: String?
     var edits: [ConfigurationEdit]?
     var persist = false
     var environment: [String: String]?
+    /// Seconds an `openPopup` stays open.
+    var duration: Double?
 }
 
 struct RuntimeResponse: Codable {

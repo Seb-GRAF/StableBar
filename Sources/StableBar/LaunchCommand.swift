@@ -35,6 +35,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --batch JSON_ARRAY [--persist]
            StableBar [--config PATH] --profile NAME|auto [--persist]
            StableBar [--config PATH] --reset | --refresh ID | --popup ID | --focus
+           StableBar [--config PATH] --popup ID --open [--duration SECONDS] | --popup [ID] --close
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID [--source SOURCE]
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
            StableBar [--config PATH] --enable-package ID VERSION [--persist]
@@ -85,8 +86,20 @@ enum LaunchCommand {
             self = .control(url, RuntimeRequest(action: .reset))
         case "--refresh" where arguments.count == 2:
             self = .control(url, RuntimeRequest(action: .refresh, id: arguments[1]))
+        case "--popup" where arguments == ["--popup", "--close"]:
+            self = .control(url, RuntimeRequest(action: .closePopup))
         case "--popup" where arguments.count == 2:
             self = .control(url, RuntimeRequest(action: .popup, id: arguments[1]))
+        case "--popup" where arguments.count == 3 && arguments[2] == "--close":
+            self = .control(url, RuntimeRequest(action: .closePopup, id: arguments[1]))
+        case "--popup" where arguments.count == 3 && arguments[2] == "--open":
+            self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1]))
+        case "--popup" where arguments.count == 5 && arguments[2] == "--open" && arguments[3] == "--duration":
+            // Duration traps on more seconds than it can hold, such as inf, which would crash the running bar.
+            guard let seconds = Double(arguments[4]), seconds > 0, seconds <= 86_400 else {
+                throw CommandFailure(message: "--duration must be greater than zero and at most one day (86400 seconds).")
+            }
+            self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1], duration: seconds))
         case "--focus" where arguments.count == 1:
             self = .control(url, RuntimeRequest(action: .focus))
         case "--packages" where arguments.count == 1:

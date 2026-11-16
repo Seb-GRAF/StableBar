@@ -405,6 +405,17 @@ final class WidgetPopup {
         }
     }
 
+    /// Closes the open popup after `duration`, unless the pointer moves into it or it's pinned first.
+    func close(after duration: Duration) {
+        hoverTask = Task { [weak self] in
+            do {
+                try await self?.clock.sleep(for: duration)
+                try Task.checkCancellation()
+            } catch { return }
+            self?.close()
+        }
+    }
+
     private func keepOpen() {
         pinned = true
         hoverTask?.cancel()

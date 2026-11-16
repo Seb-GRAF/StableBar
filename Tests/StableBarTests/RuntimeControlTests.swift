@@ -285,6 +285,22 @@ import Testing
     }
 }
 
+@Test func popupCommandsOpenOrCloseAndRejectDurationsTheBarCannotWaitFor() throws {
+    func request(_ arguments: [String]) throws -> RuntimeRequest {
+        guard case let .control(_, request) = try LaunchCommand(arguments: arguments) else { throw CommandFailure(message: "Expected a control command") }
+        return request
+    }
+    let timed = try request(["--popup", "agenda", "--open", "--duration", "2.5"])
+    #expect((timed.action, timed.id, timed.duration) == (.openPopup, "agenda", 2.5))
+    let any = try request(["--popup", "--close"])
+    #expect((any.action, any.id) == (.closePopup, nil))
+    #expect(try request(["--popup", "agenda", "--close"]).action == .closePopup)
+    #expect(try request(["--popup", "agenda"]).action == .popup)
+    for duration in ["0", "-1", "inf", "nan", "1e300", "soon"] {
+        #expect(throws: CommandFailure.self) { try LaunchCommand(arguments: ["--popup", "agenda", "--open", "--duration", duration]) }
+    }
+}
+
 @Test @MainActor func acceptedSessionEditsSurviveAutomaticProfileChanges() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
