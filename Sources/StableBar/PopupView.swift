@@ -544,15 +544,18 @@ struct PopupBlockView: View {
             .modifier(FocusHighlight(appearance: appearance))
         case let .slider(title, source, minimum, maximum, step, endStop, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
-            if let endStop {
-                EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
-                    context.runAction(action, ["VALUE": String($0)])
-                }
-            } else {
-                PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
-                    context.runAction(action, ["VALUE": String($0)])
+            Group {
+                if let endStop {
+                    EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
+                        context.runAction(action, ["VALUE": String($0)])
+                    }
+                } else {
+                    PopupSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step) {
+                        context.runAction(action, ["VALUE": String($0)])
+                    }
                 }
             }
+            .modifier(FocusHighlight(appearance: appearance))
         case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
@@ -565,10 +568,12 @@ struct PopupBlockView: View {
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
                 context.runAction(action, ["VALUE": $0 ? "true" : "false"])
             }
+            .modifier(FocusHighlight(appearance: appearance))
         case let .segmented(title, source, options, command):
             PopupSegmented(title: title, value: fields[source] ?? options[0].value, options: options) {
                 context.runAction(.command(command), ["VALUE": $0])
             }
+            .modifier(FocusHighlight(appearance: appearance))
         case let .chooser(title, source, groupsSource, optionsSource, levelsSource, stars, command):
             PopupChooser(title: title, chosen: fields[source] ?? "", groups: context.lists[groupsSource] ?? [],
                          options: context.lists[optionsSource] ?? [], levels: levelsSource.flatMap { context.lists[$0] } ?? [],
@@ -577,9 +582,11 @@ struct PopupBlockView: View {
             } onStar: {
                 if let stars { context.runAction(.command(stars.command), ["VALUE": $0, "OPTION": $1, "LEVEL": $2, "STARRED": $3 ? "true" : "false"]) }
             }
+            .modifier(FocusHighlight(appearance: appearance))
         case let .search(title, source, searchFields, row):
             VStack(alignment: .leading, spacing: appearance.spacing) {
                 TextField(title, text: $query).textFieldStyle(.roundedBorder).accessibilityLabel(title)
+                    .modifier(FocusHighlight(appearance: appearance))
                 ForEach(Array(searchPopupRows(context.lists[source] ?? [], query: query, fields: searchFields).enumerated()), id: \.offset) { _, fields in
                     child(row, of: style, fields: fields)
                 }
@@ -591,6 +598,7 @@ struct PopupBlockView: View {
             } onStop: {
                 if let stop { context.runAction(.command(stop.command), [:]) }
             }
+            .modifier(FocusHighlight(appearance: appearance))
         case .menu:
             VStack(spacing: appearance.spacing) {
                 ForEach(Array(context.menu.enumerated()), id: \.offset) { _, item in
@@ -1618,6 +1626,21 @@ private struct AppMenuRow: View {
     @State private var anchor = NSView()
 
     var body: some View {
+        Group {
+            // Tab skips a disabled entry. `focusable(true)` would give an enabled one a second stop.
+            if entry.isEnabled { button } else { button.focusable(false) }
+        }
+        .focused($focused)
+        .opacity(entry.isEnabled ? 1 : 0.4)
+        .onHover { hovered = $0 }
+        .task(id: hovered) {
+            guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
+            rest(anchor)
+        }
+        .onChange(of: entry.element) { if hovered { rest(anchor) } }
+    }
+
+    private var button: some View {
         Button {
             if entry.hasSubmenu { rest(anchor) } else if entry.isEnabled { press() }
         } label: {
@@ -1652,14 +1675,6 @@ private struct AppMenuRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .focused($focused)
-        .opacity(entry.isEnabled ? 1 : 0.4)
-        .onHover { hovered = $0 }
-        .task(id: hovered) {
-            guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
-            rest(anchor)
-        }
-        .onChange(of: entry.element) { if hovered { rest(anchor) } }
     }
 }
 
