@@ -5,7 +5,7 @@
   <img src="images/settings-light.webp" alt="The Theme section of StableBar Settings, with a preview of the bar, the theme gallery and the theme's colors">
 </picture>
 
-Open **Settings…** from the menu-bar icon or by right-clicking the bar, click a [StableBar widget](widgets.md#menu-bar-items), reopen the running app, or run `StableBar --customize`. Its tabs are **General**, **Bar**, **Theme**, **Store**, **Profiles**, **Status** and **Help**, with General selected on first opening. **Search settings** finds controls by their purpose, including login, permissions, clock format, displays and widget appearance, and jumps to the matching section.
+Open **Settings…** from the menu-bar icon or by right-clicking the bar, click a [StableBar widget](widgets.md#menu-bar-items), reopen the running app, or run `StableBar --customize`. Its tabs are **General**, **Bar**, **Theme**, **Store**, **Profiles**, **Status** and **Help**, with General selected on first opening. When a tiling window manager makes Settings narrower than about 620 points, the tabs show only their icons, and below about 500 points the search field narrows too. **Search settings** finds controls by their purpose, including login, permissions, clock format, displays and widget appearance, and jumps to the matching section.
 
 While Settings is open, StableBar appears in the Dock and the ⌘Tab app switcher so you can return after switching apps. Closing Settings, with its close button or ⌘W, removes its Dock icon; the bar keeps running.
 
