@@ -28,15 +28,18 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Theme links carry only a theme** (2026-11-16, [#676]). A
   `stablebar://theme?v=1&package=…&config=…` link carries only `package.json` and `config.json`: at
   most 64 KB for the URL, 32 KB for the two decoded files together, 32 levels of JSON nesting, 16
-  profiles and 372 JSON values across both files. Only theme configuration keys are accepted, with
-  no screenshots, includes or extra files. At the root and in every profile, `bar` must be a literal
-  object with only `height`, `margin`, `inset`, `spacing`, `background`, `style`, `notchWidth`,
-  `notchSpacing`, `fillNotch` and `popupOffset`. Inside `bar`, tokens and settings may supply
-  non-numeric values, never numbers, the `bar` object or its keys. This keeps links from changing
-  the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled theme IDs are
-  reserved, and a non-theme package's ID cannot be reused. An installed ID and version are reused
-  only when both files match byte for byte; otherwise the author raises the version on the page. The
-  app never renumbers a theme.
+  profiles and 372 JSON values across both files. Theme configuration keys are `tokens`,
+  `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
+  keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
+  is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
+  `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,
+  `style`, `notchWidth`, `notchSpacing`, `fillNotch` and `popupOffset`. Inside `bar`, numbers must
+  be literal; colors may use tokens or settings with `choices`. Free-text string settings under
+  `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
+  from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
+  theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and
+  version are reused only when both files match byte for byte; otherwise the author raises the
+  version on the page. The app never renumbers a theme.
 - **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including
   nested styles, states, gradients and every profile, must be a finite JSON number literal.
   References that can supply numbers through tokens, combined profiles or setting choices are

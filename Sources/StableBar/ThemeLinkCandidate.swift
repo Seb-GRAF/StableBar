@@ -199,7 +199,6 @@ final class ThemeLinkCandidate {
         }
         collect(document)
         var numeric: Set<String> = []
-        var freeStrings: Set<String> = []
         if case let .object(settings)? = manifest["settings"] {
             for (name, value) in settings {
                 guard case let .object(setting) = value else { continue }
@@ -209,7 +208,7 @@ final class ThemeLinkCandidate {
                 if case let .array(choices)? = setting["choices"] {
                     sources[reference, default: []] += choices
                 } else if setting["type"] == .string("string") {
-                    freeStrings.insert(reference)
+                    numeric.insert(reference)
                 }
             }
         }
@@ -229,7 +228,6 @@ final class ThemeLinkCandidate {
             for (reference, values) in sources where values.contains(where: containsNumber) {
                 numeric.insert(reference)
             }
-            if !numeric.isEmpty { numeric.formUnion(freeStrings) }
         } while numeric != previous
         return numeric
     }
@@ -256,6 +254,9 @@ final class ThemeLinkCandidate {
         _ document: [String: ConfigurationValue], profileCount: inout Int,
         numericReferences: Set<String> = []
     ) throws {
+        for key in ["customization", "removedWidgets"] where document[key] != nil {
+            throw WidgetPackageError.themeProperty(key)
+        }
         if document["includes"] != nil { throw ThemeLinkError.extraFiles }
         if let value = document["bar"] {
             // Profiles and setting choices must never supply the bar's keys or numbers.

@@ -1097,18 +1097,113 @@ struct ThemeLinkCandidateTests {
         }
     }
 
-    @Test(arguments: [false, true])
-    func barStyleColorsMayStillUseReferences(inProfile: Bool) throws {
+    @Test func legacyCustomizationCannotUseSettingChoicesForBarNumbers() throws {
+        var link = try linkedTheme()
+        var manifest = try JSONDecoder().decode(
+            [String: ConfigurationValue].self, from: link.manifest)
+        manifest["settings"] = .object(["size": .object([
+            "type": .string("string"), "default": .string("@token.small"),
+            "choices": .array([.string("@token.small"), .string("@token.big")])
+        ])])
+        link.manifest = try configurationData(manifest)
+        link.configuration = Data(#"""
+        {"customization":{"bar":{"height":"@setting.size"}},"tokens":{"small":30,"big":4000}}
+        """#.utf8)
+        try expectThemeKeyRefusal("customization", in: link)
+    }
+
+    @Test func legacyCustomizationCannotUseNumberSettingsForBarNumbers() throws {
+        var link = try linkedTheme()
+        var manifest = try JSONDecoder().decode(
+            [String: ConfigurationValue].self, from: link.manifest)
+        manifest["settings"] = .object(["size": .object([
+            "type": .string("number"), "default": .number(30)
+        ])])
+        link.manifest = try configurationData(manifest)
+        link.configuration = Data(#"{"customization":{"bar":{"height":"@setting.size"}}}"#.utf8)
+        try expectThemeKeyRefusal("customization", in: link)
+    }
+
+    @Test func legacyCustomizationCannotUseCombinedProfilesForBarNumbers() throws {
+        var link = try linkedTheme()
+        link.configuration = Data(#"""
+        {"customization":{"bar":{"height":"@token.h"}},"tokens":{"h":"@token.x","x":30},
+         "profiles":[
+          {"name":"A","when":{"appearance":"dark"},"configuration":{
+            "tokens":{"h":"@token.y","y":30}}},
+          {"name":"B","when":{"appearance":"dark"},"configuration":{"tokens":{"y":4000}}}
+        ]}
+        """#.utf8)
+        try expectThemeKeyRefusal("customization", in: link)
+    }
+
+    @Test(arguments: ["customization", "removedWidgets"], [false, true])
+    func legacyRootKeysAreRefusedBeforeProfileDecoding(
+        key: String, malformedProfiles: Bool
+    ) throws {
+        var link = try linkedTheme()
+        var document: [String: ConfigurationValue] = [
+            key: key == "customization" ? .object([:]) : .array([])
+        ]
+        if malformedProfiles {
+            document["profiles"] = .array([.object(["name": .number(1)])])
+        }
+        link.configuration = try configurationData(document)
+        try expectThemeKeyRefusal(key, in: link)
+    }
+
+    @Test(arguments: ["@setting.color", "@token.alias"], [
+        (false, false), (false, true), (true, false), (true, true)
+    ])
+    func barColorsCannotUseFreeTextSettings(reference: String, placement: (Bool, Bool)) throws {
+        let (inProfile, hasNumericToken) = placement
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         var link = try linkedTheme()
+        var manifest = try JSONDecoder().decode(
+            [String: ConfigurationValue].self, from: link.manifest)
+        manifest["settings"] = .object(["color": .object([
+            "type": .string("string"), "default": .string("#123456")
+        ])])
+        link.manifest = try configurationData(manifest)
         var document: [String: ConfigurationValue] = [
-            "bar": barValue(.string("@token.color"), at: "style.states.hover.foreground")
+            "bar": barValue(.string(reference), at: "style.background")
+        ]
+        if inProfile { document = ["profiles": .array([profile(document, enabled: false)])] }
+        var tokens: [String: ConfigurationValue] = ["alias": .string("@setting.color")]
+        if hasNumericToken { tokens["size"] = .number(30) }
+        document["tokens"] = .object(tokens)
+        link.configuration = try configurationData(document)
+        #expect(throws: ThemeLinkError.indirectBar) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func barStyleColorsMayStillUseReferences(inProfile: Bool, settingChoices: Bool) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        var link = try linkedTheme()
+        if settingChoices {
+            var manifest = try JSONDecoder().decode(
+                [String: ConfigurationValue].self, from: link.manifest)
+            manifest["settings"] = .object(["color": .object([
+                "type": .string("string"), "default": .string("@token.color"),
+                "choices": .array([.string("@token.color"), .string("#654321")])
+            ])])
+            link.manifest = try configurationData(manifest)
+        }
+        let reference = settingChoices ? "@setting.color" : "@token.color"
+        var document: [String: ConfigurationValue] = [
+            "bar": barValue(.string(reference), at: "style.states.hover.foreground")
         ]
         if inProfile { document = ["profiles": .array([profile(document)])] }
-        document["tokens"] = .object(["color": .string("#123456")])
+        document["tokens"] = .object(["color": .string("#123456"), "size": .number(30)])
         link.configuration = try configurationData(document)
         let candidate = try ThemeLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
@@ -1205,6 +1300,20 @@ struct ThemeLinkCandidateTests {
     private func linkedTheme() throws -> ThemeLink {
         ThemeLink(manifest: try Data(contentsOf: linkedThemeDirectory.appending(path: "package.json")),
                   configuration: try Data(contentsOf: linkedThemeDirectory.appending(path: "config.json")))
+    }
+
+    private func expectThemeKeyRefusal(_ key: String, in link: ThemeLink) throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let before = try temporaryFolders()
+        let error = #expect(throws: WidgetPackageError.self) {
+            let candidate = try ThemeLinkCandidate(link: link, store: store)
+            candidate.discard()
+        }
+        #expect(error?.errorDescription == WidgetPackageError.themeProperty(key).errorDescription)
+        #expect(try temporaryFolders() == before)
     }
 
     private func barValue(_ value: ConfigurationValue, at path: String) -> ConfigurationValue {
