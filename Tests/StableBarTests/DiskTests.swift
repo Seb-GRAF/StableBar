@@ -24,7 +24,7 @@ private let fixture = DiskVolumes(
     #expect(output.text == "59%")
     #expect(output.icon == "internaldrive")
     #expect(output.value == nil)
-    #expect(output.tooltip == "\(diskSize(412_000_000_000)) available on Macintosh HD")
+    #expect(output.tooltip == "\(diskSize(412_000_000_000)) free on Macintosh HD")
     #expect(output.fields == ["percent": "59", "volume": "Macintosh HD", "format": "APFS",
                               "used": diskSize(582_000_000_000), "free": diskSize(412_000_000_000),
                               "total": diskSize(994_000_000_000)])
@@ -74,10 +74,13 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
     #expect(row?["percent"] == "100" && row?["free"] == diskSize(0) && row?["total"] == diskSize(200_000_000))
 }
 
-@Test(arguments: [(0, 30_000_000_000, 30_000_000_000), (44_000_000_000, 30_000_000_000, 44_000_000_000),
-                  (nil, 30_000_000_000, 30_000_000_000), (nil, nil, 0), (0, nil, 0)] as [(Int64?, Int64?, Int64)])
-func availableSpacePrefersImportantUsageOnlyWhenTheVolumeReportsIt(important: Int64?, plain: Int64?, expected: Int64) {
-    #expect(diskAvailable(important: important, plain: plain) == expected)
+/// Disk Utility and `df` count purgeable space as used; the tolerance covers writes between the two reads.
+@Test func startupDiskFreeSpaceMatchesWhatStatfsReports() throws {
+    let startup = try SystemVolumes().read().startup
+    var stats = statfs()
+    #expect(statfs("/", &stats) == 0)
+    let free = Int64(stats.f_bavail) * Int64(stats.f_bsize)
+    #expect(abs(startup.available - free) < startup.total / 100, "\(startup.available) against statfs \(free)")
 }
 
 @Test func diskThresholdsAbove100PercentTurnWarningsOff() {

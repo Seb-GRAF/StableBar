@@ -7,7 +7,7 @@ struct DiskVolume: Equatable, Sendable {
     var name: String
     var path: String
     var format: String
-    /// Bytes; used space is `total - available`.
+    /// Bytes; used space is `total - available`. Purgeable space counts as used, as in Disk Utility and `df`.
     var total: Int64
     var available: Int64
     var isLocal: Bool
@@ -46,7 +46,7 @@ func diskOutput(_ volumes: DiskVolumes, warning: Double, critical: Double) -> Sc
     }
     var output = ScriptOutput(
         text: "\(diskPercent(fraction))%", icon: "internaldrive",
-        tooltip: "\(diskSize(startup.available)) available on \(startup.name)",
+        tooltip: "\(diskSize(startup.available)) free on \(startup.name)",
         fields: ["percent": diskPercent(fraction), "volume": startup.name, "format": startup.format,
                  "used": diskSize(used), "free": diskSize(startup.available), "total": diskSize(startup.total)],
         lists: ["volumes": rows],
@@ -54,12 +54,6 @@ func diskOutput(_ volumes: DiskVolumes, warning: Double, critical: Double) -> Sc
                  "total": Double(startup.total)])
     if let state = diskState(fraction, warning: warning, critical: critical) { output.state = .string(state) }
     return output
-}
-
-/// Important usage adds purgeable space, but volumes other than the startup disk report it as 0, not nil.
-func diskAvailable(important: Int64?, plain: Int64?) -> Int64 {
-    if let important, important > 0 { return important }
-    return plain ?? 0
 }
 
 private func diskPercent(_ fraction: Double) -> String { String(Int((fraction * 100).rounded())) }
@@ -78,8 +72,7 @@ protocol VolumeReading: Sendable {
 /// The startup disk and the volumes Finder shows, from Foundation's volume resource values.
 struct SystemVolumes: VolumeReading {
     private static let keys: [URLResourceKey] = [
-        .volumeLocalizedNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
-        .volumeAvailableCapacityKey, .volumeLocalizedFormatDescriptionKey, .volumeIsLocalKey, .volumeIsInternalKey,
+        .volumeLocalizedNameKey, .volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeLocalizedFormatDescriptionKey, .volumeIsLocalKey, .volumeIsInternalKey,
         .volumeIsEjectableKey, .volumeIsRemovableKey, .volumeIsRootFileSystemKey, .volumeIsReadOnlyKey
     ]
 
@@ -102,8 +95,7 @@ struct SystemVolumes: VolumeReading {
     private func volume(at url: URL, session: DASession?) throws -> DiskVolume? {
         let values = try url.resourceValues(forKeys: Set(Self.keys))
         guard let total = values.volumeTotalCapacity.map(Int64.init) else { return nil }
-        let available = diskAvailable(important: values.volumeAvailableCapacityForImportantUsage,
-                                      plain: values.volumeAvailableCapacity.map(Int64.init))
+        let available = values.volumeAvailableCapacity.map(Int64.init) ?? 0
         let isLocal = values.volumeIsLocal ?? true
         let ejectable = values.volumeIsInternal != true || values.volumeIsEjectable == true
             || values.volumeIsRemovable == true || !isLocal

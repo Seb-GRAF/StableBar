@@ -228,7 +228,7 @@ struct EssentialsDetails: View {
             }
             VStack(spacing: 8) {
                 detail("Used", fields["used"] ?? "—")
-                detail("Available", fields["free"] ?? "—")
+                detail("Free", fields["free"] ?? "—")
                 detail("Capacity", fields["total"] ?? "—")
             }
             if let volumes = context.lists["volumes"], !volumes.isEmpty {
