@@ -18,6 +18,9 @@ final class ThemeLinkCandidate {
     private let install: @Sendable (URL) async throws -> WidgetPackageInspection
     private var discarded = false
     private var using = false
+    /// Counts themes applied or tried elsewhere, so a selection that changes and changes back
+    /// while this theme installs still wins.
+    @ObservationIgnored private var themeChoices = 0
 
     init(link: ThemeLink, store: BarStore,
          install: (@Sendable (URL) async throws -> WidgetPackageInspection)? = nil) throws {
@@ -79,6 +82,8 @@ final class ThemeLinkCandidate {
         }
     }
 
+    func noteThemeChoice() { themeChoices += 1 }
+
     func cancelTrial() {
         guard state == .trying else { return }
         if store?.themeTrialDirectory == choice.directory { store?.endThemeTrial() }
@@ -92,6 +97,7 @@ final class ThemeLinkCandidate {
         let configurationURL = store.configurationURL
         let selectedKey = store.selectedThemeKey
         let trialDirectory = store.themeTrialDirectory
+        let themeChoices = themeChoices
         do {
             let screenTheme = try selectedScreenTheme(on: kind, in: store)
             let client = store.packageStoreClient
@@ -109,7 +115,8 @@ final class ThemeLinkCandidate {
                 installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
             }
             guard !discarded else { return }
-            guard store.configurationURL == configurationURL,
+            guard self.themeChoices == themeChoices,
+                  store.configurationURL == configurationURL,
                   store.selectedThemeKey == selectedKey,
                   store.themeTrialDirectory == trialDirectory,
                   try selectedScreenTheme(on: kind, in: store) == screenTheme else {

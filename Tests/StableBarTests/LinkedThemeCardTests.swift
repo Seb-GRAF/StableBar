@@ -221,6 +221,60 @@ struct LinkedThemeCardTests {
         #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
     }
 
+    enum Detour: CaseIterable { case chooseAnother, tryAnother }
+
+    @Test(arguments: Detour.allCases)
+    func aSelectionThatChangesBackSurvivesALinkedThemeInstallation(detour: Detour) async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let first = try fixture.theme(#"{"bar":{"height":42}}"#, id: "first-theme")
+        let second = try fixture.theme(#"{"bar":{"height":44}}"#, id: "second-theme")
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.reloadConfiguration()
+        let editor = ConfigurationEditor(store: store)
+        editor.gallery.select(first)
+        let client = store.packageStoreClient
+        let started = AsyncStream.makeStream(of: Void.self)
+        let release = AsyncStream.makeStream(of: Void.self)
+        defer { started.continuation.finish(); release.continuation.finish() }
+        let candidate = try ThemeLinkCandidate(link: link(), store: store) { directory in
+            started.continuation.yield(())
+            for await _ in release.stream { break }
+            return try await client.install(directory, from: nil)
+        }
+        store.pendingLinks.theme = candidate
+        let card = LinkedThemeCard(candidate: candidate, editor: editor)
+
+        let use = Task { await card.useTheme() }
+        for await _ in started.stream { break }
+        switch detour {
+        case .chooseAnother:
+            editor.gallery.select(second)
+            editor.gallery.select(first)
+        case .tryAnother:
+            try store.tryTheme(second)
+            store.endThemeTrial()
+        }
+        #expect(store.selectedThemeKey == first.key)
+        #expect(store.themeTrialDirectory == nil)
+        let chosenDocument = try fixture.document()
+        let undoCount = store.customizationHistory.undoSteps.count
+        release.continuation.yield(())
+        await use.value
+
+        #expect(try fixture.document() == chosenDocument)
+        #expect(store.selectedThemeKey == first.key)
+        #expect(store.customizationHistory.undoSteps.count == undoCount)
+        #expect(candidate.state == .ready)
+        #expect(store.pendingLinks.theme === candidate)
+
+        await card.useTheme()
+
+        #expect(candidate.state == .used)
+        #expect(store.selectedThemeKey == candidate.choice.key)
+    }
+
     @Test(arguments: [false, true])
     func theCardTracksTrialsEndedElsewhere(tryThemes: Bool) async throws {
         let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40},"widgets":[]}"#)

@@ -652,6 +652,7 @@ final class BarStore: NSObject {
     }
 
     func applyTheme(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) throws {
+        pendingLinks.theme?.noteThemeChoice()
         guard let kind else { return try customizationHistory.change(themeEdit(for: choice), everyBar: everyBar) }
         try customizationHistory.change([
             ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
@@ -668,6 +669,7 @@ final class BarStore: NSObject {
         guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
+        pendingLinks.theme?.noteThemeChoice()
         let (next, loader) = try configurationTryingTheme(choice)
         triedTheme = choice
         display(next, loader: loader)
