@@ -475,7 +475,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let timeout: Double
     let actions: WidgetActions?
     let enabled: Bool
-    var group: String?
+    let ownGroup: String?
+    /// The group whose `members` the widget joined. A screen's own layout settles it again.
+    var joinedGroup: String?
     let priority: Int
     let overflow: WidgetOverflow
     let rules: [StyleRule]
@@ -487,6 +489,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
     }
 
+    var group: String? { ownGroup ?? joinedGroup }
     var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
     var tooltipStyle: WidgetStyle { WidgetStyle(background: tooltipBackground).inheriting(style) }
 
@@ -533,7 +536,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         }
         actions = try values.decodeIfPresent(WidgetActions.self, forKey: .actions)
         enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-        group = try values.decodeIfPresent(String.self, forKey: .group)
+        ownGroup = try values.decodeIfPresent(String.self, forKey: .group)
         priority = try values.decodeIfPresent(Int.self, forKey: .priority) ?? 0
         overflow = try values.decodeIfPresent(WidgetOverflow.self, forKey: .overflow) ?? .automatic
         rules = try values.decodeIfPresent([StyleRule].self, forKey: .rules) ?? []
@@ -954,6 +957,7 @@ struct Configuration: Decodable, Sendable {
                 return widget
             }
         }
-        return listed + widgets.filter { widget in !listed.contains { $0.id == widget.id } }
+        let unlisted = widgets.filter { widget in !listed.contains { $0.id == widget.id } }
+        return WidgetGroupConfiguration.joining(listed + unlisted, groups: groups)
     }
 }

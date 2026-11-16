@@ -106,6 +106,18 @@ private func groupsByWidget(_ json: String) throws -> [String: String] {
     """#) == ["date": "d", "time": "c", "other": "a"])
 }
 
+@Test func aScreensOwnLayoutDecidesWhichWidgetsJoin() throws {
+    let config = try configuration(#"""
+    {"groups":{"pill":{"members":[{"type":"clock"}]}},
+     "screens":{"laptop":{"layout":{"left":["time"],"right":["date"]}}},
+     "widgets":[{"id":"time","type":"clock","position":"right"},{"id":"date","type":"clock","position":"right"}]}
+    """#)
+    #expect(config.onScreen(.monitor).widgets.map(\.group) == ["pill", "pill"])
+    let laptop = config.onScreen(.laptop)
+    #expect(laptop.widgets.map(\.group) == ["pill", nil])
+    #expect(BarUnit.make(widgets: laptop.widgets, groups: laptop.groups).map(\.position) == [.left, .right])
+}
+
 @Test func aGroupWhoseSelectorsMatchNothingDrawsNothing() throws {
     let config = try configuration(#"""
     {"groups":{"media":{"members":[{"id":"now-playing"}]}},"widgets":[{"id":"clock","type":"clock","position":"right"}]}

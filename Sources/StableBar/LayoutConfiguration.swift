@@ -18,18 +18,20 @@ struct WidgetGroupConfiguration: Decodable, Sendable {
     static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration]) -> [WidgetConfiguration] {
         var positions: [String: WidgetPosition] = [:]
         for widget in widgets {
-            if let group = widget.group { positions[group] = widget.position }
+            if let group = widget.ownGroup, positions[group] == nil { positions[group] = widget.position }
         }
         var joined = widgets
-        for index in joined.indices where joined[index].group == nil && joined[index].enabled {
+        for index in joined.indices {
+            joined[index].joinedGroup = nil
             let widget = joined[index]
+            guard widget.ownGroup == nil, widget.enabled else { continue }
             let matches = groups.sorted { $0.key < $1.key }.flatMap { id, group in
                 group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.id == nil ? 0 : 1, $0.keyCount)) }
             }
             guard let best = matches.first(where: { match in !matches.contains { $0.rank > match.rank } }),
                   (positions[best.group] ?? widget.position) == widget.position else { continue }
             positions[best.group] = widget.position
-            joined[index].group = best.group
+            joined[index].joinedGroup = best.group
         }
         return joined
     }
