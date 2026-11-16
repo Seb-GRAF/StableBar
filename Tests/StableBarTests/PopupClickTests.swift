@@ -83,3 +83,16 @@ func popupBlockActionsFireAcrossTheirStyledBox(action: String) throws {
         clicks = index + 1
     }
 }
+
+@Test(arguments: [
+    (#"{"type":"column","children":[{"type":"text","text":"Wi-Fi"},{"type":"divider"}]}"#, true),
+    (#"{"type":"column","children":[{"type":"text","text":"Wi-Fi"}]}"#, true),
+    (#"{"type":"column","children":[{"type":"field","field":"ssid"},{"type":"divider"}]}"#, false),
+    (#"{"type":"column","children":[{"type":"toggle","title":"Wi-Fi","source":"power","onChange":"true"}]}"#, false),
+    (#"{"type":"row","children":[{"type":"text","text":"Wi-Fi"}]}"#, false),
+    (#"{"type":"text","text":"Wi-Fi"}"#, false),
+    (#"{"type":"column","children":[]}"#, false),
+])
+func onlyAColumnStartingWithTextPutsItsTitleBesideTheBackArrow(json: String, titled: Bool) throws {
+    #expect(try JSONDecoder().decode(PopupBlock.self, from: Data(json.utf8)).startsWithTitle == titled)
+}

@@ -440,6 +440,12 @@ extension PopupBlock {
         }
         return (view.map { [$0] } ?? []) + inside.flatMap(\.openedViews)
     }
+
+    /// Whether a view starts with its title: a column whose first block is a text block, which then sits beside the back arrow.
+    var startsWithTitle: Bool {
+        guard case let .column(children) = content, case .text? = children.first?.content else { return false }
+        return true
+    }
 }
 
 enum ListOrientation: String, Decodable, Sendable {
