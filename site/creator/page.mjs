@@ -13,7 +13,7 @@ const groupCopy = {
   bar: "Change the strip behind your widgets. Tiles have their own controls below.",
   widgets: "Change the tiles, type and spacing. Turn tiles off to keep just the text and any glow.",
   workspaces: "Choose a background, an underline or text alone. Only the settings it uses are shown.",
-  popups: "Change the popup colors and corners. Tooltips stay compact.",
+  popups: "Change the popup colors, corners, padding, spacing and gap. Tooltips stay compact.",
   about: "Give your theme a name. Add your GitHub username if you plan to share it in the Store.",
 };
 const messages = {
@@ -74,6 +74,10 @@ function controlValue(control, r) {
   const fallbacks = { "bar.height": 40, "bar.margin": 0, "bar.cornerRadius": 0, "bar.borderWidth": 0,
     "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0, "popups.gap": 6 };
   const value = at(r, control.paths[0]) ?? fallbacks[control.id];
+  if (control.kind === "number") {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    return typeof value === "string" ? parseNumber(value) : null;
+  }
   const colors = value?.gradient?.colors;
   if (colors && (control.kind === "color" || colors.every(color => color === colors[0]))) return colors[0];
   return value;
@@ -97,7 +101,7 @@ function controlHTML(control, r) {
   } else if (control.kind === "number") {
     const [min, max] = control.range, text = value == null ? "" : formatNumber(value);
     const slider = control.slider ? `<input type="range" min="${min}" max="${max}" step="${control.step}" aria-label="${e(control.label)}" data-slider-for="${control.id}" value="${e(text)}">` : "";
-    input = `<div class="number-control">${slider}<div class="number-field"><span class="scrub-handle" aria-hidden="true" title="Drag to change. Hold Shift for steps of 10.">⟷</span><input ${attr} type="text" inputmode="decimal" value="${e(text)}" autocomplete="off" spellcheck="false"><span class="number-unit">${e(control.unit)}</span></div></div>`;
+    input = `<div class="number-control">${slider}<div class="number-field"><span class="scrub-handle" aria-hidden="true" title="Drag to change. Hold Shift for steps of 10.">⟷</span><input ${attr} type="text" ${min < 0 ? "" : 'inputmode="decimal" '}value="${e(text)}" autocomplete="off" spellcheck="false"><span class="number-unit">${e(control.unit)}</span></div></div>`;
   } else input = `<input ${attr} type="text" value="${e(value ?? "")}" autocomplete="off">`;
   const paths = control.paths.map(path => path.replace(/^manifest\./, "package.json · "));
   const helpText = control.help.slice(control.help.indexOf(": ") + 2);
@@ -123,7 +127,7 @@ function renderControls() {
     replacement?.focus({ preventScroll: true });
     if (selection && replacement?.type === "text") replacement.setSelectionRange(...selection);
   }
-  hoveredControl = cueControlID(root.querySelector(".control:hover"));
+  hoveredControl = document.activeElement?.closest(".control") ? undefined : cueControlID(root.querySelector(".control:hover"));
   for (const row of root.querySelectorAll(".control")) {
     row.addEventListener("pointerenter", () => { hoveredControl = cueControlID(row); updateCue(); });
     row.addEventListener("pointerleave", () => { hoveredControl = undefined; updateCue(); });
@@ -813,6 +817,7 @@ async function start() {
 }
 
 document.addEventListener("input", event => {
+  if (event.target.dataset.control || event.target.dataset.sliderFor) hoveredControl = undefined;
   if (event.target.dataset.sliderFor) {
     const input = root.querySelector(`[data-control="${event.target.dataset.sliderFor}"]`);
     writeNumber(input, Number(event.target.value));
@@ -844,6 +849,7 @@ document.addEventListener("change", event => {
 });
 document.addEventListener("focusin", event => {
   focusedControl = cueControlID(event.target);
+  if (event.target.closest(".control")) hoveredControl = undefined;
   updateCue();
   if (!event.target.dataset.control) return;
   const control = controlsFor(state).find(control => control.id === event.target.dataset.control);
@@ -883,11 +889,13 @@ document.addEventListener("keydown", event => {
   const control = numberControl(event.target);
   if (control && ["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
     event.preventDefault();
+    hoveredControl = undefined;
     if (event.key === "Enter") commitNumber(event.target, control);
     else {
       const value = controlValue(control, resolved()) ?? control.range[0];
       writeNumber(event.target, nudgeValue(value, event.key === "ArrowUp" ? 1 : -1, control, event.shiftKey));
     }
+    updateCue();
     return;
   }
   const tab = event.target.closest('[role="tab"]');

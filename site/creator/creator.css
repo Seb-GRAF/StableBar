@@ -54,7 +54,7 @@
 .control .number-field input { flex: 1; width: 0; min-width: 0; padding: 8px 0; border: 0; outline: none; background: transparent; text-align: right; font-variant-numeric: tabular-nums; }
 .number-unit { margin-left: 4px; color: var(--text-2); font: 400 12px/16px var(--body); }
 .scrub-handle { display: grid; place-items: center; align-self: stretch; flex: 0 0 32px; border-radius: 6px 0 0 6px; color: var(--text-2); font: 600 14px/20px var(--body); cursor: ew-resize; touch-action: none; user-select: none; -webkit-user-select: none; }
-.scrub-handle:hover { background: var(--paper); }
+.scrub-handle:hover { background: #efefe9; }
 .scrub-handle:active { background: var(--hi); }
 .is-scrubbing, .is-scrubbing * { cursor: ew-resize !important; user-select: none !important; -webkit-user-select: none !important; }
 .control input[type="range"] { flex: 1; width: 0; min-width: 0; padding: 0; border: 0; background: transparent; accent-color: var(--link); }
@@ -189,6 +189,9 @@
   .feedback { min-height: 0; margin-top: 0; }
   .feedback:not(:empty) { margin-top: 8px; }
   .control-grid { gap: 20px 12px; }
+  .number-control { flex-wrap: wrap; row-gap: 8px; }
+  .control input[type="range"] { order: 1; flex: 1 0 100%; min-height: 24px; }
+  .control input[type="range"] + .number-field { flex: 1 1 100%; }
   .color-input input[type="color"] { width: 34px; }
   .color-input input[type="text"] { padding-inline: 6px; font-size: 12px; }
   .group .summary-note { font-size: 12px; }

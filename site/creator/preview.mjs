@@ -148,7 +148,7 @@ export const PREVIEW_TARGETS = {
   "--w-shadow-box": { selector: ".preview-tile" },
   "--w-glow": { selector: ".preview-tile" },
   "--w-dy": { selector: ".preview-tile", measure: "offset" },
-  "--tile-h": { selector: ".preview-tile, .preview-workspace", measure: "height" },
+  "--tile-h": { selector: ".preview-tile, .preview-workspace" },
   "--fg": { selector: ".preview-tile:not(.preview-workspaces), .preview-battery" },
   "--muted": { selector: ".preview-key" },
   "--accent": { selector: null },

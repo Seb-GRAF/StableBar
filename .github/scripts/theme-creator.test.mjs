@@ -267,13 +267,13 @@ test("preview target measurements use the agreed geometry", () => {
     "--w-px": "padding-x", "--pop-px": "padding-x",
     "--w-py": "padding-y", "--pop-py": "padding-y",
     "--w-gap": "gap", "--bar-gap": "gap", "--pop-gap": "gap",
-    "--bar-h": "height", "--tile-h": "height", "--ul-h": "height",
+    "--bar-h": "height", "--ul-h": "height",
     "--strip-m": "offset", "--pop-offset": "offset", "--ul-dy": "offset", "--w-dy": "offset",
   };
   for (const [variable, measure] of Object.entries(expected)) {
     assert.equal(PREVIEW_TARGETS[variable]?.measure, measure, variable);
   }
-  for (const variable of ["--w-radius", "--pop-radius", "--w-border-w", "--bar-font", "--pop-font", "--w-shadow-box"]) {
+  for (const variable of ["--w-radius", "--pop-radius", "--w-border-w", "--bar-font", "--pop-font", "--w-shadow-box", "--tile-h"]) {
     assert.equal(PREVIEW_TARGETS[variable]?.measure, undefined, variable);
   }
 });

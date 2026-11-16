@@ -86,6 +86,113 @@ function numberPage(id, config = {}) {
   };
 }
 
+test("number controls render imported text and boolean values and nudge numerically", () => {
+  const page = numberPage("bar.height", { bar: { height: "40" }, defaults: { fontSize: true } });
+  assert.doesNotThrow(() => page.run("renderControls()"));
+  assert.equal(page.run("controlValue(CONTROLS.find(c => c.id === 'widgets.fontSize'), resolved())"), null);
+  assert.equal(page.key("ArrowUp"), true);
+  assert.equal(page.run("state.config.bar.height"), 41);
+  assert.equal(page.input.value, "41");
+});
+
+test("number controls accept numeric tokens and reject nonfinite or nonnumeric values", () => {
+  for (const [value, expected] of [
+    ["24", 24], ["1,5", 1.5], [24, 24], [true, null], [false, null],
+    ["invalid", null], ["Infinity", null], [Infinity, null], [NaN, null], [{}, null],
+  ]) {
+    const page = numberPage("widgets.paddingHorizontal", {
+      tokens: { size: value }, defaults: { paddingHorizontal: "@token.size" },
+    });
+    assert.equal(page.run("controlValue(CONTROLS.find(c => c.id === 'widgets.paddingHorizontal'), resolved())"), expected);
+    assert.doesNotThrow(() => page.run("renderControls()"));
+  }
+  const page = numberPage("widgets.paddingHorizontal", {
+    tokens: { size: "10" }, defaults: { paddingHorizontal: "@token.size" },
+  });
+  page.key("ArrowUp");
+  assert.equal(page.run("resolved().defaults.paddingHorizontal"), 11);
+});
+
+test("typing, nudging and committing a number clear a resting hover", () => {
+  for (const action of ["type", "nudge", "commit"]) {
+    const page = numberPage("widgets.paddingHorizontal");
+    page.run("focusedControl = 'widgets.paddingHorizontal'; hoveredControl = 'widgets.paddingVertical'");
+    if (action === "type") page.type("22");
+    else if (action === "nudge") page.key("ArrowUp");
+    else { page.input.value = "-"; page.key("Enter"); }
+    assert.equal(page.run("hoveredControl"), undefined, action);
+    assert.equal(page.run("focusedControl"), "widgets.paddingHorizontal", action);
+  }
+});
+
+test("moving focus to a control clears a resting hover", () => {
+  const page = numberPage("widgets.paddingHorizontal");
+  page.input.closest = selector => selector === ".control" ? {} : null;
+  page.run("hoveredControl = 'widgets.cornerRadius'");
+  page.events.get("focusin")({ target: page.input });
+  assert.equal(page.run("hoveredControl"), undefined);
+  assert.equal(page.run("focusedControl"), "widgets.paddingHorizontal");
+});
+
+test("rendering controls preserves restored focus until another row is entered", () => {
+  const page = numberPage("widgets.paddingHorizontal");
+  const rowEvents = new Map();
+  const row = {
+    querySelector: () => ({ dataset: { control: "widgets.paddingVertical" } }),
+    addEventListener: (type, handler) => rowEvents.set(type, handler),
+    closest: () => row,
+  };
+  const query = page.root.querySelector;
+  page.root.querySelector = selector => selector === ".control:hover" ? row : query(selector);
+  page.root.querySelectorAll = selector => selector === ".control" ? [row] : [];
+  page.input.id = "c-widgets-paddingHorizontal";
+  page.input.closest = selector => selector === ".control" ? {} : null;
+  page.input.setSelectionRange = () => {};
+  page.input.focus = () => {
+    page.context.document.activeElement = page.input;
+    page.events.get("focusin")({ target: page.input });
+  };
+  page.context.document.getElementById = id => id === page.input.id ? page.input : null;
+  page.input.focus();
+  page.run("renderControls()");
+  assert.equal(page.run("hoveredControl"), undefined);
+  assert.equal(page.run("focusedControl"), "widgets.paddingHorizontal");
+  rowEvents.get("pointerenter")();
+  assert.equal(page.run("hoveredControl"), "widgets.paddingVertical");
+  rowEvents.get("pointerleave")();
+  assert.equal(page.run("hoveredControl"), undefined);
+  page.context.document.activeElement = null;
+  page.run("renderControls()");
+  assert.equal(page.run("hoveredControl"), "widgets.paddingVertical");
+});
+
+test("number markup allows a minus sign for negative ranges and labels the three sliders", () => {
+  const page = storePage();
+  page.run("state.config = { workspaceDefaults: { indicator: 'underline' } }; renderControls()");
+  const markup = group => page.root.querySelector(`[data-group="${group}"]`).innerHTML;
+  const input = (group, id) => markup(group).match(new RegExp(`<input [^>]*data-control="${id}"[^>]*>`))[0];
+  assert.doesNotMatch(input("workspaces", "workspaces.underlineOffsetY"), /inputmode="(?:decimal|numeric)"/);
+  assert.match(input("bar", "bar.height"), /inputmode="decimal"/);
+  const html = Object.keys(page.run("names")).map(markup).join("");
+  const sliders = [...html.matchAll(/<input type="range"[^>]*>/g)].map(match => match[0]);
+  assert.equal(sliders.length, 3);
+  for (const [id, label] of [["bar.height", "Height"], ["bar.cornerRadius", "Strip corners"], ["widgets.fontSize", "Font size"]]) {
+    assert.ok(sliders.some(slider => slider.includes(`data-slider-for="${id}"`) && slider.includes(`aria-label="${label}"`)), id);
+  }
+  const handles = [...html.matchAll(/<span class="scrub-handle"[^>]*>/g)].map(match => match[0]);
+  assert.ok(handles.length > 3);
+  for (const handle of handles) {
+    assert.match(handle, /aria-hidden="true"/);
+    assert.match(handle, /title="Drag to change\. Hold Shift for steps of 10\."/);
+  }
+});
+
+test("the Popups intro names padding, spacing and gap", () => {
+  const page = storePage();
+  assert.equal(page.run("groupCopy.popups"),
+    "Change the popup colors, corners, padding, spacing and gap. Tooltips stay compact.");
+});
+
 test("number typing accepts unfinished decimals and commas without errors", () => {
   const page = numberPage("widgets.paddingHorizontal");
   page.type("1.");
