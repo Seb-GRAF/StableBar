@@ -148,9 +148,16 @@ extension DataSourceType {
         }
     }
 
-    static let network = DataSourceType(name: "network", isNative: true, symbol: "network", settings: [], optionalSettings: [.units], continuous: false) { provider, _ in
+    static let network = DataSourceType(name: "network", isNative: true, symbol: "network", settings: [], optionalSettings: [.units], continuous: false,
+                                        changeNotifications: [NetworkConnection.changedNotification]) { provider, _ in
         let metrics = NativeMetrics()
-        return PollingSource { _ in .output(Result { try metrics.networkRates(units: provider.units) }) }
+        return PollingSource { _ in
+            .output(Result {
+                var output = try metrics.networkRates(units: provider.units)
+                output.fields!.merge(NetworkConnection.shared.fields) { $1 }
+                return output
+            })
+        }
     }
 
     static let disk = disk()
