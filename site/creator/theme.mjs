@@ -73,17 +73,16 @@ export function validateThemeColors(config) {
   }
 }
 
-// The app expands a profile with its own tokens over the root's, never the root with a profile's.
-function expandDocument(document) {
-  const { profiles, ...root } = document;
-  const expanded = substituteTokens(root);
+// The app expands a profile, at any depth, with its own tokens over those around it, never the reverse.
+function expandDocument(document, inherited = {}) {
+  const { profiles, ...rest } = document;
+  const tokens = overriding(inherited, isObject(rest.tokens) ? rest.tokens : {});
+  const expanded = substituteTokens(rest, tokens);
   if (profiles === undefined) return expanded;
-  expanded.profiles = !Array.isArray(profiles) ? profiles : profiles.map(profile => {
-    if (!isObject(profile) || !isObject(profile.configuration)) return profile;
-    const { configuration } = profile;
-    const tokens = overriding(root.tokens ?? {}, isObject(configuration.tokens) ? configuration.tokens : {});
-    return { ...profile, configuration: substituteTokens(configuration, tokens) };
-  });
+  expanded.profiles = !Array.isArray(profiles) ? profiles : profiles.map(profile =>
+    isObject(profile) && isObject(profile.configuration)
+      ? { ...profile, configuration: expandDocument(profile.configuration, tokens) }
+      : profile);
   return expanded;
 }
 

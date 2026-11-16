@@ -1709,4 +1709,9 @@ test("profiles expand with their own tokens over the root's, as the app does", (
   assert.throws(() => validateThemeColors(profile({ glow: "red" })), /Use #RRGGBB or #RRGGBBAA/);
   assert.throws(() => validateThemeColors({ defaults: { foreground: "@token.glow" }, ...profile({ glow: "#ff0000" }) }),
     /Unknown configuration reference: @token\.glow/);
+  const nested = { profiles: [{ name: "Outer", configuration: { tokens: { base: "#0000ff" }, ...profile({ glow: "#ff0000" }) } }] };
+  assert.doesNotThrow(() => validateThemeColors(nested));
+  nested.profiles[0].configuration.profiles[0].configuration.defaults.background = "@token.base";
+  const inner = resolveTheme(builtIn, nested, "dark").profiles[0].configuration.profiles[0].configuration;
+  assert.deepEqual([inner.defaults.foreground, inner.defaults.background], ["#ff0000", "#0000ff"]);
 });
