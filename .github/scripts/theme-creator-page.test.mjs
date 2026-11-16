@@ -538,3 +538,10 @@ test("choosing from the font menu applies a font or opens the field for another"
   type("   ");
   assert.equal(page.run("state.config.defaults.fontName"), "JetBrains Mono");
 });
+
+test("Try in StableBar shows with the first version that opens theme links", () => {
+  const page = storePage();
+  page.run("updateOutputs()");
+  assert.equal(page.root.querySelector("[data-action=try]").hidden, false);
+  assert.equal(page.root.querySelector(".version-note").textContent, "Needs StableBar 0.16.0 or later.");
+});

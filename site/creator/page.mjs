@@ -4,7 +4,7 @@ import { ID_PATTERN, themeFiles, parseTheme, folderFiles, writeZip, readZip, enc
 import { cssVariables, indicatorClass, keptFromBase, affectedVariables, PREVIEW_TARGETS, fontFamily } from "./preview.mjs";
 import { parseNumber, formatNumber, clampNumber, scrubValue, nudgeValue } from "./number-field.mjs";
 
-const TRY_LINK_MIN_VERSION = null;
+const TRY_LINK_MIN_VERSION = "0.16.0";
 const names = { palette: "Colors", bar: "Bar", widgets: "Widgets", workspaces: "Workspaces", popups: "Popups", about: "About" };
 const baseNames = new Map();
 const baseDescriptions = { "built-in": "Separate, rounded tiles", leman: "A quiet, floating strip", notch: "A dark, simple strip", catppuccin: "Soft colors and tiles", nord: "Cool colors and an underline", gruvbox: "Warm colors and stripes", phosphor: "Amber text with a glow" };
