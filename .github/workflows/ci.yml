@@ -410,30 +410,35 @@ jobs:
           rm -rf scenes
           cp -R "$RUNNER_TEMP/scenes" scenes
       # main's images of the scene files the pull request changes go, and the base draws those it
-      # adds or edits. Without main's screens of the base, the base draws everything.
+      # adds or edits. Without main's screens of the base, the base draws everything. The screens
+      # come only from CI's run of the push to main: a pull request's run can upload an artifact of
+      # the same name.
       - name: Download main's screens of the base
         id: main
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          name=screens-main-$(git rev-parse HEAD)
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=$name" \
-            --jq '[.artifacts[] | select(.expired | not) | .workflow_run.id][0] // empty')
-          if [[ -n "$run" ]] && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "$name" --dir "$RUNNER_TEMP/before"; then
+          base=$(git rev-parse HEAD)
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
+            --jq '.workflow_runs[0].id // empty')
+          if [[ -n "$run" ]] && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "screens-main-$base" --dir "$RUNNER_TEMP/before"; then
             echo "found=true" >> "$GITHUB_OUTPUT"
-            for scene in $(git diff --name-only --no-renames HEAD "$GITHUB_SHA" -- 'scenes/*.json'); do
+            while IFS= read -r -d '' scene; do
               rm -f "$RUNNER_TEMP/before/scenes/$(basename "$scene" .json)"-{dark,light}.png
-            done
-            echo "scenes=$(git diff --name-only --no-renames --diff-filter=AM HEAD "$GITHUB_SHA" -- 'scenes/*.json' | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+            done < <(git diff -z --name-only --no-renames HEAD "$GITHUB_SHA" -- 'scenes/*.json')
+            git diff -z --name-only --no-renames --diff-filter=AM HEAD "$GITHUB_SHA" -- 'scenes/*.json' > "$RUNNER_TEMP/redrawn-scenes"
+            if [[ -s "$RUNNER_TEMP/redrawn-scenes" ]]; then
+              echo "draw=true" >> "$GITHUB_OUTPUT"
+            fi
           else
-            echo "scenes=scenes" >> "$GITHUB_OUTPUT"
+            echo "draw=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Identify Swift toolchain
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.scenes
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
         id: swift
         run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.scenes
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
         with:
           path: .build
           key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
@@ -441,13 +446,14 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       # When the app didn't change, the pull request's app draws the base too, and the docs images
       # are the same. A base that can't draw scenes leaves no scenes.json; the comparison says so.
+      # --render-scenes rewrites scenes.json with only the scenes it draws, so the scenes drawn over
+      # main's go to a folder of their own, and their entries replace main's.
       - name: Draw the base's screens
-        if: steps.main.outputs.scenes
+        if: steps.main.outputs.draw == 'true'
         timeout-minutes: 20
         env:
           APP: ${{ needs.current.outputs.app }}
           MAIN: ${{ steps.main.outputs.found }}
-          SCENES: ${{ steps.main.outputs.scenes }}
         run: |
           mkdir -p "$RUNNER_TEMP/before"
           if [[ "$APP" == true ]]; then
@@ -458,7 +464,19 @@ jobs:
             app="$RUNNER_TEMP/head.app/Contents/MacOS/StableBar"
             [[ "$MAIN" == true ]] || cp -R "$RUNNER_TEMP/after/docs" "$RUNNER_TEMP/before/docs"
           fi
-          "$app" --render-scenes "$RUNNER_TEMP/before/scenes" $SCENES || true
+          if [[ "$MAIN" == true ]]; then
+            scenes=()
+            while IFS= read -r -d '' scene; do
+              scenes+=("$scene")
+            done < "$RUNNER_TEMP/redrawn-scenes"
+            "$app" --render-scenes "$RUNNER_TEMP/redrawn" "${scenes[@]}" || true
+            jq -s '{scenes: (.[0].scenes + .[1].scenes)}' "$RUNNER_TEMP/before/scenes/scenes.json" "$RUNNER_TEMP/redrawn/scenes.json" \
+              > "$RUNNER_TEMP/scenes.json"
+            cp -R "$RUNNER_TEMP/redrawn/." "$RUNNER_TEMP/before/scenes/"
+            mv "$RUNNER_TEMP/scenes.json" "$RUNNER_TEMP/before/scenes/scenes.json"
+          else
+            "$app" --render-scenes "$RUNNER_TEMP/before/scenes" scenes || true
+          fi
       - name: Compare
         run: |
           compare="$RUNNER_TEMP/scripts/compare-screens.mjs"
