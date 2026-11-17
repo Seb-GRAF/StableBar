@@ -1662,6 +1662,10 @@
           "$ref": "#/definitions/boolean",
           "description": "Open the list of menu bar items when the pointer rests on menuBarItems widgets; false opens it on click. On by default."
         },
+        "rightClickInMenuBar": {
+          "$ref": "#/definitions/boolean",
+          "description": "Experimental. A right-click on an item of a menuBarItems widget whose menu the bar doesn't draw right-clicks the item in the macOS menu bar, for apps that give right-clicks an action of their own. Needs macOS 27 or later. Off by default: a right-click opens the item as a click does."
+        },
         "shown": {
           "type": [
             "array",

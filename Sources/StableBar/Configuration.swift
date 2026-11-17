@@ -433,7 +433,7 @@ enum WidgetContent: Equatable, Sendable {
     case appleMenu(click: AppleMenuClick)
     case controlCenter
     case stableBar
-    case menuBarItems(openOnHover: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
+    case menuBarItems(openOnHover: Bool, rightClickInMenuBar: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
     case clock(format: String)
     case text(String)
     case script(command: String, interval: Double?)
@@ -486,7 +486,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
+        case expandOnHover, openOnHover, rightClickInMenuBar, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
     }
 
     var group: String? { ownGroup ?? joinedGroup }
@@ -557,6 +557,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "stableBar": content = .stableBar
         case "menuBarItems":
             content = .menuBarItems(openOnHover: try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? true,
+                                    rightClickInMenuBar: try values.decodeIfPresent(Bool.self, forKey: .rightClickInMenuBar) ?? false,
                                     shown: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .shown) ?? [],
                                     hidden: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .hidden) ?? [])
         case "clock": content = .clock(format: try values.decodeIfPresent(String.self, forKey: .format) ?? "EEE d MMM  HH:mm")
@@ -593,7 +594,7 @@ extension WidgetConfiguration {
     }
 
     var shownMenuBarItems: [MenuBarItemsEntry] {
-        guard case let .menuBarItems(_, shown, hidden) = content else { return [] }
+        guard case let .menuBarItems(_, _, shown, hidden) = content else { return [] }
         return shown.contains(.symbol) || hidden.contains(.symbol) ? shown : shown + [.symbol]
     }
 

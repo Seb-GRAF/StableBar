@@ -545,7 +545,7 @@ struct WidgetView: View {
         } else if widget.content == .stableBar, !hasOwnClick {
             let click = { if store.barEditing.allowsWidgetActions { store.onCustomize?() } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
-        } else if case let .menuBarItems(_, _, hidden) = widget.content, !widget.drawsMenuBarItems {
+        } else if case let .menuBarItems(_, _, _, hidden) = widget.content, !widget.drawsMenuBarItems {
             let click = { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click, popupOpen: isOpen)
         } else {
@@ -607,7 +607,7 @@ struct WidgetView: View {
                 store.popup.open(popup, widget: widget, defaults: popupDefaults.popupStyle(over: defaults),
                                  store: store, anchor: popupAnchor, onHover: true)
             }
-        } else if case let .menuBarItems(openOnHover: true, _, hidden) = widget.content, !widget.drawsMenuBarItems,
+        } else if case let .menuBarItems(openOnHover: true, _, _, hidden) = widget.content, !widget.drawsMenuBarItems,
                   widgetPopup(widget, store: store) == nil, widget.onClick == nil, widget.open == nil {
             hoverMenuBarItems(inside, leavingOut: hidden.references, anchor: popupAnchor)
         } else if !inlineHoverControls, widget.hoverLayout != nil || (isSound && output?.values?["volume"] != nil) {
@@ -855,9 +855,10 @@ struct WidgetView: View {
                         .foregroundStyle(appearance.foreground)
                 }
             }
-        case let .menuBarItems(openOnHover, _, hidden) where widget.drawsMenuBarItems:
+        case let .menuBarItems(openOnHover, rightClickInMenuBar, _, hidden) where widget.drawsMenuBarItems:
             let leftOut = widget.shownMenuBarItems.references + hidden.references
             MenuBarItemsView(widget: widget, store: store, display: monitor, defaults: popupDefaults.popupStyle(over: defaults),
+                             rightClickInMenuBar: rightClickInMenuBar,
                              appearance: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()),
                              padding: padding, symbol: store.label(for: widget).icon!) { anchor in
                 toggleMenuBarItems(leavingOut: leftOut, anchor: anchor)
@@ -1216,6 +1217,7 @@ private struct MenuBarItemsView: View {
     let store: BarStore
     let display: Int
     let defaults: WidgetStyle
+    let rightClickInMenuBar: Bool
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     let symbol: String
@@ -1296,10 +1298,10 @@ private struct MenuBarItemsView: View {
         }
     }
 
-    /// An item whose menu the bar draws opens it, as on a click; any other item gets the right-click itself, which some
-    /// apps, such as MeetingBar, give an action of its own.
+    /// An item whose menu the bar draws opens it, as on a click. With `rightClickInMenuBar`, any other item gets the
+    /// right-click itself, which some apps, such as MeetingBar, give an action of their own; without it, a click.
     private func rightClick(_ item: MenuBarItem, anchor: NSView) {
-        if item.entry.hasSubmenu {
+        if item.entry.hasSubmenu || !rightClickInMenuBar {
             open(item, anchor: anchor)
         } else if store.barEditing.allowsWidgetActions {
             store.popup.close()
