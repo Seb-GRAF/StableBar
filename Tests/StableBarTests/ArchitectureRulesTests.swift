@@ -150,20 +150,34 @@ private func stateMachineConformance(in files: [String]) throws -> Regex<AnyRege
             found.insert(name)
         }
     }
-    return try Regex(#"(?m)^([ \t]*)(?:(?:public|package|internal|fileprivate|private|final)\s+)*(struct|enum|class|actor|extension)\s+([\w.]+)(?:<[^>]*>)?\s*:[^{]*\b(?:"#
+    return try Regex(#"(?m)^([ \t]*)(?:(?:public|package|internal|fileprivate|private|final|indirect)\s+)*(struct|enum|class|actor|extension)\s+([\w.]+)(?:<[^>]*>)?\s*:[^{]*\b(?:"#
                      + protocols.sorted().joined(separator: "|") + #")\b"#).wordBoundaryKind(.simple)
 }
 
-/// The names another file's extension of a state machine writes: as written for an extension, and for a top-level
-/// declaration. A nested type's own name, such as `State`, would match every unrelated `State`; it's checked where it's
-/// declared, and an extension elsewhere writes `Outer.State`.
+/// The names another file's extension of a state machine writes: `Outer.State` for an `enum State` nested in `Outer`,
+/// so an unrelated `State` stays out.
 private func stateMachineNames(in files: [String], conformance: Regex<AnyRegexOutput>) -> Set<String> {
     Set(files.flatMap { file in
         file.matches(of: conformance).compactMap { match -> String? in
-            let nested = match.output[1].substring?.isEmpty == false && match.output[2].substring != "extension"
-            return nested ? nil : match.output[3].substring.map(String.init)
+            guard let name = match.output[3].substring.map(String.init) else { return nil }
+            let indent = match.output[1].substring?.count ?? 0
+            return (enclosingTypes(above: match.range.lowerBound, indent: indent, in: file) + [name]).joined(separator: ".")
         }
     })
+}
+
+/// The types a declaration `indent` deep at `position` is nested in, outermost first, read from the less indented
+/// declarations above it.
+private func enclosingTypes(above position: String.Index, indent: Int, in file: String) -> [String] {
+    var types: [String] = []
+    var indent = indent
+    for line in file[..<position].split(separator: "\n").reversed() where indent > 0 {
+        guard let declaration = line.firstMatch(of: #/^([ \t]*)(?:\w+\s+)*?(?:struct|enum|class|actor|extension)\s+([\w.]+)/#),
+              declaration.1.count < indent else { continue }
+        types.insert(String(declaration.2), at: 0)
+        indent = declaration.1.count
+    }
+    return types
 }
 
 /// Matches code that declares or extends one of `names`, nested types included, so holds part of a state machine; nil
@@ -214,9 +228,12 @@ private func stateMachinePart(named names: Set<String>) throws -> Regex<AnyRegex
     #expect(try names("protocol Machine: StateMachine {}", "struct Hold: Machine {}") == ["Hold"])
     #expect(try names("protocol Base: StateMachine {}", "protocol Derived: Equatable, Base {}", "struct Hold: Derived {}") == ["Hold"])
     #expect(try names("struct/* a */Hold: StateMachine {}") == ["Hold"])
-    let nested = code("final class Outer {\n    enum State: StateMachine {}\n}")
-    #expect(try names(nested).isEmpty)
-    #expect(try nested.contains(stateMachineConformance(in: [nested])))
+    #expect(try names("indirect enum Hold: StateMachine {}") == ["Hold"])
+    let nested = "final class Outer {\n    struct Inner {\n        enum State: StateMachine {}\n    }\n}"
+    #expect(try names(nested, "enum State {}") == ["Outer.Inner.State"])
+    let nestedPart = try #require(try stateMachinePart(named: names(nested)))
+    #expect(code("extension Outer.Inner.State { func now() -> Date { Date() } }").contains(nestedPart))
+    #expect(!code("enum State {}").contains(nestedPart))
     let part = try #require(try stateMachinePart(named: ["SetupPlacement", "Outer.State"]))
     #expect(code("extension SetupPlacement.Phase { }").contains(part))
     #expect(code("extension Outer.State { }").contains(part))
