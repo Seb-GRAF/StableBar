@@ -90,7 +90,7 @@ There is no web view or custom drawing loop. Private macOS API, for hiding and r
 
 Reviews are requested automatically from the people listed in [CODEOWNERS](.github/CODEOWNERS), but they are not required. Ask for one when a change is risky or outside your usual area.
 
-[CodeRabbit](https://coderabbit.ai) also reviews every pull request once it is out of draft, and comments only on what matters most. Fix each comment or reply why not, then resolve its thread: unresolved conversations block merging. Its rules come from [AGENTS.md](AGENTS.md) and [.coderabbit.yaml](.coderabbit.yaml).
+[cubic](https://cubic.dev) also reviews every pull request once it is out of draft. [CodeRabbit](https://coderabbit.ai) reviews pull requests labeled `deep-review`: the label is added automatically when a pull request changes more than 400 lines or a file listed in [.github/deep-review-paths](.github/deep-review-paths), and you can add it yourself, or ask a maintainer to, when a change is risky. Fix each comment from either or reply why not, then resolve its thread: unresolved conversations block merging. Their rules come from [AGENTS.md](AGENTS.md), [cubic.yaml](cubic.yaml) and [.coderabbit.yaml](.coderabbit.yaml). CodeRabbit allows each pull request author only a few reviews per hour. When its limit holds a review back, the Deep review workflow asks it again every hour, so there's no need to ask with `@coderabbitai review`.
 
 [DECISIONS.md](DECISIONS.md) lists the lasting decisions about releases, reviews and code. A pull request that sets a new rule or policy adds an entry there.
 
@@ -109,7 +109,7 @@ A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.re
 | An eligible app commit with `!` or a `BREAKING CHANGE:` footer | Major: 0.1.0 → 1.0.0 |
 | `build:`, `chore:`, `ci:`, `docs:`, `style:`, `test:` | None |
 
-Queued pushes skip builds when `main` has already moved on. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
+Queued pushes skip builds when `main` has already moved on. `main` goes first: GitHub runs only a few macOS jobs at once for the account, so a run on `main` cancels the pull request runs waiting or running when it starts, and **Resume pull requests** restarts their cancelled jobs once its own macOS jobs are done. A pull request that got a newer commit or was closed in the meantime isn't restarted. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
 
 Both release channels come from `main`:
 
@@ -155,7 +155,7 @@ Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their st
 
 ## Scenes
 
-A scene file in [scenes](scenes) describes one screen to draw: a configuration, inline or as a path such as `../Resources/config.json`, the package folders to install beside it, such as `../examples/packages/system-monitor`, the sample outputs, graph history and AeroSpace workspaces its widgets show, and what to draw: the `bar`, the bar in edit mode (`editBar`), a widget's `popup`, a `settings` page, the `uninstall` sheet for a sample Mac, the `update` popup for a sample offer, a step of `setup`'s tour, or the `accessibilityGuide` panel shown over System Settings. A setup scene pins what setup reads from the Mac, such as the menu bar, the permissions and the battery, and the choices made before its step. Those choices show in the tour but not on the bar, since previewing them would start the commands of the widgets they add. [scene.schema.json](scene.schema.json) lists every key. Draw them with:
+A scene file in [scenes](scenes) describes one screen to draw: a configuration, inline or as a path such as `../Resources/config.json`, the package folders to install beside it, such as `../examples/packages/system-monitor`, the sample outputs, graph history, and AeroSpace workspaces or yabai spaces its widgets show, and what to draw: the `bar`, the bar in edit mode (`editBar`), a widget's `popup`, a `settings` page, the `uninstall` sheet for a sample Mac, the `update` popup for a sample offer, a step of `setup`'s tour, or the `accessibilityGuide` panel shown over System Settings. A setup scene pins what setup reads from the Mac, such as the menu bar, the permissions and the battery, and the choices made before its step. Those choices show in the tour but not on the bar, since previewing them would start the commands of the widgets they add. [scene.schema.json](scene.schema.json) lists every key. Draw them with:
 
 ```sh
 StableBar --render-scenes /tmp/scenes scenes
@@ -169,10 +169,10 @@ A change you can see extends the scene that shows its area, or adds one when non
 
 On a pull request, CI draws the screens twice, from the pull request and from its base, and a bot posts what changed.
 
-- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides.
+- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides. The base's side comes from **Draw main's screens**, which draws every push to `main` once, so the base draws only the scenes the pull request adds or edits. When `main`'s CI didn't draw the base, as for a push that a newer one replaced, a release commit, or a run that hasn't finished, the base draws everything.
 - **Draw website screens** captures the five pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
 
-Both sides are drawn in one job on one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too. A screen whose height changed, such as a website page that grew, is compared from the top: its crop starts at the first change and runs across the full width. A crop shows at most 1,600 rows of a change, and the comment says so when it stops short; the approval still covers the whole image.
+CI's Macs draw the same pixels for one commit, so the two sides needn't come from one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too. A screen whose height changed, such as a website page that grew, is compared from the top: its crop starts at the first change and runs across the full width. A crop shows at most 1,600 rows of a change, and the comment says so when it stops short; the approval still covers the whole image.
 
 These jobs run the pull request's code with a read-only token. The **Screens** workflow runs from `main` when CI finishes, and when a pull request gets or loses `visual-ok`, changes its base, closes or reopens. Each time it reads where the pull request stands, one pull request at a time, so running it again only brings everything up to date. It reads what the jobs uploaded only as data, and:
 
@@ -187,6 +187,7 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 | Pending | Screens changed. A maintainer looks at them, then adds the `visual-ok` label. |
 | Success: "M changed screens approved." | `visual-ok` was added after the comment began showing these screens. |
 | Pending: "The base changed…" | The pull request's base changed since its screens were drawn. Push a commit to draw them again. |
+| Pending: "… was cancelled…" | CI was cancelled before it drew the screens, as when `main`'s run pauses it. The comment stays as it was until CI runs again. |
 | Failure | Drawing failed; the comment says what. A `visual-ok` added while it showed the failure still approves it. |
 
 `visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens against the same base keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
@@ -197,6 +198,7 @@ Pull requests from forks get the same comment and status: the drawing runs in th
 
 - **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow. Each run's `test-results` artifact lists every Swift Testing test with its time and failures, kept 30 days, so the same test failing across runs is easy to spot.
 - **A crash that ends the test run** (`exited with unexpected signal code 6`). The log doesn't say where. After a local run, look for a `swiftpm-testing-helper` report in `~/Library/Logs/DiagnosticReports`: its crashing thread names the code. Then turn the crash into a test that fails every time.
+- **A run cancelled while `main` builds.** `main`'s run paused it and restarts its cancelled jobs when its macOS jobs are done, so wait for that rather than rerunning it. Visual review stays pending meanwhile.
 - **A job that never ran, or a check that stays in progress.** "The job was not acquired by Runner", or a required check still in progress after its steps finished, needs a rerun, not a fix.
 - **A failure only CI shows.** CI's Macs always show scroll bars: run the test with `-AppleShowScrollBars Always`. Locally, the popup tests that animate fail while the display sleeps or the screen is locked.
 - **Tests that don't match the branch.** `swift build` doesn't rebuild the tests: after switching branches, run `swift build --build-tests` before `swift test --skip-build`.

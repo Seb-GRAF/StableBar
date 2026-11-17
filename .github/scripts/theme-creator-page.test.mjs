@@ -167,7 +167,7 @@ test("rendering controls preserves restored focus until another row is entered",
   assert.equal(page.run("hoveredControl"), "widgets.paddingVertical");
 });
 
-test("number markup allows a minus sign for negative ranges and labels the three sliders", () => {
+test("number markup allows a minus sign for negative ranges and labels the sliders", () => {
   const page = storePage();
   page.run("state.config = { workspaceDefaults: { indicator: 'underline' } }; renderControls()");
   const markup = group => page.root.querySelector(`[data-group="${group}"]`).innerHTML;
@@ -176,8 +176,9 @@ test("number markup allows a minus sign for negative ranges and labels the three
   assert.match(input("bar", "bar.height"), /inputmode="decimal"/);
   const html = Object.keys(page.run("names")).map(markup).join("");
   const sliders = [...html.matchAll(/<input type="range"[^>]*>/g)].map(match => match[0]);
-  assert.equal(sliders.length, 3);
-  for (const [id, label] of [["bar.height", "Height"], ["bar.cornerRadius", "Strip corners"], ["widgets.fontSize", "Font size"]]) {
+  assert.equal(sliders.length, 4);
+  for (const [id, label] of [["bar.height", "Height"], ["bar.cornerRadius", "Strip corners"],
+    ["widgets.fontSize", "Font size"], ["workspaces.appIconSize", "App icon size"]]) {
     assert.ok(sliders.some(slider => slider.includes(`data-slider-for="${id}"`) && slider.includes(`aria-label="${label}"`)), id);
   }
   const handles = [...html.matchAll(/<span class="scrub-handle"[^>]*>/g)].map(match => match[0]);

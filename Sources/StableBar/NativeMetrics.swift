@@ -168,6 +168,15 @@ func networkCounters(_ data: Data) -> [UInt16: NetworkCounters] {
     return counters
 }
 
+/// The local day `date` falls in, and the time the next meeting must start before: `lookahead` hours
+/// after `date`, or with `todayOnly` the end of the day when that comes first.
+func meetingWindow(at date: Date, lookahead: Double, todayOnly: Bool, calendar: Calendar) -> (today: Date, tomorrow: Date, horizon: Date) {
+    let today = calendar.startOfDay(for: date)
+    let tomorrow = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: today)!)
+    let horizon = date.addingTimeInterval(lookahead * 3600)
+    return (today, tomorrow, todayOnly ? min(horizon, tomorrow) : horizon)
+}
+
 func meetingCountdown(start: Date, end: Date, at date: Date, soon: Int, now: Int)
     -> (phase: String, minutes: Int, remaining: Double, target: Double, delay: Double) {
     let live = start <= date
@@ -176,6 +185,20 @@ func meetingCountdown(start: Date, end: Date, at date: Date, soon: Int, now: Int
     let phase = live ? "live" : (left <= Double(now * 60) ? "now" : (left <= Double(soon * 60) ? "soon" : "later"))
     let second = left.truncatingRemainder(dividingBy: 60)
     return (phase, Int((left / 60).rounded(.up)), min(1, left / span), min(1, max(0, left - 60) / span), second == 0 ? 60 : second)
+}
+
+/// An agenda event's phase: `past` once it has ended, otherwise its countdown's phase.
+func agendaPhase(start: Date, end: Date, at date: Date, soon: Int, now: Int) -> String {
+    end <= date ? "past" : meetingCountdown(start: start, end: end, at: date, soon: soon, now: now).phase
+}
+
+/// The service a meeting link from `meetingLink` opens.
+func meetingService(_ link: String) -> String? {
+    guard let host = URL(string: link)?.host()?.lowercased() else { return nil }
+    if host == "meet.google.com" { return "Google Meet" }
+    if host == "zoom.us" || host.hasSuffix(".zoom.us") { return "Zoom" }
+    if host == "teams.microsoft.com" || host == "teams.live.com" { return "Microsoft Teams" }
+    return nil
 }
 
 func meetingLink(_ texts: [String]) -> String? {
@@ -198,24 +221,31 @@ actor CalendarMetrics {
             return ScriptOutput(text: "No calendar access", icon: "calendar", fields: ["access": access == .notDetermined ? "notDetermined" : "denied"])
         }
         let now = Date()
-        let today = Calendar.current.startOfDay(for: now)
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
-        let horizon = now.addingTimeInterval(provider.lookahead * 3600)
+        let (today, tomorrow, horizon) = meetingWindow(at: now, lookahead: provider.lookahead, todayOnly: provider.todayOnly, calendar: .current)
         let events = store.events(matching: store.predicateForEvents(withStart: today, end: max(tomorrow, horizon), calendars: nil))
             .filter { !$0.isAllDay && (provider.calendars.isEmpty || provider.calendars.contains($0.calendar.title)) }
             .sorted { $0.startDate < $1.startDate }
-        let agenda = events.filter { $0.startDate < tomorrow }.map(meetingFields)
-        guard let next = events.first(where: { $0.endDate > now && $0.startDate < horizon }) else {
-            return ScriptOutput(text: "No meetings", icon: "calendar", fields: ["access": "granted", "phase": "none"], lists: ["today": agenda],
-                                interval: 60 - now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
+        let next = events.first(where: { $0.endDate > now && $0.startDate < horizon })
+        let agenda = events.filter { $0.startDate < tomorrow }.map { event in
+            var fields = meetingFields(event)
+            fields["phase"] = agendaPhase(start: event.startDate, end: event.endDate, at: now, soon: provider.soon, now: provider.now)
+            if event === next { fields["current"] = "true" }
+            return fields
+        }
+        let date = now.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated))
+        guard let next else {
+            return ScriptOutput(text: "No meetings", icon: "calendar", fields: ["access": "granted", "phase": "none", "date": date],
+                                lists: ["today": agenda], interval: 60 - now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
         }
         let countdown = meetingCountdown(start: next.startDate, end: next.endDate, at: now, soon: provider.soon, now: provider.now)
         var fields = meetingFields(next)
         fields["access"] = "granted"
         fields["phase"] = countdown.phase
         fields["minutes"] = String(countdown.minutes)
+        fields["date"] = date
         return ScriptOutput(text: next.title ?? "", icon: "calendar", fields: fields, lists: ["today": agenda],
-                            values: ["remaining": countdown.remaining], targets: ["remaining": countdown.target], interval: countdown.delay)
+                            values: ["remaining": countdown.remaining], targets: ["remaining": countdown.target],
+                            interval: min(countdown.delay, tomorrow.timeIntervalSince(now)))
     }
 
     private func meetingFields(_ event: EKEvent) -> [String: String] {
@@ -224,6 +254,7 @@ actor CalendarMetrics {
         if let link = meetingLink([event.url?.absoluteString, event.location, event.notes].compactMap { $0 }) {
             fields["link"] = link
             fields["joinCommand"] = "open '\(link)'"
+            fields["service"] = meetingService(link)
         }
         return fields
     }

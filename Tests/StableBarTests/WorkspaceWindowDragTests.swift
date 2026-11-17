@@ -446,9 +446,9 @@ private func workspaceMouse(_ type: NSEvent.EventType, x: CGFloat) throws -> NSE
             snapshot = windows.map { ["workspace": movedIDs.contains($0.id) ? destination : "1",
                 "app-name": $0.app.name, "app-bundle-id": $0.app.bundleID, "window-id": $0.id, "window-title": $0.title] }
         } else {
-            spaces = [1, 2].map { ["index": $0, "display": 1, "has-focus": $0 == 1, "is-visible": $0 == 1] }
+            spaces = [1, 2].map { ["index": $0, "display": 1, "has-focus": $0 == 1, "is-visible": $0 == 1, "type": "bsp"] }
             snapshot = windows.map { ["space": movedIDs.contains($0.id) ? 2 : 1, "pid": 0,
-                "app": $0.app.name, "id": $0.id, "title": $0.title] }
+                "app": $0.app.name, "id": $0.id, "title": $0.title, "stack-index": 0] }
             let screen = try #require(NSScreen.screens.first)
             let id = try #require(screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
             try JSONSerialization.data(withJSONObject: [["id": id.uint32Value, "index": 1]])

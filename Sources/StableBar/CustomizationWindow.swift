@@ -260,13 +260,9 @@ private struct SettingsHeader: View {
             // up when a tiling window manager shrinks the window below its minimum size.
             Color.clear.frame(maxWidth: Self.searchWidth + 8)
             Spacer(minLength: 8)
-            HStack(spacing: 2) {
-                ForEach(CustomizationSection.allCases) { section in
-                    SettingsTab(section: section, selected: (editor.section ?? .general) == section,
-                                badge: section == .diagnostics ? attentionCount : 0) {
-                        editor.section = section
-                    }
-                }
+            ViewThatFits(in: .horizontal) {
+                tabs(labelled: true)
+                tabs(labelled: false)
             }
             .layoutPriority(1)
             Spacer(minLength: 8)
@@ -285,16 +281,30 @@ private struct SettingsHeader: View {
                         .accessibilityLabel("Search settings")
                 }
                 .padding(.horizontal, 8)
-                .frame(width: Self.searchWidth, height: 26)
+                .frame(minWidth: 100, maxWidth: Self.searchWidth)
+                .frame(height: 26)
                 .background(SettingsPalette.field, in: RoundedRectangle(cornerRadius: 7))
                 .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(searching ? Color.accentColor : SettingsPalette.groupBorder,
                                                                          lineWidth: searching ? 2 : 1))
                 Button("") { searching = true }.keyboardShortcut("f").hidden().frame(width: 0)
             }
+            // Keeps the search field at its full width until the tabs have dropped their labels.
+            .layoutPriority(2)
         }
         .padding(.horizontal, 12)
         .frame(height: 52)
         .background(SettingsPalette.sidebar)
+    }
+
+    private func tabs(labelled: Bool) -> some View {
+        HStack(spacing: 2) {
+            ForEach(CustomizationSection.allCases) { section in
+                SettingsTab(section: section, labelled: labelled, selected: (editor.section ?? .general) == section,
+                            badge: section == .diagnostics ? attentionCount : 0) {
+                    editor.section = section
+                }
+            }
+        }
     }
 
     private var attentionCount: Int {
@@ -304,6 +314,7 @@ private struct SettingsHeader: View {
 
 private struct SettingsTab: View {
     let section: CustomizationSection
+    let labelled: Bool
     let selected: Bool
     let badge: Int
     let select: () -> Void
@@ -326,12 +337,14 @@ private struct SettingsTab: View {
                                 .offset(x: 8, y: -4)
                         }
                     }
-                Text(section.rawValue).font(.system(size: 11))
+                if labelled {
+                    Text(section.rawValue).font(.system(size: 11))
+                }
             }
             .foregroundStyle(selected ? Color.accentColor : hovering ? .primary : .secondary)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .frame(minWidth: 56)
+            .frame(minWidth: labelled ? 56 : nil)
             .background(selected ? SettingsPalette.control : .clear, in: RoundedRectangle(cornerRadius: 7))
             .contentShape(Rectangle())
         }

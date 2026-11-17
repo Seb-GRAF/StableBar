@@ -536,7 +536,7 @@ struct BarInspector: View {
                     }
                 }
                 iconGroup(widget)
-            case let .menuBarItems(_, _, hidden):
+            case let .menuBarItems(_, _, _, hidden):
                 SettingsGroup("Menu bar items") {
                     MenuBarItemsSettings(store: store, editor: editor, widget: widget, shown: widget.shownMenuBarItems, hidden: hidden)
                 }
@@ -639,10 +639,19 @@ struct BarInspector: View {
                     }))
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
                 }
-            } else if case let .menuBarItems(openOnHover, _, _) = widget.content {
+            } else if case let .menuBarItems(openOnHover, _, _, _) = widget.content {
                 SettingRow(title: "Open on hover", hint: "When off, a click opens the list") {
                     Toggle("Open on hover", isOn: Binding(get: { openOnHover }, set: {
                         editor.set(["openOnHover": .bool($0)], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            }
+            if case let .menuBarItems(_, rightClickInMenuBar, _, _) = widget.content {
+                SettingRow(title: "Right-click items as in the menu bar",
+                           hint: "Experimental. Needs macOS 27 or later. When off, a right-click opens the item") {
+                    Toggle("Right-click items as in the menu bar", isOn: Binding(get: { rightClickInMenuBar }, set: {
+                        editor.set(["rightClickInMenuBar": .bool($0)], for: widget.id)
                     }))
                     .toggleStyle(.switch).labelsHidden().controlSize(.small)
                 }

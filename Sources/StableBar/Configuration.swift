@@ -433,14 +433,20 @@ enum WidgetContent: Equatable, Sendable {
     case appleMenu(click: AppleMenuClick)
     case controlCenter
     case stableBar
-    case menuBarItems(openOnHover: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
+    case menuBarItems(openOnHover: Bool, rightClickInMenuBar: Bool, shown: [MenuBarItemsEntry], hidden: [MenuBarItemsEntry])
     case clock(format: String)
     case text(String)
     case script(command: String, interval: Double?)
 }
 
 struct WidgetConfiguration: Decodable, Identifiable, Sendable {
+    /// The types besides those of native providers, such as `battery`.
+    private static let fixedTypeNames: Set<String> = ["spacer", "provider", "aerospace", "workspaces", "activeApp", "appMenu", "appleMenu",
+                                                      "controlCenter", "stableBar", "menuBarItems", "clock", "text", "script"]
+
     let id: String
+    /// The `type` the widget declares, with `aerospace` as `workspaces`.
+    let typeName: String
     let role: PresentationRole?
     var position: WidgetPosition
     let content: WidgetContent
@@ -469,7 +475,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let timeout: Double
     let actions: WidgetActions?
     let enabled: Bool
-    let group: String?
+    let ownGroup: String?
+    /// The group whose `members` the widget joined. A screen's own layout settles it again.
+    var joinedGroup: String?
     let priority: Int
     let overflow: WidgetOverflow
     let rules: [StyleRule]
@@ -478,9 +486,10 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
+        case expandOnHover, openOnHover, rightClickInMenuBar, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
     }
 
+    var group: String? { ownGroup ?? joinedGroup }
     var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
     var tooltipStyle: WidgetStyle { WidgetStyle(background: tooltipBackground).inheriting(style) }
 
@@ -527,12 +536,17 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         }
         actions = try values.decodeIfPresent(WidgetActions.self, forKey: .actions)
         enabled = try values.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
-        group = try values.decodeIfPresent(String.self, forKey: .group)
+        ownGroup = try values.decodeIfPresent(String.self, forKey: .group)
         priority = try values.decodeIfPresent(Int.self, forKey: .priority) ?? 0
         overflow = try values.decodeIfPresent(WidgetOverflow.self, forKey: .overflow) ?? .automatic
         rules = try values.decodeIfPresent([StyleRule].self, forKey: .rules) ?? []
         transition = try values.decodeIfPresent(WidgetTransition.self, forKey: .transition)
-        switch try values.decode(String.self, forKey: .type) {
+        let type = try values.decode(String.self, forKey: .type)
+        guard let typeName = Self.typeName(type) else {
+            throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
+        }
+        self.typeName = typeName
+        switch type {
         case "spacer": content = .spacer
         case "provider": content = .provider(try values.decode(String.self, forKey: .provider))
         case "aerospace", "workspaces": content = .workspaces
@@ -543,6 +557,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "stableBar": content = .stableBar
         case "menuBarItems":
             content = .menuBarItems(openOnHover: try values.decodeIfPresent(Bool.self, forKey: .openOnHover) ?? true,
+                                    rightClickInMenuBar: try values.decodeIfPresent(Bool.self, forKey: .rightClickInMenuBar) ?? false,
                                     shown: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .shown) ?? [],
                                     hidden: try values.decodeIfPresent([MenuBarItemsEntry].self, forKey: .hidden) ?? [])
         case "clock": content = .clock(format: try values.decodeIfPresent(String.self, forKey: .format) ?? "EEE d MMM  HH:mm")
@@ -553,11 +568,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
                 throw DecodingError.dataCorruptedError(forKey: .interval, in: values, debugDescription: "A script interval must be greater than zero.")
             }
             content = .script(command: try values.decode(String.self, forKey: .command), interval: interval)
-        case let type:
-            guard DataSourceRegistry.builtIn[type]?.isNative == true else {
-                throw DecodingError.dataCorruptedError(forKey: .type, in: values, debugDescription: "Unknown widget type.")
-            }
-            content = .provider(type)
+        case let type: content = .provider(type)
         }
         if !rules.isEmpty {
             switch content {
@@ -570,6 +581,12 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
 }
 
 extension WidgetConfiguration {
+    /// `type` as a widget stores it, or nil when no widget has that type.
+    static func typeName(_ type: String) -> String? {
+        guard fixedTypeNames.contains(type) || DataSourceRegistry.builtIn[type]?.isNative == true else { return nil }
+        return type == "aerospace" ? "workspaces" : type
+    }
+
     /// The provider this widget shows: the one it names, or the native type it is.
     var providerName: String? {
         if case let .provider(name) = content { return name }
@@ -577,7 +594,7 @@ extension WidgetConfiguration {
     }
 
     var shownMenuBarItems: [MenuBarItemsEntry] {
-        guard case let .menuBarItems(_, shown, hidden) = content else { return [] }
+        guard case let .menuBarItems(_, _, shown, hidden) = content else { return [] }
         return shown.contains(.symbol) || hidden.contains(.symbol) ? shown : shown + [.symbol]
     }
 
@@ -886,6 +903,7 @@ struct Configuration: Decodable, Sendable {
         subscribedEvents = subscribed
         activeProviders = active
         groups = try values.decodeIfPresent([String: WidgetGroupConfiguration].self, forKey: .groups) ?? [:]
+        widgets = WidgetGroupConfiguration.joining(widgets, groups: groups)
         var groupPositions: [String: WidgetPosition] = [:]
         var ids = Set<String>()
         for widget in widgets {
@@ -940,6 +958,7 @@ struct Configuration: Decodable, Sendable {
                 return widget
             }
         }
-        return listed + widgets.filter { widget in !listed.contains { $0.id == widget.id } }
+        let unlisted = widgets.filter { widget in !listed.contains { $0.id == widget.id } }
+        return WidgetGroupConfiguration.joining(listed + unlisted, groups: groups)
     }
 }

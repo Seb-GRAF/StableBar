@@ -70,6 +70,16 @@ enum SceneRenderer {
                                                                     windows: JSONEncoder().encode(scene.windows ?? []),
                                                                     focusedWindow: scene.focusedWindow)
         }
+        if let spaces = scene.yabaiSpaces {
+            let bundleIDs = try Dictionary(uniqueKeysWithValues: scene.yabaiApps.map { key, bundleID in
+                guard let pid = Int32(exactly: key) else { throw CommandFailure(message: "yabaiApps: \(key) isn't a process ID.") }
+                return (pid, bundleID)
+            })
+            store.workspaceStore.workspaces = try yabaiSnapshot(spaces: JSONEncoder().encode(spaces),
+                                                                windows: JSONEncoder().encode(scene.yabaiWindows ?? []),
+                                                                displays: Data(#"[{"id":1,"index":1}]"#.utf8), screenIDs: [1],
+                                                                bundleIDs: bundleIDs)
+        }
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
@@ -257,6 +267,7 @@ enum SceneRenderer {
                 .environment(\.macOSVersion, macOSVersion).background(Color(nsColor: .windowBackgroundColor))
                 .environment(\.feedbackSample, feedbackSample)
                 .environment(\.starRequestSample, (scene.starRequest ?? .repository).state)
+                .environment(\.calendarsSample, calendarsSample)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
@@ -445,6 +456,9 @@ enum SceneRenderer {
                           live: BugReport.Live(access: ["Accessibility allowed", "Calendars allowed"], workspaces: "",
                                                profiles: [], problems: [])),
         account: "octocat", agents: [.claude])
+
+    /// The Calendars control's sample Mac: an iCloud account, and a Google account whose main calendar takes its address.
+    private static let calendarsSample = ["iCloud": ["Family", "Home", "Work"], "jane@example.com": ["Holidays", "jane@example.com"]]
 
     /// Crash reports as macOS writes them, for Crashes in Status: one of a release, one of a development build, and one
     /// of a launch that dyld stopped, which Crashes leaves out.
