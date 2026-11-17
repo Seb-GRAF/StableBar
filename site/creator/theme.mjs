@@ -312,6 +312,10 @@ export const CONTROLS = [
     "Set the shadow or glow radius in points.", "styling.md#widget-styles", undefined, { range: [0, 1000] }),
   select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
     "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
+  control("workspaces.appIconSize", "App icon size", "number",
+    ["workspaceDefaults.appStyle.width", "workspaceDefaults.appStyle.height"],
+    "Set native app icons' width and height in points.", "widgets.md#workspace-appearance", undefined,
+    { range: [6, 40], slider: true }),
   control("workspaces.foreground", "Unfocused text", "color", ["workspaceDefaults.style.foreground"],
     "Set the text color of unfocused workspaces.", "widgets.md#workspace-appearance"),
   control("workspaces.focusedForeground", "Focused text", "color", ["workspaceDefaults.style.states.focused.foreground"],
@@ -424,14 +428,25 @@ export function applyControl(state, id, value, appearance) {
       writePath(next.config, control.paths[0], editedColor(state.config, control.paths[0], value, appearance));
     }
   } else {
-    const path = control.paths[0];
-    writePath(next.config, path, control.kind === "color" ? editedColor(state.config, path, value, appearance) : value);
+    for (const path of control.paths) {
+      writePath(next.config, path, control.kind === "color" ? editedColor(state.config, path, value, appearance) : value);
+    }
   }
   if (["color", "background"].includes(control.kind)) validateThemeColors(next.config);
   return next;
 }
 
-const valueAt = (object, path) => path.split(".").reduce((value, key) => value?.[key], object);
+function valueAt(object, path) {
+  let value = object, tokens;
+  for (const key of path.split(".")) {
+    if (typeof value === "string" && value.startsWith("@token.")) {
+      tokens ??= overriding(builtIn, object).tokens ?? {};
+      value = aliasValue(value, tokens);
+    }
+    value = value?.[key];
+  }
+  return value;
+}
 
 export function differsFromBase(state, id, base) {
   const control = CONTROLS.find(control => control.id === id);
