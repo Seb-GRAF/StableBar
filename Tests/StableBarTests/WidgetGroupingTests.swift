@@ -310,6 +310,13 @@ private let row = #"""
     try bar.apply(try bar.grouping.leaving("imported"))
     #expect(bar.groups() == ["imported": "-"])
     #expect(try bar.fixture.document()["widgetOverrides"] == .object(["imported": .object(["group": .null])]))
+    try bar.store.customizationHistory.undo()
+    #expect(bar.groups() == ["imported": "status"])
+
+    // The included file still names the group under the `null`, so its definition stays.
+    try bar.apply(try bar.grouping.dissolving("status"))
+    #expect(bar.groups() == ["imported": "-"])
+    #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
 }
 
 @MainActor @Test func ungroupingKeepsAGroupAProfileFromAnIncludedFileNames() throws {

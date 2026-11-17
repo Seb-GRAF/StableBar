@@ -125,8 +125,10 @@ struct WidgetGrouping {
         let removable = editingProfile == nil && !definition.isEmpty
             && definition.allSatisfy { $0.file == mainFile && $0.profile == nil }
             && own.allSatisfy { origins["widgets.\($0.id).group"].map { $0.file == mainFile && $0.profile == nil } == true }
-        if removable {
-            var document = try mainDocument()
+        var document = removable ? try mainDocument() : [:]
+        // A member defined elsewhere, such as in an included file, may still name the group under its `null`.
+        let defined = try document["widgets"]?.decoded([[String: ConfigurationValue]].self).map { $0["id"] } ?? []
+        if removable, own.allSatisfy({ defined.contains(.string($0.id)) }) {
             var ids = widgets.map(\.id)
             for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
             document["groups"] = nil
