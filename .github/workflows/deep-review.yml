@@ -1,0 +1,40 @@
+name: Deep review
+
+# Adds the deep-review label, which starts a CodeRabbit review, to a pull request that changes more
+# than 400 lines or a file listed in .github/deep-review-paths. It never removes the label. A draft
+# gets it once it's ready for review, since CodeRabbit skips drafts. pull_request_target runs the
+# default branch's copy of this workflow and of .github/scripts, so a pull request never runs its own
+# code here. The logic and its tests are in .github/scripts/deep-review.mjs.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: deep-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Deep review label
+    if: ${{ !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'deep-review') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { needsDeepReview } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/deep-review.mjs`);
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 });
+            if (needsDeepReview(files.map((file) => file.filename), pr.additions + pr.deletions))
+              await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: ["deep-review"] });

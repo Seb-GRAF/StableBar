@@ -90,7 +90,7 @@ There is no web view or custom drawing loop. Private macOS API, for hiding and r
 
 Reviews are requested automatically from the people listed in [CODEOWNERS](.github/CODEOWNERS), but they are not required. Ask for one when a change is risky or outside your usual area.
 
-[CodeRabbit](https://coderabbit.ai) also reviews every pull request once it is out of draft, and comments only on what matters most. Fix each comment or reply why not, then resolve its thread: unresolved conversations block merging. Its rules come from [AGENTS.md](AGENTS.md) and [.coderabbit.yaml](.coderabbit.yaml).
+[cubic](https://cubic.dev) also reviews every pull request once it is out of draft. [CodeRabbit](https://coderabbit.ai) reviews pull requests labeled `deep-review`: the label is added automatically when a pull request changes more than 400 lines or a file listed in [.github/deep-review-paths](.github/deep-review-paths), and you can add it yourself when a change is risky. Fix each comment from either or reply why not, then resolve its thread: unresolved conversations block merging. Their rules come from [AGENTS.md](AGENTS.md), [cubic.yaml](cubic.yaml) and [.coderabbit.yaml](.coderabbit.yaml). CodeRabbit allows each pull request author only a few reviews per hour, so don't ask it again and again with `@coderabbitai review`.
 
 [DECISIONS.md](DECISIONS.md) lists the lasting decisions about releases, reviews and code. A pull request that sets a new rule or policy adds an entry there.
 

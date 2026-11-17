@@ -1,6 +1,8 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit reviews every pull request. It reads AGENTS.md on its own, as one of its default code
-# guidelines; the path instructions point it at what reviews of StableBar keep catching.
+# CodeRabbit reviews pull requests labeled deep-review, and cubic reviews every pull request
+# (cubic.yaml). .github/workflows/deep-review.yml adds the label to big or risky changes, and anyone
+# can add it by hand. CodeRabbit reads AGENTS.md on its own, as one of its default code guidelines;
+# the path instructions point it at what reviews of StableBar keep catching.
 language: en-US
 reviews:
   # Only the most important findings go inline. Each one is a thread to resolve before merging.
@@ -18,6 +20,8 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+    # Adding the label starts a review.
+    labels: ["deep-review"]
     # Every base branch, so pull requests stacked on another branch are reviewed too.
     base_branches: [".*"]
     # Keep reviewing every push: by default reviews pause after five reviewed commits, silently

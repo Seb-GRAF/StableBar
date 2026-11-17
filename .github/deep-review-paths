@@ -1,0 +1,16 @@
+Sources/StableBar/PrivateAPI.swift
+Sources/StableBar/AppUpdate.swift
+Sources/StableBar/UpdateRelease.swift
+Sources/StableBar/ICloudSync*.swift
+Sources/StableBar/Uninstall*.swift
+Resources/Info.plist
+Resources/StableBar.entitlements
+.github/workflows/**
+.github/scripts/**
+.githooks/**
+scripts/**
+.releaserc.json
+Package.swift
+Package.resolved
+package.json
+package-lock.json

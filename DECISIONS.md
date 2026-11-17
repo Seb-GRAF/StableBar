@@ -13,7 +13,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Reviews and checks
 
-- **CodeRabbit reviews every pull request** (2026-10-31, [#391]). It's free for open source, its quiet profile posts only what matters, and it reviews every push. No paid review tools or API keys.
+- **cubic reviews every pull request, CodeRabbit the risky ones** (2026-11-17, [#772]). CodeRabbit's free plan allows each author two reviews an hour, so pull requests opened together went unreviewed. cubic is free for public repositories and resolves its own threads. CodeRabbit, which had reviewed every pull request since 2026-10-31 ([#391]), now reviews those labeled `deep-review`: more than 400 changed lines, a file in `.github/deep-review-paths`, or added by hand. No paid review tools or API keys.
 - **No auto-merge** (2026-10-31). The rules need no approval, but a maintainer merges; nothing merges itself.
 - **A person approves changed screens** (2026-10-31, [#395], [#397]). CI draws before/after screens, and any maintainer, the author too, adds `visual-ok` after looking. A visible change also shows screenshots in its pull request description (2026-11-08, [#484]).
 - **Pull requests compare with `main`'s own screens** (2026-11-17). Each push to `main` draws its screens once, and a pull request uses those of its base, drawing from the base only the scenes it adds or edits, instead of drawing the whole base again in every run. Docs images drawn from one commit on different CI Macs, and on two runner images, matched byte for byte. A cancelled draw leaves Visual review pending, not failed.
@@ -82,3 +82,4 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#618]: https://github.com/Seb-GRAF/StableBar/issues/618
 [#664]: https://github.com/Seb-GRAF/StableBar/issues/664
 [#676]: https://github.com/Seb-GRAF/StableBar/issues/676
+[#772]: https://github.com/Seb-GRAF/StableBar/issues/772
