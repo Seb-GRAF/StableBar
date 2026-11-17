@@ -93,6 +93,10 @@ private func sliderBlock(_ properties: String = "") throws -> PopupBlock {
     let wrapper = NSHostingView(rootView: PopupBlockView(block: nested, inheritedStyle: WidgetStyle(), fields: [:],
         context: BlockContext(roles: roles, inlineControlHeight: 20, fillsWidth: false, open: { _ in }, runAction: { _, _ in })).frame(width: 100))
     #expect(wrapper.fittingSize.height == 20, "A padded wrapper shares the inline height budget")
+    let overflowing = try JSONDecoder().decode(PopupBlock.self, from: Data(#"{"type":"row","style":{"paddingVertical":-3},"children":[{"type":"slider","title":"Volume","source":"volume","set":"volume"}]}"#.utf8))
+    let negative = NSHostingView(rootView: PopupBlockView(block: overflowing, inheritedStyle: WidgetStyle(), fields: [:],
+        context: BlockContext(roles: roles, inlineControlHeight: 20, fillsWidth: false, open: { _ in }, runAction: { _, _ in })).frame(width: 100))
+    #expect(negative.fittingSize.height == 14, "Negative padding doesn't let the inline slider grow past the widget")
 }
 
 @MainActor @Observable private final class SliderInteraction {

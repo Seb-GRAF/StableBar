@@ -472,7 +472,8 @@ struct PopupBlockView: View {
     private func child(_ block: PopupBlock, of style: BlockStyle, fields: [String: String]) -> PopupBlockView {
         var context = context
         if let limit = context.inlineControlHeight {
-            let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
+            // Negative padding lets a child overflow its box, but an inline control still stays within the widget.
+            let inset = max(style.box.paddingTop ?? style.box.paddingVertical ?? 0, 0) + max(style.box.paddingBottom ?? style.box.paddingVertical ?? 0, 0)
             context.inlineControlHeight = max(min(limit, style.box.height ?? limit) - inset, 1)
         }
         return PopupBlockView(block: block, inheritedStyle: style.inherited, fields: fields, context: context)
