@@ -300,12 +300,12 @@ function gather(run, folders) {
  * when the comment is written: that write's time becomes `shownAt`, so a label added during the uploads
  * approves nothing. A run that started before the base last changed compared the old base: its review
  * waits for a new run. A run cancelled before it drew the screens, as when main's CI pauses it, leaves the
- * comment as it is and the review pending until CI runs again.
+ * comment as it is and the review pending until CI runs again, unless another job failed.
  */
 async function publish({ github, owner, repo, pr, existing, data: previous, labels, labeledAt, baseChangedAt, run, folders, target }) {
   const number = pr.number, head = pr.head.sha;
   const { screens, failed, files, ranScreens, cancelled } = gather(run, folders);
-  if (cancelled) {
+  if (cancelled && failed.length === 0) {
     const review = { state: "pending", description: `${cancelled} was cancelled: the screens are compared when CI runs again.`, removeLabel: false };
     await setStatus({ github, owner, repo, sha: head, review, url: existing?.html_url });
     return review;

@@ -378,7 +378,7 @@ test("failed and missing jobs, and screens the changed files call for, fail the 
   }
 });
 
-test("a run cancelled before it drew the screens leaves the comment and the review pending until CI runs again", async () => {
+test("a run cancelled before it drew the screens leaves the comment and the review pending until CI runs again, unless another job failed", async () => {
   const { github, state, run } = fakeGitHub();
   state.jobs[99] = jobsOf({ ...conclusions, "Draw screens": "cancelled" });
   state.artifacts[99] = [];
@@ -392,6 +392,9 @@ test("a run cancelled before it drew the screens leaves the comment and the revi
   assert.equal((await reconcile(github, runEvent())).review.description, "Build release was cancelled: the screens are compared when CI runs again.");
   assert.equal(comment(state).body, shown);
   assert.equal(state.statuses.at(-1).state, "pending");
+  run({ jobs: { ...conclusions, "Draw screens": "cancelled", "Draw website screens": "failure" }, artifacts: [] });
+  assert.equal((await reconcile(github, runEvent())).review.state, "failure");
+  assert.ok(comment(state).body.includes("- `site`: `Draw website screens ended with failure.`"));
 });
 
 test("unusable artifacts are refused whole", async () => {
