@@ -193,7 +193,6 @@ class BarPanel: NSPanel, Observable {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.isMenuBarProbe { return }
         if event.type == .keyDown, event.keyCode == 53, focusesWidgets { releaseKeyboard() } else { super.sendEvent(event) }
     }
 
@@ -296,7 +295,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
         endMenuBarReveals()
-        store.appMenu.coverMenuBar = { [weak self] in self?.menuBarStrip.coversMenuBar = $0 }
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(named: "StatusBarIconTemplate")

@@ -39,13 +39,9 @@ final class AppMenu: NSObject {
     @ObservationIgnored private(set) var readTask: Task<Void, Never>?
     @ObservationIgnored private var menuBarPresses = 0
     @ObservationIgnored private var revealedPresses = 0
-    @ObservationIgnored private var rightClicking = false
-    @ObservationIgnored private var menuBarContexts: [CGDirectDisplayID: MenuBarContext] = [:]
     @ObservationIgnored private var pressedItem: AXUIElement?
     private(set) var menuBarItems: [MenuBarItem] = []
     @ObservationIgnored let mirror: MenuBarItemMirror
-    /// Puts the bars over the menu bar, letting mouse events through to it, or where the menu bar as it is now puts them.
-    @ObservationIgnored var coverMenuBar: (Bool) -> Void = { _ in }
     @ObservationIgnored var hidesMenuBar = false {
         didSet { if hidesMenuBar != oldValue { menuBar.setHidden(hidesMenuBar) } }
     }
@@ -374,57 +370,16 @@ final class AppMenu: NSObject {
     /// Right-clicks the item by sending the click to MenuBarAgent, which draws the menu bar and passes the click on to
     /// the item's app, so the pointer stays where it is. Where that can't be done, the item gets a press.
     private func rightClickInMenuBar(_ item: AXUIElement, on display: CGDirectDisplayID) async {
-        // A second right-click would read the menu bar's context while the first one does.
-        guard !rightClicking else { return }
-        rightClicking = true
-        defer { rightClicking = false }
         let readAttribute = readAttribute, mouse = mouse
-        let itemFrame = await Task.detached { frame(of: item, readAttribute) }.value
-        guard !itemFrame.isEmpty, let context = await menuBarContext(on: display, around: itemFrame) else {
+        let (itemFrame, window) = await Task.detached { (frame(of: item, readAttribute), mouse.menuBarWindow(display)) }.value
+        guard !itemFrame.isEmpty, let window else {
             // Awaited: a revealed menu bar hides again once this returns.
             _ = await Task.detached { AXUIElementPerformAction(item, kAXPressAction as CFString) }.value
             return
         }
-        mouse.rightClick(CGPoint(x: itemFrame.midX, y: itemFrame.midY), context)
+        mouse.rightClick(CGPoint(x: itemFrame.midX, y: itemFrame.midY), window)
         // A menu the click opens keeps a revealed menu bar from hiding again, once it's open.
         try? await sleep(.milliseconds(MenuBarVisibility.clickDelivery))
-    }
-
-    /// What a click sent to MenuBarAgent needs to reach the menu bar on `display`, read once for as long as that
-    /// MenuBarAgent runs and the display stays as it is. Reading it takes a mouse event that the window server gives to
-    /// the menu bar, so the menu bar has to have slid all the way down, and one hidden as transparent shows faintly
-    /// meanwhile, behind the bars: macOS gives a mouse event on a transparent menu bar to the window beneath it.
-    private func menuBarContext(on display: CGDirectDisplayID, around item: CGRect) async -> MenuBarContext? {
-        guard let agent = mouse.agent() else { return nil }
-        let bounds = CGDisplayBounds(display)
-        if let context = menuBarContexts[display], context.agent == agent, context.menuBar == bounds { return context }
-        menuBarContexts[display] = nil
-        let sleep = sleep, menuBar = menuBar
-        let inPlace = await Task.detached {
-            for _ in 0..<25 {
-                if menuBar.isInPlace(display) { return true }
-                try? await sleep(.milliseconds(20))
-            }
-            return false
-        }.value
-        guard inPlace else { return nil }
-        let transparent = hidesMenuBar || revealedPresses > 0
-        // A bar over a faint menu bar hides as much of it as the bar is opaque. A menu bar the user sees stays over the
-        // bars, and a bar still above one that has just shown would take the mouse event.
-        coverMenuBar(transparent)
-        if transparent { menuBar.setOpacity(MenuBarVisibility.clickableOpacity) }
-        let row = CGRect(x: bounds.minX, y: item.minY, width: bounds.width, height: item.height)
-        let number = await mouse.contextNumber(agent, row, item, sleep)
-        if hidesMenuBar || revealedPresses > 0 { menuBar.setOpacity(0) }
-        if transparent {
-            // Uncovered at once, the menu bar would still be drawn faint for a frame.
-            try? await sleep(.milliseconds(MenuBarVisibility.opacityChange))
-            coverMenuBar(false)
-        }
-        guard let number else { return nil }
-        let context = MenuBarContext(agent: agent, number: number, menuBar: bounds)
-        menuBarContexts[display] = context
-        return context
     }
 
     private func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
@@ -853,138 +808,61 @@ func copyAttributes(_ names: [String], of element: AXUIElement) -> [CFTypeRef?] 
     }
 }
 
-/// What a click sent to MenuBarAgent carries to reach a display's menu bar: the number of the layer context the
-/// agent draws that menu bar in, and the menu bar's place, which the click's place in it is counted from.
-struct MenuBarContext: Equatable, Sendable {
+/// Where a click sent to MenuBarAgent goes: one of the windows it keeps off screen for a display's menu bar items. It
+/// finds the item by the click's place in that window and passes the click on to the item's app.
+struct MenuBarWindow: Equatable, Sendable {
     let agent: pid_t
     let number: Int64
-    let menuBar: CGRect
+    let frame: CGRect
 }
 
 /// The mouse as a right-click on a menu bar item needs it, so that a test can stand in for it.
 struct MenuBarMouse: Sendable {
     var rightButtonIsDown: @Sendable () -> Bool = { CGEventSource.buttonState(.hidSystemState, button: .right) }
-    /// MenuBarAgent, on a macOS where it draws the menu bar and a click can be sent to it (27).
-    var agent: @Sendable () -> pid_t? = {
-        guard PrivateAPI.eventContextField != nil, PrivateAPI.setEventWindowLocation != nil else { return nil }
-        return NSRunningApplication.runningApplications(withBundleIdentifier: menuBarAgentID).first?.processIdentifier
+    /// MenuBarAgent's window for the menu bar on a display, on a macOS where it draws the menu bar and a click can be
+    /// sent to it (27).
+    var menuBarWindow: @Sendable (CGDirectDisplayID) -> MenuBarWindow? = { display in
+        guard PrivateAPI.eventWindowField != nil, PrivateAPI.setEventWindowLocation != nil,
+              let agent = NSRunningApplication.runningApplications(withBundleIdentifier: menuBarAgentID).first?.processIdentifier
+        else { return nil }
+        let windows = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
+        return menuBarAgentWindow(agent: agent, display: CGDisplayBounds(display), windows: windows)
     }
-    var contextNumber: @MainActor @Sendable (pid_t, CGRect, CGRect, @escaping @Sendable (Duration) async throws -> Void) async -> Int64? = {
-        await readMenuBarContextNumber(agent: $0, row: $1, item: $2, sleep: $3)
-    }
-    var rightClick: @Sendable (CGPoint, MenuBarContext) -> Void = { point, context in
-        for event in menuBarRightClick(at: point, in: context) { event.postToPid(context.agent) }
-    }
-}
-
-/// Marks the mouse event StableBar sends to read a menu bar's context, in the event's user data ("SBar").
-let menuBarProbeMark: Int64 = 0x5342_6172
-/// A button no mouse has, so that no menu bar item acts on its release.
-let menuBarProbeButton: Int64 = 20
-
-extension NSEvent {
-    /// Whether StableBar sent this event to read a menu bar's context. One that reaches a bar instead stops there.
-    var isMenuBarProbe: Bool {
-        type == .otherMouseUp && cgEvent?.getIntegerValueField(.eventSourceUserData) == menuBarProbeMark
+    var rightClick: @Sendable (CGPoint, MenuBarWindow) -> Void = { point, window in
+        for event in menuBarRightClick(at: point, in: window) { event.postToPid(window.agent) }
     }
 }
 
-/// Where to send the event that reads a menu bar's context: where the pointer is if that's in the row of the menu
-/// bar's items, so that it stays put, or else the middle of `item`.
-func menuBarProbePoint(row: CGRect, item: CGRect, pointer: CGPoint) -> CGPoint {
-    row.contains(pointer) ? pointer : CGPoint(x: item.midX, y: item.midY)
+/// The window, among `windows` as the window list describes them, that MenuBarAgent keeps at the menu bar's level along
+/// the top of `display`. The menu bar that shows is the window server's, and the strip over a menu bar that hides
+/// automatically sits a level higher; neither passes a click on to an item.
+func menuBarAgentWindow(agent: pid_t, display: CGRect, windows: [[String: Any]]) -> MenuBarWindow? {
+    let menuBarLevel = Int(CGWindowLevelForKey(.mainMenuWindow))
+    for window in windows {
+        guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == agent,
+              window[kCGWindowLayer as String] as? Int == menuBarLevel,
+              let number = window[kCGWindowNumber as String] as? Int,
+              let bounds = (window[kCGWindowBounds as String] as! CFDictionary?).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+              abs(bounds.minX - display.minX) <= 1, abs(bounds.width - display.width) <= 1, abs(bounds.minY - display.minY) <= 1,
+              bounds.height < display.height / 4
+        else { continue }
+        return MenuBarWindow(agent: agent, number: Int64(number), frame: bounds)
+    }
+    return nil
 }
 
-/// A right-click at `point`, in global display coordinates, for MenuBarAgent: it finds the item by the click's place in
-/// the menu bar and passes the click on to the item's app. The events come from a source of their own, so their button
-/// state never mixes with the mouse's.
-func menuBarRightClick(at point: CGPoint, in context: MenuBarContext) -> [CGEvent] {
-    guard let field = PrivateAPI.eventContextField, let setWindowLocation = PrivateAPI.setEventWindowLocation,
+/// A right-click at `point`, in global display coordinates, for MenuBarAgent's `window`. The events come from a source
+/// of their own, so their button state never mixes with the mouse's, and they're posted to MenuBarAgent alone, so the
+/// pointer stays where it is.
+func menuBarRightClick(at point: CGPoint, in window: MenuBarWindow) -> [CGEvent] {
+    guard let field = PrivateAPI.eventWindowField, let setWindowLocation = PrivateAPI.setEventWindowLocation,
           let source = CGEventSource(stateID: .privateState) else { return [] }
     return [CGEventType.rightMouseDown, .rightMouseUp].compactMap { type in
         guard let event = CGEvent(mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: .right) else { return nil }
         event.setIntegerValueField(.mouseEventClickState, value: 1)
-        event.setIntegerValueField(field, value: context.number)
-        setWindowLocation(event, CGPoint(x: point.x - context.menuBar.minX, y: point.y - context.menuBar.minY))
+        event.setIntegerValueField(field, value: window.number)
+        setWindowLocation(event, CGPoint(x: point.x - window.frame.minX, y: point.y - window.frame.minY))
         return event
-    }
-}
-
-/// Reads the number of the layer context MenuBarAgent draws a menu bar in. The window server writes it on a mouse
-/// event it gives to that menu bar, so this sends one there and reads it back as it passes: the release of a button no
-/// mouse has, where the pointer is if that's in `row`, or else on `item` and back. It sends the event again until the
-/// window server has taken in a menu bar that has just become clickable.
-@MainActor
-func readMenuBarContextNumber(agent: pid_t, row: CGRect, item: CGRect, sleep: @escaping @Sendable (Duration) async throws -> Void) async -> Int64? {
-    let reader = MenuBarContextReader(agent: agent)
-    guard reader.start() else { return nil }
-    defer { reader.stop() }
-    for attempt in 0..<10 {
-        guard let pointer = CGEvent(source: nil)?.location else { return nil }
-        // A window over the menu bar where the pointer is takes the event instead; the item has none over it.
-        postMenuBarProbe(at: attempt == 0 ? menuBarProbePoint(row: row, item: item, pointer: pointer) : CGPoint(x: item.midX, y: item.midY),
-                         pointer: pointer)
-        for _ in 0..<5 {
-            if let number = reader.number { return number }
-            try? await sleep(.milliseconds(4))
-        }
-    }
-    return reader.number
-}
-
-private func postMenuBarProbe(at point: CGPoint, pointer: CGPoint) {
-    guard let source = CGEventSource(stateID: .privateState),
-          let release = CGEvent(mouseEventSource: source, mouseType: .otherMouseUp, mouseCursorPosition: point, mouseButton: .center) else { return }
-    release.setIntegerValueField(.mouseEventButtonNumber, value: menuBarProbeButton)
-    release.setIntegerValueField(.eventSourceUserData, value: menuBarProbeMark)
-    release.post(tap: .cghidEventTap)
-    if point != pointer {
-        CGEvent(mouseEventSource: source, mouseType: .mouseMoved, mouseCursorPosition: pointer, mouseButton: .left)?.post(tap: .cghidEventTap)
-    }
-}
-
-/// Watches the mouse events the window server has given to an app for StableBar's probe, and keeps the context number
-/// of the one given to MenuBarAgent.
-@MainActor
-private final class MenuBarContextReader {
-    private let agent: pid_t
-    private(set) var number: Int64?
-    private var tap: CFMachPort?
-    private var source: CFRunLoopSource?
-
-    init(agent: pid_t) {
-        self.agent = agent
-    }
-
-    func start() -> Bool {
-        tap = CGEvent.tapCreate(tap: .cgAnnotatedSessionEventTap, place: .tailAppendEventTap, options: .listenOnly,
-            eventsOfInterest: 1 << CGEventType.otherMouseUp.rawValue,
-            callback: { _, type, event, context in
-                if type == .otherMouseUp {
-                    MainActor.assumeIsolated { Unmanaged<MenuBarContextReader>.fromOpaque(context!).takeUnretainedValue().read(event) }
-                }
-                return Unmanaged.passUnretained(event)
-            }, userInfo: Unmanaged.passUnretained(self).toOpaque())
-        guard let tap else { return false }
-        source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        return true
-    }
-
-    func stop() {
-        guard let tap else { return }
-        CGEvent.tapEnable(tap: tap, enable: false)
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        CFMachPortInvalidate(tap)
-        self.tap = nil
-    }
-
-    private func read(_ event: CGEvent) {
-        guard let field = PrivateAPI.eventContextField, event.getIntegerValueField(.eventSourceUserData) == menuBarProbeMark,
-              event.getIntegerValueField(.eventTargetUnixProcessID) == Int64(agent) else { return }
-        let number = event.getIntegerValueField(field)
-        if number != 0 { self.number = number }
     }
 }
 
