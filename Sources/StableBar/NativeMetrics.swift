@@ -222,7 +222,8 @@ actor CalendarMetrics {
         fields["phase"] = countdown.phase
         fields["minutes"] = String(countdown.minutes)
         return ScriptOutput(text: next.title ?? "", icon: "calendar", fields: fields, lists: ["today": agenda],
-                            values: ["remaining": countdown.remaining], targets: ["remaining": countdown.target], interval: countdown.delay)
+                            values: ["remaining": countdown.remaining], targets: ["remaining": countdown.target],
+                            interval: min(countdown.delay, tomorrow.timeIntervalSince(now)))
     }
 
     private func meetingFields(_ event: EKEvent) -> [String: String] {
