@@ -13,7 +13,8 @@ private func schema(_ reference: String) -> String {
 
 @Test(arguments: [("0.9.0", "0.10.0"), ("0.9.0-beta.20261026143311.421", "0.9.0"),
                   ("0.9.0-beta.20261026143311.421", "0.9.0-beta.20261026150000.425"), ("0.9.0", "0.9.1-beta.20261027100000.430"),
-                  ("0.9.0-beta.9", "0.9.0-beta.10"), ("0.9.0-beta", "0.9.0-beta.1")])
+                  ("0.9.0-beta.9", "0.9.0-beta.10"), ("0.9.0-beta", "0.9.0-beta.1"), ("1.0.0-rc10", "1.0.0-rc2"),
+                  ("1.0.0-1", "1.0.0-alpha"), ("1.0.0-9", "1.0.0--1")])
 func releasesOrderAsSemanticVersions(earlier: String, later: String) {
     #expect(compareReleases(earlier, later) == .orderedAscending)
     #expect(compareReleases(later, earlier) == .orderedDescending)

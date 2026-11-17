@@ -1642,6 +1642,12 @@ func theStoreOffersTheNewestVersionThisStableBarCanRun(appVersion: String?, offe
     #expect(packages.last?.version == offered)
 }
 
+@Test func theStoreOrdersLetteredPrereleasesAsText() async throws {
+    let (client, directory) = try storeClient(listing: [("fern", "1.0.0-rc10", nil), ("fern", "1.0.0-rc2", nil)], appVersion: "0.17.0")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    #expect(try await client.index().packages.map(\.version) == ["1.0.0-rc2"])
+}
+
 @Test func theStoreOffersTheNewestVersionWhenThisStableBarCanRunNone() async throws {
     let (client, directory) = try storeClient(listing: [("fern", "1.3.0", "0.18.0"), ("fern", "1.10.0", "0.20.0")], appVersion: "0.17.0")
     defer { try? FileManager.default.removeItem(at: directory) }
