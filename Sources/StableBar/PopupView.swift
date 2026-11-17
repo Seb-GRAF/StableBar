@@ -34,10 +34,11 @@ struct PopupView: View {
                 // coming back both read right, whatever each was last drawn with.
                 ZStack(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: appearance.spacing) {
-                        if navigation.view != nil {
+                        let view = navigation.view.map { popup.views[$0]! }
+                        if let view, !view.startsWithTitle(fields: fields) {
                             CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground) { navigation.view = nil }
                         }
-                        PopupBlockView(block: navigation.view.map { popup.views[$0]! } ?? popup.layout, inheritedStyle: style, fields: fields,
+                        PopupBlockView(block: view ?? popup.layout, inheritedStyle: style, fields: fields,
                                        context: BlockContext(lists: lists, samples: samples, menu: menu,
                                                              values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
                                                              styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
@@ -90,12 +91,13 @@ struct PopupView: View {
                             if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                             store.runAction(action, widget: widget,
                                             event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
-                        }, topLevel: true)
+                        }, topLevel: true, back: view == nil ? nil : { navigation.view = nil })
                     }
                     .id(navigation.view)
                     .transition(reduceMotion ? .opacity : .move(edge: navigation.view == nil ? .leading : .trailing).combined(with: .opacity))
                 }
-                .clipped()
+                // Focus rings reach a few points past the controls.
+                .clipShape(Rectangle().inset(by: -8))
                 if let error {
                     Text(error).foregroundStyle(.red).textSelection(.enabled)
                 }
@@ -131,6 +133,7 @@ struct PopupView: View {
         }
         .modifier(PopupBackground(style: presentationStyle, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(),
                                   backgrounds: backgrounds ?? store.popup.backgrounds))
+        .tint(appearance.accent)
         .focusEffectDisabled()
         .accessibilityIdentifier("\(widget.id)-popup")
     }
@@ -288,6 +291,8 @@ struct PopupBlockView: View {
     /// The popup's layout itself. As a column, it spaces its blocks `PopupConfiguration.blockSpacing` apart when nothing
     /// sets `spacing`; rows and lists keep 6 at every level.
     var topLevel = false
+    /// Returns from a view whose title this block starts with, from a back arrow beside that title.
+    var back: (() -> Void)?
     @State private var pointerInside: Bool
     @State private var query = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -295,11 +300,12 @@ struct PopupBlockView: View {
 
     /// `pointerInside` starts the block with the pointer over it; tests use it, as drawing has no pointer.
     init(block: PopupBlock, inheritedStyle: WidgetStyle, fields: [String: String], context: BlockContext, pointerInside: Bool = false,
-         topLevel: Bool = false) {
+         topLevel: Bool = false, back: (() -> Void)? = nil) {
         self.block = block
         self.inheritedStyle = inheritedStyle
         self.fields = fields
         self.topLevel = topLevel
+        self.back = back
         var context = context
         context.states = context.states.scoped(to: block)
         self.context = context
@@ -311,7 +317,7 @@ struct PopupBlockView: View {
 
     @ViewBuilder
     var body: some View {
-        if let field = block.hideWhenEmpty, fields[field, default: ""].isEmpty {
+        if block.isHidden(fields: fields) {
             EmptyView()
         } else {
             styledContent
@@ -352,43 +358,43 @@ struct PopupBlockView: View {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let value = block.openField.flatMap({ fields[$0] }) ?? block.open {
                 Button { if let target = OpenTarget(value) { context.open(target) } } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let pid = block.quitField.flatMap({ fields[$0] }).flatMap({ pid_t($0) }) {
                 Button { context.quit(pid) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let reference = block.openMenuBarItem {
                 Button { context.pressMenuBarItem(reference) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let id = block.selectInputSourceField.flatMap({ fields[$0] }) {
                 Button { context.selectInputSource(id) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let id = block.selectOutputDeviceField.flatMap({ fields[$0] }) {
                 Button { context.selectOutputDevice(id) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let view = block.view {
                 Button { context.openView(view) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if block.keepsLineHeight {
                 boxed(ZStack {
                     Text(" ").hidden()
@@ -466,7 +472,16 @@ struct PopupBlockView: View {
             }
         case let .column(children):
             VStack(alignment: .leading, spacing: appearance.spacing) {
-                ForEach(Array(children.enumerated()), id: \.offset) { _, item in child(item, of: style, fields: fields) }
+                ForEach(Array(children.enumerated()), id: \.offset) { index, item in
+                    if index == 0, let back, block.startsWithTitle(fields: fields) {
+                        HStack(spacing: 4) {
+                            CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground, action: back)
+                            child(item, of: style, fields: fields)
+                        }
+                    } else {
+                        child(item, of: style, fields: fields)
+                    }
+                }
             }
         case let .text(text):
             ResolvedBlockMotion(motion: context.motion, block: block) { transition, animation in
@@ -541,7 +556,7 @@ struct PopupBlockView: View {
                 Text(title).frame(maxWidth: .infinity).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .modifier(FocusHighlight(appearance: appearance))
+            .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
         case let .slider(title, source, minimum, maximum, step, endStop, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
             if let endStop {
@@ -580,6 +595,7 @@ struct PopupBlockView: View {
         case let .search(title, source, searchFields, row):
             VStack(alignment: .leading, spacing: appearance.spacing) {
                 TextField(title, text: $query).textFieldStyle(.roundedBorder).accessibilityLabel(title)
+                    .modifier(FocusRing { FocusRingShape(shape: RoundedRectangle(cornerRadius: 10)) })
                 ForEach(Array(searchPopupRows(context.lists[source] ?? [], query: query, fields: searchFields).enumerated()), id: \.offset) { _, fields in
                     child(row, of: style, fields: fields)
                 }
@@ -591,6 +607,19 @@ struct PopupBlockView: View {
             } onStop: {
                 if let stop { context.runAction(.command(stop.command), [:]) }
             }
+            .modifier(FocusRing {
+                if sendButton {
+                    // The block's style draws the field's shape, so the ring goes around it.
+                    let box = style.box
+                    FocusRingShape(shape: RoundedRectangle(cornerRadius: appearance.cornerRadius + 4))
+                        .padding(EdgeInsets(top: -(box.paddingTop ?? box.paddingVertical ?? 0),
+                                            leading: -(box.paddingLeading ?? box.paddingHorizontal ?? 0),
+                                            bottom: -(box.paddingBottom ?? box.paddingVertical ?? 0),
+                                            trailing: -(box.paddingTrailing ?? box.paddingHorizontal ?? 0)))
+                } else {
+                    FocusRingShape(shape: RoundedRectangle(cornerRadius: 10))
+                }
+            })
         case .menu:
             VStack(spacing: appearance.spacing) {
                 ForEach(Array(context.menu.enumerated()), id: \.offset) { _, item in
@@ -673,16 +702,28 @@ private struct PopupSlider: View {
     let onChange: (Double) -> Void
     @State private var localValue: Double?
     @State private var editing = false
+    @State private var labelWidth = 0.0
+
+    private var shown: Double { localValue ?? min(max(value, minimum), maximum) }
 
     var body: some View {
-        Slider(value: Binding(get: { localValue ?? min(max(value, minimum), maximum) }, set: { localValue = $0 }),
+        Slider(value: Binding(get: { shown }, set: { localValue = $0 }),
                in: minimum...maximum, step: step) {
-            Text(title)
+            Text(title).onGeometryChange(for: Double.self) { $0.size.width } action: { labelWidth = $0 }
         } onEditingChanged: { editing in
             self.editing = editing
             if !editing, let localValue { onChange(localValue) }
         }
         .accessibilityLabel(title)
+        .modifier(FocusRing { [labelWidth, shown] in
+            // Around the knob, which macOS draws 20 by 16 points on a track that starts where the label ends.
+            GeometryReader { proxy in
+                FocusRingShape(shape: Capsule())
+                    .frame(width: 20, height: 16)
+                    .position(x: labelWidth + 10 + (shown - minimum) / (maximum - minimum) * (proxy.size.width - labelWidth - 20),
+                              y: proxy.size.height / 2)
+            }
+        })
         .onChange(of: value) { if !editing { localValue = nil } }
         .preference(key: ControlEditingPreference.self, value: editing)
     }
@@ -699,6 +740,10 @@ private struct PopupToggle: View {
             localValue = $0
             onChange($0)
         }))
+        .modifier(FocusRing {
+            // The checkbox is a square as tall as the toggle at its leading edge.
+            FocusRingShape(shape: RoundedRectangle(cornerRadius: 8)).aspectRatio(1, contentMode: .fit).frame(maxWidth: .infinity, alignment: .leading)
+        })
         .onChange(of: value) { localValue = nil }
     }
 }
@@ -845,6 +890,7 @@ private struct PopupChooser: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .modifier(FocusRing { FocusRingShape(shape: Capsule()).padding(.horizontal, -3) })
             } else {
                 HStack(spacing: 2) {
                     ChipRow(spacing: 2) {
@@ -861,6 +907,7 @@ private struct PopupChooser: View {
                     }
                     Button(action: togglePanel) { chevron.padding(6).contentShape(Rectangle()) }
                         .buttonStyle(.plain)
+                        .modifier(FocusRing { FocusRingShape(shape: Capsule(), outset: 0) })
                 }
             }
         }
@@ -1102,6 +1149,7 @@ private struct ChooserChip<Label: View>: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .modifier(FocusRing { FocusRingShape(shape: Capsule(), outset: 0) })
         .onHover { hovered = $0 }
         .animation(.easeOut(duration: 0.12), value: hovered)
     }
@@ -1221,7 +1269,8 @@ private struct CornerButton: View {
                 .contentTransition(.symbolEffect(.replace))
                 .font(.system(size: 11, weight: .semibold))
                 .frame(width: 22, height: 22)
-                .background(foreground.opacity(hovered || focused ? 0.12 : 0), in: Circle())
+                .background(foreground.opacity(hovered ? 0.12 : 0), in: Circle())
+                .overlay { if focused { FocusRingShape(shape: Circle(), outset: 0) } }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -1234,18 +1283,37 @@ private struct CornerButton: View {
     }
 }
 
-struct FocusHighlight: ViewModifier {
-    let appearance: WidgetAppearance
+/// Shows keyboard focus as macOS does, with a ring around the view that `ring` draws.
+struct FocusRing<Ring: View>: ViewModifier {
+    let ring: Ring
     @FocusState private var focused: Bool
+
+    init(@ViewBuilder ring: () -> Ring) {
+        self.ring = ring()
+    }
 
     func body(content: Content) -> some View {
         content
             .focused($focused)
-            .background {
-                if focused {
-                    RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground).padding(-4)
-                }
-            }
+            .overlay { if focused { ring } }
+    }
+}
+
+extension FocusRing where Ring == FocusRingShape<RoundedRectangle> {
+    /// A ring 4 points around the view, its corners concentric with corners of `cornerRadius`.
+    init(cornerRadius: Double) {
+        self.init { FocusRingShape(shape: RoundedRectangle(cornerRadius: cornerRadius + 4)) }
+    }
+}
+
+/// A 2-point ring along `shape` in the tint, which a popup sets to the theme's accent, reaching `outset` points past the
+/// view: 4 leaves a gap around a control's own outline, and 0 keeps it inside a row, whose neighbors leave no room.
+struct FocusRingShape<S: InsettableShape>: View {
+    let shape: S
+    var outset = 4.0
+
+    var body: some View {
+        shape.strokeBorder(.tint, lineWidth: 2).padding(-outset)
     }
 }
 
@@ -1362,14 +1430,20 @@ private struct PopupSegmented: View {
     @State private var localValue: String?
 
     var body: some View {
-        Picker(title, selection: Binding(get: { localValue ?? value }, set: {
-            localValue = $0
-            onChange($0)
-        })) {
-            ForEach(options, id: \.value) { option in Text(option.title).tag(option.value) }
+        LabeledContent {
+            Picker(title, selection: Binding(get: { localValue ?? value }, set: {
+                localValue = $0
+                onChange($0)
+            })) {
+                ForEach(options, id: \.value) { option in Text(option.title).tag(option.value) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel(title)
+            .modifier(FocusRing { FocusRingShape(shape: RoundedRectangle(cornerRadius: 11)) })
+        } label: {
+            Text(title).accessibilityHidden(true)
         }
-        .pickerStyle(.segmented)
-        .accessibilityLabel(title)
         .onChange(of: value) { localValue = nil }
     }
 }
@@ -1618,6 +1692,21 @@ private struct AppMenuRow: View {
     @State private var anchor = NSView()
 
     var body: some View {
+        Group {
+            // Tab skips a disabled entry. `focusable(true)` would give an enabled one a second stop.
+            if entry.isEnabled { button } else { button.focusable(false) }
+        }
+        .focused($focused)
+        .opacity(entry.isEnabled ? 1 : 0.4)
+        .onHover { hovered = $0 }
+        .task(id: hovered) {
+            guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
+            rest(anchor)
+        }
+        .onChange(of: entry.element) { if hovered { rest(anchor) } }
+    }
+
+    private var button: some View {
         Button {
             if entry.hasSubmenu { rest(anchor) } else if entry.isEnabled { press() }
         } label: {
@@ -1646,20 +1735,13 @@ private struct AppMenuRow: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background((hovered || focused || open) && entry.isEnabled ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+            .background((hovered || open) && entry.isEnabled ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                         in: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)))
+            .overlay { if focused { FocusRingShape(shape: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)), outset: 0) } }
             .background(MenuAnchor(view: anchor))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .focused($focused)
-        .opacity(entry.isEnabled ? 1 : 0.4)
-        .onHover { hovered = $0 }
-        .task(id: hovered) {
-            guard hovered, (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
-            rest(anchor)
-        }
-        .onChange(of: entry.element) { if hovered { rest(anchor) } }
     }
 }
 
@@ -1727,8 +1809,9 @@ private struct MenuBarItemButton: View {
         Button { click(anchor) } label: {
             Image(nsImage: entry.icon!).resizable().scaledToFit().frame(width: 18, height: 18)
                 .padding(5)
-                .background(hovered || focused || openAnchor == ObjectIdentifier(anchor) ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+                .background(hovered || openAnchor == ObjectIdentifier(anchor) ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                             in: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)))
+                .overlay { if focused { FocusRingShape(shape: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)), outset: 0) } }
                 .background(MenuAnchor(view: anchor))
                 .contentShape(Rectangle())
         }
@@ -1759,8 +1842,9 @@ struct PopupMenuRow: View {
                 label
             }
         }
-        .background((hovered || focused) && item.onClick != nil ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
+        .background(hovered && item.onClick != nil ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                     in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
+        .overlay { if focused { FocusRingShape(shape: RoundedRectangle(cornerRadius: appearance.cornerRadius), outset: 0) } }
         .onHover { hovered = $0 }
     }
 

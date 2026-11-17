@@ -27,7 +27,7 @@ A hidden menu bar still appears when the pointer reaches the top edge. **Reveal 
 
 ## Where is the configuration file, and how do I apply a change?
 
-It's `~/.config/stablebar/config.json`. **Settings → General → Configuration file** opens it, shows it in Finder or reloads it.
+It's `~/.config/stablebar/config.json`. **Settings → General → Configuration file** opens it, shows it in Finder or reloads it. To use the same bar on several Macs, turn on **Sync with iCloud** there; see [Sync across Macs](configuration.md#sync-across-macs).
 
 StableBar watches the file and applies a change as soon as you save it. If the change has a mistake, the bar keeps the last working configuration and shows an error indicator; click it to see the error in Settings. Changes you make in Settings apply at once and save to your configuration. See [The configuration file](configuration.md#the-configuration-file).
 

@@ -315,7 +315,8 @@ final class WidgetPopup {
     let pins = PopupPins()
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
-        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(nil) }
+        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
+        panel.makeFirstResponder(nil)
     }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }, clock: any Clock<Duration> = ContinuousClock()) {
         self.present = present
         self.mouseLocation = mouseLocation

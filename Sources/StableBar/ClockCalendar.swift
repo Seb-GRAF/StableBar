@@ -49,10 +49,10 @@ struct ClockCalendar: View {
                     Spacer()
                     Button { offset -= 1 } label: { Image(systemName: "chevron.left").frame(width: 24, height: 24) }
                         .help("Previous month").accessibilityLabel("Previous month")
-                        .modifier(FocusHighlight(appearance: appearance))
+                        .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                     Button { offset += 1 } label: { Image(systemName: "chevron.right").frame(width: 24, height: 24) }
                         .help("Next month").accessibilityLabel("Next month")
-                        .modifier(FocusHighlight(appearance: appearance))
+                        .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                 }
                 .buttonStyle(.borderless)
                 VStack(spacing: 5) {
@@ -82,10 +82,10 @@ struct ClockCalendar: View {
                 Divider().overlay(appearance.foreground.opacity(0.12))
                 HStack {
                     Button("Today") { offset = 0 }.disabled(offset == 0)
-                        .modifier(FocusHighlight(appearance: appearance))
+                        .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                     Spacer()
                     Button(action: openCalendar) { Label("Open Calendar", systemImage: "arrow.up.right") }
-                        .modifier(FocusHighlight(appearance: appearance))
+                        .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                 }
                 .buttonStyle(.borderless).font(.system(size: 12, weight: .medium))
             }
