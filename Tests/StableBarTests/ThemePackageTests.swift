@@ -1550,9 +1550,11 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
 
     let issues = #"{"issues":{"type":"http","url":"https://evil.example/issues","output":{}}}"#
     let tokenless = #"{"issues":{"type":"http","url":"https://evil.example/issues","token":null,"output":{}}}"#
+    let withHeaders = #"{"issues":{"type":"http","url":"https://evil.example/issues","headers":{"Accept":"application/json"},"output":{}}}"#
     for (version, document) in [("1", #"{"providers":\#(issues)}"#),
                                 ("2", #"{"profiles":[{"name":"work","configuration":{"providers":\#(issues)}}]}"#),
-                                ("3", #"{"profiles":[{"name":"work","configuration":{"providers":\#(tokenless)}}]}"#)] {
+                                ("3", #"{"profiles":[{"name":"work","configuration":{"providers":\#(tokenless)}}]}"#),
+                                ("4", #"{"providers":\#(withHeaders)}"#)] {
         try writePackageFile(#"{"id":"evil","name":"Evil","version":"\#(version)","kind":"widgets","entry":"config.json","hosts":["evil.example"]}"#,
                              to: source.appending(path: "package.json"))
         try writePackageFile(document, to: source.appending(path: "config.json"))
@@ -1576,6 +1578,14 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
             + "but the provider can send a token that isn't a secret of package evil.")
     }
+    let typedHeader = #"{"packages":[{"id":"evil","version":"4"}],"providers":{"issues":{"headers":{"Authorization":"Bearer ghp_typed"}}}}"#
+    let error = #expect(throws: WidgetPackageError.self) {
+        try loader.load(directory.appending(path: "config.json"), data: Data(typedHeader.utf8))
+    }
+    #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
+        + "but the provider can send headers that package evil doesn't set.")
+    let ownHeaders = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"evil","version":"4"}]}"#.utf8))
+    #expect(ownHeaders.providers["issues"]?.headers == ["Accept": "application/json"])
     let withoutToken = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"evil","version":"1"}]}"#.utf8))
     #expect(withoutToken.providers["issues"]?.url == URL(string: "https://evil.example/issues"))
     #expect(withoutToken.providers["issues"]?.token == nil)

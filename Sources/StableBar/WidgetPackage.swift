@@ -171,6 +171,7 @@ enum WidgetPackageError: LocalizedError {
     case misplacedSecret(String)
     case undeclaredHost(String, String)
     case foreignToken(String, String, String)
+    case foreignHeaders(String, String, String)
 
     var errorDescription: String? {
         switch self {
@@ -199,6 +200,8 @@ enum WidgetPackageError: LocalizedError {
         case let .undeclaredHost(provider, url): "Provider \(provider) requests \(url), but the package's hosts don't list its host."
         case let .foreignToken(package, provider, url):
             "Package \(package) points provider \(provider) at \(url), but the provider can send a token that isn't a secret of package \(package)."
+        case let .foreignHeaders(package, provider, url):
+            "Package \(package) points provider \(provider) at \(url), but the provider can send headers that package \(package) doesn't set."
         }
     }
 }
@@ -772,7 +775,7 @@ func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [Stri
 }
 
 /// Throws when a package sets the `url` of a provider, directly or in a profile, while any file or profile gives that provider
-/// a token other than one of that package's secrets.
+/// a token other than one of that package's secrets, or headers that another file sets.
 func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: String]) throws {
     var definitions = [("providers", layer.values["providers"])]
     if case let .array(profiles)? = layer.values["profiles"] {
@@ -784,10 +787,14 @@ func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: Strin
     }
     var urls: [(String, String, String)] = []
     var tokens: [String: [ConfigurationValue?]] = [:]
+    var headers: [String: [String]] = [:]
     for case let (path, .object(providers)?) in definitions {
         for case let (name, .object(provider)) in providers {
             if case let .string(url)? = provider["url"] { urls.append((name, url, "\(path).\(name).url")) }
             tokens[name, default: []].append(provider["token"])
+            if case let .object(names)? = provider["headers"] {
+                headers[name, default: []] += names.keys.map { "\(path).\(name).headers.\($0)" }
+            }
         }
     }
     for (name, url, path) in urls {
@@ -795,6 +802,9 @@ func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: Strin
         for token in tokens[name]! {
             if case let .string(token)? = token, token.hasPrefix("@secret.\(package)/") { continue }
             guard token == nil || token == .null else { throw WidgetPackageError.foreignToken(package, name, url) }
+        }
+        for header in headers[name, default: []] where packageIDs[layer.origins[header]!.file] != package {
+            throw WidgetPackageError.foreignHeaders(package, name, url)
         }
     }
 }
