@@ -101,6 +101,7 @@ struct WidgetsView: View {
         let hidden = widgets.filter { widget in !shown.contains { $0.id == widget.id } }
         let positions = WidgetPlacement.positions(widgets: widgets, hasNotchedDisplay: NSScreen.screens.contains { $0.auxiliaryTopLeftArea != nil })
         let changed = profileWidgets
+        let grouping = WidgetGrouping(store: store)
         return VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -131,16 +132,16 @@ struct WidgetsView: View {
                             }
                             ForEach(BarUnit.make(widgets: section, groups: store.configuration?.groups ?? [:])) { unit in
                                 if let group = unit.widgets[0].group {
-                                    groupRow(group, members: unit.widgets, position: position, listed: shown)
+                                    groupRow(group, members: unit.widgets, position: position, listed: shown, grouping: grouping)
                                     if !collapsedGroups.contains(group) {
                                         ForEach(unit.widgets) { widget in
                                             widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown,
-                                                      changed: changed.contains(widget.id), names: names, grouped: true)
+                                                      changed: changed.contains(widget.id), names: names, grouping: grouping, grouped: true)
                                         }
                                     }
                                 } else {
                                     widgetRow(unit.widgets[0], name: names[unit.widgets[0].id] ?? unit.widgets[0].id, position: position,
-                                              listed: shown, changed: changed.contains(unit.widgets[0].id), names: names)
+                                              listed: shown, changed: changed.contains(unit.widgets[0].id), names: names, grouping: grouping)
                                 }
                             }
                             WidgetDragRow(session: dragSession, widgetID: nil, name: "", insertionKey: dropKey(position),
@@ -224,7 +225,8 @@ struct WidgetsView: View {
             .padding(.bottom, 4)
     }
 
-    private func groupRow(_ group: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration]) -> some View {
+    private func groupRow(_ group: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
+                          grouping: WidgetGrouping) -> some View {
         let selected = selectedGroup == group
         let first = members[0]
         let title = friendly(group)
@@ -270,6 +272,7 @@ struct WidgetsView: View {
             }
             Divider()
             Button("Ungroup") { editor.ungroup(group) }
+                .disabled(grouping.ungroupBlocker(group) != nil)
         }
     }
 
@@ -281,10 +284,9 @@ struct WidgetsView: View {
     }
 
     private func widgetRow(_ widget: WidgetConfiguration, name: String, position: WidgetPosition, listed: [WidgetConfiguration], changed: Bool,
-                           names: [String: String], grouped: Bool = false) -> some View {
+                           names: [String: String], grouping: WidgetGrouping, grouped: Bool = false) -> some View {
         let selected = selectedWidget == widget.id
         let subtitle = store.screensTitle(for: widget)
-        let grouping = WidgetGrouping(store: store)
         return ListRow(selected: selected, eye: ("eye", "Hide on this screen", { editor.setWidget(widget, shown: false, on: screen) })) { hovering in
             WidgetDragRow(session: dragSession, widgetID: widget.id, name: name, insertionKey: dropKey(position, before: widget.id),
                           select: { select(widget.id) }, move: { move($0, to: position, before: widget.id) }) {

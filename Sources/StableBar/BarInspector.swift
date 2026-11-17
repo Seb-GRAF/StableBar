@@ -300,7 +300,10 @@ struct BarInspector: View {
 
     /// The group's widgets on this screen, in bar order.
     private func groupMembers(_ group: String) -> [WidgetConfiguration] {
-        (store.configuration?.onScreen(screen).widgets ?? []).filter { $0.enabled && $0.group == group }
+        let displays = NSScreen.screens.map(BarDisplay.init)
+        return (store.configuration?.onScreen(screen).widgets ?? []).filter {
+            $0.enabled && $0.group == group && screen.shows($0.display, among: displays, activeID: store.activeDisplayID)
+        }
     }
 
     @ViewBuilder private func groupPanel(_ group: String) -> some View {
@@ -338,16 +341,16 @@ struct BarInspector: View {
                     Button("Leave Group") { editor.leaveGroup(member.id) }
                         .controlSize(.small)
                         .disabled(!grouping.canLeave(member.id))
-                        .help(grouping.canLeave(member.id) ? "Take this widget out of the group"
-                              : "This widget joins the group through its members, which your theme or configuration sets")
+                        .help(grouping.leaveBlocker(member.id) ?? "Take this widget out of the group")
                 }
             }
         }
         Button("Ungroup") { editor.ungroup(group) }
             .controlSize(.small)
+            .disabled(grouping.ungroupBlocker(group) != nil)
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
-            .help("Take every widget out of this group")
+            .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
     }
 
     private var defaultsStyle: StyleFields {

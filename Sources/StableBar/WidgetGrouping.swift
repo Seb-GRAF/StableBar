@@ -28,12 +28,10 @@ struct WidgetGrouping {
     /// The shared configuration's widgets, whose positions a group's members must share.
     let widgets: [WidgetConfiguration]
     let groups: [String: WidgetGroupConfiguration]
-    /// Every profile, from any file: a new group mustn't take an ID one defines, which would merge with theirs, and a
-    /// group one names stays defined.
+    /// Every profile, from any file. A new group ID avoids their group IDs, and a group they name keeps its definition.
     var profiles: [ConfigurationProfile] = []
-    /// Groups that a file other than the main one assigns, even where a `null` hides the assignment: removing their
-    /// definition would leave that file naming a missing group.
-    var namedElsewhere: Set<String> = []
+    /// Every layer's values by path, which show the groups other files assign, even under a `null`.
+    var contributions: [String: [ConfigurationContribution]] = [:]
     let defaults: WidgetStyle
     let origins: [String: ConfigurationOrigin]
     /// The standardized path of the main configuration file.
@@ -79,17 +77,38 @@ struct WidgetGrouping {
         }
     }
 
-    /// Whether `id` can leave its group. A widget that a group's `members` take in would only join it again.
     func canLeave(_ id: String) -> Bool {
-        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return false }
+        widgets.first(where: { $0.id == id })?.ownGroup != nil && leaveBlocker(id) == nil
+    }
+
+    /// Why `id` can't leave the group it's in, if it can't.
+    func leaveBlocker(_ id: String) -> String? {
+        guard widgets.contains(where: { $0.id == id }) else { return nil }
+        if let origin = profileElsewhere(setting: id), let profile = origin.profile {
+            return "The profile “\(profile)” in \(URL(filePath: origin.file).lastPathComponent) puts this widget in the group. Change it there."
+        }
         let left = WidgetGroupConfiguration.joining(widgets, groups: groups) { $0.id == id ? nil : $0.ownGroup }
-        return left.first { $0.id == id }?.joinedGroup == nil
+        if left.first(where: { $0.id == id })?.joinedGroup != nil {
+            return "This widget joins the group through its members, which your theme or configuration sets."
+        }
+        return nil
+    }
+
+    /// Why Ungroup can't take every widget out of `group`, if it can't.
+    func ungroupBlocker(_ group: String) -> String? {
+        widgets.first { $0.ownGroup == group && profileElsewhere(setting: $0.id) != nil }.flatMap { leaveBlocker($0.id) }
+    }
+
+    /// The origin of `id`'s group when an active profile of another file sets it: the profile merges after anything
+    /// Settings can write, so no edit here takes the widget out.
+    private func profileElsewhere(setting id: String) -> ConfigurationOrigin? {
+        origins["widgets.\(id).group"].flatMap { $0.profile != nil && $0.file != mainFile ? $0 : nil }
     }
 
     /// Takes `id` out of its own group in the profile being edited, else in the main file or the profile of it that
     /// sets the group. A `null` hides a group that a layer below sets: an included file, a package or a template.
     func leaving(_ id: String) throws -> [ConfigurationEdit] {
-        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return [] }
+        guard widgets.first(where: { $0.id == id })?.ownGroup != nil, profileElsewhere(setting: id) == nil else { return [] }
         let origin = origins["widgets.\(id).group"]
         let layer = editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
         var document = try mainDocument()
@@ -125,7 +144,10 @@ struct WidgetGrouping {
         let own = widgets.filter { $0.ownGroup == group }
         var edits = try own.flatMap { try leaving($0.id) }
         let definition = origins.filter { $0.key == "groups.\(group)" || $0.key.hasPrefix("groups.\(group).") }.values
-        let removable = editingProfile == nil && !definition.isEmpty && !namedElsewhere.contains(group)
+        let namedElsewhere = contributions.contains { path, entries in
+            path.hasSuffix(".group") && entries.contains { $0.origin.file != mainFile && $0.value == .string(group) }
+        }
+        let removable = editingProfile == nil && !definition.isEmpty && !namedElsewhere
             && definition.allSatisfy { $0.file == mainFile && $0.profile == nil }
             && own.allSatisfy { origins["widgets.\($0.id).group"].map { $0.file == mainFile && $0.profile == nil } == true }
         var document = removable ? try mainDocument() : [:]
@@ -184,14 +206,7 @@ extension WidgetGrouping {
         let configuration = store.configuration
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
                   profiles: store.profiles,
-                  namedElsewhere: Set(store.contributions.flatMap { path, entries -> [String] in
-                      guard path.hasSuffix(".group") else { return [] }
-                      return entries.compactMap { entry in
-                          guard entry.origin.file != store.configurationURL.standardizedFileURL.path,
-                                case let .string(group) = entry.value else { return nil }
-                          return group
-                      }
-                  }),
+                  contributions: store.contributions,
                   defaults: configuration?.defaults ?? WidgetStyle(), origins: store.origins,
                   mainFile: store.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,

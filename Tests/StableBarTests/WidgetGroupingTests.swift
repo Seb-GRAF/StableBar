@@ -345,3 +345,19 @@ private let row = #"""
     #expect(bar.groups() == ["own": "-", "imported": "-"])
     #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
 }
+
+@MainActor @Test func aGroupAProfileOfAnIncludedFileSetsCanNotBeLeftHere() throws {
+    let bar = try GroupingFixture(#"""
+    {"includes":["included.json"],"groups":{"status":{}},"widgets":[
+      {"id":"own","type":"text","text":"A","position":"right"}
+    ]}
+    """#, includes: #"{"profiles":[{"name":"night","configuration":{"widgetOverrides":{"own":{"group":"status"}}}}]}"#)
+    defer { bar.close() }
+    #expect(bar.groups() == ["own": "status"])
+    let grouping = bar.grouping
+    #expect(!grouping.canLeave("own"))
+    #expect(grouping.leaveBlocker("own")?.contains("“night” in included.json") == true)
+    #expect(try grouping.leaving("own").isEmpty)
+    #expect(grouping.ungroupBlocker("status") != nil)
+    #expect(grouping.ungroupBlocker("other") == nil)
+}
