@@ -172,7 +172,7 @@ func networkCounters(_ data: Data) -> [UInt16: NetworkCounters] {
 /// after `date`, or with `todayOnly` the end of the day when that comes first.
 func meetingWindow(at date: Date, lookahead: Double, todayOnly: Bool, calendar: Calendar) -> (today: Date, tomorrow: Date, horizon: Date) {
     let today = calendar.startOfDay(for: date)
-    let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+    let tomorrow = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: today)!)
     let horizon = date.addingTimeInterval(lookahead * 3600)
     return (today, tomorrow, todayOnly ? min(horizon, tomorrow) : horizon)
 }
