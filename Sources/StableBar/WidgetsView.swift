@@ -181,7 +181,9 @@ struct WidgetsView: View {
                     .padding(.bottom, 10)
                 }
                 .onChange(of: selectedWidget, initial: true) {
-                    if let selectedWidget { proxy.scrollTo(selectedWidget) }
+                    guard let selectedWidget else { return }
+                    if let group = widgets.first(where: { $0.id == selectedWidget })?.group { collapsedGroups.remove(group) }
+                    proxy.scrollTo(selectedWidget)
                 }
                 .onChange(of: selectedGroup, initial: true) {
                     if let selectedGroup { proxy.scrollTo("group:\(selectedGroup)") }

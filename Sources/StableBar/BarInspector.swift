@@ -312,12 +312,14 @@ struct BarInspector: View {
                                 set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
                                 unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
         let grouping = WidgetGrouping(store: store)
+        let flared = store.configuration?.groups[group]?.style.flare != nil
         SettingsGroup("Background and border") {
             style.color("Background", "background")
             NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
-                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
-                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
-                    style.colorButton("Border color", "borderColor")
+                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5),
+                          hint: flared ? "A group with a flare draws no border" : nil) { _ in
+                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5).disabled(flared)
+                    style.colorButton("Border color", "borderColor").disabled(flared)
                 }
             }
         }

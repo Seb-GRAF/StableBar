@@ -28,6 +28,8 @@ struct WidgetGrouping {
     /// The shared configuration's widgets, whose positions a group's members must share.
     let widgets: [WidgetConfiguration]
     let groups: [String: WidgetGroupConfiguration]
+    /// Group IDs that a profile defines, which a new group mustn't take: it would merge with theirs.
+    var profileGroups: Set<String> = []
     let defaults: WidgetStyle
     let origins: [String: ConfigurationOrigin]
     /// The standardized path of the main configuration file.
@@ -75,24 +77,23 @@ struct WidgetGrouping {
 
     /// Whether `id` can leave its group. A widget that a group's `members` take in would only join it again.
     func canLeave(_ id: String) -> Bool {
-        guard let widget = widgets.first(where: { $0.id == id }), widget.ownGroup != nil else { return false }
-        return !groups.values.contains { $0.members.contains { $0.matches(widget) } }
+        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return false }
+        let left = WidgetGroupConfiguration.joining(widgets, groups: groups) { $0.id == id ? nil : $0.ownGroup }
+        return left.first { $0.id == id }?.joinedGroup == nil
     }
 
     func leaving(_ id: String) -> ConfigurationEdit? {
-        guard let widget = widgets.first(where: { $0.id == id }), widget.ownGroup != nil else { return nil }
-        if let origin = origins["widgets.\(id).group"], origin.file == mainFile {
-            if editingProfile == nil, origin.profile == nil {
-                return ConfigurationEdit(action: .unset, id: id, properties: ["group": .null])
-            }
-            if let profile = origin.profile, editingProfile == nil || editingProfile == profile {
-                var edit = ConfigurationEdit(action: .unset, id: id, properties: ["group": .null])
-                edit.profile = profile
-                return edit
-            }
+        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return nil }
+        // A group set in another file, a template, or outside the profile being edited, is overridden instead.
+        guard let origin = origins["widgets.\(id).group"], origin.file == mainFile, !origin.detail.contains("(template "),
+              editingProfile == nil || origin.profile == editingProfile else {
+            return ConfigurationEdit(action: .set, id: id, properties: ["group": .null])
         }
-        // A group set in another file, or outside the profile being edited, is overridden instead.
-        return ConfigurationEdit(action: .set, id: id, properties: ["group": .null])
+        var edit = origin.detail.contains("(widget override)")
+            ? ConfigurationEdit(action: .unset, properties: ["widgetOverrides": .object([id: .object(["group": .null])])])
+            : ConfigurationEdit(action: .unset, id: id, properties: ["group": .null])
+        edit.profile = origin.profile
+        return edit
     }
 
     /// Takes every widget out of `group`, and removes its definition when only the main file has it and nothing else
@@ -135,9 +136,10 @@ struct WidgetGrouping {
     }
 
     private func newGroupID() -> String {
-        guard groups["group"] != nil else { return "group" }
+        let taken = profileGroups.union(groups.keys)
+        guard taken.contains("group") else { return "group" }
         var number = 2
-        while groups["group-\(number)"] != nil { number += 1 }
+        while taken.contains("group-\(number)") { number += 1 }
         return "group-\(number)"
     }
 
@@ -154,6 +156,9 @@ extension WidgetGrouping {
     init(store: BarStore) {
         let configuration = store.configuration
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
+                  profileGroups: Set(store.profiles.flatMap { profile in
+                      (try? profile.configuration["groups"]?.decoded([String: ConfigurationValue].self).keys).map(Array.init) ?? []
+                  }),
                   defaults: configuration?.defaults ?? WidgetStyle(), origins: store.origins,
                   mainFile: store.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,

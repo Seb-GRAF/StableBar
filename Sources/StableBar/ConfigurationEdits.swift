@@ -157,7 +157,7 @@ private func changeDefinition(_ id: String, in document: inout [String: Configur
     return false
 }
 
-private enum RemovalScope { case document, profile, object }
+private enum RemovalScope { case document, profile, groups, object }
 
 private func removing(_ keys: [String: ConfigurationValue], from object: [String: ConfigurationValue],
                       scope: RemovalScope = .object) -> [String: ConfigurationValue] {
@@ -166,8 +166,10 @@ private func removing(_ keys: [String: ConfigurationValue], from object: [String
         if case let .object(nested) = value, !nested.isEmpty {
             if case let .object(current) = result[key] {
                 let profileConfiguration = scope == .profile && key == "configuration"
-                let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : .object)
-                result[key] = remaining.isEmpty && !profileConfiguration ? nil : .object(remaining)
+                let groups = scope == .document && key == "groups"
+                let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : groups ? .groups : .object)
+                // Widgets still name a group whose last value is removed; only `null` for the group removes it.
+                result[key] = remaining.isEmpty && !profileConfiguration && scope != .groups ? nil : .object(remaining)
             } else if scope == .document, case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
                 // A root unset can address several named definitions in one undoable change, and null removes a profile.
                 // Widgets are removed with `remove`, which also drops the references to them.

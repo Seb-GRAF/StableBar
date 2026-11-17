@@ -146,7 +146,8 @@ func sceneRejectsUnsupportedMacOSVersions(version: Int) throws {
     (#"{"configuration": {}, "draw": "settings", "section": "theme", "package": "clock"}"#, "package"),
     (#"{"configuration": {}, "draw": "bar", "group": "status"}"#, "group"),
     (#"{"configuration": {}, "draw": "settings", "widget": "clock", "group": "status"}"#, "group"),
-    (#"{"configuration": {}, "draw": "settings", "section": "bar", "tab": "look", "group": "status"}"#, "group")
+    (#"{"configuration": {}, "draw": "settings", "section": "bar", "tab": "look", "group": "status"}"#, "group"),
+    (#"{"configuration": {}, "draw": "settings", "section": "packages", "package": "clock", "group": "status"}"#, "group")
 ])
 func sceneNamesWhatItDraws(json: String, key: String) throws {
     let error = #expect(throws: (any Error).self) { try scene(json) }

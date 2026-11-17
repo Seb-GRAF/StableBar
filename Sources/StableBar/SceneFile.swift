@@ -228,9 +228,9 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .section, in: values,
                                                    debugDescription: "A settings scene names a widget, a group or a section.")
         }
-        if group != nil, draw != .settings || widget != nil || tab != nil {
+        if group != nil, draw != .settings || widget != nil || section != nil || tab != nil {
             throw DecodingError.dataCorruptedError(forKey: .group, in: values,
-                                                   debugDescription: "group belongs to a settings scene without a widget or a tab.")
+                                                   debugDescription: "group belongs to a settings scene without a widget, a section or a tab.")
         }
         if package != nil, draw != .settings || widget != nil || section != .packages {
             throw DecodingError.dataCorruptedError(forKey: .package, in: values, debugDescription: "package belongs to the packages section of Settings.")

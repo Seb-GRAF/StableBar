@@ -246,3 +246,58 @@ private let row = #"""
     editor.endProfileEditing()
     #expect(bar.groups() == ["a": "-", "b": "-"])
 }
+
+@MainActor @Test func resettingAGroupsLastStyleValueKeepsTheGroup() throws {
+    let bar = try GroupingFixture(#"""
+    {"groups":{"status":{"style":{"cornerRadius":8}}},"widgets":[
+      {"id":"a","type":"text","text":"A","position":"right","group":"status"}
+    ]}
+    """#)
+    defer { bar.close() }
+    try bar.apply([ConfigurationEdit(action: .unset, properties: ["groups": .object(["status": .object(["style": .object(["cornerRadius": .null])])])])])
+    #expect(bar.groups() == ["a": "status"])
+    #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
+}
+
+@MainActor @Test func leavingRemovesAGroupFromTheOverrideThatSetsIt() throws {
+    let bar = try GroupingFixture(#"""
+    {"groups":{"status":{}},"templates":{"pill":{"group":"status"}},
+     "widgetOverrides":{"a":{"group":"status"}},
+     "widgets":[
+      {"id":"a","type":"text","text":"A","position":"right"},
+      {"id":"b","type":"text","text":"B","position":"right","template":"pill"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.groups() == ["a": "status", "b": "status"])
+    try bar.apply([try #require(bar.grouping.leaving("a"))])
+    try bar.apply([try #require(bar.grouping.leaving("b"))])
+    #expect(bar.groups() == ["a": "-", "b": "-"])
+    let document = try bar.fixture.document()
+    #expect(document["widgetOverrides"] == nil)
+    // The template still names the group, so the widget's own definition overrides it.
+    #expect(try document["widgets"]?.decoded([[String: ConfigurationValue]].self).last?["group"] == .null)
+}
+
+@MainActor @Test func aWidgetCanLeaveWhenTheGroupItsMembersMatchSitsElsewhere() throws {
+    let bar = try GroupingFixture(#"""
+    {"groups":{"time":{"members":[{"type":"clock"}]},"status":{}},"widgets":[
+      {"id":"left","type":"clock","position":"left","group":"time"},
+      {"id":"date","type":"clock","position":"right","group":"status"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.canLeave("date"))
+    #expect(!bar.grouping.canLeave("left"))
+}
+
+@MainActor @Test func aNewGroupSkipsTheIDsProfilesDefine() throws {
+    let bar = try GroupingFixture(#"""
+    {"profiles":[{"name":"night","when":{"app":"com.example.never"},"configuration":{"groups":{"group":{}}}}],"widgets":[
+      {"id":"a","type":"text","text":"A","position":"right"},
+      {"id":"b","type":"text","text":"B","position":"right"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.group(of: .groupWith("b")) == "group-2")
+}
