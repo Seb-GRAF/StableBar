@@ -22,7 +22,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         self.present = present
     }
 
-    func show(store: BarStore, widgetID: String? = nil, section: CustomizationSection? = nil) {
+    func show(store: BarStore, widgetID: String? = nil, groupID: String? = nil, section: CustomizationSection? = nil) {
         self.store = store
         store.setInspectorOpen(true)
         if editor == nil {
@@ -53,6 +53,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         editor?.finishEditing()
         editor?.widgetTab = .content
         if let widgetID { editor?.showWidget(widgetID) }
+        if let groupID { editor?.showGroup(groupID) }
         if let section { editor?.section = section }
         present(window!)
     }

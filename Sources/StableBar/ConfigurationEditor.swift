@@ -27,6 +27,8 @@ final class ConfigurationEditor {
         set { history.editingProfile = newValue }
     }
     var barItem = BarItem.widget
+    /// The group Settings shows while `barItem` is `group`.
+    var selectedGroup: String?
     var barTab = BarTab.size
     var widgetTab = WidgetTab.content
     var barScreen = ScreenKind.laptop
@@ -76,6 +78,33 @@ final class ConfigurationEditor {
         barItem = .widget
         widgetTab = .content
         section = .widgets
+    }
+
+    func showGroup(_ group: String) {
+        guard store.configuration?.widgets.contains(where: { $0.group == group }) == true else { return }
+        finishEditing()
+        searchTarget = nil
+        selectedGroup = group
+        barItem = .group
+        section = .widgets
+    }
+
+    /// Puts `id` in a group as `choice` says, and shows a group it starts so its look can be chosen.
+    func group(_ id: String, _ choice: WidgetGrouping.Choice) {
+        let grouping = WidgetGrouping(store: store)
+        let group = grouping.group(of: choice)
+        change(grouping.edits(choice, for: id))
+        if error == nil, case .groupWith = choice { showGroup(group) }
+    }
+
+    func leaveGroup(_ id: String) {
+        guard let edit = WidgetGrouping(store: store).leaving(id) else { return }
+        change(edit)
+    }
+
+    func ungroup(_ group: String) {
+        do { change(try WidgetGrouping(store: store).dissolving(group)) }
+        catch { self.error = errorMessage(error) }
     }
 
     func showPackage(_ id: String) {
@@ -188,6 +217,14 @@ final class ConfigurationEditor {
     func change(_ edit: ConfigurationEdit, everyBar: Bool = false) {
         if edit.action == .remove { finishEditing() }
         do { try history.change(edit, everyBar: everyBar) }
+        catch { self.error = errorMessage(error) }
+        keepSelection()
+    }
+
+    /// Related edits, saved together with one Undo step.
+    func change(_ edits: [ConfigurationEdit]) {
+        finishEditing()
+        do { try history.change(edits) }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }
@@ -359,6 +396,9 @@ final class ConfigurationEditor {
     func keepSelection() {
         if store.configuration?.widgets.contains(where: { $0.id == selectedID }) != true {
             selectedID = store.configuration?.widgets.first?.id
+        }
+        if barItem == .group, store.configuration?.widgets.contains(where: { $0.group == selectedGroup }) != true {
+            barItem = .widget
         }
     }
 }

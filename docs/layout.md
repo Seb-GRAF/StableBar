@@ -71,7 +71,7 @@ Use `"overflow": "never"` for essential widgets. If these alone exceed the avail
 }
 ```
 
-A named group has one shared background, padding, border and spacing. Members must use the same `position`; their first appearance places the group. A group overflows as one unit, takes its highest member priority, and stays visible if any member sets `overflow` to `never`.
+A named group has one shared background, padding, border and spacing. Members must use the same `position`; their first appearance places the group. To make one without editing the file, right-click a widget in [**Settings → Bar**](settings.md) or while editing the bar in place and choose **Group With** the widget beside it; Settings then shows the group's look. A group overflows as one unit, takes its highest member priority, and stays visible if any member sets `overflow` to `never`.
 
 A group can also list its `members`, so widgets join it without a `group` of their own. A theme drawn as pills uses them to fill its pills while it's selected; under another theme, the widgets leave them.
 
