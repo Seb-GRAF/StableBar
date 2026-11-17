@@ -151,9 +151,11 @@ private final class FakeMenuBarItem: @unchecked Sendable {
 }
 
 /// Right-clicks the item of a bar that shows `fake` and has `appMenu`, once the bar has laid it out.
-@MainActor private func rightClickItem(of fake: FakeMenuBarItem, with appMenu: AppMenu, then check: (BarStore) async throws -> Void) async throws {
+@MainActor private func rightClickItem(of fake: FakeMenuBarItem, with appMenu: AppMenu, inMenuBar: Bool = true,
+                                       then check: (BarStore) async throws -> Void) async throws {
     let fixture = try ThemeGalleryFixture(#"""
-    {"widgets":[{"id":"items","type":"menuBarItems","position":"left","shown":[{"app":"com.apple.dock"}],"hidden":["symbol"]}]}
+    {"widgets":[{"id":"items","type":"menuBarItems","position":"left","shown":[{"app":"com.apple.dock"}],"hidden":["symbol"],
+                 "rightClickInMenuBar":\#(inMenuBar)}]}
     """#)
     defer { fixture.close() }
     let store = try fixture.store(appMenu: appMenu)
@@ -194,6 +196,21 @@ private final class FakeMenuBarItem: @unchecked Sendable {
                                                                               width: CGDisplayBounds(display).width, height: fake.frame.height),
                                                      item: fake.frame)])
         #expect(!store.popup.isOpen, "The bar opens no menu of its own for the item")
+    }
+}
+
+@Test @MainActor func rightClickingAnItemWithoutAMenuPressesItUnlessTurnedOn() async throws {
+    let dock = try #require(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first)
+    let fake = FakeMenuBarItem(owner: dock.processIdentifier, hasMenu: false)
+    let menuBar = FakeMenuBar(shown: true)
+    let appMenu = AppMenu(checkAccess: { true }, readAttribute: fake.read, sleep: { _ in await Task.yield() },
+                          menuBar: menuBar.visibility, mouse: menuBar.mouse)
+    try await rightClickItem(of: fake, with: appMenu, inMenuBar: false) { store in
+        try await awaitCondition { menuBar.showsChecks == 1 }
+        for _ in 0..<20 { await Task.yield() }
+        #expect(menuBar.showsChecks == 1, "The item gets one press, as on a click")
+        #expect(menuBar.heldPolls == 3 && menuBar.steps.isEmpty, "Off by default: nothing is read from the menu bar and no click is sent")
+        #expect(!store.popup.isOpen)
     }
 }
 
@@ -278,6 +295,7 @@ private final class FakeMenuBar: @unchecked Sendable {
     private let lock = NSLock()
     private let agent: pid_t?
     private var shown: Bool
+    private var showsChecked = 0
     private var held = 3
     private var slidingPolls: Int
     private var recorded: [String] = []
@@ -295,6 +313,8 @@ private final class FakeMenuBar: @unchecked Sendable {
     var clicks: [Click] { lock.withLock { clicked } }
     var probes: [Probe] { lock.withLock { probed } }
     var heldPolls: Int { lock.withLock { held } }
+    /// Only a press asks whether the menu bar shows.
+    var showsChecks: Int { lock.withLock { showsChecked } }
     var heldPollsAtClick: [Int] { lock.withLock { heldAtClick } }
 
     func forget() {
@@ -306,7 +326,12 @@ private final class FakeMenuBar: @unchecked Sendable {
     }
 
     var visibility: MenuBarVisibility {
-        MenuBarVisibility(shows: { _ in self.lock.withLock { self.shown } },
+        MenuBarVisibility(shows: { _ in
+                              self.lock.withLock {
+                                  self.showsChecked += 1
+                                  return self.shown
+                              }
+                          },
                           isInPlace: { _ in
                               self.lock.withLock {
                                   self.slidingPolls -= 1

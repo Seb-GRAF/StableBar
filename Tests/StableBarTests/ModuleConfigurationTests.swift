@@ -500,8 +500,17 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
     {"widgets":[{"id":"items","type":"menuBarItems","position":"right"},
                 {"id":"clicked","type":"menuBarItems","position":"right","openOnHover":false}]}
     """#.utf8))
-    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, shown: [], hidden: []),
-                                                     .menuBarItems(openOnHover: false, shown: [], hidden: [])])
+    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, rightClickInMenuBar: false, shown: [], hidden: []),
+                                                     .menuBarItems(openOnHover: false, rightClickInMenuBar: false, shown: [], hidden: [])])
+}
+
+@Test func menuBarItemsRightClickInTheMenuBarOnlyWhenTurnedOn() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"items","type":"menuBarItems","position":"right"},
+                {"id":"rightClicked","type":"menuBarItems","position":"right","rightClickInMenuBar":true}]}
+    """#.utf8))
+    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, rightClickInMenuBar: false, shown: [], hidden: []),
+                                                     .menuBarItems(openOnHover: true, rightClickInMenuBar: true, shown: [], hidden: [])])
 }
 
 @Test func menuBarItemsPutTheirSymbolLastUnlessPlacedOrHidden() throws {
