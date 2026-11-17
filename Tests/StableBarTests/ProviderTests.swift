@@ -178,14 +178,15 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
 @Test func httpOutputCopiesWhatItsJSONPointersFind() throws {
     let response = try JSONDecoder().decode(ConfigurationValue.self, from: Data(#"""
     {"current":{"temperature_2m":21.4,"weather_code":3,"is_day":true},"current_units":{"temperature_2m":"°C"},
-     "a/b":{"m~n":"escaped"},"price":"67000.12",
+     "a/b":{"m~n":"escaped"},"price":"67000.12","missingPrice":"NaN","hugePrice":"1e400",
      "items":[{"name":"stablebar","stars":12,"archived":false,"owner":{"login":"seb"}},"skipped",{"name":"empty","topics":[]}]}
     """#.utf8))
     let output = try JSONDecoder().decode(HTTPOutput.self, from: Data(#"""
     {"text":"/current/temperature_2m",
      "fields":{"code":"/current/weather_code","day":"/current/is_day","unit":"/current_units/temperature_2m","escaped":"/a~1b/m~0n",
                "first":"/items/0/name","missing":"/current/wind","outside":"/items/9/name","object":"/current"},
-     "values":{"temperature":"/current/temperature_2m","price":"/price","unit":"/current_units/temperature_2m"},
+     "values":{"temperature":"/current/temperature_2m","price":"/price","unit":"/current_units/temperature_2m",
+               "missingPrice":"/missingPrice","hugePrice":"/hugePrice"},
      "lists":{"repos":"/items","missing":"/repos","object":"/current"}}
     """#.utf8)).output(from: response)
     #expect(output == ScriptOutput(text: "21.4", fields: ["code": "3", "day": "true", "unit": "°C", "escaped": "escaped", "first": "stablebar"],

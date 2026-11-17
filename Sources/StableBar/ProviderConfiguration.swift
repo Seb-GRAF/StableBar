@@ -173,11 +173,12 @@ extension ConfigurationValue {
         }
     }
 
-    /// A number, or a string that holds one, as some APIs send prices.
+    /// A number, or a string that holds a finite one, as some APIs send prices. `Double` also reads `NaN` and
+    /// `1e400`, which JSON, and so `--query`, can't hold.
     fileprivate var number: Double? {
         switch self {
         case let .number(number): number
-        case let .string(string): Double(string)
+        case let .string(string): if let number = Double(string), number.isFinite { number } else { nil }
         default: nil
         }
     }
