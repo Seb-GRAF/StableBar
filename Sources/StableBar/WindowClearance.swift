@@ -72,12 +72,13 @@ struct ManagerGap: Equatable {
 }
 
 /// The gap `manager` needs when one of `windows` starts under the bar, measured as the manager measures its gaps:
-/// AeroSpace from the area macOS leaves for windows, which leaves out a menu bar that shows, yabai and OmniWM from
-/// the display's edge. A window past the display's edge, where AeroSpace hides other workspaces' windows, doesn't count.
-func managerGap(_ manager: WorkspaceSource, windows: [CGRect], displays: [WindowClearanceDisplay]) -> ManagerGap? {
+/// AeroSpace from the area macOS leaves for windows, which leaves out a menu bar that shows, yabai from below a menu
+/// bar that shows, else from the display's edge past a notch, and OmniWM from the display's edge. A window past the
+/// display's edge, where AeroSpace hides other workspaces' windows, doesn't count.
+func managerGap(_ manager: WorkspaceSource, windows: [CGRect], displays: [WindowClearanceDisplay], menuBarHides: Bool) -> ManagerGap? {
     for window in windows {
         guard let display = barDisplay(for: window, in: displays) else { continue }
-        let area = manager == .aerospace ? display.visibleFrame : display.frame
+        let area = manager == .aerospace || manager == .yabai && !menuBarHides ? display.visibleFrame : display.frame
         if display.position == .bottom, window.maxY > display.barFrame.minY, window.maxY <= display.frame.maxY {
             return ManagerGap(manager: manager, position: .bottom, points: Int((area.maxY - display.barFrame.minY).rounded(.up)))
         }
@@ -163,7 +164,7 @@ final class WindowClearance: NSObject {
                 }
             }
         }
-        return managerGap(manager, windows: windows ?? [], displays: displays)
+        return managerGap(manager, windows: windows ?? [], displays: displays, menuBarHides: MenuBarAutoHide.isOn())
     }
 
     private struct WatchedApplication {

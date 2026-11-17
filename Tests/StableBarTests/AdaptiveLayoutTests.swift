@@ -136,9 +136,12 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 863),
         barFrame: CGRect(x: 0, y: 823, width: 1440, height: 40), position: .top, desktopTop: 900)
     let tiled = CGRect(x: 0, y: 37, width: 1440, height: 863)
-    #expect(managerGap(.aerospace, windows: [tiled], displays: [belowMenuBar]) == ManagerGap(manager: .aerospace, position: .top, points: 40))
-    #expect(managerGap(.yabai, windows: [tiled], displays: [belowMenuBar]) == ManagerGap(manager: .yabai, position: .top, points: 77))
-    #expect(managerGap(.aerospace, windows: [CGRect(x: 0, y: 77, width: 1440, height: 823)], displays: [belowMenuBar]) == nil)
+    #expect(managerGap(.aerospace, windows: [tiled], displays: [belowMenuBar], menuBarHides: false) == ManagerGap(manager: .aerospace, position: .top, points: 40))
+    #expect(managerGap(.yabai, windows: [tiled], displays: [belowMenuBar], menuBarHides: false) == ManagerGap(manager: .yabai, position: .top, points: 40))
+    #expect(managerGap(.omniwm, windows: [tiled], displays: [belowMenuBar], menuBarHides: false) == ManagerGap(manager: .omniwm, position: .top, points: 77))
+    // A notched display's visible frame leaves out the notch while the menu bar hides, and yabai measures past it.
+    #expect(managerGap(.yabai, windows: [tiled], displays: [belowMenuBar], menuBarHides: true) == ManagerGap(manager: .yabai, position: .top, points: 77))
+    #expect(managerGap(.aerospace, windows: [CGRect(x: 0, y: 77, width: 1440, height: 823)], displays: [belowMenuBar], menuBarHides: false) == nil)
 }
 
 @Test func managerGapFindsWindowsUnderABarAtTheBottomButNotWindowsHiddenPastTheEdge() {
@@ -146,8 +149,8 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900),
         barFrame: CGRect(x: 0, y: 6, width: 1440, height: 40), position: .bottom, desktopTop: 900)
     let hidden = CGRect(x: 1439, y: 899, width: 800, height: 600)
-    #expect(managerGap(.omniwm, windows: [hidden], displays: [display]) == nil)
-    #expect(managerGap(.omniwm, windows: [hidden, CGRect(x: 0, y: 0, width: 1440, height: 900)], displays: [display])
+    #expect(managerGap(.omniwm, windows: [hidden], displays: [display], menuBarHides: false) == nil)
+    #expect(managerGap(.omniwm, windows: [hidden, CGRect(x: 0, y: 0, width: 1440, height: 900)], displays: [display], menuBarHides: false)
             == ManagerGap(manager: .omniwm, position: .bottom, points: 46))
 }
 
