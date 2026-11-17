@@ -148,11 +148,14 @@ jobs:
       # Swift Testing writes test-results/results-swift-testing.xml: every test, its time and its
       # failures, kept to find flaky tests. It can't create the folder, and exits 1 without a word when
       # the folder is missing. XCTest writes one only when its tests run with --parallel, which this job
-      # doesn't use.
+      # doesn't use. A failure here doesn't fail the job by itself: the next step decides.
       - name: Test
+        id: test
+        continue-on-error: true
         run: |
+          set -o pipefail
           mkdir -p test-results
-          python3 - <<'PY'
+          python3 - <<'PY' 2>&1 | tee test-results/output.txt
           import subprocess
           import sys
 
@@ -167,6 +170,29 @@ jobs:
               tests.wait()
           sys.exit(tests.returncode)
           PY
+      # A few Swift Testing tests that failed run once more on their own. Those that pass then are
+      # flaky: the job passes with a warning naming them, so they get fixed without blocking the pull
+      # request. A test that fails again, an XCTest failure, a crash or more failures fail the job.
+      - name: Run failed tests again
+        if: steps.test.outcome == 'failure'
+        run: |
+          mv test-results/results-swift-testing.xml test-results/first-run-swift-testing.xml 2>/dev/null || true
+          plan=$(node .github/scripts/failed-tests.mjs test-results/first-run-swift-testing.xml test-results/output.txt)
+          if error=$(jq -er '.error // empty' <<< "$plan"); then
+            echo "::error title=Tests failed::$error"
+            exit 1
+          fi
+          swift test --skip-build --disable-xctest --filter "$(jq -r .filter <<< "$plan")" --xunit-output test-results/retry.xml
+          {
+            echo "### Flaky tests"
+            echo
+            echo "These tests failed, then passed when they ran again on their own. Fix them as CONTRIBUTING's When CI fails says:"
+            echo
+            jq -r '.names[] | "- `\(.)`"' <<< "$plan"
+          } >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.names[]' <<< "$plan" | while IFS= read -r name; do
+            echo "::warning title=Flaky test::$name failed, then passed when it ran again on its own."
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:

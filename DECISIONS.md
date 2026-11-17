@@ -20,6 +20,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **`main`'s CI goes first** (2026-11-16). GitHub runs a few macOS jobs at once and has no priorities, so a run on `main` cancels the pull request runs it finds and restarts their cancelled jobs when its own are done. Pull requests lose the work that was cut off; betas and releases don't wait behind them.
 - **CI builds with one pinned Xcode** (2026-11-08, [#479]). A runner image update can't change the toolchain under a pull request; moving to a newer Xcode is a pull request of its own.
 - **Commit messages are checked before they leave the Mac** (2026-11-08, [#485]). Git hooks check them in every tool, and Claude Code also builds when an agent stops. `STABLEBAR_SKIP_HOOKS=1` turns the hooks off for one person.
+- **A flaky test doesn't block a pull request** (2026-11-17). When up to five Swift Testing tests fail, the Test job runs them once more on their own and passes with a warning naming those that pass then. They still get fixed, in a pull request of their own. A test that fails twice, an XCTest failure, a crash, a hang or more failures fail the job.
 
 ## Code
 
