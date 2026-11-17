@@ -146,7 +146,7 @@ struct WidgetClockFormat {
 /// battery, whose icon is its battery block, `volume` for sound, `cpu`, `memory` or both, in
 /// order, for system, and `disk` for disk.
 enum WidgetMetricDisplay: String, CaseIterable {
-    case standard, changes, icon, value, meter, graph, custom
+    case standard, changes, icon, value, meter, labelValueMeter, graph, custom
 
     var title: String {
         switch self {
@@ -155,6 +155,7 @@ enum WidgetMetricDisplay: String, CaseIterable {
         case .icon: "Icon only"
         case .value: "Value only"
         case .meter: "Meter and value"
+        case .labelValueMeter: "Label, value and meter"
         case .graph: "Graph and value"
         case .custom: "Custom layout"
         }
@@ -182,6 +183,10 @@ enum WidgetMetricDisplay: String, CaseIterable {
         case .icon where sources == ["percent"]: return .null
         case .standard where sources == ["disk"]: return .null
         case .custom: return nil
+        case .labelValueMeter:
+            let columns = sources.map(metricColumn)
+            return columns.count == 1 ? columns[0]
+                : .object(["type": .string("row"), "style": .object(["spacing": .number(14)]), "children": .array(columns)])
         default: return .object(["type": .string("row"), "children": .array(sources.flatMap(blocks))])
         }
     }
@@ -192,11 +197,7 @@ enum WidgetMetricDisplay: String, CaseIterable {
         case "memory": .object(["type": .string("symbol"), "name": .string("memorychip")])
         default: .object(["type": .string("symbol"), "source": .string("icon")])
         }
-        let text: ConfigurationValue = source == "memory"
-            ? .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
-                .object(["type": .string("field"), "field": .string("memory")]), .object(["type": .string("text"), "text": .string("%")])
-            ])])
-            : .object(["type": .string("field"), "field": .string("text")])
+        let text = Self.valueBlock(for: source)
         switch self {
         case .icon: return [icon]
         case .value: return [text]
@@ -212,10 +213,42 @@ enum WidgetMetricDisplay: String, CaseIterable {
         }
     }
 
+    private static func valueBlock(for source: String) -> ConfigurationValue {
+        source == "memory"
+            ? .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
+                .object(["type": .string("field"), "field": .string("memory")]), .object(["type": .string("text"), "text": .string("%")])
+            ])])
+            : .object(["type": .string("field"), "field": .string("text")])
+    }
+
+    private func metricColumn(for source: String) -> ConfigurationValue {
+        let label = ["percent": "BAT", "volume": "VOL", "cpu": "CPU", "memory": "MEM", "disk": "DISK"][source] ?? source.uppercased()
+        var value = Self.valueBlock(for: source)
+        if case var .object(properties) = value {
+            var style: [String: ConfigurationValue] = [:]
+            if case let .object(existing)? = properties["style"] { style = existing }
+            style["width"] = .number(37)
+            properties["style"] = .object(style)
+            properties["alignment"] = .string("trailing")
+            value = .object(properties)
+        }
+        return .object(["type": .string("column"), "style": .object(["spacing": .number(1), "width": .number(73)]), "children": .array([
+            .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
+                .object(["type": .string("text"), "text": .string(label), "role": .string("key"), "alignment": .string("leading"),
+                         "style": .object(["fontWeight": .string("medium"), "width": .number(36)])]), value
+            ])]),
+            .object(["type": .string("column"), "style": .object(["paddingTop": .number(2)]), "children": .array([
+                .object(["type": .string("progress"), "source": .string(source), "height": .number(4), "role": .string("meter")])
+            ])])
+        ])])
+    }
+
     static func current(_ layout: ConfigurationValue?, sources: [String]) -> Self {
         if layout == nil || layout == .null { return choices(for: sources[0])[0] }
+        if layout == Self.labelValueMeter.layout(for: sources) { return .labelValueMeter }
         guard case let .object(properties) = layout, properties["type"] == .string("row") else { return .custom }
         return choices(for: sources[0]).first {
+            guard $0 != .labelValueMeter else { return false }
             guard case let .object(candidate)? = $0.layout(for: sources) else { return false }
             return candidate["children"] == properties["children"]
         } ?? .custom

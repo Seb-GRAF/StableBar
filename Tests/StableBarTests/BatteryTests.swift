@@ -131,7 +131,7 @@ private func battery(_ extra: [String: Any] = [:]) -> [String: Any] {
 }
 
 @Test func batteryDisplayStartsWithTheBatteryAloneAndUsesItAsTheIcon() {
-    #expect(WidgetMetricDisplay.choices(for: "percent") == [.icon, .standard, .value, .meter, .graph, .custom])
+    #expect(WidgetMetricDisplay.choices(for: "percent") == [.icon, .standard, .value, .meter, .labelValueMeter, .graph, .custom])
     #expect(WidgetMetricDisplay.icon.layout(for: ["percent"]) == .null)
     #expect(WidgetMetricDisplay.current(nil, sources: ["percent"]) == .icon)
     let battery: ConfigurationValue = .object(["type": .string("battery")])
