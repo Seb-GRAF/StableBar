@@ -5,6 +5,7 @@ Sources/StableBar/ICloudSync*.swift
 Sources/StableBar/Uninstall*.swift
 Sources/StableBar/ConfigurationLoader.swift
 Sources/StableBar/PackageSecrets.swift
+Sources/StableBar/PackageSourceFetching.swift
 Resources/Info.plist
 Resources/StableBar.entitlements
 .github/workflows/**
