@@ -13,7 +13,7 @@ const head = "a".repeat(40), oldHead = "c".repeat(40), base = "b".repeat(40);
 const repo = { owner: "Seb-GRAF", repo: "StableBar" };
 const bot = { login: "github-actions[bot]", type: "Bot" };
 const notFound = () => Object.assign(new Error("Not Found"), { status: 404 });
-const conclusions = { "Check revision": "success", "Build release": "success", "Draw screens": "success", "Draw website screens": "skipped" };
+const conclusions = { "Check revision": "success", "Test": "success", "Build release": "success", "Draw screens": "success", "Draw website screens": "skipped" };
 const jobsOf = (entries) => Object.entries(entries).map(([name, conclusion]) => ({ name, conclusion }));
 
 function image(color) {
@@ -174,11 +174,11 @@ const comment = (state) => state.comments.find((entry) => entry.user.login === b
 test("plan finds a fork's pull request, and the newest finished CI run for its head", async () => {
   const { github, state, run } = fakeGitHub({ files: ["Sources/StableBar/BarView.swift", "README.md"] });
   assert.deepEqual(await plan({ github, context: runEvent() }), { action: "publish", number: 7, run: { id: 99, attempt: 1, head, createdAt: "2026-10-31T09:50:00Z",
-    jobs: { current: "success", build: "success", app: "success", site: "skipped" }, artifacts: { app: true, site: false }, expected: { app: true, site: false } } });
+    jobs: { current: "success", build: "success", test: "success", app: "success", site: "skipped" }, artifacts: { app: true, site: false }, expected: { app: true, site: false } } });
   // A newer run for the head, a rerun or a run another event started, is the one to publish.
   const newer = run({ jobs: { "Check revision": "success" }, artifacts: [] });
   const chosen = await plan({ github, context: prEvent("labeled") });
-  assert.deepEqual([chosen.run.id, chosen.run.jobs], [newer, { current: "success", build: "missing", app: "missing", site: "missing" }]);
+  assert.deepEqual([chosen.run.id, chosen.run.jobs], [newer, { current: "success", build: "missing", test: "missing", app: "missing", site: "missing" }]);
   assert.equal(state.uploads.length, 0);
 });
 
@@ -346,7 +346,7 @@ test("lookalike comments are ignored", async () => {
 
 test("a run that drew no screens passes without a comment, or rewrites the one an earlier head left", async () => {
   const { github, state, run } = fakeGitHub();
-  state.jobs[99] = jobsOf({ "Check revision": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "skipped" });
+  state.jobs[99] = jobsOf({ "Check revision": "success", "Test": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "skipped" });
   state.artifacts[99] = [];
   state.files = ["docs/README.md"];
   assert.deepEqual((await reconcile(github, runEvent())).review, { state: "success", description: "No screens to compare.", removeLabel: false });
@@ -354,7 +354,7 @@ test("a run that drew no screens passes without a comment, or rewrites the one a
   state.files = ["Sources/StableBar/BarView.swift"];
   run();
   await reconcile(github, runEvent(), { app: artifact() });
-  run({ jobs: { "Check revision": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "skipped" }, artifacts: [] });
+  run({ jobs: { "Check revision": "success", "Test": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "skipped" }, artifacts: [] });
   state.files = ["docs/README.md"];
   await reconcile(github, runEvent());
   assert.match(comment(state).body, /changes neither the app nor the website/);
@@ -363,10 +363,12 @@ test("a run that drew no screens passes without a comment, or rewrites the one a
 
 test("failed and missing jobs, and screens the changed files call for, fail the review", async () => {
   const cases = [
-    [{ "Check revision": "success", "Build release": "failure", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
+    [{ "Check revision": "success", "Test": "success", "Build release": "failure", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
       "Build release ended with failure, so Draw screens didn't run."],
-    [{ "Check revision": "success", "Build release": "success", "Draw website screens": "skipped" }, [], "Draw screens is missing from this CI run."],
-    [{ "Check revision": "success", "Build release": "success", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
+    [{ "Check revision": "success", "Test": "failure", "Build release": "success", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
+      "Test ended with failure, so Draw screens didn't run."],
+    [{ "Check revision": "success", "Test": "success", "Build release": "success", "Draw website screens": "skipped" }, [], "Draw screens is missing from this CI run."],
+    [{ "Check revision": "success", "Test": "success", "Build release": "success", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
       "Draw screens was skipped, but this pull request changes what it draws."],
   ];
   for (const [jobs, artifacts, error] of cases) {
@@ -388,8 +390,10 @@ test("a run cancelled before it drew the screens leaves the comment and the revi
   run();
   await reconcile(github, runEvent(), { app: artifact() });
   const shown = comment(state).body;
-  run({ jobs: { "Check revision": "success", "Build release": "cancelled", "Draw screens": "skipped", "Draw website screens": "skipped" }, artifacts: [] });
+  run({ jobs: { "Check revision": "success", "Test": "success", "Build release": "cancelled", "Draw screens": "skipped", "Draw website screens": "skipped" }, artifacts: [] });
   assert.equal((await reconcile(github, runEvent())).review.description, "Build release was cancelled: the screens are compared when CI runs again.");
+  run({ jobs: { ...conclusions, "Test": "cancelled", "Draw screens": "skipped" }, artifacts: [] });
+  assert.equal((await reconcile(github, runEvent())).review.description, "Test was cancelled: the screens are compared when CI runs again.");
   assert.equal(comment(state).body, shown);
   assert.equal(state.statuses.at(-1).state, "pending");
   run({ jobs: { ...conclusions, "Draw screens": "cancelled", "Draw website screens": "failure" }, artifacts: [] });
@@ -401,7 +405,7 @@ test("unusable artifacts are refused whole", async () => {
   const refused = async (folder, expected, kind = "app") => {
     const { github, state } = fakeGitHub();
     if (kind === "site") {
-      state.jobs[99] = jobsOf({ "Check revision": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "success" });
+      state.jobs[99] = jobsOf({ "Check revision": "success", "Test": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "success" });
       state.artifacts[99] = [{ name: "screens-site" }];
       state.files = ["site/index.html"];
     }

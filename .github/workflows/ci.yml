@@ -369,11 +369,12 @@ jobs:
   # the base, and only the scenes the pull request adds or edits are drawn from the base. This job
   # runs the pull request's code with a read-only token: screens.yml, which runs from the default
   # branch, posts the comparison and the Visual review status.
+  # Waits for Test, so a push whose tests fail, or that a newer push replaces first, draws nothing.
   screens:
     name: Draw screens
     env:
       STABLEBAR_PREBUILT_DIR: release-build
-    needs: [current, build]
+    needs: [current, build, test]
     if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
     runs-on: macos-26
     timeout-minutes: 45
