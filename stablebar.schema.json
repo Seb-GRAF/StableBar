@@ -1138,6 +1138,14 @@
         "hideWhenEmpty": {
           "$ref": "#/definitions/string"
         },
+        "showWhen": {
+          "$ref": "#/definitions/blockConditions",
+          "description": "Show the block only while one of these conditions matches the widget's output, or the list row's fields."
+        },
+        "hideWhen": {
+          "$ref": "#/definitions/blockConditions",
+          "description": "Hide the block while one of these conditions matches the widget's output, or the list row's fields."
+        },
         "scrollSpeed": {
           "$ref": "#/definitions/number"
         },
@@ -1828,6 +1836,13 @@
           "description": "Data state to set, such as warning, critical, active or muted. Mode and interaction/workspace state names are reserved."
         }
       }
+    },
+    "blockConditions": {
+      "description": "A condition as a rule's when takes, or a list of them, any of which matches.",
+      "oneOf": [
+        { "$ref": "#/definitions/ruleCondition" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/ruleCondition" } }
+      ]
     },
     "ruleCondition": {
       "type": "object",

@@ -239,7 +239,7 @@ export function commentBody({ baseRef = "main", base, head, screens, failed = []
   const sections = changed.map((screen) => section(screen, imageURL));
   const assemble = (shown) => {
     const lines = [marker, "### Before and after", "", `${code(baseRef, 100)} at ${base.slice(0, 7)} → this pull request at ${head.slice(0, 7)}`
-      + ` · ${plural(screens.length, "screen")} drawn in one CI job · ${changed.length} changed`, ""];
+      + ` · ${plural(screens.length, "screen")} drawn · ${changed.length} changed`, ""];
     if (changed.length > 0) {
       lines.push("| Screen | Change | Where (image pixels) |", "| --- | --- | --- |");
       for (const screen of changed.slice(0, maximumRows)) lines.push(`| ${code(screen.id)} | ${describe(screen).join(" | ")} |`);
