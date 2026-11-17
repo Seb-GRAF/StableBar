@@ -365,7 +365,7 @@ struct WidgetPackageStore: Sendable {
 
     func requiresNewerApp(_ minimumVersion: String) -> Bool {
         guard let appVersion else { return false }
-        return appVersion.compare(minimumVersion, options: .numeric) == .orderedAscending
+        return compareReleases(appVersion, minimumVersion) == .orderedAscending
     }
 
     func inspect(_ source: URL, settings: [String: ConfigurationValue] = [:],

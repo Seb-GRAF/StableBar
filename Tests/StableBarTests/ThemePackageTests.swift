@@ -1611,6 +1611,13 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     _ = try store.install(source)
 }
 
+@Test(arguments: [("0.17.0", false), ("0.17.1", false), ("0.17.0-beta.20261116163147.1186", false),
+                  ("0.17.0-beta.20261116153113.1185", false), ("0.17.0-beta.20261116131343.1164", true), ("0.16.0", true)])
+func aPackageNeedingABetaAcceptsThatBetasRelease(appVersion: String, refused: Bool) {
+    let store = WidgetPackageStore(directory: FileManager.default.temporaryDirectory, appVersion: appVersion)
+    #expect(store.requiresNewerApp("0.17.0-beta.20261116153113.1185") == refused)
+}
+
 @Test func storePackagesInstallFromTheIndexOnlyWhenTheirArchiveMatches() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
