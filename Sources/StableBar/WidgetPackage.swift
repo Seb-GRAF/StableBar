@@ -774,16 +774,23 @@ func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [Stri
 /// Throws when a package sets the `url` of a provider, directly or in a profile, while any file or profile gives that provider
 /// a token other than one of that package's secrets.
 func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: String]) throws {
-    let providers = try layer.values["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
-    var urls = providers.map { name, provider in (name, provider["url"], "providers.\(name).url") }
-    var tokens = providers.mapValues { [$0["token"]] }
-    for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
-        for (name, provider) in try profile.configuration["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
-            urls.append((name, provider["url"], "profiles.\(profile.name).configuration.providers.\(name).url"))
+    var definitions = [("providers", layer.values["providers"])]
+    if case let .array(profiles)? = layer.values["profiles"] {
+        for case let .object(profile) in profiles {
+            if case let .string(name)? = profile["name"], case let .object(configuration)? = profile["configuration"] {
+                definitions.append(("profiles.\(name).configuration.providers", configuration["providers"]))
+            }
+        }
+    }
+    var urls: [(String, String, String)] = []
+    var tokens: [String: [ConfigurationValue?]] = [:]
+    for case let (path, .object(providers)?) in definitions {
+        for case let (name, .object(provider)) in providers {
+            if case let .string(url)? = provider["url"] { urls.append((name, url, "\(path).\(name).url")) }
             tokens[name, default: []].append(provider["token"])
         }
     }
-    for case let (name, .string(url)?, path) in urls {
+    for (name, url, path) in urls {
         guard let package = packageIDs[layer.origins[path]!.file] else { continue }
         for token in tokens[name]! {
             if case let .string(token)? = token, token.hasPrefix("@secret.\(package)/") { continue }
