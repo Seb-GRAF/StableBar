@@ -170,7 +170,7 @@ enum WidgetPackageError: LocalizedError {
     case archiveMismatch(String, String)
     case misplacedSecret(String)
     case undeclaredHost(String, String)
-    case undeclaredTokenHost(String, String, String, String)
+    case foreignToken(String, String, String)
 
     var errorDescription: String? {
         switch self {
@@ -197,8 +197,8 @@ enum WidgetPackageError: LocalizedError {
         case let .archiveMismatch(id, version): "The archive of package \(id) \(version) contains a different id or version."
         case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines."
         case let .undeclaredHost(provider, url): "Provider \(provider) requests \(url), but the package's hosts don't list its host."
-        case let .undeclaredTokenHost(package, provider, url, owner):
-            "Package \(package) points provider \(provider) at \(url), but the provider sends the token of package \(owner), whose hosts don't list that host."
+        case let .foreignToken(package, provider, url):
+            "Package \(package) points provider \(provider) at \(url), but the provider can send a token that isn't a secret of package \(package)."
         }
     }
 }
@@ -771,23 +771,23 @@ func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [Stri
     }
 }
 
-/// Throws when a package points a provider that sends a package's secret as its token, directly or in a profile,
-/// at a host that the secret's package doesn't list in `hosts`, whoever set the token.
-func validateTokenHosts(_ layer: ConfigurationLayer, hosts: [String: [String]], packageIDs: [String: String]) throws {
+/// Throws when a package sets the `url` of a provider, directly or in a profile, while any file or profile gives that provider
+/// a token other than one of that package's secrets.
+func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: String]) throws {
     let providers = try layer.values["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
-    var requests = providers.map { name, provider in (name, provider, "providers.\(name).url") }
+    var urls = providers.map { name, provider in (name, provider["url"], "providers.\(name).url") }
+    var tokens = providers.mapValues { [$0["token"]] }
     for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
         for (name, provider) in try profile.configuration["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
-            let path = provider["url"] == nil ? "providers.\(name).url" : "profiles.\(profile.name).configuration.providers.\(name).url"
-            requests.append((name, providers[name, default: [:]].merging(provider) { $1 }, path))
+            urls.append((name, provider["url"], "profiles.\(profile.name).configuration.providers.\(name).url"))
+            tokens[name, default: []].append(provider["token"])
         }
     }
-    for (name, provider, path) in requests {
-        guard case let .string(url)? = provider["url"], case let .string(token)? = provider["token"], token.hasPrefix("@secret."),
-              let package = packageIDs[layer.origins[path]!.file] else { continue }
-        let owner = String(token.dropFirst("@secret.".count).prefix { $0 != "/" })
-        guard let host = URL(string: url)?.host(), hosts[owner, default: []].contains(host) else {
-            throw WidgetPackageError.undeclaredTokenHost(package, name, url, owner)
+    for case let (name, .string(url)?, path) in urls {
+        guard let package = packageIDs[layer.origins[path]!.file] else { continue }
+        for token in tokens[name]! {
+            if case let .string(token)? = token, token.hasPrefix("@secret.\(package)/") { continue }
+            guard token == nil || token == .null else { throw WidgetPackageError.foreignToken(package, name, url) }
         }
     }
 }
