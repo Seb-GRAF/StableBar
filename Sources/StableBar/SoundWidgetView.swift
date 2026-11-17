@@ -115,6 +115,8 @@ struct VolumeSlider: View {
             }
             .font(appearance.font)
             .foregroundStyle(appearance.foreground)
+            // Keyboard and VoiceOver changes set the volume without a drag, so only a drag keeps its value over the source's.
+            .onChange(of: volume) { if !dragging { level = nil } }
             .preference(key: ControlEditingPreference.self, value: dragging)
         }
     }
