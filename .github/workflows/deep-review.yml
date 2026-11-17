@@ -2,12 +2,17 @@ name: Deep review
 
 # Adds the deep-review label, which starts a CodeRabbit review, to a pull request that changes more
 # than 400 lines or a file listed in .github/deep-review-paths. It never removes the label. A draft
-# gets it once it's ready for review, since CodeRabbit skips drafts. pull_request_target runs the
-# default branch's copy of this workflow and of .github/scripts, so a pull request never runs its own
-# code here. The logic and its tests are in .github/scripts/deep-review.mjs.
+# gets it once it's ready for review, since CodeRabbit skips drafts. Every hour it adds the label anew
+# to a labeled pull request that CodeRabbit left unreviewed because of its review limit, or never
+# answered. pull_request_target runs the default branch's copy of this workflow and of
+# .github/scripts, so a pull request never runs its own code here. The logic and its tests are in
+# .github/scripts/deep-review.mjs.
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,7 +25,9 @@ concurrency:
 jobs:
   label:
     name: Deep review label
-    if: ${{ !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'deep-review') }}
+    if: >-
+      github.event_name == 'pull_request_target' && !github.event.pull_request.draft
+      && !contains(github.event.pull_request.labels.*.name, 'deep-review')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -38,3 +45,29 @@ jobs:
             const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 });
             if (needsDeepReview(files.map((file) => file.filename), pr.additions + pr.deletions))
               await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: ["deep-review"] });
+
+  retry:
+    name: Ask CodeRabbit again
+    if: github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { needsRetry } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/deep-review.mjs`);
+            const { owner, repo } = context.repo;
+            const pulls = await github.paginate(github.rest.pulls.list, { owner, repo, state: "open", per_page: 100 });
+            for (const pr of pulls.filter((pr) => !pr.draft && pr.labels.some((label) => label.name === "deep-review"))) {
+              const reviews = await github.paginate(github.rest.pulls.listReviews, { owner, repo, pull_number: pr.number, per_page: 100 });
+              const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number: pr.number, per_page: 100 });
+              if (!needsRetry({ headSha: pr.head.sha, updatedAt: pr.updated_at, reviews, comments, now: Date.now() })) continue;
+              core.info(`Asking CodeRabbit again on #${pr.number}.`);
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: "deep-review" });
+              await github.rest.issues.addLabels({ owner, repo, issue_number: pr.number, labels: ["deep-review"] });
+            }
