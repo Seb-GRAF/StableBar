@@ -528,7 +528,9 @@ func writeConfiguration(_ data: Data, to url: URL) throws {
 }
 
 func requireWritable(_ url: URL) throws {
-    guard FileManager.default.isWritableFile(atPath: url.resolvingSymlinksInPath().path) else {
+    let target = url.resolvingSymlinksInPath()
+    guard FileManager.default.isWritableFile(atPath: target.path),
+          FileManager.default.isWritableFile(atPath: target.deletingLastPathComponent().path) else {
         throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
     }
 }
