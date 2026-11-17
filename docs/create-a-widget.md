@@ -83,7 +83,7 @@ Commands inherit your login shell's environment, then top-level `environment`, t
 | `NAME` | Widget ID; event data cannot replace it |
 | `CONFIG_DIR` | Directory containing the main configuration; event data cannot replace it |
 | `SENDER` | `startup`, `routine`, the subscribed event name, `action` after an action completes, or a mouse event below |
-| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available |
+| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available, with dates as ISO 8601 strings and without values JSON can't hold, such as data |
 | `SID` | Display number for pointer actions and workspace events |
 | `BUTTON` | `left`, `right` or `middle` for widget mouse clicks |
 | `MODIFIER` | Space-separated `shift`, `ctrl`, `alt`, `cmd`, `fn` for pointer actions |
