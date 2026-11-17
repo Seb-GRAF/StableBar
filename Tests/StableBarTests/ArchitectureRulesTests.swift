@@ -133,13 +133,25 @@ private func stateMachineViolations(_ code: String) throws -> [String] {
     try stateMachineReaches.filter { code.contains(try Regex($0.pattern).wordBoundaryKind(.simple)) }.map(\.name)
 }
 
-/// The types `files` make conform to `StateMachine`, directly or through a protocol that refines it, named as written,
-/// such as `Outer.Hold` for `extension Outer.Hold: StateMachine`.
-private func stateMachineNames(in files: [String]) throws -> Set<String> {
+/// Matches code that makes a type conform to `StateMachine`, directly or through a protocol of `files` that refines
+/// it. Its captures are the indentation, the keyword and the type's name as written, such as `Outer.Hold` for
+/// `extension Outer.Hold: StateMachine`.
+private func stateMachineConformance(in files: [String]) throws -> Regex<AnyRegexOutput> {
     let protocols = files.flatMap { $0.matches(of: #/\bprotocol\s+(\w+)[^{]*:[^{]*\bStateMachine\b/#).map { String($0.1) } }
-    let conformance = try Regex(#"\b(?:struct|enum|class|actor|extension)\s+([\w.]+)(?:<[^>]*>)?\s*:[^{]*\b(?:"#
-                                + (["StateMachine"] + protocols).joined(separator: "|") + #")\b"#).wordBoundaryKind(.simple)
-    return Set(files.flatMap { $0.matches(of: conformance).compactMap { $0.output[1].substring.map(String.init) } })
+    return try Regex(#"(?m)^([ \t]*)(?:(?:public|package|internal|fileprivate|private|final)\s+)*(struct|enum|class|actor|extension)\s+([\w.]+)(?:<[^>]*>)?\s*:[^{]*\b(?:"#
+                     + (["StateMachine"] + protocols).joined(separator: "|") + #")\b"#).wordBoundaryKind(.simple)
+}
+
+/// The names another file's extension of a state machine writes: as written for an extension, and for a top-level
+/// declaration. A nested type's own name, such as `State`, would match every unrelated `State`; it's checked where it's
+/// declared, and an extension elsewhere writes `Outer.State`.
+private func stateMachineNames(in files: [String], conformance: Regex<AnyRegexOutput>) -> Set<String> {
+    Set(files.flatMap { file in
+        file.matches(of: conformance).compactMap { match -> String? in
+            let nested = match.output[1].substring?.isEmpty == false && match.output[2].substring != "extension"
+            return nested ? nil : match.output[3].substring.map(String.init)
+        }
+    })
 }
 
 /// Matches code that declares or extends one of `names`, nested types included, so holds part of a state machine; nil
@@ -156,8 +168,9 @@ private func stateMachinePart(named names: Set<String>) throws -> Regex<AnyRegex
 @Test func stateMachinesDecideAndTheirOwnersAct() throws {
     let files = try swiftSources().map { (path: $0.path, code: code($0.text)) }
     #expect(files.count > 100)
-    guard let part = try stateMachinePart(named: stateMachineNames(in: files.map(\.code))) else { return }
-    for file in files where file.code.contains(part) {
+    let conformance = try stateMachineConformance(in: files.map(\.code))
+    let part = try stateMachinePart(named: stateMachineNames(in: files.map(\.code), conformance: conformance))
+    for file in files where file.code.contains(conformance) || part.map(file.code.contains) == true {
         for reach in try stateMachineViolations(file.code) {
             Issue.record("""
                 \(file.path) holds part of a StateMachine and reaches \(reach): return an effect for its owner to \
@@ -177,11 +190,19 @@ private func stateMachinePart(named names: Set<String>) throws -> Regex<AnyRegex
             mutating func handle(_ event: Event) -> [Effect] { _ = "a Task, a \\(1) Timer"; _ = #"a "Thread""#; return [] }
         }
         """)
-    #expect(try stateMachineNames(in: [pure]) == ["Hold"])
+    func names(_ files: String...) throws -> Set<String> {
+        let files = files.map(code)
+        return stateMachineNames(in: files, conformance: try stateMachineConformance(in: files))
+    }
+    #expect(try names(pure) == ["Hold"])
+    #expect(try names("import Foundation\n\n// A machine.\nstruct Hold: StateMachine {}") == ["Hold"])
     #expect(try stateMachineViolations(pure).isEmpty)
-    #expect(try stateMachineNames(in: [code("extension Outer.Hold: Equatable, StateMachine {}")]) == ["Outer.Hold"])
-    #expect(try stateMachineNames(in: [code("struct Hold: Equatable {} // : StateMachine")]).isEmpty)
-    #expect(try stateMachineNames(in: [code("protocol Machine: StateMachine {}"), code("struct Hold: Machine {}")]) == ["Hold"])
+    #expect(try names("extension Outer.Hold: Equatable, StateMachine {}") == ["Outer.Hold"])
+    #expect(try names("struct Hold: Equatable {} // : StateMachine").isEmpty)
+    #expect(try names("protocol Machine: StateMachine {}", "struct Hold: Machine {}") == ["Hold"])
+    let nested = code("final class Outer {\n    enum State: StateMachine {}\n}")
+    #expect(try names(nested).isEmpty)
+    #expect(try nested.contains(stateMachineConformance(in: [nested])))
     let part = try #require(try stateMachinePart(named: ["SetupPlacement", "Outer.State"]))
     #expect(code("extension SetupPlacement.Phase { }").contains(part))
     #expect(code("extension Outer.State { }").contains(part))
