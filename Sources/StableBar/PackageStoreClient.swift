@@ -76,7 +76,7 @@ actor PackageStoreClient {
 
     /// Loads a source's index without caching it, for the Add source form.
     func check(_ source: PackageSource, token: String?) async throws -> PackageIndex {
-        try await PackageIndex.load(from: source, token: token, session: session)
+        try await PackageIndex.load(from: source, token: token, session: session, appVersion: packages.appVersion)
     }
 
     /// Loads a source's index, uncached, with the token saved for its id when `source` is on the origin it was saved for.
@@ -127,8 +127,8 @@ actor PackageStoreClient {
 
     private func indexTask(for source: PackageSource, reload: Bool) -> Task<PackageIndex, Error> {
         if !reload, let task = indexTasks[source.id] { return task }
-        let token = token(for: source), session = session
-        let task = Task { try await PackageIndex.load(from: source, token: token, session: session) }
+        let token = token(for: source), session = session, appVersion = packages.appVersion
+        let task = Task { try await PackageIndex.load(from: source, token: token, session: session, appVersion: appVersion) }
         indexTasks[source.id] = task
         return task
     }

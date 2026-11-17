@@ -67,7 +67,7 @@ A package whose `package.json` sets `"kind": "widgets"` contains no commands, so
 
 ## Store
 
-**Settings → Store** lists widget packages from the [StableBar store](https://github.com/Seb-GRAF/stablebar-packages), with their descriptions and versions. Select one to download and inspect it, review its included widgets, setup and access requirements, then choose **Add to bar**. Loading the list does not download every package; only the chosen package is inspected. A package that needs a newer StableBar shows the version it requires and cannot be installed. The reload button at the top of the Store refreshes the index. Installed packages remain available when the Store cannot be reached.
+**Settings → Store** lists widget packages from the [StableBar store](https://github.com/Seb-GRAF/stablebar-packages), with their descriptions and versions. Select one to download and inspect it, review its included widgets, setup and access requirements, then choose **Add to bar**. Loading the list does not download every package; only the chosen package is inspected. When the Store lists several versions of a package, it offers the newest one your StableBar can run, so a version that needs a newer StableBar doesn't replace the one you can use. A package with no version your StableBar can run shows the version it requires and cannot be installed. The reload button at the top of the Store refreshes the index. Installed packages remain available when the Store cannot be reached.
 
 With a [private source](#private-sources) added, the Store lists the packages of every source, and search covers them all. The source's name in the sidebar narrows the list to it, and its rows carry the name with a lock, as rows from a folder you opened carry **Local folder**. When two sources list the same package ID, both rows appear. Once one copy is installed, the other source's row shows **Installed from** the installing source instead of **Get**; uninstall that copy before getting the other.
 
@@ -92,7 +92,7 @@ These optional `package.json` keys describe a package, and the review shows them
 | `author` | Person, organization or handle |
 | `repository` | `https` URL of the package's source |
 | `screenshot` | Path inside the package to a PNG or JPEG |
-| `minimumVersion` | Oldest StableBar version that can run it, such as `0.6.0`. An older StableBar refuses to review or install it. One that finds it already installed, after a rollback for example, loads the package and skips the properties it doesn't know (see [Files from a newer StableBar](configuration.md#files-from-a-newer-stablebar)). |
+| `minimumVersion` | Oldest StableBar version that can run it, such as `0.6.0`. A release comes after its betas, so name a beta, such as `0.18.0-beta.20261116211548.1210`, for a package that the betas before the release can run. An older StableBar refuses to review or install it. One that finds it already installed, after a rollback for example, loads the package and skips the properties it doesn't know (see [Files from a newer StableBar](configuration.md#files-from-a-newer-stablebar)). |
 | `requires` | Command-line tools needed on the login shell's PATH, such as `jq` or `gh`. The review names the ones it cannot find. |
 | `permissions` | macOS permissions: `calendars`, `automation`, `accessibility`, `bluetooth` or `location` |
 | `hosts` | Hostnames the package contacts, such as `api.github.com` |
