@@ -316,7 +316,7 @@ struct BarInspector: View {
         SettingsGroup("Background and border") {
             style.color("Background", "background")
             NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
-                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5),
+                style.row("Border", "borderWidth", scrub: flared ? nil : Scrub(value: width, range: 0...6, step: 0.5),
                           hint: flared ? "A group with a flare draws no border" : nil) { _ in
                     NumberField(title: "Border width", value: width, range: 0...6, step: 0.5).disabled(flared)
                     style.colorButton("Border color", "borderColor").disabled(flared)

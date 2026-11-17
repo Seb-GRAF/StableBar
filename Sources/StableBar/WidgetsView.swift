@@ -182,8 +182,12 @@ struct WidgetsView: View {
                 }
                 .onChange(of: selectedWidget, initial: true) {
                     guard let selectedWidget else { return }
-                    if let group = widgets.first(where: { $0.id == selectedWidget })?.group { collapsedGroups.remove(group) }
-                    proxy.scrollTo(selectedWidget)
+                    if let group = widgets.first(where: { $0.id == selectedWidget })?.group, collapsedGroups.remove(group) != nil {
+                        // The widget's row exists only once the expanded group draws.
+                        DispatchQueue.main.async { proxy.scrollTo(selectedWidget) }
+                    } else {
+                        proxy.scrollTo(selectedWidget)
+                    }
                 }
                 .onChange(of: selectedGroup, initial: true) {
                     if let selectedGroup { proxy.scrollTo("group:\(selectedGroup)") }

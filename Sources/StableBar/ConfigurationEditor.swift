@@ -98,8 +98,8 @@ final class ConfigurationEditor {
     }
 
     func leaveGroup(_ id: String) {
-        guard let edit = WidgetGrouping(store: store).leaving(id) else { return }
-        change(edit)
+        do { change(try WidgetGrouping(store: store).leaving(id)) }
+        catch { self.error = errorMessage(error) }
     }
 
     func ungroup(_ group: String) {

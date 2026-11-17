@@ -100,13 +100,13 @@ private let row = #"""
     ]}
     """#, includes: #"{"widgets":[{"id":"imported","type":"text","text":"B","position":"right","group":"status"}]}"#)
     defer { bar.close() }
-    try bar.apply([try #require(bar.grouping.leaving("own"))])
-    try bar.apply([try #require(bar.grouping.leaving("imported"))])
+    try bar.apply(try bar.grouping.leaving("own"))
+    try bar.apply(try bar.grouping.leaving("imported"))
     #expect(bar.groups() == ["own": "-", "imported": "-"])
     let document = try bar.fixture.document()
     #expect(try document["widgets"]?.decoded([[String: ConfigurationValue]].self).first?["group"] == nil)
     #expect(document["widgetOverrides"] == .object(["imported": .object(["group": .null])]))
-    #expect(bar.grouping.leaving("own") == nil)
+    #expect(try bar.grouping.leaving("own").isEmpty)
 }
 
 @MainActor @Test func leavingAGroupAProfileSetsChangesThatProfile() throws {
@@ -116,10 +116,10 @@ private let row = #"""
     """#)
     defer { bar.close() }
     #expect(bar.groups()["a"] == "status")
-    try bar.apply([try #require(bar.grouping.leaving("a"))])
+    try bar.apply(try bar.grouping.leaving("a"))
     #expect(bar.groups()["a"] == "-")
     let profiles = try bar.fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self)
-    #expect(profiles?.first?["configuration"] == .object([:]))
+    #expect(profiles?.first?["configuration"] == .object(["widgetOverrides": .object(["a": .object(["group": .null])])]))
 }
 
 @MainActor @Test func aWidgetTakenInByMembersCanNotLeave() throws {
@@ -270,8 +270,8 @@ private let row = #"""
     """#)
     defer { bar.close() }
     #expect(bar.groups() == ["a": "status", "b": "status"])
-    try bar.apply([try #require(bar.grouping.leaving("a"))])
-    try bar.apply([try #require(bar.grouping.leaving("b"))])
+    try bar.apply(try bar.grouping.leaving("a"))
+    try bar.apply(try bar.grouping.leaving("b"))
     #expect(bar.groups() == ["a": "-", "b": "-"])
     let document = try bar.fixture.document()
     #expect(document["widgetOverrides"] == nil)
@@ -300,4 +300,28 @@ private let row = #"""
     """#)
     defer { bar.close() }
     #expect(bar.grouping.group(of: .groupWith("b")) == "group-2")
+}
+
+@MainActor @Test func leavingHidesAGroupAnIncludedFileSetsUnderAnOverride() throws {
+    let bar = try GroupingFixture(#"""
+    {"includes":["included.json"],"groups":{"status":{}},"widgetOverrides":{"imported":{"group":"status"}},"widgets":[]}
+    """#, includes: #"{"widgets":[{"id":"imported","type":"text","text":"B","position":"right","group":"status"}]}"#)
+    defer { bar.close() }
+    try bar.apply(try bar.grouping.leaving("imported"))
+    #expect(bar.groups() == ["imported": "-"])
+    #expect(try bar.fixture.document()["widgetOverrides"] == .object(["imported": .object(["group": .null])]))
+}
+
+@MainActor @Test func ungroupingKeepsAGroupAProfileFromAnIncludedFileNames() throws {
+    let bar = try GroupingFixture(#"""
+    {"includes":["included.json"],"groups":{"status":{}},"widgets":[
+      {"id":"own","type":"text","text":"A","position":"right","group":"status"}
+    ]}
+    """#, includes: #"""
+    {"profiles":[{"name":"night","when":{"app":"com.example.never"},"configuration":{"widgetOverrides":{"own":{"group":"status"}}}}]}
+    """#)
+    defer { bar.close() }
+    try bar.apply(try bar.grouping.dissolving("status"))
+    #expect(bar.groups() == ["own": "-"])
+    #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
 }

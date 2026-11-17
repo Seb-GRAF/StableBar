@@ -28,8 +28,9 @@ struct WidgetGrouping {
     /// The shared configuration's widgets, whose positions a group's members must share.
     let widgets: [WidgetConfiguration]
     let groups: [String: WidgetGroupConfiguration]
-    /// Group IDs that a profile defines, which a new group mustn't take: it would merge with theirs.
-    var profileGroups: Set<String> = []
+    /// Every profile, from any file: a new group mustn't take an ID one defines, which would merge with theirs, and a
+    /// group one names stays defined.
+    var profiles: [ConfigurationProfile] = []
     let defaults: WidgetStyle
     let origins: [String: ConfigurationOrigin]
     /// The standardized path of the main configuration file.
@@ -82,25 +83,44 @@ struct WidgetGrouping {
         return left.first { $0.id == id }?.joinedGroup == nil
     }
 
-    func leaving(_ id: String) -> ConfigurationEdit? {
-        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return nil }
-        // A group set in another file, a template, or outside the profile being edited, is overridden instead.
-        guard let origin = origins["widgets.\(id).group"], origin.file == mainFile, !origin.detail.contains("(template "),
-              editingProfile == nil || origin.profile == editingProfile else {
-            return ConfigurationEdit(action: .set, id: id, properties: ["group": .null])
+    /// Takes `id` out of its own group in the profile being edited, else in the main file or the profile of it that
+    /// sets the group. A `null` hides a group that a layer below sets: an included file, a package or a template.
+    func leaving(_ id: String) throws -> [ConfigurationEdit] {
+        guard widgets.first(where: { $0.id == id })?.ownGroup != nil else { return [] }
+        let origin = origins["widgets.\(id).group"]
+        let layer = editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
+        var document = try mainDocument()
+        if let layer {
+            let profiles = try document["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
+            document = try profiles.first { $0["name"] == .string(layer) }?["configuration"]?.decoded([String: ConfigurationValue].self) ?? [:]
         }
-        var edit = origin.detail.contains("(widget override)")
-            ? ConfigurationEdit(action: .unset, properties: ["widgetOverrides": .object([id: .object(["group": .null])])])
-            : ConfigurationEdit(action: .unset, id: id, properties: ["group": .null])
-        edit.profile = origin.profile
-        return edit
+        let definition = try document["widgets"]?.decoded([[String: ConfigurationValue]].self).first { $0["id"] == .string(id) }
+        let override = try document["widgetOverrides"]?.decoded([String: [String: ConfigurationValue]].self)[id]
+        var edits: [ConfigurationEdit] = []
+        if let definition {
+            if override?["group"] != nil {
+                edits.append(ConfigurationEdit(action: .unset, properties: ["widgetOverrides": .object([id: .object(["group": .null])])]))
+            }
+            if definition["template"] != nil {
+                edits.append(ConfigurationEdit(action: .set, id: id, properties: ["group": .null]))
+            } else if definition["group"] != nil {
+                edits.append(ConfigurationEdit(action: .unset, id: id, properties: ["group": .null]))
+            }
+        } else {
+            edits.append(ConfigurationEdit(action: .set, id: id, properties: ["group": .null]))
+        }
+        return edits.map { edit in
+            var edit = edit
+            edit.profile = layer
+            return edit
+        }
     }
 
     /// Takes every widget out of `group`, and removes its definition when only the main file has it and nothing else
     /// there names it.
     func dissolving(_ group: String) throws -> [ConfigurationEdit] {
         let own = widgets.filter { $0.ownGroup == group }
-        var edits = own.compactMap { leaving($0.id) }
+        var edits = try own.flatMap { try leaving($0.id) }
         let definition = origins.filter { $0.key == "groups.\(group)" || $0.key.hasPrefix("groups.\(group).") }.values
         let removable = editingProfile == nil && !definition.isEmpty
             && definition.allSatisfy { $0.file == mainFile && $0.profile == nil }
@@ -110,7 +130,7 @@ struct WidgetGrouping {
             var ids = widgets.map(\.id)
             for edit in edits { document = try edit.applying(to: document, widgetIDs: &ids) }
             document["groups"] = nil
-            if !names(group, in: .object(document)) {
+            if !names(group, in: .object(document)), !profiles.contains(where: { names(group, in: .object($0.configuration)) }) {
                 return edits + [ConfigurationEdit(action: .unset, properties: ["groups": .object([group: .null])])]
             }
         }
@@ -136,7 +156,9 @@ struct WidgetGrouping {
     }
 
     private func newGroupID() -> String {
-        let taken = profileGroups.union(groups.keys)
+        let taken = Set(groups.keys).union(profiles.flatMap { profile in
+            (try? profile.configuration["groups"]?.decoded([String: ConfigurationValue].self).keys).map(Array.init) ?? []
+        })
         guard taken.contains("group") else { return "group" }
         var number = 2
         while taken.contains("group-\(number)") { number += 1 }
@@ -156,9 +178,7 @@ extension WidgetGrouping {
     init(store: BarStore) {
         let configuration = store.configuration
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
-                  profileGroups: Set(store.profiles.flatMap { profile in
-                      (try? profile.configuration["groups"]?.decoded([String: ConfigurationValue].self).keys).map(Array.init) ?? []
-                  }),
+                  profiles: store.profiles,
                   defaults: configuration?.defaults ?? WidgetStyle(), origins: store.origins,
                   mainFile: store.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,

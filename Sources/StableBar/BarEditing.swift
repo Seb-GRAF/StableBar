@@ -296,8 +296,8 @@ final class BarEditing {
     func leaveGroup(_ id: String, on displayID: Int) {
         guard isActive else { return }
         perform(on: displayID) {
-            guard let store = self.store, let edit = WidgetGrouping(store: store).leaving(id) else { return }
-            try store.customizationHistory.change(edit)
+            guard let store = self.store else { return }
+            try store.customizationHistory.change(WidgetGrouping(store: store).leaving(id))
         }
     }
 
