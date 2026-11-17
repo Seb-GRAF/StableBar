@@ -63,6 +63,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   height: var(--tile-h);
   padding: var(--w-py) 7px;
   color: var(--ws-off);
@@ -70,6 +71,12 @@
 }
 
 .theme-preview .preview-workspace.is-focused { color: var(--ws-on); }
+.theme-preview .preview-app-icon {
+  flex: none;
+  width: var(--ws-app-w);
+  height: var(--ws-app-h);
+  object-fit: contain;
+}
 .theme-preview.preview-ws-fill .preview-workspace.is-focused { background: var(--ws-ind); }
 
 .theme-preview .preview-underline { display: none; }
