@@ -69,7 +69,7 @@ extension SourcePermission {
 extension WidgetContent {
     var permissions: [SourcePermission] {
         switch self {
-        case let .menuBarItems(_, shown, _) where shown.references.contains { $0.display == .live }: [.accessibility, .screenRecording]
+        case let .menuBarItems(_, _, shown, _) where shown.references.contains { $0.display == .live }: [.accessibility, .screenRecording]
         case .appMenu, .appleMenu(click: .menu), .controlCenter, .menuBarItems: [.accessibility]
         default: []
         }

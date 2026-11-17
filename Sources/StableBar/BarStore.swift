@@ -225,7 +225,7 @@ final class BarStore: NSObject {
     }
 
     func move(_ source: MenuBarItemSource, to placement: MenuBarItemPlacement, before index: Int?, in widget: WidgetConfiguration) {
-        guard case let .menuBarItems(_, _, hidden) = widget.content else { return }
+        guard case let .menuBarItems(_, _, _, hidden) = widget.content else { return }
         let properties = menuBarItemsProperties(shown: widget.shownMenuBarItems, hidden: hidden, moving: source, to: placement, before: index,
                                                 among: appMenu.menuBarItems)
         do {
