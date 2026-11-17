@@ -184,9 +184,12 @@ enum WidgetMetricDisplay: String, CaseIterable {
         case .standard where sources == ["disk"]: return .null
         case .custom: return nil
         case .labelValueMeter:
+            // A plain row on top, like the other choices: editing merges a new layout into the old one, so a top-level
+            // style here would stay behind on the next choice.
             let columns = sources.map(metricColumn)
-            return columns.count == 1 ? columns[0]
+            let content = columns.count == 1 ? columns[0]
                 : .object(["type": .string("row"), "style": .object(["spacing": .number(14)]), "children": .array(columns)])
+            return .object(["type": .string("row"), "children": .array([content])])
         default: return .object(["type": .string("row"), "children": .array(sources.flatMap(blocks))])
         }
     }
@@ -221,21 +224,23 @@ enum WidgetMetricDisplay: String, CaseIterable {
             : .object(["type": .string("field"), "field": .string("text")])
     }
 
+    /// A label and value over a meter. The widths are minimums: 100% fits 37 points in Built-in's and Fern's fonts, and a
+    /// theme with a larger or bolder font, such as Catppuccin's 13 pt medium, widens the column instead of cutting it.
     private func metricColumn(for source: String) -> ConfigurationValue {
         let label = ["percent": "BAT", "volume": "VOL", "cpu": "CPU", "memory": "MEM", "disk": "DISK"][source] ?? source.uppercased()
         var value = Self.valueBlock(for: source)
         if case var .object(properties) = value {
             var style: [String: ConfigurationValue] = [:]
             if case let .object(existing)? = properties["style"] { style = existing }
-            style["width"] = .number(37)
+            style["minWidth"] = .number(37)
             properties["style"] = .object(style)
             properties["alignment"] = .string("trailing")
             value = .object(properties)
         }
-        return .object(["type": .string("column"), "style": .object(["spacing": .number(1), "width": .number(73)]), "children": .array([
+        return .object(["type": .string("column"), "style": .object(["spacing": .number(1), "minWidth": .number(73)]), "children": .array([
             .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
                 .object(["type": .string("text"), "text": .string(label), "role": .string("key"), "alignment": .string("leading"),
-                         "style": .object(["fontWeight": .string("medium"), "width": .number(36)])]), value
+                         "style": .object(["fontWeight": .string("medium"), "minWidth": .number(36)])]), value
             ])]),
             .object(["type": .string("column"), "style": .object(["paddingTop": .number(2)]), "children": .array([
                 .object(["type": .string("progress"), "source": .string(source), "height": .number(4), "role": .string("meter")])
@@ -245,10 +250,8 @@ enum WidgetMetricDisplay: String, CaseIterable {
 
     static func current(_ layout: ConfigurationValue?, sources: [String]) -> Self {
         if layout == nil || layout == .null { return choices(for: sources[0])[0] }
-        if layout == Self.labelValueMeter.layout(for: sources) { return .labelValueMeter }
         guard case let .object(properties) = layout, properties["type"] == .string("row") else { return .custom }
         return choices(for: sources[0]).first {
-            guard $0 != .labelValueMeter else { return false }
             guard case let .object(candidate)? = $0.layout(for: sources) else { return false }
             return candidate["children"] == properties["children"]
         } ?? .custom

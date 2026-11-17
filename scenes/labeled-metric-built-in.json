@@ -9,41 +9,66 @@
         "position": "left",
         "layout": {
           "type": "row",
-          "style": {"spacing": 14},
           "children": [
             {
-              "type": "column",
-              "style": {"spacing": 1, "width": 73},
+              "type": "row",
+              "style": {"spacing": 14},
               "children": [
                 {
-                  "type": "row",
-                  "style": {"spacing": 0},
+                  "type": "column",
+                  "style": {"spacing": 1, "minWidth": 73},
                   "children": [
-                    {"type": "text", "text": "CPU", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
-                  ]
-                },
-                {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "cpu", "height": 4, "role": "meter"}]}
-              ]
-            },
-            {
-              "type": "column",
-              "style": {"spacing": 1, "width": 73},
-              "children": [
-                {
-                  "type": "row",
-                  "style": {"spacing": 0},
-                  "children": [
-                    {"type": "text", "text": "MEM", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
                     {
                       "type": "row",
-                      "style": {"spacing": 0, "width": 37},
-                      "children": [{"type": "field", "field": "memory"}, {"type": "text", "text": "%"}],
-                      "alignment": "trailing"
+                      "style": {"spacing": 0},
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "CPU",
+                          "role": "key",
+                          "alignment": "leading",
+                          "style": {"fontWeight": "medium", "minWidth": 36}
+                        },
+                        {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "style": {"paddingTop": 2},
+                      "children": [{"type": "progress", "source": "cpu", "height": 4, "role": "meter"}]
                     }
                   ]
                 },
-                {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "memory", "height": 4, "role": "meter"}]}
+                {
+                  "type": "column",
+                  "style": {"spacing": 1, "minWidth": 73},
+                  "children": [
+                    {
+                      "type": "row",
+                      "style": {"spacing": 0},
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "MEM",
+                          "role": "key",
+                          "alignment": "leading",
+                          "style": {"fontWeight": "medium", "minWidth": 36}
+                        },
+                        {
+                          "type": "row",
+                          "style": {"spacing": 0, "minWidth": 37},
+                          "children": [{"type": "field", "field": "memory"}, {"type": "text", "text": "%"}],
+                          "alignment": "trailing"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "style": {"paddingTop": 2},
+                      "children": [{"type": "progress", "source": "memory", "height": 4, "role": "meter"}]
+                    }
+                  ]
+                }
               ]
             }
           ]
@@ -55,18 +80,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "DISK", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "DISK",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "disk", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "disk", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "disk-9"
@@ -76,18 +116,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "BAT", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "BAT",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "percent", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "percent", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "battery-9"
@@ -97,18 +152,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "VOL", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "VOL",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "volume", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "volume", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "audio-9"
@@ -119,41 +189,66 @@
         "position": "left",
         "layout": {
           "type": "row",
-          "style": {"spacing": 14},
           "children": [
             {
-              "type": "column",
-              "style": {"spacing": 1, "width": 73},
+              "type": "row",
+              "style": {"spacing": 14},
               "children": [
                 {
-                  "type": "row",
-                  "style": {"spacing": 0},
+                  "type": "column",
+                  "style": {"spacing": 1, "minWidth": 73},
                   "children": [
-                    {"type": "text", "text": "CPU", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
-                  ]
-                },
-                {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "cpu", "height": 4, "role": "meter"}]}
-              ]
-            },
-            {
-              "type": "column",
-              "style": {"spacing": 1, "width": 73},
-              "children": [
-                {
-                  "type": "row",
-                  "style": {"spacing": 0},
-                  "children": [
-                    {"type": "text", "text": "MEM", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
                     {
                       "type": "row",
-                      "style": {"spacing": 0, "width": 37},
-                      "children": [{"type": "field", "field": "memory"}, {"type": "text", "text": "%"}],
-                      "alignment": "trailing"
+                      "style": {"spacing": 0},
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "CPU",
+                          "role": "key",
+                          "alignment": "leading",
+                          "style": {"fontWeight": "medium", "minWidth": 36}
+                        },
+                        {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "style": {"paddingTop": 2},
+                      "children": [{"type": "progress", "source": "cpu", "height": 4, "role": "meter"}]
                     }
                   ]
                 },
-                {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "memory", "height": 4, "role": "meter"}]}
+                {
+                  "type": "column",
+                  "style": {"spacing": 1, "minWidth": 73},
+                  "children": [
+                    {
+                      "type": "row",
+                      "style": {"spacing": 0},
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "MEM",
+                          "role": "key",
+                          "alignment": "leading",
+                          "style": {"fontWeight": "medium", "minWidth": 36}
+                        },
+                        {
+                          "type": "row",
+                          "style": {"spacing": 0, "minWidth": 37},
+                          "children": [{"type": "field", "field": "memory"}, {"type": "text", "text": "%"}],
+                          "alignment": "trailing"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "style": {"paddingTop": 2},
+                      "children": [{"type": "progress", "source": "memory", "height": 4, "role": "meter"}]
+                    }
+                  ]
+                }
               ]
             }
           ]
@@ -165,18 +260,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "DISK", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "DISK",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "disk", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "disk", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "disk-100"
@@ -186,18 +296,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "BAT", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "BAT",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "percent", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "percent", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "battery-100"
@@ -207,18 +332,33 @@
         "type": "provider",
         "position": "left",
         "layout": {
-          "type": "column",
-          "style": {"spacing": 1, "width": 73},
+          "type": "row",
           "children": [
             {
-              "type": "row",
-              "style": {"spacing": 0},
+              "type": "column",
+              "style": {"spacing": 1, "minWidth": 73},
               "children": [
-                {"type": "text", "text": "VOL", "role": "key", "alignment": "leading", "style": {"fontWeight": "medium", "width": 36}},
-                {"type": "field", "field": "text", "alignment": "trailing", "style": {"width": 37}}
+                {
+                  "type": "row",
+                  "style": {"spacing": 0},
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "VOL",
+                      "role": "key",
+                      "alignment": "leading",
+                      "style": {"fontWeight": "medium", "minWidth": 36}
+                    },
+                    {"type": "field", "field": "text", "alignment": "trailing", "style": {"minWidth": 37}}
+                  ]
+                },
+                {
+                  "type": "column",
+                  "style": {"paddingTop": 2},
+                  "children": [{"type": "progress", "source": "volume", "height": 4, "role": "meter"}]
+                }
               ]
-            },
-            {"type": "column", "style": {"paddingTop": 2}, "children": [{"type": "progress", "source": "volume", "height": 4, "role": "meter"}]}
+            }
           ]
         },
         "provider": "audio-100"
@@ -236,14 +376,54 @@
     }
   },
   "outputs": {
-    "system-9": {"text": "9%", "value": 0.09, "values": {"cpu": 0.09, "memory": 0.09}, "fields": {"memory": "9"}},
-    "disk-9": {"text": "9%", "value": 0.09, "values": {"disk": 0.09}, "fields": {"memory": "9"}},
-    "battery-9": {"text": "9%", "value": 0.09, "values": {"percent": 0.09}, "fields": {"memory": "9"}},
-    "audio-9": {"text": "9%", "value": 0.09, "values": {"volume": 0.09}, "fields": {"memory": "9"}},
-    "system-100": {"text": "100%", "value": 1.0, "values": {"cpu": 1.0, "memory": 1.0}, "fields": {"memory": "100"}},
-    "disk-100": {"text": "100%", "value": 1.0, "values": {"disk": 1.0}, "fields": {"memory": "100"}},
-    "battery-100": {"text": "100%", "value": 1.0, "values": {"percent": 1.0}, "fields": {"memory": "100"}},
-    "audio-100": {"text": "100%", "value": 1.0, "values": {"volume": 1.0}, "fields": {"memory": "100"}}
+    "system-9": {
+      "text": "9%",
+      "value": 0.09,
+      "values": {"cpu": 0.09, "memory": 0.09},
+      "fields": {"memory": "9"}
+    },
+    "disk-9": {
+      "text": "9%",
+      "value": 0.09,
+      "values": {"disk": 0.09},
+      "fields": {"memory": "9"}
+    },
+    "battery-9": {
+      "text": "9%",
+      "value": 0.09,
+      "values": {"percent": 0.09},
+      "fields": {"memory": "9"}
+    },
+    "audio-9": {
+      "text": "9%",
+      "value": 0.09,
+      "values": {"volume": 0.09},
+      "fields": {"memory": "9"}
+    },
+    "system-100": {
+      "text": "100%",
+      "value": 1.0,
+      "values": {"cpu": 1.0, "memory": 1.0},
+      "fields": {"memory": "100"}
+    },
+    "disk-100": {
+      "text": "100%",
+      "value": 1.0,
+      "values": {"disk": 1.0},
+      "fields": {"memory": "100"}
+    },
+    "battery-100": {
+      "text": "100%",
+      "value": 1.0,
+      "values": {"percent": 1.0},
+      "fields": {"memory": "100"}
+    },
+    "audio-100": {
+      "text": "100%",
+      "value": 1.0,
+      "values": {"volume": 1.0},
+      "fields": {"memory": "100"}
+    }
   },
   "draw": "bar",
   "width": 1280
