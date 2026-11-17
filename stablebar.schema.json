@@ -1941,7 +1941,18 @@
           "$ref": "#/definitions/number"
         },
         "url": {
-          "$ref": "#/definitions/string",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "The https URL an http provider requests. In a package, its host must be in the package's hosts."
         },
         "headers": {
