@@ -5,6 +5,7 @@ import SwiftUI
 final class CustomizationWindow: NSObject, NSWindowDelegate {
     private weak var store: BarStore?
     private var window: NSWindow?
+    private var awaitingInitialFocus = false
     private(set) var editor: ConfigurationEditor?
     private let launchResume: ApplicationMoveLaunchResume
     /// Brings the window forward; tests keep it off screen.
@@ -49,6 +50,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
             window.center()
             window.setFrameAutosaveName("StableBarSettings")
             self.window = window
+            awaitingInitialFocus = true
         }
         editor?.finishEditing()
         editor?.widgetTab = .content
@@ -65,6 +67,13 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
     func showFeedback(store: BarStore) {
         show(store: store)
         editor?.showFeedback()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard awaitingInitialFocus, let window else { return }
+        awaitingInitialFocus = false
+        // AppKit's first text-field selection can open macOS suggestions before the user starts searching.
+        window.makeFirstResponder(nil)
     }
 
     func windowWillClose(_ notification: Notification) {
