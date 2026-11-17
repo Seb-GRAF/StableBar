@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -35,4 +36,23 @@ import Testing
     #expect(settings.editor?.section == .appearance)
     #expect(settings.editor?.selectedID == "clock")
     reopened.close()
+}
+
+@Test @MainActor func settingsFollowsAWindowManagerTileNarrowerThanItsFullHeader() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let store = try fixture.store()
+    defer { store.stop() }
+    let editor = ConfigurationEditor(store: store)
+    editor.section = .profiles
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 760),
+                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    defer { window.close() }
+    window.contentView = NSHostingView(rootView: SettingsView(store: store, editor: editor))
+    // AppKit widens the window back to SwiftUI's minimum width on its next layout pass.
+    window.setFrame(NSRect(x: 0, y: 0, width: 300, height: 760), display: false)
+    try await awaitCondition { window.frame.width > 300 }
+    // One of three tiles side by side on a 1512-point screen.
+    #expect(window.frame.width <= 490)
 }
