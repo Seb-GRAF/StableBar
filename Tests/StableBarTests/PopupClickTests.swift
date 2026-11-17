@@ -92,7 +92,10 @@ func popupBlockActionsFireAcrossTheirStyledBox(action: String) throws {
     (#"{"type":"row","children":[{"type":"text","text":"Wi-Fi"}]}"#, false),
     (#"{"type":"text","text":"Wi-Fi"}"#, false),
     (#"{"type":"column","children":[]}"#, false),
+    (#"{"type":"column","hideWhenEmpty":"ssid","children":[{"type":"text","text":"Wi-Fi"}]}"#, false),
+    (#"{"type":"column","hideWhenEmpty":"power","children":[{"type":"text","text":"Wi-Fi"}]}"#, true),
 ])
-func onlyAColumnStartingWithTextPutsItsTitleBesideTheBackArrow(json: String, titled: Bool) throws {
-    #expect(try JSONDecoder().decode(PopupBlock.self, from: Data(json.utf8)).startsWithTitle == titled)
+func onlyAShownColumnStartingWithTextPutsItsTitleBesideTheBackArrow(json: String, titled: Bool) throws {
+    let block = try JSONDecoder().decode(PopupBlock.self, from: Data(json.utf8))
+    #expect(block.startsWithTitle(fields: ["ssid": "", "power": "On"]) == titled)
 }
