@@ -60,3 +60,7 @@ pr_descriptions:
   # The Description check reads the description's last line, so cubic leaves it alone.
   generate: false
   cubic_review_link: false
+issues:
+  # Authors fix review comments themselves; with auto-fix off, cubic pushes no commits on its own and
+  # adds no auto-fix button to descriptions.
+  auto_fix: "off"
