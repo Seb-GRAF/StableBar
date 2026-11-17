@@ -83,6 +83,8 @@ func switchingAwayFromLabelValueAndMeterLeavesNothingBehind(inProfile: Bool) thr
     for (id, sources) in [("disk", ["disk"]), ("system", ["memory", "cpu"])] {
         for choice in WidgetMetricDisplay.choices(for: sources[0]) where choice != .labelValueMeter && choice != .custom {
             editor.set(["layout": try #require(WidgetMetricDisplay.labelValueMeter.layout(for: sources))], for: id)
+            // Saved first: Settings merges an edit of the same paths into the pending one, which never reaches the file.
+            try editor.history.flush()
             editor.set(["layout": try #require(choice.layout(for: sources))], for: id)
             try editor.history.flush()
             #expect(editor.error == nil)
