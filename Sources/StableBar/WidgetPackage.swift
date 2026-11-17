@@ -170,6 +170,7 @@ enum WidgetPackageError: LocalizedError {
     case archiveMismatch(String, String)
     case misplacedSecret(String)
     case undeclaredHost(String, String)
+    case tokenInRequest(String, String)
     case foreignToken(String, String, String)
     case foreignHeaders(String, String, String)
 
@@ -198,6 +199,8 @@ enum WidgetPackageError: LocalizedError {
         case let .archiveMismatch(id, version): "The archive of package \(id) \(version) contains a different id or version."
         case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines."
         case let .undeclaredHost(provider, url): "Provider \(provider) requests \(url), but the package's hosts don't list its host."
+        case let .tokenInRequest(package, provider):
+            "Package \(package) must write out the url and headers of provider \(provider), without @token. references."
         case let .foreignToken(package, provider, url):
             "Package \(package) points provider \(provider) at \(url), but the provider can send a token that isn't a secret of package \(package)."
         case let .foreignHeaders(package, provider, url):
@@ -783,14 +786,19 @@ func validateSecretReferences(_ value: ConfigurationValue, package id: String, p
     }
 }
 
-/// Throws when a provider of the package, or of one of its profiles, requests a host that `hosts` doesn't list.
-func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [String]) throws {
+/// Throws when a provider of the package, or of one of its profiles, doesn't write out its `url` and `headers`,
+/// or requests a host that the package's `hosts` don't list.
+func validatePackageHosts(_ document: [String: ConfigurationValue], manifest: WidgetPackageManifest) throws {
     for (name, provider) in try document["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
+        guard case let .object(headers) = provider["headers"] ?? .object([:]) else { throw WidgetPackageError.tokenInRequest(manifest.id, name) }
+        for case let .string(value) in Array(headers.values) + [provider["url"] ?? .null] where value.hasPrefix("@token.") {
+            throw WidgetPackageError.tokenInRequest(manifest.id, name)
+        }
         guard case let .string(url)? = provider["url"] else { continue }
-        guard let host = URL(string: url)?.host(), hosts.contains(host) else { throw WidgetPackageError.undeclaredHost(name, url) }
+        guard let host = URL(string: url)?.host(), manifest.hosts.contains(host) else { throw WidgetPackageError.undeclaredHost(name, url) }
     }
     for profile in try document["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
-        try validatePackageHosts(profile.configuration, hosts: hosts)
+        try validatePackageHosts(profile.configuration, manifest: manifest)
     }
 }
 
@@ -814,6 +822,8 @@ func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: Strin
             tokens[name, default: []].append(provider["token"])
             if case let .object(names)? = provider["headers"] {
                 headers[name, default: []] += names.keys.map { "\(path).\(name).headers.\($0)" }
+            } else if case .string? = provider["headers"] {
+                headers[name, default: []].append("\(path).\(name).headers")
             }
         }
     }
