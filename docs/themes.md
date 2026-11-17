@@ -33,6 +33,8 @@ A theme is a package whose `package.json` sets `"kind": "theme"`. Its configurat
 
 A theme can change the whole look, not only its colors. [Nord](../Resources/themes/nord/config.json) draws the strip with `bar.style` and removes the widget tiles by setting `background`, `borderColor` and `shadowColor` to `null` in `defaults`. Popups would show the system's material instead of the theme's colors, so it gives popups their own in `popupDefaults`. [Léman](../Resources/themes/leman/config.json) adds `bar.margin` and a corner radius so the strip floats.
 
+A theme can also fill its groups with [`members`](layout.md#adaptive-layout-and-groups), such as pills for the clock and the status widgets. Such a theme should set [`minimumVersion`](packages.md#store) to the first release with `members`: an older StableBar then refuses to install it, and skips `members` if it finds it already installed.
+
 Install your own theme like any other package, then select it with its version:
 
 ```json

@@ -471,6 +471,7 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         "animation": WidgetAnimation.CodingKeys.allCases, "workspace": WorkspaceConfiguration.CodingKeys.allCases,
         "actions": WidgetActions.CodingKeys.allCases, "menuItem": WidgetMenuItem.CodingKeys.allCases,
         "provider": ProviderConfiguration.CodingKeys.allCases, "group": WidgetGroupConfiguration.CodingKeys.allCases,
+        "groupMember": WidgetGroupMember.CodingKeys.allCases,
         "profile": ConfigurationProfile.CodingKeys.allCases, "conditions": ProfileConditions.CodingKeys.allCases,
         "packageSelection": WidgetPackageSelection.CodingKeys.allCases, "rule": StyleRule.CodingKeys.allCases,
         "ruleCondition": RuleCondition.CodingKeys.allCases, "workspaceDefaults": WorkspaceDefaults.CodingKeys.allCases,

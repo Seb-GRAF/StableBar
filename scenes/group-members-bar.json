@@ -1,0 +1,38 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "defaults": { "background": null, "borderColor": null, "shadowColor": null },
+    "groups": {
+      "status": {
+        "style": { "background": "@token.surfaceRaised", "cornerRadius": 14, "paddingHorizontal": 4, "spacing": 0 },
+        "members": [{ "type": "battery" }, { "type": "network" }]
+      },
+      "clock": {
+        "style": { "background": "@token.accent", "cornerRadius": 14, "paddingHorizontal": 4 },
+        "members": [{ "type": "clock" }]
+      }
+    },
+    "widgets": [
+      { "id": "app", "type": "activeApp", "position": "left" },
+      { "id": "battery", "type": "battery", "position": "right" },
+      { "id": "network", "type": "network", "position": "right" },
+      { "id": "time", "type": "clock", "format": "EEE d MMM  HH:mm", "position": "right", "style": { "foreground": "#ffffff" } }
+    ]
+  },
+  "outputs": {
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": { "percent": 0.82 },
+      "fields": { "percent": "82", "state": "battery" }
+    },
+    "network": {
+      "text": "↓1.2 MiB/s ↑240 KiB/s",
+      "icon": "network",
+      "fields": { "interface": "en0", "downloadRate": "1.2 MiB/s", "uploadRate": "240 KiB/s" },
+      "values": { "download": 1258291, "upload": 245760 }
+    }
+  },
+  "draw": "bar",
+  "width": 700
+}
