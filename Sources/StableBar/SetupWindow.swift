@@ -661,8 +661,10 @@ final class SetupSession {
 
     func cancel() {
         workspaceConnection.hide()
-        // A placement still waiting on macOS no longer applies, and the restore below waits for its menu bar change.
+        // A placement still waiting on macOS, for Automation access or for its menu bar change, no longer applies, and
+        // the restore below waits for that change.
         placementRequest += 1
+        placementAwaitingAccess = nil
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()

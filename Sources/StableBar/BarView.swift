@@ -267,7 +267,7 @@ private struct WidgetContextMenu: View {
         if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
            store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
             if dividerAbove { Divider() }
-            Button("Edit Widget…") { store.onCustomizeWidget?(widget.id) }
+            Button("Edit Widget…") { store.onCustomizeItem?(.widget(widget.id)) }
             Divider()
             BarContextMenu(store: store, display: display)
         }

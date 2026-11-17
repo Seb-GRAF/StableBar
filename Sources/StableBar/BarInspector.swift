@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum BarItem {
-    case bar, everyWidget, widget
+    case bar, everyWidget, widget, group
 }
 
 enum BarTab: CaseIterable {
@@ -69,11 +69,18 @@ struct BarInspector: View {
 
     var body: some View {
         let widget = editor.barItem == .widget ? store.configuration?.onScreen(screen).widgets.first { $0.id == editor.selectedID } : nil
-        let key = widget.map { "widget/\($0.id)/\(editor.widgetTab)" } ?? (editor.barItem == .everyWidget ? "everyWidget" : "bar/\(editor.barTab)")
+        let group = editor.barItem == .group ? editor.selectedGroup.flatMap { store.configuration?.groups[$0] != nil ? $0 : nil } : nil
+        let key = widget.map { "widget/\($0.id)/\(editor.widgetTab)" } ?? group.map { "group/\($0)" }
+            ?? (editor.barItem == .everyWidget ? "everyWidget" : "bar/\(editor.barTab)")
         VStack(spacing: 0) {
             Group {
                 if let widget {
                     widgetHeader(widget)
+                } else if let group {
+                    header(Image(systemName: WidgetGrouping.symbol).font(.system(size: 18)), title: friendly(group)) {
+                        Text(groupMembers(group).isEmpty ? "Group"
+                             : "Group of \(groupMembers(group).map { names[$0.id] ?? $0.id }.formatted(.list(type: .and)))")
+                    }
                 } else if editor.barItem == .everyWidget {
                     header(Text("Aa").font(.system(size: 17, weight: .medium)), title: "Every widget") {
                         Text("Widgets use this look unless you style them yourself")
@@ -89,7 +96,7 @@ struct BarInspector: View {
                 SettingsSegments(selection: $editor.widgetTab, options: WidgetTab.allCases.map { ($0, $0.title) })
                     .frame(maxWidth: 330)
                     .padding(.horizontal, 20).padding(.bottom, 8)
-            } else if editor.barItem != .everyWidget {
+            } else if editor.barItem == .bar {
                 SettingsSegments(selection: $editor.barTab, options: BarTab.allCases.map { ($0, $0.title) })
                     .frame(maxWidth: 330)
                     .padding(.horizontal, 20).padding(.bottom, 8)
@@ -99,6 +106,8 @@ struct BarInspector: View {
                     Color.clear.frame(height: 0).id("top")
                     if let widget {
                         widgetPanel(widget)
+                    } else if let group {
+                        groupPanel(group)
                     } else if editor.barItem == .everyWidget {
                         stylePanel(defaultsStyle, name: "Widget", widget: nil)
                         SettingsCallout(systemImage: "sparkle",
@@ -288,6 +297,61 @@ struct BarInspector: View {
         }
     }
 
+
+    /// The group's widgets on this screen, in bar order.
+    private func groupMembers(_ group: String) -> [WidgetConfiguration] {
+        let displays = NSScreen.screens.map(BarDisplay.init)
+        return (store.configuration?.onScreen(screen).widgets ?? []).filter {
+            $0.enabled && $0.group == group && screen.shows($0.display, among: displays, activeID: store.activeDisplayID)
+        }
+    }
+
+    @ViewBuilder private func groupPanel(_ group: String) -> some View {
+        let values = store.configuration?.groups[group].flatMap { group -> [String: ConfigurationValue]? in
+            if case let .object(properties) = group.style.configurationValue { return properties }
+            return nil
+        } ?? [:]
+        let style = StyleFields(store: store, path: "groups.\(group).style", values: values,
+                                set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
+                                unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
+        let grouping = WidgetGrouping(store: store)
+        let flared = store.configuration?.groups[group]?.style.flare != nil
+        SettingsGroup("Background and border") {
+            style.color("Background", "background")
+            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
+                style.row("Border", "borderWidth", scrub: flared ? nil : Scrub(value: width, range: 0...6, step: 0.5),
+                          hint: flared ? "A group with a flare draws no border" : nil) { _ in
+                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5).disabled(flared)
+                    style.colorButton("Border color", "borderColor").disabled(flared)
+                }
+            }
+        }
+        SettingsGroup("Shape") {
+            style.number("Corners", "cornerRadius", default: 0, in: 0...40, slider: true)
+            style.number("Flare", "flare", default: 0, in: 0...30, slider: true, hint: "Curves the top corners outward, like the notch")
+        }
+        SettingsGroup("Spacing") {
+            style.number("Side padding", "paddingHorizontal", default: 0, in: 0...30, slider: true)
+            style.number("Top and bottom padding", "paddingVertical", default: 0, in: 0...20, slider: true)
+            style.number("Between widgets", "spacing", default: store.configuration?.onScreen(screen).bar.spacing ?? 0, in: 0...30, slider: true)
+        }
+        SettingsGroup("Widgets") {
+            ForEach(groupMembers(group)) { member in
+                SettingRow(title: names[member.id] ?? member.id) {
+                    Button("Leave Group") { editor.leaveGroup(member.id) }
+                        .controlSize(.small)
+                        .disabled(!grouping.canLeave(member.id))
+                        .help(grouping.leaveBlocker(member.id) ?? "Take this widget out of the group")
+                }
+            }
+        }
+        Button("Ungroup") { editor.ungroup(group) }
+            .controlSize(.small)
+            .disabled(grouping.ungroupBlocker(group) != nil)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
+            .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
+    }
 
     private var defaultsStyle: StyleFields {
         StyleFields(store: store, path: "defaults", values: document("defaults"),

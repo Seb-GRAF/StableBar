@@ -17,10 +17,10 @@ const statusContext = "Visual review";
 const approval = "visual-ok";
 const workflowPath = ".github/workflows/ci.yml";
 /** The CI jobs the screens depend on, by the names they show. */
-const jobNames = { current: "Check revision", build: "Build release", wait: "Wait for main's screens", app: "Draw screens", site: "Draw website screens" };
+const jobNames = { current: "Check revision", build: "Build release", test: "Test", wait: "Wait for main's screens", app: "Draw screens", site: "Draw website screens" };
 /** Each kind of screens: its artifact, the ids it may hold, the screens it always has, and the jobs it needs. */
 const kinds = {
-  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], always: { prefix: "docs", name: "docs images" }, needs: ["current", "build", "wait"] },
+  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], always: { prefix: "docs", name: "docs images" }, needs: ["current", "build", "test", "wait"] },
   site: { artifact: "screens-site", prefixes: ["site"], always: { prefix: "site", name: "website screens" }, needs: ["current"] },
 };
 const broken = ["failure", "cancelled", "timed_out", "missing"];
@@ -260,12 +260,14 @@ function gather(run, folders) {
       continue;
     }
     if (conclusion === "skipped") {
+      // A pull request that calls for none of these screens needs none, whatever else failed.
+      if (!run.expected[kind]) continue;
       const blocker = needs.find((job) => broken.includes(run.jobs[job]));
       if (blocker) {
         ranScreens = true;
         if (run.jobs[blocker] === "cancelled") cancelled = jobNames[blocker];
         else failed.push({ id: kind, error: `${jobNames[blocker]} ${run.jobs[blocker] === "missing" ? "is missing" : `ended with ${run.jobs[blocker]}`}, so ${jobNames[kind]} didn't run.` });
-      } else if (run.expected[kind]) {
+      } else {
         ranScreens = true;
         failed.push({ id: kind, error: `${jobNames[kind]} was skipped, but this pull request changes what it draws.` });
       }
