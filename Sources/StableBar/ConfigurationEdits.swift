@@ -521,10 +521,14 @@ func writeConfiguration(_ data: Data, to url: URL) throws {
     let target = url.resolvingSymlinksInPath()
     if FileManager.default.fileExists(atPath: target.path) {
         if try Data(contentsOf: target) == data { return }
-        guard FileManager.default.isWritableFile(atPath: target.path) else {
-            throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
-        }
+        try requireWritable(target)
     }
     do { try data.write(to: target, options: .atomic) }
     catch { throw CommandFailure(message: "The configuration file could not be saved. \(error.localizedDescription)") }
+}
+
+func requireWritable(_ url: URL) throws {
+    guard FileManager.default.isWritableFile(atPath: url.resolvingSymlinksInPath().path) else {
+        throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
+    }
 }
