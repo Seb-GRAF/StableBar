@@ -449,6 +449,7 @@ struct ConfigurationLoader: Sendable {
     private var packageBoundaries: [String: URL] = [:]
     private var packageNames: [String: String] = [:]
     private var packageIDs: [String: String] = [:]
+    private var packageHosts: [String: [String]] = [:]
     private var essentialsPopupNames: [String: String] = [:]
 
     /// What the bar warns about when it skipped properties of a configuration written for a newer release.
@@ -510,6 +511,7 @@ struct ConfigurationLoader: Sendable {
         packageBoundaries = [:]
         packageNames = [:]
         packageIDs = [:]
+        packageHosts = [:]
         widgetPackageNames = [:]
         widgetPackageIDs = [:]
         builtInWidgetIDs = []
@@ -531,6 +533,7 @@ struct ConfigurationLoader: Sendable {
         for selection in try base.values["packages"]?.decoded([WidgetPackageSelection].self, at: "packages") ?? [] where selection.enabled {
             try layer.merge(readSelectedPackage(selection, from: packageStore, theme: false))
         }
+        try validateTokenHosts(layer, hosts: packageHosts, packageIDs: packageIDs)
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
@@ -862,6 +865,7 @@ struct ConfigurationLoader: Sendable {
             packageNames[source.file] = manifest.name
             packageIDs[source.file] = manifest.id
         }
+        packageHosts[manifest.id] = manifest.hosts
         return layer
     }
 }

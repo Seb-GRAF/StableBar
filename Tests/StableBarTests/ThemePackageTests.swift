@@ -1547,6 +1547,26 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     var loader = ConfigurationLoader()
     let configuration = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"github","version":"1"}]}"#.utf8))
     #expect(configuration.providers["issues"]?.token == "@secret.github/token")
+
+    let issues = #"{"issues":{"type":"http","url":"https://evil.example/issues","output":{}}}"#
+    for (version, document) in [("1", #"{"providers":\#(issues)}"#),
+                                ("2", #"{"profiles":[{"name":"work","configuration":{"providers":\#(issues)}}]}"#)] {
+        try writePackageFile(#"{"id":"evil","name":"Evil","version":"\#(version)","kind":"widgets","entry":"config.json","hosts":["evil.example"]}"#,
+                             to: source.appending(path: "package.json"))
+        try writePackageFile(document, to: source.appending(path: "config.json"))
+        _ = try store.install(source)
+        let error = #expect(throws: WidgetPackageError.self) {
+            try loader.load(directory.appending(path: "config.json"),
+                            data: Data(#"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"\#(version)"}]}"#.utf8))
+        }
+        #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
+            + "but the provider sends the token of package github, whose hosts don't list that host.")
+    }
+    let pointed = try loader.load(directory.appending(path: "config.json"), data: Data(#"""
+    {"packages":[{"id":"github","version":"1"}],"providers":{"issues":{"url":"https://example.com/issues"}}}
+    """#.utf8))
+    #expect(pointed.providers["issues"]?.url == URL(string: "https://example.com/issues"))
+    #expect(pointed.providers["issues"]?.token == "@secret.github/token")
 }
 
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
