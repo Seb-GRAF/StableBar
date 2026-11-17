@@ -10,13 +10,11 @@ export function needsDeepReview(files, changedLines) {
   return changedLines > 400 || files.some((file) => deepReviewPaths.some((path) => matchesGlob(file, path)));
 }
 
-// Whether to add the label anew, which asks CodeRabbit again: since the head commit, CodeRabbit either
-// hasn't answered or answered that it hit its review limit. It rewrites its summary comment on each
-// attempt, and doesn't retry by itself. A pull request updated in the last 30 minutes may still have
-// a review on the way.
-export function needsRetry({ headDate, updatedAt, comments, now }) {
-  if (now - Date.parse(updatedAt) < 30 * 60 * 1000) return false;
-  const answers = comments.filter((comment) =>
-    comment.user.login === "coderabbitai[bot]" && Date.parse(comment.updated_at) >= Date.parse(headDate));
-  return answers.length === 0 || answers.some((comment) => comment.body.includes("rate limited by coderabbit.ai"));
+// Whether to add the label anew, which asks CodeRabbit again: at least 30 minutes ago, its summary
+// comment said it hit the review limit on the head commit. CodeRabbit doesn't retry by itself, and
+// drops the notice once it reviews.
+export function needsRetry({ headSha, comments, now }) {
+  return comments.some((comment) => comment.user.login === "coderabbitai[bot]"
+    && comment.body.includes("rate limited by coderabbit.ai") && comment.body.includes(headSha)
+    && now - Date.parse(comment.updated_at) >= 30 * 60 * 1000);
 }
