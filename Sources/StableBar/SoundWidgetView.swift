@@ -9,6 +9,8 @@ struct SoundWidgetView: View {
     let store: BarStore
     let monitor: Int
     let style: LayoutStyle
+    /// The widget's block states, so a themed slider follows its role's hover and mode states.
+    var sliderStates = StyleStates()
     let hovered: Bool
     let motion: BlockMotion
     let runAction: (BlockAction, [String: String]) -> Void
@@ -32,7 +34,9 @@ struct SoundWidgetView: View {
         Group {
             if volume != nil {
                 HoverExpansionLayout(expansion: expanded ? 1 : 0, spacing: appearance.spacing, controlsBefore: Self.opensBeforeIcon(widget.position)) {
-                    VolumeSlider(widget: widget, store: store, style: style, width: 72, inline: true)
+                    VolumeSlider(widget: widget, store: store,
+                                 style: LayoutStyle(inherited: style.inherited, states: sliderStates, tracksHover: true),
+                                 width: 72, inline: true)
                         .controlSize(.mini)
                         .allowsHitTesting(expanded)
                         .accessibilityHidden(!expanded)
@@ -85,7 +89,11 @@ struct VolumeSlider: View {
                                                              if let value = values["VALUE"].flatMap(Double.init) { set(value) }
                                                          }))
                         .frame(width: width)
-                        .onPreferenceChange(ControlEditingPreference.self) { if !$0 { level = nil } }
+                        // The HStack's own preference below replaces the slider's, so pass the drag on through it.
+                        .onPreferenceChange(ControlEditingPreference.self) { editing in
+                            dragging = editing
+                            if !editing { level = nil }
+                        }
                 } else {
                     // A line of text tall, so opening the slider doesn't make the widget taller.
                     Text(" ").hidden().frame(width: width).overlay {

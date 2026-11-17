@@ -187,7 +187,10 @@ struct BarInspector: View {
                     if $0 != (widget.role?.rawValue ?? "") { editor.set(["role": $0.isEmpty ? .null : .string($0)], for: widget.id) }
                 })) {
                     Text("None").tag("")
-                    ForEach(PresentationRole.allCases, id: \.rawValue) { Text($0.rawValue.capitalized).tag($0.rawValue) }
+                    // The slider role styles slider blocks, not a whole widget.
+                    ForEach(PresentationRole.allCases.filter { $0 != .slider || widget.role == .slider }, id: \.rawValue) {
+                        Text($0.rawValue.capitalized).tag($0.rawValue)
+                    }
                 }
                 if widget.drawsTransitions {
                     Picker("Transition", selection: string("transition", for: widget,

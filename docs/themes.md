@@ -101,7 +101,6 @@ native control. Widgets can opt out with `"filled": false` or keep an explicit f
 with `"filled": true`. See [presentation roles](styling.md#presentation-roles-and-workspace-defaults).
 Widget layouts and their Display choices remain part of the widget configuration.
 
-
 ## Liquid Glass
 
 `bar.glass` is experimental. It draws backgrounds as native Liquid Glass, the material of the macOS 26 Dock, on top of any theme:

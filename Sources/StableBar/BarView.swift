@@ -869,6 +869,7 @@ struct WidgetView: View {
         case .provider where isSound && inlineHoverControls:
             SoundWidgetView(widget: widget, store: store, monitor: monitor,
                             style: resolution.layoutStyle(configured: false, hovered: hovered, open: open),
+                            sliderStates: resolution.blockStates(open: open),
                             hovered: hovered, motion: motion, runAction: blockAction)
         case .spacer where widget.layout == nil:
             Spacer(minLength: resolution.base.minWidth ?? 0)

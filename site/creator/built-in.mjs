@@ -1,6 +1,6 @@
 // Safari 17.0 cannot import JSON modules.
 export default {
-  "roles": { "time": {}, "primary": {}, "secondary": {}, "key": {}, "value": {}, "heading": {}, "button": {}, "meter": {}, "separator": {}, "slider": {} },
+  "roles": { "time": {}, "primary": {}, "secondary": {}, "key": {}, "value": {}, "heading": {}, "button": {}, "meter": {}, "separator": {} },
   "tokens": {
     "surface": { "light": "#f8f8faed", "dark": "#242629ee" },
     "surfaceRaised": { "light": "#ffffff", "dark": "#36383c" },

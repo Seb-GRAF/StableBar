@@ -978,7 +978,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "type": {
           "anyOf": [
             {
@@ -1549,7 +1549,7 @@
           "description": "Clock time zone identifier. Omit to follow the Mac.",
           "$ref": "#/definitions/string"
         },
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "id": {
           "$ref": "#/definitions/string",
           "description": "Stable, unique widget identifier."
@@ -2092,7 +2092,7 @@
             }
           ]
         },
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "id": {
           "type": "string",
           "description": "A widget ID, such as one a package fixes."
