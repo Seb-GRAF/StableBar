@@ -80,39 +80,6 @@ jobs:
             echo "site=true" >> "$GITHUB_OUTPUT"
           fi
 
-  # GitHub runs only a few macOS jobs at once for the whole account, and pull requests can hold them
-  # all for an hour. A run on main cancels the pull request runs it finds waiting or running, and
-  # Resume pull requests restarts their cancelled jobs once main's macOS jobs are done.
-  pause-pull-requests:
-    name: Pause pull requests
-    needs: current
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.current.outputs.build == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    outputs:
-      runs: ${{ steps.pause.outputs.runs }}
-    steps:
-      - name: Cancel pull request runs
-        id: pause
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          paused=()
-          for status in requested pending queued in_progress; do
-            for run in $(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=$status&per_page=100" \
-                --jq '.workflow_runs[].id'); do
-              if gh run cancel "$run"; then
-                paused+=("$run")
-              else
-                echo "::warning::Couldn't cancel run $run."
-              fi
-            done
-          done
-          echo "runs=${paused[*]}" >> "$GITHUB_OUTPUT"
-
   test:
     name: Test
     needs: current
@@ -247,8 +214,7 @@ jobs:
           retention-days: 1
 
   # Draws main's docs images and scenes, for the pull requests based on this commit: their Draw
-  # screens job compares with these instead of drawing the base again. Resume pull requests doesn't
-  # wait for it, as the runs it restarts are based on older commits.
+  # screens job compares with these instead of drawing the base again.
   main-screens:
     name: Draw main's screens
     env:
@@ -817,36 +783,3 @@ jobs:
           git -C tap -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -am "stablebar $version"
           git -C tap push
-
-  # Runs after every macOS job of main's run, whether it passed, failed or was cancelled. A paused run
-  # is left alone once its pull request is closed, has a newer commit or a newer run, or someone
-  # already restarted it.
-  resume-pull-requests:
-    name: Resume pull requests
-    needs: [pause-pull-requests, test, build, docs-images, beta, release]
-    if: always() && needs.pause-pull-requests.outputs.runs != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-      pull-requests: read
-    steps:
-      - name: Restart cancelled jobs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RUNS: ${{ needs.pause-pull-requests.outputs.runs }}
-        run: |
-          heads=$(gh api --paginate "repos/$GH_REPO/pulls?state=open&per_page=100" --jq '.[].head.sha')
-          for run in $RUNS; do
-            read -r sha state <<< "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq '"\(.head_sha) \(.status)/\(.conclusion)"')"
-            newest=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
-              --jq '.workflow_runs[0].id') || true
-            if [[ "$state" != completed/cancelled ]]; then
-              echo "Run $run is $state; leaving it."
-            elif ! grep -qx "$sha" <<< "$heads" || [[ "$newest" != "$run" ]]; then
-              echo "Run $run is no longer its pull request's newest; leaving it."
-            elif ! gh run rerun "$run" --failed; then
-              echo "::warning::Couldn't restart run $run."
-            fi
-          done
