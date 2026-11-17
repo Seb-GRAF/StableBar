@@ -19,20 +19,24 @@ test("needsDeepReview matches the listed paths", () => {
 });
 
 test("every listed path matches a file", () => {
-  const files = execFileSync("git", ["ls-files"], { cwd: new URL("../..", import.meta.url), encoding: "utf8" }).split("\n");
+  const files = execFileSync("git", ["ls-files"],
+    { cwd: new URL("../..", import.meta.url), encoding: "utf8", timeout: 60_000 }).split("\n");
   for (const path of deepReviewPaths) assert.ok(files.some((file) => matchesGlob(file, path)), path);
 });
 
-test("needsRetry asks CodeRabbit again after its review limit or when it never answered", () => {
+test("needsRetry asks CodeRabbit again when, since the head commit, it hit its limit or didn't answer", () => {
   const codeRabbit = { login: "coderabbitai[bot]" };
-  const limited = { user: codeRabbit, body: "<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->" };
-  const summary = { user: codeRabbit, body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->" };
-  const cubic = { user: { login: "cubic-dev-ai[bot]" }, body: "rate limited by coderabbit.ai" };
-  const pr = { headSha: "b", updatedAt: "2026-11-17T09:00:00Z", reviews: [], comments: [limited], now: Date.parse("2026-11-17T10:00:00Z") };
+  const limited = { user: codeRabbit, updated_at: "2026-11-17T08:40:00Z",
+    body: "<!-- This is an auto-generated comment: rate limited by coderabbit.ai -->" };
+  const summary = { user: codeRabbit, updated_at: "2026-11-17T08:40:00Z",
+    body: "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->" };
+  const cubic = { user: { login: "cubic-dev-ai[bot]" }, updated_at: "2026-11-17T08:40:00Z", body: "rate limited by coderabbit.ai" };
+  const pr = { headDate: "2026-11-17T08:30:00Z", updatedAt: "2026-11-17T09:00:00Z", comments: [limited],
+    now: Date.parse("2026-11-17T10:00:00Z") };
   assert.equal(needsRetry(pr), true);
+  assert.equal(needsRetry({ ...pr, comments: [] }), true);
   assert.equal(needsRetry({ ...pr, comments: [cubic] }), true);
   assert.equal(needsRetry({ ...pr, comments: [summary] }), false);
+  assert.equal(needsRetry({ ...pr, comments: [summary], headDate: "2026-11-17T08:50:00Z" }), true);
   assert.equal(needsRetry({ ...pr, now: Date.parse("2026-11-17T09:20:00Z") }), false);
-  assert.equal(needsRetry({ ...pr, reviews: [{ user: codeRabbit, commit_id: "b" }] }), false);
-  assert.equal(needsRetry({ ...pr, reviews: [{ user: codeRabbit, commit_id: "a" }] }), true);
 });
