@@ -17,10 +17,10 @@ const statusContext = "Visual review";
 const approval = "visual-ok";
 const workflowPath = ".github/workflows/ci.yml";
 /** The CI jobs the screens depend on, by the names they show. */
-const jobNames = { current: "Check revision", build: "Build release", app: "Draw screens", site: "Draw website screens" };
+const jobNames = { current: "Check revision", build: "Build release", wait: "Wait for main's screens", app: "Draw screens", site: "Draw website screens" };
 /** Each kind of screens: its artifact, the ids it may hold, the screens it always has, and the jobs it needs. */
 const kinds = {
-  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], always: { prefix: "docs", name: "docs images" }, needs: ["current", "build"] },
+  app: { artifact: "screens-app", prefixes: ["docs", "scenes"], always: { prefix: "docs", name: "docs images" }, needs: ["current", "build", "wait"] },
   site: { artifact: "screens-site", prefixes: ["site"], always: { prefix: "site", name: "website screens" }, needs: ["current"] },
 };
 const broken = ["failure", "cancelled", "timed_out", "missing"];

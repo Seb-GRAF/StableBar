@@ -279,6 +279,47 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # Draw screens takes the base's side from main's run of the base. When that run is still going,
+  # this waits for its screens on Linux, so a Mac doesn't draw the base all over again. It gives up
+  # once the run ends without them, and after 40 minutes.
+  main-screens-wait:
+    name: Wait for main's screens
+    needs: current
+    if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Wait for main's screens of the base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=$(git rev-parse HEAD^)
+          for _ in {1..80}; do
+            read -r run status <<< "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
+              --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"')"
+            if [[ -z "${run:-}" ]]; then
+              echo "main's CI has no run of $base, so the base draws its own screens."
+              exit 0
+            fi
+            if (( $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?name=screens-main-$base" --jq .total_count) > 0 )); then
+              echo "main's run $run drew the screens of $base."
+              exit 0
+            fi
+            if [[ "$status" == completed ]]; then
+              echo "main's run $run ended without screens of $base, so the base draws its own."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "main's run $run is still going after 40 minutes, so the base draws its own screens."
+
   # Builds the DMG as the beta does, for pull requests that change the scripts, resources or this
   # workflow. Pull requests get no Developer ID, so the app is ad-hoc signed; only the beta and
   # release jobs sign and notarize.
@@ -373,7 +414,7 @@ jobs:
     name: Draw screens
     env:
       STABLEBAR_PREBUILT_DIR: release-build
-    needs: [current, build]
+    needs: [current, build, main-screens-wait]
     if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
     runs-on: macos-26
     timeout-minutes: 45
@@ -411,34 +452,39 @@ jobs:
           cp -R "$RUNNER_TEMP/scenes" scenes
       # main's images of the scene files the pull request changes go, and the base draws those it
       # adds or edits. Without main's screens of the base, the base draws everything. The screens
-      # come only from CI's run of the push to main: a pull request's run can upload an artifact of
-      # the same name.
+      # and the base's release build come only from CI's run of the push to main: a pull request's
+      # run can upload artifacts of the same names.
       - name: Download main's screens of the base
         id: main
         env:
           GH_TOKEN: ${{ github.token }}
+          APP: ${{ needs.current.outputs.app }}
         run: |
           base=$(git rev-parse HEAD)
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
             --jq '.workflow_runs[0].id // empty')
+          draw=true
           if [[ -n "$run" ]] && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "screens-main-$base" --dir "$RUNNER_TEMP/before"; then
             echo "found=true" >> "$GITHUB_OUTPUT"
             while IFS= read -r -d '' scene; do
               rm -f "$RUNNER_TEMP/before/scenes/$(basename "$scene" .json)"-{dark,light}.png
             done < <(git diff -z --name-only --no-renames HEAD "$GITHUB_SHA" -- 'scenes/*.json')
             git diff -z --name-only --no-renames --diff-filter=AM HEAD "$GITHUB_SHA" -- 'scenes/*.json' > "$RUNNER_TEMP/redrawn-scenes"
-            if [[ -s "$RUNNER_TEMP/redrawn-scenes" ]]; then
-              echo "draw=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "draw=true" >> "$GITHUB_OUTPUT"
+            [[ -s "$RUNNER_TEMP/redrawn-scenes" ]] || draw=false
+          fi
+          echo "draw=$draw" >> "$GITHUB_OUTPUT"
+          if [[ "$draw" == true && "$APP" == true && -n "$run" ]] \
+              && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name release-build --dir "$RUNNER_TEMP/base-build"; then
+            mkdir "$RUNNER_TEMP/base-release"
+            tar -xf "$RUNNER_TEMP/base-build/release-build.tar" -C "$RUNNER_TEMP/base-release"
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Identify Swift toolchain
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true' && steps.main.outputs.build != 'true'
         id: swift
         run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true' && steps.main.outputs.build != 'true'
         with:
           path: .build
           key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
@@ -454,10 +500,11 @@ jobs:
         env:
           APP: ${{ needs.current.outputs.app }}
           MAIN: ${{ steps.main.outputs.found }}
+          BASE_BUILD: ${{ steps.main.outputs.build == 'true' && format('{0}/base-release', runner.temp) || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/before"
           if [[ "$APP" == true ]]; then
-            STABLEBAR_PREBUILT_DIR= ./scripts/build.sh "$RUNNER_TEMP/base.app"
+            STABLEBAR_PREBUILT_DIR="$BASE_BUILD" ./scripts/build.sh "$RUNNER_TEMP/base.app"
             app="$RUNNER_TEMP/base.app/Contents/MacOS/StableBar"
             [[ "$MAIN" == true ]] || "$app" --render-docs-images "$RUNNER_TEMP/before/docs"
           else
