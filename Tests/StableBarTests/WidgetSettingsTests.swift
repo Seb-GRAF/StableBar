@@ -239,3 +239,18 @@ final class WidgetSettingsTests: XCTestCase {
     #expect(WidgetClickChoice.control(for: try stableBar(["onClick": .string("echo keep")])) == .explanation("This widget runs a command. Change it with Edit as JSON in the More menu."))
     #expect(WidgetClickChoice.control(for: try stableBar(["open": .string("https://example.com")])) == .choices)
 }
+
+@MainActor @Test func allCalendarsAlsoClearsTheCalendarsAnIncludedFileChooses() throws {
+    let fixture = try ThemeGalleryFixture(#"{"includes":["meetings.json"],"widgets":[{"id":"calendar","type":"calendar","position":"right"}]}"#)
+    defer { fixture.close() }
+    try fixture.write(#"{"providers":{"calendar":{"type":"calendar","calendars":["Work"]}}}"#, to: fixture.directory.appending(path: "meetings.json"))
+    let store = try fixture.store()
+    defer { store.stop() }
+    let editor = ConfigurationEditor(store: store)
+    editor.setProvider(["calendars": .null], for: store.configuration!.widgets[0])
+    try editor.history.flush()
+    #expect(editor.error == nil)
+    #expect(store.configuration?.providers["calendar"]?.calendars == [])
+    editor.undo()
+    #expect(store.configuration?.providers["calendar"]?.calendars == ["Work"])
+}
