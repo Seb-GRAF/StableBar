@@ -90,6 +90,7 @@ private func code(_ text: String) -> String {
             while index < characters.count, characters[index] != "\n" { index += 1 }
             continue
         }
+        // A space keeps `struct/* … */Hold` two words.
         if at("/*") {
             var depth = 0
             repeat {
@@ -103,6 +104,7 @@ private func code(_ text: String) -> String {
                     index += 1
                 }
             } while depth > 0 && index < characters.count
+            code.append(" ")
             continue
         }
         let hashes = characters[index...].prefix { $0 == "#" }.count
@@ -133,13 +135,23 @@ private func stateMachineViolations(_ code: String) throws -> [String] {
     try stateMachineReaches.filter { code.contains(try Regex($0.pattern).wordBoundaryKind(.simple)) }.map(\.name)
 }
 
-/// Matches code that makes a type conform to `StateMachine`, directly or through a protocol of `files` that refines
-/// it. Its captures are the indentation, the keyword and the type's name as written, such as `Outer.Hold` for
+/// Matches code that makes a type conform to `StateMachine`, directly or through protocols of `files` that refine it.
+/// Its captures are the indentation, the keyword and the type's name as written, such as `Outer.Hold` for
 /// `extension Outer.Hold: StateMachine`.
 private func stateMachineConformance(in files: [String]) throws -> Regex<AnyRegexOutput> {
-    let protocols = files.flatMap { $0.matches(of: #/\bprotocol\s+(\w+)[^{]*:[^{]*\bStateMachine\b/#).map { String($0.1) } }
+    let refinements = files.flatMap { $0.matches(of: #/\bprotocol\s+(\w+)[^{]*?:([^{]*)/#).map { (String($0.1), String($0.2)) } }
+    // A protocol can refine one that refines `StateMachine`, so collect them until no new one turns up.
+    var protocols: Set<String> = []
+    var found: Set<String> = ["StateMachine"]
+    while found != protocols {
+        protocols = found
+        for (name, parents) in refinements
+        where parents.split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "_" }).contains(where: { protocols.contains(String($0)) }) {
+            found.insert(name)
+        }
+    }
     return try Regex(#"(?m)^([ \t]*)(?:(?:public|package|internal|fileprivate|private|final)\s+)*(struct|enum|class|actor|extension)\s+([\w.]+)(?:<[^>]*>)?\s*:[^{]*\b(?:"#
-                     + (["StateMachine"] + protocols).joined(separator: "|") + #")\b"#).wordBoundaryKind(.simple)
+                     + protocols.sorted().joined(separator: "|") + #")\b"#).wordBoundaryKind(.simple)
 }
 
 /// The names another file's extension of a state machine writes: as written for an extension, and for a top-level
@@ -200,6 +212,8 @@ private func stateMachinePart(named names: Set<String>) throws -> Regex<AnyRegex
     #expect(try names("extension Outer.Hold: Equatable, StateMachine {}") == ["Outer.Hold"])
     #expect(try names("struct Hold: Equatable {} // : StateMachine").isEmpty)
     #expect(try names("protocol Machine: StateMachine {}", "struct Hold: Machine {}") == ["Hold"])
+    #expect(try names("protocol Base: StateMachine {}", "protocol Derived: Equatable, Base {}", "struct Hold: Derived {}") == ["Hold"])
+    #expect(try names("struct/* a */Hold: StateMachine {}") == ["Hold"])
     let nested = code("final class Outer {\n    enum State: StateMachine {}\n}")
     #expect(try names(nested).isEmpty)
     #expect(try nested.contains(stateMachineConformance(in: [nested])))
