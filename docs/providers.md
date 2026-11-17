@@ -197,7 +197,7 @@ An `http` provider reads JSON from a web API without running a command, and copi
 Output:
 
 - `text` and `fields`: a string as the response has it, a number as JSON writes it, such as `21.4`, or `true` or `false`. StableBar doesn't round numbers or add units; show a unit the API sends as a field of its own.
-- `values`: a number, or a string that holds one, as some price APIs send them.
+- `values`: a number, or a string that holds a finite one, as some price APIs send them.
 - `lists`: each object in the array becomes a row of its members that are strings, numbers or booleans. Nested objects and arrays, and items that aren't objects, are left out.
 - A pointer that finds nothing, or finds an object or an array where it needs text or a number, leaves its part out: `text` is then empty.
 
