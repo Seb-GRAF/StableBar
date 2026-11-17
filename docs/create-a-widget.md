@@ -104,7 +104,7 @@ Script output can also set `onClick` for a state-dependent click action; popups 
 
 ## Composing widgets
 
-A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
+A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty`, `showWhen` or `hideWhen` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
 
 A `list` with `"orientation": "horizontal"` repeats its `row` block side by side for each entry from the script. This works in bar layouts and popups. The [Dock badges example](../examples/dock-badges/config.json) shows each running app's icon and badge on the bar; clicking an entry opens that app. It needs `jq`. Set `APPS` in the example's `environment` to the app names to watch, separated by commas. Apps without badges show `0`, and apps that are not running are omitted. Counts follow each app's Dock badge settings and refresh every ten seconds.
 

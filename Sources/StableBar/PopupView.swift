@@ -35,7 +35,7 @@ struct PopupView: View {
                 ZStack(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: appearance.spacing) {
                         let view = navigation.view.map { popup.views[$0]! }
-                        if let view, !view.startsWithTitle(fields: fields) {
+                        if let view, !view.startsWithTitle(fields: fields, values: script?.output.values ?? [:]) {
                             CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground) { navigation.view = nil }
                         }
                         PopupBlockView(block: view ?? popup.layout, inheritedStyle: style, fields: fields,
@@ -317,7 +317,7 @@ struct PopupBlockView: View {
 
     @ViewBuilder
     var body: some View {
-        if block.isHidden(fields: fields) {
+        if block.isHidden(fields: fields, values: context.values) {
             EmptyView()
         } else {
             styledContent
@@ -473,7 +473,7 @@ struct PopupBlockView: View {
         case let .column(children):
             VStack(alignment: .leading, spacing: appearance.spacing) {
                 ForEach(Array(children.enumerated()), id: \.offset) { index, item in
-                    if index == 0, let back, block.startsWithTitle(fields: fields) {
+                    if index == 0, let back, block.startsWithTitle(fields: fields, values: context.values) {
                         HStack(spacing: 4) {
                             CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground, action: back)
                             child(item, of: style, fields: fields)
