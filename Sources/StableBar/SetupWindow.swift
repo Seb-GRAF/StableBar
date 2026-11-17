@@ -271,14 +271,14 @@ final class SetupSession {
     var accessibilityAccess: Bool
     /// StableBar's access to System Events, which hides and shows the menu bar; nil until setup checks it.
     private(set) var automationAccess: MenuBarAutoHide.Access?
+    private var placing = SetupPlacement()
     /// The placement the person picked, in the intro or on the first step; nil until they pick one, whatever the bar's
     /// placement is.
-    private(set) var placementChoice: SetupPreferences.Placement?
+    var placementChoice: SetupPreferences.Placement? { placing.choice }
     /// The placement that needs Automation access first; setup applies it once access is allowed.
-    private(set) var placementAwaitingAccess: SetupPreferences.Placement?
+    var placementAwaitingAccess: SetupPreferences.Placement? { placing.awaitingAccess }
     private var accessRequest: Task<MenuBarAutoHide.Access, Never>?
     @ObservationIgnored let system: SetupSystem
-    private var placementRequest = 0
     /// The menu bar change System Events is still making, if any.
     @ObservationIgnored private var menuBarChange: Task<Void, Error>?
     /// macOS is asking whether StableBar may control System Events.
@@ -330,8 +330,7 @@ final class SetupSession {
         if let saved = resume?.setup {
             step = saved.step
             preset = saved.preset
-            placementChoice = saved.placementChoice
-            placementAwaitingAccess = saved.placementAwaitingAccess
+            placing = SetupPlacement(choice: saved.placementChoice, awaitingAccess: saved.placementAwaitingAccess)
             openAtLogin = system.isInApplications() ? saved.openAtLogin : nil
             preferences = saved.preferences
         }
@@ -547,39 +546,31 @@ final class SetupSession {
         }
     }
 
-    /// Hiding or showing the menu bar needs Automation access to System Events, so setup checks it first,
-    /// lets macOS ask once, and otherwise waits for the person to allow it in System Settings.
-    /// The latest choice wins: a placement chosen while macOS asks replaces the earlier one.
     func place(_ placement: SetupPreferences.Placement) async {
-        placementChoice = placement
-        placementRequest += 1
-        let request = placementRequest
-        placementAwaitingAccess = nil
-        if placement != .top { preferences.placement = placement }
-        let changes = (placement == .top) != menuBarHides
-        if changes {
-            let access = await menuBarAccess()
-            guard request == placementRequest else { return }
-            guard access == .allowed else {
-                placementAwaitingAccess = placement
-                error = nil
-                return
+        await perform(placing.handle(.chose(placement, menuBarHides: menuBarHides)))
+    }
+
+    /// Carries out what `placing` decided, and tells it how each step went.
+    private func perform(_ effects: [SetupPlacement.Effect]) async {
+        for effect in effects {
+            switch effect {
+            case .move(let placement):
+                preferences.placement = placement
+            case .showError(let message):
+                error = message
+            case .checkAccess(let request):
+                let access = await menuBarAccess()
+                await perform(placing.handle(.accessChecked(access, request: request)))
+            case .changeMenuBar(let hidden, let provesAccess, let request):
+                var failure: String?
+                do {
+                    try await setMenuBarHidden(hidden)
+                    if provesAccess { automationAccess = .allowed }
+                } catch {
+                    failure = errorMessage(error)
+                }
+                await perform(placing.handle(.menuBarChanged(failure: failure, request: request)))
             }
-        }
-        // Skip setup, or a later choice, may come while macOS changes the menu bar; this one then no longer applies,
-        // whether the change worked or not.
-        do {
-            try await setMenuBarHidden(placement == .top)
-            if changes { automationAccess = .allowed }
-            guard request == placementRequest else { return }
-            preferences.placement = placement
-            error = nil
-        } catch {
-            guard request == placementRequest else { return }
-            let detail = errorMessage(error).contains("-1743")
-                ? MenuBarAutoHide.accessHint
-                : errorMessage(error)
-            self.error = "StableBar couldn’t \(placement == .top ? "hide" : "show") the macOS menu bar. \(detail)"
         }
     }
 
@@ -646,8 +637,8 @@ final class SetupSession {
         Task {
             let access = await system.automationAccess(false)
             automationAccess = access
-            guard access == .allowed, let placement = placementAwaitingAccess else { return }
-            await place(placement)
+            guard access == .allowed else { return }
+            await perform(placing.handle(.accessAllowed(menuBarHides: menuBarHides)))
         }
     }
 
@@ -662,7 +653,7 @@ final class SetupSession {
     func cancel() {
         workspaceConnection.hide()
         // A placement still waiting on macOS no longer applies, and the restore below waits for its menu bar change.
-        placementRequest += 1
+        _ = placing.handle(.skipped)
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
         store.sessionEdits = sessionEdits
         store.reloadConfiguration()
