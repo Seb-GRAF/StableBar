@@ -245,10 +245,13 @@ async function deleteAssets({ github, owner, repo, pick }) {
   return deleted;
 }
 
-/** What the run's jobs and artifacts give: the screens, the failures, the image files and whether any screens were drawn. */
+/**
+ * What the run's jobs and artifacts give: the screens, the failures, the image files, whether any screens were drawn, and
+ * the job that was cancelled before the screens were drawn, or null.
+ */
 function gather(run, folders) {
   const screens = [], failed = [], files = new Map();
-  let ranScreens = false;
+  let ranScreens = false, cancelled = null;
   for (const [kind, { artifact, prefixes, always, needs }] of Object.entries(kinds)) {
     const conclusion = run.jobs[kind];
     if (conclusion === "missing") {
@@ -260,7 +263,8 @@ function gather(run, folders) {
       const blocker = needs.find((job) => broken.includes(run.jobs[job]));
       if (blocker) {
         ranScreens = true;
-        failed.push({ id: kind, error: `${jobNames[blocker]} ${run.jobs[blocker] === "missing" ? "is missing" : `ended with ${run.jobs[blocker]}`}, so ${jobNames[kind]} didn't run.` });
+        if (run.jobs[blocker] === "cancelled") cancelled = jobNames[blocker];
+        else failed.push({ id: kind, error: `${jobNames[blocker]} ${run.jobs[blocker] === "missing" ? "is missing" : `ended with ${run.jobs[blocker]}`}, so ${jobNames[kind]} didn't run.` });
       } else if (run.expected[kind]) {
         ranScreens = true;
         failed.push({ id: kind, error: `${jobNames[kind]} was skipped, but this pull request changes what it draws.` });
@@ -268,6 +272,10 @@ function gather(run, folders) {
       continue;
     }
     ranScreens = true;
+    if (conclusion === "cancelled") {
+      cancelled = jobNames[kind];
+      continue;
+    }
     if (conclusion !== "success") {
       failed.push({ id: kind, error: `${jobNames[kind]} ended with ${conclusion}.` });
       continue;
@@ -281,7 +289,7 @@ function gather(run, folders) {
     failed.push(...read.failed);
     for (const [name, image] of read.files) files.set(name, image);
   }
-  return { screens, failed, files, ranScreens };
+  return { screens, failed, files, ranScreens, cancelled };
 }
 
 /**
@@ -291,11 +299,17 @@ function gather(run, folders) {
  * time they first appeared, and so their approval, unless the base changed since. New screens appear
  * when the comment is written: that write's time becomes `shownAt`, so a label added during the uploads
  * approves nothing. A run that started before the base last changed compared the old base: its review
- * waits for a new run.
+ * waits for a new run. A run cancelled before it drew the screens, as when main's CI pauses it, leaves the
+ * comment as it is and the review pending until CI runs again, unless another job failed.
  */
 async function publish({ github, owner, repo, pr, existing, data: previous, labels, labeledAt, baseChangedAt, run, folders, target }) {
   const number = pr.number, head = pr.head.sha;
-  const { screens, failed, files, ranScreens } = gather(run, folders);
+  const { screens, failed, files, ranScreens, cancelled } = gather(run, folders);
+  if (cancelled && failed.length === 0) {
+    const review = { state: "pending", description: `${cancelled} was cancelled: the screens are compared when CI runs again.`, removeLabel: false };
+    await setStatus({ github, owner, repo, sha: head, review, url: existing?.html_url });
+    return review;
+  }
   const drawn = { head, base: pr.base.sha, baseRef: pr.base.ref, runId: run.id, runAttempt: run.attempt, runCreatedAt: run.createdAt ?? null };
   const baseChanged = changedSince(baseChangedAt, drawn.runCreatedAt);
   let review, body, data, shownLater = false;

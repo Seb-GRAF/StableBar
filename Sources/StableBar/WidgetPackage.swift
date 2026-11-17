@@ -372,8 +372,12 @@ struct WidgetPackageStore: Sendable {
     }
 
     func requiresNewerApp(_ minimumVersion: String) -> Bool {
+        Self.requiresNewerApp(minimumVersion, appVersion: appVersion)
+    }
+
+    static func requiresNewerApp(_ minimumVersion: String, appVersion: String?) -> Bool {
         guard let appVersion else { return false }
-        return appVersion.compare(minimumVersion, options: .numeric) == .orderedAscending
+        return compareReleases(appVersion, minimumVersion) == .orderedAscending
     }
 
     func inspect(_ source: URL, settings: [String: ConfigurationValue] = [:],
@@ -610,6 +614,16 @@ struct PackageIndex: Decodable, Sendable {
 
         /// Identifies an entry across sources, for caches and SwiftUI.
         var key: String { "\(sourceID):\(id)/\(version)" }
+
+        /// Whether this version of a package beats `other`: one a StableBar of `appVersion` can run beats one it can't,
+        /// then the newer one wins.
+        func isPreferred(over other: Entry, appVersion: String?) -> Bool {
+            func runs(_ entry: Entry) -> Bool {
+                entry.minimumVersion.map { !WidgetPackageStore.requiresNewerApp($0, appVersion: appVersion) } ?? true
+            }
+            if runs(self) != runs(other) { return runs(self) }
+            return compareReleases(version, other.version) == .orderedDescending
+        }
     }
 
     static let url = URL(string: "https://github.com/Seb-GRAF/stablebar-packages/releases/download/store/index.json")!
@@ -654,25 +668,31 @@ struct PackageIndex: Decodable, Sendable {
         suggestions = try container.decodeIfPresent([Suggestion].self, forKey: ConfigurationKey(stringValue: "suggestions")) ?? []
     }
 
-    /// Tags every entry with the source, resolves relative screenshots and keeps the first entry for each ID.
-    static func load(from source: PackageSource, token: String?, session: URLSession) async throws -> PackageIndex {
+    /// Tags every entry with the source, resolves relative screenshots and keeps one entry for each ID: the newest
+    /// version a StableBar of `appVersion` can run, or the newest when it can run none.
+    static func load(from source: PackageSource, token: String?, session: URLSession, appVersion: String?) async throws -> PackageIndex {
         let data = try await fetch(sourceRequest(for: source.url, source: source, token: token), session: session)
-        var seen: Set<String> = []
+        var positions: [String: Int] = [:]
         var packages: [Entry] = []
         let index = try JSONDecoder().decode(PackageIndex.self, from: data)
-        for var entry in index.packages where seen.insert(entry.id).inserted {
+        for var entry in index.packages {
             entry.sourceID = source.id
             if let screenshot = entry.screenshot, screenshot.scheme == nil {
                 entry.screenshot = URL(string: screenshot.relativeString, relativeTo: source.url)?.absoluteURL
             }
-            packages.append(entry)
+            if let position = positions[entry.id] {
+                if entry.isPreferred(over: packages[position], appVersion: appVersion) { packages[position] = entry }
+            } else {
+                positions[entry.id] = packages.count
+                packages.append(entry)
+            }
         }
         return PackageIndex(packages: packages, suggestions: index.suggestions)
     }
 
-    static func load(from url: URL) async throws -> PackageIndex {
+    static func load(from url: URL, appVersion: String? = nil) async throws -> PackageIndex {
         try await load(from: PackageSource(id: PackageSource.storeID, name: PackageSource.store.name, url: url), token: nil,
-                       session: .packageSources)
+                       session: .packageSources, appVersion: appVersion)
     }
 }
 

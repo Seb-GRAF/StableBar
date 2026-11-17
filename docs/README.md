@@ -5,6 +5,7 @@ StableBar reads one JSON configuration, by default `~/.config/stablebar/config.j
 | Page | What it covers |
 | --- | --- |
 | [Getting started](getting-started.md) | Installing, setup, the first launch, updates, keeping windows clear of the bar and uninstalling |
+| [Coming from SketchyBar](coming-from-sketchybar.md) | How SketchyBar items, plugins, events and commands map to StableBar, with a plugin ported |
 | [Questions](questions.md) | Short answers to common questions, also shown in Settings → Help |
 | [Configuration](configuration.md) | The configuration file, includes, templates, overrides, tokens and profiles |
 | [Styles and states](styling.md) | Widget styles, hover and open states, presentation roles and data states |

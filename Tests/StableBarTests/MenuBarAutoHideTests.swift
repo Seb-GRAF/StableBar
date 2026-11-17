@@ -174,7 +174,7 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     #expect(session.missingPermissions == [.accessibility])
     session.finish()
     #expect(!session.finished)
-    #expect(session.error?.contains("Accessibility") == true)
+    #expect(session.error?.contains(session.system.macOSVersion.accessibilityName) == true)
     #expect(try Data(contentsOf: fixture.url) == saved)
 }
 

@@ -11,6 +11,9 @@ const filled = ["## Problem", "The clock disappears on a notched display.", "",
   "## Merging", "Rebase merge.", "", attribution].join("\n");
 const summary = "\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n" +
   "## Summary by CodeRabbit\n* New stuff\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->";
+const cubicButtons = "\n\n<!-- This is an auto-generated description by cubic. -->\n" +
+  '<a href="https://cubic.dev/pr/Seb-GRAF/StableBar/pull/1"><img alt="View guided diff" src="review.svg"></a>\n' +
+  "<!-- End of auto-generated description by cubic. -->\n";
 const everything = ["Problem", "Changes", "Testing", "attribution line"];
 
 test("visibleText drops comments, auto-generated blocks and carriage returns", () => {
@@ -18,6 +21,7 @@ test("visibleText drops comments, auto-generated blocks and carriage returns", (
   assert.equal(visibleText("a\n<!-- never closed\nb"), "a\n");
   assert.equal(visibleText("a\r\nb"), "a\nb");
   assert.equal(visibleText("text\n" + summary.trimStart()), "text\n");
+  assert.equal(visibleText("text" + cubicButtons), "text\n\n\n");
   assert.equal(visibleText(null), "");
 });
 
@@ -68,6 +72,7 @@ test("checkDescription wants Problem, Changes, Testing and a last attribution li
   assert.deepEqual(checkDescription(filled.replace("swift test --filter Clock passes.", "<!-- later -->")).missing, ["Testing"]);
   assert.deepEqual(checkDescription(filled.replace("## Testing", "## testing")).missing, []);
   assert.deepEqual(checkDescription(filled + summary).missing, []);
+  assert.deepEqual(checkDescription(filled + cubicButtons).missing, []);
   assert.deepEqual(checkDescription(filled.replace("Keep it left of the notch.", "Handle the literal `<!--` token.")).missing, []);
   assert.deepEqual(checkDescription(filled.replace("swift test --filter Clock passes.", "```html\n<!-- example\n```")).missing, []);
   assert.deepEqual(checkDescription(filled.replace("Keep it left of the notch.", "<!-- unterminated")).missing,

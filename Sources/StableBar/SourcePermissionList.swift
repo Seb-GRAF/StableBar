@@ -13,12 +13,13 @@ struct SourcePermissionList: View {
     @State private var locationAccess = CLAuthorizationStatus.notDetermined
     @State private var requestingCalendar = false
     @State private var error: String?
+    @Environment(\.macOSVersion) private var macOSVersion
 
     var body: some View {
         ForEach(permissions, id: \.self) { permission in
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(permission.title)
+                    Text(permission.privacyPane == "Privacy_Accessibility" ? macOSVersion.accessibilityName : permission.title)
                     Text(permission.detail).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 12)

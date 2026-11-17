@@ -143,7 +143,7 @@ struct FilledSlider: View {
         .frame(idealWidth: FilledSliderTrack.minimumWidth(height: height, endStop: endStop != nil), maxWidth: .infinity)
         .frame(height: height)
         .focusable(interactions: .activate)
-        .modifier(FocusHighlight(appearance: appearance))
+        .modifier(FocusRing { FocusRingShape(shape: RoundedRectangle(cornerRadius: radius + 4)) })
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             commit(steps.stop(after: shown, forward: press.key == .rightArrow || press.key == .upArrow))
             return .handled

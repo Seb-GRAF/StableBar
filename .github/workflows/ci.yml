@@ -80,6 +80,39 @@ jobs:
             echo "site=true" >> "$GITHUB_OUTPUT"
           fi
 
+  # GitHub runs only a few macOS jobs at once for the whole account, and pull requests can hold them
+  # all for an hour. A run on main cancels the pull request runs it finds waiting or running, and
+  # Resume pull requests restarts their cancelled jobs once main's macOS jobs are done.
+  pause-pull-requests:
+    name: Pause pull requests
+    needs: current
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.current.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    outputs:
+      runs: ${{ steps.pause.outputs.runs }}
+    steps:
+      - name: Cancel pull request runs
+        id: pause
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          paused=()
+          for status in requested pending queued in_progress; do
+            for run in $(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=$status&per_page=100" \
+                --jq '.workflow_runs[].id'); do
+              if gh run cancel "$run"; then
+                paused+=("$run")
+              else
+                echo "::warning::Couldn't cancel run $run."
+              fi
+            done
+          done
+          echo "runs=${paused[*]}" >> "$GITHUB_OUTPUT"
+
   test:
     name: Test
     needs: current
@@ -213,6 +246,39 @@ jobs:
           path: docs/images/*.webp
           retention-days: 1
 
+  # Draws main's docs images and scenes, for the pull requests based on this commit: their Draw
+  # screens job compares with these instead of drawing the base again. Resume pull requests doesn't
+  # wait for it, as the runs it restarts are based on older commits.
+  main-screens:
+    name: Draw main's screens
+    env:
+      STABLEBAR_PREBUILT_DIR: release-build
+    needs: [current, build]
+    if: github.event_name == 'push' && needs.current.outputs.build == 'true'
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-build
+      - name: Draw
+        run: |
+          mkdir release-build
+          tar -xf release-build.tar -C release-build
+          ./scripts/build.sh "$RUNNER_TEMP/StableBar.app"
+          app="$RUNNER_TEMP/StableBar.app/Contents/MacOS/StableBar"
+          "$app" --render-docs-images "$RUNNER_TEMP/screens/docs"
+          "$app" --render-scenes "$RUNNER_TEMP/screens/scenes" scenes || [[ -f "$RUNNER_TEMP/screens/scenes/scenes.json" ]]
+      - uses: actions/upload-artifact@v7
+        with:
+          name: screens-main-${{ github.sha }}
+          path: ${{ runner.temp }}/screens/
+          retention-days: 7
+          if-no-files-found: error
+
   # Builds the DMG as the beta does, for pull requests that change the scripts, resources or this
   # workflow. Pull requests get no Developer ID, so the app is ad-hoc signed; only the beta and
   # release jobs sign and notarize.
@@ -299,9 +365,10 @@ jobs:
 
   # Draws the docs images and the scenes with the pull request's app and with its base's, and
   # compares them into the screens-app artifact. Both draw the pull request's scenes, each beside
-  # its own resources and examples. This job runs the pull request's code with a read-only token:
-  # screens.yml, which runs from the default branch, posts the comparison and the Visual review
-  # status.
+  # its own resources and examples. The base's screens come from Draw main's screens when it drew
+  # the base, and only the scenes the pull request adds or edits are drawn from the base. This job
+  # runs the pull request's code with a read-only token: screens.yml, which runs from the default
+  # branch, posts the comparison and the Visual review status.
   screens:
     name: Draw screens
     env:
@@ -309,7 +376,10 @@ jobs:
     needs: [current, build]
     if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -324,7 +394,7 @@ jobs:
       # The scenes and the comparison scripts are kept aside before the checkout moves to the base.
       # A scene that fails to draw is reported in scenes.json, and later in the comparison.
       - name: Draw the pull request's screens
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           mkdir release-build
           tar -xf release-build.tar -C release-build
@@ -339,12 +409,36 @@ jobs:
           git checkout --quiet --detach HEAD^
           rm -rf scenes
           cp -R "$RUNNER_TEMP/scenes" scenes
+      # main's images of the scene files the pull request changes go, and the base draws those it
+      # adds or edits. Without main's screens of the base, the base draws everything. The screens
+      # come only from CI's run of the push to main: a pull request's run can upload an artifact of
+      # the same name.
+      - name: Download main's screens of the base
+        id: main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=$(git rev-parse HEAD)
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
+            --jq '.workflow_runs[0].id // empty')
+          if [[ -n "$run" ]] && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "screens-main-$base" --dir "$RUNNER_TEMP/before"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            while IFS= read -r -d '' scene; do
+              rm -f "$RUNNER_TEMP/before/scenes/$(basename "$scene" .json)"-{dark,light}.png
+            done < <(git diff -z --name-only --no-renames HEAD "$GITHUB_SHA" -- 'scenes/*.json')
+            git diff -z --name-only --no-renames --diff-filter=AM HEAD "$GITHUB_SHA" -- 'scenes/*.json' > "$RUNNER_TEMP/redrawn-scenes"
+            if [[ -s "$RUNNER_TEMP/redrawn-scenes" ]]; then
+              echo "draw=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "draw=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Identify Swift toolchain
-        if: needs.current.outputs.app == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
         id: swift
         run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
-        if: needs.current.outputs.app == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
         with:
           path: .build
           key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
@@ -352,21 +446,37 @@ jobs:
             ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-
       # When the app didn't change, the pull request's app draws the base too, and the docs images
       # are the same. A base that can't draw scenes leaves no scenes.json; the comparison says so.
+      # --render-scenes rewrites scenes.json with only the scenes it draws, so the scenes drawn over
+      # main's go to a folder of their own, and their entries replace main's.
       - name: Draw the base's screens
-        timeout-minutes: 15
+        if: steps.main.outputs.draw == 'true'
+        timeout-minutes: 20
         env:
           APP: ${{ needs.current.outputs.app }}
+          MAIN: ${{ steps.main.outputs.found }}
         run: |
           mkdir -p "$RUNNER_TEMP/before"
           if [[ "$APP" == true ]]; then
             STABLEBAR_PREBUILT_DIR= ./scripts/build.sh "$RUNNER_TEMP/base.app"
             app="$RUNNER_TEMP/base.app/Contents/MacOS/StableBar"
-            "$app" --render-docs-images "$RUNNER_TEMP/before/docs"
+            [[ "$MAIN" == true ]] || "$app" --render-docs-images "$RUNNER_TEMP/before/docs"
           else
             app="$RUNNER_TEMP/head.app/Contents/MacOS/StableBar"
-            cp -R "$RUNNER_TEMP/after/docs" "$RUNNER_TEMP/before/docs"
+            [[ "$MAIN" == true ]] || cp -R "$RUNNER_TEMP/after/docs" "$RUNNER_TEMP/before/docs"
           fi
-          "$app" --render-scenes "$RUNNER_TEMP/before/scenes" scenes || true
+          if [[ "$MAIN" == true ]]; then
+            scenes=()
+            while IFS= read -r -d '' scene; do
+              scenes+=("$scene")
+            done < "$RUNNER_TEMP/redrawn-scenes"
+            "$app" --render-scenes "$RUNNER_TEMP/redrawn" "${scenes[@]}" || true
+            jq -s '{scenes: (.[0].scenes + .[1].scenes)}' "$RUNNER_TEMP/before/scenes/scenes.json" "$RUNNER_TEMP/redrawn/scenes.json" \
+              > "$RUNNER_TEMP/scenes.json"
+            cp -R "$RUNNER_TEMP/redrawn/." "$RUNNER_TEMP/before/scenes/"
+            mv "$RUNNER_TEMP/scenes.json" "$RUNNER_TEMP/before/scenes/scenes.json"
+          else
+            "$app" --render-scenes "$RUNNER_TEMP/before/scenes" scenes || true
+          fi
       - name: Compare
         run: |
           compare="$RUNNER_TEMP/scripts/compare-screens.mjs"
@@ -659,3 +769,36 @@ jobs:
           git -C tap -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -am "stablebar $version"
           git -C tap push
+
+  # Runs after every macOS job of main's run, whether it passed, failed or was cancelled. A paused run
+  # is left alone once its pull request is closed, has a newer commit or a newer run, or someone
+  # already restarted it.
+  resume-pull-requests:
+    name: Resume pull requests
+    needs: [pause-pull-requests, test, build, docs-images, beta, release]
+    if: always() && needs.pause-pull-requests.outputs.runs != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      pull-requests: read
+    steps:
+      - name: Restart cancelled jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUNS: ${{ needs.pause-pull-requests.outputs.runs }}
+        run: |
+          heads=$(gh api --paginate "repos/$GH_REPO/pulls?state=open&per_page=100" --jq '.[].head.sha')
+          for run in $RUNS; do
+            read -r sha state <<< "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq '"\(.head_sha) \(.status)/\(.conclusion)"')"
+            newest=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
+              --jq '.workflow_runs[0].id') || true
+            if [[ "$state" != completed/cancelled ]]; then
+              echo "Run $run is $state; leaving it."
+            elif ! grep -qx "$sha" <<< "$heads" || [[ "$newest" != "$run" ]]; then
+              echo "Run $run is no longer its pull request's newest; leaving it."
+            elif ! gh run rerun "$run" --failed; then
+              echo "::warning::Couldn't restart run $run."
+            fi
+          done

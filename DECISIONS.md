@@ -13,9 +13,11 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Reviews and checks
 
-- **CodeRabbit reviews every pull request** (2026-10-31, [#391]). It's free for open source, its quiet profile posts only what matters, and it reviews every push. No paid review tools or API keys.
+- **cubic reviews every pull request, CodeRabbit the risky ones** (2026-11-17, [#772], [#773]). CodeRabbit's free plan allows each author two reviews an hour, so pull requests opened together went unreviewed. cubic is free for public repositories and resolves its own threads. CodeRabbit, which had reviewed every pull request since 2026-10-31 ([#391]), now reviews those labeled `deep-review`: more than 400 changed lines, a file in `.github/deep-review-paths`, or added by hand. A workflow asks it again every hour when its limit held a review back. No paid review tools or API keys.
 - **No auto-merge** (2026-10-31). The rules need no approval, but a maintainer merges; nothing merges itself.
 - **A person approves changed screens** (2026-10-31, [#395], [#397]). CI draws before/after screens, and any maintainer, the author too, adds `visual-ok` after looking. A visible change also shows screenshots in its pull request description (2026-11-08, [#484]).
+- **Pull requests compare with `main`'s own screens** (2026-11-17). Each push to `main` draws its screens once, and a pull request uses those of its base, drawing from the base only the scenes it adds or edits, instead of drawing the whole base again in every run. Docs images drawn from one commit on different CI Macs, and on two runner images, matched byte for byte. A cancelled draw leaves Visual review pending, not failed.
+- **`main`'s CI goes first** (2026-11-16). GitHub runs a few macOS jobs at once and has no priorities, so a run on `main` cancels the pull request runs it finds and restarts their cancelled jobs when its own are done. Pull requests lose the work that was cut off; betas and releases don't wait behind them.
 - **CI builds with one pinned Xcode** (2026-11-08, [#479]). A runner image update can't change the toolchain under a pull request; moving to a newer Xcode is a pull request of its own.
 - **Commit messages are checked before they leave the Mac** (2026-11-08, [#485]). Git hooks check them in every tool, and Claude Code also builds when an agent stops. `STABLEBAR_SKIP_HOOKS=1` turns the hooks off for one person.
 
@@ -83,3 +85,5 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#664]: https://github.com/Seb-GRAF/StableBar/issues/664
 [#676]: https://github.com/Seb-GRAF/StableBar/issues/676
 [#744]: https://github.com/Seb-GRAF/StableBar/pull/744
+[#772]: https://github.com/Seb-GRAF/StableBar/issues/772
+[#773]: https://github.com/Seb-GRAF/StableBar/pull/773

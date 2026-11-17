@@ -1692,6 +1692,49 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     _ = try store.install(source)
 }
 
+@Test(arguments: [("0.17.0", false), ("0.17.1", false), ("0.17.0-beta.20261116163147.1186", false),
+                  ("0.17.0-beta.20261116153113.1185", false), ("0.17.0-beta.20261116131343.1164", true), ("0.16.0", true)])
+func aPackageNeedingABetaAcceptsThatBetasRelease(appVersion: String, refused: Bool) {
+    let store = WidgetPackageStore(directory: FileManager.default.temporaryDirectory, appVersion: appVersion)
+    #expect(store.requiresNewerApp("0.17.0-beta.20261116153113.1185") == refused)
+}
+
+/// Writes a store index whose entries are (id, version, minimumVersion), and a client that reads it as `appVersion`.
+private func storeClient(listing entries: [(String, String, String?)], appVersion: String?) throws -> (PackageStoreClient, URL) {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let packages = entries.map { id, version, minimum in
+        let requirement = minimum.map { #","minimumVersion":"\#($0)""# } ?? ""
+        return #"{"id":"\#(id)","name":"\#(id)","version":"\#(version)","archive":"\#(id)-\#(version).tar.gz","sha256":"0"\#(requirement)}"#
+    }
+    try writePackageFile(#"{"packages":[\#(packages.joined(separator: ","))]}"#, to: directory.appending(path: "index.json"))
+    let store = WidgetPackageStore(directory: directory.appending(path: "packages"), appVersion: appVersion)
+    return (PackageStoreClient(packages: store, indexURL: directory.appending(path: "index.json")), directory)
+}
+
+@Test(arguments: [("0.17.0", "1.2.1"), ("0.18.0-beta.20261116211548.1210", "1.3.0"), ("0.18.0-beta.20261117073519.1244", "1.3.0"),
+                  ("0.18.0", "1.3.0"), ("0.20.0-beta.1", "1.10.0"), (nil, "1.10.0")])
+func theStoreOffersTheNewestVersionThisStableBarCanRun(appVersion: String?, offered: String) async throws {
+    let (client, directory) = try storeClient(listing: [("clock", "1", nil), ("fern", "1.2.1", nil),
+                                                        ("fern", "1.3.0", "0.18.0-beta.20261116211548.1210"),
+                                                        ("fern", "1.10.0", "0.20.0-beta.1")], appVersion: appVersion)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let packages = try await client.index().packages
+    #expect(packages.map(\.id) == ["clock", "fern"])
+    #expect(packages.last?.version == offered)
+}
+
+@Test func theStoreOrdersLetteredPrereleasesAsText() async throws {
+    let (client, directory) = try storeClient(listing: [("fern", "1.0.0-rc10", nil), ("fern", "1.0.0-rc2", nil)], appVersion: "0.17.0")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    #expect(try await client.index().packages.map(\.version) == ["1.0.0-rc2"])
+}
+
+@Test func theStoreOffersTheNewestVersionWhenThisStableBarCanRunNone() async throws {
+    let (client, directory) = try storeClient(listing: [("fern", "1.3.0", "0.18.0"), ("fern", "1.10.0", "0.20.0")], appVersion: "0.17.0")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    #expect(try await client.index().packages.map(\.version) == ["1.10.0"])
+}
+
 @Test func storePackagesInstallFromTheIndexOnlyWhenTheirArchiveMatches() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
