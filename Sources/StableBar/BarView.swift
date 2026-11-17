@@ -1252,7 +1252,7 @@ private struct MenuBarItemsView: View {
 
     private func itemCell(_ item: MenuBarItem, icon: String?, live: MenuBarItemImage?, openAnchor: ObjectIdentifier?) -> some View {
         MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu,
-                        clicksOnRightClick: true) { anchor in
+                        rightClick: { anchor in rightClick(item, anchor: anchor) }) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
             if inside, switches(to: anchor) {
@@ -1296,6 +1296,17 @@ private struct MenuBarItemsView: View {
             store.appMenu.pressUnlessOpen(item.entry)
         }
     }
+
+    /// An item whose menu the bar draws opens it, as on a click; any other item gets the right-click itself, which some
+    /// apps, such as MeetingBar, give an action of its own.
+    private func rightClick(_ item: MenuBarItem, anchor: NSView) {
+        if item.entry.hasSubmenu {
+            open(item, anchor: anchor)
+        } else if store.barEditing.allowsWidgetActions {
+            store.popup.close()
+            store.appMenu.rightClick(item.entry)
+        }
+    }
 }
 
 struct MenuBarItemCommands: View {
@@ -1321,8 +1332,8 @@ private struct MenuBarItemCell<Label: View>: View {
     let padding: EdgeInsets
     let openAnchor: ObjectIdentifier?
     var actsOnMouseDown = false
-    /// A right-click does what a click does, as on an app's item in the macOS menu bar, instead of opening a menu.
-    var clicksOnRightClick = false
+    /// Runs on a right-click instead of opening the menu around the cell.
+    var rightClick: ((NSView) -> Void)?
     let click: (NSView) -> Void
     let hover: (NSView, Bool) -> Void
     @ViewBuilder let label: () -> Label
@@ -1348,7 +1359,7 @@ private struct MenuBarItemCell<Label: View>: View {
         Group {
             if actsOnMouseDown { button.buttonStyle(MouseDownButtonStyle()) } else { button.buttonStyle(.plain) }
         }
-        .overlay { if clicksOnRightClick { RightClickCapture { click(anchor) } } }
+        .overlay { if let rightClick { RightClickCapture { rightClick(anchor) } } }
         .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onHover { inside in
             hovered = inside

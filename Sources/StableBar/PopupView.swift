@@ -34,10 +34,11 @@ struct PopupView: View {
                 // coming back both read right, whatever each was last drawn with.
                 ZStack(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: appearance.spacing) {
-                        if navigation.view != nil {
+                        let view = navigation.view.map { popup.views[$0]! }
+                        if let view, !view.startsWithTitle(fields: fields) {
                             CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground) { navigation.view = nil }
                         }
-                        PopupBlockView(block: navigation.view.map { popup.views[$0]! } ?? popup.layout, inheritedStyle: style, fields: fields,
+                        PopupBlockView(block: view ?? popup.layout, inheritedStyle: style, fields: fields,
                                        context: BlockContext(lists: lists, samples: samples, menu: menu,
                                                              values: script?.output.values ?? [:], targets: script?.output.targets ?? [:],
                                                              styles: script?.output.styles ?? [:], series: script?.output.series ?? [:],
@@ -90,7 +91,7 @@ struct PopupView: View {
                             if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                             store.runAction(action, widget: widget,
                                             event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
-                        }, topLevel: true)
+                        }, topLevel: true, back: view == nil ? nil : { navigation.view = nil })
                     }
                     .id(navigation.view)
                     .transition(reduceMotion ? .opacity : .move(edge: navigation.view == nil ? .leading : .trailing).combined(with: .opacity))
@@ -288,6 +289,8 @@ struct PopupBlockView: View {
     /// The popup's layout itself. As a column, it spaces its blocks `PopupConfiguration.blockSpacing` apart when nothing
     /// sets `spacing`; rows and lists keep 6 at every level.
     var topLevel = false
+    /// Returns from a view whose title this block starts with, from a back arrow beside that title.
+    var back: (() -> Void)?
     @State private var pointerInside: Bool
     @State private var query = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -295,11 +298,12 @@ struct PopupBlockView: View {
 
     /// `pointerInside` starts the block with the pointer over it; tests use it, as drawing has no pointer.
     init(block: PopupBlock, inheritedStyle: WidgetStyle, fields: [String: String], context: BlockContext, pointerInside: Bool = false,
-         topLevel: Bool = false) {
+         topLevel: Bool = false, back: (() -> Void)? = nil) {
         self.block = block
         self.inheritedStyle = inheritedStyle
         self.fields = fields
         self.topLevel = topLevel
+        self.back = back
         var context = context
         context.states = context.states.scoped(to: block)
         self.context = context
@@ -311,7 +315,7 @@ struct PopupBlockView: View {
 
     @ViewBuilder
     var body: some View {
-        if let field = block.hideWhenEmpty, fields[field, default: ""].isEmpty {
+        if block.isHidden(fields: fields) {
             EmptyView()
         } else {
             styledContent
@@ -466,7 +470,16 @@ struct PopupBlockView: View {
             }
         case let .column(children):
             VStack(alignment: .leading, spacing: appearance.spacing) {
-                ForEach(Array(children.enumerated()), id: \.offset) { _, item in child(item, of: style, fields: fields) }
+                ForEach(Array(children.enumerated()), id: \.offset) { index, item in
+                    if index == 0, let back, block.startsWithTitle(fields: fields) {
+                        HStack(spacing: 4) {
+                            CornerButton(symbol: "chevron.left", label: "Back", foreground: appearance.foreground, action: back)
+                            child(item, of: style, fields: fields)
+                        }
+                    } else {
+                        child(item, of: style, fields: fields)
+                    }
+                }
             }
         case let .text(text):
             ResolvedBlockMotion(motion: context.motion, block: block) { transition, animation in
