@@ -372,3 +372,14 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
     }
     #expect(script.output.text == "frontApp:Safari")
 }
+
+@Test func notificationInfoKeepsDatesAndLeavesOutData() {
+    let payload: [String: Any] = [
+        "Name": "Song", "Play Date": Date(timeIntervalSince1970: 0), "Artwork": Data([1, 2, 3]),
+        "Album": ["Year": 1999, "Added": Date(timeIntervalSince1970: 60), "Tracks": [1, Data(), Date(timeIntervalSince1970: 120)]]
+    ]
+    #expect(notificationInfo(payload) == """
+        {"Album":{"Added":"1970-01-01T00:01:00Z","Tracks":[1,"1970-01-01T00:02:00Z"],"Year":1999},\
+        "Name":"Song","Play Date":"1970-01-01T00:00:00Z"}
+        """)
+}

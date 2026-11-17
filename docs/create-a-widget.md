@@ -65,7 +65,18 @@ Add `events` to a script widget to refresh it on named events, alongside its int
 | `privacyChange` | An app starts or stops using the microphone or a camera, or the microphone's mute state changes | `true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false` |
 | `wifiChange` | Wi-Fi turns on or off, or joins or leaves a network | The network's name, empty without a network or Location access; `POWER` is `on` or `off` |
 
-`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
+`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting.
+
+Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`. These work on current macOS:
+
+| Notification | Sent when | `INFO` |
+| --- | --- | --- |
+| `com.apple.screenIsLocked` | The screen locks | Not set |
+| `com.apple.screenIsUnlocked` | The screen unlocks | Not set |
+| `AppleInterfaceThemeChangedNotification` | The appearance switches between light and dark | Not set |
+| `com.apple.Music.playerInfo` | Music starts, pauses or stops playing, or changes track while playing | The track and its `Player State`, such as `Playing`, as JSON |
+
+These names belong to macOS and the apps that send them, which can change them in an update.
 
 External hooks can trigger an event without launching another bar:
 
@@ -74,7 +85,7 @@ External hooks can trigger an event without launching another bar:
 /path/to/StableBar.app/Contents/MacOS/StableBar --trigger build_finished 'INFO=Build passed' STATUS=success
 ```
 
-Use that event name in the widget's `events`. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
+Use that event name in the widget's `events`. A trigger posts a distributed notification with that name, so trigger names share one space with the names macOS and your apps send. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
 
 A widget's own commands can run the StableBar that started them as `"$STABLEBAR"`. Its live commands, such as `--refresh` and `--popup`, then address that bar instead of the default configuration:
 
@@ -91,7 +102,7 @@ Commands inherit your login shell's environment, then top-level `environment`, t
 | `STABLEBAR` | Path of the running StableBar executable; event data cannot replace it |
 | `STABLEBAR_CONFIG` | Path of the configuration file the bar was started with, which the [command line](command-line.md) uses when `--config` isn't given; event data cannot replace it |
 | `SENDER` | `startup`, `routine`, the subscribed event name, `action` after an action completes, or a mouse event below |
-| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available |
+| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available, with dates as ISO 8601 strings and without values JSON can't hold, such as data |
 | `SID` | Display number for pointer actions and workspace events |
 | `BUTTON` | `left`, `right` or `middle` for widget mouse clicks |
 | `MODIFIER` | Space-separated `shift`, `ctrl`, `alt`, `cmd`, `fn` for pointer actions |
@@ -101,7 +112,7 @@ Script output can also set `onClick` for a state-dependent click action; popups 
 
 ## Composing widgets
 
-A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
+A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty`, `showWhen` or `hideWhen` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
 
 A `list` with `"orientation": "horizontal"` repeats its `row` block side by side for each entry from the script. This works in bar layouts and popups. The [Dock badges example](../examples/dock-badges/config.json) shows each running app's icon and badge on the bar; clicking an entry opens that app. It needs `jq`. Set `APPS` in the example's `environment` to the app names to watch, separated by commas. Apps without badges show `0`, and apps that are not running are omitted. Counts follow each app's Dock badge settings and refresh every ten seconds.
 

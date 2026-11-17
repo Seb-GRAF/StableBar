@@ -205,17 +205,17 @@ enum SetupPermission: CaseIterable, Hashable {
             }
         }
 
-        func accessibilityLabel(for permission: SetupPermission) -> String {
+        func accessibilityLabel(for permission: SetupPermission, on macOSVersion: MacOSVersion) -> String {
             switch self {
-            case .allow: "Allow \(permission.title)"
-            case .openSettings: "Open \(permission.title) Settings"
+            case .allow: "Allow \(permission.title(on: macOSVersion))"
+            case .openSettings: "Open \(permission.title(on: macOSVersion)) Settings"
             }
         }
     }
 
-    var title: String {
+    func title(on macOSVersion: MacOSVersion) -> String {
         switch self {
-        case .accessibility: "Accessibility"
+        case .accessibility: macOSVersion.accessibilityName
         case .automation: "Automation"
         case .calendars: "Calendars"
         }
@@ -676,7 +676,7 @@ final class SetupSession {
         calendarAccess = system.calendarAccess()
         accessibilityAccess = system.isTrusted()
         guard missingPermissions.isEmpty else {
-            error = "Allow \(missingPermissions.map(\.title).formatted()) before you finish setup."
+            error = "Allow \(missingPermissions.map { $0.title(on: system.macOSVersion) }.formatted()) before you finish setup."
             return
         }
         var saved = false
