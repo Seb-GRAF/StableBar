@@ -344,6 +344,18 @@ test("lookalike comments are ignored", async () => {
   assert.equal(state.statuses.at(-1).state, "failure");
 });
 
+test("a pull request that calls for no screens passes even when a job its screens need failed", async () => {
+  for (const failed of [{ "Test": "failure" }, { "Test": "cancelled" }, { "Check revision": "failure" }]) {
+    const { github, state } = fakeGitHub({ files: ["docs/README.md"] });
+    state.jobs[99] = jobsOf({ "Check revision": "success", "Test": "success", "Build release": "skipped", "Draw screens": "skipped",
+      "Draw website screens": "skipped", ...failed });
+    state.artifacts[99] = [];
+    assert.deepEqual((await reconcile(github, runEvent())).review, { state: "success", description: "No screens to compare.", removeLabel: false },
+      JSON.stringify(failed));
+    assert.equal(state.comments.length, 0);
+  }
+});
+
 test("a run that drew no screens passes without a comment, or rewrites the one an earlier head left", async () => {
   const { github, state, run } = fakeGitHub();
   state.jobs[99] = jobsOf({ "Check revision": "success", "Test": "success", "Build release": "skipped", "Draw screens": "skipped", "Draw website screens": "skipped" });

@@ -260,12 +260,14 @@ function gather(run, folders) {
       continue;
     }
     if (conclusion === "skipped") {
+      // A pull request that calls for none of these screens needs none, whatever else failed.
+      if (!run.expected[kind]) continue;
       const blocker = needs.find((job) => broken.includes(run.jobs[job]));
       if (blocker) {
         ranScreens = true;
         if (run.jobs[blocker] === "cancelled") cancelled = jobNames[blocker];
         else failed.push({ id: kind, error: `${jobNames[blocker]} ${run.jobs[blocker] === "missing" ? "is missing" : `ended with ${run.jobs[blocker]}`}, so ${jobNames[kind]} didn't run.` });
-      } else if (run.expected[kind]) {
+      } else {
         ranScreens = true;
         failed.push({ id: kind, error: `${jobNames[kind]} was skipped, but this pull request changes what it draws.` });
       }
