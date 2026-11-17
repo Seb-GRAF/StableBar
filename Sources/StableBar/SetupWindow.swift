@@ -481,8 +481,8 @@ final class SetupSession {
     /// bar hides or shows to match. It hasn't while macOS asks for Automation access, once it's refused, or while the
     /// menu bar changes.
     var placementTookEffect: Bool {
-        guard let placementChoice, placementAwaitingAccess == nil else { return false }
-        return preferences.placement == placementChoice && menuBarHides == (placementChoice == .top)
+        guard case .placed(let placement) = placing.phase else { return false }
+        return preferences.placement == placement && menuBarHides == (placement == .top)
     }
 
     /// Whether Continue, or Finish setup, waits at `step` for permissions macOS hasn't allowed yet: from the step that
@@ -547,10 +547,18 @@ final class SetupSession {
     }
 
     func place(_ placement: SetupPreferences.Placement) async {
-        await perform(placing.handle(.chose(placement, menuBarHides: menuBarHides)))
+        await send(.chose(placement, menuBarHides: menuBarHides))
     }
 
-    /// Carries out what `placing` decided, and tells it how each step went.
+    private func send(_ event: SetupPlacement.Event) async {
+        var next = placing
+        let effects = next.handle(event)
+        // Every write redraws the views that read `placing`, so a dropped answer writes nothing.
+        if next != placing { placing = next }
+        await perform(effects)
+    }
+
+    /// Carries out what `placing` decided, and sends it how each step went.
     private func perform(_ effects: [SetupPlacement.Effect]) async {
         for effect in effects {
             switch effect {
@@ -560,7 +568,7 @@ final class SetupSession {
                 error = message
             case .checkAccess(let request):
                 let access = await menuBarAccess()
-                await perform(placing.handle(.accessChecked(access, request: request)))
+                await send(.accessChecked(access, request: request))
             case .changeMenuBar(let hidden, let provesAccess, let request):
                 var failure: String?
                 do {
@@ -569,7 +577,7 @@ final class SetupSession {
                 } catch {
                     failure = errorMessage(error)
                 }
-                await perform(placing.handle(.menuBarChanged(failure: failure, request: request)))
+                await send(.menuBarChanged(failure: failure, request: request))
             }
         }
     }
@@ -638,7 +646,7 @@ final class SetupSession {
             let access = await system.automationAccess(false)
             automationAccess = access
             guard access == .allowed else { return }
-            await perform(placing.handle(.accessAllowed(menuBarHides: menuBarHides)))
+            await send(.accessAllowed(menuBarHides: menuBarHides))
         }
     }
 

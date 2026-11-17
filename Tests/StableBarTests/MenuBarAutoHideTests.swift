@@ -623,3 +623,17 @@ private struct TimedOut: Error {}
     await replace.value
     #expect(session.error == nil)
 }
+
+/// Continue waits on the first step while setup shows the menu bar change failing, even when the change took effect.
+@MainActor
+@Test func aFailedMenuBarChangeKeepsTheFirstStepWaiting() async throws {
+    var hides = true
+    let (session, fixture, store) = try setupSession(changing: { hidden in
+        hides = hidden
+        throw TimedOut()
+    }, hides: { hides })
+    defer { store.stop(); fixture.close() }
+    await session.place(.belowMenuBar)
+    #expect(session.error != nil)
+    #expect(session.blocksContinue(at: .placement))
+}

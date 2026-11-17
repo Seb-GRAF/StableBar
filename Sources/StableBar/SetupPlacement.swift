@@ -1,7 +1,7 @@
 /// Where setup puts the bar, chosen on its first step, and the change to the macOS menu bar that choice needs: the top
 /// edge hides the menu bar and the other places show it, which takes Automation access to System Events first. The
-/// latest choice wins: an answer or a change that arrives for an earlier choice, or after Skip setup, is dropped.
-struct SetupPlacement: StateMachine {
+/// latest choice wins: an answer or a change that arrives for an earlier choice is dropped.
+struct SetupPlacement: StateMachine, Equatable {
     typealias Placement = SetupPreferences.Placement
 
     enum Phase: Equatable {
@@ -26,6 +26,8 @@ struct SetupPlacement: StateMachine {
         case skipped
     }
 
+    /// `checkAccess` and `changeMenuBar` come last in what `handle` returns: their answer is the next event, and the
+    /// owner handles it before any effect after them.
     enum Effect: Equatable {
         /// Moves the bar in setup's preview.
         case move(Placement)
@@ -39,11 +41,9 @@ struct SetupPlacement: StateMachine {
     /// Counts choices, so an answer can tell whether it is for the latest one.
     private var request = 0
 
-    init() {}
-
-    /// A choice restored after StableBar moved itself counts as placed unless it was waiting for access; nothing it
-    /// started is still running.
-    init(choice: Placement?, awaitingAccess: Placement?) {
+    /// A choice restored after StableBar moved itself counts as placed unless it was waiting for access: nothing it
+    /// started is still running, and setup still checks the bar and the menu bar before it counts as taking effect.
+    init(choice: Placement? = nil, awaitingAccess: Placement? = nil) {
         phase = awaitingAccess.map(Phase.awaitingAccess) ?? choice.map(Phase.placed) ?? .unchosen
     }
 
