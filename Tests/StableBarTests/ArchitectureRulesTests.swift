@@ -60,9 +60,53 @@ private let stateMachineReaches: [(pattern: String, name: String)] = [
     (#"\b(FileManager|UserDefaults|NotificationCenter|Process|NSWorkspace|URLSession)\b"#, "the system"),
 ]
 
-/// `text` without its comments and string literals, which name things without reaching them.
+/// `text` without its comments and the literal parts of its strings, which name things without reaching them. What a
+/// string interpolates runs, so it stays.
 private func code(_ text: String) -> String {
-    text.replacing(#/"""[\s\S]*?"""|#*"(?:[^"\\\n]|\\.)*"#*|/\*[\s\S]*?\*/|//[^\n]*/#, with: "")
+    let characters = Array(text)
+    var code = ""
+    var index = 0
+    // The strings open around `index`, innermost last, with how deep in parentheses its interpolation is; 0 in its text.
+    var strings: [(quotes: Int, depth: Int)] = []
+    while index < characters.count {
+        let rest = characters[index...]
+        if let string = strings.last, string.depth == 0 {
+            if rest.starts(with: "\\(") {
+                strings[strings.count - 1].depth = 1
+                index += 2
+            } else if rest.starts(with: repeatElement("\"", count: string.quotes)) {
+                strings.removeLast()
+                index += string.quotes
+            } else {
+                index += characters[index] == "\\" ? 2 : 1
+            }
+            continue
+        }
+        if rest.starts(with: "//") || rest.starts(with: "/*") {
+            let end = rest.starts(with: "//") ? "\n" : "*/"
+            index += 2
+            while index < characters.count, !characters[index...].starts(with: end) { index += 1 }
+            index += end.count
+            continue
+        }
+        if characters[index] == "\"" {
+            let quotes = rest.starts(with: "\"\"\"") ? 3 : 1
+            strings.append((quotes, 0))
+            index += quotes
+            continue
+        }
+        if !strings.isEmpty, characters[index] == "(" { strings[strings.count - 1].depth += 1 }
+        if !strings.isEmpty, characters[index] == ")" {
+            strings[strings.count - 1].depth -= 1
+            if strings[strings.count - 1].depth == 0 {
+                index += 1
+                continue
+            }
+        }
+        code.append(characters[index])
+        index += 1
+    }
+    return code
 }
 
 /// What `text`, code that's part of a `StateMachine`, reaches that it shouldn't.
@@ -123,5 +167,8 @@ private func holdsStateMachine(_ text: String, named names: Set<String>) throws 
     #expect(try stateMachineViolations("DispatchQueue.main.async {}") == ["work that runs later"])
     #expect(try stateMachineViolations("let now = Date()") == ["the clock"])
     #expect(try stateMachineViolations("let now = Date.now") == ["the clock"])
+    #expect(try stateMachineViolations(#"let message = "failed at \(Date.now), not by a Timer""#) == ["the clock"])
+    #expect(try stateMachineViolations(#"let message = "a \(flag ? "Task" : "Timer") \"Thread\"""#).isEmpty)
+    #expect(try stateMachineViolations("let text = \"\"\"\n    a Task\n    \"\"\" /* a Timer */").isEmpty)
     #expect(try stateMachineViolations("let defaults = UserDefaults.standard") == ["the system"])
 }
