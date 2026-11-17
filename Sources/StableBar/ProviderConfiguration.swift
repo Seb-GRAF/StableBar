@@ -154,7 +154,7 @@ extension ConfigurationValue {
                 guard let member = object[key] else { return nil }
                 value = member
             case let .array(array):
-                guard let index = Int(key), array.indices.contains(index) else { return nil }
+                guard let index = Int(key), String(index) == key, array.indices.contains(index) else { return nil }
                 value = array[index]
             default:
                 return nil

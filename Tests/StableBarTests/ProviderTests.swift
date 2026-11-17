@@ -184,7 +184,8 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     let output = try JSONDecoder().decode(HTTPOutput.self, from: Data(#"""
     {"text":"/current/temperature_2m",
      "fields":{"code":"/current/weather_code","day":"/current/is_day","unit":"/current_units/temperature_2m","escaped":"/a~1b/m~0n",
-               "first":"/items/0/name","missing":"/current/wind","outside":"/items/9/name","object":"/current"},
+               "first":"/items/0/name","missing":"/current/wind","outside":"/items/9/name","object":"/current",
+               "minusZero":"/items/-0/name","leadingZero":"/items/00/name","plus":"/items/+0/name"},
      "values":{"temperature":"/current/temperature_2m","price":"/price","unit":"/current_units/temperature_2m",
                "missingPrice":"/missingPrice","hugePrice":"/hugePrice"},
      "lists":{"repos":"/items","missing":"/repos","object":"/current"}}
