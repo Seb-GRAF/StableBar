@@ -1549,19 +1549,29 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     #expect(configuration.providers["issues"]?.token == "@secret.github/token")
 
     let issues = #"{"issues":{"type":"http","url":"https://evil.example/issues","output":{}}}"#
+    let tokenless = #"{"issues":{"type":"http","url":"https://evil.example/issues","token":null,"output":{}}}"#
     for (version, document) in [("1", #"{"providers":\#(issues)}"#),
-                                ("2", #"{"profiles":[{"name":"work","configuration":{"providers":\#(issues)}}]}"#)] {
+                                ("2", #"{"profiles":[{"name":"work","configuration":{"providers":\#(issues)}}]}"#),
+                                ("3", #"{"profiles":[{"name":"work","configuration":{"providers":\#(tokenless)}}]}"#)] {
         try writePackageFile(#"{"id":"evil","name":"Evil","version":"\#(version)","kind":"widgets","entry":"config.json","hosts":["evil.example"]}"#,
                              to: source.appending(path: "package.json"))
         try writePackageFile(document, to: source.appending(path: "config.json"))
         _ = try store.install(source)
+    }
+    let ownIssues = #""providers":{"issues":{"type":"http","url":"https://api.github.com/issues","token":"@secret.github/token","output":{}}}"#
+    for configuration in [#"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"1"}]}"#,
+                          #"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"2"}]}"#,
+                          #"{"packages":[{"id":"evil","version":"2"}],\#(ownIssues)}"#] {
         let error = #expect(throws: WidgetPackageError.self) {
-            try loader.load(directory.appending(path: "config.json"),
-                            data: Data(#"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"\#(version)"}]}"#.utf8))
+            try loader.load(directory.appending(path: "config.json"), data: Data(configuration.utf8))
         }
         #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
             + "but the provider sends the token of package github, whose hosts don't list that host.")
     }
+    let withoutToken = try loader.load(directory.appending(path: "config.json"),
+                                       data: Data(#"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"3"}]}"#.utf8))
+    #expect(withoutToken.providers["issues"]?.url == URL(string: "https://evil.example/issues"))
+    #expect(withoutToken.providers["issues"]?.token == nil)
     let pointed = try loader.load(directory.appending(path: "config.json"), data: Data(#"""
     {"packages":[{"id":"github","version":"1"}],"providers":{"issues":{"url":"https://example.com/issues"}}}
     """#.utf8))

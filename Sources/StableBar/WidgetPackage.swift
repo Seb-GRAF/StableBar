@@ -771,21 +771,23 @@ func validatePackageHosts(_ document: [String: ConfigurationValue], hosts: [Stri
     }
 }
 
-/// Throws when a provider of the merged package layers, or of one of their profiles, sends a package's secret as its token
-/// to a host that package's `hosts` don't list, such as one another package points it at.
+/// Throws when a package points a provider that sends a package's secret as its token, directly or in a profile,
+/// at a host that the secret's package doesn't list in `hosts`, whoever set the token.
 func validateTokenHosts(_ layer: ConfigurationLayer, hosts: [String: [String]], packageIDs: [String: String]) throws {
     let providers = try layer.values["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
-    var urls = providers.map { name, provider in (name, provider["url"], "providers.\(name).url") }
+    var requests = providers.map { name, provider in (name, provider, "providers.\(name).url") }
     for profile in try layer.values["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
         for (name, provider) in try profile.configuration["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
-            urls.append((name, provider["url"], "profiles.\(profile.name).configuration.providers.\(name).url"))
+            let path = provider["url"] == nil ? "providers.\(name).url" : "profiles.\(profile.name).configuration.providers.\(name).url"
+            requests.append((name, providers[name, default: [:]].merging(provider) { $1 }, path))
         }
     }
-    for case let (name, .string(url)?, path) in urls {
-        guard case let .string(token)? = providers[name]?["token"], token.hasPrefix("@secret.") else { continue }
+    for (name, provider, path) in requests {
+        guard case let .string(url)? = provider["url"], case let .string(token)? = provider["token"], token.hasPrefix("@secret."),
+              let package = packageIDs[layer.origins[path]!.file] else { continue }
         let owner = String(token.dropFirst("@secret.".count).prefix { $0 != "/" })
-        guard let host = URL(string: url)?.host(), hosts[owner]!.contains(host) else {
-            throw WidgetPackageError.undeclaredTokenHost(packageIDs[layer.origins[path]!.file]!, name, url, owner)
+        guard let host = URL(string: url)?.host(), hosts[owner, default: []].contains(host) else {
+            throw WidgetPackageError.undeclaredTokenHost(package, name, url, owner)
         }
     }
 }

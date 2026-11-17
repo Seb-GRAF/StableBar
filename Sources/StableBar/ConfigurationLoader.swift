@@ -533,7 +533,6 @@ struct ConfigurationLoader: Sendable {
         for selection in try base.values["packages"]?.decoded([WidgetPackageSelection].self, at: "packages") ?? [] where selection.enabled {
             try layer.merge(readSelectedPackage(selection, from: packageStore, theme: false))
         }
-        try validateTokenHosts(layer, hosts: packageHosts, packageIDs: packageIDs)
         if themesDirectory != nil {
             try layer.merge(readBundledTheme(WidgetPackageSelection(id: "built-in")))
         }
@@ -547,6 +546,7 @@ struct ConfigurationLoader: Sendable {
             context.theme = theme.id
         }
         try layer.merge(base)
+        try validateTokenHosts(layer, hosts: packageHosts, packageIDs: packageIDs)
         return try finish(layer, context: context)
     }
 
