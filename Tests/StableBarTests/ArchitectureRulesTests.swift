@@ -50,3 +50,78 @@ private func swiftSources() throws -> [(path: String, text: String)] {
                 "\(file.path) calls private macOS API: add it to PrivateAPI.swift, with a maintainer's OK (AGENTS.md)")
     }
 }
+
+/// What a `StateMachine`'s code may not use: a UI framework, work that runs later, or the clock, the disk and the
+/// system, which belong to the owner that performs its effects.
+private let stateMachineReaches: [(pattern: String, name: String)] = [
+    (#"\bimport\s+(AppKit|SwiftUI|Cocoa|Combine)\b"#, "a UI framework"),
+    (#"\b(Task|DispatchQueue|Timer|RunLoop|Thread)\b"#, "work that runs later"),
+    (#"\bDate\s*(\(|\.now\b)|\b(ContinuousClock|SuspendingClock)\b|\.sleep\b"#, "the clock"),
+    (#"\b(FileManager|UserDefaults|NotificationCenter|Process|NSWorkspace|URLSession)\b"#, "the system"),
+]
+
+/// `text` without its comments and string literals, which name things without reaching them.
+private func code(_ text: String) -> String {
+    text.replacing(#/"""[\s\S]*?"""|#*"(?:[^"\\\n]|\\.)*"#*|/\*[\s\S]*?\*/|//[^\n]*/#, with: "")
+}
+
+/// What `text`, code that's part of a `StateMachine`, reaches that it shouldn't.
+private func stateMachineViolations(_ text: String) throws -> [String] {
+    let code = code(text)
+    // Unicode word boundaries make `UserDefaults.standard` one word, which `\b` wouldn't split.
+    return try stateMachineReaches.filter { code.contains(try Regex($0.pattern).wordBoundaryKind(.simple)) }.map(\.name)
+}
+
+/// The types `text` makes conform to `StateMachine`, such as `Hold` for `extension Outer.Hold: StateMachine`.
+private func stateMachineNames(_ text: String) -> [String] {
+    code(text).matches(of: #/\b(?:struct|enum|class|actor|extension)\s+(?:\w+\.)*(\w+)(?:<[^>]*>)?\s*:[^{]*\bStateMachine\b/#)
+        .map { String($0.1) }
+}
+
+/// Whether `text` declares or extends one of `names`, so holds part of a state machine.
+private func holdsStateMachine(_ text: String, named names: Set<String>) throws -> Bool {
+    let code = code(text)
+    return try names.contains { name in
+        code.contains(try Regex(#"\b(struct|enum|class|actor|extension)\s+(\w+\.)*"# + name + #"\b"#))
+    }
+}
+
+/// Decisions about state live in a `StateMachine` whose owner performs its effects, so a unit test covers every
+/// transition without a window, a clock or a script.
+@Test func stateMachinesDecideAndTheirOwnersAct() throws {
+    let files = try swiftSources()
+    #expect(files.count > 100)
+    let names = Set(files.flatMap { stateMachineNames($0.text) })
+    for file in files where try holdsStateMachine(file.text, named: names) {
+        for reach in try stateMachineViolations(file.text) {
+            Issue.record("""
+                \(file.path) holds part of a StateMachine and reaches \(reach): return an effect for its owner to \
+                perform instead (AGENTS.md)
+                """)
+        }
+    }
+}
+
+/// The checks above find what they look for and only that, whichever file holds which part of a state machine.
+@Test func theStateMachineCheckFindsWhatAStateMachineMayNotReach() throws {
+    let pure = """
+        struct Hold: StateMachine {
+            enum Event { case opened }
+            enum Effect { case none }
+            // Its owner starts a Task and reads Date.now.
+            mutating func handle(_ event: Event) -> [Effect] { _ = "a Task, a \\(1) Timer"; return [] }
+        }
+        """
+    #expect(stateMachineNames(pure) == ["Hold"])
+    #expect(try stateMachineViolations(pure).isEmpty)
+    #expect(stateMachineNames("extension Outer.Hold: Equatable, StateMachine {}") == ["Hold"])
+    #expect(stateMachineNames("struct Hold: Equatable {} // : StateMachine").isEmpty)
+    #expect(try holdsStateMachine("extension Hold { func later() {} }", named: ["Hold"]))
+    #expect(try !holdsStateMachine("struct Holder {}", named: ["Hold"]))
+    #expect(try stateMachineViolations("import AppKit\n\(pure)") == ["a UI framework"])
+    #expect(try stateMachineViolations("\(pure)\nfunc later() { Task { } }") == ["work that runs later"])
+    #expect(try stateMachineViolations("DispatchQueue.main.async {}") == ["work that runs later"])
+    #expect(try stateMachineViolations("let now = Date()") == ["the clock"])
+    #expect(try stateMachineViolations("let now = Date.now") == ["the clock"])
+    #expect(try stateMachineViolations("let defaults = UserDefaults.standard") == ["the system"])
+}
