@@ -31,6 +31,9 @@ struct WidgetGrouping {
     /// Every profile, from any file: a new group mustn't take an ID one defines, which would merge with theirs, and a
     /// group one names stays defined.
     var profiles: [ConfigurationProfile] = []
+    /// Groups that a file other than the main one assigns, even where a `null` hides the assignment: removing their
+    /// definition would leave that file naming a missing group.
+    var namedElsewhere: Set<String> = []
     let defaults: WidgetStyle
     let origins: [String: ConfigurationOrigin]
     /// The standardized path of the main configuration file.
@@ -122,7 +125,7 @@ struct WidgetGrouping {
         let own = widgets.filter { $0.ownGroup == group }
         var edits = try own.flatMap { try leaving($0.id) }
         let definition = origins.filter { $0.key == "groups.\(group)" || $0.key.hasPrefix("groups.\(group).") }.values
-        let removable = editingProfile == nil && !definition.isEmpty
+        let removable = editingProfile == nil && !definition.isEmpty && !namedElsewhere.contains(group)
             && definition.allSatisfy { $0.file == mainFile && $0.profile == nil }
             && own.allSatisfy { origins["widgets.\($0.id).group"].map { $0.file == mainFile && $0.profile == nil } == true }
         var document = removable ? try mainDocument() : [:]
@@ -181,6 +184,14 @@ extension WidgetGrouping {
         let configuration = store.configuration
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
                   profiles: store.profiles,
+                  namedElsewhere: Set(store.contributions.flatMap { path, entries -> [String] in
+                      guard path.hasSuffix(".group") else { return [] }
+                      return entries.compactMap { entry in
+                          guard entry.origin.file != store.configurationURL.standardizedFileURL.path,
+                                case let .string(group) = entry.value else { return nil }
+                          return group
+                      }
+                  }),
                   defaults: configuration?.defaults ?? WidgetStyle(), origins: store.origins,
                   mainFile: store.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,

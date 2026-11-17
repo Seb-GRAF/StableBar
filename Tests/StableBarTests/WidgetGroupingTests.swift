@@ -332,3 +332,16 @@ private let row = #"""
     #expect(bar.groups() == ["own": "-"])
     #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
 }
+
+@MainActor @Test func ungroupingKeepsAGroupAnIncludedWidgetNamesUnderANull() throws {
+    let bar = try GroupingFixture(#"""
+    {"includes":["included.json"],"groups":{"status":{}},"widgetOverrides":{"imported":{"group":null}},"widgets":[
+      {"id":"own","type":"text","text":"A","position":"right","group":"status"}
+    ]}
+    """#, includes: #"{"widgets":[{"id":"imported","type":"text","text":"B","position":"right","group":"status"}]}"#)
+    defer { bar.close() }
+    #expect(bar.groups() == ["own": "status", "imported": "-"])
+    try bar.apply(try bar.grouping.dissolving("status"))
+    #expect(bar.groups() == ["own": "-", "imported": "-"])
+    #expect(try bar.fixture.document()["groups"] == .object(["status": .object([:])]))
+}
