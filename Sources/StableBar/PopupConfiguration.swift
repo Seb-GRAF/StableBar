@@ -468,6 +468,13 @@ extension PopupBlock {
         }
         return (view.map { [$0] } ?? []) + inside.flatMap(\.openedViews)
     }
+
+    /// Whether a view starts with its title: a shown column whose first block is a text block, which then sits beside the
+    /// back arrow. A hidden view keeps the back arrow above it, so it can still be left.
+    func startsWithTitle(fields: [String: String], values: [String: Double]) -> Bool {
+        guard !isHidden(fields: fields, values: values), case let .column(children) = content, case .text? = children.first?.content else { return false }
+        return true
+    }
 }
 
 enum ListOrientation: String, Decodable, Sendable {
