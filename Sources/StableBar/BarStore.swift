@@ -1034,14 +1034,22 @@ final class BarStore: NSObject {
                 throw CommandFailure(message: "Widget is suspended. Choose Resume for testing in Status or make a consumer visible before refreshing.")
             }
             refresh(configuration!.widgets.first { $0.id == id }!, event: ScriptEvent(sender: "manual"))
-        case .popup:
+        case .closePopup where request.id == nil:
+            popup.closeAll()
+        case .popup, .openPopup, .closePopup:
             guard let id = request.id, configuration?.widgets.contains(where: { $0.id == id }) == true else {
                 throw CommandFailure(message: "Unknown widget: \(request.id ?? "").")
             }
-            if popupWidgetID == id {
-                popup.close()
+            // Duration traps on more seconds than it can hold, which would crash the bar.
+            if let duration = request.duration, duration <= 0 || duration > 86_400 {
+                throw CommandFailure(message: "--duration must be greater than zero and at most one day (86400 seconds).")
+            }
+            if popupWidgetID == id || popup.pins.ids.contains(id) {
+                if request.action == .openPopup { break }
+                if popupWidgetID == id { popup.close() } else { popup.closePinned(id) }
                 break
             }
+            if request.action == .closePopup { break }
             func find(_ name: String, in view: NSView) -> NSView? {
                 view.identifier?.rawValue == name ? view : view.subviews.lazy.compactMap { find(name, in: $0) }.first
             }
@@ -1059,6 +1067,7 @@ final class BarStore: NSObject {
             let config = configuration!.onScreen(ScreenKind(BarDisplay(screen: bar.screen!)))
             popup.open(content, widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults),
                        store: self, anchor: anchor, onHover: false)
+            if let duration = request.duration { popup.close(after: .seconds(duration)) }
         case .focus:
             let activeID = workspaceStore.workspaces.first(where: \.isFocused)?.monitor ?? activeDisplayID
             guard let bar = barPanel(activeID) else { throw CommandFailure(message: "No bar on the active display.") }
@@ -1135,6 +1144,7 @@ final class BarStore: NSObject {
                         "origins": .object(origins.mapValues { .string($0.description) }),
                         "profiles": .array(activeProfiles.map(ConfigurationValue.string)),
                         "sessionEdits": .number(Double(sessionEdits.count)),
+                        "popup": popupWidgetID.map(ConfigurationValue.string) ?? .null,
                         "error": configurationError.map(ConfigurationValue.string) ?? .null,
                         "warning": configurationWarning.map(ConfigurationValue.string) ?? .null])
     }
