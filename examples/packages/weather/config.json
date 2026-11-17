@@ -1,4 +1,7 @@
 {
+  "tokens": {
+    "warning": { "light": "#c93400", "dark": "#ffb340" }
+  },
   "providers": {
     "weather": {
       "type": "http",
@@ -14,6 +17,7 @@
   "widgets": [
     {
       "id": "weather", "type": "provider", "provider": "weather", "position": "right",
+      "style": { "states": { "warning": { "foreground": "@token.warning" } } },
       "layout": {
         "type": "row", "style": { "spacing": 4 },
         "children": [
