@@ -1481,6 +1481,20 @@
             }
           ]
         },
+        "layoutGlyphs": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "$ref": "#/definitions/reference"
+            }
+          ],
+          "description": "yabai space layouts (bsp, stack, float) to text glyphs shown after the workspace name."
+        },
         "hideApps": {
           "$ref": "#/definitions/strings",
           "description": "App bundle IDs or app names to leave out, matched like appGlyphs keys."
