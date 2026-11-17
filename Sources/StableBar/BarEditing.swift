@@ -317,7 +317,7 @@ final class BarEditing {
 
 private enum BarEditContent {
     static func hasContent(_ block: PopupBlock, fields: [String: String], output: ScriptOutput?, menu: [WidgetMenuItem]) -> Bool {
-        if let field = block.hideWhenEmpty, fields[field, default: ""].isEmpty { return false }
+        if block.isHidden(fields: fields, values: output?.values ?? [:]) { return false }
         switch block.content {
         case let .row(children), let .column(children):
             return children.contains { hasContent($0, fields: fields, output: output, menu: menu) }

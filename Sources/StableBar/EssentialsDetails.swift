@@ -116,7 +116,7 @@ struct EssentialsDetails: View {
                                     .buttonStyle(.plain).help("Quit \(app["name"] ?? "app")…")
                                     .accessibilityLabel("Quit \(app["name"] ?? "app")")
                                     .frame(width: 18)
-                                    .modifier(FocusHighlight(appearance: appearance))
+                                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                             }
                         }
                     }
@@ -191,7 +191,7 @@ struct EssentialsDetails: View {
                         .padding(.vertical, 4).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .modifier(FocusHighlight(appearance: appearance))
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                 }
                 Divider().overlay(appearance.foreground.opacity(0.12))
                 open("Open Calendar", "com.apple.iCal", symbol: "calendar")
@@ -270,7 +270,7 @@ struct EssentialsDetails: View {
                 .padding(.vertical, 3).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .modifier(FocusHighlight(appearance: appearance))
+        .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
     }
 }
 
@@ -347,7 +347,7 @@ struct DiskVolumeRow: View {
             .buttonStyle(.plain)
             .help("Eject \(name)")
             .accessibilityLabel("Eject \(name)")
-            .modifier(FocusHighlight(appearance: appearance))
+            .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
         }
     }
 
@@ -364,20 +364,20 @@ struct DiskVolumeRow: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Eject All")
-                .modifier(FocusHighlight(appearance: appearance))
+                .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                 Button { eject(.volume) } label: {
                     Text("Only \(name)").foregroundStyle(appearance.accent).lineLimit(1).truncationMode(.middle)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Only \(name)")
-                .modifier(FocusHighlight(appearance: appearance))
+                .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
                 Button { asking = false } label: {
                     Text("Cancel").opacity(0.7).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Cancel")
-                .modifier(FocusHighlight(appearance: appearance))
+                .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             }
             .font(.system(size: 12, weight: .medium))
         }

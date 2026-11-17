@@ -471,6 +471,7 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         "animation": WidgetAnimation.CodingKeys.allCases, "workspace": WorkspaceConfiguration.CodingKeys.allCases,
         "actions": WidgetActions.CodingKeys.allCases, "menuItem": WidgetMenuItem.CodingKeys.allCases,
         "provider": ProviderConfiguration.CodingKeys.allCases, "group": WidgetGroupConfiguration.CodingKeys.allCases,
+        "groupMember": WidgetGroupMember.CodingKeys.allCases,
         "profile": ConfigurationProfile.CodingKeys.allCases, "conditions": ProfileConditions.CodingKeys.allCases,
         "packageSelection": WidgetPackageSelection.CodingKeys.allCases, "rule": StyleRule.CodingKeys.allCases,
         "ruleCondition": RuleCondition.CodingKeys.allCases, "workspaceDefaults": WorkspaceDefaults.CodingKeys.allCases,
@@ -608,7 +609,7 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         + registry.types.filter(\.isNative).map(\.name)))
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
-        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
+        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .todayOnly: ("true", #""true""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
         .processes: ("5", #""5""#), .sortBy: (#""cpu""#, #""unknown""#), .units: (#""bits""#, #""unknown""#),
         .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#),
         .diskWarning: ("0.5", #""high""#), .diskCritical: ("0.5", #""high""#)

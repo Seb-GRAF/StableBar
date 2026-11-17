@@ -250,6 +250,22 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(countdown(1_780).target == 0)
 }
 
+@Test func agendaEventsArePastOnceTheyEndAndOtherwiseTakeTheirCountdownsPhase() {
+    let start = Date(timeIntervalSinceReferenceDate: 3_600)
+    let end = start.addingTimeInterval(1_800)
+    let phase = { (offset: Double) in agendaPhase(start: start, end: end, at: start.addingTimeInterval(offset), soon: 15, now: 5) }
+    #expect([-901, -900, -300, 0, 1_799, 1_800, 7_200].map(phase) == ["later", "soon", "now", "live", "live", "past", "past"])
+}
+
+@Test func meetingServicesFollowTheLinksHost() {
+    #expect(meetingService("https://meet.google.com/abc-defg-hij?authuser=0") == "Google Meet")
+    #expect(meetingService("https://zoom.us/j/1") == "Zoom")
+    #expect(meetingService("https://us02web.zoom.us/j/123456789?pwd=abc.DEF") == "Zoom")
+    #expect(meetingService("https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0") == "Microsoft Teams")
+    #expect(meetingService("https://teams.live.com/meet/9") == "Microsoft Teams")
+    #expect(meetingService("https://example.com/j/1") == nil)
+}
+
 @Test func meetingLinksKeepOnlyMeetZoomAndTeamsURLsAndStopAtShellSyntax() {
     #expect(meetingLink(["Room 4", "Join: https://us02web.zoom.us/j/123456789?pwd=abc.DEF"]) == "https://us02web.zoom.us/j/123456789?pwd=abc.DEF")
     #expect(meetingLink(["https://meet.google.com/abc-defg-hij?authuser=0", "https://zoom.us/j/1"]) == "https://meet.google.com/abc-defg-hij?authuser=0")
@@ -260,6 +276,18 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(meetingLink(["https://meet.google.com/abc-defg-hij';touch /tmp/x;'"]) == "https://meet.google.com/abc-defg-hij")
     #expect(meetingLink(["https://zoom.us/j/1$(reboot)"]) == "https://zoom.us/j/1")
     #expect(meetingLink(["https://teams.live.com/meet/9`id`;ls|cat>x\"y\nhttps://zoom.us/j/2"]) == "https://teams.live.com/meet/9")
+}
+
+@Test func todayOnlyLooksForTheNextMeetingUntilLocalMidnightWhenTheClocksChange() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+    // 00:30 on the day the clocks go forward an hour, then on the day they go back.
+    let spring = try Date("2026-03-08T05:30:00Z", strategy: .iso8601)
+    let autumn = try Date("2026-11-01T04:30:00Z", strategy: .iso8601)
+    #expect(meetingWindow(at: spring, lookahead: 48, todayOnly: true, calendar: calendar).horizon == spring.addingTimeInterval(22.5 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 48, todayOnly: true, calendar: calendar).horizon == autumn.addingTimeInterval(24.5 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 2, todayOnly: true, calendar: calendar).horizon == autumn.addingTimeInterval(2 * 3600))
+    #expect(meetingWindow(at: autumn, lookahead: 48, todayOnly: false, calendar: calendar).horizon == autumn.addingTimeInterval(48 * 3600))
 }
 
 @Test @MainActor func sharedProvidersRunOncePerEventAndSurviveIndependentWidgetEdits() async throws {

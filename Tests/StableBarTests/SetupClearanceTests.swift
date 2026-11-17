@@ -313,7 +313,7 @@ struct SetupClearanceTests {
         session.preferences.keepWindowsClear = true
         session.finish()
         #expect(!session.finished)
-        #expect(session.error?.contains("Accessibility") == true)
+        #expect(session.error?.contains(session.system.macOSVersion.accessibilityName) == true)
         #expect(store.clearanceConfiguration?.bar.keepWindowsClear == false)
         trusted = true
         session.finish()

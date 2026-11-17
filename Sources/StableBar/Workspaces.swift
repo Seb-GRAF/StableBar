@@ -9,6 +9,8 @@ struct Workspace: Decodable, Identifiable, Sendable, Equatable {
     let monitor: Int
     var apps: [WorkspaceApp] = []
     var windows: [WorkspaceWindow] = []
+    /// The yabai space's layout: `bsp`, `stack` or `float`. Other sources leave it nil.
+    var layout: String?
     /// A name the window manager shows instead of `name`, such as an OmniWM workspace's display name.
     var displayName: String?
     var riftDisplay: String?
@@ -45,18 +47,21 @@ struct WorkspaceWindow: Decodable, Identifiable, Sendable, Equatable {
     var reference: String?
     /// Whether the window manager reports this window as focused. Sources that don't report it leave it false.
     var isFocused = false
+    /// The window's position in its yabai stack, from 1, or 0 when it isn't stacked. Other sources leave it 0.
+    var stackIndex = 0
 
     enum CodingKeys: String, CodingKey {
         case id = "window-id"
         case title = "window-title"
     }
 
-    init(id: Int, title: String, app: WorkspaceApp, reference: String? = nil, isFocused: Bool = false) {
+    init(id: Int, title: String, app: WorkspaceApp, reference: String? = nil, isFocused: Bool = false, stackIndex: Int = 0) {
         self.id = id
         self.title = title
         self.app = app
         self.reference = reference
         self.isFocused = isFocused
+        self.stackIndex = stackIndex
     }
 
     init(from decoder: Decoder) throws {

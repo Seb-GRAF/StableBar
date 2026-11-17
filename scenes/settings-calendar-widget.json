@@ -10,24 +10,26 @@
       }
     ],
     "providers": {
-      "calendar": { "type": "calendar", "calendars": ["Work", "jane@example.com", "Team offsite"] }
+      "calendar": { "type": "calendar", "todayOnly": true }
     }
   },
   "outputs": {
     "calendar": {
-      "text": "Design review",
+      "text": "No meetings",
       "icon": "calendar",
       "fields": {
         "access": "granted",
-        "phase": "soon",
-        "title": "Design review",
-        "start": "09:55",
-        "end": "10:30",
-        "minutes": "14"
+        "phase": "none"
+      },
+      "lists": {
+        "today": [
+          { "title": "Standup", "start": "09:30", "end": "09:45" },
+          { "title": "Design review", "start": "14:00", "end": "15:00" }
+        ]
       }
     }
   },
   "draw": "settings",
   "widget": "calendar",
-  "height": 1100
+  "tab": "content"
 }

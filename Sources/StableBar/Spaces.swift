@@ -102,7 +102,7 @@ struct DesktopShortcutUnavailable: LocalizedError {
 func switchToDesktop(_ number: Int, shortcuts: DesktopShortcuts = DesktopShortcuts()) throws {
     guard let shortcut = shortcuts.shortcut(for: number) else { throw DesktopShortcutUnavailable(number: number) }
     guard AXIsProcessTrusted() else {
-        throw CommandFailure(message: "Allow StableBar in System Settings → Privacy & Security → Accessibility to switch Spaces.")
+        throw CommandFailure(message: "Allow StableBar in System Settings → Privacy & Security → \(MacOSVersion().accessibilityName) to switch Spaces.")
     }
     for keyDown in [true, false] {
         guard let event = CGEvent(keyboardEventSource: nil, virtualKey: shortcut.key, keyDown: keyDown) else {

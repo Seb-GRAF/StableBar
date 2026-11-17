@@ -811,9 +811,8 @@ final class BarStore: NSObject {
         eventObservers = events.map { event in
             center.addObserver(forName: Notification.Name(event), object: nil, queue: .main) { [weak self] notification in
                 var environment = withoutShellVariables(notification.userInfo as? [String: String] ?? [:])
-                if environment["INFO"] == nil, let info = notification.userInfo,
-                   let data = try? JSONSerialization.data(withJSONObject: info, options: [.sortedKeys]) {
-                    environment["INFO"] = String(decoding: data, as: UTF8.self)
+                if environment["INFO"] == nil, let info = notification.userInfo as? [String: Any] {
+                    environment["INFO"] = notificationInfo(info)
                 }
                 MainActor.assumeIsolated { self?.refreshScripts(for: event, environment: environment) }
             }
@@ -1317,6 +1316,23 @@ final class BarStore: NSObject {
 private func withoutShellVariables(_ environment: [String: String]) -> [String: String] {
     let shell = shellEnvironment.withLock { $0 }
     return environment.filter { shell[$0.key] == nil }
+}
+
+/// A distributed notification's payload as JSON. `JSONSerialization` raises an exception on values
+/// JSON can't hold, so dates become ISO 8601 strings and the rest, such as data, is left out.
+func notificationInfo(_ payload: [String: Any]) -> String? {
+    func jsonValue(_ value: Any) -> Any? {
+        switch value {
+        case let date as Date: date.formatted(.iso8601)
+        case let array as [Any]: array.compactMap(jsonValue)
+        case let dictionary as [String: Any]: dictionary.compactMapValues(jsonValue)
+        default: JSONSerialization.isValidJSONObject([value]) ? value : nil
+        }
+    }
+    guard let data = try? JSONSerialization.data(withJSONObject: payload.compactMapValues(jsonValue), options: [.sortedKeys]) else {
+        return nil
+    }
+    return String(decoding: data, as: UTF8.self)
 }
 
 /// One widget's resolved style and presence, observed per widget so one widget's update doesn't

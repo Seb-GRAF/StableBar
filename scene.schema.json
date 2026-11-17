@@ -42,6 +42,22 @@
       "type": "array",
       "items": { "type": "object" }
     },
+    "yabaiSpaces": {
+      "description": "yabai's query --spaces objects, drawn in place of workspaces, every space on display 1.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "yabaiWindows": {
+      "description": "yabai's query --windows objects.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "yabaiApps": {
+      "description": "The bundle identifier of each yabai window's pid, which StableBar otherwise reads from the running apps.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[0-9]+$" },
+      "additionalProperties": { "type": "string" }
+    },
     "dockBadges": {
       "description": "Dock badge labels by bundle identifier, for a Workspaces widget that shows badges.",
       "type": "object",
