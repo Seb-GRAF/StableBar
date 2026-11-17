@@ -478,6 +478,7 @@ struct WidgetView: View {
     @Environment(\.fixedDate) private var fixedDate
     @Environment(\.barFocus) private var barFocus
     @Environment(\.focusesWidgets) private var focusesWidgets
+    @Environment(\.macOSVersion) private var macOSVersion
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
@@ -838,7 +839,7 @@ struct WidgetView: View {
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
                 AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
-                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
+                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
@@ -1017,11 +1018,17 @@ struct WorkspaceView: View {
                                                   cornerRadius: $0.cornerRadius ?? styles.resting.cornerRadius ?? max(appearance.cornerRadius - 4, 0)) }
                 HStack(spacing: style.spacing ?? 4) {
                     Button { workspaceStore.select(workspace) } label: {
-                        Text(workspace.label)
+                        HStack(spacing: style.spacing ?? 4) {
+                            Text(workspace.label)
+                            if let layout = workspace.layout, let glyph = configuration?.layoutGlyphs?[layout] {
+                                Text(glyph)
+                            }
+                        }
                     }
                     .magnified(.label, by: magnifier, upTo: magnification)
                     .help("Switch to workspace \(workspace.label)")
                     .accessibilityLabel("Workspace \(workspace.label)\(workspace.isFocused ? ", focused" : workspace.isVisible ? ", visible" : "")")
+                    .accessibilityValue(layoutValue(for: workspace))
                     .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
                     if configuration?.showApps != false {
                         if configuration?.windows == true {
@@ -1030,6 +1037,9 @@ struct WorkspaceView: View {
                                     HStack(spacing: style.spacing ?? 4) {
                                         appIcon(window.app, style: glyph, spacing: style.spacing ?? 4,
                                                 highlight: window.isFocused ? highlight : nil)
+                                        if window.stackIndex > 0 {
+                                            Text(String(window.stackIndex)).magnified(.label, by: magnifier, upTo: magnification)
+                                        }
                                         if let length = configuration?.titleLength, length > 0 {
                                             Text(String(window.title.prefix(length))).magnified(.label, by: magnifier, upTo: magnification)
                                         }
@@ -1037,7 +1047,7 @@ struct WorkspaceView: View {
                                     .contentShape(Rectangle())
                                 }
                                 .help(magnification == nil ? window.title : "")
-                                .accessibilityLabel("\(window.app.name): \(window.title)\(window.isFocused ? ", focused" : "")")
+                                .accessibilityLabel("\(window.app.name): \(window.title)\(window.stackIndex > 0 ? ", stack position \(window.stackIndex)" : "")\(window.isFocused ? ", focused" : "")")
                                 .accessibilityAddTraits(window.isFocused ? .isSelected : [])
                                 .accessibilityValue(badgeValue(for: window.app))
                             }
@@ -1149,6 +1159,11 @@ struct WorkspaceView: View {
         }
     }
 
+    private func layoutValue(for workspace: Workspace) -> String {
+        guard let layout = workspace.layout, configuration?.layoutGlyphs?[layout] != nil else { return "" }
+        return "\(layout) layout"
+    }
+
     private func badgeValue(for app: WorkspaceApp) -> String {
         guard configuration?.badges != nil, let label = workspaceStore.dockBadges.labels[app.bundleID] else { return "" }
         return "Badge \(label)"
@@ -1251,7 +1266,7 @@ private struct MenuBarItemsView: View {
 
     private func itemCell(_ item: MenuBarItem, icon: String?, live: MenuBarItemImage?, openAnchor: ObjectIdentifier?) -> some View {
         MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu,
-                        clicksOnRightClick: true) { anchor in
+                        rightClick: { anchor in rightClick(item, anchor: anchor) }) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
             if inside, switches(to: anchor) {
@@ -1295,6 +1310,17 @@ private struct MenuBarItemsView: View {
             store.appMenu.pressUnlessOpen(item.entry)
         }
     }
+
+    /// An item whose menu the bar draws opens it, as on a click; any other item gets the right-click itself, which some
+    /// apps, such as MeetingBar, give an action of its own.
+    private func rightClick(_ item: MenuBarItem, anchor: NSView) {
+        if item.entry.hasSubmenu {
+            open(item, anchor: anchor)
+        } else if store.barEditing.allowsWidgetActions {
+            store.popup.close()
+            store.appMenu.rightClick(item.entry)
+        }
+    }
 }
 
 struct MenuBarItemCommands: View {
@@ -1320,8 +1346,8 @@ private struct MenuBarItemCell<Label: View>: View {
     let padding: EdgeInsets
     let openAnchor: ObjectIdentifier?
     var actsOnMouseDown = false
-    /// A right-click does what a click does, as on an app's item in the macOS menu bar, instead of opening a menu.
-    var clicksOnRightClick = false
+    /// Runs on a right-click instead of opening the menu around the cell.
+    var rightClick: ((NSView) -> Void)?
     let click: (NSView) -> Void
     let hover: (NSView, Bool) -> Void
     @ViewBuilder let label: () -> Label
@@ -1347,7 +1373,7 @@ private struct MenuBarItemCell<Label: View>: View {
         Group {
             if actsOnMouseDown { button.buttonStyle(MouseDownButtonStyle()) } else { button.buttonStyle(.plain) }
         }
-        .overlay { if clicksOnRightClick { RightClickCapture { click(anchor) } } }
+        .overlay { if let rightClick { RightClickCapture { rightClick(anchor) } } }
         .animation(hoverAnimation(highlighted, reduceMotion: reduceMotion), value: highlighted)
         .onHover { inside in
             hovered = inside
@@ -1422,6 +1448,7 @@ struct AppMenuView: View {
     @State private var overflowAnchor = NSView()
     @State private var hoveringOverflow = false
     @Environment(\.appMenuShrink) private var shrink
+    @Environment(\.macOSVersion) private var macOSVersion
 
     private var widths: [CGFloat]? {
         let widths = items.enumerated().compactMap { titleWidths["\($0.offset):\($0.element.title)"] }
@@ -1439,7 +1466,7 @@ struct AppMenuView: View {
                     Image(systemName: "exclamationmark.triangle").padding(padding).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings and drag StableBar into the list.")
+                .help("Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to show the app's menus. Click to open System Settings and drag StableBar into the list.")
             }
             ForEach(Array(items.prefix(count).enumerated()), id: \.offset) { index, item in
                 let anchor = anchors[index].map(ObjectIdentifier.init)

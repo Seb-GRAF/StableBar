@@ -111,6 +111,7 @@ struct EndStopSlider: View {
     @State private var editing = false
     /// Resets however the drag ends, unlike `onEnded`, which a cancelled drag skips.
     @GestureState private var dragging = false
+    @FocusState private var focused: Bool
     @Environment(\.controlSize) private var controlSize
     @Environment(\.controlActiveState) private var activeState
     @Environment(\.colorScheme) private var colorScheme
@@ -184,6 +185,7 @@ struct EndStopSlider: View {
                     }
                     .shadow(color: .black.opacity(0.22), radius: 1, y: 0.5)
                     .frame(width: metrics.knob.width, height: metrics.knob.height)
+                    .overlay { if focused { FocusRingShape(shape: Capsule()) } }
                     .offset(x: knob - metrics.knob.width / 2, y: middle - metrics.knob.height / 2)
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -196,6 +198,7 @@ struct EndStopSlider: View {
         .frame(minWidth: metrics.knob.width * 3 + EndStopSliderTrack.notch, maxWidth: .infinity)
         .frame(height: metrics.height)
         .focusable(interactions: .activate)
+        .focused($focused)
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             commit(steps.stop(after: shown, forward: press.key == .rightArrow || press.key == .upArrow))
             return .handled

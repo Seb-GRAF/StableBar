@@ -368,7 +368,6 @@ test("failed and missing jobs, and screens the changed files call for, fail the 
     [{ "Check revision": "success", "Build release": "success", "Draw website screens": "skipped" }, [], "Draw screens is missing from this CI run."],
     [{ "Check revision": "success", "Build release": "success", "Draw screens": "skipped", "Draw website screens": "skipped" }, [],
       "Draw screens was skipped, but this pull request changes what it draws."],
-    [{ ...conclusions, "Draw screens": "cancelled" }, [], "Draw screens ended with cancelled."],
   ];
   for (const [jobs, artifacts, error] of cases) {
     const { github, state } = fakeGitHub();
@@ -377,6 +376,25 @@ test("failed and missing jobs, and screens the changed files call for, fail the 
     assert.equal((await reconcile(github, runEvent())).review.state, "failure", error);
     assert.ok(comment(state).body.includes(`- \`app\`: \`${error}\``), error);
   }
+});
+
+test("a run cancelled before it drew the screens leaves the comment and the review pending until CI runs again, unless another job failed", async () => {
+  const { github, state, run } = fakeGitHub();
+  state.jobs[99] = jobsOf({ ...conclusions, "Draw screens": "cancelled" });
+  state.artifacts[99] = [];
+  assert.deepEqual((await reconcile(github, runEvent())).review,
+    { state: "pending", description: "Draw screens was cancelled: the screens are compared when CI runs again.", removeLabel: false });
+  assert.equal(state.comments.length, 0);
+  run();
+  await reconcile(github, runEvent(), { app: artifact() });
+  const shown = comment(state).body;
+  run({ jobs: { "Check revision": "success", "Build release": "cancelled", "Draw screens": "skipped", "Draw website screens": "skipped" }, artifacts: [] });
+  assert.equal((await reconcile(github, runEvent())).review.description, "Build release was cancelled: the screens are compared when CI runs again.");
+  assert.equal(comment(state).body, shown);
+  assert.equal(state.statuses.at(-1).state, "pending");
+  run({ jobs: { ...conclusions, "Draw screens": "cancelled", "Draw website screens": "failure" }, artifacts: [] });
+  assert.equal((await reconcile(github, runEvent())).review.state, "failure");
+  assert.ok(comment(state).body.includes("- `site`: `Draw website screens ended with failure.`"));
 });
 
 test("unusable artifacts are refused whole", async () => {
