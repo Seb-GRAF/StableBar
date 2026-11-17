@@ -478,6 +478,7 @@ struct WidgetView: View {
     @Environment(\.fixedDate) private var fixedDate
     @Environment(\.barFocus) private var barFocus
     @Environment(\.focusesWidgets) private var focusesWidgets
+    @Environment(\.macOSVersion) private var macOSVersion
 
     private var resolution: ResolvedWidgetStyle {
         store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
@@ -838,7 +839,7 @@ struct WidgetView: View {
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
                 AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
-                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → Accessibility to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
+                                help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
                     if click == .menu { store.appMenu.refresh() }
@@ -1433,6 +1434,7 @@ struct AppMenuView: View {
     @State private var overflowAnchor = NSView()
     @State private var hoveringOverflow = false
     @Environment(\.appMenuShrink) private var shrink
+    @Environment(\.macOSVersion) private var macOSVersion
 
     private var widths: [CGFloat]? {
         let widths = items.enumerated().compactMap { titleWidths["\($0.offset):\($0.element.title)"] }
@@ -1450,7 +1452,7 @@ struct AppMenuView: View {
                     Image(systemName: "exclamationmark.triangle").padding(padding).contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Allow StableBar in Privacy & Security → Accessibility to show the app's menus. Click to open System Settings and drag StableBar into the list.")
+                .help("Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to show the app's menus. Click to open System Settings and drag StableBar into the list.")
             }
             ForEach(Array(items.prefix(count).enumerated()), id: \.offset) { index, item in
                 let anchor = anchors[index].map(ObjectIdentifier.init)

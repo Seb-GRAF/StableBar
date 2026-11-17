@@ -41,9 +41,10 @@ import Testing
 
     @Test func permissionActionsNameTheirPermission() {
         for (permission, name) in [(SetupPermission.accessibility, "Accessibility"), (.automation, "Automation"), (.calendars, "Calendars")] {
-            #expect(SetupPermission.Action.allow.accessibilityLabel(for: permission) == "Allow \(name)")
-            #expect(SetupPermission.Action.openSettings.accessibilityLabel(for: permission) == "Open \(name) Settings")
+            #expect(SetupPermission.Action.allow.accessibilityLabel(for: permission, on: MacOSVersion(major: 26)) == "Allow \(name)")
+            #expect(SetupPermission.Action.openSettings.accessibilityLabel(for: permission, on: MacOSVersion(major: 26)) == "Open \(name) Settings")
         }
+        #expect(SetupPermission.Action.allow.accessibilityLabel(for: .accessibility, on: MacOSVersion(major: 27)) == "Allow Device Control and Data Access")
     }
 
     @Test func tabReachesTilesAndSpaceChoosesWhileReturnContinues() async throws {
