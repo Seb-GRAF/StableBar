@@ -23,6 +23,8 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Code
 
+- **Sliders may take a role implicitly** (2026-11-17). Sliders with neither `filled` nor another role follow a nonempty `slider` role, so themes can style controls without owning widget layouts. Explicit `filled` choices retain their behavior, and an empty role retains the native control. Other blocks still require explicit roles.
+
 - **Window managers own their gaps** (2026-11-13). StableBar does not turn macOS menu-bar auto-hide off to reserve space: that changes the usable screen area underneath existing window-manager gaps, and the reserved height does not follow StableBar’s height. Keep windows clear remains a correction for ordinary windows after a drag.
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, a number that only goes down, allows no `unowned` reference ([#493]) and keeps private macOS API in `PrivateAPI.swift` ([#490]).
 - **Private macOS API is a maintainer's call** (2026-11-08, [#484], [#490]). Every call lives in `PrivateAPI.swift` and is looked up at runtime, never with `@_silgen_name`, so a macOS without one turns off only its feature.

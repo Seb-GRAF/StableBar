@@ -187,6 +187,9 @@ struct BlockContext {
     var styles: [String: WidgetStyle] = [:]
     var series: [String: [Double]] = [:]
     var roles: [String: WidgetStyle] = [:]
+    /// Nil in popups and tooltips; bar controls must fit the widget's content area.
+    var inlineControlHeight: Double?
+    var continuousSliders = false
     /// Popup layouts fill their width; bar layouts take their content's width.
     var fillsWidth = true
     /// Opens an `open` or `openField` block's target; a popup's also closes the popup when its actions dismiss it.
@@ -332,10 +335,10 @@ struct PopupBlockView: View {
     }
 
     private var styledContent: some View {
-        let resting = block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: context.states, roles: context.roles)
+        let resting = resolvedStyle(states: context.states)
         var hovering = context.states
         hovering.hover = true
-        let current = hovered ? block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: hovering, roles: context.roles) : resting
+        let current = hovered ? resolvedStyle(states: hovering) : resting
         let stacksBlocks = if topLevel, case .column = block.content { true } else { false }
         var box = current.box
         var drawn = resting
@@ -344,6 +347,7 @@ struct PopupBlockView: View {
             box.background = nil
             drawn = current
         }
+        if block.automaticallyFillsSlider(roles: context.roles) { drawn = current }
         let appearance = WidgetAppearance(drawn.text, defaults: WidgetStyle(spacing: stacksBlocks ? PopupConfiguration.blockSpacing : nil))
         let alignment: Alignment = switch block.alignment {
         case .leading: .leading
@@ -421,6 +425,12 @@ struct PopupBlockView: View {
             .frame(maxWidth: block.fitsWidth && context.fillsWidth ? .infinity : nil, alignment: alignment)
     }
 
+    private func resolvedStyle(states: StyleStates) -> BlockStyle {
+        let style = block.resolvedStyle(inherited: inheritedStyle, styles: context.styles, fields: fields, states: states, roles: context.roles)
+        return block.automaticallyFillsSlider(roles: context.roles)
+            ? style.limitingSliderHeight(to: context.inlineControlHeight) : style
+    }
+
     private func fieldText(_ text: String) -> Text {
         block.markdown ? MarkdownBlocks.inline(text) : Text(text)
     }
@@ -460,7 +470,12 @@ struct PopupBlockView: View {
 
     /// A child block, built as a concrete view so SwiftUI diffs it without type erasure.
     private func child(_ block: PopupBlock, of style: BlockStyle, fields: [String: String]) -> PopupBlockView {
-        PopupBlockView(block: block, inheritedStyle: style.inherited, fields: fields, context: context)
+        var context = context
+        if let limit = context.inlineControlHeight {
+            let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
+            context.inlineControlHeight = max(min(limit, style.box.height ?? limit) - inset, 1)
+        }
+        return PopupBlockView(block: block, inheritedStyle: style.inherited, fields: fields, context: context)
     }
 
     @ViewBuilder
@@ -559,7 +574,10 @@ struct PopupBlockView: View {
             .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
         case let .slider(title, source, minimum, maximum, step, endStop, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
-            if let endStop {
+            if block.automaticallyFillsSlider(roles: context.roles) {
+                filledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step,
+                             endStop: endStop, icon: block.sliderIcon, action: action, style: style, appearance: appearance)
+            } else if let endStop {
                 EndStopSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop) {
                     context.runAction(action, ["VALUE": String($0)])
                 }
@@ -570,12 +588,8 @@ struct PopupBlockView: View {
             }
         case let .filledSlider(title, source, minimum, maximum, step, endStop, icon, action):
             let value = context.values[source] ?? Double(fields[source] ?? "") ?? minimum
-            let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
-            FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
-                         height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
-                         appearance: appearance) {
-                context.runAction(action, ["VALUE": String($0)])
-            }
+            filledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step,
+                         endStop: endStop, icon: icon, action: action, style: style, appearance: appearance)
         case let .toggle(title, source, action):
             PopupToggle(title: title, value: fields[source] == "true" || fields[source] == "1" || context.values[source] == 1) {
                 context.runAction(action, ["VALUE": $0 ? "true" : "false"])
@@ -681,6 +695,19 @@ struct PopupBlockView: View {
                             hover: context.hoverMenuBarItem, press: context.pressMenuItem, place: context.placeMenuBarItem)
         case let .essentials(kind, timeZone):
             EssentialsDetails(kind: kind, timeZone: timeZone, fields: fields, context: context, appearance: appearance)
+        }
+    }
+}
+
+extension PopupBlockView {
+    private func filledSlider(title: String, value: Double, minimum: Double, maximum: Double, step: Double,
+                              endStop: SliderEndStop?, icon: String?, action: BlockAction, style: BlockStyle,
+                              appearance: WidgetAppearance) -> some View {
+        let inset = (style.box.paddingTop ?? style.box.paddingVertical ?? 0) + (style.box.paddingBottom ?? style.box.paddingVertical ?? 0)
+        return FilledSlider(title: title, value: value, minimum: minimum, maximum: maximum, step: step, endStop: endStop, icon: icon,
+                            height: max((style.box.height ?? 28) - inset, 1), drawsTrack: style.box.background == nil,
+                            appearance: appearance, continuous: context.continuousSliders) {
+            context.runAction(action, ["VALUE": String($0)])
         }
     }
 }

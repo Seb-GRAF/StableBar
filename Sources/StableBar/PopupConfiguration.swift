@@ -145,6 +145,9 @@ indirect enum PopupContent: Sendable {
 
 struct PopupBlock: Decodable, Sendable {
     let content: PopupContent
+    /// An omitted choice lets the slider role decide; explicit false keeps the native control.
+    private(set) var sliderFilled: Bool?
+    private(set) var sliderIcon: String?
     let role: PresentationRole?
     let style: WidgetStyle
     let alignment: PopupAlignment
@@ -332,15 +335,17 @@ struct PopupBlock: Decodable, Sendable {
             if let endStop, (minimum...maximum).contains(endStop.value) {
                 throw DecodingError.dataCorruptedError(forKey: .endStop, in: values, debugDescription: "An end stop's value must be outside min…max, so the slider can tell it from a step.")
             }
-            let filled = try values.decodeIfPresent(Bool.self, forKey: .filled) ?? false
+            let filled = try values.decodeIfPresent(Bool.self, forKey: .filled)
             let icon = try values.decodeIfPresent(String.self, forKey: .icon)
-            if icon != nil, !filled {
-                throw DecodingError.dataCorruptedError(forKey: .icon, in: values, debugDescription: "Only a filled slider shows an icon; add \"filled\": true.")
+            if icon != nil, filled == false {
+                throw DecodingError.dataCorruptedError(forKey: .icon, in: values, debugDescription: "Only a filled slider shows an icon; remove \"filled\": false to follow the slider role, or set it to true.")
             }
+            sliderFilled = filled
+            sliderIcon = icon
             let title = try values.decode(String.self, forKey: .title)
             let source = try values.decode(String.self, forKey: .source)
             let action = try controlAction([.volume])
-            content = filled
+            content = filled == true
                 ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
                                 icon: icon, action: action)
                 : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, action: action)

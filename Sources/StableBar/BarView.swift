@@ -900,9 +900,10 @@ struct WidgetView: View {
             if let layout = widget.hoverLayout {
                 WidgetBlocks(widget: widget, store: store,
                              style: LayoutStyle(inherited: style, states: resolution.blockStates(open: false), tracksHover: true),
-                             block: layout, motion: motion, runAction: blockAction)
+                             block: layout, inline: false, motion: motion, runAction: blockAction)
             } else {
-                VolumeSlider(widget: widget, store: store, appearance: WidgetAppearance(style, defaults: WidgetStyle()), width: 120)
+                VolumeSlider(widget: widget, store: store,
+                             style: LayoutStyle(inherited: style, states: resolution.blockStates(open: false), tracksHover: true), width: 120)
             }
         }
         .controlSize(.small)
@@ -935,6 +936,7 @@ struct WidgetBlocks: View {
     let store: BarStore
     let style: LayoutStyle
     var block: PopupBlock?
+    var inline = true
     var date = Date.now
     var fillsWidth = false
     var motion = BlockMotion()
@@ -952,6 +954,7 @@ struct WidgetBlocks: View {
                                                  menu: script?.output.menu ?? widget.menu ?? [], values: script?.output.values ?? [:],
                                                  targets: script?.output.targets ?? [:], styles: script?.output.styles ?? [:],
                                                  series: script?.output.series ?? [:], roles: store.configuration?.look(on: screenKind).roles ?? [:],
+                                                 inlineControlHeight: inline ? style.inherited.inlineControlHeight : nil,
                                                  fillsWidth: fillsWidth, open: { if store.barEditing.allowsWidgetActions { $0.open() } },
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
