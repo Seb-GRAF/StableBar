@@ -81,8 +81,8 @@ jobs:
           fi
 
   # GitHub runs only a few macOS jobs at once for the whole account, and pull requests can hold them
-  # all for an hour. A run on main cancels the pull request runs it finds waiting or running, and
-  # Resume pull requests restarts their cancelled jobs once main's macOS jobs are done.
+  # all for an hour. A run on main cancels the pull request runs whose macOS jobs haven't started,
+  # and Resume pull requests restarts their cancelled jobs once main's macOS jobs are done.
   pause-pull-requests:
     name: Pause pull requests
     needs: current
@@ -104,6 +104,18 @@ jobs:
           for status in requested pending queued in_progress; do
             for run in $(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=$status&per_page=100" \
                 --jq '.workflow_runs[].id'); do
+              # Only whole runs can be cancelled, and a cancelled job starts over on resume.
+              if [[ "$status" == in_progress ]]; then
+                if ! running=$(gh api "repos/$GH_REPO/actions/runs/$run/jobs?per_page=100" \
+                    --jq '[.jobs[] | select(.status == "in_progress" and any(.labels[]; startswith("macos")))] | length'); then
+                  echo "::warning::Couldn't read the jobs of run $run; leaving it."
+                  continue
+                fi
+                if (( running > 0 )); then
+                  echo "Run $run has a macOS job running; leaving it."
+                  continue
+                fi
+              fi
               if gh run cancel "$run"; then
                 paused+=("$run")
               else
