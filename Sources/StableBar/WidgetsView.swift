@@ -269,8 +269,11 @@ struct WidgetsView: View {
         }
     }
 
+    /// Collapsing the group of the selected widget selects the group, so selecting the widget again expands it.
     private func toggle(_ group: String) {
-        if collapsedGroups.remove(group) == nil { collapsedGroups.insert(group) }
+        guard collapsedGroups.remove(group) == nil else { return }
+        collapsedGroups.insert(group)
+        if widgets.first(where: { $0.id == selectedWidget })?.group == group { editor.showGroup(group) }
     }
 
     private func widgetRow(_ widget: WidgetConfiguration, name: String, position: WidgetPosition, listed: [WidgetConfiguration], changed: Bool,
