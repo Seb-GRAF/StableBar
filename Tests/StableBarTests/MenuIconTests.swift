@@ -14,8 +14,8 @@ import Testing
     let delegate = AppDelegate(store: store, panels: [1: bar])
     delegate.menuWillOpen(menu)
     let actions = menu.items.filter { $0.action != nil }
-    #expect(actions.map(\.title) == ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "Hide Bar", "Getting Started…", "Help…",
-                                     "Send Feedback…", "Settings…", "Quit StableBar"])
+    #expect(actions.map(\.title) == ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "Hide Bar", "Getting Started…",
+                                     "Help…", "Share My Bar…", "Send Feedback…", "Settings…", "Quit StableBar"])
     #expect(actions.allSatisfy { $0.image?.isTemplate == true })
 
     let hide = try #require(actions.first { $0.title == "Hide Bar" })

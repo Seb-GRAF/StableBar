@@ -7,6 +7,7 @@ enum MenuIcon: String {
     case editBar = "pencil"
     case finishEditing = "checkmark.circle"
     case themes = "paintpalette"
+    case share = "square.and.arrow.up"
     case store = "bag"
     case hideBar = "eye.slash"
     case showBar = "eye"

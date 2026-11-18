@@ -243,6 +243,7 @@ private struct BarContextMenu: View {
             }
             if let note = store.crashReports.note { item(note, .problem) { store.onShowCrashes?() } }
             Divider()
+            item("Share My Bar…", .share) { if let screen = store.barPanel(display)?.screen { barShare.show(store: store, screen: screen) } }
             item("Send Feedback…", .feedback) { NSApp.sendAction(#selector(AppDelegate.showFeedback), to: NSApp.delegate, from: nil) }
             item("Settings…", .settings) { store.onCustomize?() }
             item("Quit StableBar", .quit) { NSApp.terminate(nil) }

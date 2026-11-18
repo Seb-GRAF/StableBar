@@ -83,9 +83,22 @@ struct ScreenBand: View {
                 }
             }
             Spacer()
-            Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
-                .disabled(!store.barEditing.isAvailable)
+            // A narrow window keeps only Edit Bar in Place: Share My Bar… is also in the bar's menus.
+            ViewThatFits(in: .horizontal) {
+                HStack { shareButton; editButton }
+                editButton
+            }
         }
+    }
+
+    private var shareButton: some View {
+        Button("Share My Bar…") { barShare.show(store: store, screen: screen.screens[0]) }
+            .disabled(screen.screens.isEmpty || store.configuration == nil)
+    }
+
+    private var editButton: some View {
+        Button(store.barEditing.menuTitle, action: store.barEditing.toggle)
+            .disabled(!store.barEditing.isAvailable)
     }
 
     private func setupMenu(_ setup: ScreenSetup) -> some View {

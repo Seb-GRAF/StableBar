@@ -89,8 +89,8 @@
       }
     },
     "draw": {
-      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add. `accessibilityGuide` draws the panel that asks people to drag StableBar into the Accessibility list in System Settings.",
-      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup", "accessibilityGuide"]
+      "description": "What to draw. `update` draws the update popup for a sample offer, with the request for a star on GitHub. `setup` draws a step of setup's tour, 1512 by 982 points by default, with the bar above it as the configuration has it: setup's choices show in the tour, not on the bar, since previewing them would start the commands of the widgets they add. `accessibilityGuide` draws the panel that asks people to drag StableBar into the Accessibility list in System Settings. `share` draws Share My Bar for a 1512 by 982 point screen with the setup tour's wallpaper, at Landscape 16:9.",
+      "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup", "accessibilityGuide", "share"]
     },
     "widget": { "description": "The widget whose popup or Settings page to draw. With `bar`, the bar is drawn with that widget's popup open, below the bar or above a bar at the bottom.", "type": "string" },
     "group": { "description": "For `settings`, without `widget`: the group whose page Settings → Bar draws, with its widgets listed under it.", "type": "string" },

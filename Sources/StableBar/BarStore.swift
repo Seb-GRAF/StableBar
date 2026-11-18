@@ -77,7 +77,7 @@ final class BarStore: NSObject {
     private var pauses: Set<PauseReason> = []
     private var popupWidgetID: String?
     private(set) var inspectedWidgetID: String?
-    private var inspectorOpen = false
+    private(set) var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
