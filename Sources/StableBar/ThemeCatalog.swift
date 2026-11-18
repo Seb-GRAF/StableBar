@@ -75,8 +75,10 @@ extension [ThemeChoice] {
     func onePerTheme(keeping selected: Set<String>) -> [ThemeChoice] {
         filter { choice in
             choice.isBundled || selected.contains(choice.key) || !contains { other in
-                !other.isBundled && other.manifest.id == choice.manifest.id
-                    && (selected.contains(other.key) || compareReleases(other.manifest.version, choice.manifest.version) == .orderedDescending)
+                guard !other.isBundled, other.manifest.id == choice.manifest.id else { return false }
+                let order = compareReleases(other.manifest.version, choice.manifest.version)
+                // Equal releases, such as 1.0 and 1.0.0, keep the later spelling.
+                return selected.contains(other.key) || order == .orderedDescending || order == .orderedSame && other.manifest.version > choice.manifest.version
             }
         }
     }
