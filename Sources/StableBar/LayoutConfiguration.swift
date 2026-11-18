@@ -14,17 +14,19 @@ struct WidgetGroupConfiguration: Decodable, Sendable {
     }
 
     /// `widgets`, each enabled one without a `group` in the group whose `members` match it best, unless that group's
-    /// widgets sit in another position. Widgets with their own `group` settle a group's position first.
-    static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration]) -> [WidgetConfiguration] {
+    /// widgets sit in another position. Widgets with their own `group` settle a group's position first. `ownGroup`
+    /// can stand in for a widget's own `group`, to see where a widget would go without it.
+    static func joining(_ widgets: [WidgetConfiguration], groups: [String: WidgetGroupConfiguration],
+                        ownGroup: (WidgetConfiguration) -> String? = \.ownGroup) -> [WidgetConfiguration] {
         var positions: [String: WidgetPosition] = [:]
         for widget in widgets {
-            if let group = widget.ownGroup, positions[group] == nil { positions[group] = widget.position }
+            if let group = ownGroup(widget), positions[group] == nil { positions[group] = widget.position }
         }
         var joined = widgets
         for index in joined.indices {
             joined[index].joinedGroup = nil
             let widget = joined[index]
-            guard widget.ownGroup == nil, widget.enabled else { continue }
+            guard ownGroup(widget) == nil, widget.enabled else { continue }
             let matches = groups.sorted { $0.key < $1.key }.flatMap { id, group in
                 group.members.filter { $0.matches(widget) }.map { (group: id, rank: ($0.id == nil ? 0 : 1, $0.keyCount)) }
             }
