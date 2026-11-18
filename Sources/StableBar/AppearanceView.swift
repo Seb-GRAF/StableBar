@@ -191,7 +191,8 @@ struct AppearanceView: View {
 
     private var shownThemes: [ThemeItem] {
         let included = gallery.choices.filter(\.isBundled).map(ThemeItem.installed)
-        let others = (gallery.choices.filter { !$0.isBundled }.map(ThemeItem.installed) + gallery.storeThemes.map(ThemeItem.store))
+        let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
+        let others = (installed.filter { !$0.isBundled }.map(ThemeItem.installed) + gallery.storeThemes.map(ThemeItem.store))
             .sorted { $0.title < $1.title }
         switch filter {
         case .all: return included + others

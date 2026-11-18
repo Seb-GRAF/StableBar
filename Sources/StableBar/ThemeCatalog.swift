@@ -69,6 +69,21 @@ extension ThemeCatalog {
     }
 }
 
+extension [ThemeChoice] {
+    /// Updates keep earlier versions installed, so each installed theme shows once: its versions in `selected`, or else
+    /// its newest.
+    func onePerTheme(keeping selected: Set<String>) -> [ThemeChoice] {
+        filter { choice in
+            choice.isBundled || selected.contains(choice.key) || !contains { other in
+                guard !other.isBundled, other.manifest.id == choice.manifest.id else { return false }
+                let order = compareReleases(other.manifest.version, choice.manifest.version)
+                // Equal releases, such as 1.0 and 1.0.0, keep the later spelling.
+                return selected.contains(other.key) || order == .orderedDescending || order == .orderedSame && other.manifest.version > choice.manifest.version
+            }
+        }
+    }
+}
+
 extension ThemeChoice {
     var isBuiltIn: Bool { isBundled && manifest.id == "built-in" }
     var edit: ConfigurationEdit { ConfigurationEdit(action: .theme, properties: isBuiltIn ? nil : selection) }

@@ -683,6 +683,11 @@ final class WidgetPopup {
                        glass: GlassSettings, animation: WidgetAnimation, onHover: Bool) {
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let toBox = panel.frame.insetBy(dx: inset, dy: inset)
+        let (fromHalf, toHalf) = (min(from.box.width, from.box.height) / 2, min(toBox.width, toBox.height) / 2)
+        let (fromRadius, toRadius) = (min(from.cornerRadius, fromHalf), min(appearance.cornerRadius, toHalf))
+        // SwiftUI draws a corner of half the shorter side or more as a capsule, while Core Animation's continuous corner
+        // comes to a point there, so such a card takes circular corners.
+        let capsule = from.cornerRadius >= fromHalf || appearance.cornerRadius >= toHalf
         let union = from.box.union(toBox)
         let morph = PopupPanel(contentRect: union, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         morph.title = "\(panel.title) morph"
@@ -707,8 +712,8 @@ final class WidgetPopup {
         for (card, window) in cards {
             card.anchorPoint = .zero
             card.frame = from.box.offsetBy(dx: -window.frame.minX, dy: -window.frame.minY)
-            card.cornerCurve = .continuous
-            card.cornerRadius = from.cornerRadius
+            card.cornerCurve = capsule ? .circular : .continuous
+            card.cornerRadius = fromRadius
             if card === outline {
                 window.contentView!.layer!.addSublayer(card)
             } else {
@@ -741,9 +746,9 @@ final class WidgetPopup {
             let target = toBox.offsetBy(dx: -window.frame.minX, dy: -window.frame.minY)
             let changes: [(String, Any, Any)] = [("position", NSValue(point: card.position), NSValue(point: target.origin)),
                                                  ("bounds.size", NSValue(size: card.bounds.size), NSValue(size: target.size)),
-                                                 ("cornerRadius", card.cornerRadius, appearance.cornerRadius)]
+                                                 ("cornerRadius", card.cornerRadius, toRadius)]
             card.frame = target
-            card.cornerRadius = appearance.cornerRadius
+            card.cornerRadius = toRadius
             for (keyPath, fromValue, toValue) in changes {
                 let change = animation.layerAnimation(keyPath: keyPath)
                 change.fromValue = fromValue
