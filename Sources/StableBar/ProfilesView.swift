@@ -453,6 +453,7 @@ struct ProfilesView: View {
         case "bar": owner = "Bar"
         case "defaults": owner = "Every widget"
         case "popupDefaults": owner = "Popups"
+        case "groupDefaults": owner = "Every group"
         case "workspaceDefaults": owner = "Workspaces"
         case "tokens": owner = "Theme color"
         case "roles" where path.count > 1:
@@ -481,7 +482,7 @@ struct ProfilesView: View {
             HStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 4).fill(color.color).frame(width: 14, height: 14)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.gray.opacity(0.4)))
-                Text(token.flatMap { name in themeTokens.first { $0.name == name }?.title } ?? String(format: "#%06X", color.light >> 8))
+                Text(token.flatMap { name in store.themeTokenColors.first { $0.name == name }?.title } ?? String(format: "#%06X", color.light >> 8))
                 if color.light != color.dark { Text("light/dark").foregroundStyle(.tertiary) }
             }
         } else if value.isGradient,

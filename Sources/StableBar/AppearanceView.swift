@@ -52,6 +52,7 @@ struct AppearanceView: View {
                         HStack(alignment: .top, spacing: 20) {
                             VStack(spacing: 22) {
                                 widgets
+                                groups
                                 animation
                             }
                             VStack(spacing: 22) {
@@ -245,7 +246,7 @@ struct AppearanceView: View {
                 Text("Widgets, popups and packages that use a color follow it.").font(.system(size: 11.5)).foregroundStyle(.secondary)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(store.themeTokenColors(in: document)) { token in
+                ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
                     let property = store.propertySources(path: tokens.path, key: token.name, defaultsPath: tokens.defaultsPath, values: tokens.values)
                     let color = (try? property.editingValue?.decoded(HexColor.self)) ?? token.color
                     TokenColorButton(title: token.title, color: color, dark: appearance.colorScheme == .dark,
@@ -293,6 +294,22 @@ struct AppearanceView: View {
             defaults.number("Horizontal padding", "paddingHorizontal", default: 10, in: 0...40)
             defaults.number("Vertical padding", "paddingVertical", default: 6, in: 0...40)
             defaults.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var groups: some View {
+        let groups = editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen))
+        let look = screen.map { store.configuration?.onScreen($0) } ?? store.configuration
+        let flared = look?.groupDefaults.flare != nil
+        return ThemeGroup(title: "Groups") {
+            groups.color("Background", "background")
+            groups.color("Border", "borderColor").disabled(flared)
+            groups.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5).disabled(flared)
+            groups.number("Corner radius", "cornerRadius", default: 0, in: 0...40)
+            groups.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30)
+            groups.number("Vertical padding", "paddingVertical", default: 0, in: 0...20)
+            groups.number("Spacing", "spacing", default: look?.bar.spacing ?? 8, in: 0...30)
         }
         .frame(maxWidth: .infinity)
     }

@@ -289,7 +289,7 @@ extension BarLink {
     @MainActor private static func look(of store: BarStore, on kind: ScreenKind) throws -> ThemeLink {
         var main = try store.editedMainDocument(replaying: store.customizationEdits)
         let screen = try main["screens"]?.decoded([String: [String: ConfigurationValue]].self)[kind.rawValue] ?? [:]
-        for key in ["bar", "tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults"] {
+        for key in ["bar", "tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults"] {
             if let value = screen[key] { main[key] = value.overriding(main[key] ?? .object([:])) }
         }
         let screens = try store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]

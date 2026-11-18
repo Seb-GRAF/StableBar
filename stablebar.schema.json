@@ -230,6 +230,20 @@
       ],
       "description": "Styles every popup inherits. A popup's own style and its widget's style win; defaults fill the rest. Padding and spacing come only from here and the popup's own style, not from defaults or the widget's style, and tooltips and hover controls keep their own."
     },
+    "groupDefaults": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/style"
+        },
+        {
+          "$ref": "#/definitions/reference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Styles every group starts from, such as its background, border, corners, padding and spacing. A group's own style wins, property by property."
+    },
     "widgets": {
       "type": "array",
       "items": {
@@ -2541,6 +2555,10 @@
         "popupDefaults": {
           "$ref": "#/definitions/style",
           "description": "Popup styles for this kind of screen, merged over the shared popupDefaults."
+        },
+        "groupDefaults": {
+          "$ref": "#/definitions/style",
+          "description": "Group styles for this kind of screen, merged over the shared groupDefaults."
         },
         "roles": {
           "$ref": "#/properties/roles",

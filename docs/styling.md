@@ -81,7 +81,7 @@ An unmapped non-main mode activates only `mode`. Aliases start with a letter and
 }
 ```
 
-A selected theme can style any subset of roles. Configuration files, includes and profiles can override those styles. Widget packages (including command-capable packages) may annotate widgets and blocks, but cannot define global `roles`, `workspaceDefaults` or `modeAliases`. Role styles accept only style properties: they cannot change actions, providers, visibility, display filters or the row/column structure of a layout.
+A selected theme can style any subset of roles. Configuration files, includes and profiles can override those styles. Widget packages (including command-capable packages) may annotate widgets and blocks, but cannot define global `groupDefaults`, `roles`, `workspaceDefaults` or `modeAliases`. Role styles accept only style properties: they cannot change actions, providers, visibility, display filters or the row/column structure of a layout.
 
 A slider without `filled` or an explicit role follows `roles.slider` when that role sets a style
 property. It then draws as a filled bar, with `background` as its track and `accent` as its fill.
@@ -105,6 +105,7 @@ Layers apply from lowest to highest:
 | Bar widget | `defaults` → `roles[role]` → widget `style` → output `widgetStyles` in configuration order → own output `style`/`color` |
 | Layout/popup block | inherited text style → `roles[role]` → block `style` → named output style selected by `styleSource`/`styleField` |
 | Popup panel | `defaults` → `popupDefaults` → widget's explicit `style` → popup `style`; the bar widget's role is excluded. Padding and spacing skip `defaults` and the widget's `style`, starting from 16 points of padding, 12 between the blocks of the popup's top-level column and 6 in any other row, column or list |
+| Group | `groupDefaults` → group `style` |
 | Workspace | `workspaceDefaults` → widget `workspace` |
 | Bar strip | `bar.style` → script `barStyle` in configuration order |
 

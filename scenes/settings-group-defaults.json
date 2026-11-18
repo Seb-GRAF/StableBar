@@ -1,0 +1,70 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "groupDefaults": {
+      "background": {
+        "light": "#d8dee9",
+        "dark": "#2e3440"
+      },
+      "cornerRadius": 14,
+      "paddingHorizontal": 6
+    },
+    "groups": {
+      "status": {}
+    },
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "group": "status"
+      },
+      {
+        "id": "network",
+        "type": "network",
+        "position": "right",
+        "group": "status"
+      },
+      {
+        "id": "time",
+        "type": "clock",
+        "format": "EEE d MMM  HH:mm",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery"
+      }
+    },
+    "network": {
+      "text": "↓1.2 MiB/s ↑240 KiB/s",
+      "icon": "network",
+      "fields": {
+        "interface": "en0",
+        "downloadRate": "1.2 MiB/s",
+        "uploadRate": "240 KiB/s"
+      },
+      "values": {
+        "download": 1258291,
+        "upload": 245760
+      }
+    }
+  },
+  "draw": "settings",
+  "group": "status",
+  "height": 900
+}

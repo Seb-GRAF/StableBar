@@ -36,7 +36,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   profiles and 372 JSON values across both files. Reference expansion shares a budget of 300,000
   units and 8,000,000 bytes of reference origin paths; a link exceeding either is refused as too
   many references. Theme configuration keys are `tokens`,
-  `defaults`, `popupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
+  `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `workspaceDefaults`, `bar`, `groups` and `profiles`. Other
   keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
   is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
   `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,

@@ -1,0 +1,38 @@
+{
+  "groupDefaults": {
+    "background": {
+      "light": "#d8dee9",
+      "dark": "#2e3440"
+    },
+    "cornerRadius": 14,
+    "paddingHorizontal": 6
+  },
+  "groups": {
+    "status": {}
+  },
+  "widgets": [
+    {
+      "id": "apple",
+      "type": "appleMenu",
+      "position": "left"
+    },
+    {
+      "id": "battery",
+      "type": "battery",
+      "position": "right",
+      "group": "status"
+    },
+    {
+      "id": "network",
+      "type": "network",
+      "position": "right",
+      "group": "status"
+    },
+    {
+      "id": "time",
+      "type": "clock",
+      "format": "EEE d MMM  HH:mm",
+      "position": "right"
+    }
+  ]
+}

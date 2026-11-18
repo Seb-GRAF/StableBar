@@ -25,13 +25,17 @@ struct ThemeOverrides {
             widget.role.map { (widget.id, $0.rawValue) }
         })
         func inspect(_ document: [String: ConfigurationValue], prefix: [String] = [], suffix: String = "") {
-            for key in ["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups"] {
+            for key in ["tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "bar", "groups"] {
                 guard let own = document[key] else { continue }
                 var themed = theme[key]
                 if key == "tokens" {
                     // Theme colors also include colors inherited from Built-in.
                     let colors = ConfigurationValue.object(Dictionary(uniqueKeysWithValues: themeTokens.map { ($0.name, ConfigurationValue.null) }))
                     themed = themed.map { $0.overriding(colors) } ?? colors
+                }
+                if key == "groups", case let .object(base)? = theme["groupDefaults"], case let .object(groups) = own {
+                    let started = ConfigurationValue.object(groups.mapValues { _ in .object(["style": .object(base)]) })
+                    themed = themed.map { $0.overriding(started) } ?? started
                 }
                 guard let themed else { continue }
                 for path in overlapping(own, themed, path: [key]) where path != ["bar", "appearance"] {
@@ -107,6 +111,7 @@ private func overrideTitle(_ path: [String]) -> String {
         return appearanceTitle(name.lowercased().hasSuffix("color") ? name : "\(name) color", appearance: tail.last)
     case "defaults": return "All widgets: \(detailTitle(tail))"
     case "popupDefaults": return "Popups: \(detailTitle(tail))"
+    case "groupDefaults": return "Every group: \(detailTitle(tail))"
     case "roles": return "\(friendly(tail.first ?? "")) widgets: \(detailTitle(Array(tail.dropFirst())))"
     case "workspaceDefaults": return "Workspaces: \(detailTitle(tail))"
     case "groups": return "\(friendly(tail.first ?? "")) group: \(detailTitle(Array(tail.dropFirst().filter { $0 != "style" })))"

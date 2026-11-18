@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 enum BarItem {
-    case bar, everyWidget, widget, group
+    case bar, everyWidget, everyGroup, widget, group
 }
 
 enum BarTab: CaseIterable {
@@ -71,7 +71,7 @@ struct BarInspector: View {
         let widget = editor.barItem == .widget ? store.configuration?.onScreen(screen).widgets.first { $0.id == editor.selectedID } : nil
         let group = editor.barItem == .group ? editor.selectedGroup.flatMap { store.configuration?.groups[$0] != nil ? $0 : nil } : nil
         let key = widget.map { "widget/\($0.id)/\(editor.widgetTab)" } ?? group.map { "group/\($0)" }
-            ?? (editor.barItem == .everyWidget ? "everyWidget" : "bar/\(editor.barTab)")
+            ?? (editor.barItem == .everyWidget ? "everyWidget" : editor.barItem == .everyGroup ? "everyGroup" : "bar/\(editor.barTab)")
         VStack(spacing: 0) {
             Group {
                 if let widget {
@@ -84,6 +84,10 @@ struct BarInspector: View {
                 } else if editor.barItem == .everyWidget {
                     header(Text("Aa").font(.system(size: 17, weight: .medium)), title: "Every widget") {
                         Text("Widgets use this look unless you style them yourself")
+                    }
+                } else if editor.barItem == .everyGroup {
+                    header(Image(systemName: WidgetGrouping.symbol).font(.system(size: 18)), title: "Every group") {
+                        Text("Groups use this look unless you style them yourself")
                     }
                 } else {
                     header(Image(systemName: "menubar.rectangle").font(.system(size: 18)), title: "Bar") { Text("The strip itself") }
@@ -112,6 +116,11 @@ struct BarInspector: View {
                         stylePanel(defaultsStyle, name: "Widget", widget: nil)
                         SettingsCallout(systemImage: "sparkle",
                                         text: Text("Widgets with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
+                            .padding(.top, 12)
+                    } else if editor.barItem == .everyGroup {
+                        groupStylePanel(groupDefaultsStyle, flared: store.configuration?.groupDefaults.flare != nil)
+                        SettingsCallout(systemImage: "sparkle",
+                                        text: Text("Groups with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
                             .padding(.top, 12)
                     } else {
                         barPanel
@@ -314,11 +323,30 @@ struct BarInspector: View {
             if case let .object(properties) = group.style.configurationValue { return properties }
             return nil
         } ?? [:]
-        let style = StyleFields(store: store, path: "groups.\(group).style", values: values,
+        let style = StyleFields(store: store, path: "groups.\(group).style", defaultsPath: "groupDefaults", values: values,
                                 set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
                                 unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
         let grouping = WidgetGrouping(store: store)
-        let flared = store.configuration?.groups[group]?.style.flare != nil
+        groupStylePanel(style, flared: store.configuration?.groups[group]?.style.flare != nil)
+        SettingsGroup("Widgets") {
+            ForEach(groupMembers(group)) { member in
+                SettingRow(title: names[member.id] ?? member.id) {
+                    Button("Leave Group") { editor.leaveGroup(member.id) }
+                        .controlSize(.small)
+                        .disabled(!grouping.canLeave(member.id))
+                        .help(grouping.leaveBlocker(member.id) ?? "Take this widget out of the group")
+                }
+            }
+        }
+        Button("Ungroup") { editor.ungroup(group) }
+            .controlSize(.small)
+            .disabled(grouping.ungroupBlocker(group) != nil)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
+            .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
+    }
+
+    @ViewBuilder private func groupStylePanel(_ style: StyleFields, flared: Bool) -> some View {
         SettingsGroup("Background and border") {
             style.color("Background", "background")
             NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
@@ -338,28 +366,18 @@ struct BarInspector: View {
             style.number("Top and bottom padding", "paddingVertical", default: 0, in: 0...20, slider: true)
             style.number("Between widgets", "spacing", default: store.configuration?.onScreen(screen).bar.spacing ?? 0, in: 0...30, slider: true)
         }
-        SettingsGroup("Widgets") {
-            ForEach(groupMembers(group)) { member in
-                SettingRow(title: names[member.id] ?? member.id) {
-                    Button("Leave Group") { editor.leaveGroup(member.id) }
-                        .controlSize(.small)
-                        .disabled(!grouping.canLeave(member.id))
-                        .help(grouping.leaveBlocker(member.id) ?? "Take this widget out of the group")
-                }
-            }
-        }
-        Button("Ungroup") { editor.ungroup(group) }
-            .controlSize(.small)
-            .disabled(grouping.ungroupBlocker(group) != nil)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
-            .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
     }
 
     private var defaultsStyle: StyleFields {
         StyleFields(store: store, path: "defaults", values: document("defaults"),
                     set: { editor.change(ConfigurationEdit(action: .defaults, properties: $0)) },
                     unset: { unset(["defaults": .object($0)]) })
+    }
+
+    private var groupDefaultsStyle: StyleFields {
+        StyleFields(store: store, path: "groupDefaults", values: document("groupDefaults"),
+                    set: { editor.change(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
+                    unset: { unset(["groupDefaults": .object($0)]) })
     }
 
     @ViewBuilder private func stylePanel(_ style: StyleFields, name: String, widget: WidgetConfiguration?) -> some View {
