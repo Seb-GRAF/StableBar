@@ -1,4 +1,5 @@
 import AppKit
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -97,4 +98,15 @@ final class ThemePreviewTests: XCTestCase {
         XCTAssertEqual(workspace.cellStyle(.focused).underline.height, 3)
         XCTAssertEqual(workspace.cellStyle(.focused).underline.placement, .belowBar)
     }
+}
+
+@Test func eachInstalledThemeShowsOnceAtItsSelectedOrNewestVersion() throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    for version in ["1.2.0", "1.10.0", "1.9.0"] { _ = try fixture.theme("{}", version: version) }
+    func versions(selectedKey: String?) -> [String] {
+        themeChoices(packages: fixture.packages.directory, themesDirectory: nil, selectedKey: selectedKey).map(\.manifest.version)
+    }
+    #expect(versions(selectedKey: nil) == ["1.10.0"])
+    #expect(versions(selectedKey: "test-theme/1.2.0") == ["1.2.0"])
 }

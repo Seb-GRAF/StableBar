@@ -30,7 +30,11 @@ func themeChoices(packages: URL, themesDirectory: URL? = bundledThemesDirectory,
     }) ?? []).filter { $0.lastPathComponent != "built-in" }.compactMap { directory in
         (try? WidgetPackageStore(directory: directory).manifest(at: directory)).map { ThemeChoice(manifest: $0, directory: directory, isBundled: true) }
     }
-    let installed = ((try? WidgetPackageStore(directory: packages).list()) ?? []).filter { $0.kind == .theme }.map {
+    // Updates keep earlier versions installed, so each theme shows once: the selected version, or the newest.
+    let themes = Dictionary(grouping: ((try? WidgetPackageStore(directory: packages).list()) ?? []).filter { $0.kind == .theme }, by: \.id)
+    let installed = themes.values.map { versions in
+        versions.first { $0.versionKey == selectedKey } ?? versions.max { compareReleases($0.version, $1.version) == .orderedAscending }!
+    }.sorted { $0.id < $1.id }.map {
         ThemeChoice(manifest: $0, directory: packages.appending(path: $0.id).appending(path: $0.version), isBundled: false)
     }
     return (bundled.sorted { $0.manifest.name < $1.manifest.name } + installed).filter { !$0.isLegacy || $0.key == selectedKey }
