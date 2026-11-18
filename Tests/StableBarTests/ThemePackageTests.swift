@@ -68,6 +68,7 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(try loader.load(root, data: Data(json.utf8)).bar.height == 40)
     #expect(loader.profiles.map(\.name) == ["dark", "portable", "work", "external"])
     #expect(!loader.matchesApps)
+    #expect(!loader.matchesDisplays)
     let battery = try loader.load(root, data: Data(json.utf8), context: ConfigurationContext(onBattery: true))
     #expect(loader.activeProfiles == ["dark"])
     #expect(battery.bar.height == 34)
@@ -86,6 +87,31 @@ private func writePackageFile(_ text: String, to url: URL) throws {
     #expect(throws: ThemeConfigurationError.self) {
         try loader.load(root, data: Data(#"{"profiles":[{"name":"same"},{"name":"same"}]}"#.utf8))
     }
+}
+
+@Test func profilesMatchAMonitorAWiFiNetworkCallsAndSeveralApps() throws {
+    let url = FileManager.default.temporaryDirectory.appending(path: "profiles.json")
+    let json = #"""
+    {"widgets":[],"profiles":[
+      {"name":"home","when":{"display":"LG HDR 4K","wifi":"Home"},"configuration":{"bar":{"height":30}}},
+      {"name":"call","when":{"camera":true,"microphone":true},"configuration":{"bar":{"spacing":12}}},
+      {"name":"one app","when":{"app":"com.test.Editor"},"configuration":{"bar":{"margin":3}}},
+      {"name":"apps","when":{"apps":["com.test.Editor","com.test.Mail"]},"configuration":{"bar":{"inset":4}}}]}
+    """#
+    var loader = ConfigurationLoader()
+    _ = try loader.load(url, data: Data(json.utf8), context: ConfigurationContext(displays: ["Built-in Retina Display", "LG HDR 4K"],
+                                                                                    wifi: "Home", camera: true, microphone: true,
+                                                                                    app: "com.test.Editor"))
+    #expect(loader.activeProfiles == ["home", "call", "one app", "apps"])
+    #expect(loader.matchesApps)
+    #expect(loader.matchesDisplays)
+    _ = try loader.load(url, data: Data(json.utf8), context: ConfigurationContext(displays: ["LG HDR 4K"], wifi: "Office",
+                                                                                    camera: true, app: "com.test.Mail"))
+    #expect(loader.activeProfiles == ["apps"])
+    #expect(loader.profiles[0].when?.unmet(in: loader.profileContext) == [.wifi])
+    #expect(loader.profiles[1].when?.unmet(in: loader.profileContext) == [.microphone])
+    #expect(loader.profiles[2].when?.unmet(in: loader.profileContext) == [.app])
+    #expect(loader.profiles[3].when?.appList == ["com.test.Editor", "com.test.Mail"])
 }
 
 @Test func manualProfilesOverrideConditionsAndUnknownProfilesFail() throws {

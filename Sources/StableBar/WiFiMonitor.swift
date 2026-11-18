@@ -54,8 +54,13 @@ final class WiFiMonitor: NSObject, ChangeMonitor, CWEventDelegate, CLLocationMan
         stop()
         relay.start(changed)
         client.delegate = self
-        for event in [CWEventType.ssidDidChange, .linkDidChange, .linkQualityDidChange, .powerDidChange] {
-            try client.startMonitoringEvent(with: event)
+        do {
+            for event in [CWEventType.ssidDidChange, .linkDidChange, .linkQualityDidChange, .powerDidChange] {
+                try client.startMonitoringEvent(with: event)
+            }
+        } catch {
+            stop()
+            throw error
         }
     }
 

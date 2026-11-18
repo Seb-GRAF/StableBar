@@ -1,0 +1,27 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "clock", "type": "clock", "position": "right" }
+    ],
+    "profiles": [
+      {
+        "name": "Home desk",
+        "when": {
+          "onBattery": false,
+          "display": "LG HDR 4K",
+          "wifi": "Home",
+          "apps": ["com.apple.Safari", "com.apple.mail"]
+        },
+        "configuration": { "bar": { "height": 36 } }
+      },
+      {
+        "name": "In a call",
+        "when": { "camera": true, "microphone": true },
+        "configuration": { "widgetOverrides": { "clock": { "enabled": false } } }
+      }
+    ]
+  },
+  "draw": "settings",
+  "section": "profiles"
+}

@@ -441,9 +441,10 @@ struct ConfigurationLoader: Sendable {
     private(set) var profileFiles: [String: Set<String>] = [:]
     private(set) var pinnedProfile: String?
     var previewProfile: String?
-    /// The fixed appearance used to match conditions, before profiles apply their settings.
-    private(set) var profileAppearance: String?
+    /// What profiles were matched against: the Mac's state, with the bar's fixed appearance and its theme.
+    private(set) var profileContext = ConfigurationContext()
     private(set) var matchesApps = false
+    private(set) var matchesDisplays = false
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private(set) var screenDocuments: [String: [String: ConfigurationValue]] = [:]
     private var packageBoundaries: [String: URL] = [:]
@@ -587,20 +588,20 @@ struct ConfigurationLoader: Sendable {
     mutating func finish(_ input: ConfigurationLayer, context: ConfigurationContext) throws -> [String: ConfigurationValue] {
         var layer = input
         var context = context
-        profileAppearance = nil
         if case let .object(bar) = layer.values["bar"], let appearance = bar["appearance"],
            case let .string(name) = try substituteConfigurationReferences(appearance, prefix: "@token.",
                                                                           values: layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:],
                                                                           budget: referenceExpansionBudget) {
             context.appearance = name
-            profileAppearance = name
         }
+        profileContext = context
         activeProfiles = []
         profiles = try layer.values["profiles"]?.decoded([ConfigurationProfile].self, at: "profiles") ?? []
         profileFiles = Dictionary(profiles.map { profile in
             (profile.name, Set(layer.contributions["profiles.\(profile.name).name"]?.map(\.origin.file) ?? []))
         }) { $0.union($1) }
-        matchesApps = profiles.contains { $0.enabled && $0.when?.app != nil }
+        matchesApps = profiles.contains { $0.enabled && $0.when?.appList != nil }
+        matchesDisplays = profiles.contains { $0.enabled && $0.when?.display != nil }
         let selected = try previewProfile ?? layer.values["profile"].flatMap { try $0.decoded(String?.self) }
         pinnedProfile = selected
         var names = Set<String>()
@@ -722,7 +723,8 @@ struct ConfigurationLoader: Sendable {
         document = try preparePackageAssets(.object(layer.values), origins: layer.origins, boundaries: packageBoundaries)
             .decoded([String: ConfigurationValue].self)
         origins = layer.origins.filter { finalPaths.contains($0.key) }
-        contributions = layer.contributions.filter { finalPaths.contains($0.key) }
+        // Profile paths stay so Settings can tell which files set a profile's conditions.
+        contributions = layer.contributions.filter { finalPaths.contains($0.key) || $0.key.hasPrefix("profiles.") }
         widgetPackageNames = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
             guard let source = origins["widgets.\(id).id"], let name = packageNames[source.file] else { return nil }
             return (id, name)

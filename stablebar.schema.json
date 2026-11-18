@@ -2392,9 +2392,36 @@
         "externalDisplay": {
           "$ref": "#/definitions/boolean"
         },
+        "display": {
+          "$ref": "#/definitions/string",
+          "description": "Name of a screen that must be connected, as System Settings → Displays shows it."
+        },
+        "wifi": {
+          "$ref": "#/definitions/string",
+          "description": "Name of the Wi-Fi network. StableBar reads it only with Location access, which the wifi provider asks for."
+        },
+        "camera": {
+          "$ref": "#/definitions/boolean",
+          "description": "Whether an app uses a camera."
+        },
+        "microphone": {
+          "$ref": "#/definitions/boolean",
+          "description": "Whether an app records from the microphone."
+        },
         "app": {
           "$ref": "#/definitions/string",
           "description": "Bundle identifier of the focused app."
+        },
+        "apps": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Bundle identifiers of apps, any of which focused matches. Use app for one app: releases before apps read it."
         },
         "theme": {
           "$ref": "#/definitions/string",

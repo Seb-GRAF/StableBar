@@ -1,4 +1,5 @@
 import AppKit
+import CoreLocation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -10,6 +11,13 @@ struct ProfilesView: View {
     @State private var hovered: String?
     @State private var deleting: String?
     @State private var themeOptions = [ProfileThemeOption(id: "built-in", name: "Built-in")]
+    @State private var network: String?
+    @State private var locationAccess = false
+    /// Reads the Wi-Fi network, camera and microphone for every profile while the page shows: the bar reads them only
+    /// for profiles that are turned on.
+    @State private var liveWatch: SystemContext?
+    @State private var live = ConfigurationContext()
+    @Environment(\.offline) private var offline
 
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? {
@@ -60,6 +68,24 @@ struct ProfilesView: View {
             let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                                        themesDirectory: store.themesDirectory)
             themeOptions = await Task.detached { catalog.profileThemeOptions }.value
+            if !offline {
+                network = SystemContext.wifiNetwork()
+                locationAccess = CLLocationManager().authorizationStatus == .authorizedAlways
+            }
+        }
+        .onAppear {
+            guard !offline else { return }
+            live = SystemContext.current(checking: store.profiles)
+            liveWatch = SystemContext { [store] in
+                live = SystemContext.current(checking: store.profiles)
+                network = SystemContext.wifiNetwork()
+            }
+            liveWatch?.watch(store.profiles)
+        }
+        .onChange(of: store.profiles) { liveWatch?.watch(store.profiles) }
+        .onDisappear {
+            liveWatch?.stop()
+            liveWatch = nil
         }
     }
 
@@ -168,6 +194,7 @@ struct ProfilesView: View {
 
     private func detail(_ profile: ConfigurationProfile) -> some View {
         let pinned = store.pinnedProfile == profile.name
+        let unmet = conditions(profile).filter { !$0.met }.map(\.phrase)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "switch.2")
@@ -178,7 +205,8 @@ struct ProfilesView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(profile.name).font(.system(size: 15, weight: .semibold))
                     Text(store.activeProfiles.contains(profile.name) ? "Active now"
-                         : profile.enabled ? "Waiting for its conditions" : "Turned off")
+                         : !profile.enabled ? "Turned off"
+                         : unmet.isEmpty ? "Waiting for its conditions" : "Waiting until " + unmet.joined(separator: " and "))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -188,7 +216,7 @@ struct ProfilesView: View {
             .padding(EdgeInsets(top: 12, leading: 16, bottom: 10, trailing: 16))
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    group("When") { conditionsRow(profile) }
+                    group("When") { conditionRows(profile) }
                     group("What it changes") { changeRows(profile) }
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 8) {
@@ -247,45 +275,113 @@ struct ProfilesView: View {
         .padding(.top, 14)
     }
 
-    private func conditionsRow(_ profile: ConfigurationProfile) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) { conditionItems(profile) }
-            VStack(alignment: .leading, spacing: 6) { conditionItems(profile) }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+    private var context: ConfigurationContext {
+        var context = store.profileContext
+        context.app = store.context.app
+        context.displays = store.context.displays
+        context.wifi = live.wifi
+        context.camera = live.camera
+        context.microphone = live.microphone
+        return context
     }
 
-    @ViewBuilder private func conditionItems(_ profile: ConfigurationProfile) -> some View {
+    @ViewBuilder private func conditionRows(_ profile: ConfigurationProfile) -> some View {
         let conditions = self.conditions(profile)
         ForEach(Array(conditions.enumerated()), id: \.element.id) { index, condition in
-            if index > 0 { Text("and").font(.system(size: 11.5)).foregroundStyle(.tertiary) }
-            chip(condition, profile: profile)
-        }
-        if conditions.isEmpty { Text("Always").font(.system(size: 11.5)).foregroundStyle(.secondary) }
-        let screens = store.context.displayCount
-        Menu {
-            Button("Dark Mode is on") { editor.setProfileCondition(profile.name, \.appearance, value: "dark", control: "appearance") }
-            Button("Light Mode is on") { editor.setProfileCondition(profile.name, \.appearance, value: "light", control: "appearance") }
-            Divider()
-            Button("On battery") { editor.setProfileCondition(profile.name, \.onBattery, value: true, control: "onBattery") }
-            Button("On power adapter") { editor.setProfileCondition(profile.name, \.onBattery, value: false, control: "onBattery") }
-            Divider()
-            Button("A monitor is connected") {
-                editor.setProfileCondition(profile.name, \.externalDisplay, value: true, control: "externalDisplay")
-            }
-            Button("Only the laptop screen is connected") {
-                editor.setProfileCondition(profile.name, \.externalDisplay, value: false, control: "externalDisplay")
-            }
-            Button(screenCount(screens)) { editor.setProfileCondition(profile.name, \.displayCount, value: screens, control: "displayCount") }
-            Divider()
-            Button("An app is in front…") { chooseApp(for: profile) }
-            Divider()
-            Menu("The theme is…") {
-                ForEach(themeOptions, id: \.id) { option in
-                    Button(option.name) { editor.setProfileCondition(profile.name, \.theme, value: option.id, control: "theme") }
+            HStack(spacing: 10) {
+                Image(systemName: condition.met ? "checkmark.circle.fill" : "circle.dashed")
+                    .foregroundStyle(condition.met ? SettingsPalette.success : .secondary)
+                Text(condition.kind)
+                Text(condition.met ? "True now" : "Not true now").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Spacer()
+                Menu(condition.value) {
+                    ForEach(Array(condition.choices.enumerated()), id: \.offset) { _, choice in
+                        Toggle(choice.title, isOn: Binding(get: { choice.isOn }, set: { _ in choice.choose() }))
+                    }
                 }
+                .fixedSize()
+                Button(action: condition.remove) {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .semibold)).frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Remove this condition")
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .frame(minHeight: 38)
+            .overlay(alignment: .top) {
+                if index > 0 { Rectangle().fill(SettingsPalette.separator).frame(height: 1) }
+            }
+        }
+        HStack(spacing: 10) {
+            if conditions.isEmpty { Text("Always").font(.system(size: 11.5)).foregroundStyle(.secondary) }
+            addCondition(profile)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+        .overlay(alignment: .top) {
+            if !conditions.isEmpty { Rectangle().fill(SettingsPalette.separator).frame(height: 1) }
+        }
+    }
+
+    private func addCondition(_ profile: ConfigurationProfile) -> some View {
+        let when = profile.when ?? ProfileConditions()
+        let context = self.context
+        let name = profile.name
+        return Menu {
+            Section("Appearance") {
+                Button("Light or Dark Mode") {
+                    editor.setProfileCondition(name, \.appearance, value: context.appearance, control: "appearance")
+                }
+                .disabled(when.appearance != nil)
+            }
+            Section("Power") {
+                Button("On battery or power adapter") {
+                    editor.setProfileCondition(name, \.onBattery, value: context.onBattery, control: "onBattery")
+                }
+                .disabled(when.onBattery != nil)
+            }
+            Section("Screens") {
+                Button("Number of screens") {
+                    editor.setProfileCondition(name, \.displayCount, value: context.displayCount, control: "displayCount")
+                }
+                .disabled(when.displayCount != nil)
+                Button("Any monitor") {
+                    editor.setProfileCondition(name, \.externalDisplay, value: context.externalDisplay, control: "externalDisplay")
+                }
+                .disabled(when.externalDisplay != nil)
+                Menu("A monitor by name") {
+                    ForEach(Set(context.displays).sorted(), id: \.self) { display in
+                        Button(display) { editor.setProfileCondition(name, \.display, value: display, control: "display") }
+                    }
+                }
+                .disabled(when.display != nil)
+            }
+            Section("Network") {
+                Button(network.map { "Wi-Fi network: \($0)" } ?? (locationAccess ? "Wi-Fi network: not connected" : "Wi-Fi network: needs Location access")) {
+                    editor.setProfileCondition(name, \.wifi, value: network, control: "wifi")
+                }
+                .disabled(network == nil || when.wifi != nil)
+            }
+            Section("Calls") {
+                Button("Camera in use") { editor.setProfileCondition(name, \.camera, value: true, control: "camera") }
+                    .disabled(when.camera != nil)
+                Button("Microphone in use") { editor.setProfileCondition(name, \.microphone, value: true, control: "microphone") }
+                    .disabled(when.microphone != nil)
+            }
+            Section("Apps") {
+                Button("An app is in front…") { chooseApp(for: profile) }
+                    .disabled(when.appList != nil)
+            }
+            Section("Theme") {
+                Menu("The theme is…") {
+                    ForEach(themeOptions, id: \.id) { option in
+                        Button(option.name) { editor.setProfileCondition(name, \.theme, value: option.id, control: "theme") }
+                    }
+                }
+                .disabled(when.theme != nil)
             }
         } label: {
             Label("Condition", systemImage: "plus")
@@ -296,33 +392,6 @@ struct ProfilesView: View {
         .fixedSize()
     }
 
-    private func chip(_ condition: ProfileCondition, profile: ConfigurationProfile) -> some View {
-        HStack(spacing: 4) {
-            if let count = profile.when?.displayCount, condition.id == "displayCount" {
-                Stepper("Screens", value: Binding(get: { count }, set: {
-                    editor.setProfileCondition(profile.name, \.displayCount, value: $0, control: "displayCount")
-                }), in: 1...9)
-                .labelsHidden()
-                .controlSize(.mini)
-            }
-            Text(condition.text)
-            Button(action: condition.remove) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 8, weight: .bold))
-                    .frame(width: 16, height: 16)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Remove this condition")
-        }
-        .font(.system(size: 12))
-        .padding(.leading, 10)
-        .padding(.trailing, 4)
-        .frame(height: 24)
-        .background(SettingsPalette.profileSoft, in: Capsule())
-    }
-
     private func sentence(_ profile: ConfigurationProfile) -> String {
         let conditions = self.conditions(profile)
         return conditions.isEmpty ? "Always" : "When " + conditions.map(\.phrase).joined(separator: " and ")
@@ -330,43 +399,73 @@ struct ProfilesView: View {
 
     private func conditions(_ profile: ConfigurationProfile) -> [ProfileCondition] {
         let when = profile.when ?? ProfileConditions()
+        let unmet = when.unmet(in: context)
         let name = profile.name
+        func condition<Value: Equatable>(_ key: WritableKeyPath<ProfileConditions, Value?>, _ id: ProfileConditions.CodingKeys,
+                                         _ kind: String, _ value: String, _ phrase: String,
+                                         _ choices: [(title: String, value: Value)]) -> ProfileCondition {
+            ProfileCondition(id: id, kind: kind, value: value, phrase: phrase, met: !unmet.contains(id), choices: choices.map { choice in
+                ProfileCondition.Choice(title: choice.title, isOn: when[keyPath: key] == choice.value) {
+                    editor.setProfileCondition(name, key, value: choice.value, control: id.rawValue)
+                }
+            }) {
+                editor.setProfileCondition(name, key, value: nil, control: id.rawValue)
+            }
+        }
         var conditions: [ProfileCondition] = []
         if let appearance = when.appearance {
-            let text = appearance == "dark" ? "Dark Mode is on" : "Light Mode is on"
-            conditions.append(ProfileCondition(id: "appearance", text: text, phrase: text) {
-                editor.setProfileCondition(name, \.appearance, value: nil, control: "appearance")
-            })
+            conditions.append(condition(\.appearance, .appearance, "Appearance", appearance == "dark" ? "Dark" : "Light",
+                                        appearance == "dark" ? "Dark Mode is on" : "Light Mode is on",
+                                        [("Light", "light"), ("Dark", "dark")]))
         }
         if let battery = when.onBattery {
-            conditions.append(ProfileCondition(id: "onBattery", text: battery ? "On battery" : "On power adapter",
-                                               phrase: battery ? "on battery" : "on power adapter") {
-                editor.setProfileCondition(name, \.onBattery, value: nil, control: "onBattery")
-            })
+            conditions.append(condition(\.onBattery, .onBattery, "Power", battery ? "On battery" : "On power adapter",
+                                        battery ? "on battery" : "on power adapter", [("On battery", true), ("On power adapter", false)]))
         }
         if let count = when.displayCount {
-            conditions.append(ProfileCondition(id: "displayCount", text: screenCount(count), phrase: screenCount(count)) {
-                editor.setProfileCondition(name, \.displayCount, value: nil, control: "displayCount")
-            })
+            conditions.append(condition(\.displayCount, .displayCount, "Screens", "\(count)", screenCount(count),
+                                        (1...9).map { ("\($0)", $0) }))
         }
         if let external = when.externalDisplay {
-            conditions.append(ProfileCondition(id: "externalDisplay",
-                                               text: external ? "A monitor is connected" : "Only the laptop screen is connected",
-                                               phrase: external ? "a monitor is connected" : "only the laptop screen is connected") {
-                editor.setProfileCondition(name, \.externalDisplay, value: nil, control: "externalDisplay")
-            })
+            conditions.append(condition(\.externalDisplay, .externalDisplay, "Monitors",
+                                        external ? "A monitor is connected" : "Only the laptop screen",
+                                        external ? "a monitor is connected" : "only the laptop screen is connected",
+                                        [("A monitor is connected", true), ("Only the laptop screen", false)]))
         }
-        if let app = when.app {
-            let text = "\(NSWorkspace.shared.urlForApplication(withBundleIdentifier: app)?.deletingPathExtension().lastPathComponent ?? app) is in front"
-            conditions.append(ProfileCondition(id: "app", text: text, phrase: text) {
-                editor.setProfileCondition(name, \.app, value: nil, control: "app")
+        if let display = when.display {
+            conditions.append(condition(\.display, .display, "Monitor", display, "\(display) is connected",
+                                        Set(context.displays + [display]).sorted().map { ($0, $0) }))
+        }
+        if let wifi = when.wifi {
+            conditions.append(condition(\.wifi, .wifi, "Wi-Fi network", wifi, "the Wi-Fi network is \(wifi)",
+                                        Set([wifi] + [network].compactMap { $0 }).sorted().map { ($0, $0) }))
+        }
+        if let camera = when.camera {
+            conditions.append(condition(\.camera, .camera, "Camera", camera ? "In use" : "Not in use",
+                                        camera ? "the camera is in use" : "the camera isn't in use", [("In use", true), ("Not in use", false)]))
+        }
+        if let microphone = when.microphone {
+            conditions.append(condition(\.microphone, .microphone, "Microphone", microphone ? "In use" : "Not in use",
+                                        microphone ? "the microphone is in use" : "the microphone isn't in use",
+                                        [("In use", true), ("Not in use", false)]))
+        }
+        if let apps = when.appList {
+            let names = apps.map { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)?.deletingPathExtension().lastPathComponent ?? $0 }
+            let choices = zip(apps, names).map { app, title in
+                ProfileCondition.Choice(title: title, isOn: true) {
+                    editor.setProfileCondition(name, \.appList, value: apps.filter { $0 != app }, control: "app")
+                }
+            } + [ProfileCondition.Choice(title: "Add an app…", isOn: false) { chooseApp(for: profile) }]
+            conditions.append(ProfileCondition(id: .app, kind: apps.count == 1 ? "App in front" : "Apps in front",
+                                               value: names.joined(separator: ", "), phrase: "\(names.joined(separator: " or ")) is in front",
+                                               met: !unmet.contains(.app) && !unmet.contains(.apps), choices: choices) {
+                editor.setProfileCondition(name, \.appList, value: nil, control: "app")
             })
         }
         if let theme = when.theme {
-            let text = "\(themeOptions.first { $0.id == theme }?.name ?? theme) is the theme"
-            conditions.append(ProfileCondition(id: "theme", text: text, phrase: text) {
-                editor.setProfileCondition(name, \.theme, value: nil, control: "theme")
-            })
+            let themeName = themeOptions.first { $0.id == theme }?.name ?? theme
+            conditions.append(condition(\.theme, .theme, "Theme", themeName, "\(themeName) is the theme",
+                                        themeOptions.map { ($0.name, $0.id) }))
         }
         return conditions
     }
@@ -381,8 +480,9 @@ struct ProfilesView: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Choose app"
-        if panel.runModal() == .OK, let url = panel.url, let identifier = Bundle(url: url)?.bundleIdentifier {
-            editor.setProfileCondition(profile.name, \.app, value: identifier, control: "app")
+        let apps = profile.when?.appList ?? []
+        if panel.runModal() == .OK, let url = panel.url, let identifier = Bundle(url: url)?.bundleIdentifier, !apps.contains(identifier) {
+            editor.setProfileCondition(profile.name, \.appList, value: apps + [identifier], control: "app")
         }
     }
 
@@ -532,8 +632,19 @@ struct ProfilesView: View {
 }
 
 private struct ProfileCondition: Identifiable {
-    let id: String
-    let text: String
+    let id: ProfileConditions.CodingKeys
+    /// What it checks, such as Power, and its value, such as On battery.
+    let kind: String
+    let value: String
     let phrase: String
+    /// Whether it's true now.
+    let met: Bool
+    let choices: [Choice]
     let remove: () -> Void
+
+    struct Choice {
+        let title: String
+        let isOn: Bool
+        let choose: () -> Void
+    }
 }
