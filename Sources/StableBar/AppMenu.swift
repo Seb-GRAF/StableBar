@@ -139,7 +139,9 @@ final class AppMenu: NSObject {
     private func belongsToMenuBarApp(_ item: AppMenuItem) -> Bool {
         var pid: pid_t = 0
         AXUIElementGetPid(item.element, &pid)
-        return pid == menuOwner?.processIdentifier
+        // Keep a retained snapshot visible with its owner icon, but stop its titles opening stale menus as soon as
+        // macOS reports a different menu-bar app. A successful read then makes the new snapshot actionable.
+        return pid == app?.processIdentifier
     }
 
     /// The popup that shows a menu's entries.

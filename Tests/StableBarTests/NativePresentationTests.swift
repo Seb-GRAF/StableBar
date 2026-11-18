@@ -77,6 +77,20 @@ private final class MenuReadFixture: @unchecked Sendable {
     }
 }
 
+private final class OverflowMenuReadFixture: @unchecked Sendable {
+    let menuBar = AXUIElementCreateApplication(101)
+    let item = AXUIElementCreateApplication(100)
+
+    func read(_ name: String, _: AXUIElement) -> CFTypeRef? {
+        switch name {
+        case kAXMenuBarAttribute: menuBar
+        case kAXChildrenAttribute: [item] as CFArray
+        case kAXTitleAttribute: "File" as CFString
+        default: nil
+        }
+    }
+}
+
 @Test(arguments: [kAXMenuBarAttribute, kAXChildrenAttribute, kAXTitleAttribute])
 @MainActor func menuReadFailureKeepsCompleteMenusAndRetries(
     attribute: String
@@ -107,10 +121,13 @@ private final class MenuReadFixture: @unchecked Sendable {
     let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read, sleep: source.sleep)
     let firstIcon = NSImage(size: CGSize(width: 20, height: 20))
     let firstOwner = MenuApplication(pid: 100, bundleID: "com.apple.finder", icon: firstIcon)
+    let firstMenuItem = AppMenuItem(title: "File", element: AXUIElementCreateApplication(100))
+    let secondMenuItem = AppMenuItem(title: "File", element: AXUIElementCreateApplication(200))
     menu.read(firstOwner)
     await menu.readTask?.value
     #expect(menu.menuOwner?.processIdentifier == 100)
     #expect(menu.menuOwnerIcon === firstIcon)
+    #expect(menu.popup(for: firstMenuItem) != nil)
 
     source.failedAttribute = kAXMenuBarAttribute
     menu.read(MenuApplication(pid: 200, bundleID: "com.apple.Safari"))
@@ -118,12 +135,16 @@ private final class MenuReadFixture: @unchecked Sendable {
     #expect(menu.items.map(\.title) == ["First", "File"])
     #expect(menu.menuOwner?.processIdentifier == 100)
     #expect(menu.menuOwnerIcon === firstIcon)
+    #expect(menu.popup(for: firstMenuItem) == nil)
+    #expect(menu.overflowPopup(for: [firstMenuItem]) == nil)
 
     source.failedAttribute = nil
     source.allowRetry()
     await menu.readTask?.value
     #expect(menu.menuOwner?.processIdentifier == 200)
     #expect(menu.menuOwnerIcon === menu.menuOwner?.icon)
+    #expect(menu.popup(for: firstMenuItem) == nil)
+    #expect(menu.popup(for: secondMenuItem) != nil)
 }
 
 @Test @MainActor func menuRecoversWhenItsFirstReadFails() async throws {
@@ -941,12 +962,15 @@ private func indicatorConfiguration(gap: Int, scale: Double = 1, placement: Stri
     #expect(frames[BarView.moreWidgetsID]?.isEmpty != overflows)
 }
 
-@Test @MainActor func overflowMenusOpenOnlyForTheMenuBarsApp() {
-    let menu = AppMenu(checkAccess: { true }, readAttribute: { _, _ in nil }, sleep: { _ in })
+@Test @MainActor func overflowMenusOpenOnlyForTheMenuBarsApp() async {
+    let source = OverflowMenuReadFixture()
+    let menu = AppMenu(checkAccess: { true }, readAttribute: source.read)
     let window = AppMenuItem(title: "Window", element: AXUIElementCreateApplication(100))
     let help = AppMenuItem(title: "Help", element: AXUIElementCreateApplication(200))
     #expect(menu.overflowPopup(for: [window]) == nil)
     menu.read(MenuApplication(pid: 100))
+    await menu.readTask?.value
+    #expect(menu.menuOwner?.processIdentifier == 100)
     guard let popup = menu.overflowPopup(for: [window, help]), case let .appMenu(entries) = popup.layout.content else {
         Issue.record("No overflow popup for the menu bar's app")
         return
