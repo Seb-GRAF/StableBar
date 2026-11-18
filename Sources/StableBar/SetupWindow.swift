@@ -328,6 +328,7 @@ final class SetupSession {
         currentThemeKey = store.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
+            .onePerTheme(keeping: [currentThemeKey])
         // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
         // looks again.
         let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
