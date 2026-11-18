@@ -189,6 +189,13 @@ struct SetupSystem {
         await SetupWorkspaceChecker(configurationURL: configuration).check(source)
     }
     var yabaiSignalScript: String?
+    /// The packages the sources suggest for the tools and apps on this Mac. Scenes replace it so drawing setup never
+    /// downloads the Store's index.
+    var suggestedPackages: @Sendable (PackageStoreClient) async -> [PackageIndex.Entry] = { client in
+        let catalog = await client.catalog()
+        let ids = catalog.suggestedIDs
+        return catalog.widgets.filter { ids.contains($0.id) }
+    }
 }
 
 /// A macOS permission the bar that setup builds depends on. Setup asks for each one it needs before it finishes.
@@ -245,6 +252,13 @@ final class SetupSession {
     private(set) var finished = false
     var preset: SetupPreferences.Preset?
     var preferences = SetupPreferences() { didSet { preview() } }
+    /// Store packages for the tools and apps on this Mac, without those already on the bar unless this setup added them.
+    /// Empty until the Store answers, and when it can't be reached.
+    private(set) var suggestions: [PackageIndex.Entry] = []
+    /// The key of the suggestion downloading for review.
+    private(set) var downloading: String?
+    /// A picked suggestion's download, which setup shows for review before adding it, as Add here does.
+    var review: (inspection: WidgetPackageInspection, sourceID: String)?
     /// The person's Open at login choice; nil until they make one.
     var openAtLogin: Bool?
     var loginStatus: SMAppService.Status
@@ -370,6 +384,33 @@ final class SetupSession {
     /// A display change updates the tiles without clearing a chosen preset, which stays available to deselect.
     func refreshDisplays() {
         hasNotchedDisplay = system.hasNotchedDisplay()
+    }
+
+    func loadSuggestions() async {
+        let entries = await system.suggestedPackages(store.packageStoreClient)
+        let onBar = Set(store.widgetPackageIDs.values)
+        suggestions = entries.filter { entry in !onBar.contains(entry.id) || preferences.packages.contains { $0.id == entry.id } }
+    }
+
+    /// Downloads `entry` for review, or takes back the suggestion when this setup added it.
+    func pick(_ entry: PackageIndex.Entry) async {
+        if preferences.packages.contains(where: { $0.id == entry.id }) {
+            preferences.packages.removeAll { $0.id == entry.id }
+            return
+        }
+        downloading = entry.key
+        defer { downloading = nil }
+        do {
+            review = (try await store.packageStoreClient.packageForAdding(entry), entry.sourceID)
+            error = nil
+        } catch {
+            self.error = errorMessage(error)
+        }
+    }
+
+    /// Adds a suggestion its review installed, with the settings the review chose. Finish setup saves it.
+    func add(_ inspection: WidgetPackageInspection, settings: [String: ConfigurationValue]) {
+        preferences.packages.append(.init(id: inspection.manifest.id, version: inspection.manifest.version, settings: settings))
     }
 
     /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the

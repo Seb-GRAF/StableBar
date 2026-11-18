@@ -839,12 +839,15 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
 @Test func setupPresetReplacementClassifiesEveryPreference() {
     let choices = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour,
                                    theme: .package(id: "slate", version: "1"), widgetSets: [.meetings], workspaces: .yabai,
-                                   keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true)
+                                   keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true,
+                                   packages: [.init(id: "ai-usage", version: "1", settings: [:])])
     let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour, theme: .builtIn,
                                         widgetSets: [.system], workspaces: .spaces,
-                                        keepWindowsClear: false, keepNotificationsClear: false)
+                                        keepWindowsClear: false, keepNotificationsClear: false,
+                                        packages: [.init(id: "weather", version: "1", settings: [:])])
     let presetFields: Set<String> = ["appearance", "theme", "widgetSets"]
-    let otherFields: Set<String> = ["placement", "clock", "workspaces", "keepWindowsClear", "keepNotificationsClear", "deferMeetings"]
+    let otherFields: Set<String> = ["placement", "clock", "workspaces", "keepWindowsClear", "keepNotificationsClear", "deferMeetings",
+                                    "packages"]
     func fields(_ preferences: SetupPreferences) -> [String: String] {
         Dictionary(uniqueKeysWithValues: Mirror(reflecting: preferences).children.map { ($0.label!, String(describing: $0.value)) })
     }
@@ -859,7 +862,7 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     }
     #expect(choices.replacingPresetChoices(with: SetupPreferences()) == SetupPreferences(
         placement: .belowMenuBar, clock: .twelveHour, workspaces: .yabai,
-        keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true))
+        keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true, packages: choices.packages))
 }
 
 /// A clock choice and deferred Meetings survive a preset change but write nothing for widgets the new bar lacks.

@@ -123,6 +123,8 @@ struct SceneFile: Decodable {
         var inApplications = true
         /// A canned connection result; drawing setup never queries a window manager or reads its config.
         var workspaceCheck: WorkspaceCheck?
+        /// Store entries the look step shows under Found on your Mac, as if the Mac had their tools.
+        var suggested: [PackageIndex.Entry] = []
 
         enum WorkspaceCheck: String, Decodable, CaseIterable {
             case connected, signalsMissing, reloadYabai, ipcOff, couldntCheck
@@ -282,7 +284,8 @@ struct SceneFile: Decodable {
 
 extension SceneFile.Setup: Decodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications, workspaceCheck
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications, workspaceCheck,
+             suggested
     }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
@@ -308,6 +311,7 @@ extension SceneFile.Setup: Decodable {
         notch = try values.decodeIfPresent(Bool.self, forKey: .notch) ?? true
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
         workspaceCheck = try values.decodeIfPresent(WorkspaceCheck.self, forKey: .workspaceCheck)
+        suggested = try values.decodeIfPresent([PackageIndex.Entry].self, forKey: .suggested) ?? []
     }
 }
 

@@ -158,6 +158,23 @@
         "inApplications": {
           "description": "Whether StableBar runs from an Applications folder, which Open at login needs. true by default.",
           "type": "boolean"
+        },
+        "suggested": {
+          "description": "Store index entries the look step shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "version", "archive", "sha256"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "version": { "type": "string" },
+              "description": { "type": "string" },
+              "symbol": { "type": "string" },
+              "archive": { "type": "string" },
+              "sha256": { "type": "string" }
+            }
+          }
         }
       }
     },

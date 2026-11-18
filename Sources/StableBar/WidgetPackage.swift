@@ -589,7 +589,7 @@ func packageListing(_ packages: WidgetPackageStore) throws -> Data {
 
 // Unlike manifests, the index ignores unknown keys and entries of unknown kinds, because older apps read the same index.
 struct PackageIndex: Decodable, Sendable {
-    struct Entry: Decodable, Sendable {
+    struct Entry: Decodable, Sendable, Equatable {
         let id: String
         let name: String
         let version: String
