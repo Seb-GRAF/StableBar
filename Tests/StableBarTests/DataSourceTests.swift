@@ -93,14 +93,14 @@ private final class FakeSources {
     }
 }
 
-/// Waits up to two seconds for `condition`, then requires it.
+/// Checks `condition` every 20 ms, at most 100 times, then requires it where the caller waits.
 @MainActor
-func awaitCondition(_ condition: () -> Bool) async throws {
+func awaitCondition(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
     for _ in 0..<100 {
         if condition() { return }
         try await Task.sleep(for: .milliseconds(20))
     }
-    try #require(condition())
+    try #require(condition(), sourceLocation: sourceLocation)
 }
 
 @Test @MainActor func aBurstOfUpdatesReachesTheWidgetAsItsNewestValue() async throws {
@@ -629,8 +629,10 @@ private extension DataSourceRegistry {
 }
 
 @Test @MainActor func aMergeRunsItsInputsForItsWidgetsAndPublishesEachChangeUnderTheirNames() async throws {
+    // The test counts the calendar's reads, so its runner's own refresh, every 5 seconds by default, must not add one.
     let url = try writeTemporaryConfiguration(#"""
-    {"providers":{"power":{"type":"battery","whenVisible":true},"sound":{"type":"audio"},"meetings":{"type":"calendar","events":["tick"]},
+    {"providers":{"power":{"type":"battery","whenVisible":true},"sound":{"type":"audio"},
+                  "meetings":{"type":"calendar","events":["tick"],"interval":86400},
                   "status":{"type":"merge","providers":["power","sound","meetings"]}},
      "widgets":[{"id":"status","type":"provider","provider":"status","position":"right","events":["repaint"],
                  "rules":[{"when":{"value":"power.percent","below":0.2},"state":"warning"}]},
