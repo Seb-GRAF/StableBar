@@ -24,6 +24,7 @@ struct SetupTourView: View {
     @State private var confirmingSkip = false
     /// The menu bar's height as last read, so the pointer to the bar follows the bar when the menu bar hides or shows.
     @State private var currentMenuBarHeight: Double
+    @State private var managerGap: ManagerGap?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The date scenes draw at, which holds the pointer still so two drawings match.
     @Environment(\.fixedDate) private var fixedDate
@@ -777,8 +778,26 @@ struct SetupTourView: View {
             .frame(width: 440, alignment: .leading)
             .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
+            if let managerGap {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(managerGap.warning, systemImage: "exclamationmark.triangle").font(.system(size: 13, weight: .semibold))
+                    Text(managerGap.setting)
+                    Button("Check Again") { Task { await checkManagerGap() } }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.6))
+                .frame(width: 440, alignment: .leading)
+            }
             profileNotice(ProfileControlledSetting.all(in: session.store.configuration, origins: session.store.origins))
         }
+        .task { await checkManagerGap() }
+    }
+
+    private func checkManagerGap() async {
+        guard let configuration = session.store.configuration else { return }
+        managerGap = await session.store.windowClearance.checkManagerGap(configuration)
     }
 
     @ViewBuilder private func profileNotice(_ profileSettings: [ProfileControlledSetting]) -> some View {
