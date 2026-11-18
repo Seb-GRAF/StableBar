@@ -1,0 +1,333 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "providers": {
+      "meetings": {
+        "type": "calendar"
+      }
+    },
+    "widgets": [
+      {
+        "id": "meeting",
+        "type": "provider",
+        "provider": "meetings",
+        "position": "right",
+        "style": {
+          "width": 250
+        },
+        "layout": {
+          "type": "row",
+          "hideWhen": {
+            "field": "phase",
+            "equals": "none"
+          },
+          "style": {
+            "spacing": 6
+          },
+          "children": [
+            {
+              "type": "symbol",
+              "name": "calendar",
+              "hideWhen": {
+                "field": "phase",
+                "equals": "live"
+              }
+            },
+            {
+              "type": "symbol",
+              "name": "circle.fill",
+              "showWhen": {
+                "field": "phase",
+                "equals": "live"
+              },
+              "style": {
+                "iconSize": 8,
+                "foreground": "#30d158"
+              }
+            },
+            {
+              "type": "field",
+              "field": "title"
+            },
+            {
+              "type": "field",
+              "field": "start",
+              "showWhen": {
+                "field": "phase",
+                "equals": "later"
+              }
+            },
+            {
+              "type": "row",
+              "showWhen": [
+                {
+                  "field": "phase",
+                  "equals": "soon"
+                },
+                {
+                  "field": "phase",
+                  "equals": "now"
+                }
+              ],
+              "style": {
+                "spacing": 3
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "in"
+                },
+                {
+                  "type": "field",
+                  "field": "minutes"
+                },
+                {
+                  "type": "text",
+                  "text": "min"
+                }
+              ]
+            },
+            {
+              "type": "row",
+              "showWhen": {
+                "field": "phase",
+                "equals": "live"
+              },
+              "style": {
+                "spacing": 3,
+                "opacity": 0.7
+              },
+              "children": [
+                {
+                  "type": "field",
+                  "field": "minutes"
+                },
+                {
+                  "type": "text",
+                  "text": "min left"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "Join",
+              "hideWhenEmpty": "joinCommand",
+              "hideWhen": {
+                "field": "phase",
+                "equals": "later"
+              },
+              "onClickField": "joinCommand",
+              "style": {
+                "background": "#30d15840",
+                "cornerRadius": 9,
+                "paddingHorizontal": 8,
+                "paddingVertical": 2,
+                "fontWeight": "medium"
+              }
+            }
+          ]
+        },
+        "rules": [
+          {
+            "when": {
+              "field": "phase",
+              "equals": "soon"
+            },
+            "state": "warning"
+          },
+          {
+            "when": {
+              "field": "phase",
+              "equals": "now"
+            },
+            "state": "warning"
+          }
+        ],
+        "popup": {
+          "style": {
+            "width": 300
+          },
+          "layout": {
+            "type": "column",
+            "children": [
+              {
+                "type": "row",
+                "showWhen": [
+                  {
+                    "field": "phase",
+                    "equals": "soon"
+                  },
+                  {
+                    "field": "phase",
+                    "equals": "now"
+                  }
+                ],
+                "style": {
+                  "spacing": 3,
+                  "foreground": "#ff9f0a"
+                },
+                "children": [
+                  {
+                    "type": "text",
+                    "text": "Starts in",
+                    "style": {
+                      "width": 62
+                    }
+                  },
+                  {
+                    "type": "field",
+                    "field": "minutes",
+                    "style": {
+                      "width": 18
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "text": "min"
+                  }
+                ]
+              },
+              {
+                "type": "row",
+                "showWhen": {
+                  "field": "phase",
+                  "equals": "live"
+                },
+                "style": {
+                  "spacing": 4
+                },
+                "children": [
+                  {
+                    "type": "symbol",
+                    "name": "circle.fill",
+                    "style": {
+                      "iconSize": 8,
+                      "foreground": "#30d158",
+                      "width": 12
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "text": "Live ·",
+                    "style": {
+                      "width": 40
+                    }
+                  },
+                  {
+                    "type": "field",
+                    "field": "minutes",
+                    "style": {
+                      "width": 20
+                    }
+                  },
+                  {
+                    "type": "text",
+                    "text": "min left"
+                  }
+                ]
+              },
+              {
+                "type": "field",
+                "field": "title",
+                "style": {
+                  "fontSize": 15,
+                  "fontWeight": "medium"
+                }
+              },
+              {
+                "type": "list",
+                "source": "today",
+                "row": {
+                  "type": "row",
+                  "openField": "link",
+                  "children": [
+                    {
+                      "type": "field",
+                      "field": "start",
+                      "style": {
+                        "width": 48,
+                        "opacity": 0.7
+                      }
+                    },
+                    {
+                      "type": "field",
+                      "field": "title"
+                    },
+                    {
+                      "type": "symbol",
+                      "name": "video",
+                      "hideWhenEmpty": "link",
+                      "style": {
+                        "width": 18
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "type": "button",
+                "title": "Calendar access",
+                "hideWhen": {
+                  "field": "access",
+                  "equals": "granted"
+                },
+                "onClick": "open 'x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars'"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "time",
+        "type": "clock",
+        "format": "HH:mm",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "meeting": {
+      "text": "Design review",
+      "fields": {
+        "access": "granted",
+        "phase": "live",
+        "title": "Design review",
+        "start": "09:30",
+        "end": "10:30",
+        "minutes": "49",
+        "link": "https://meet.google.com/abc-defg-hij",
+        "joinCommand": "open 'https://meet.google.com/abc-defg-hij'"
+      },
+      "lists": {
+        "today": [
+          {
+            "title": "Daily stand-up",
+            "start": "09:00",
+            "end": "09:15",
+            "link": "https://meet.google.com/abc-defg-hij",
+            "joinCommand": "open 'https://meet.google.com/abc-defg-hij'"
+          },
+          {
+            "title": "Design review",
+            "start": "09:30",
+            "end": "10:30",
+            "link": "https://meet.google.com/abc-defg-hij",
+            "joinCommand": "open 'https://meet.google.com/abc-defg-hij'"
+          },
+          {
+            "title": "Lunch with Sam",
+            "start": "12:30",
+            "end": "13:30"
+          }
+        ]
+      },
+      "values": {
+        "remaining": 0.82
+      }
+    }
+  },
+  "draw": "bar",
+  "widget": "meeting",
+  "width": 560,
+  "height": 320
+}

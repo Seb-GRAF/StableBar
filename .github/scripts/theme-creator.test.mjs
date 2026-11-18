@@ -36,6 +36,7 @@ test("every number control has a range, step, unit and slider flag", () => {
     "widgets.paddingHorizontal": [[0, 40], 1, false],
     "widgets.paddingVertical": [[0, 40], 1, false],
     "widgets.shadowRadius": [[0, 1000], 1, false],
+    "workspaces.appIconSize": [[6, 40], 1, true],
     "workspaces.cornerRadius": [[0, 1000], 1, false],
     "workspaces.underlineWidth": [[0, 1000], 1, false],
     "workspaces.underlineHeight": [[0, 1000], 1, false],
@@ -333,6 +334,7 @@ test("every non-token contract path feeds the renderer", () => {
     "bar.style.borderColor": "#123456", "bar.style.borderWidth": 3, "bar.style.borderEdges": "all",
     "bar.inset": 20, "bar.spacing": 12,
     "workspaceDefaults.indicator": "none", "workspaceDefaults.style.foreground": "#123456",
+    "workspaceDefaults.appStyle.width": 23, "workspaceDefaults.appStyle.height": 21,
     "workspaceDefaults.style.states.focused.foreground": "#123456",
     "workspaceDefaults.style.states.focused.background": "#123456", "workspaceDefaults.style.cornerRadius": 4,
     "workspaceDefaults.indicatorStyle.width": 20, "workspaceDefaults.indicatorStyle.height": 4,
@@ -631,6 +633,62 @@ test("icon size uses the app's fallback and popup inheritance", () => {
   assert.equal(resolveTheme({}, config, "light").popupDefaults.iconSize, 17);
   config.popupDefaults = { iconSize: 19 };
   assert.equal(resolveTheme({}, config, "light").popupDefaults.iconSize, 19);
+});
+
+test("workspace icon size updates both dimensions, exports them and resets to the base", () => {
+  for (const id of baseIDs) {
+    const original = state(id);
+    const edited = applyControl(original, "workspaces.appIconSize", 24, "dark");
+    assert.deepEqual(edited.config.workspaceDefaults.appStyle, { width: 24, height: 24 });
+    const variables = cssVariables(resolveTheme(builtIn, edited.config, "light"));
+    assert.equal(variables["--ws-app-w"], "24px");
+    assert.equal(variables["--ws-app-h"], "24px");
+    assert.deepEqual(affectedVariables(edited, "workspaces.appIconSize", "dark"), ["--ws-app-h", "--ws-app-w"]);
+    assert.equal(differsFromBase(edited, "workspaces.appIconSize", original.config), true);
+    const files = themeFiles({ ...edited, manifest: { ...edited.manifest, id: `custom-${id}` } });
+    assert.deepEqual(JSON.parse(files.configText).workspaceDefaults.appStyle, { width: 24, height: 24 });
+    assert.deepEqual(parseTheme(decodeLink(encodeLink(files))).config.workspaceDefaults.appStyle, { width: 24, height: 24 });
+    assert.deepEqual(resetControl(edited, "workspaces.appIconSize", original.config).config, original.config);
+  }
+  const original = state("built-in");
+  original.config.workspaceDefaults ??= {};
+  original.config.workspaceDefaults.appStyle = { width: 20, height: 16, foreground: "#123456" };
+  const edited = applyControl(original, "workspaces.appIconSize", 24, "light");
+  assert.equal(edited.config.workspaceDefaults.appStyle.foreground, "#123456");
+  assert.deepEqual(resetControl(edited, "workspaces.appIconSize", original.config).config, original.config);
+  const defaults = cssVariables(resolveTheme({}, {}, "dark"));
+  assert.equal(defaults["--ws-app-w"], "14px");
+  assert.equal(defaults["--ws-app-h"], "14px");
+});
+
+test("workspace icon Reset reads token-backed parents and keeps leaf references", () => {
+  for (const tokenWorkspace of [false, true]) {
+    const config = {
+      tokens: { icons: { width: "@token.iconWidth", height: 16, foreground: "@token.accent" },
+        iconAlias: "@token.icons", iconWidth: 20, accent: "#123456" },
+      workspaceDefaults: { appStyle: "@token.iconAlias" },
+    };
+    if (tokenWorkspace) {
+      config.tokens.workspace = config.workspaceDefaults;
+      config.workspaceDefaults = "@token.workspace";
+    }
+    const original = structuredClone(config);
+    const state = { manifest: {}, config };
+    const edited = applyControl(state, "workspaces.appIconSize", 24, "dark");
+    assert.equal(differsFromBase(edited, "workspaces.appIconSize", config), true);
+    edited.config.workspaceDefaults.appStyle.foreground = "#654321";
+    const reset = resetControl(edited, "workspaces.appIconSize", config);
+    assert.deepEqual(reset.config.workspaceDefaults.appStyle,
+      { width: "@token.iconWidth", height: 16, foreground: "#654321" });
+    assert.equal(differsFromBase(reset, "workspaces.appIconSize", config), false);
+    for (const appearance of ["light", "dark"]) {
+      const variables = cssVariables(resolveTheme(builtIn, reset.config, appearance));
+      assert.equal(variables["--ws-app-w"], "20px");
+      assert.equal(variables["--ws-app-h"], "16px");
+    }
+    assert.deepEqual(config, original);
+    assert.deepEqual(reset.config.tokens, original.tokens);
+  }
 });
 
 test("unknown font weights fall back to regular after style inheritance", () => {

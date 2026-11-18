@@ -35,6 +35,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --batch JSON_ARRAY [--persist]
            StableBar [--config PATH] --profile NAME|auto [--persist]
            StableBar [--config PATH] --reset | --refresh ID | --popup ID | --focus
+           StableBar [--config PATH] --popup ID --open [--duration SECONDS] | --popup [ID] --close
            StableBar [--config PATH] --hide | --show | --toggle
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID [--source SOURCE]
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
@@ -86,8 +87,20 @@ enum LaunchCommand {
             self = .control(url, RuntimeRequest(action: .reset))
         case "--refresh" where arguments.count == 2:
             self = .control(url, RuntimeRequest(action: .refresh, id: arguments[1]))
+        case "--popup" where arguments == ["--popup", "--close"]:
+            self = .control(url, RuntimeRequest(action: .closePopup))
         case "--popup" where arguments.count == 2:
             self = .control(url, RuntimeRequest(action: .popup, id: arguments[1]))
+        case "--popup" where arguments.count == 3 && arguments[2] == "--close":
+            self = .control(url, RuntimeRequest(action: .closePopup, id: arguments[1]))
+        case "--popup" where arguments.count == 3 && arguments[2] == "--open":
+            self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1]))
+        case "--popup" where arguments.count == 5 && arguments[2] == "--open" && arguments[3] == "--duration":
+            // JSON can't carry inf or nan; the bar checks the range.
+            guard let seconds = Double(arguments[4]), seconds.isFinite else {
+                throw CommandFailure(message: "--duration takes a number of seconds.")
+            }
+            self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1], duration: seconds))
         case "--focus" where arguments.count == 1:
             self = .control(url, RuntimeRequest(action: .focus))
         case "--hide" where arguments.count == 1:

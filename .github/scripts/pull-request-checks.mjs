@@ -5,13 +5,13 @@ const keywords = "close|closes|closed|fix|fixes|fixed|resolve|resolves|resolved"
 const sectionNames = ["Problem", "Changes", "Testing"];
 const attributionHint = 'End it with the model and harness that did the work, such as "Claude Opus 5.5 via Claude Code", or with "No agent".';
 
-// The text GitHub shows, following CommonMark: auto-generated summaries and comments are hidden,
+// The text GitHub shows, following CommonMark: auto-generated blocks and comments are hidden,
 // code is shown as written, a comment that starts a line hides everything up to its "-->" (or the
 // rest of the description when it never closes), and an unclosed "<!--" inside a line is text.
 export function visibleText(body) {
   const text = (body ?? "")
     .replace(/\r\n/g, "\n")
-    .replace(/<!-- This is an auto-generated comment[\s\S]*?<!-- end of auto-generated comment[\s\S]*?-->/g, "");
+    .replace(/<!-- This is an auto-generated (?:comment|description)[\s\S]*?<!-- end of auto-generated (?:comment|description)[\s\S]*?-->/gi, "");
   const shown = [];
   let paragraph = [];
   let fence = null;

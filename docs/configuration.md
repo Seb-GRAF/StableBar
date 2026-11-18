@@ -43,6 +43,12 @@ This configuration was written for StableBar 0.10.0, so 0.9.0 skips bar.motion. 
 
 Skipped properties stay in the file, and edits made in the older version keep them. A profile condition it doesn't know never matches, so that profile applies only when you pin it with `profile`. If the configuration still fails to load, for example on a widget type the older version lacks, the error ends with the version the file was written for. Package manifests stay strict. In files written for the running version or an older one, unknown properties remain errors. Versions released before StableBar read newer files this way stop at the first unknown property in every case.
 
+## Sync across Macs
+
+**Settings → General → Configuration file → Sync with iCloud** moves the configuration folder, with its includes, widget scripts, themes and packages, to **iCloud Drive → StableBar** and leaves a link to it at `~/.config/stablebar`. Every Mac where you turn it on, signed in to the same Apple Account, then loads the same bar, and a change saved on one Mac applies on the others once iCloud brings it over. When iCloud Drive already has a configuration from another Mac, StableBar asks which one to keep; the other moves to the Trash. Turning sync off copies the folder back to `~/.config/stablebar` and leaves the copy in iCloud Drive for your other Macs.
+
+The switch is off when iCloud Drive is off, when StableBar runs with a configuration opened with `--config`, or when `~/.config/stablebar` is already a link somewhere else, such as into your dotfiles. When two Macs save at once, iCloud Drive keeps the other version as a copy such as `config 2.json`: StableBar keeps loading `config.json`, and Settings names the copy until you delete it. With **Optimize Mac Storage**, macOS can remove the files' contents to save space; StableBar then waits for iCloud to download them when it reads them, and shows an error, as for any file it can't read, if the download fails. Use [screen setups](layout.md#screen-setups) or [profiles](#theme-tokens-and-automatic-profiles) for what differs between Macs.
+
 ## Modules, templates and overrides
 
 Split a setup into JSON files and load them from the main configuration:
