@@ -1612,6 +1612,36 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     #expect(pointed.providers["issues"]?.token == "@secret.github/token")
 }
 
+@Test @MainActor func aPackageProviderFollowsNoRedirectOutsideItsHosts() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let source = directory.appending(path: "source")
+    try writePackageFile(#"{"id":"weather","name":"Weather","version":"1","kind":"widgets","entry":"config.json","hosts":["api.package-redirect.example"]}"#,
+                         to: source.appending(path: "package.json"))
+    try writePackageFile(#"{"providers":{"weather":{"type":"http","url":"https://api.package-redirect.example/now","output":{"text":"/text"}}}}"#,
+                         to: source.appending(path: "config.json"))
+    _ = try WidgetPackageStore(directory: directory.appending(path: "packages")).install(source)
+    var loader = ConfigurationLoader()
+    let providers = try loader.load(directory.appending(path: "config.json"), data: Data(#"""
+    {"packages":[{"id":"weather","version":"1"}],
+     "providers":{"mine":{"type":"http","url":"https://api.package-redirect.example/now","output":{"text":"/text"}}}}
+    """#.utf8)).providers
+    let away = URL(string: "https://elsewhere.package-redirect.example/now")!
+    StubURLProtocol.redirect(URL(string: "https://api.package-redirect.example/now")!, to: away)
+    StubURLProtocol.serve(Data(#"{"text":"moved"}"#.utf8), at: away)
+    let registry = DataSourceRegistry(types: [.http(session: StubURLProtocol.session())])
+    let script = ScriptWidget()
+    defer { script.stop() }
+
+    script.start(provider: providers["mine"]!, registry: registry)
+    try await awaitCondition { script.output.text == "moved" }
+    let followed = StubURLProtocol.requests.filter { $0.url == away }.count
+    script.start(provider: providers["weather"]!, registry: registry)
+    try await awaitCondition { script.error != nil }
+    #expect(script.error == "The server answered with HTTP status 302.")
+    #expect(StubURLProtocol.requests.filter { $0.url == away }.count == followed)
+}
+
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }

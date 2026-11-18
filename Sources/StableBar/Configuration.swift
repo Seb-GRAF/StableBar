@@ -801,7 +801,7 @@ struct Configuration: Decodable, Sendable {
     let popups: [String: PopupConfiguration]
     let environment: [String: String]
 
-    let providers: [String: ProviderConfiguration]
+    var providers: [String: ProviderConfiguration]
     let groups: [String: WidgetGroupConfiguration]
     /// Events that enabled widgets, and the providers they show, subscribe to.
     let subscribedEvents: Set<String>

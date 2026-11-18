@@ -134,7 +134,7 @@ extension DataSourceType {
 
     /// A JSON request read on a timer, with the parts of the response that `output` names. Web APIs limit how often
     /// a client may ask, so it reads once a minute by default. The session drops the token on a redirect to another
-    /// host and keeps no cache or cookies.
+    /// host, follows no redirect outside a package's `hosts` and keeps no cache or cookies.
     static func http(session: URLSession = .packageSources) -> DataSourceType {
         DataSourceType(name: "http", isNative: false, symbol: "globe", settings: [.url, .output], optionalSettings: [.headers, .token],
                        continuous: false, defaultInterval: 60) { provider, _ in
@@ -147,7 +147,7 @@ extension DataSourceType {
                         let token = try await BlockingWork.run { secretValue(reference) }
                         if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
                     }
-                    let (data, response) = try await session.data(for: request)
+                    let (data, response) = try await session.data(for: request, delegate: provider.hosts.map { SourceRedirectGuard(hosts: $0) })
                     let body = CommandResult(stdout: data, stderr: Data())
                     let status = (response as! HTTPURLResponse).statusCode
                     guard status == 200 else {

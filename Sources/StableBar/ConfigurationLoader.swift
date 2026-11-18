@@ -449,6 +449,7 @@ struct ConfigurationLoader: Sendable {
     private var packageBoundaries: [String: URL] = [:]
     private var packageNames: [String: String] = [:]
     private var packageIDs: [String: String] = [:]
+    private var packageHosts: [String: [String]] = [:]
     private var essentialsPopupNames: [String: String] = [:]
 
     /// What the bar warns about when it skipped properties of a configuration written for a newer release.
@@ -465,6 +466,9 @@ struct ConfigurationLoader: Sendable {
         try readingNewerFiles { loader in
             var configuration = try ConfigurationValue.object(loader.compose(url, data: data, context: context, previewTheme: previewTheme))
                 .decoded(Configuration.self)
+            for name in configuration.providers.keys {
+                configuration.providers[name]!.hosts = loader.origins["providers.\(name).url"].flatMap { loader.packageHosts[$0.file] }
+            }
             loader.screenDocuments = [:]
             for kind in configuration.screensWithOwnLook {
                 var screenLoader = loader
@@ -510,6 +514,7 @@ struct ConfigurationLoader: Sendable {
         packageBoundaries = [:]
         packageNames = [:]
         packageIDs = [:]
+        packageHosts = [:]
         widgetPackageNames = [:]
         widgetPackageIDs = [:]
         builtInWidgetIDs = []
@@ -862,6 +867,7 @@ struct ConfigurationLoader: Sendable {
         for source in layer.origins.values {
             packageNames[source.file] = manifest.name
             packageIDs[source.file] = manifest.id
+            packageHosts[source.file] = manifest.hosts
         }
         return layer
     }

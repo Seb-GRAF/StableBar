@@ -28,6 +28,8 @@ struct ProviderConfiguration: Decodable, Equatable, Sendable {
     let headers: [String: String]
     let token: String?
     let output: HTTPOutput?
+    /// When a package set the `url`, its `hosts`, the only ones a redirect may reach. The loader sets them.
+    var hosts: [String]?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, command, interval, timeout, environment, whenVisible, events, calendars, lookahead, todayOnly, soon, now, processes

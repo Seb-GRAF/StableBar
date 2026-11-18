@@ -97,7 +97,7 @@ These optional `package.json` keys describe a package, and the review shows them
 | `permissions` | macOS permissions: `calendars`, `automation`, `accessibility`, `bluetooth` or `location` |
 | `hosts` | Hostnames the package contacts, such as `api.github.com` |
 
-StableBar shows `requires`, `permissions` and `hosts`. It enforces `hosts` only for [`http` providers](providers.md#http), whose `url` must be on a listed host; commands can contact any host. For store packages that run commands, a maintainer checks all three against the code.
+StableBar shows `requires`, `permissions` and `hosts`. It enforces `hosts` only for [`http` providers](providers.md#http), whose `url` and redirects must stay on listed hosts; commands can contact any host. For store packages that run commands, a maintainer checks all three against the code.
 
 ### Linking to a package
 
