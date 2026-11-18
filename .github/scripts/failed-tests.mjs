@@ -54,10 +54,7 @@ export function retryPlan(xml, output) {
   return { names, tests, filter: filterFor(names) };
 }
 
-/**
- * Whether the retry's report `xml` shows each of `tests` passing, matched by suite and name: run, not skipped, and
- * without a failure. Another suite's test of the same name doesn't count.
- */
+/** Test names can repeat across suites, so a retried test must pass under its own suite and name. */
 export function retryPassed(xml, tests) {
   const cases = testCases(xml);
   const unproven = tests.filter(({ suite, name }) => {
