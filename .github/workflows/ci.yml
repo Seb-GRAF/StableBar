@@ -172,7 +172,8 @@ jobs:
           PY
       # A few Swift Testing tests that failed run once more on their own. Those that pass then are
       # flaky: the job passes with a warning naming them, so they get fixed without blocking the pull
-      # request. A test that fails again, an XCTest failure, a crash or more failures fail the job.
+      # request. A test that fails again or doesn't run, an XCTest failure, a crash, a failure outside any
+      # test or more failures fail the job.
       - name: Run failed tests again
         if: steps.test.outcome == 'failure'
         run: |
@@ -183,6 +184,14 @@ jobs:
             exit 1
           fi
           swift test --skip-build --disable-xctest --filter "$(jq -r .filter <<< "$plan")" --xunit-output test-results/retry.xml
+          # With only Swift Testing running, the report may keep the name it was given.
+          report=test-results/retry-swift-testing.xml
+          [[ -f "$report" ]] || report=test-results/retry.xml
+          retry=$(node .github/scripts/failed-tests.mjs --passed "$report" "$plan")
+          if error=$(jq -er '.error // empty' <<< "$retry"); then
+            echo "::error title=Tests failed::$error"
+            exit 1
+          fi
           {
             echo "### Flaky tests"
             echo
