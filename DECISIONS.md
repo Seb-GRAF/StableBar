@@ -59,12 +59,14 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.
+- **A package can't move another party's credentials** (2026-11-17, [#85], [#744]). A package may set the `url` of a provider, directly or in a profile, only when no file or profile gives that provider a token other than one of that package's own secrets, and no other file sets its `headers`. A package without commands can reach the Store after CI alone, so it must not point your token, a header you typed or another package's secret at its own host. In its own files, a package writes out each provider's `url` and `headers`, without `@token.` references, so StableBar needn't follow tokens to see where a request goes or what it sends. The check doesn't work out which profiles can be active together, so it can refuse an unusual but harmless setup. URLs and headers set in your own files stay free, `@token.` references included.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
 - **Blocking work stays off Swift's shared pool** (2026-11-13, [#618]). The pool has one thread per core, three on CI, and never replaces a blocked one. A slow copy or a lookup that can stall runs through `BlockingWork.run` on a GCD queue, and tests that block such work check that it does. [AGENTS.md](AGENTS.md#writing-tests) has the rule for tests.
 - **Comments are for the next reader** (2026-11-10, [#533]). A comment says what the code can't, such as why it must be so, in a line or two. How the bug was found and fixed goes in the issue, the pull request and the commit message. [AGENTS.md](AGENTS.md#writing-comments) has the rule.
 
 [#3]: https://github.com/Seb-GRAF/StableBar/issues/3
 [#23]: https://github.com/Seb-GRAF/StableBar/pull/23
+[#85]: https://github.com/Seb-GRAF/StableBar/issues/85
 [#100]: https://github.com/Seb-GRAF/StableBar/pull/100
 [#220]: https://github.com/Seb-GRAF/StableBar/issues/220
 [#223]: https://github.com/Seb-GRAF/StableBar/issues/223
@@ -85,5 +87,6 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#618]: https://github.com/Seb-GRAF/StableBar/issues/618
 [#664]: https://github.com/Seb-GRAF/StableBar/issues/664
 [#676]: https://github.com/Seb-GRAF/StableBar/issues/676
+[#744]: https://github.com/Seb-GRAF/StableBar/pull/744
 [#772]: https://github.com/Seb-GRAF/StableBar/issues/772
 [#773]: https://github.com/Seb-GRAF/StableBar/pull/773

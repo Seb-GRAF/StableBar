@@ -1515,6 +1515,144 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     }
 }
 
+@Test func packageProvidersRequestOnlyTheirHostsAndSendTheirSecretAsTheToken() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let source = directory.appending(path: "source")
+    let store = WidgetPackageStore(directory: directory.appending(path: "packages"))
+    try writePackageFile(#"""
+    {"id":"github","name":"GitHub","version":"1","kind":"widgets","entry":"config.json","hosts":["api.github.com"],
+     "settings":{"token":{"type":"secret"}}}
+    """#, to: source.appending(path: "package.json"))
+    for (configuration, message) in [
+        (#"{"providers":{"issues":{"type":"http","url":"https://example.com/issues","output":{}}}}"#,
+         "Provider issues requests https://example.com/issues, but the package's hosts don't list its host."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com@example.com/issues","output":{}}}}"#,
+         "Provider issues requests https://api.github.com@example.com/issues, but the package's hosts don't list its host."),
+        (#"{"profiles":[{"name":"work","configuration":{"providers":{"issues":{"type":"http","url":"https://example.com","output":{}}}}}]}"#,
+         "Provider issues requests https://example.com, but the package's hosts don't list its host."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","headers":{"Authorization":"@setting.token"},"output":{}}}}"#,
+         "@secret.github/token can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","headers":{"Authorization":"@token.auth"},"output":{}}}}"#,
+         "Package github must write out the url and headers of provider issues, without @token. references."),
+        (#"{"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","headers":"@token.auth","output":{}}}}"#,
+         "Package github must write out the url and headers of provider issues, without @token. references."),
+        (#"""
+        {"tokens":{"apiURL":"https://api.github.com/issues"},"providers":{"issues":{"type":"http","url":"@token.apiURL","output":{}}},
+         "profiles":[{"name":"work","configuration":{"tokens":{"apiURL":"https://example.com"}}}]}
+        """#, "Package github must write out the url and headers of provider issues, without @token. references.")
+    ] {
+        try writePackageFile(configuration, to: source.appending(path: "config.json"))
+        let error = #expect(throws: WidgetPackageError.self) { try store.inspect(source) }
+        #expect(error?.localizedDescription == message)
+    }
+    try writePackageFile(#"""
+    {"providers":{"issues":{"type":"http","url":"https://api.github.com/issues","token":"@setting.token",
+                            "output":{"text":"/0/title","lists":{"issues":""}}}},
+     "widgets":[{"id":"issues","type":"provider","provider":"issues","position":"right"}]}
+    """#, to: source.appending(path: "config.json"))
+    #expect(try store.install(source).commands.isEmpty)
+    var loader = ConfigurationLoader()
+    let configuration = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"github","version":"1"}]}"#.utf8))
+    #expect(configuration.providers["issues"]?.token == "@secret.github/token")
+
+    let issues = #"{"issues":{"type":"http","url":"https://evil.example/issues","output":{}}}"#
+    let tokenless = #"{"issues":{"type":"http","url":"https://evil.example/issues","token":null,"output":{}}}"#
+    let withHeaders = #"{"issues":{"type":"http","url":"https://evil.example/issues","headers":{"Accept":"application/json"},"output":{}}}"#
+    for (version, document) in [("1", #"{"providers":\#(issues)}"#),
+                                ("2", #"{"profiles":[{"name":"work","configuration":{"providers":\#(issues)}}]}"#),
+                                ("3", #"{"profiles":[{"name":"work","configuration":{"providers":\#(tokenless)}}]}"#),
+                                ("4", #"{"providers":\#(withHeaders)}"#)] {
+        try writePackageFile(#"{"id":"evil","name":"Evil","version":"\#(version)","kind":"widgets","entry":"config.json","hosts":["evil.example"]}"#,
+                             to: source.appending(path: "package.json"))
+        try writePackageFile(document, to: source.appending(path: "config.json"))
+        _ = try store.install(source)
+    }
+    let ownIssues = #""providers":{"issues":{"type":"http","url":"https://api.github.com/issues","token":"@secret.github/token","output":{}}}"#
+    let tokenInProfile = #"""
+    "providers":{"issues":{"type":"http","url":"https://api.github.com/issues","output":{}}},
+    "profiles":[{"name":"mine","configuration":{"providers":{"issues":{"token":"@secret.github/token"}}}}]
+    """#
+    let typedToken = #""providers":{"issues":{"type":"http","url":"https://api.github.com/issues","token":"ghp_typed","output":{}}}"#
+    for configuration in [#"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"1"}]}"#,
+                          #"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"2"}]}"#,
+                          #"{"packages":[{"id":"github","version":"1"},{"id":"evil","version":"3"}]}"#,
+                          #"{"packages":[{"id":"evil","version":"2"}],\#(ownIssues)}"#,
+                          #"{"packages":[{"id":"evil","version":"2"}],\#(tokenInProfile)}"#,
+                          #"{"packages":[{"id":"evil","version":"2"}],\#(typedToken)}"#] {
+        let error = #expect(throws: WidgetPackageError.self) {
+            try loader.load(directory.appending(path: "config.json"), data: Data(configuration.utf8))
+        }
+        #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
+            + "but the provider can send a token that isn't a secret of package evil.")
+    }
+    let typedHeader = #"{"packages":[{"id":"evil","version":"4"}],"providers":{"issues":{"headers":{"Authorization":"Bearer ghp_typed"}}}}"#
+    let headersToken = #"""
+    {"packages":[{"id":"evil","version":"2"}],"tokens":{"auth":{"Authorization":"Bearer ghp_typed"}},
+     "providers":{"issues":{"type":"http","url":"https://api.github.com/issues","headers":"@token.auth","output":{}}}}
+    """#
+    for configuration in [typedHeader, headersToken] {
+        let error = #expect(throws: WidgetPackageError.self) {
+            try loader.load(directory.appending(path: "config.json"), data: Data(configuration.utf8))
+        }
+        #expect(error?.localizedDescription == "Package evil points provider issues at https://evil.example/issues, "
+            + "but the provider can send headers that package evil doesn't set.")
+    }
+    let ownHeaders = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"evil","version":"4"}]}"#.utf8))
+    #expect(ownHeaders.providers["issues"]?.headers == ["Accept": "application/json"])
+    let withoutToken = try loader.load(directory.appending(path: "config.json"), data: Data(#"{"packages":[{"id":"evil","version":"1"}]}"#.utf8))
+    #expect(withoutToken.providers["issues"]?.url == URL(string: "https://evil.example/issues"))
+    #expect(withoutToken.providers["issues"]?.token == nil)
+    let pointed = try loader.load(directory.appending(path: "config.json"), data: Data(#"""
+    {"packages":[{"id":"github","version":"1"}],"tokens":{"elsewhere":"https://example.com/issues","accept":{"Accept":"application/json"}},
+     "providers":{"issues":{"url":"@token.elsewhere","headers":"@token.accept"}}}
+    """#.utf8))
+    #expect(pointed.providers["issues"]?.url == URL(string: "https://example.com/issues"))
+    #expect(pointed.providers["issues"]?.headers == ["Accept": "application/json"])
+    #expect(pointed.providers["issues"]?.token == "@secret.github/token")
+}
+
+@Test @MainActor func aPackageProviderFollowsNoRedirectOutsideItsHosts() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let source = directory.appending(path: "source")
+    try writePackageFile(#"{"id":"weather","name":"Weather","version":"1","kind":"widgets","entry":"config.json","hosts":["api.package-redirect.example"]}"#,
+                         to: source.appending(path: "package.json"))
+    try writePackageFile(#"{"providers":{"weather":{"type":"http","url":"https://api.package-redirect.example/now","output":{"text":"/text"}}}}"#,
+                         to: source.appending(path: "config.json"))
+    _ = try WidgetPackageStore(directory: directory.appending(path: "packages")).install(source)
+    var loader = ConfigurationLoader()
+    let providers = try loader.load(directory.appending(path: "config.json"), data: Data(#"""
+    {"packages":[{"id":"weather","version":"1"}],
+     "providers":{"mine":{"type":"http","url":"https://api.package-redirect.example/now","output":{"text":"/text"}}}}
+    """#.utf8)).providers
+    let away = URL(string: "https://elsewhere.package-redirect.example/now")!
+    StubURLProtocol.redirect(URL(string: "https://api.package-redirect.example/now")!, to: away)
+    StubURLProtocol.serve(Data(#"{"text":"moved"}"#.utf8), at: away)
+    let registry = DataSourceRegistry(types: [.http(session: StubURLProtocol.session())])
+    let script = ScriptWidget()
+    defer { script.stop() }
+
+    script.start(provider: providers["mine"]!, registry: registry)
+    try await awaitCondition { script.output.text == "moved" }
+    let followed = StubURLProtocol.requests.filter { $0.url == away }.count
+    script.start(provider: providers["weather"]!, registry: registry)
+    try await awaitCondition { script.error != nil }
+    #expect(script.error == "The server answered with HTTP status 302.")
+    #expect(StubURLProtocol.requests.filter { $0.url == away }.count == followed)
+
+    let url = directory.appending(path: "config.json")
+    try Data(#"{"packages":[{"id":"weather","version":"1"}],"providers":{"weather":{"url":"https://api.package-redirect.example/now"}}}"#.utf8)
+        .write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.configuration?.providers["weather"]?.hosts == nil)
+    try Data(#"{"packages":[{"id":"weather","version":"1"}]}"#.utf8).write(to: url)
+    store.reloadConfiguration()
+    #expect(store.configuration?.providers["weather"]?.hosts == ["api.package-redirect.example"])
+}
+
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
