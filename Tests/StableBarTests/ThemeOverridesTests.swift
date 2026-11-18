@@ -170,6 +170,7 @@ final class ThemeOverridesTests: XCTestCase {
         let reset = try overrides.resetEdit.applying(to: main, widgetIDs: &ids)
         XCTAssertNil(reset["groupDefaults"])
         XCTAssertEqual(reset["groups"], .object(["mine": .object(["style": .object(["spacing": .number(2)])])]))
+        XCTAssertEqual(ThemeOverrides(main: ["groups": main["groups"]!], theme: ["groupDefaults": .null], widgets: []).values, [])
     }
 
     func testColorsNullsAndNestedPresentationPropertiesAreNamedAndResetPrecisely() throws {

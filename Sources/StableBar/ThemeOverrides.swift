@@ -33,8 +33,8 @@ struct ThemeOverrides {
                     let colors = ConfigurationValue.object(Dictionary(uniqueKeysWithValues: themeTokens.map { ($0.name, ConfigurationValue.null) }))
                     themed = themed.map { $0.overriding(colors) } ?? colors
                 }
-                if key == "groups", let base = theme["groupDefaults"], case let .object(groups) = own {
-                    let started = ConfigurationValue.object(groups.mapValues { _ in .object(["style": base]) })
+                if key == "groups", case let .object(base)? = theme["groupDefaults"], case let .object(groups) = own {
+                    let started = ConfigurationValue.object(groups.mapValues { _ in .object(["style": .object(base)]) })
                     themed = themed.map { $0.overriding(started) } ?? started
                 }
                 guard let themed else { continue }
