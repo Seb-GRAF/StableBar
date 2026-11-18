@@ -116,14 +116,16 @@ final class ConfigurationHistory {
             profile.when = current.when == nil && conditions == ProfileConditions() ? nil : conditions
             var changes = try profileChanges(from: current, to: profile)
             if changes.isEmpty { return [] }
-            // A condition only the main file sets is removed rather than set to null: a release that doesn't know its
-            // key would count it as a condition it can't check, and the profile would never match there.
+            // A condition no other file sets is removed rather than set to null: a release that doesn't know its key
+            // would count it as a condition it can't check, and the profile would never match there.
             let main = store.configurationURL.standardizedFileURL.path
             var removals: [ConfigurationEdit] = []
-            if store.profileFiles[name]?.contains(where: { $0 != main }) != true, case let .object(when) = changes["when"] {
-                let cleared = when.filter { $0.value == .null }
+            if case let .object(when) = changes["when"] {
+                let cleared = when.filter { key, value in
+                    value == .null && store.contributions["profiles.\(name).when.\(key)"]?.contains { $0.origin.file != main } != true
+                }
                 if !cleared.isEmpty {
-                    changes["when"] = .object(when.filter { $0.value != .null })
+                    changes["when"] = .object(when.filter { cleared[$0.key] == nil })
                     removals.append(ConfigurationEdit(action: .unset, properties: ["profiles": .object([name: .object(["when": .object(cleared)])])]))
                 }
             }

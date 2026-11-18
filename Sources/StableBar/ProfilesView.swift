@@ -74,7 +74,10 @@ struct ProfilesView: View {
         .onAppear {
             guard !offline else { return }
             live = SystemContext.current(checking: store.profiles)
-            liveWatch = SystemContext { [store] in live = SystemContext.current(checking: store.profiles) }
+            liveWatch = SystemContext { [store] in
+                live = SystemContext.current(checking: store.profiles)
+                network = SystemContext.wifiNetwork()
+            }
             liveWatch?.watch(store.profiles)
         }
         .onChange(of: store.profiles) { liveWatch?.watch(store.profiles) }
@@ -272,6 +275,8 @@ struct ProfilesView: View {
 
     private var context: ConfigurationContext {
         var context = store.profileContext
+        context.app = store.context.app
+        context.displays = store.context.displays
         context.wifi = live.wifi
         context.camera = live.camera
         context.microphone = live.microphone

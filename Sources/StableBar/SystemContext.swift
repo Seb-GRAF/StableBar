@@ -64,12 +64,10 @@ final class SystemContext {
         let starts = (checks.wifi && !watchesWiFi) || (checks.privacy && !watchesPrivacy)
         let changed: @Sendable () -> Void = { [weak self] in MainActor.assumeIsolated { self?.changed() } }
         if checks.wifi != watchesWiFi {
-            if checks.wifi { try? wifi.start(changed: changed) } else { wifi.stop() }
-            watchesWiFi = checks.wifi
+            if checks.wifi { watchesWiFi = (try? wifi.start(changed: changed)) != nil } else { wifi.stop(); watchesWiFi = false }
         }
         if checks.privacy != watchesPrivacy {
-            if checks.privacy { try? privacy.start(changed: changed) } else { privacy.stop() }
-            watchesPrivacy = checks.privacy
+            if checks.privacy { watchesPrivacy = (try? privacy.start(changed: changed)) != nil } else { privacy.stop(); watchesPrivacy = false }
         }
         if starts { DispatchQueue.main.async(execute: changed) }
     }
