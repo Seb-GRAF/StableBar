@@ -5,6 +5,26 @@ import SwiftUI
 import Testing
 @testable import StableBar
 
+@Test(arguments: [
+    (#"{"id":"menus","type":"appMenu","position":"left"}"#, AppMenuDisplayMode.name),
+    (#"{"id":"menus","type":"appMenu","position":"left","displayMode":"name"}"#, .name),
+    (#"{"id":"menus","type":"appMenu","position":"left","displayMode":"icon"}"#, .icon),
+])
+func appMenuDisplayModeDecodesWithBackwardCompatibleDefault(_ json: String, _ expected: AppMenuDisplayMode) throws {
+    let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(json.utf8))
+    #expect(widget.content == .appMenu(expandOnHover: false, displayMode: expected))
+}
+
+@Test func appMenuDisplayModeRejectsUnknownValuesAndSelectsOnlyAppTitleIcon() throws {
+    #expect(throws: DecodingError.self) {
+        try JSONDecoder().decode(WidgetConfiguration.self, from: Data(#"{"id":"menus","type":"appMenu","position":"left","displayMode":"symbol"}"#.utf8))
+    }
+    #expect(AppMenuDisplayMode.icon.showsIcon(forMenuIndex: 0, isAppleMenu: false))
+    #expect(!AppMenuDisplayMode.name.showsIcon(forMenuIndex: 0, isAppleMenu: false))
+    #expect(!AppMenuDisplayMode.icon.showsIcon(forMenuIndex: 1, isAppleMenu: false))
+    #expect(!AppMenuDisplayMode.icon.showsIcon(forMenuIndex: 0, isAppleMenu: true))
+}
+
 @Test func scriptOutputSupportsTextAndRichUpdates() throws {
     let plain = try ScriptOutput.read(Data("  1.42\n".utf8))
     #expect(plain.text == "1.42")

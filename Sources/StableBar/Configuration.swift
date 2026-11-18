@@ -429,7 +429,7 @@ enum WidgetContent: Equatable, Sendable {
     case provider(String)
     case workspaces
     case activeApp
-    case appMenu(expandOnHover: Bool)
+    case appMenu(expandOnHover: Bool, displayMode: AppMenuDisplayMode)
     case appleMenu(click: AppleMenuClick)
     case controlCenter
     case stableBar
@@ -437,6 +437,14 @@ enum WidgetContent: Equatable, Sendable {
     case clock(format: String)
     case text(String)
     case script(command: String, interval: Double?)
+}
+
+enum AppMenuDisplayMode: String, Decodable, Sendable {
+    case name, icon
+
+    func showsIcon(forMenuIndex index: Int, isAppleMenu: Bool) -> Bool {
+        self == .icon && index == 0 && !isAppleMenu
+    }
 }
 
 struct WidgetConfiguration: Decodable, Identifiable, Sendable {
@@ -486,7 +494,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case id, role, position, type, icon, tooltip, onClick, open, menu, popup, popupName, style, format, text, command, interval
         case display, layout, hoverLayout, overlay, animation, workspace, events, environment, timeout, actions, enabled, provider, group, priority, overflow, rules, transition
-        case expandOnHover, openOnHover, rightClickInMenuBar, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
+        case expandOnHover, displayMode, openOnHover, rightClickInMenuBar, shown, hidden, details, hideWhenIdle, timeZone, click, background, popupBackground, tooltipBackground
     }
 
     var group: String? { ownGroup ?? joinedGroup }
@@ -551,7 +559,8 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
         case "provider": content = .provider(try values.decode(String.self, forKey: .provider))
         case "aerospace", "workspaces": content = .workspaces
         case "activeApp": content = .activeApp
-        case "appMenu": content = .appMenu(expandOnHover: try values.decodeIfPresent(Bool.self, forKey: .expandOnHover) ?? false)
+        case "appMenu": content = .appMenu(expandOnHover: try values.decodeIfPresent(Bool.self, forKey: .expandOnHover) ?? false,
+                                            displayMode: try values.decodeIfPresent(AppMenuDisplayMode.self, forKey: .displayMode) ?? .name)
         case "appleMenu": content = .appleMenu(click: try values.decodeIfPresent(AppleMenuClick.self, forKey: .click) ?? .menu)
         case "controlCenter": content = .controlCenter
         case "stableBar": content = .stableBar

@@ -813,12 +813,14 @@ struct WidgetView: View {
                     store.popup.showTooltip(name, widget: widget, defaults: popupDefaults.popupStyle(over: defaults), store: store, anchor: anchor)
                 }
             }
-        case let .appMenu(expandOnHover) where widget.layout == nil:
+        case let .appMenu(expandOnHover, displayMode) where widget.layout == nil:
             let expands = expandOnHover && moreWidgetsAnchor == nil
             let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
             AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
                         expanded: barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
-                        appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
+                        displayMode: displayMode, appIcon: store.activeApp?.icon,
+                        appearance: appearance, padding: padding,
+                        openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess, expansionChanged: { expanded in
                 if !measuring && expands {
                     store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
@@ -1438,6 +1440,8 @@ struct AppMenuView: View {
     var hovering = false
     var expanded = false
     var isAppleMenu = false
+    var displayMode: AppMenuDisplayMode = .name
+    var appIcon: NSImage?
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     var openAnchor: ObjectIdentifier?
@@ -1476,7 +1480,9 @@ struct AppMenuView: View {
             }
             ForEach(Array(items.prefix(count).enumerated()), id: \.offset) { index, item in
                 let anchor = anchors[index].map(ObjectIdentifier.init)
-                AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu, appearance: appearance, padding: padding,
+                AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu,
+                             appIcon: displayMode.showsIcon(forMenuIndex: index, isAppleMenu: isAppleMenu) ? appIcon : nil,
+                             appearance: appearance, padding: padding,
                              highlighted: openAnchor.map { $0 == anchor } ?? (hoveredItem == item), anchors: $anchors) {
                     open(item, anchors[index]!)
                 }
@@ -1514,11 +1520,17 @@ extension AppMenuView {
     private var measuringRow: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                Text(item.title).fontWeight(index == 0 ? .bold : nil)
-                    .padding(.horizontal, isAppleMenu ? 0 : 7)
-                    .padding(padding)
-                    .fixedSize()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { titleWidths["\(index):\(item.title)"] = $0 }
+                Group {
+                    if displayMode.showsIcon(forMenuIndex: index, isAppleMenu: isAppleMenu), let appIcon {
+                        Image(nsImage: appIcon).resizable().scaledToFit().frame(width: 20, height: 20)
+                    } else {
+                        Text(item.title).fontWeight(index == 0 ? .bold : nil)
+                    }
+                }
+                .padding(.horizontal, isAppleMenu ? 0 : 7)
+                .padding(padding)
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { titleWidths["\(index):\(item.title)"] = $0 }
             }
             AppMenuOverflowButton.label(padding: padding)
                 .fixedSize()
@@ -1566,6 +1578,7 @@ private struct AppMenuTitle: View {
     let item: AppMenuItem
     let index: Int
     let isAppleMenu: Bool
+    let appIcon: NSImage?
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     let highlighted: Bool
@@ -1579,6 +1592,9 @@ private struct AppMenuTitle: View {
             Group {
                 if isAppleMenu {
                     Image(systemName: "apple.logo").accessibilityLabel(item.title)
+                } else if let appIcon {
+                    Image(nsImage: appIcon).resizable().scaledToFit().frame(width: 20, height: 20)
+                        .accessibilityLabel(item.title)
                 } else {
                     Text(item.title).fontWeight(index == 0 ? .bold : nil)
                 }
