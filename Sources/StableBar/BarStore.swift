@@ -36,7 +36,7 @@ final class BarStore: NSObject {
     var onConfigurationChange: (() -> Void)?
     var onCustomize: (() -> Void)?
     var onShowCrashes: (() -> Void)?
-    var onCustomizeWidget: ((String) -> Void)?
+    var onCustomizeItem: ((CustomizationTarget) -> Void)?
     var onCustomizePackages: (() -> Void)?
     let pendingLinks = PendingLinks()
     var onCustomizeProfile: ((String) -> Void)?
@@ -1018,7 +1018,7 @@ final class BarStore: NSObject {
         case .report:
             return try JSONDecoder().decode(ConfigurationValue.self, from: JSONEncoder().encode(liveReport()))
         case .customize:
-            if let id = request.id { onCustomizeWidget?(id) }
+            if let id = request.id { onCustomizeItem?(.widget(id)) }
             else { onCustomize?() }
         case .reload:
             barEditing.end()
