@@ -37,16 +37,18 @@ test("failedTests lists the test cases that recorded a failure, by their names a
 
 test("filterFor matches each name literally", () => {
   const filter = filterFor(["timesOut()", "rejects(json:)", "odd.name[1]*()"]);
-  assert.equal(filter, String.raw`timesOut\(\)|rejects\(json:\)|odd\.name\[1\]\*\(\)`);
+  assert.equal(filter, String.raw`(?:^|[./])timesOut\(\)|(?:^|[./])rejects\(json:\)|(?:^|[./])odd\.name\[1\]\*\(\)`);
   const pattern = new RegExp(filter);
-  assert.ok(pattern.test("StableBarTests/timesOut()"));
+  assert.ok(pattern.test("StableBarTests.timesOut()"));
+  assert.ok(pattern.test("StableBarTests.Suite/rejects(json:)"));
   assert.ok(pattern.test("rejects(json:)"));
-  assert.ok(!pattern.test("timesOutLater()"));
+  assert.ok(!pattern.test("StableBarTests.timesOutLater()"));
+  assert.ok(!pattern.test("StableBarTests.neverTimesOut()"));
 });
 
 test("retryPlan runs a few failed Swift Testing tests again, and nothing after XCTest failures, crashes or many failures", () => {
   assert.deepEqual(retryPlan(report({ "aTest()": "Expectation failed", "other()": null }), output),
-    { names: ["aTest()"], filter: String.raw`aTest\(\)` });
+    { names: ["aTest()"], filter: String.raw`(?:^|[./])aTest\(\)` });
   assert.match(retryPlan(report({ "aTest()": "Expectation failed" }),
     `${output}Test Case '-[StableBarTests.PackagesViewTests testReview]' failed (1.2 seconds).\n`).error, /XCTest/);
   assert.match(retryPlan(report({ "aTest()": "Expectation failed" }), `${output}error: Exited with unexpected signal code 6\n`).error, /crashed/);
@@ -56,6 +58,11 @@ test("retryPlan runs a few failed Swift Testing tests again, and nothing after X
   assert.match(retryPlan(report(many), output).error, new RegExp(`${maxRetried + 1} tests failed`));
   const few = Object.fromEntries(Array.from({ length: maxRetried }, (_, index) => [`test${index}()`, "failed"]));
   assert.equal(retryPlan(report(few), output).names.length, maxRetried);
+  // The same name in several suites counts once per suite.
+  const suites = Array.from({ length: maxRetried + 1 }, (_, index) =>
+    `<testcase classname="StableBarTests.Suite${index}" name="check()" time="1"><failure message="failed" /></testcase>`).join("\n");
+  const sameName = `<testsuites><testsuite failures="${maxRetried + 1}" errors="0">\n${suites}\n</testsuite></testsuites>`;
+  assert.match(retryPlan(sameName, output).error, new RegExp(`${maxRetried + 1} tests failed`));
 });
 
 test("retryPassed needs each retried test to have run and passed", () => {
@@ -71,7 +78,7 @@ test("the command prints the plan as JSON, and an error when the report is missi
   writeFileSync(join(folder, "results-swift-testing.xml"), report({ "aTest()": "Expectation failed" }));
   writeFileSync(join(folder, "output.txt"), output);
   const run = (...files) => JSON.parse(execFileSync(process.execPath, [new URL("./failed-tests.mjs", import.meta.url).pathname, ...files], { encoding: "utf8" }));
-  assert.deepEqual(run(join(folder, "results-swift-testing.xml"), join(folder, "output.txt")), { names: ["aTest()"], filter: String.raw`aTest\(\)` });
+  assert.deepEqual(run(join(folder, "results-swift-testing.xml"), join(folder, "output.txt")), { names: ["aTest()"], filter: String.raw`(?:^|[./])aTest\(\)` });
   assert.match(run(join(folder, "missing.xml"), join(folder, "output.txt")).error, /no test report/);
   writeFileSync(join(folder, "retry-swift-testing.xml"), report({ "aTest()": null }));
   const plan = JSON.stringify({ names: ["aTest()"], filter: String.raw`aTest\(\)` });

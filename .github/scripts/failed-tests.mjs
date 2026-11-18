@@ -14,16 +14,18 @@ const decode = (text) =>
       ? String.fromCodePoint(entity[1].toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10))
       : entities[entity] ?? whole);
 
-/** Each test case in `xml`: its name, such as `aTest()` or `aTest(value:)`, and what's inside it. */
+/** Each test case in `xml`: its suite, its name, such as `aTest()` or `aTest(value:)`, and what's inside it. */
 const testCases = (xml) =>
   [...xml.matchAll(/<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g)].flatMap(([, attributes, , body = ""]) => {
     const name = /\bname="([^"]*)"/.exec(attributes)?.[1];
-    return name === undefined ? [] : [{ name: decode(name), body }];
+    const suite = /\bclassname="([^"]*)"/.exec(attributes)?.[1] ?? "";
+    return name === undefined ? [] : [{ suite: decode(suite), name: decode(name), body }];
   });
+const failed = ({ body }) => /<(failure|error)\b/.test(body);
 
 /** The names of the test cases in `xml` that recorded a failure or an error. */
 export function failedTests(xml) {
-  return [...new Set(testCases(xml).filter(({ body }) => /<(failure|error)\b/.test(body)).map(({ name }) => name))];
+  return [...new Set(testCases(xml).filter(failed).map(({ name }) => name))];
 }
 
 /** The failures and errors the suites count, against those recorded inside a test case. */
@@ -36,10 +38,10 @@ function failureCounts(xml) {
   return { total, inTests };
 }
 
-/** A `swift test --filter` pattern that matches each name as written. */
-export const filterFor = (names) => names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+/** A `swift test --filter` pattern for each name as written, which a test ID such as `Module.aTest()` ends with. */
+export const filterFor = (names) => names.map((name) => `(?:^|[./])${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).join("|");
 
-/** Whether the failed run may be retried, from its xUnit report and its output. */
+/** Only a few failed Swift Testing tests, each named in the report, run again. */
 export function retryPlan(xml, output) {
   if (/Test Case '[^']*' failed/.test(output)) return { error: "An XCTest test failed. Only Swift Testing tests run again." };
   if (/unexpected signal code|Fatal error:|exited with signal/.test(output)) return { error: "The test run crashed, so no test runs again." };
@@ -47,7 +49,8 @@ export function retryPlan(xml, output) {
   if (names.length === 0) return { error: "The test run failed, but its report lists no failed Swift Testing test to run again." };
   const { total, inTests } = failureCounts(xml);
   if (total > inTests) return { error: `The report counts ${total} failures but names tests for only ${inTests}, so the others can't run again.` };
-  if (names.length > maxRetried) return { error: `${names.length} tests failed, more than the ${maxRetried} that run again.` };
+  const count = new Set(testCases(xml).filter(failed).map(({ suite, name }) => `${suite}\n${name}`)).size;
+  if (count > maxRetried) return { error: `${count} tests failed, more than the ${maxRetried} that run again.` };
   return { names, filter: filterFor(names) };
 }
 
