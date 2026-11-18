@@ -728,7 +728,7 @@ final class BarStore: NSObject {
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
         adopt(loader)
-        if effectiveDocument == loader.document, screenDocuments == loader.screenDocuments {
+        if effectiveDocument == loader.document, screenDocuments == loader.screenDocuments, configuration?.providers == next.providers {
             origins = loader.origins
             activeProfiles = loader.activeProfiles
             configurationError = nil

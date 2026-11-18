@@ -1640,6 +1640,17 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try await awaitCondition { script.error != nil }
     #expect(script.error == "The server answered with HTTP status 302.")
     #expect(StubURLProtocol.requests.filter { $0.url == away }.count == followed)
+
+    let url = directory.appending(path: "config.json")
+    try Data(#"{"packages":[{"id":"weather","version":"1"}],"providers":{"weather":{"url":"https://api.package-redirect.example/now"}}}"#.utf8)
+        .write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    #expect(store.configuration?.providers["weather"]?.hosts == nil)
+    try Data(#"{"packages":[{"id":"weather","version":"1"}]}"#.utf8).write(to: url)
+    store.reloadConfiguration()
+    #expect(store.configuration?.providers["weather"]?.hosts == ["api.package-redirect.example"])
 }
 
 @Test func manifestsDeclareWhatAPackageNeedsAndKeepTheirScreenshotInside() throws {
