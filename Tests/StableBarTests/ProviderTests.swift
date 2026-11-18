@@ -175,6 +175,52 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(providerRetryDelay(interval: 600, failures: 100) == 600)
 }
 
+@Test func httpOutputCopiesWhatItsJSONPointersFind() throws {
+    let response = try JSONDecoder().decode(ConfigurationValue.self, from: Data(#"""
+    {"current":{"temperature_2m":21.4,"weather_code":3,"is_day":true},"current_units":{"temperature_2m":"°C"},
+     "a/b":{"m~n":"escaped"},"price":"67000.12","missingPrice":"NaN","hugePrice":"1e400",
+     "items":[{"name":"stablebar","stars":12,"archived":false,"owner":{"login":"seb"}},"skipped",{"name":"empty","topics":[]}]}
+    """#.utf8))
+    let output = try JSONDecoder().decode(HTTPOutput.self, from: Data(#"""
+    {"text":"/current/temperature_2m",
+     "fields":{"code":"/current/weather_code","day":"/current/is_day","unit":"/current_units/temperature_2m","escaped":"/a~1b/m~0n",
+               "first":"/items/0/name","missing":"/current/wind","outside":"/items/9/name","object":"/current",
+               "minusZero":"/items/-0/name","leadingZero":"/items/00/name","plus":"/items/+0/name"},
+     "values":{"temperature":"/current/temperature_2m","price":"/price","unit":"/current_units/temperature_2m",
+               "missingPrice":"/missingPrice","hugePrice":"/hugePrice"},
+     "lists":{"repos":"/items","missing":"/repos","object":"/current"}}
+    """#.utf8)).output(from: response)
+    #expect(output == ScriptOutput(text: "21.4", fields: ["code": "3", "day": "true", "unit": "°C", "escaped": "escaped", "first": "stablebar"],
+                                   lists: ["repos": [["name": "stablebar", "stars": "12", "archived": "false"], ["name": "empty"]]],
+                                   values: ["temperature": 21.4, "price": 67000.12]))
+}
+
+@Test @MainActor func anHTTPProviderSendsItsHeadersAndTokenAndReportsAFailedStatus() async throws {
+    let registry = DataSourceRegistry(types: [.http(session: StubURLProtocol.session())])
+    let url = URL(string: "https://api.http-provider.example/weather")!
+    let body = Data(#"{"current":{"temperature_2m":21.4}}"#.utf8)
+    StubURLProtocol.serve(body, at: url)
+    let script = ScriptWidget()
+    defer { script.stop() }
+    script.start(provider: try JSONDecoder().decode(ProviderConfiguration.self, from: Data(#"""
+    {"type":"http","url":"https://api.http-provider.example/weather","headers":{"Accept":"application/json"},"token":"abc",
+     "output":{"text":"/current/temperature_2m"}}
+    """#.utf8)), registry: registry)
+    try await awaitCondition { script.output.text == "21.4" }
+    let request = try #require(StubURLProtocol.requests.last { $0.url == url })
+    #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer abc")
+    #expect(script.diagnostics.lastStdout == String(decoding: body, as: UTF8.self))
+    // Configuration can't read a source's token, so this one is empty and no header is sent.
+    script.start(provider: try JSONDecoder().decode(ProviderConfiguration.self, from: Data(#"""
+    {"type":"http","url":"https://api.http-provider.example/missing","token":"@secret.source:acme","output":{}}
+    """#.utf8)), registry: registry)
+    try await awaitCondition { script.error != nil }
+    #expect(script.error == "The server answered with HTTP status 404.")
+    let missing = try #require(StubURLProtocol.requests.last { $0.url?.path() == "/missing" && $0.url?.host() == url.host() })
+    #expect(missing.value(forHTTPHeaderField: "Authorization") == nil)
+}
+
 @Test func nativeCountersMeasureDeltasAndDiscardResetNetworkCounters() {
     let before = NetworkCounters(received: 1_000, sent: 2_000)
     let rates = NetworkCounters(received: 3_000, sent: 8_000).rates(since: before, elapsed: 2)

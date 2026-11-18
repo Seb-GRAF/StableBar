@@ -19,6 +19,7 @@ enum LaunchCommand {
     case finishUninstall(pid_t)
     /// A detached helper: wait for this bar to exit, then open the moved app with its original arguments.
     case finishApplicationMove(URL, pid_t)
+    case version
     case help
 
     static let configurationURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".config/stablebar/config.json")
@@ -36,6 +37,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --profile NAME|auto [--persist]
            StableBar [--config PATH] --reset | --refresh ID | --popup ID | --focus
            StableBar [--config PATH] --popup ID --open [--duration SECONDS] | --popup [ID] --close
+           StableBar [--config PATH] --status | --quit
            StableBar [--config PATH] --hide | --show | --toggle
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID [--source SOURCE]
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
@@ -44,12 +46,13 @@ enum LaunchCommand {
            StableBar [--config PATH] triage [--agent claude|codex] [--model MODEL] [--notes FILE]
            StableBar [--config PATH] --report
            StableBar --uninstall [--remove-config] [--show-menu-bar] [--yes]
+           StableBar --version
            StableBar --help
     """
 
     init(arguments: [String]) throws {
         var arguments = arguments
-        var url = Self.configurationURL
+        var url = ProcessInfo.processInfo.environment["STABLEBAR_CONFIG"].map { URL(filePath: $0) } ?? Self.configurationURL
         let targeted = arguments.first == "--config"
         if arguments.first == "--config" {
             guard arguments.count >= 2 else { throw CommandFailure(message: Self.usage) }
@@ -103,6 +106,10 @@ enum LaunchCommand {
             self = .control(url, RuntimeRequest(action: .openPopup, id: arguments[1], duration: seconds))
         case "--focus" where arguments.count == 1:
             self = .control(url, RuntimeRequest(action: .focus))
+        case "--status" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .status))
+        case "--quit" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .quit))
         case "--hide" where arguments.count == 1:
             self = .control(url, RuntimeRequest(action: .hide))
         case "--show" where arguments.count == 1:
@@ -168,6 +175,8 @@ enum LaunchCommand {
         case "--finish-application-move" where arguments.count == 3 && !targeted:
             guard let bar = pid_t(arguments[2]), bar > 0 else { throw CommandFailure(message: Self.usage) }
             self = .finishApplicationMove(URL(filePath: arguments[1]), bar)
+        case "--version" where arguments.count == 1:
+            self = .version
         case "--help" where arguments.count == 1:
             self = .help
         default:

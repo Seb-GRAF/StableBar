@@ -507,6 +507,8 @@ final class WidgetPopup {
                     .foregroundStyle(appearance.foreground)
                     .padding(.horizontal, appearance.paddingHorizontal)
                     .padding(.vertical, appearance.paddingVertical)
+                    // Its blocks read this screen's look, such as its slider role, not the laptop's.
+                    .environment(\.screenKind, kind)
             }
             .modifier(PopupBackground(style: style, glass: bar.glass, backgrounds: backgrounds))
             .padding(shadowInset)

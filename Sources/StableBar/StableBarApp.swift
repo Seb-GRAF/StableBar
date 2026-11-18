@@ -109,6 +109,8 @@ struct StableBarApp {
             case let .finishApplicationMove(plan, bar):
                 Task { exit(await ApplicationMoveRelaunch.finish(planURL: plan, parent: bar)) }
                 dispatchMain()
+            case .version:
+                print("StableBar \(MacFacts.version)")
             case .help:
                 print(LaunchCommand.usage)
             case let .run(url):
@@ -120,7 +122,7 @@ struct StableBarApp {
             }
         } catch {
             FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
-            exit(1)
+            exit(error is BarNotRunning ? 3 : 1)
         }
     }
 
@@ -193,7 +195,6 @@ class BarPanel: NSPanel, Observable {
     }
 
     override func sendEvent(_ event: NSEvent) {
-        if event.isMenuBarProbe { return }
         if event.type == .keyDown, event.keyCode == 53, focusesWidgets { releaseKeyboard() } else { super.sendEvent(event) }
     }
 
@@ -299,7 +300,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
         endMenuBarReveals()
-        store.appMenu.coverMenuBar = { [weak self] in self?.menuBarStrip.coversMenuBar = $0 }
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(named: "StatusBarIconTemplate")

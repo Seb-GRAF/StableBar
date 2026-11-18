@@ -8,18 +8,22 @@ struct ScriptEvent: Sendable {
     var environment: [String: String] = [:]
 
     func commandEnvironment(_ configured: [String: String], secret: @Sendable (String) -> String = packageSecret) async -> [String: String] {
-        // A source's token belongs to its requests only; configuration can't read it.
-        let resolved = configured.mapValues { value in
-            guard value.hasPrefix("@secret.") else { return value }
-            let account = String(value.dropFirst("@secret.".count))
-            return account.hasPrefix("source:") ? "" : secret(account)
-        }
-        var variables = resolved.merging(environment) { _, event in event }
+        var variables = configured.mapValues { secretValue($0, secret: secret) }.merging(environment) { _, event in event }
         variables["NAME"] = configured["NAME"]
         variables["CONFIG_DIR"] = configured["CONFIG_DIR"]
+        variables["STABLEBAR"] = configured["STABLEBAR"]
+        variables["STABLEBAR_CONFIG"] = configured["STABLEBAR_CONFIG"]
         variables["SENDER"] = sender
         return variables
     }
+}
+
+/// `value`, or the saved token that a `@secret.` reference such as `@secret.github/token` names.
+func secretValue(_ value: String, secret: (String) -> String = packageSecret) -> String {
+    guard value.hasPrefix("@secret.") else { return value }
+    let account = String(value.dropFirst("@secret.".count))
+    // A source's token belongs to its requests only; configuration can't read it.
+    return account.hasPrefix("source:") ? "" : secret(account)
 }
 
 struct WidgetMenuItem: Decodable, Equatable, Sendable {
@@ -144,6 +148,8 @@ final class ScriptWidget {
         var variables = environment.merging(provider.environment) { _, value in value }
         variables["NAME"] = environment["NAME"]
         variables["CONFIG_DIR"] = environment["CONFIG_DIR"]
+        variables["STABLEBAR"] = environment["STABLEBAR"]
+        variables["STABLEBAR_CONFIG"] = environment["STABLEBAR_CONFIG"]
         guard let type = registry[provider.type] else {
             stop()
             error = "Unknown data source type: \(provider.type)."

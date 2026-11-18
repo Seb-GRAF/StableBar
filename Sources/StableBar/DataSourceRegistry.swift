@@ -115,8 +115,8 @@ struct DataSourceRegistry: Sendable {
             .filter { listed.insert($0).inserted }
     }
 
-    static let builtIn = DataSourceRegistry(types: [.command, .stream, .battery, .bluetooth, .system, .network, .wifi, .disk, .audio, .inputSource,
-                                                    .microphone, .privacy, .calendar, .merge])
+    static let builtIn = DataSourceRegistry(types: [.command, .stream, .http, .battery, .bluetooth, .system, .network, .wifi, .disk, .audio,
+                                                    .inputSource, .microphone, .privacy, .calendar, .merge])
 }
 
 extension DataSourceType {
@@ -128,6 +128,38 @@ extension DataSourceType {
     static let stream = DataSourceType(name: "stream", isNative: false, symbol: "terminal", settings: [.command],
                                        continuous: true) { provider, environment in
         StreamSource(command: provider.command!, environment: environment)
+    }
+
+    static let http = http()
+
+    /// A JSON request read on a timer, with the parts of the response that `output` names. Web APIs limit how often
+    /// a client may ask, so it reads once a minute by default. The session drops the token on a redirect to another
+    /// host, follows no redirect outside a package's `hosts` and keeps no cache or cookies.
+    static func http(session: URLSession = .packageSources) -> DataSourceType {
+        DataSourceType(name: "http", isNative: false, symbol: "globe", settings: [.url, .output], optionalSettings: [.headers, .token],
+                       continuous: false, defaultInterval: 60) { provider, _ in
+            PollingSource { _ in
+                do {
+                    var request = URLRequest(url: provider.url!, timeoutInterval: provider.timeout)
+                    for (name, value) in provider.headers { request.setValue(value, forHTTPHeaderField: name) }
+                    if let reference = provider.token {
+                        // Reading the Keychain can wait on macOS asking whether StableBar may use the token.
+                        let token = try await BlockingWork.run { secretValue(reference) }
+                        if !token.isEmpty { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+                    }
+                    let (data, response) = try await session.data(for: request, delegate: provider.hosts.map { SourceRedirectGuard(hosts: $0) })
+                    let body = CommandResult(stdout: data, stderr: Data())
+                    let status = (response as! HTTPURLResponse).statusCode
+                    guard status == 200 else {
+                        return .output(.failure(CommandFailure(message: "The server answered with HTTP status \(status).")), process: body)
+                    }
+                    return .output(Result { provider.output!.output(from: try JSONDecoder().decode(ConfigurationValue.self, from: data)) },
+                                   process: body)
+                } catch {
+                    return .output(.failure(error))
+                }
+            }
+        }
     }
 
     static let battery = DataSourceType(name: "battery", isNative: true, symbol: "battery.100percent", settings: [],

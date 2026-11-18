@@ -476,9 +476,12 @@ struct ThemeAdvancedSheet: View {
             role.color("Accent", "accent")
             role.number("Border width", "borderWidth", default: 0)
             role.number("Corner radius", "cornerRadius", default: 0)
+            if selectedRole == .slider { role.number("Height", "height", default: 28) }
             role.number("Horizontal padding", "paddingHorizontal", default: 0)
             role.number("Vertical padding", "paddingVertical", default: 0)
-            Text("Only widgets and layout blocks explicitly assigned this role use it. A bar widget’s role does not style its popup.")
+            Text(selectedRole == .slider
+                 ? "Sliders follow this role unless they set filled or another role. An empty role keeps the native slider."
+                 : "Only widgets and layout blocks explicitly assigned this role use it. A bar widget’s role does not style its popup.")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }

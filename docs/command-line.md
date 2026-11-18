@@ -1,6 +1,6 @@
 # Command-line controls
 
-The executable is `StableBar.app/Contents/MacOS/StableBar`; [install the command](#install-the-command) to run it as `stablebar`. Prefix commands with `--config PATH` to address a specific running configuration; otherwise live commands target the default configuration. Replies are JSON, and errors exit with status 1. Each configuration has one local control endpoint per user.
+The executable is `StableBar.app/Contents/MacOS/StableBar`; [install the command](#install-the-command) to run it as `stablebar`. Prefix commands with `--config PATH` to address a specific running configuration; otherwise live commands target the configuration in `STABLEBAR_CONFIG`, which [widget commands](create-a-widget.md) get from the bar that runs them, or the default configuration. Replies are JSON, and the [exit status](#exit-statuses) tells a script what failed. Each configuration has one local control endpoint per user.
 
 ```sh
 StableBar --query
@@ -13,6 +13,8 @@ StableBar --profile dark
 StableBar --profile auto
 StableBar --reset
 StableBar --customize
+StableBar --status
+StableBar --quit
 ```
 
 Command-line changes are live for the current session. Settings shows a notice with **Save** and **Discard** for these temporary changes. Changes made in Settings save separately and leave temporary command-line changes applied on top. Add `--persist` to save the session changes into the root file. `--reset` discards unsaved session changes and reloads the files. Session edits reapply over external file changes. Imports and package source files are preserved.
@@ -32,17 +34,30 @@ A batch validates the whole resulting configuration before replacing the running
 Without `id`, `unset` can also address widget definitions by their ID and profiles by their name in the main file. For example, `{"action":"unset","properties":{"widgets":{"clock":{"style":{"foreground":null}}},"profiles":{"night":{"configuration":{"bar":{"height":null}}}}}}` removes the clock’s text color and the night profile’s bar height in one edit. Empty objects are removed, except an emptied profile `configuration` stays as `{}`. A profile's name set to `null` removes that profile from the main file: `{"action":"unset","properties":{"profiles":{"night":null},"profile":null}}` deletes the night profile and clears a `profile` pin, which must not name a profile that no longer exists.
 
 - `--validate [PATH]`: compose and validate files without starting scripts. For a configuration [written for a newer StableBar](configuration.md#files-from-a-newer-stablebar), it also prints a warning that lists the properties this version skips.
+- `--version`: print this copy's version, channel and build, such as `StableBar 0.9.0 (Stable, build 412)`.
 - `--report`: print a [bug report](settings.md) in Markdown, the one **Copy bug report** in Settings → Status gives, to paste into an issue. When no bar is running with the configuration, it still lists versions, displays, the configuration's theme and packages, and crashes, and says that access, connections and widget problems are missing.
 - `--refresh ID`: refresh a running widget. Hidden, suspended providers must first be made visible or explicitly resumed with **Settings → Status → Resume for testing**.
 - `--popup ID`: open the popup or menu of a widget, or close it when it's open. It opens on the active display, as `"display": "active"` defines it; a widget in **More widgets** opens its popup under the More widgets button on its side. Key bindings can call it, for example in `aerospace.toml`: `alt-c = 'exec-and-forget /Applications/StableBar.app/Contents/MacOS/StableBar --popup agenda'`.
 - `--popup ID --open [--duration SECONDS]`, `--popup ID --close`, `--popup --close`: for scripts, which need the popup in a known state. `--open` opens the popup and leaves it as it is when it's already open. `--duration` closes it after that many seconds, at most a day, unless the pointer has moved into it or it's pinned by then. `--close` closes the widget's popup, pinned or not, and does nothing when it's closed; without an ID, it closes every popup, pinned ones too. Their reply, like `--query` without an ID, includes `popup`: the ID of the widget whose popup is open under the bar, or `null`; pinned popups aren't listed. For example, `StableBar --popup agenda --open --duration 30` shows the agenda for 30 seconds.
 - `--focus`: give the keyboard to the bar on the active display, as Control-F2 does for the macOS menu bar. The arrow keys move between its widgets, Return or Space clicks one, and Escape gives the keyboard back; see [Keyboard and VoiceOver](widgets.md#keyboard-and-voiceover). Bind it to a key in Shortcuts, Raycast, skhd or your window manager, for example in `aerospace.toml`: `alt-b = 'exec-and-forget /Applications/StableBar.app/Contents/MacOS/StableBar --focus'`.
 - `--hide`, `--show`, `--toggle`: [hide the bar](getting-started.md#hide-the-bar) on every display, show it again, or switch between the two, as **Hide Bar** and **Show Bar** in the menu-bar icon's menu do. It stays that way until StableBar quits and changes no file. A bar that `bar.hidden` hides stays hidden after `--show`.
-- `--trigger EVENT [KEY=VALUE ...]`: send an event. Without `--config`, this broadcasts to all subscribed bars for compatibility; with `--config`, it targets that configuration.
+- `--status`: print the running bar's version, build and channel, its process ID and its configuration file, for example `{"build": "412", "channel": "Stable", "configuration": "/Users/you/.config/stablebar/config.json", "pid": 812, "running": true, "version": "0.9.0"}`. When no bar runs the configuration, it exits with status 3. `--query` without an ID includes the same `version`, `build` and `channel`.
+- `--quit`: quit the bar running the configuration, as **Quit StableBar** in its menu does. With `--config`, only that configuration's bar quits.
+- `--trigger EVENT [KEY=VALUE ...]`: send an event. Without `--config`, this broadcasts to all subscribed bars for compatibility, also from a widget's command; with `--config`, it targets that configuration, such as `--config "$STABLEBAR_CONFIG"` for the bar that runs the widget.
 - `--reload`: reload configuration; without `--config`, notify all running bars.
 - `--packages`, `--inspect-package PATH`, `--install-package PATH|ID [--source SOURCE]`, `--enable-package ID VERSION [--persist]`, `--uninstall-package ID VERSION`: review and manage packages. `--packages` lists installed packages; `source` names the source that installed each one (`stablebar`, a private source's `id`, or `local` for a folder) and is absent for packages installed before StableBar recorded sources. `--install-package` installs a folder, or a package from the [store](packages.md#store) or a [private source](packages.md#private-sources) in the configuration file when its argument is not a folder. When more than one source lists the ID, it names them; add `--source` with a source's `id`. It refuses a package that another source installed. Installation does not enable commands. Uninstall requires the bar to be running and always saves configuration edits before removing that version. Package selections belong in the root file or its includes; use profile widget overrides to hide package widgets contextually.
 - `--build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]`: build a [private package source](packages.md#publishing-a-source) from a folder of packages. It writes an archive for each package version that isn't published yet, and `index.json`, into `OUT`, then prints what to upload. `--previous` is the index you published last time; its versions that are still in `PACKAGES` keep their entries and no archive is written for them, and a package whose folder is gone leaves the index. With `--url` (the index's `https` address) and `--name`, it also prints a join link. It checks each package like `--inspect-package`, needs StableBar 0.6.0 or later, and doesn't use a configuration file or a running bar.
 - `--uninstall [--remove-config] [--show-menu-bar] [--yes]`: [uninstall StableBar](getting-started.md#uninstall) like **Settings → General → Uninstall**. It lists the steps and asks before it starts; `--yes` skips the question, which a script needs. It quits every StableBar that's running and moves the app to the Trash, unless Homebrew installed it. `--remove-config` also moves `~/.config/stablebar` to the Trash, and `--show-menu-bar` turns off the menu bar's auto-hide when StableBar didn't turn it on. If a step fails, the others still run, and the command prints what to do by hand and exits with status 1. It doesn't take `--config` or `sudo`, and runs only from the app bundle.
+
+## Exit statuses
+
+| Status | When |
+| --- | --- |
+| 0 | The command succeeded. |
+| 1 | The command failed, for example on a wrong argument or a refused edit. The error is on standard error. |
+| 3 | No bar runs the configuration. Every command that needs a running bar, such as `--query`, `--set`, `--status` or `--quit`, exits with it. |
+
+Without `--config`, `--trigger` and `--reload` notify every running bar and exit with status 0, even when none is running.
 
 ## Install the command
 

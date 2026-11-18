@@ -15,8 +15,6 @@ struct MenuBarStripState: Equatable {
 
     private(set) var strips: Set<CGDirectDisplayID> = []
     private(set) var shownMenuBars: Set<CGDirectDisplayID> = []
-    /// The shown menu bars that have slid all the way down.
-    private(set) var menuBarsInPlace: Set<CGDirectDisplayID> = []
 
     init() {}
 
@@ -31,10 +29,7 @@ struct MenuBarStripState: Equatable {
             where bounds.minX <= display.minX + 1 && bounds.maxX >= display.maxX - 1 && bounds.minY <= display.minY + 1 {
                 // Other apps put windows at the menu bar's level too, such as screencaptureui covering the whole display.
                 let barSized = bounds.height < display.height / 4
-                if layer == menuBarLevel, barSized, bounds.maxY > display.minY + 1 {
-                    shownMenuBars.insert(id)
-                    if bounds.minY >= display.minY { menuBarsInPlace.insert(id) }
-                }
+                if layer == menuBarLevel, barSized, bounds.maxY > display.minY + 1 { shownMenuBars.insert(id) }
                 if layer >= statusLevel, window[kCGWindowOwnerName as String] as? String == "MenuBarAgent",
                    bounds.minY >= display.minY - 1, barSized { strips.insert(id) }
             }
@@ -76,11 +71,6 @@ final class MenuBarStrip: NSResponder {
     private var shownMenuBars: Set<CGDirectDisplayID> = []
     private var timer: Timer?
     private var interval: TimeInterval?
-    /// While set, each bar sits above the menu bar and lets mouse events through to it. A menu bar that StableBar
-    /// shows faintly, so that the window server gives it a mouse event, is then hidden behind the bar.
-    var coversMenuBar = false {
-        didSet { refresh() }
-    }
 
     func update(panels: [CGDirectDisplayID: BarPanel]) {
         for (id, panel) in panels where self.panels[id] !== panel {
@@ -109,9 +99,8 @@ final class MenuBarStrip: NSResponder {
         let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
         let state = MenuBarStripState(windows: windows, displays: panels.keys.reduce(into: [:]) { $0[$1] = CGDisplayBounds($1) })
         for (id, panel) in panels {
-            let level: NSWindow.Level = coversMenuBar || state.raisesBar(on: id) ? .aboveMenuBarStrip : .floating
+            let level: NSWindow.Level = state.raisesBar(on: id) ? .aboveMenuBarStrip : .floating
             if panel.level != level { panel.level = level }
-            if panel.ignoresMouseEvents != coversMenuBar { panel.ignoresMouseEvents = coversMenuBar }
         }
         strips = state.strips.union(strips.intersection(state.shownMenuBars))
         shownMenuBars = state.shownMenuBars

@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 
 struct RuntimeRequest: Codable {
-    enum Action: String, Codable { case query, batch, reset, refresh, popup, openPopup, closePopup, focus, trigger, reload, customize, uninstallPackage, report, hide, show, toggle }
+    enum Action: String, Codable { case query, batch, reset, refresh, popup, openPopup, closePopup, focus, trigger, reload, customize, uninstallPackage, report, status, quit, hide, show, toggle }
     let action: Action
     var id: String?
     var version: String?
@@ -11,6 +11,12 @@ struct RuntimeRequest: Codable {
     var environment: [String: String]?
     /// Seconds an `openPopup` stays open.
     var duration: Double?
+}
+
+/// The command line exits with status 3 for it, so a script can tell it from a refused command.
+struct BarNotRunning: LocalizedError {
+    let url: URL
+    var errorDescription: String? { "StableBar is not running with configuration \(url.path)." }
 }
 
 struct RuntimeResponse: Codable {
@@ -73,7 +79,7 @@ final class RuntimeControl {
 
     static func send(_ request: RuntimeRequest, url: URL) throws -> ConfigurationValue {
         guard let remote = CFMessagePortCreateRemote(nil, name(url) as CFString) else {
-            throw CommandFailure(message: "StableBar is not running with configuration \(url.path).")
+            throw BarNotRunning(url: url)
         }
         var reply: Unmanaged<CFData>?
         let status = CFMessagePortSendRequest(remote, 1, try JSONEncoder().encode(request) as CFData,

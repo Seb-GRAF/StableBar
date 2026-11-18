@@ -169,6 +169,10 @@ enum WidgetPackageError: LocalizedError {
     case checksumMismatch(String)
     case archiveMismatch(String, String)
     case misplacedSecret(String)
+    case undeclaredHost(String, String)
+    case tokenInRequest(String, String)
+    case foreignToken(String, String, String)
+    case foreignHeaders(String, String, String)
 
     var errorDescription: String? {
         switch self {
@@ -193,7 +197,14 @@ enum WidgetPackageError: LocalizedError {
         case let .downloadFailed(url, status): "Downloading \(url) failed with HTTP status \(status)."
         case let .checksumMismatch(id): "The archive of package \(id) does not match the store's checksum."
         case let .archiveMismatch(id, version): "The archive of package \(id) \(version) contains a different id or version."
-        case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider that its own package defines."
+        case let .misplacedSecret(reference): "\(reference) can be used only as a whole environment value of a widget or provider, or as the token of a provider, that its own package defines."
+        case let .undeclaredHost(provider, url): "Provider \(provider) requests \(url), but the package's hosts don't list its host."
+        case let .tokenInRequest(package, provider):
+            "Package \(package) must write out the url and headers of provider \(provider), without @token. references."
+        case let .foreignToken(package, provider, url):
+            "Package \(package) points provider \(provider) at \(url), but the provider can send a token that isn't a secret of package \(package)."
+        case let .foreignHeaders(package, provider, url):
+            "Package \(package) points provider \(provider) at \(url), but the provider can send headers that package \(package) doesn't set."
         }
     }
 }
@@ -762,7 +773,9 @@ private func rejectCommandKeys(_ value: ConfigurationValue) throws {
 func validateSecretReferences(_ value: ConfigurationValue, package id: String, path: [String] = []) throws {
     switch value {
     case let .string(string) where string.hasPrefix("@secret."):
-        guard string.hasPrefix("@secret.\(id)/"), path.count == 4, ["widgets", "providers"].contains(path[0]), path[2] == "environment" else {
+        let environment = path.count == 4 && ["widgets", "providers"].contains(path[0]) && path[2] == "environment"
+        let token = path.count == 3 && path[0] == "providers" && path[2] == "token"
+        guard string.hasPrefix("@secret.\(id)/"), environment || token else {
             throw WidgetPackageError.misplacedSecret(string)
         }
     case let .object(object):
@@ -770,6 +783,59 @@ func validateSecretReferences(_ value: ConfigurationValue, package id: String, p
     case let .array(array):
         for (index, child) in array.enumerated() { try validateSecretReferences(child, package: id, path: path + [String(index)]) }
     default: break
+    }
+}
+
+/// Throws when a provider of the package, or of one of its profiles, doesn't write out its `url` and `headers`,
+/// or requests a host that the package's `hosts` don't list.
+func validatePackageHosts(_ document: [String: ConfigurationValue], manifest: WidgetPackageManifest) throws {
+    for (name, provider) in try document["providers"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:] {
+        guard case let .object(headers) = provider["headers"] ?? .object([:]) else { throw WidgetPackageError.tokenInRequest(manifest.id, name) }
+        for case let .string(value) in Array(headers.values) + [provider["url"] ?? .null] where value.hasPrefix("@token.") {
+            throw WidgetPackageError.tokenInRequest(manifest.id, name)
+        }
+        guard case let .string(url)? = provider["url"] else { continue }
+        guard let host = URL(string: url)?.host(), manifest.hosts.contains(host) else { throw WidgetPackageError.undeclaredHost(name, url) }
+    }
+    for profile in try document["profiles"]?.decoded([ConfigurationProfile].self) ?? [] {
+        try validatePackageHosts(profile.configuration, manifest: manifest)
+    }
+}
+
+/// Throws when a package sets the `url` of a provider, directly or in a profile, while any file or profile gives that provider
+/// a token other than one of that package's secrets, or headers that another file sets.
+func validatePackageURLs(_ layer: ConfigurationLayer, packageIDs: [String: String]) throws {
+    var definitions = [("providers", layer.values["providers"])]
+    if case let .array(profiles)? = layer.values["profiles"] {
+        for case let .object(profile) in profiles {
+            if case let .string(name)? = profile["name"], case let .object(configuration)? = profile["configuration"] {
+                definitions.append(("profiles.\(name).configuration.providers", configuration["providers"]))
+            }
+        }
+    }
+    var urls: [(String, String, String)] = []
+    var tokens: [String: [ConfigurationValue?]] = [:]
+    var headers: [String: [String]] = [:]
+    for case let (path, .object(providers)?) in definitions {
+        for case let (name, .object(provider)) in providers {
+            if case let .string(url)? = provider["url"] { urls.append((name, url, "\(path).\(name).url")) }
+            tokens[name, default: []].append(provider["token"])
+            if case let .object(names)? = provider["headers"] {
+                headers[name, default: []] += names.keys.map { "\(path).\(name).headers.\($0)" }
+            } else if case .string? = provider["headers"] {
+                headers[name, default: []].append("\(path).\(name).headers")
+            }
+        }
+    }
+    for (name, url, path) in urls {
+        guard let package = packageIDs[layer.origins[path]!.file] else { continue }
+        for token in tokens[name]! {
+            if case let .string(token)? = token, token.hasPrefix("@secret.\(package)/") { continue }
+            guard token == nil || token == .null else { throw WidgetPackageError.foreignToken(package, name, url) }
+        }
+        for header in headers[name, default: []] where packageIDs[layer.origins[header]!.file] != package {
+            throw WidgetPackageError.foreignHeaders(package, name, url)
+        }
     }
 }
 

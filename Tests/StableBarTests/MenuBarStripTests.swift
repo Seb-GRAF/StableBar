@@ -27,12 +27,10 @@ private var bar: [String: Any] { window("StableBar", layer: 3, CGRect(x: -1800, 
                                   displays: displays)
     #expect(!shown.raisesBar(on: 1))
     #expect(shown.showsMenuBar(on: 1))
-    #expect(shown.menuBarsInPlace == [1])
     let sliding = MenuBarStripState(windows: [window("MenuBarAgent", layer: 24, CGRect(x: -1800, y: -20, width: 1800, height: 39)), strip],
                                     displays: displays)
     #expect(!sliding.raisesBar(on: 1))
     #expect(sliding.showsMenuBar(on: 1))
-    #expect(sliding.menuBarsInPlace.isEmpty, "A menu bar that's still sliding down has its items above where they'll be")
     let hidden = MenuBarStripState(windows: [window("Window Server", layer: 24, CGRect(x: -1800, y: -39, width: 1800, height: 39)), strip],
                                    displays: displays)
     #expect(hidden.raisesBar(on: 1))
@@ -71,20 +69,4 @@ private var bar: [String: Any] { window("StableBar", layer: 3, CGRect(x: -1800, 
     #expect(MenuBarStripState.nearsTop(CGPoint(x: -900, y: 5), of: laptop))
     #expect(!MenuBarStripState.nearsTop(CGPoint(x: -900, y: 6), of: laptop))
     #expect(!MenuBarStripState.nearsTop(CGPoint(x: 100, y: 0), of: laptop))
-}
-
-@Test @MainActor func aBarCoveringTheMenuBarSitsAboveItAndLetsMouseEventsThrough() {
-    let panel = BarPanel(contentRect: CGRect(x: 0, y: 0, width: 40, height: 40), styleMask: [.borderless, .nonactivatingPanel],
-                         backing: .buffered, defer: false)
-    panel.isReleasedWhenClosed = false
-    defer { panel.close() }
-    let strip = MenuBarStrip()
-    defer { strip.stop() }
-    strip.update(panels: [CGMainDisplayID(): panel])
-    strip.coversMenuBar = true
-    #expect(panel.level == .aboveMenuBarStrip)
-    #expect(panel.level.rawValue > Int(CGWindowLevelForKey(.mainMenuWindow)))
-    #expect(panel.ignoresMouseEvents, "A mouse event for the menu bar would stop at the bar")
-    strip.coversMenuBar = false
-    #expect(!panel.ignoresMouseEvents)
 }

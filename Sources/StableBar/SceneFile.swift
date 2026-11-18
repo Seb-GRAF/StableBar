@@ -85,6 +85,8 @@ struct SceneFile: Decodable {
     /// A move row outside Applications, for setup or Settings → General.
     var applicationMove: ApplicationMove?
     enum ApplicationMove: String, Decodable, CaseIterable { case ready, replace, useExisting, failed, moving, setupOpen }
+    /// The window manager whose windows start under the bar, which setup's last step and Settings → General warn about.
+    var windowsUnderBar: WorkspaceSource?
     /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
     var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
@@ -95,7 +97,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
-             themeLink, starRequest, setup, applicationMove, macOSMajorVersion, appearances,
+             themeLink, starRequest, setup, applicationMove, windowsUnderBar, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -201,6 +203,11 @@ struct SceneFile: Decodable {
         if applicationMove != nil, draw == .setup, setup?.inApplications != false {
             throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
                 debugDescription: "A setup scene draws applicationMove only with setup.inApplications false.")
+        }
+        windowsUnderBar = try values.decodeIfPresent(WorkspaceSource.self, forKey: .windowsUnderBar)
+        if windowsUnderBar != nil, draw != .setup && !(draw == .settings && section == .general) {
+            throw DecodingError.dataCorruptedError(forKey: .windowsUnderBar, in: values,
+                debugDescription: "windowsUnderBar draws setup or Settings General.")
         }
         macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
         if macOSMajorVersion < 14 {

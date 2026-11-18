@@ -83,6 +83,14 @@ enum SceneRenderer {
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
         store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
+        store.windowClearance.checkManagerGap = { configuration in
+            let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
+            return scene.windowsUnderBar.flatMap {
+                managerGap($0, windows: [screen], displays: [WindowClearanceDisplay(frame: screen, visibleFrame: screen, configuration: configuration,
+                                                                                    display: display, desktopTop: screen.maxY)],
+                           menuBarHides: true)
+            }
+        }
         // Crashes and Send feedback read these samples, never the crash reports of the Mac that draws.
         let crashes = directory.appending(path: "DiagnosticReports")
         try FileManager.default.createDirectory(at: crashes, withIntermediateDirectories: true)

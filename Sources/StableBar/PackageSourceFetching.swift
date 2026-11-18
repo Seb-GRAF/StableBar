@@ -33,8 +33,16 @@ func redirectRequest(_ request: URLRequest, from original: URL?) -> URLRequest {
 }
 
 final class SourceRedirectGuard: NSObject, URLSessionTaskDelegate, Sendable {
+    /// The only hosts a redirect may reach, or nil for any.
+    let hosts: [String]?
+
+    init(hosts: [String]? = nil) {
+        self.hosts = hosts
+    }
+
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        if let hosts, !hosts.contains(where: { $0 == request.url?.host() }) { return completionHandler(nil) }
         completionHandler(redirectRequest(request, from: task.originalRequest?.url))
     }
 }
