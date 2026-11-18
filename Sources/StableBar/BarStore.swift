@@ -854,7 +854,7 @@ final class BarStore: NSObject {
             let script = scripts[widget.id]
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
                                                       role: configuration.roleStyle(widget.role)))
-            let usesMode = base.usesModeStates || widget.layout?.usesModeStates(roles: configuration.roles) == true
+            let usesMode = base.usesModeStates || configuration.usesSliderModeStates(widget) || widget.layout?.usesModeStates(roles: configuration.roles) == true
                 || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
                 || widget.overlay?.usesModeStates(roles: configuration.roles) == true
                 || script?.output.styles?.values.contains(where: \.usesModeStates) == true
@@ -871,8 +871,12 @@ final class BarStore: NSObject {
                 let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind]!, own: script?.output,
                                                           role: look.roleStyle(own.role)))
                 let screenStates = widgetDataStates(script?.output, widget: own, providers: configuration.providers)
+                let screenUsesMode = usesMode || base.usesModeStates || look.usesSliderModeStates(own)
+                    || own.layout?.usesModeStates(roles: look.roles) == true
+                    || own.hoverLayout?.usesModeStates(roles: look.roles) == true
+                    || own.overlay?.usesModeStates(roles: look.roles) == true
                 screenStyles[kind] = ResolvedWidgetStyle(base: base, state: screenStates.widget, parts: screenStates.parts,
-                                                         mode: usesMode ? modePresentation(on: ScreenKind(rawValue: kind)!) : ModePresentation())
+                                                         mode: screenUsesMode ? modePresentation(on: ScreenKind(rawValue: kind)!) : ModePresentation())
             }
             presentations[widget.id]?.update(style: ResolvedWidgetStyle(base: base, state: states.widget, parts: states.parts,
                                                                         mode: usesMode ? mode : ModePresentation()),

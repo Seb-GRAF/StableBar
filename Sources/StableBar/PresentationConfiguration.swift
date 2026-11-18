@@ -1,7 +1,7 @@
 import Foundation
 
 enum PresentationRole: String, Decodable, CaseIterable, Sendable {
-    case time, primary, secondary, key, value, heading, button, meter, separator
+    case time, primary, secondary, key, value, heading, button, meter, separator, slider
 }
 
 /// Only presentation belongs in workspace defaults. Workspace visibility and local app-glyph

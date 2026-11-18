@@ -9,6 +9,8 @@ struct SoundWidgetView: View {
     let store: BarStore
     let monitor: Int
     let style: LayoutStyle
+    /// The widget's block states, so a themed slider follows its role's hover and mode states.
+    var sliderStates = StyleStates()
     let hovered: Bool
     let motion: BlockMotion
     let runAction: (BlockAction, [String: String]) -> Void
@@ -32,7 +34,9 @@ struct SoundWidgetView: View {
         Group {
             if volume != nil {
                 HoverExpansionLayout(expansion: expanded ? 1 : 0, spacing: appearance.spacing, controlsBefore: Self.opensBeforeIcon(widget.position)) {
-                    VolumeSlider(widget: widget, store: store, appearance: appearance, width: 72)
+                    VolumeSlider(widget: widget, store: store,
+                                 style: LayoutStyle(inherited: style.inherited, states: sliderStates, tracksHover: true),
+                                 width: 72, inline: true)
                         .controlSize(.mini)
                         .allowsHitTesting(expanded)
                         .accessibilityHidden(!expanded)
@@ -58,24 +62,48 @@ struct SoundWidgetView: View {
 struct VolumeSlider: View {
     let widget: WidgetConfiguration
     let store: BarStore
-    let appearance: WidgetAppearance
+    let style: LayoutStyle
     let width: CGFloat
+    var inline = false
     /// The slider's value while it is dragged, ahead of the volume the source reads back.
     @State private var level: Double?
     @State private var dragging = false
+    @Environment(\.screenKind) private var screenKind
+
+    private static let slider = PopupBlock(content: .slider(title: "Volume", source: "volume", minimum: 0, maximum: 1,
+                                                          step: 0.01, endStop: nil, action: .set(.volume)))
 
     var body: some View {
         if let volume = store.scripts[widget.id]?.output.values?["volume"] {
             let shown = level ?? volume
+            let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
+            let roles = store.configuration?.look(on: screenKind).roles ?? [:]
             HStack(spacing: appearance.spacing) {
-                // A line of text tall, so opening the slider doesn't make the widget taller.
-                Text(" ").hidden().frame(width: width).overlay {
-                    Slider(value: Binding(get: { shown }, set: { set($0) }), in: 0...1) { editing in
-                        dragging = editing
-                        if !editing { level = nil }
+                if Self.slider.automaticallyFillsSlider(roles: roles) {
+                    PopupBlockView(block: Self.slider, inheritedStyle: style.inherited, fields: [:],
+                                   context: BlockContext(values: ["volume": shown], roles: roles,
+                                                         inlineControlHeight: inline ? style.inherited.inlineControlHeight : nil,
+                                                         continuousSliders: true, fillsWidth: false, open: { _ in },
+                                                         states: style.states, tracksHover: style.tracksHover,
+                                                         runAction: { _, values in
+                                                             if let value = values["VALUE"].flatMap(Double.init) { set(value) }
+                                                         }))
+                        .frame(width: width)
+                        // The HStack's own preference below replaces the slider's, so pass the drag on through it.
+                        .onPreferenceChange(ControlEditingPreference.self) { editing in
+                            dragging = editing
+                            if !editing { level = nil }
+                        }
+                } else {
+                    // A line of text tall, so opening the slider doesn't make the widget taller.
+                    Text(" ").hidden().frame(width: width).overlay {
+                        Slider(value: Binding(get: { shown }, set: { set($0) }), in: 0...1) { editing in
+                            dragging = editing
+                            if !editing { level = nil }
+                        }
+                        .tint(appearance.accent)
+                        .accessibilityLabel("Volume")
                     }
-                    .tint(appearance.accent)
-                    .accessibilityLabel("Volume")
                 }
                 // As wide as 100% at any volume, so dragging doesn't move the bar.
                 ZStack(alignment: .trailing) {
@@ -87,6 +115,8 @@ struct VolumeSlider: View {
             }
             .font(appearance.font)
             .foregroundStyle(appearance.foreground)
+            // Keyboard and VoiceOver changes set the volume without a drag, so only a drag keeps its value over the source's.
+            .onChange(of: volume) { if !dragging { level = nil } }
             .preference(key: ControlEditingPreference.self, value: dragging)
         }
     }
