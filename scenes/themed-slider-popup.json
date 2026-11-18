@@ -36,6 +36,25 @@
                 "step": 15,
                 "endStop": {"value": 0, "label": "∞"},
                 "onChange": "true"
+              },
+              {"type": "text", "text": "In a row with a height", "role": "key"},
+              {
+                "type": "row",
+                "style": {"height": 16, "spacing": 6},
+                "children": [
+                  {
+                    "type": "slider",
+                    "title": "Minutes",
+                    "source": "duration",
+                    "min": 15,
+                    "max": 240,
+                    "step": 15,
+                    "endStop": {"value": 0, "label": "∞"},
+                    "onChange": "true",
+                    "style": {"width": 104}
+                  },
+                  {"type": "text", "text": "195m", "style": {"width": 38}}
+                ]
               }
             ]
           }
@@ -43,7 +62,7 @@
       }
     ]
   },
-  "outputs": {"sliders": {"text": "Sliders", "values": {"volume": 0.62, "minutes": 0}}},
+  "outputs": {"sliders": {"text": "Sliders", "values": {"volume": 0.62, "minutes": 0, "duration": 195}}},
   "draw": "popup",
   "widget": "sliders"
 }

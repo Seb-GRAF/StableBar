@@ -187,7 +187,8 @@ struct BlockContext {
     var styles: [String: WidgetStyle] = [:]
     var series: [String: [Double]] = [:]
     var roles: [String: WidgetStyle] = [:]
-    /// Nil in popups and tooltips; bar controls must fit the widget's content area.
+    /// The tallest a themed slider can be: in the bar, the widget's content area, and anywhere, the height of a block
+    /// around it. Nil in popups and tooltips outside a block with a height.
     var inlineControlHeight: Double?
     var continuousSliders = false
     /// Popup layouts fill their width; bar layouts take their content's width.
@@ -471,7 +472,7 @@ struct PopupBlockView: View {
     /// A child block, built as a concrete view so SwiftUI diffs it without type erasure.
     private func child(_ block: PopupBlock, of style: BlockStyle, fields: [String: String]) -> PopupBlockView {
         var context = context
-        if let limit = context.inlineControlHeight {
+        if let limit = context.inlineControlHeight ?? style.box.height {
             // Negative padding lets a child overflow its box, but an inline control still stays within the widget.
             let inset = max(style.box.paddingTop ?? style.box.paddingVertical ?? 0, 0) + max(style.box.paddingBottom ?? style.box.paddingVertical ?? 0, 0)
             context.inlineControlHeight = max(min(limit, style.box.height ?? limit) - inset, 1)
