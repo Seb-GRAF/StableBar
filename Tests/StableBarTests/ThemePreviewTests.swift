@@ -104,9 +104,11 @@ final class ThemePreviewTests: XCTestCase {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     for version in ["1.2.0", "1.10.0", "1.9.0"] { _ = try fixture.theme("{}", version: version) }
-    func versions(selectedKey: String?) -> [String] {
-        themeChoices(packages: fixture.packages.directory, themesDirectory: nil, selectedKey: selectedKey).map(\.manifest.version)
+    let choices = themeChoices(packages: fixture.packages.directory, themesDirectory: nil)
+    func versions(keeping selected: Set<String>) -> [String] {
+        choices.onePerTheme(keeping: selected).map(\.manifest.version)
     }
-    #expect(versions(selectedKey: nil) == ["1.10.0"])
-    #expect(versions(selectedKey: "test-theme/1.2.0") == ["1.2.0"])
+    #expect(versions(keeping: []) == ["1.10.0"])
+    #expect(versions(keeping: ["test-theme/1.2.0"]) == ["1.2.0"])
+    #expect(versions(keeping: ["test-theme/1.2.0", "test-theme/1.9.0"]) == ["1.2.0", "1.9.0"])
 }
