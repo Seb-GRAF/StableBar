@@ -33,6 +33,7 @@ struct WidgetGrouping {
     /// Every layer's values by path, which show the groups other files assign, even under a `null`.
     var contributions: [String: [ConfigurationContribution]] = [:]
     let defaults: WidgetStyle
+    let groupDefaults: WidgetStyle
     let origins: [String: ConfigurationOrigin]
     /// The standardized path of the main configuration file.
     let mainFile: String
@@ -41,9 +42,12 @@ struct WidgetGrouping {
     /// The main file with the unsaved Settings changes, read only to dissolve a group.
     let mainDocument: () throws -> [String: ConfigurationValue]
 
-    /// A new group's look, which Settings then offers to change: a faint backdrop that works in light and dark.
-    static func newGroupStyle(defaults: WidgetStyle) -> [String: ConfigurationValue] {
-        ["background": .string("#8080802e"), "cornerRadius": .number(defaults.cornerRadius ?? 14), "paddingHorizontal": .number(4)]
+    /// A new group's definition, whose look Settings then offers to change: a faint backdrop that works in light and dark,
+    /// or no style when `groupDefaults` gives every group a background, so the group follows the theme.
+    static func newGroup(defaults: WidgetStyle, groupDefaults: WidgetStyle) -> ConfigurationValue {
+        guard groupDefaults.background == nil else { return .object([:]) }
+        return .object(["style": .object(["background": .string("#8080802e"), "cornerRadius": .number(defaults.cornerRadius ?? 14),
+                                          "paddingHorizontal": .number(4)])])
     }
 
     /// The choices for `id` among `listed`, the widgets one screen shows in their order: the units on either side of
@@ -72,7 +76,7 @@ struct WidgetGrouping {
             return [joining(id, group: group, position: position(ofGroup: group) ?? position(ofWidget: id))]
         case let .groupWith(other):
             let group = newGroupID()
-            return [ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object(Self.newGroupStyle(defaults: defaults))])]),
+            return [ConfigurationEdit(action: .groups, properties: [group: Self.newGroup(defaults: defaults, groupDefaults: groupDefaults)]),
                     joining(id, group: group, position: position(ofWidget: other)), joining(other, group: group, position: position(ofWidget: other))]
         }
     }
@@ -207,7 +211,8 @@ extension WidgetGrouping {
         self.init(widgets: configuration?.widgets ?? [], groups: configuration?.groups ?? [:],
                   profiles: store.profiles,
                   contributions: store.contributions,
-                  defaults: configuration?.defaults ?? WidgetStyle(), origins: store.origins,
+                  defaults: configuration?.defaults ?? WidgetStyle(), groupDefaults: configuration?.groupDefaults ?? WidgetStyle(),
+                  origins: store.origins,
                   mainFile: store.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,
                   mainDocument: { [weak store] in try store?.editedMainDocument(replaying: store?.customizationEdits) ?? [:] })

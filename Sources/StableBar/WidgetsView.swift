@@ -116,6 +116,12 @@ struct WidgetsView: View {
                         }
                         .onTapGesture { select(.everyWidget) }
                         .accessibilityAddTraits(.isButton)
+                        ListRow(selected: editor.barItem == .everyGroup) { _ in
+                            WidgetRowLabel(symbol: WidgetGrouping.symbol, name: "Every group", subtitle: "The shared group look",
+                                           selected: editor.barItem == .everyGroup)
+                        }
+                        .onTapGesture { select(.everyGroup) }
+                        .accessibilityAddTraits(.isButton)
                         ForEach(positions, id: \.self) { position in
                             let section = shown.filter { $0.position == position }
                             HStack(alignment: .bottom, spacing: 0) {
@@ -429,6 +435,7 @@ struct WidgetsView: View {
             select(.bar)
             scroll = "These screens"
         case .everyWidget: select(.everyWidget)
+        case .everyGroup: select(.everyGroup)
         case .widgetContent, .widgetStyle, .widgetBehavior:
             if let id = editor.selectedID ?? widgets.first?.id { select(id) }
             editor.widgetTab = target == .widgetContent ? .content : target == .widgetStyle ? .style : .behavior
@@ -438,6 +445,7 @@ struct WidgetsView: View {
         switch editor.barItem {
         case .bar: scrollPositions["bar/\(editor.barTab)"] = scroll
         case .everyWidget: scrollPositions["everyWidget"] = scroll
+        case .everyGroup: scrollPositions["everyGroup"] = scroll
         case .widget:
             if let id = editor.selectedID { scrollPositions["widget/\(id)/\(editor.widgetTab)"] = scroll }
         case .group:

@@ -244,7 +244,7 @@ final class ThemeGallery {
             let main = try store.editedMainDocument(replaying: store.customizationEdits)
             var moved: [String: ConfigurationValue] = [:]
             var removal: [String: ConfigurationValue] = [:]
-            for property in ["defaults", "popupDefaults", "roles", "workspaceDefaults", "groups"] where main[property] != nil {
+            for property in ["defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "groups"] where main[property] != nil {
                 moved[property] = main[property]
                 removal[property] = .null
             }

@@ -523,7 +523,7 @@ struct ConfigurationLoader: Sendable {
         var theme = base.values["theme"]
         if let screen, let look = try base.values["screens"]?.decoded([String: [String: ConfigurationValue]].self)[screen.rawValue] {
             theme = look["theme"] ?? theme
-            for key in ["bar", "tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "modeAliases"] {
+            for key in ["bar", "tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "modeAliases"] {
                 guard let value = look[key] else { continue }
                 base.values[key] = value.overriding(base.values[key] ?? .object([:]))
                 let prefix = "screens.\(screen.rawValue).\(key)"

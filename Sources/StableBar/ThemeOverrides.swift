@@ -25,7 +25,7 @@ struct ThemeOverrides {
             widget.role.map { (widget.id, $0.rawValue) }
         })
         func inspect(_ document: [String: ConfigurationValue], prefix: [String] = [], suffix: String = "") {
-            for key in ["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups"] {
+            for key in ["tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "bar", "groups"] {
                 guard let own = document[key] else { continue }
                 var themed = theme[key]
                 if key == "tokens" {
@@ -107,6 +107,7 @@ private func overrideTitle(_ path: [String]) -> String {
         return appearanceTitle(name.lowercased().hasSuffix("color") ? name : "\(name) color", appearance: tail.last)
     case "defaults": return "All widgets: \(detailTitle(tail))"
     case "popupDefaults": return "Popups: \(detailTitle(tail))"
+    case "groupDefaults": return "Every group: \(detailTitle(tail))"
     case "roles": return "\(friendly(tail.first ?? "")) widgets: \(detailTitle(Array(tail.dropFirst())))"
     case "workspaceDefaults": return "Workspaces: \(detailTitle(tail))"
     case "groups": return "\(friendly(tail.first ?? "")) group: \(detailTitle(Array(tail.dropFirst().filter { $0 != "style" })))"

@@ -9,7 +9,7 @@ const maximumDepth = 32;
 const maximumProfiles = 16;
 const maximumValues = 372;
 export const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-const themeKeys = new Set(["tokens", "defaults", "popupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"]);
+const themeKeys = new Set(["tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"]);
 // Keep this list aligned with ThemeLinkCandidate’s appearance-only bar properties.
 const barProperties = new Set([
   "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset",

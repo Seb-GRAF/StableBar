@@ -765,7 +765,7 @@ struct ScreenConfiguration: Decodable, Sendable {
     let layout: [String: [String]]?
     let hasLook: Bool
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case bar, layout, theme, tokens, defaults, popupDefaults, roles, workspaceDefaults, modeAliases }
+    enum CodingKeys: String, CodingKey, CaseIterable { case bar, layout, theme, tokens, defaults, popupDefaults, groupDefaults, roles, workspaceDefaults, modeAliases }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self)
@@ -784,7 +784,7 @@ struct ScreenConfiguration: Decodable, Sendable {
             }
         }
         _ = try values.decodeIfPresent(WidgetPackageSelection.self, forKey: .theme)
-        hasLook = [.bar, .theme, .tokens, .defaults, .popupDefaults, .roles, .workspaceDefaults, .modeAliases].contains(where: values.contains)
+        hasLook = [.bar, .theme, .tokens, .defaults, .popupDefaults, .groupDefaults, .roles, .workspaceDefaults, .modeAliases].contains(where: values.contains)
     }
 }
 
@@ -794,6 +794,7 @@ struct Configuration: Decodable, Sendable {
     let bar: BarSettings
     let defaults: WidgetStyle
     let popupDefaults: WidgetStyle
+    let groupDefaults: WidgetStyle
     let roles: [String: WidgetStyle]
     let workspaceDefaults: WorkspaceDefaults
     private(set) var widgets: [WidgetConfiguration]
@@ -812,7 +813,7 @@ struct Configuration: Decodable, Sendable {
     /// another type has its name.
     let activeProviders: Set<String>
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case workspaceSource, modeAliases, bar, defaults, popupDefaults, roles, workspaceDefaults, widgets, screens, popups, templates, widgetOverrides, environment, providers, groups }
+    enum CodingKeys: String, CodingKey, CaseIterable { case workspaceSource, modeAliases, bar, defaults, popupDefaults, groupDefaults, roles, workspaceDefaults, widgets, screens, popups, templates, widgetOverrides, environment, providers, groups }
 
     init(from decoder: Decoder) throws {
         try decoder.rejectUnknownKeys(CodingKeys.self, allowing: ["$schema", "tokens", "packages", "packageSources", "theme"])
@@ -829,6 +830,8 @@ struct Configuration: Decodable, Sendable {
         bar = try values.decodeIfPresent(BarSettings.self, forKey: .bar) ?? BarSettings()
         defaults = try values.decodeIfPresent(WidgetStyle.self, forKey: .defaults) ?? WidgetStyle()
         popupDefaults = try values.decodeIfPresent(WidgetStyle.self, forKey: .popupDefaults) ?? WidgetStyle()
+        let groupDefaults = try values.decodeIfPresent(WidgetStyle.self, forKey: .groupDefaults) ?? WidgetStyle()
+        self.groupDefaults = groupDefaults
         let roleDefinitions = try values.decodeIfPresent([String: WidgetStyle?].self, forKey: .roles) ?? [:]
         guard roleDefinitions.keys.allSatisfy({ PresentationRole(rawValue: $0) != nil }) else {
             throw DecodingError.dataCorruptedError(forKey: .roles, in: values,
@@ -904,7 +907,11 @@ struct Configuration: Decodable, Sendable {
         self.providers = providers
         subscribedEvents = subscribed
         activeProviders = active
-        groups = try values.decodeIfPresent([String: WidgetGroupConfiguration].self, forKey: .groups) ?? [:]
+        groups = (try values.decodeIfPresent([String: WidgetGroupConfiguration].self, forKey: .groups) ?? [:]).mapValues { group in
+            var group = group
+            group.style = group.style.inheriting(groupDefaults)
+            return group
+        }
         widgets = WidgetGroupConfiguration.joining(widgets, groups: groups)
         var groupPositions: [String: WidgetPosition] = [:]
         var ids = Set<String>()

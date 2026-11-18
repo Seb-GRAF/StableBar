@@ -154,6 +154,34 @@ private let row = #"""
     #expect(try bar.fixture.document()["groups"] == .object(["kept": .object([:])]))
 }
 
+@MainActor @Test func groupsStartFromGroupDefaultsAndNewGroupsFollowThem() throws {
+    let bar = try GroupingFixture(row)
+    defer { bar.close() }
+    _ = try bar.fixture.theme(##"""
+    {"groupDefaults":{"background":"#112233","cornerRadius":14,"paddingHorizontal":0},
+     "groups":{"time":{"members":[{"type":"clock"}]}}}
+    """##)
+    try bar.fixture.write(##"""
+    {"theme":{"id":"test-theme","version":"1"},"groups":{"own":{"style":{"background":"#445566","paddingHorizontal":6}}},"widgets":[
+      {"id":"clock","type":"clock","position":"right"},
+      {"id":"a","type":"text","text":"A","position":"right","group":"own"},
+      {"id":"b","type":"text","text":"B","position":"right"},
+      {"id":"c","type":"text","text":"C","position":"right"}
+    ]}
+    """##, to: bar.fixture.url)
+    bar.store.reloadConfiguration()
+    let groups = try #require(bar.store.configuration?.groups)
+    #expect(groups["time"]?.style.background == .color(HexColor(0x112233ff)))
+    #expect(groups["time"]?.style.cornerRadius == 14)
+    #expect(groups["own"]?.style.background == .color(HexColor(0x445566ff)))
+    #expect(groups["own"]?.style.cornerRadius == 14)
+    #expect(groups["own"]?.style.paddingHorizontal == 6)
+
+    try bar.apply(bar.grouping.edits(.groupWith("c"), for: "b"))
+    #expect(try bar.fixture.document()["groups"]?.decoded([String: ConfigurationValue].self)["group"] == .object([:]))
+    #expect(bar.store.configuration?.groups["group"]?.style.background == .color(HexColor(0x112233ff)))
+}
+
 @MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheMainFile() throws {
     let bar = try GroupingFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     defer { bar.close() }

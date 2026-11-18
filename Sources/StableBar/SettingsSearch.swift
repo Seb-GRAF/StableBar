@@ -2,7 +2,7 @@ import Foundation
 
 enum SettingsSearchResult: String, CaseIterable, Identifiable {
     case login, menuBar, windows, hover, workspaces, access, configuration, commandLine, updates, help, feedback, uninstall
-    case barSize, barLook, barPlacement, screenSetups, everyWidget, widgetContent, widgetStyle, widgetBehavior, addWidget
+    case barSize, barLook, barPlacement, screenSetups, everyWidget, everyGroup, widgetContent, widgetStyle, widgetBehavior, addWidget
     case theme, colors, glass, popups, animation, roles, workspaceStyle, modeAliases
     case profiles, library, store, packageSources, status
 
@@ -30,6 +30,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .barPlacement: ("Below the menu bar, offset and margin", .widgets, "Bar › Bar › Placement", "position floating display")
         case .screenSetups: ("Own bar for these screens", .widgets, "Bar › Screens", "screen setup monitor laptop vertical shared external")
         case .everyWidget: ("Look of every widget", .widgets, "Bar › Every widget", "defaults font size color padding corners shadow px pt")
+        case .everyGroup: ("Look of every group", .widgets, "Bar › Every group", "groups defaults background border corners padding spacing px pt")
         case .widgetContent: ("Widget content", .widgets, "Bar › Widget › Content", "text icon clock date format package settings location units")
         case .widgetStyle: ("Widget style", .widgets, "Bar › Widget › Style", "color gradient font size padding corners border px pt")
         case .widgetBehavior: ("Widget clicks, screens and position", .widgets, "Bar › Widget › Behavior", "click popup hover screens display position tooltip hide")

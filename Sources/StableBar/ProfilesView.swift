@@ -453,6 +453,7 @@ struct ProfilesView: View {
         case "bar": owner = "Bar"
         case "defaults": owner = "Every widget"
         case "popupDefaults": owner = "Popups"
+        case "groupDefaults": owner = "Every group"
         case "workspaceDefaults": owner = "Workspaces"
         case "tokens": owner = "Theme color"
         case "roles" where path.count > 1:

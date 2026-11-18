@@ -52,6 +52,7 @@ struct AppearanceView: View {
                         HStack(alignment: .top, spacing: 20) {
                             VStack(spacing: 22) {
                                 widgets
+                                groups
                                 animation
                             }
                             VStack(spacing: 22) {
@@ -284,6 +285,21 @@ struct AppearanceView: View {
             defaults.number("Horizontal padding", "paddingHorizontal", default: 10, in: 0...40)
             defaults.number("Vertical padding", "paddingVertical", default: 6, in: 0...40)
             defaults.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var groups: some View {
+        let groups = editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen))
+        return ThemeGroup(title: "Groups") {
+            groups.color("Background", "background")
+            groups.color("Border", "borderColor")
+            groups.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
+            groups.number("Corner radius", "cornerRadius", default: 0, in: 0...40)
+            groups.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30)
+            groups.number("Vertical padding", "paddingVertical", default: 0, in: 0...20)
+            groups.number("Spacing", "spacing", default: (screen.map { store.configuration?.onScreen($0) } ?? store.configuration)?.bar.spacing ?? 8,
+                          in: 0...30)
         }
         .frame(maxWidth: .infinity)
     }
