@@ -48,13 +48,25 @@ To install the latest stable release with [Homebrew](https://brew.sh) instead, r
 
 ## First launch
 
-The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](../Resources/config.json), with the bar on the top edge, or below the menu bar when the menu bar doesn't hide, where it starts with Workspaces, System and Sound. Subsequent launches keep your file. If it is a symbolic link, Setup, Settings and command-line saves update the linked file and keep the link. Right-click the bar or use its macOS menu-bar icon to choose **Edit Bar in Place**, **Try Themes…**, **Get Widgets…**, **Settings…** or **Quit StableBar**. **Get Widgets…** opens **Settings → Store**. While editing, the menus offer **Finish Editing Bar**. **Settings → General** controls login, window and notification clearance, access and workspace connections, opens or reloads the configuration file, and links to updates, setup and help. Placement is in **Settings → Bar → Bar → Placement**.
+The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](../Resources/config.json), with the bar on the top edge, or below the menu bar when the menu bar doesn't hide, where it starts with Workspaces, System and Sound. Subsequent launches keep your file. If it is a symbolic link, Setup, Settings and command-line saves update the linked file and keep the link. Right-click the bar or use its macOS menu-bar icon to choose **Edit Bar in Place**, **Try Themes…**, **Get Widgets…**, **Settings…** or **Quit StableBar**; the menu-bar icon also offers [**Hide Bar**](#hide-the-bar). **Get Widgets…** opens **Settings → Store**. While editing, the menus offer **Finish Editing Bar**. **Settings → General** controls login, window and notification clearance, access and workspace connections, opens or reloads the configuration file, and links to updates, setup and help. Placement is in **Settings → Bar → Bar → Placement**.
 
 Keep personal settings in `~/.config/stablebar/config.json` and personal scripts in `~/.config/stablebar/widgets/`, outside the repository. Point commands directly at those scripts. `Resources/config.json` is the shared starter configuration; rebuilding the app does not overwrite your personal file. Local scripts should load any supporting files from their own directory.
 
-StableBar sits at the top edge of each display, or, with `bar.belowMenuBar` (**Below the menu bar** in **Settings → Bar → Bar → Placement**), right under each display's macOS menu bar; a display whose menu bar hides keeps the bar on its top edge. `bar.offset` moves the bar further down from there. It hides on native fullscreen Spaces.
+StableBar sits at the top edge of each display, or, with `bar.belowMenuBar` (**Below the menu bar** in **Settings → Bar → Bar → Placement**), right under each display's macOS menu bar; a display whose menu bar hides keeps the bar on its top edge. `bar.offset` moves the bar further down from there. It hides on native fullscreen Spaces, and when you [hide it](#hide-the-bar).
 
 With `"position": "bottom"` (**Edge → Bottom** in **Settings → Bar → Bar → Placement**), the bar sits on the bottom edge of each display instead, and `bar.offset` moves it up from that edge. It counts from the display's edge, not from the Dock: with the Dock at the bottom and always shown, the Dock covers the bar, so hide the Dock, move it to a side, or raise the bar with `bar.offset`. At the bottom, popups and tooltips open upward, `belowBar` underlines sit on the bar's top side, the notch positions place widgets as on a display without a notch, and `belowMenuBar` has no effect. A screen setup or kind of screen can set its own `position` in its `bar`, like `offset`. AeroSpace gaps are managed separately. Of the macOS menu-bar settings, StableBar changes only auto-hide, in setup and in [Settings](#hide-the-native-menu-bar). Keep the center clear on a notched display. The default configuration uses only the left and right groups.
+
+## Hide the bar
+
+Choose **Hide Bar** in the menu-bar icon's menu, or run `StableBar --hide`, to put the bar away on every display, for example while you present or watch a video. **Show Bar** or `StableBar --show` brings it back, and `StableBar --toggle` switches between the two; see [Command-line controls](command-line.md). The bar stays hidden until you show it or quit StableBar, and your configuration file doesn't change.
+
+To hide it while an app is in front, set `bar.hidden` in a [profile](configuration.md#theme-tokens-and-automatic-profiles):
+
+```json
+{ "name": "tv", "when": { "app": "com.apple.TV" }, "configuration": { "bar": { "hidden": true } } }
+```
+
+The bar shows only when neither **Hide Bar** nor the configuration hides it, so **Show Bar** doesn't bring back a bar that `bar.hidden` hides. While the bar is hidden, its popup closes, providers set to `whenVisible` pause as they do when none of their widgets is visible, and [window and notification clearance](#keeping-windows-clear-of-the-bar) leaves windows where they are.
 
 ## Updates
 

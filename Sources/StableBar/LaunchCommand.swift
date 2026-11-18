@@ -38,6 +38,7 @@ enum LaunchCommand {
            StableBar [--config PATH] --reset | --refresh ID | --popup ID | --focus
            StableBar [--config PATH] --popup ID --open [--duration SECONDS] | --popup [ID] --close
            StableBar [--config PATH] --status | --quit
+           StableBar [--config PATH] --hide | --show | --toggle
            StableBar [--config PATH] --packages | --inspect-package PATH | --install-package PATH|ID [--source SOURCE]
            StableBar --build-source PACKAGES OUT [--previous FILE] [--url URL --name NAME]
            StableBar [--config PATH] --enable-package ID VERSION [--persist]
@@ -109,6 +110,12 @@ enum LaunchCommand {
             self = .control(url, RuntimeRequest(action: .status))
         case "--quit" where arguments.count == 1:
             self = .control(url, RuntimeRequest(action: .quit))
+        case "--hide" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .hide))
+        case "--show" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .show))
+        case "--toggle" where arguments.count == 1:
+            self = .control(url, RuntimeRequest(action: .toggle))
         case "--packages" where arguments.count == 1:
             self = .packages(url, "list", nil)
         case "--inspect-package" where arguments.count == 2:

@@ -2232,6 +2232,10 @@
           "$ref": "#/definitions/boolean",
           "description": "Keep the macOS menu bar invisible while StableBar runs, even at the top edge. Quitting StableBar shows it again. Disabled by default."
         },
+        "hidden": {
+          "$ref": "#/definitions/boolean",
+          "description": "Hides the bar on every display, for example from a profile while an app is in front. StableBar --hide also hides it; the bar shows only when neither does. Disabled by default."
+        },
         "hoverDelay": {
           "$ref": "#/definitions/number",
           "description": "Milliseconds the pointer rests on a widget before its tooltip, hover controls or hover popup opens. While one is open, moving to another widget opens its own at once. Defaults to 400."
