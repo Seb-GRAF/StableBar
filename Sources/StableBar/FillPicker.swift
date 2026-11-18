@@ -338,7 +338,7 @@ private struct FillPopover: View {
             }
         }
         .font(.callout)
-        .frame(width: 244)
+        .frame(width: 310)
         .padding(10)
         .onChange(of: value) {
             if !isDragging, FillChoice(value).configurationValue != written { reload() }
