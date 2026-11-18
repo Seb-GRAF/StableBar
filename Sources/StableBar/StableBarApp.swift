@@ -542,6 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         addItem("Getting Started…", icon: .setup, action: #selector(showSetup), to: menu)
         addItem("Help…", icon: .help, action: #selector(showHelp), to: menu)
+        if !panels.isEmpty { addItem("Share My Bar…", icon: .share, action: #selector(shareBar), to: menu) }
         addItem("Send Feedback…", icon: .feedback, action: #selector(showFeedback), to: menu)
         if let update = store.update {
             addItem("Check for Updates…", icon: .updates, action: #selector(AppUpdate.checkForUpdates), to: menu).target = update
@@ -583,15 +584,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func editBar() { store.barEditing.toggle() }
     @objc private func toggleBar() { hidesBar.toggle() }
     @objc private func tryThemes() {
+        if let screen = barScreenUnderPointer() { showThemeTrial(on: screen) }
+    }
+    @objc private func shareBar() {
+        if let screen = barScreenUnderPointer() { barShare.show(store: store, screen: screen) }
+    }
+
+    /// The screen with a bar under the pointer, or else the main screen or the first with a bar.
+    private func barScreenUnderPointer() -> NSScreen? {
         let screens = NSScreen.screens
         let barIndices = screens.indices.filter { index in
             let id = (screens[index].deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as! NSNumber).uint32Value
             return panels[id] != nil
         }
-        guard let index = ThemeTrialPlacement.screenIndex(at: NSEvent.mouseLocation, frames: screens.map(\.frame),
-                                                         mainIndex: screens.firstIndex { $0 === NSScreen.main },
-                                                         barIndices: barIndices) else { return }
-        showThemeTrial(on: screens[index])
+        return ThemeTrialPlacement.screenIndex(at: NSEvent.mouseLocation, frames: screens.map(\.frame),
+                                               mainIndex: screens.firstIndex { $0 === NSScreen.main },
+                                               barIndices: barIndices).map { screens[$0] }
     }
 
     private func showThemeTrial(on screen: NSScreen) {
@@ -623,7 +631,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showCustomization()
+        if !store.inspectorOpen, let window = barShare.window { window.makeKeyAndOrderFront(nil) } else { showCustomization() }
         return false
     }
 

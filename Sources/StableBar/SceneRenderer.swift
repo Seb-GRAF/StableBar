@@ -37,7 +37,8 @@ enum SceneRenderer {
         }
         let packages = WidgetPackageStore(directory: directory.appending(path: "packages"))
         for path in scene.packages {
-            _ = try packages.install(URL(filePath: path, relativeTo: folder).standardizedFileURL)
+            _ = try packages.install(URL(filePath: path, relativeTo: folder).standardizedFileURL,
+                                     record: scene.barLink == nil && scene.draw != .shareLink ? .local : PackageInstallRecord(.store))
         }
         let store = BarStore(configurationURL: configurationURL, themesDirectory: themes)
         var loader = ConfigurationLoader()
@@ -108,6 +109,19 @@ enum SceneRenderer {
                                  configuration: try Data(contentsOf: source.appending(path: "config.json")))
             _ = store.receive([link.link])
             if let message = store.pendingLinks.themeError { throw CommandFailure(message: "themeLink: \(message)") }
+        }
+        if let path = scene.barLink {
+            // The Store lists the packages it installed, so the card reads them without downloading anything.
+            let listed = try packages.list().map { manifest in
+                ConfigurationValue.object(["id": .string(manifest.id), "name": .string(manifest.name), "version": .string(manifest.version),
+                                           "kind": manifest.kind.map { .string($0.rawValue) } ?? .null,
+                                           "archive": .string("\(manifest.id).tar.gz"), "sha256": .string("")])
+            }
+            try JSONEncoder().encode(ConfigurationValue.object(["packages": .array(listed)])).write(to: directory.appending(path: "index.json"))
+            let link = try BarLink(payload: Data(contentsOf: URL(filePath: path, relativeTo: folder).standardizedFileURL))
+            _ = store.receive([try link.url()])
+            if let message = store.pendingLinks.barError { throw CommandFailure(message: "barLink: \(message)") }
+            store.pendingLinks.bar!.unticked = Set(scene.untickedWidgets)
         }
         return store
     }
@@ -286,6 +300,7 @@ enum SceneRenderer {
                                               dark: dark, settle: settle, ready: {
                 (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
                     && (store.pendingLinks.theme.map { editor.gallery.previews[$0.choice.linkedPreviewKey] != nil } ?? true)
+                    && (store.pendingLinks.bar.map { $0.entries != nil } ?? true)
                     // Crashes marks what it shows as seen once it has read the reports.
                     && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
                     && (scene.package == nil || library.draft?.inspection.manifest.id == scene.package)
@@ -293,6 +308,13 @@ enum SceneRenderer {
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
                                               size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+        case .barLinkReview:
+            let candidate = store.pendingLinks.bar!
+            await candidate.loadStore()
+            await candidate.use()
+            guard !candidate.reviews.isEmpty else { throw CommandFailure(message: "barLink: No package the link needs asks for a review.") }
+            try await OffscreenSnapshot.write(BarLinkReview(candidate: candidate, store: store).background(Color(nsColor: .windowBackgroundColor)),
+                                              size: NSSize(width: 540, height: CGFloat(scene.height ?? 540)), dark: dark, settle: settle, to: url)
         case .accessibilityGuide:
             let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:)).flatMap { image in
                 var rect = NSRect(x: 0, y: 0, width: 256, height: 256)
@@ -302,6 +324,12 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(AccessibilityGuideView(icon: icon ?? NSApp.applicationIconImage) {}
                 .padding(24).background(Color(nsColor: .windowBackgroundColor)),
                                               size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
+        case .share, .shareLink:
+            let share = BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: setupMenuBarHeight,
+                                 wallpaper: nil)
+            try await OffscreenSnapshot.write(BarShareView(share: share, showsDetails: scene.draw == .shareLink),
+                                              size: NSSize(width: CGFloat(scene.width ?? 640), height: CGFloat(scene.height ?? 600)),
+                                              dark: dark, settle: settle, ready: { share.png != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),

@@ -77,11 +77,11 @@ final class BarStore: NSObject {
     private var pauses: Set<PauseReason> = []
     private var popupWidgetID: String?
     private(set) var inspectedWidgetID: String?
-    private var inspectorOpen = false
+    private(set) var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
-    private var triedTheme: ThemeChoice?
+    private var triedTheme: (choice: ThemeChoice, edits: [ConfigurationEdit])?
     private var managesConnections = false
     private let configurationWatcher = ConfigurationWatcher()
     private(set) var reloadTask: Task<Void, Never>?
@@ -617,7 +617,7 @@ final class BarStore: NSObject {
         normalComposition = (next, configurationLoader)
         if let triedTheme {
             do {
-                let (preview, loader) = try configurationTryingTheme(triedTheme)
+                let (preview, loader) = try configurationTryingTheme(triedTheme.choice, edits: triedTheme.edits)
                 display(preview, loader: loader)
             } catch { configurationError = errorMessage(error) }
         } else {
@@ -630,7 +630,7 @@ final class BarStore: NSObject {
         return selection.flatMap { $0.enabled ? $0.key : nil } ?? "built-in"
     }
 
-    var themeTrialDirectory: URL? { triedTheme?.directory }
+    var themeTrialDirectory: URL? { triedTheme?.choice.directory }
 
     func themeSettings(for choice: ThemeChoice, in previewDocument: [String: ConfigurationValue]? = nil) throws -> [String: ConfigurationValue] {
         // Saving uses only the main file's own settings; previews can supply the temporary composition.
@@ -663,11 +663,16 @@ final class BarStore: NSObject {
 
     func applyTheme(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) throws {
         pendingLinks.theme?.noteThemeChoice()
-        guard let kind else { return try customizationHistory.change(themeEdit(for: choice), everyBar: everyBar) }
-        try customizationHistory.change([
+        try customizationHistory.change(themeEdits(for: choice, on: kind), everyBar: everyBar)
+    }
+
+    /// The edits that select `choice` for every screen, or for screens of `kind` only.
+    func themeEdits(for choice: ThemeChoice, on kind: ScreenKind?) throws -> [ConfigurationEdit] {
+        guard let kind else { return [try themeEdit(for: choice)] }
+        return [
             ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["theme": .null])])]),
             ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["theme": .object(choice.selection)])])
-        ], everyBar: everyBar)
+        ]
     }
 
     var clearanceConfiguration: Configuration? {
@@ -675,13 +680,14 @@ final class BarStore: NSObject {
         return normalComposition?.configuration ?? configuration
     }
 
-    func tryTheme(_ choice: ThemeChoice) throws {
+    /// Shows `choice` on the bar until the trial ends, with `edits` applied over the saved configuration.
+    func tryTheme(_ choice: ThemeChoice, edits: [ConfigurationEdit] = []) throws {
         guard normalComposition != nil else {
             throw CommandFailure(message: "Load a bar before trying themes.")
         }
         pendingLinks.theme?.noteThemeChoice()
-        let (next, loader) = try configurationTryingTheme(choice)
-        triedTheme = choice
+        let (next, loader) = try configurationTryingTheme(choice, edits: edits)
+        triedTheme = (choice, edits)
         display(next, loader: loader)
     }
 
@@ -691,11 +697,11 @@ final class BarStore: NSObject {
         if let normalComposition { display(normalComposition.configuration, loader: normalComposition.loader) }
     }
 
-    private func configurationTryingTheme(_ choice: ThemeChoice) throws -> (Configuration, ConfigurationLoader) {
+    private func configurationTryingTheme(_ choice: ThemeChoice, edits: [ConfigurationEdit]) throws -> (Configuration, ConfigurationLoader) {
         var loader = newLoader()
         let settings = try themeSettings(for: choice, in: configurationLoader.document)
         let layer = try loader.readPackage(at: choice.directory, manifest: choice.manifest, settings: settings)
-        let next = try loader.load(configurationURL, data: configurationData(editedMainDocument()),
+        let next = try loader.load(configurationURL, data: configurationData(editedMainDocument(replaying: customizationEdits + sessionEdits + edits)),
                                    context: context, previewTheme: PreviewTheme(id: choice.manifest.id, layer: layer))
         return (next, loader)
     }
@@ -1293,6 +1299,19 @@ final class BarStore: NSObject {
                 pendingLinks.themeError = errorMessage(error)
                 return .appearance
             }
+            do {
+                if let link = try BarLink(url: url) {
+                    pendingLinks.bar?.discard()
+                    pendingLinks.bar = try BarLinkCandidate(link: link, store: self)
+                    pendingLinks.barError = nil
+                    return .appearance
+                }
+            } catch {
+                pendingLinks.bar?.discard()
+                pendingLinks.bar = nil
+                pendingLinks.barError = errorMessage(error)
+                return .appearance
+            }
             if let link = PackageSourceLink(url: url) {
                 pendingLinks.source = link
             } else if let link = PackageLink(url: url) {
@@ -1311,6 +1330,8 @@ final class BarStore: NSObject {
         endThemeTrial()
         pendingLinks.theme?.discard()
         pendingLinks.theme = nil
+        pendingLinks.bar?.discard()
+        pendingLinks.bar = nil
         flushCustomization()
         managesConnections = false
         popup.closeAll()

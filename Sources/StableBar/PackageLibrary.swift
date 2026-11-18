@@ -531,8 +531,9 @@ final class PackageLibrary {
         }
     }
 
-    /// Opens a folder, an installed copy, or with `sourceID` a package from that source in the Store.
-    func select(_ directory: URL, sourceID: String? = nil) async {
+    /// Opens a folder, an installed copy, or with `sourceID` a package from that source in the Store. Its settings are
+    /// `settings`, or else those the bar has saved for it.
+    func select(_ directory: URL, sourceID: String? = nil, settings: [String: ConfigurationValue]? = nil) async {
         guard let store else { return }
         selectionRequest += 1
         let request = selectionRequest
@@ -547,7 +548,7 @@ final class PackageLibrary {
                 return
             }
             let manifest = inspection.manifest
-            let supplied = try WidgetSetup(store: store).savedSettings(for: manifest)
+            let supplied = try settings ?? WidgetSetup(store: store).savedSettings(for: manifest)
             let values = try manifest.values(supplied)
             let reviewed = try await client.inspect(directory, settings: values)
             guard request == selectionRequest else { return }

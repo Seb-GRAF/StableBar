@@ -75,7 +75,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         store?.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         store?.customizationHistory.clearNotice()
         store?.setInspectorOpen(false)
-        NSApplication.shared.setActivationPolicy(.accessory)
+        if barShare.window == nil { NSApplication.shared.setActivationPolicy(.accessory) }
         // SwiftUI views in a closed window still observe the store and redraw. The editor outlives the window.
         window = nil
     }

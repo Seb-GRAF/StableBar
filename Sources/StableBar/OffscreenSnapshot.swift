@@ -1,8 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// Draws views to PNG files in offscreen windows, for the docs images and scene files. Nothing appears
-/// on screen, every clock in the drawing shows `DocsImages.date`, and the version row shows `AppVersion.sample`.
+/// Draws views to PNG images in offscreen windows, for the docs images, scene files and Share My Bar. Nothing
+/// appears on screen.
 @MainActor
 enum OffscreenSnapshot {
     private static let darkBackdrop = Bundle.main.url(forResource: "SetupDusk", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
@@ -16,18 +16,27 @@ enum OffscreenSnapshot {
         }
     }
 
-    /// Draws `content` at twice `size` in an offscreen window below the desktop icons and writes it to
-    /// `url` as PNG. It checks `ready` every tenth of a second, at most 600 times, then runs `prepare`
-    /// and lets the views settle for `settle` before drawing.
+    /// Draws `content` at twice `size`, with every clock showing `DocsImages.date` and the version row showing
+    /// `AppVersion.sample`, and writes it to `url` as PNG.
     static func write(_ content: some View, size: NSSize, dark: Bool, settle: Duration, ready: () -> Bool = { true },
                       prepare: () -> Void = {}, to url: URL) async throws {
-        let view = NSHostingView(rootView: content
+        let framed = content
             .environment(\.fixedDate, DocsImages.date)
             .environment(\.fixedVersion, AppVersion.sample)
             .environment(\.offline, true)
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14))))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.14)))
+        try await png(framed, size: size, pixels: NSSize(width: size.width * 2, height: size.height * 2), dark: dark, settle: settle,
+                      ready: ready, prepare: prepare, name: url.deletingPathExtension().lastPathComponent).write(to: url)
+    }
+
+    /// Draws `content`, laid out `size` points large, to a PNG image `pixels` large in an offscreen window below the
+    /// desktop icons. It checks `ready` every tenth of a second, at most 600 times, then runs `prepare` and lets the
+    /// views settle for `settle` before drawing. Errors start with `name`.
+    static func png(_ content: some View, size: NSSize, pixels: NSSize, dark: Bool, settle: Duration, ready: () -> Bool = { true },
+                    prepare: () -> Void = {}, name: String) async throws -> Data {
+        let view = NSHostingView(rootView: content)
         view.frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(contentRect: NSRect(x: -9000, y: -6000, width: size.width, height: size.height),
                               styleMask: [.borderless], backing: .buffered, defer: false)
@@ -43,23 +52,23 @@ enum OffscreenSnapshot {
         var checks = 0
         while !ready() {
             guard checks < 600 else {
-                throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): the views weren't ready after a minute.")
+                throw CommandFailure(message: "\(name): the views weren't ready after a minute.")
             }
             checks += 1
             try await Task.sleep(for: .milliseconds(100))
         }
         prepare()
         try await Task.sleep(for: settle)
-        guard let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * 2), pixelsHigh: Int(size.height * 2),
+        guard let image = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(pixels.width), pixelsHigh: Int(pixels.height),
                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else {
-            throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): no image of \(Int(size.width)) × \(Int(size.height)) points.")
+            throw CommandFailure(message: "\(name): no image of \(Int(size.width)) × \(Int(size.height)) points.")
         }
         image.size = size
         view.cacheDisplay(in: view.bounds, to: image)
         guard let png = image.representation(using: .png, properties: [:]) else {
-            throw CommandFailure(message: "\(url.deletingPathExtension().lastPathComponent): the image couldn't be encoded as PNG.")
+            throw CommandFailure(message: "\(name): the image couldn't be encoded as PNG.")
         }
-        try png.write(to: url)
+        return png
     }
 }

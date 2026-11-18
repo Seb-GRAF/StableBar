@@ -6,6 +6,30 @@ let savedThemeBarProperties: Set<String> = [
     "popupOffset"
 ]
 
+/// `theme` with the look of `main` merged in, as Save as Theme saves it, and the unset that takes that look out of `main`.
+func savingLook(of main: [String: ConfigurationValue], into theme: [String: ConfigurationValue]) throws
+    -> (theme: [String: ConfigurationValue], removal: [String: ConfigurationValue]) {
+    var moved: [String: ConfigurationValue] = [:]
+    var removal: [String: ConfigurationValue] = [:]
+    for property in ["defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "groups"] where main[property] != nil {
+        moved[property] = main[property]
+        removal[property] = .null
+    }
+    let bar = try (main["bar"]?.decoded([String: ConfigurationValue].self) ?? [:]).filter {
+        savedThemeBarProperties.contains($0.key)
+    }
+    if !bar.isEmpty {
+        moved["bar"] = .object(bar)
+        removal["bar"] = .object(bar.mapValues { _ in .null })
+    }
+    let tokens = try main["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
+    let themed = try theme["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
+    if !tokens.isEmpty { moved["tokens"] = .object(tokens) }
+    let themeColors = tokens.filter { name, _ in themed[name] != nil || themeTokens.contains { $0.name == name } }
+    if !themeColors.isEmpty { removal["tokens"] = .object(themeColors.mapValues { _ in .null }) }
+    return (theme.merging(moved) { $1.overriding($0) }, removal)
+}
+
 @MainActor @Observable
 final class ThemeGallery {
     private let store: BarStore
@@ -241,25 +265,7 @@ final class ThemeGallery {
             var loader = ConfigurationLoader()
             let theme = try loader.readPackage(at: current.directory, manifest: current.manifest,
                                                settings: store.themeSettings(for: current)).values
-            let main = try store.editedMainDocument(replaying: store.customizationEdits)
-            var moved: [String: ConfigurationValue] = [:]
-            var removal: [String: ConfigurationValue] = [:]
-            for property in ["defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "groups"] where main[property] != nil {
-                moved[property] = main[property]
-                removal[property] = .null
-            }
-            let bar = try (main["bar"]?.decoded([String: ConfigurationValue].self) ?? [:]).filter {
-                savedThemeBarProperties.contains($0.key)
-            }
-            if !bar.isEmpty {
-                moved["bar"] = .object(bar)
-                removal["bar"] = .object(bar.mapValues { _ in .null })
-            }
-            let tokens = try main["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
-            let themed = try theme["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
-            if !tokens.isEmpty { moved["tokens"] = .object(tokens) }
-            let themeColors = tokens.filter { name, _ in themed[name] != nil || themeTokens.contains { $0.name == name } }
-            if !themeColors.isEmpty { removal["tokens"] = .object(themeColors.mapValues { _ in .null }) }
+            let saved = try savingLook(of: store.editedMainDocument(replaying: store.customizationEdits), into: theme)
             let id = packageSlug(name)
             let versions = try await client.installed().filter { $0.id == id }.map(\.version)
             var patch = 0
@@ -271,12 +277,12 @@ final class ThemeGallery {
                                    "kind": .string("theme"), "entry": .string("config.json"),
                                    "description": .string("Based on \(current.manifest.name).")])
                 .write(to: source.appending(path: "package.json"))
-            try configurationData(theme.merging(moved) { $1.overriding($0) }).write(to: source.appending(path: "config.json"))
+            try configurationData(saved.theme).write(to: source.appending(path: "config.json"))
             let installed = try await client.install(source, from: nil)
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
             perform(on: key) {
-                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: removal), store.themeEdit(for: choice)],
+                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: saved.removal), store.themeEdit(for: choice)],
                                                       everyBar: everyBar)
             }
         } catch { errors[key] = errorMessage(error) }

@@ -501,7 +501,9 @@ final class BarEditingTests: XCTestCase {
                 delegate.menuWillOpen(menu)
                 var expected = ["StableBar", "separator"]
                 if hasBar { expected += ["Edit Bar in Place", "Try Themes…", "Get Widgets…"] }
-                expected += ["Hide Bar", "separator", "Getting Started…", "Help…", "Send Feedback…"]
+                expected += ["Hide Bar", "separator", "Getting Started…", "Help…"]
+                if hasBar { expected += ["Share My Bar…"] }
+                expected += ["Send Feedback…"]
                 if let error { expected += ["separator", error] }
                 expected += ["separator", "Settings…", "Quit StableBar"]
                 XCTAssertEqual(menu.items.map { $0.isSeparatorItem ? "separator" : $0.title }, expected)

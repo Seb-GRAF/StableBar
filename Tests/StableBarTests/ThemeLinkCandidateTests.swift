@@ -1342,6 +1342,246 @@ struct ThemeLinkCandidateTests {
         }
     }
 
+    @Test func sharingABarCarriesItsResolvedLookAndBuiltInAndStoreWidgetsOnly() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"theme":{"id":"catppuccin"},
+             "tokens":{"accent":"#ff0000","barTint":"#123456","myBlue":"#0000ff","apiKey":"secret"},
+             "bar":{"height":30,"background":"@token.barTint","position":"bottom"},
+             "profiles":[{"name":"Work","configuration":{"defaults":{"cornerRadius":4}}}],
+             "packages":[{"id":"weather","version":"1.0.0","settings":{"units":"imperial","interval":300,"city":"Bern"}},
+                         {"id":"notes","version":"1.0.0"},{"id":"team","version":"1.0.0"}],
+             "providers":{"speakers":{"type":"audio"}},
+             "widgets":[
+               {"id":"clock","type":"clock","position":"right","onClick":"open -a Calendar","style":{"foreground":"@token.myBlue"}},
+               {"id":"note","type":"script","position":"left","command":"echo hi"},
+               {"id":"volume","type":"provider","provider":"speakers","position":"right"},
+               {"id":"laptop","type":"text","text":"x","position":"left","display":"builtIn"}
+             ]}
+            """#)
+        defer { fixture.close() }
+        let settings = #"""
+            {"units":{"type":"string","title":"Units","choices":["metric","imperial"],"default":"metric"},
+             "interval":{"type":"number","title":"Refresh every (seconds)","default":900},
+             "city":{"type":"string","title":"City","default":"Zurich"},"apiKey":{"type":"secret","title":"API key"}}
+            """#
+        for (id, record) in [("weather", PackageInstallRecord(.store)), ("notes", .local),
+                             ("team", PackageInstallRecord(source: "team", name: "Team", url: URL(string: "https://team.example/index.json")))] {
+            let source = fixture.directory.appending(path: "sources/\(id)")
+            try fixture.write(#"{"id":"\#(id)","name":"\#(id.capitalized)","version":"1.0.0","kind":"widgets","entry":"config.json","settings":\#(id == "weather" ? settings : "{}")}"#,
+                              to: source.appending(path: "package.json"))
+            try fixture.write(#"{"widgets":[{"id":"\#(id)","type":"text","text":"x","position":"right"}]}"#, to: source.appending(path: "config.json"))
+            _ = try fixture.packages.install(source, record: record)
+        }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let shared = try BarLink.sharing(store, on: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil))
+        #expect(shared.look == "Catppuccin (shared)")
+        #expect(shared.widgets == [
+            BarLink.Sharing.Widget(name: "Weather", symbol: "textformat", store: true, settings: ["Units: imperial", "Refresh every (seconds): 300"],
+                                   settingsLeftOut: ["City: free text", "API key: secret"]),
+            BarLink.Sharing.Widget(name: "Notes", symbol: "textformat", leftOut: "Local folder"),
+            BarLink.Sharing.Widget(name: "Team", symbol: "textformat", leftOut: "Private source"),
+            BarLink.Sharing.Widget(name: "clock", symbol: "clock"),
+            BarLink.Sharing.Widget(name: "note", symbol: "terminal", leftOut: "Script widget"),
+            BarLink.Sharing.Widget(name: "volume", symbol: "gauge.with.dots.needle.33percent", leftOut: "Custom provider")
+        ])
+        let page = "https://stablebar.app/bar.html#"
+        #expect(shared.link.absoluteString.hasPrefix(page + "v=1&d="))
+        let link = try #require(try BarLink(url: URL(string: "stablebar://bar?" + shared.link.absoluteString.dropFirst(page.count))!))
+        #expect(link.widgets == [["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
+                                  "style": .object(["foreground": .string("#0000ff")])]])
+        #expect(link.packages == [BarLink.Package(id: "weather", version: "1.0.0", settings: ["units": .string("imperial"), "interval": .number(300)])])
+        #expect(link.widgetOrder == ["weather", "clock"])
+        let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.manifest)
+        #expect(manifest["name"] == .string("Catppuccin (shared)"))
+        #expect(try manifest["id"]?.decoded(String.self).hasPrefix("shared-") == true)
+        let look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        #expect(look["profiles"] == nil)
+        #expect(try look["defaults"]?.decoded([String: ConfigurationValue].self)["cornerRadius"] == .number(4))
+        let bar = try #require(try look["bar"]?.decoded([String: ConfigurationValue].self))
+        #expect(bar["height"] == .number(30))
+        #expect(bar["position"] == nil)
+        let tokens = try #require(try look["tokens"]?.decoded([String: ConfigurationValue].self))
+        #expect(tokens["accent"] == .string("#ff0000"))
+        #expect(tokens["barTint"] == .string("#123456"))
+        #expect(tokens["myBlue"] == nil)
+        #expect(tokens["apiKey"] == nil)
+    }
+
+    @Test func tryingABarLinkShowsItsWidgetsUntilCancelled() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        let original = try Data(contentsOf: fixture.url)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.themeTrialDirectory == candidate.look.choice.directory)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        #expect(try Data(contentsOf: fixture.url) == original)
+        candidate.cancelTrial()
+        #expect(candidate.state == .ready)
+        #expect(store.configuration?.widgets.map(\.id) == ["mine"])
+    }
+
+    @Test func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep() async throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"bottom"},
+             "screens":{"laptop":{"layout":{"left":["mine"]}}},
+             "profiles":[{"name":"Work","enabled":false,"configuration":{"widgetOverrides":{"mine":{"text":"Work"}}}}],
+             "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"},
+                        {"id":"clock","type":"clock","position":"right"}]}
+            """#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        let original = try Data(contentsOf: fixture.url)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        #expect(candidate.widgets.filter { $0.source == .unlisted }.map(\.id) == ["weather", "uptime"])
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.configurationError == nil)
+        #expect(store.selectedThemeKey == "shared-5c1e0b7a/1.0.0")
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        let document = try fixture.document()
+        #expect(document["defaults"] == nil)
+        #expect(document["bar"] == .object(["position": .string("bottom")]))
+        #expect(document["screens"] == nil)
+        #expect(document["profiles"] == .array([.object(["name": .string("Work"), "enabled": .bool(false), "configuration": .object([:])])]))
+        #expect(store.customizationHistory.undoSteps.count == 1)
+        try store.customizationHistory.undo()
+        #expect(try Data(contentsOf: fixture.url) == original)
+    }
+
+    @Test func untickedWidgetsAndTheirStorePackagesAreLeftOutOfTryAndUse() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "weather", kind: "widgets", configuration: #"{"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"}]}"#,
+                                name: "Weather")
+        store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        #expect(candidate.widgets.first { $0.id == "weather" }
+            == BarLinkCandidate.Widget(id: "weather", name: "Weather", source: .store(summary: "Runs nothing, stays offline")))
+        // The Store doesn't list uptime, so it has nothing to preview.
+        #expect(candidate.previewWidgets.map(\.id) == ["workspaces", "app", "weather", "sound", "battery", "clock"])
+        #expect(candidate.previewWidgets[2].content == .text("Weather"))
+        #expect(candidate.previewWidgets[2].position == .right)
+        candidate.unticked = ["weather", "battery"]
+        #expect(candidate.previewWidgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        candidate.cancelTrial()
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        #expect(try fixture.document()["packages"] == nil)
+        #expect(try !fixture.packages.list().contains { $0.id == "weather" })
+    }
+
+    @Test func storePackagesThatNeedAReviewShareOneReview() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let index = LocalPackageIndex(fixture: fixture)
+        let entries = [
+            try await index.add(id: "weather", kind: "widgets", configuration: #"""
+                {"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"},{"id":"forecast","type":"text","text":"Sun","position":"right"}]}
+                """#, hosts: #"["api.open-meteo.com"]"#, name: "Weather"),
+            try await index.add(id: "uptime", kind: "widgets", configuration: #"{"widgets":[{"id":"uptime","type":"text","text":"3 days","position":"right"}]}"#,
+                                settings: #"{"interval":{"type":"number","default":60}}"#, hosts: #"["example.com"]"#, name: "Uptime"),
+            try await index.add(id: "moon", kind: "widgets", configuration: #"{"widgets":[{"id":"moon","type":"text","text":"Moon","position":"right"}]}"#,
+                                name: "Moon"),
+            try await index.add(id: "ticker", kind: nil, configuration: #"""
+                {"widgets":[{"id":"ticker","type":"script","command":"date","position":"right"},
+                            {"id":"tock","type":"script","command":"date +%s","position":"right"}]}
+                """#, permissions: #"["accessibility"]"#, name: "Ticker")
+        ]
+        try JSONEncoder().encode(ConfigurationValue.object(["packages": .array(entries.map { entry in
+            .object(["id": .string(entry.id), "name": .string(entry.name), "version": .string(entry.version),
+                     "kind": entry.kind.map { .string($0.rawValue) } ?? .null,
+                     "archive": .string(entry.archive), "sha256": .string(entry.sha256)])
+        })])).write(to: index.url)
+        store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        var link = try linkedBar()
+        link.packages += [BarLink.Package(id: "moon", version: "1", settings: [:]), BarLink.Package(id: "ticker", version: "1", settings: [:])]
+        for id in ["forecast", "moon", "ticker"] { link.widgetOverrides[id] = ["position": .string("right")] }
+        link.widgetOrder += ["forecast", "moon", "ticker"]
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        #expect(candidate.widgets.filter { $0.source != .builtIn }.map(\.source) == [
+            .store(summary: "Connects to api.open-meteo.com"), .store(summary: "Connects to example.com"),
+            .store(summary: "Connects to api.open-meteo.com"), .store(summary: "Runs nothing, stays offline"),
+            .store(summary: "Runs 2 commands · Needs Accessibility access")
+        ])
+        candidate.unticked = ["forecast", "ticker"]
+        await candidate.use()
+        #expect(candidate.state == .ready)
+        #expect(candidate.reviews.map(\.manifest.id) == ["weather", "uptime"])
+        #expect(try fixture.packages.list().map(\.id) == ["moon"])
+
+        // As the review's Add to bar does.
+        let library = PackageLibrary(store: store, reviewing: true)
+        await library.loadInstalled()
+        for inspection in candidate.reviews {
+            await library.select(inspection.directory, sourceID: PackageSource.storeID, settings: candidate.settings(for: inspection.manifest))
+            let draft = try #require(library.draft)
+            await library.add(draft, onEnable: { candidate.reviewed($0, settings: $1) })
+            #expect(draft.error == nil)
+        }
+        await candidate.resume()
+        #expect(candidate.state == .used)
+        #expect(candidate.reviews.isEmpty)
+        #expect(store.configuration?.widgets.filter(\.enabled).map(\.id) == ["workspaces", "app", "weather", "uptime", "sound", "battery", "clock", "moon"])
+        #expect(store.configuration?.widgets.first { $0.id == "forecast" }?.enabled == false)
+        let packages = try #require(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self))
+        #expect(packages.map(\.id) == ["weather", "uptime", "moon"])
+        #expect(packages[1].settings == ["interval": .number(300)])
+        #expect(store.customizationHistory.undoSteps.count == 1)
+    }
+
+    @Test func anUntickedLookKeepsTheBarsLookAndAppliesOnlyTheWidgets() async throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"theme":{"id":"gruvbox"},"defaults":{"cornerRadius":2},
+             "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"}]}
+            """#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        candidate.appliesLook = false
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.themeTrialDirectory?.lastPathComponent == "gruvbox")
+        #expect(store.configuration?.defaults.cornerRadius == 2)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        candidate.cancelTrial()
+        #expect(store.configuration?.widgets.map(\.id) == ["mine"])
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.selectedThemeKey == "gruvbox")
+        #expect(store.configuration?.defaults.cornerRadius == 2)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        #expect(try fixture.document()["defaults"] == .object(["cornerRadius": .number(2)]))
+    }
+
     enum Rejection: CaseIterable, Sendable {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
         case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
@@ -1354,6 +1594,10 @@ struct ThemeLinkCandidateTests {
     private var linkedThemeDirectory: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appending(path: "Fixtures/linked-theme")
+    }
+
+    private func linkedBar() throws -> BarLink {
+        try BarLink(payload: Data(contentsOf: linkedThemeDirectory.deletingLastPathComponent().appending(path: "linked-bar.json")))
     }
 
     private func linkedTheme() throws -> ThemeLink {

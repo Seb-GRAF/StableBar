@@ -1,0 +1,5 @@
+{
+  "widgets": [
+    { "id": "uptime", "type": "script", "command": "uptime | sed -E 's/.*up ([^,]*),.*/\\1/'", "interval": "@setting.interval", "icon": "clock.arrow.circlepath", "position": "right" }
+  ]
+}

@@ -58,6 +58,36 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
+- **Bar links carry only built-in and Store widgets** (2026-11-18, [#807]). A
+  `stablebar://bar?v=1&d=…` link carries what a bar shows on one display, resolved: its look and
+  widgets with the active profiles applied, without profiles, screen layouts or `display`. `d` is
+  the JSON payload, compressed with zlib's raw DEFLATE and base64url-encoded. The app shares
+  `https://stablebar.app/bar.html#v=1&d=…`, a page that opens the link, since social sites don't
+  open `stablebar://` links; the fragment never reaches a server. The look is an inline theme,
+  `package.json` and `config.json`, under every theme link rule and limit above, made the way
+  **Save as Theme…** merges the main file's look into the current theme. It keeps only the
+  theme's tokens and those the look refers to, as a token can hold a provider's header. Its ID is
+  `shared-` and 8 hex digits of a hash of its files, its name the theme's with "(shared)". A
+  built-in widget keeps only `id`, `type`, `role`, `position`, `icon`, `tooltip`, `style`,
+  `format`, `text`, `layout`, `hoverLayout`, `overlay`, `popup`, `animation`, `workspace`,
+  `group`, `priority`, `overflow`, `transition`, `expandOnHover`, `openOnHover`, `shown`,
+  `hidden`, `details`, `hideWhenIdle`, `timeZone`, `background`, `popupBackground` and
+  `tooltipBackground`. Its popup loses `onOpen` and `onClose`, and its blocks lose every block
+  that runs, opens or changes something (`onClick`, `onClickField`, `open`, `openField`,
+  `quitField`, `openMenuBarItem`, `selectInputSourceField`, `selectOutputDeviceField`,
+  `onChange`, `onSubmit`, `onStop`, `onStar`, `set`), every `image` block and every list whose
+  row is one of those. Script and custom provider widgets, widgets from folders or private
+  sources, includes, templates, `environment` and `packageSources` stay behind. A Store package
+  carries its ID, version, its widgets' positions and its number, boolean and choice settings;
+  secret and free-text settings keep the package's defaults. The recipient applies the same
+  filters, installs packages from the Store, through its review when they need one, gets the
+  version the Store lists (the link's while it's the newest), and leaves out packages the Store
+  doesn't list. **Use this bar**
+  replaces the main file's widgets, packages, widget overrides and order, screen layouts and the
+  widget changes in its profiles, and with **Every screen** the look that Save as Theme would
+  move, in one undoable change; widgets that included files add stay. Limits: 64 KB for the URL,
+  128 KB for the decoded payload, 32 levels of JSON nesting and 4,096 JSON values. Theme links
+  don't change.
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.
 - **A package can't move another party's credentials** (2026-11-17, [#85], [#744]). A package may set the `url` of a provider, directly or in a profile, only when no file or profile gives that provider a token other than one of that package's own secrets, and no other file sets its `headers`. A package without commands can reach the Store after CI alone, so it must not point your token, a header you typed or another package's secret at its own host. In its own files, a package writes out each provider's `url` and `headers`, without `@token.` references, so StableBar needn't follow tokens to see where a request goes or what it sends. The check doesn't work out which profiles can be active together, so it can refuse an unusual but harmless setup. URLs and headers set in your own files stay free, `@token.` references included.
 - **Tests keep their own time** (2026-11-08, [#491]). Code whose tests depend on time takes a clock, and the test clock lives in the repository rather than in a new dependency.
@@ -90,3 +120,4 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#744]: https://github.com/Seb-GRAF/StableBar/pull/744
 [#772]: https://github.com/Seb-GRAF/StableBar/issues/772
 [#773]: https://github.com/Seb-GRAF/StableBar/pull/773
+[#807]: https://github.com/Seb-GRAF/StableBar/issues/807

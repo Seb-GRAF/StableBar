@@ -137,7 +137,7 @@ struct LinkedThemeErrorCard: View {
     }
 }
 
-private struct LinkedThemeCardStyle: ViewModifier {
+struct LinkedThemeCardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
