@@ -109,6 +109,8 @@ struct StableBarApp {
             case let .finishApplicationMove(plan, bar):
                 Task { exit(await ApplicationMoveRelaunch.finish(planURL: plan, parent: bar)) }
                 dispatchMain()
+            case .version:
+                print("StableBar \(MacFacts.version)")
             case .help:
                 print(LaunchCommand.usage)
             case let .run(url):
@@ -120,7 +122,7 @@ struct StableBarApp {
             }
         } catch {
             FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
-            exit(1)
+            exit(error is BarNotRunning ? 3 : 1)
         }
     }
 

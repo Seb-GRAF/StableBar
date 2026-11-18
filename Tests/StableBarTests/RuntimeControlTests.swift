@@ -314,6 +314,11 @@ import Testing
     }
 }
 
+@Test @MainActor func liveCommandsTellAMissingBarFromAFailedCommand() {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/config.json")
+    #expect(throws: BarNotRunning.self) { try RuntimeControl.send(RuntimeRequest(action: .status), url: url) }
+}
+
 @Test func popupCommandsOpenOrCloseAndRejectDurationsThatArentNumbers() throws {
     func request(_ arguments: [String]) throws -> RuntimeRequest {
         guard case let .control(_, request) = try LaunchCommand(arguments: arguments) else { throw CommandFailure(message: "Expected a control command") }

@@ -1021,6 +1021,12 @@ final class BarStore: NSObject {
         switch request.action {
         case .report:
             return try JSONDecoder().decode(ConfigurationValue.self, from: JSONEncoder().encode(liveReport()))
+        case .status:
+            return .object(AppVersion().fields.merging(["running": .bool(true), "pid": .number(Double(getpid())),
+                                                        "configuration": .string(sharedConfigurationURL.path)]) { $1 })
+        case .quit:
+            // Terminating right away would exit before the command gets its reply.
+            Task { NSApp.terminate(nil) }
         case .customize:
             if let id = request.id { onCustomizeItem?(.widget(id)) }
             else { onCustomize?() }
@@ -1152,7 +1158,7 @@ final class BarStore: NSObject {
                         "sessionEdits": .number(Double(sessionEdits.count)),
                         "popup": popupWidgetID.map(ConfigurationValue.string) ?? .null,
                         "error": configurationError.map(ConfigurationValue.string) ?? .null,
-                        "warning": configurationWarning.map(ConfigurationValue.string) ?? .null])
+                        "warning": configurationWarning.map(ConfigurationValue.string) ?? .null].merging(AppVersion().fields) { $1 })
     }
 
     private func presentationLayers(for widget: WidgetConfiguration) -> [ConfigurationValue] {
