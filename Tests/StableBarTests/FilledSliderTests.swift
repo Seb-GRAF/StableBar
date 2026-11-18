@@ -33,11 +33,13 @@ private func volume(_ slider: String) -> String {
     }
 }
 
-@Test func anIconWithoutAFilledSliderNamesItsProblem() throws {
+@Test func anIconOnAnExplicitNativeSliderNamesItsProblem() throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "filled-slider.json")
     var loader = ConfigurationLoader()
-    let error = #expect(throws: (any Error).self) { try loader.load(url, data: Data(volume(#""icon":"speaker.fill""#).utf8)) }
-    #expect(error.map(errorMessage) == #"widgets.sound: popup.layout.icon: Only a filled slider shows an icon; add "filled": true."#)
+    let error = #expect(throws: (any Error).self) { try loader.load(url, data: Data(volume(#""filled":false,"icon":"speaker.fill""#).utf8)) }
+    #expect(error.map(errorMessage) == #"widgets.sound: popup.layout.icon: Only a filled slider shows an icon; remove "filled": false to follow the slider role, or set it to true."#)
+    let automatic = try loader.load(url, data: Data(volume(#""icon":"speaker.fill""#).utf8))
+    #expect(automatic.widgets.first?.popup?.layout.sliderIcon == "speaker.fill")
 }
 
 /// A 288-point bar, 40 points tall, over 0–1 in hundredths.
