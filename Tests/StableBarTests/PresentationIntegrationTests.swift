@@ -103,7 +103,8 @@ private var presentationRepository: URL {
     #expect(presentations.allSatisfy { !$0.panel.isVisible })
 }
 
-@Test @MainActor func popupCommandTogglesTheWidgetsPopupOnTheActiveDisplay() async throws {
+/// `--popup --close` without an ID closes pinned popups too, and the bar rejects a duration it can't wait for.
+@Test @MainActor func popupCommandsOpenAndCloseTheWidgetsPopupOnTheActiveDisplay() async throws {
     let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"agenda-command","type":"text","text":"Agenda","position":"right",
       "popup":{"style":{},"layout":{"type":"text","text":"Today"}}}]}
@@ -124,6 +125,15 @@ private var presentationRepository: URL {
     _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
     #expect(!popup.isOpen)
     #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .popup, id: "missing")) }
+    for duration in [0, -1, 1e300] {
+        #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .openPopup, id: "agenda-command", duration: duration)) }
+    }
+    #expect(!popup.isOpen)
+    _ = try store.handle(RuntimeRequest(action: .openPopup, id: "agenda-command"))
+    popup.pin()
+    #expect(popup.pins.ids == ["agenda-command"])
+    _ = try store.handle(RuntimeRequest(action: .closePopup))
+    #expect(popup.pins.ids.isEmpty)
 }
 
 /// VoiceOver reads each widget's name and what it shows, and a widget's popup as the open state of a button that
@@ -571,6 +581,36 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     popup.toggle(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: anchor)
     #expect(popup.toggleIfOpen(widget.id, anchor: anchor))
     #expect(!popup.isOpen)
+}
+
+/// A popup a script opens for a while closes when the time runs out, unless the pointer has moved into it.
+@Test(arguments: [false, true]) @MainActor func aPopupOpenedForAWhileClosesUnlessThePointerMovedIntoIt(pointerMoved: Bool) async throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"agenda","type":"text","text":"Agenda","position":"right",
+      "popup":{"style":{},"layout":{"type":"text","text":"Today"}}}]}
+    """#.utf8))
+    let clock = TestClock()
+    let popup = WidgetPopup(present: { _, _ in }, clock: clock)
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    store.preparePresentations()
+    defer { store.stop() }
+    let bar = OffscreenBar(configuration: configuration,
+                           display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
+    defer { bar.close() }
+    await bar.settle()
+    let widget = configuration.widgets[0]
+    popup.toggle(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: try #require(bar.anchors(widget.id).first))
+    popup.close(after: .seconds(30))
+    try await clock.waitForSleepers()
+    if pointerMoved {
+        popup.hoverPopup(true)
+        popup.hoverPopup(false)
+    }
+    clock.advance(by: .seconds(30))
+    await TestClock.settle()
+    #expect(popup.isOpen == pointerMoved)
+    popup.close()
 }
 
 @Test(arguments: [false, true]) @MainActor func pendingHoverIsCancelledWhenDismissedOrRemoved(remove: Bool) async throws {

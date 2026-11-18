@@ -1,0 +1,33 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "calendar",
+        "type": "calendar",
+        "position": "right",
+        "details": true
+      }
+    ],
+    "providers": {
+      "calendar": { "type": "calendar", "calendars": ["Work", "jane@example.com", "Team offsite"] }
+    }
+  },
+  "outputs": {
+    "calendar": {
+      "text": "Design review",
+      "icon": "calendar",
+      "fields": {
+        "access": "granted",
+        "phase": "soon",
+        "title": "Design review",
+        "start": "09:55",
+        "end": "10:30",
+        "minutes": "14"
+      }
+    }
+  },
+  "draw": "settings",
+  "widget": "calendar",
+  "height": 1100
+}

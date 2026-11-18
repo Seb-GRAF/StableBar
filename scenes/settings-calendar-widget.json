@@ -1,0 +1,35 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "calendar",
+        "type": "calendar",
+        "position": "right",
+        "details": true
+      }
+    ],
+    "providers": {
+      "calendar": { "type": "calendar", "todayOnly": true }
+    }
+  },
+  "outputs": {
+    "calendar": {
+      "text": "No meetings",
+      "icon": "calendar",
+      "fields": {
+        "access": "granted",
+        "phase": "none"
+      },
+      "lists": {
+        "today": [
+          { "title": "Standup", "start": "09:30", "end": "09:45" },
+          { "title": "Design review", "start": "14:00", "end": "15:00" }
+        ]
+      }
+    }
+  },
+  "draw": "settings",
+  "widget": "calendar",
+  "tab": "content"
+}

@@ -66,7 +66,7 @@ struct FilledSliderTrack: Equatable {
 /// A slider drawn as a bar in the block's style rather than macOS's control: its background is the track, the
 /// accent fills it from the leading edge, and an optional symbol sits on the fill in the accent's text color. An end
 /// stop follows a notch at its trailing end and fills the whole bar. Clicking or dragging anywhere sets the value. It
-/// sends its value when the drag ends, as the native slider does.
+/// sends its value when the drag ends, or continuously for the built-in volume control.
 struct FilledSlider: View {
     let title: String
     let value: Double
@@ -79,6 +79,7 @@ struct FilledSlider: View {
     /// Whether the block draws no track of its own, so the slider draws a faint one.
     let drawsTrack: Bool
     let appearance: WidgetAppearance
+    var continuous = false
     let onChange: (Double) -> Void
     @State private var dragged: FilledSliderTrack.Stop?
     @State private var editing = false
@@ -143,7 +144,7 @@ struct FilledSlider: View {
         .frame(idealWidth: FilledSliderTrack.minimumWidth(height: height, endStop: endStop != nil), maxWidth: .infinity)
         .frame(height: height)
         .focusable(interactions: .activate)
-        .modifier(FocusHighlight(appearance: appearance))
+        .modifier(FocusRing { FocusRingShape(shape: RoundedRectangle(cornerRadius: radius + 4)) })
         .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
             commit(steps.stop(after: shown, forward: press.key == .rightArrow || press.key == .upArrow))
             return .handled
@@ -186,11 +187,12 @@ struct FilledSlider: View {
         } else {
             dragged = stop
         }
+        if continuous { onChange(sent(stop)) }
     }
 
     private func finish() {
         editing = false
-        if let dragged { onChange(sent(dragged)) }
+        if !continuous, let dragged { onChange(sent(dragged)) }
     }
 
     /// A keyboard or VoiceOver step, which applies at once.

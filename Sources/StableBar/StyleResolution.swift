@@ -226,7 +226,7 @@ extension PopupBlock {
     var usesModeStates: Bool { usesModeStates(roles: [:]) }
 
     func usesModeStates(roles: [String: WidgetStyle]) -> Bool {
-        if style.usesModeStates || role.flatMap({ roles[$0.rawValue] })?.usesModeStates == true { return true }
+        if style.usesModeStates || effectiveRole(roles: roles).flatMap({ roles[$0.rawValue] })?.usesModeStates == true { return true }
         switch content {
         case let .row(children), let .column(children), let .ring(_, _, _, children): return children.contains { $0.usesModeStates(roles: roles) }
         case let .list(_, row, _), let .search(_, _, _, row): return row.usesModeStates(roles: roles)
@@ -239,7 +239,7 @@ extension PopupBlock {
     func resolvedStyle(inherited: WidgetStyle, styles: [String: WidgetStyle], fields: [String: String],
                        states: StyleStates, roles: [String: WidgetStyle] = [:]) -> BlockStyle {
         let name = styleField.flatMap { fields[$0] } ?? styleSource
-        let role = role.flatMap { roles[$0.rawValue] } ?? WidgetStyle()
+        let role = effectiveRole(roles: roles).flatMap { roles[$0.rawValue] } ?? WidgetStyle()
         let output = name.flatMap { styles[$0] } ?? WidgetStyle()
         let own = resolveStyle([role, style, output])
         let merged = resolveStyle([inherited, own])
@@ -258,11 +258,11 @@ extension PopupConfiguration {
 
 extension Configuration {
     var needsModeConnection: Bool {
-        subscribedEvents.contains(BuiltInEvent.aerospaceMode.rawValue) || bar.style.usesModeStates
+        screenLooks.values.contains(where: \.needsModeConnection) || subscribedEvents.contains(BuiltInEvent.aerospaceMode.rawValue) || bar.style.usesModeStates
             || defaults.usesModeStates || popupDefaults.usesModeStates
             || popups.values.contains { $0.usesModeStates(roles: roles) }
             || widgets.contains { widget in
-                widget.enabled && (widget.style.usesModeStates || roleStyle(widget.role).usesModeStates
+                widget.enabled && (widget.style.usesModeStates || roleStyle(widget.role).usesModeStates || usesSliderModeStates(widget)
                     || widget.layout?.usesModeStates(roles: roles) == true
                     || widget.hoverLayout?.usesModeStates(roles: roles) == true
                     || widget.overlay?.usesModeStates(roles: roles) == true || widget.workspace?.usesModeStates == true
@@ -350,8 +350,12 @@ struct RuleCondition: Decodable, Equatable, Sendable {
     }
 
     func matches(_ output: ScriptOutput) -> Bool {
-        if let field { return output.fields?[field] == equals }
-        guard let value, let number = output.values?[value] else { return false }
+        matches(fields: output.fields ?? [:], values: output.values ?? [:])
+    }
+
+    func matches(fields: [String: String], values: [String: Double]) -> Bool {
+        if let field { return fields[field] == equals }
+        guard let value, let number = values[value] else { return false }
         return (below.map { number <= $0 } ?? true) && (above.map { number >= $0 } ?? true)
     }
 }

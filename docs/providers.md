@@ -33,7 +33,7 @@ Provider `type` is `command`, `stream`, `system`, `network`, `wifi`, `battery`, 
 
 A widget with `type` set to `system`, `network`, `wifi`, `battery`, `bluetooth`, `audio`, `inputSource`, `microphone`, `privacy`, `calendar` or `disk` uses the provider of that name. Without a definition in `providers`, it is a native provider of that type with default settings, shared by every widget that names it. An implicit `system` provider uses a 2-second interval and lists 5 apps when a consumer enables Essentials details. Define a provider with the same name to change its interval or other settings. `{ "id": "power", "type": "battery", "position": "right" }` is enough for a battery widget.
 
-Provider `environment` overlays the top-level environment. `NAME` is the provider name and `CONFIG_DIR` remains the main configuration directory. The environment of a consuming widget applies to that widget's actions, not the shared update process. Add `events` to a provider or consuming widget to request updates; one event refreshes a shared provider once. An explicit refresh restarts a stream's process with the new event payload, and restarts the listener of a push source such as `battery`, which then reads its current state again.
+Provider `environment` overlays the top-level environment. `NAME` is the provider name, `CONFIG_DIR` remains the main configuration directory, and `STABLEBAR` and `STABLEBAR_CONFIG` remain the running bar's. The environment of a consuming widget applies to that widget's actions, not the shared update process. Add `events` to a provider or consuming widget to request updates; one event refreshes a shared provider once. An explicit refresh restarts a stream's process with the new event payload, and restarts the listener of a push source such as `battery`, which then reads its current state again.
 
 A stream writes one complete JSON object per line, including `text`, and flushes stdout after each update. Empty lines are ignored; the final line may omit its newline. Streaming output represents current state: when updates arrive faster than the UI consumes them, only the newest pending update is retained. Each line is limited to 1 MiB; stderr retains its latest 16 KiB. Malformed output stops the process and retains the last good value. Clean exits and failures reconnect with exponential backoff, capped at five minutes or the configured interval if longer. Ten seconds of successful streaming resets the failure streak.
 
@@ -77,8 +77,9 @@ A `calendar` provider reads your calendars through EventKit. It asks for Calenda
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `calendars` | all | Calendar names to include, as shown in Calendar |
+| `calendars` | all | Calendar names to include, as shown in Calendar. **Calendars** in the widget's Content lists them to choose from |
 | `lookahead` | `24` | Hours ahead to look for the next meeting |
+| `todayOnly` | `false` | Look for the next meeting only until local midnight, even when `lookahead` reaches further |
 | `soon` | `15` | Whole minutes before the start when the `soon` phase begins |
 | `now` | `5` | Whole minutes before the start when the `now` phase begins |
 
@@ -86,12 +87,14 @@ Output:
 
 - `text`: the next meeting's title, `No meetings` or `No calendar access`.
 - `fields.access`: `granted`, `denied` or `notDetermined`. Without access, it is the only field.
-- `fields.phase`: `none` when no meeting starts within `lookahead`; otherwise `later`, `soon`, `now`, or `live` while the meeting runs.
+- `fields.phase`: `none` when no meeting is running and none starts within `lookahead`, or before midnight with `todayOnly`; otherwise `later`, `soon`, `now`, or `live` while the meeting runs.
 - `fields.title`, `fields.start` and `fields.end`: the meeting in progress, or else the next one. Times use your short time format.
 - `fields.minutes`: whole minutes until it starts, or until it ends while `live`, rounded up.
 - `fields.link`: the first Google Meet (`meet.google.com`), Zoom (`zoom.us`) or Teams (`teams.microsoft.com`, `teams.live.com`) HTTPS URL in the event's URL, location or notes. A link ends at the first character other than `A–Z a–z 0–9 . _ ~ % / ? = & + # : @ -`, so it never contains a quote or other shell syntax. Use it with `openField`. `fields.joinCommand` is `open '<link>'` and exists only with a link; use it with `onClickField`.
+- `fields.service`: `Google Meet`, `Zoom` or `Microsoft Teams`, the service that `link` opens.
+- `fields.date`: today's date in the short form your region uses, such as `Mon 16 Nov`, for an agenda's heading.
 - `values.remaining`: before the start, the share of the `soon` lead time left; while `live`, the share of the meeting left. `targets.remaining` is the value one minute later, so a progress block with a 60-second `linear` animation shrinks smoothly.
-- `lists.today`: today's events in start order, with `title`, `start` and `end`, plus `link` and `joinCommand` when the event has a link.
+- `lists.today`: today's events in start order, with `title`, `start`, `end` and `phase`, plus `link`, `joinCommand` and `service` when the event has a link. A row's `phase` is `past` once the event has ended, and otherwise the phase `fields.phase` would give it: `later`, `soon`, `now` or `live`. The row of the meeting in `fields`, in progress or else next, has `current` set to `true`, so an agenda can fade past events and highlight that one.
 
 With access, the provider updates at each minute and phase boundary and when your calendars or the Calendars permission change. Until access is granted, it checks again every `interval`. `denied` also covers restricted and add-only access; change it in **System Settings → Privacy & Security → Calendars**.
 

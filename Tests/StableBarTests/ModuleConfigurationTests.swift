@@ -486,6 +486,21 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         + ["$schema", "tokens", "packages", "packageSources", "theme", "includes", "profiles", "profile", "widgetOrder"]))
 }
 
+@Test func schemaListsEveryPresentationRole() throws {
+    let url = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "stablebar.schema.json")
+    let text = try String(contentsOf: url, encoding: .utf8)
+    let roles = PresentationRole.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")
+    let lists = text.components(separatedBy: "\"role\": {\"anyOf\": [{\"enum\": [").dropFirst()
+    #expect(lists.count == 3)
+    for list in lists { #expect(list.hasPrefix(roles + "]")) }
+    let schema = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8))
+    let properties = try #require(schema["properties"]).decoded([String: ConfigurationValue].self)
+    let definitions = try #require(properties["roles"]).decoded([String: ConfigurationValue].self)
+    let roleMap = try #require(definitions["anyOf"]).decoded([ConfigurationValue].self).first
+    #expect(try schemaProperties(roleMap) == Set(PresentationRole.allCases.map(\.rawValue)))
+}
+
 @Test func packageSchemaListsTheSamePropertiesAsTheManifestDecoder() throws {
     let url = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .appending(path: "package.schema.json")
@@ -500,8 +515,17 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
     {"widgets":[{"id":"items","type":"menuBarItems","position":"right"},
                 {"id":"clicked","type":"menuBarItems","position":"right","openOnHover":false}]}
     """#.utf8))
-    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, shown: [], hidden: []),
-                                                     .menuBarItems(openOnHover: false, shown: [], hidden: [])])
+    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, rightClickInMenuBar: false, shown: [], hidden: []),
+                                                     .menuBarItems(openOnHover: false, rightClickInMenuBar: false, shown: [], hidden: [])])
+}
+
+@Test func menuBarItemsRightClickInTheMenuBarOnlyWhenTurnedOn() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"items","type":"menuBarItems","position":"right"},
+                {"id":"rightClicked","type":"menuBarItems","position":"right","rightClickInMenuBar":true}]}
+    """#.utf8))
+    #expect(configuration.widgets.map(\.content) == [.menuBarItems(openOnHover: true, rightClickInMenuBar: false, shown: [], hidden: []),
+                                                     .menuBarItems(openOnHover: true, rightClickInMenuBar: true, shown: [], hidden: [])])
 }
 
 @Test func menuBarItemsPutTheirSymbolLastUnlessPlacedOrHidden() throws {
@@ -609,7 +633,7 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         + registry.types.filter(\.isNative).map(\.name)))
     // Each optional setting has a value of its type, which sets it, and one of another type, which the decoder rejects.
     let samples: [ProviderConfiguration.CodingKeys: (valid: String, invalid: String)] = [
-        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
+        .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .todayOnly: ("true", #""true""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
         .processes: ("5", #""5""#), .sortBy: (#""cpu""#, #""unknown""#), .units: (#""bits""#, #""unknown""#),
         .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#),
         .diskWarning: ("0.5", #""high""#), .diskCritical: ("0.5", #""high""#)

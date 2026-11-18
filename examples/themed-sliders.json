@@ -1,0 +1,27 @@
+{
+  "$schema": "../stablebar.schema.json",
+  "roles": {
+    "slider": {
+      "height": 40,
+      "cornerRadius": 20,
+      "background": "@token.surfaceRaised"
+    }
+  },
+  "widgets": [
+    {
+      "id": "sound",
+      "type": "audio",
+      "position": "right",
+      "popup": {
+        "style": { "width": 280 },
+        "layout": {
+          "type": "slider",
+          "title": "Volume",
+          "source": "volume",
+          "set": "volume",
+          "icon": "speaker.wave.2.fill"
+        }
+      }
+    }
+  ]
+}

@@ -163,17 +163,35 @@ private enum FrontmostApp {
 }
 
 @Test @MainActor func hiddenBlocksAddNoSpacing() throws {
+    let hiders = [#""hideWhenEmpty":"empty""#, #""showWhen":{"field":"phase","equals":"live"}"#,
+                  #""hideWhen":[{"field":"phase","equals":"soon"},{"value":"remaining","below":0.5}]"#]
     for type in ["row", "column"] {
-        let shown = try decode(PopupBlock.self, #"{"type":"\#(type)","children":[{"type":"text","text":"A"},{"type":"text","text":"B"}]}"#)
-        let hidden = try decode(PopupBlock.self, #"""
-        {"type":"\#(type)","children":[{"type":"text","text":"A"},{"type":"field","field":"empty","hideWhenEmpty":"empty"},{"type":"text","text":"B"}]}
-        """#)
-        let context = BlockContext(fillsWidth: false, open: { _ in }, runAction: { _, _ in })
-        let expected = try draw(PopupBlockView(block: shown, inheritedStyle: WidgetStyle(), fields: [:], context: context))
-        let drawn = try draw(PopupBlockView(block: hidden, inheritedStyle: WidgetStyle(), fields: [:], context: context))
-        #expect(drawn.width == expected.width && drawn.height == expected.height, "\(type)")
-        #expect(drawn.difference(from: expected) <= tolerance, "\(type)")
+        for hider in hiders {
+            let shown = try decode(PopupBlock.self, #"{"type":"\#(type)","children":[{"type":"text","text":"A"},{"type":"text","text":"B"}]}"#)
+            let hidden = try decode(PopupBlock.self, #"""
+            {"type":"\#(type)","children":[{"type":"text","text":"A"},{"type":"field","field":"phase",\#(hider)},{"type":"text","text":"B"}]}
+            """#)
+            let context = BlockContext(values: ["remaining": 0.2], fillsWidth: false, open: { _ in }, runAction: { _, _ in })
+            let expected = try draw(PopupBlockView(block: shown, inheritedStyle: WidgetStyle(), fields: ["phase": "later"], context: context))
+            let drawn = try draw(PopupBlockView(block: hidden, inheritedStyle: WidgetStyle(), fields: ["phase": "later"], context: context))
+            #expect(drawn.width == expected.width && drawn.height == expected.height, "\(type) \(hider)")
+            #expect(drawn.difference(from: expected) <= tolerance, "\(type) \(hider)")
+        }
     }
+}
+
+@Test @MainActor func listRowConditionsReadEachRowsFields() throws {
+    let list = try decode(PopupBlock.self, #"""
+    {"type":"list","source":"today",
+     "row":{"type":"field","field":"title","hideWhen":{"field":"phase","equals":"past"},"style":{"width":100}}}
+    """#)
+    let expected = try decode(PopupBlock.self, #"{"type":"field","field":"title","style":{"width":100}}"#)
+    let context = BlockContext(lists: ["today": [["title": "Daily", "phase": "past"], ["title": "Grooming", "phase": "live"]]],
+                               fillsWidth: false, open: { _ in }, runAction: { _, _ in })
+    let drawn = try draw(PopupBlockView(block: list, inheritedStyle: WidgetStyle(), fields: ["phase": "past"], context: context))
+    let reference = try draw(PopupBlockView(block: expected, inheritedStyle: WidgetStyle(), fields: ["title": "Grooming"], context: context))
+    #expect(drawn.width == reference.width && drawn.height == reference.height)
+    #expect(drawn.difference(from: reference) <= tolerance)
 }
 
 @Test(arguments: [("", "column", false), ("", "column", true),
@@ -449,10 +467,11 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     }
 }
 
-@Test @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn() throws {
+@Test(arguments: [false, true]) @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
+    {"roles":\#(roles),"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
     """#)
     store.preparePresentations()
     for (id, json) in [("sound", #"{"text":"62%","icon":"speaker.wave.2","value":0.62,"values":{"volume":0.62}}"#),
@@ -502,10 +521,11 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
     }
 }
 
-@Test @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay() throws {
+@Test(arguments: [false, true]) @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
+    {"roles":\#(roles),"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
      "hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,
                     "onChange":"set-duration","style":{"width":100,"height":16}}}]}
     """#)

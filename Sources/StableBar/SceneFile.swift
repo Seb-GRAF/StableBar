@@ -45,6 +45,12 @@ struct SceneFile: Decodable {
     var workspaces: [ConfigurationValue]?
     /// AeroSpace's `list-windows --json` objects.
     var windows: [ConfigurationValue]?
+    /// yabai's `query --spaces` objects, drawn in place of `workspaces`, every space on display 1.
+    var yabaiSpaces: [ConfigurationValue]?
+    /// yabai's `query --windows` objects.
+    var yabaiWindows: [ConfigurationValue]?
+    /// The bundle identifier of each yabai window's `pid`, which StableBar otherwise reads from the running apps.
+    var yabaiApps: [Int: String] = [:]
     /// Dock badge labels by bundle identifier.
     var dockBadges: [String: String] = [:]
     /// The `window-id` of the window the stand-in window manager reports as focused.
@@ -58,6 +64,8 @@ struct SceneFile: Decodable {
     var draw: Draw
     /// The widget whose popup or Settings page to draw, or whose popup the bar shows open.
     var widget: String?
+    /// The group whose Settings page to draw, in place of a widget's.
+    var group: String?
     /// The view of the widget's popup to draw in place of its layout, for `popup`.
     var view: String?
     /// The Settings section to draw when no widget is named.
@@ -77,6 +85,8 @@ struct SceneFile: Decodable {
     /// A move row outside Applications, for setup or Settings → General.
     var applicationMove: ApplicationMove?
     enum ApplicationMove: String, Decodable, CaseIterable { case ready, replace, useExisting, failed, moving, setupOpen }
+    /// The window manager whose windows start under the bar, which setup's last step and Settings → General warn about.
+    var windowsUnderBar: WorkspaceSource?
     /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
     var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
@@ -86,8 +96,8 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, view, section, tab, package, uninstall,
-             themeLink, starRequest, setup, applicationMove, macOSMajorVersion, appearances,
+        case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
+             themeLink, starRequest, setup, applicationMove, windowsUnderBar, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -163,6 +173,9 @@ struct SceneFile: Decodable {
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)
         windows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .windows)
+        yabaiSpaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .yabaiSpaces)
+        yabaiWindows = try values.decodeIfPresent([ConfigurationValue].self, forKey: .yabaiWindows)
+        yabaiApps = try values.decodeIfPresent([Int: String].self, forKey: .yabaiApps) ?? [:]
         dockBadges = try values.decodeIfPresent([String: String].self, forKey: .dockBadges) ?? [:]
         desktopShortcuts = try values.decodeIfPresent([Int].self, forKey: .desktopShortcuts) ?? []
         if desktopShortcuts.contains(where: { !DesktopShortcuts.desktops.contains($0) }) || Set(desktopShortcuts).count != desktopShortcuts.count {
@@ -174,6 +187,7 @@ struct SceneFile: Decodable {
         menu = try values.decodeIfPresent([MenuItem].self, forKey: .menu)
         draw = try values.decode(Draw.self, forKey: .draw)
         widget = try values.decodeIfPresent(String.self, forKey: .widget)
+        group = try values.decodeIfPresent(String.self, forKey: .group)
         view = try values.decodeIfPresent(String.self, forKey: .view)
         section = try values.decodeIfPresent(Section.self, forKey: .section)
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
@@ -191,6 +205,11 @@ struct SceneFile: Decodable {
         if applicationMove != nil, draw == .setup, setup?.inApplications != false {
             throw DecodingError.dataCorruptedError(forKey: .applicationMove, in: values,
                 debugDescription: "A setup scene draws applicationMove only with setup.inApplications false.")
+        }
+        windowsUnderBar = try values.decodeIfPresent(WorkspaceSource.self, forKey: .windowsUnderBar)
+        if windowsUnderBar != nil, draw != .setup && !(draw == .settings && section == .general) {
+            throw DecodingError.dataCorruptedError(forKey: .windowsUnderBar, in: values,
+                debugDescription: "windowsUnderBar draws setup or Settings General.")
         }
         macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
         if macOSMajorVersion < 14 {
@@ -214,9 +233,13 @@ struct SceneFile: Decodable {
         if draw == .popup, widget == nil {
             throw DecodingError.dataCorruptedError(forKey: .widget, in: values, debugDescription: "A popup scene names its widget.")
         }
-        if draw == .settings, widget == nil, section == nil {
+        if draw == .settings, widget == nil, group == nil, section == nil {
             throw DecodingError.dataCorruptedError(forKey: .section, in: values,
-                                                   debugDescription: "A settings scene names a widget or a section.")
+                                                   debugDescription: "A settings scene names a widget, a group or a section.")
+        }
+        if group != nil, draw != .settings || widget != nil || section != nil || tab != nil {
+            throw DecodingError.dataCorruptedError(forKey: .group, in: values,
+                                                   debugDescription: "group belongs to a settings scene without a widget, a section or a tab.")
         }
         if package != nil, draw != .settings || widget != nil || section != .packages {
             throw DecodingError.dataCorruptedError(forKey: .package, in: values, debugDescription: "package belongs to the packages section of Settings.")

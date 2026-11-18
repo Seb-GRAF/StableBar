@@ -145,6 +145,9 @@ indirect enum PopupContent: Sendable {
 
 struct PopupBlock: Decodable, Sendable {
     let content: PopupContent
+    /// An omitted choice lets the slider role decide; explicit false keeps the native control.
+    private(set) var sliderFilled: Bool?
+    private(set) var sliderIcon: String?
     let role: PresentationRole?
     let style: WidgetStyle
     let alignment: PopupAlignment
@@ -162,6 +165,10 @@ struct PopupBlock: Decodable, Sendable {
     /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
     let view: String?
     let hideWhenEmpty: String?
+    /// Conditions of which one must match for the block to show; nil shows it whatever the output.
+    let showWhen: [RuleCondition]?
+    /// Conditions any of which hides the block.
+    let hideWhen: [RuleCondition]?
     let scrollSpeed: Double?
     /// Whether a field block shows all of its text over as many lines as it needs, selectable, and an input block
     /// runs its text onto more lines as it grows.
@@ -190,7 +197,8 @@ struct PopupBlock: Decodable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
-        case hideWhenEmpty, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
+        case hideWhenEmpty, showWhen, hideWhen, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField
+        case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
@@ -214,6 +222,8 @@ struct PopupBlock: Decodable, Sendable {
         selectOutputDeviceField = nil
         view = nil
         self.hideWhenEmpty = hideWhenEmpty
+        showWhen = nil
+        hideWhen = nil
         scrollSpeed = nil
         wraps = false
         maxHeight = nil
@@ -268,6 +278,8 @@ struct PopupBlock: Decodable, Sendable {
             throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
+        showWhen = try Self.conditions(in: values, forKey: .showWhen)
+        hideWhen = try Self.conditions(in: values, forKey: .hideWhen)
         scrollSpeed = try values.decodeIfPresent(Double.self, forKey: .scrollSpeed)
         if let scrollSpeed, scrollSpeed <= 0 {
             throw DecodingError.dataCorruptedError(forKey: .scrollSpeed, in: values, debugDescription: "Scroll speed must be greater than zero.")
@@ -323,15 +335,17 @@ struct PopupBlock: Decodable, Sendable {
             if let endStop, (minimum...maximum).contains(endStop.value) {
                 throw DecodingError.dataCorruptedError(forKey: .endStop, in: values, debugDescription: "An end stop's value must be outside min…max, so the slider can tell it from a step.")
             }
-            let filled = try values.decodeIfPresent(Bool.self, forKey: .filled) ?? false
+            let filled = try values.decodeIfPresent(Bool.self, forKey: .filled)
             let icon = try values.decodeIfPresent(String.self, forKey: .icon)
-            if icon != nil, !filled {
-                throw DecodingError.dataCorruptedError(forKey: .icon, in: values, debugDescription: "Only a filled slider shows an icon; add \"filled\": true.")
+            if icon != nil, filled == false {
+                throw DecodingError.dataCorruptedError(forKey: .icon, in: values, debugDescription: "Only a filled slider shows an icon; remove \"filled\": false to follow the slider role, or set it to true.")
             }
+            sliderFilled = filled
+            sliderIcon = icon
             let title = try values.decode(String.self, forKey: .title)
             let source = try values.decode(String.self, forKey: .source)
             let action = try controlAction([.volume])
-            content = filled
+            content = filled == true
                 ? .filledSlider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop,
                                 icon: icon, action: action)
                 : .slider(title: title, source: source, minimum: minimum, maximum: maximum, step: step, endStop: endStop, action: action)
@@ -428,6 +442,25 @@ struct PopupBlock: Decodable, Sendable {
             }
         }
     }
+
+    /// One condition, or a list of them.
+    private static func conditions(in values: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> [RuleCondition]? {
+        guard values.contains(key), try !values.decodeNil(forKey: key) else { return nil }
+        guard (try? values.nestedUnkeyedContainer(forKey: key)) != nil else { return [try values.decode(RuleCondition.self, forKey: key)] }
+        let conditions = try values.decode([RuleCondition].self, forKey: key)
+        guard !conditions.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: key, in: values, debugDescription: "List at least one condition, or leave \(key.stringValue) out.")
+        }
+        return conditions
+    }
+
+    /// Whether the block shows nothing and takes no space for these fields: its `hideWhenEmpty` field is empty,
+    /// none of its `showWhen` conditions match, or one of its `hideWhen` conditions does.
+    func isHidden(fields: [String: String], values: [String: Double]) -> Bool {
+        if let field = hideWhenEmpty, fields[field, default: ""].isEmpty { return true }
+        if let showWhen, !showWhen.contains(where: { $0.matches(fields: fields, values: values) }) { return true }
+        return hideWhen?.contains { $0.matches(fields: fields, values: values) } == true
+    }
 }
 
 extension PopupBlock {
@@ -439,6 +472,13 @@ extension PopupBlock {
         default: []
         }
         return (view.map { [$0] } ?? []) + inside.flatMap(\.openedViews)
+    }
+
+    /// Whether a view starts with its title: a shown column whose first block is a text block, which then sits beside the
+    /// back arrow. A hidden view keeps the back arrow above it, so it can still be left.
+    func startsWithTitle(fields: [String: String], values: [String: Double]) -> Bool {
+        guard !isHidden(fields: fields, values: values), case let .column(children) = content, case .text? = children.first?.content else { return false }
+        return true
     }
 }
 

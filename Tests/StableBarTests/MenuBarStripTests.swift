@@ -30,6 +30,7 @@ private var bar: [String: Any] { window("StableBar", layer: 3, CGRect(x: -1800, 
     let sliding = MenuBarStripState(windows: [window("MenuBarAgent", layer: 24, CGRect(x: -1800, y: -20, width: 1800, height: 39)), strip],
                                     displays: displays)
     #expect(!sliding.raisesBar(on: 1))
+    #expect(sliding.showsMenuBar(on: 1))
     let hidden = MenuBarStripState(windows: [window("Window Server", layer: 24, CGRect(x: -1800, y: -39, width: 1800, height: 39)), strip],
                                    displays: displays)
     #expect(hidden.raisesBar(on: 1))

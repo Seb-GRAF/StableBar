@@ -42,6 +42,22 @@
       "type": "array",
       "items": { "type": "object" }
     },
+    "yabaiSpaces": {
+      "description": "yabai's query --spaces objects, drawn in place of workspaces, every space on display 1.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "yabaiWindows": {
+      "description": "yabai's query --windows objects.",
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "yabaiApps": {
+      "description": "The bundle identifier of each yabai window's pid, which StableBar otherwise reads from the running apps.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[0-9]+$" },
+      "additionalProperties": { "type": "string" }
+    },
     "dockBadges": {
       "description": "Dock badge labels by bundle identifier, for a Workspaces widget that shows badges.",
       "type": "object",
@@ -77,6 +93,7 @@
       "enum": ["bar", "editBar", "popup", "settings", "uninstall", "update", "setup", "accessibilityGuide"]
     },
     "widget": { "description": "The widget whose popup or Settings page to draw. With `bar`, the bar is drawn with that widget's popup open, below the bar or above a bar at the bottom.", "type": "string" },
+    "group": { "description": "For `settings`, without `widget`: the group whose page Settings → Bar draws, with its widgets listed under it.", "type": "string" },
     "view": { "description": "For `popup`: the view of the widget's popup to draw in place of its layout, under its back arrow.", "type": "string" },
     "section": {
       "description": "The Settings section to draw when no widget is named. `help` opens the first answer of its Questions; `feedback` draws Send feedback in Help, with a sample bug, bug report, GitHub account and coding agent; `crashes` draws Crashes in Status, with sample crash reports of a release, of a development build and of a launch that dyld stopped, which Crashes leaves out.",
@@ -164,6 +181,10 @@
     "applicationMove": {
       "description": "Draw the Move to Applications row in setup or Settings General without touching any app: its button, confirmation, existing copy, failure, progress, or direction back to an open setup. A setup scene also needs setup.inApplications false.",
       "enum": ["ready", "replace", "useExisting", "failed", "moving", "setupOpen"]
+    },
+    "windowsUnderBar": {
+      "description": "Draw setup's last step or Settings General as if this window manager ran and left a window under the bar, with the warning and the gap it needs for the scene's bar. Drawing never reads this Mac's windows.",
+      "enum": ["aerospace", "yabai", "omniwm"]
     },
     "macOSMajorVersion": {
       "description": "The macOS major version for feature availability in setup and Settings. 26 by default, independently of the Mac that draws.",

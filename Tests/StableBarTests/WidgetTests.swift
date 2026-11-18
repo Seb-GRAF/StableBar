@@ -160,20 +160,23 @@ import Testing
 }
 
 @Test func yabaiSnapshotMapsDisplaysAndAppWindowsToWorkspaces() throws {
-    let spaces = Data(#"[{"index":10,"display":1,"has-focus":false,"is-visible":false},{"index":2,"display":1,"has-focus":true,"is-visible":true},{"index":1,"display":2,"has-focus":false,"is-visible":true}]"#.utf8)
-    let windows = Data(#"[{"pid":41,"app":"Safari","space":1,"id":1,"title":"Window 1"},{"pid":42,"app":"Finder","space":1,"id":2,"title":"Window 2","has-focus":true},{"pid":43,"app":"Safari","space":1,"id":3,"title":"Window 3"},{"pid":41,"app":"Safari","space":2,"id":4,"title":"Window 4"}]"#.utf8)
+    let spaces = Data(#"[{"index":10,"display":1,"has-focus":false,"is-visible":false,"type":"float"},{"index":2,"display":1,"has-focus":true,"is-visible":true,"type":"bsp"},{"index":1,"display":2,"has-focus":false,"is-visible":true,"type":"stack"}]"#.utf8)
+    let windows = Data(#"[{"pid":41,"app":"Safari","space":1,"id":1,"title":"Window 1","stack-index":1},{"pid":42,"app":"Finder","space":1,"id":2,"title":"Window 2","has-focus":true,"stack-index":2},{"pid":43,"app":"Safari","space":1,"id":3,"title":"Window 3","stack-index":3},{"pid":41,"app":"Safari","space":2,"id":4,"title":"Window 4","stack-index":0}]"#.utf8)
     let displays = Data(#"[{"id":80,"index":1},{"id":90,"index":2}]"#.utf8)
     let snapshot = try yabaiSnapshot(spaces: spaces, windows: windows, displays: displays, screenIDs: [90, 80],
                                      bundleIDs: [41: "com.apple.Safari", 42: "com.apple.finder", 43: "com.apple.Safari"])
     #expect(snapshot.map(\.name) == ["1", "2", "10"])
     #expect(snapshot.map(\.monitor) == [1, 2, 2])
+    #expect(snapshot.map(\.layout) == ["stack", "bsp", "float"])
     #expect(snapshot[1].isFocused)
     #expect(snapshot[0].isVisible)
     #expect(snapshot[0].windows.map(\.id) == [1, 2, 3])
     #expect(snapshot[0].windows.map(\.title) == ["Window 1", "Window 2", "Window 3"])
     #expect(snapshot[0].windows.map(\.isFocused) == [false, true, false])
     #expect(snapshot[0].windows.map(\.app.bundleID) == ["com.apple.Safari", "com.apple.finder", "com.apple.Safari"])
+    #expect(snapshot[0].windows.map(\.stackIndex) == [1, 2, 3])
     #expect(snapshot[1].windows.map(\.id) == [4])
+    #expect(snapshot[1].windows.map(\.stackIndex) == [0])
     #expect(snapshot[2].windows.isEmpty)
     #expect(snapshot[0].apps.map(\.bundleID) == ["com.apple.finder", "com.apple.Safari"])
     #expect(snapshot[1].apps.count == 1)

@@ -1,0 +1,35 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "workspaceSource": "yabai",
+    "widgets": [
+      {
+        "id": "spaces", "type": "workspaces", "position": "left",
+        "workspace": { "windows": true, "layoutGlyphs": { "bsp": "⊞", "stack": "☰", "float": "◇" } }
+      },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "yabaiSpaces": [
+    { "index": 1, "display": 1, "has-focus": false, "is-visible": false, "type": "bsp" },
+    { "index": 2, "display": 1, "has-focus": true, "is-visible": true, "type": "stack" },
+    { "index": 3, "display": 1, "has-focus": false, "is-visible": false, "type": "float" }
+  ],
+  "yabaiWindows": [
+    { "id": 1, "title": "Terminal", "pid": 11, "app": "Terminal", "space": 1, "has-focus": false, "stack-index": 0 },
+    { "id": 2, "title": "Notes", "pid": 12, "app": "Notes", "space": 1, "has-focus": false, "stack-index": 0 },
+    { "id": 3, "title": "Docs", "pid": 13, "app": "Safari", "space": 2, "has-focus": true, "stack-index": 1 },
+    { "id": 4, "title": "Mail", "pid": 13, "app": "Safari", "space": 2, "has-focus": false, "stack-index": 2 },
+    { "id": 5, "title": "Calendar", "pid": 14, "app": "Calendar", "space": 2, "has-focus": false, "stack-index": 3 },
+    { "id": 6, "title": "Music", "pid": 15, "app": "Music", "space": 3, "has-focus": false, "stack-index": 0 }
+  ],
+  "yabaiApps": {
+    "11": "com.apple.Terminal",
+    "12": "com.apple.Notes",
+    "13": "com.apple.Safari",
+    "14": "com.apple.iCal",
+    "15": "com.apple.Music"
+  },
+  "draw": "bar",
+  "width": 600
+}

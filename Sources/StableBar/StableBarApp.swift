@@ -294,6 +294,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.prepareScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
+        endMenuBarReveals()
         NSApp.mainMenu = EditMenu.make()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(named: "StatusBarIconTemplate")
@@ -308,9 +309,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self else { return }
             customization.show(store: store, section: .packages)
         }
-        store.onCustomizeWidget = { [weak self] id in
+        store.onCustomizeItem = { [weak self] target in
             guard let self else { return }
-            customization.show(store: store, widgetID: id)
+            switch target {
+            case let .widget(id): customization.show(store: store, widgetID: id)
+            case let .group(group): customization.show(store: store, groupID: group)
+            }
         }
         store.onEndThemeTrial = { [weak self] in self?.themeTrial.cancel() }
         store.barPanel = { [weak self] displayID in
@@ -619,5 +623,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         systemContext?.stop()
         store.stop()
         store.appMenu.hidesMenuBar = false
+        endMenuBarReveals()
     }
 }

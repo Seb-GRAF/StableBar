@@ -65,7 +65,18 @@ Add `events` to a script widget to refresh it on named events, alongside its int
 | `privacyChange` | An app starts or stops using the microphone or a camera, or the microphone's mute state changes | `true` while the microphone or a camera is in use, else `false`; `MICROPHONE`, `CAMERA` and `MUTED` are `true` or `false` |
 | `wifiChange` | Wi-Fi turns on or off, or joins or leaves a network | The network's name, empty without a network or Location access; `POWER` is `on` or `off` |
 
-`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting. Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`.
+`powerSourceChange` comes from the `battery` data source, `volumeChange` and `outputDeviceChange` from the `audio` source, `inputSourceChange` from the `inputSource` source, `microphoneChange` and `inputDeviceChange` from the `microphone` source, `privacyChange` from the `privacy` source, and `wifiChange` from the `wifi` source. Subscribing to one of them runs that source while the subscribing widget is enabled, even when no widget shows it, and keeps it running while its own widgets are hidden. A provider of another type named after one of these sources, such as your own `battery` stream, keeps the built-in source from starting.
+
+Other names subscribe to macOS distributed notifications, for example `com.spotify.client.PlaybackStateChanged`. These work on current macOS:
+
+| Notification | Sent when | `INFO` |
+| --- | --- | --- |
+| `com.apple.screenIsLocked` | The screen locks | Not set |
+| `com.apple.screenIsUnlocked` | The screen unlocks | Not set |
+| `AppleInterfaceThemeChangedNotification` | The appearance switches between light and dark | Not set |
+| `com.apple.Music.playerInfo` | Music starts, pauses or stops playing, or changes track while playing | The track and its `Player State`, such as `Playing`, as JSON |
+
+These names belong to macOS and the apps that send them, which can change them in an update.
 
 External hooks can trigger an event without launching another bar:
 
@@ -74,7 +85,13 @@ External hooks can trigger an event without launching another bar:
 /path/to/StableBar.app/Contents/MacOS/StableBar --trigger build_finished 'INFO=Build passed' STATUS=success
 ```
 
-Use that event name in the widget's `events`. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
+Use that event name in the widget's `events`. A trigger posts a distributed notification with that name, so trigger names share one space with the names macOS and your apps send. Extra `KEY=VALUE` arguments become environment variables, preserving spaces, quotes and equals signs as data. Trigger arguments and distributed-notification data cannot replace variables exported by your login shell, such as `PATH` or `HOME`. Events finish the currently running update and coalesce pending refreshes to the latest event and payload. A widget never runs overlapping update commands. This queue is intended for refreshing current state, not recording every event.
+
+A widget's own commands can run the StableBar that started them as `"$STABLEBAR"`. Its live commands, such as `--refresh` and `--popup`, then address that bar instead of the default configuration:
+
+```json
+"onClick": "\"$STABLEBAR\" --refresh weather"
+```
 
 Commands inherit your login shell's environment, then top-level `environment`, then the widget's `environment`, then event data. Values must be strings. StableBar supplies these variables:
 
@@ -82,8 +99,10 @@ Commands inherit your login shell's environment, then top-level `environment`, t
 | --- | --- |
 | `NAME` | Widget ID; event data cannot replace it |
 | `CONFIG_DIR` | Directory containing the main configuration; event data cannot replace it |
+| `STABLEBAR` | Path of the running StableBar executable; event data cannot replace it |
+| `STABLEBAR_CONFIG` | Path of the configuration file the bar was started with, which the [command line](command-line.md) uses when `--config` isn't given; event data cannot replace it |
 | `SENDER` | `startup`, `routine`, the subscribed event name, `action` after an action completes, or a mouse event below |
-| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available |
+| `INFO` | For StableBar's events, as the table above lists; for a trigger, its `INFO` value; otherwise the distributed notification's JSON payload when available, with dates as ISO 8601 strings and without values JSON can't hold, such as data |
 | `SID` | Display number for pointer actions and workspace events |
 | `BUTTON` | `left`, `right` or `middle` for widget mouse clicks |
 | `MODIFIER` | Space-separated `shift`, `ctrl`, `alt`, `cmd`, `fn` for pointer actions |
@@ -93,7 +112,7 @@ Script output can also set `onClick` for a state-dependent click action; popups 
 
 ## Composing widgets
 
-A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
+A widget's `layout` uses the same blocks as a popup. Use rows and columns to style the label, icon and other elements independently. Bar layouts take their content's width; popup layouts fill their available width. Give graphs, progress blocks and images explicit sizes when they should have a fixed footprint. A script or provider widget whose layout shows nothing, such as before its first output or when `hideWhenEmpty`, `showWhen` or `hideWhen` hides every block, takes no space on the bar. If its script fails, it shows its icon with the error badge.
 
 A `list` with `"orientation": "horizontal"` repeats its `row` block side by side for each entry from the script. This works in bar layouts and popups. The [Dock badges example](../examples/dock-badges/config.json) shows each running app's icon and badge on the bar; clicking an entry opens that app. It needs `jq`. Set `APPS` in the example's `environment` to the app names to watch, separated by commas. Apps without badges show `0`, and apps that are not running are omitted. Counts follow each app's Dock badge settings and refresh every ten seconds.
 
@@ -107,7 +126,9 @@ dist/StableBar.app/Contents/MacOS/StableBar --config "$scratch/config.json"
 
 A widget without `layout` draws a default layout made of the same blocks: a `row` of its icon (`symbol`) and text (`field`), at least a line of text tall even when it shows only the icon. Its digits all have the same width, so a number that changes, such as a CPU percentage, doesn't resize the widget. Battery draws a [`battery`](popups.md) block, like the battery in the macOS menu bar: its fill follows the charge and turns red at 10 % or less on battery power, a bolt shows it charging, and a plug shows the Mac on its adapter without charging. An orange badge appears when macOS recommends servicing the battery, the condition System Settings shows under Battery Health. Its percentage is in its tooltip, with the time left or until full and “Service recommended” when it applies. A Mac without a battery shows a plug and AC. Sound shows only its speaker icon, whose waves show the volume: none at zero, then one, two or three. The icon keeps the width of three waves, so the widget doesn't change size between levels. After the volume changes, the new volume fades in beside it for a moment, its digits rolling while it keeps changing, then fades out. Muting hides it at once. Hovering it shows a volume slider, with the volume, that changes the volume as you drag: in a tooltip under the widget, or beside the icon with [Open hover controls inline](#controls-on-hover). Inline, on the right of the bar the slider opens to the icon's left, so the icon stays under the pointer; elsewhere it opens to the right. A Sound widget with a `layout` of its own, including a **Display** choice other than its default, has no slider. The bar animates the Sound widget's width as the volume and the inline slider come and go, unless Reduce Motion is on. Other script and provider widgets whose output has a `value` show a 40 × 16 `graph` before them, and active-app widgets show the app's icon instead of a `symbol`. Workspaces and spacers keep their own views. A `layout` replaces the default layout, so block options work on built-in widgets too, for example an app name that scrolls when it doesn't fit: `"layout": { "type": "field", "field": "text", "scrollSpeed": 30, "style": { "maxWidth": 120 } }`.
 
-For battery, sound, system and disk, **Settings → Bar → Content → Display** offers icon and value, icon only, value only, meter and value, or graph and value. Battery starts with icon only, its default, and its icon in every choice is its battery; sound starts with icon, value on change, its default, and system with graph and value. Disk starts with icon and value, and has no graph, since it keeps no history. For system, **Shows** chooses **CPU**, its default, **Memory**, **CPU and memory** or **Memory and CPU**; each gets its own symbol and value, drawn as Display says, and memory's graph draws `series.memory`. This also works with named battery/audio/system/disk providers and package widgets. Choices use the existing `layout` configuration and support Undo; a hand-written layout stays marked **Custom layout** until you choose another display.
+For battery, sound, system and disk, **Settings → Bar → Content → Display** offers icon and value, icon only, value only, meter and value, label, value and meter, or graph and value. Battery starts with icon only, its default, and its icon in every choice is its battery; sound starts with icon, value on change, its default, and system with graph and value. Disk starts with icon and value, and has no graph, since it keeps no history. For system, **Shows** chooses **CPU**, its default, **Memory**, **CPU and memory** or **Memory and CPU**; each gets its own symbol and value, drawn as Display says, and memory's graph draws `series.memory`. This also works with named battery/audio/system/disk providers and package widgets. Choices use the existing `layout` configuration and support Undo; a hand-written layout stays marked **Custom layout** until you choose another display.
+
+**Label, value and meter** puts a short label and a right-aligned percentage on one line, above a progress line. The label uses the `key` role and the line the `meter` role, so a theme styles both, and the column widens when a theme's font needs more room for 100%. System keeps CPU and memory in the selected order, each in its own column. This is a widget layout choice, so it stays selected when you change themes.
 
 `overlay` uses the same blocks, aligned to the widget's bottom edge. It occupies no space and does not intercept clicks. This supports an underline, playback progress or a graph underneath the label.
 
@@ -180,6 +201,8 @@ With `bar.inlineHoverControls` (**Open hover controls inline** in **Settings →
   "style": { "width": 100, "height": 16 }
 }
 ```
+
+Sound’s built-in hover slider and sliders in `hoverLayout` follow the [slider presentation role](styling.md#presentation-roles-and-workspace-defaults). A themed inline slider fits the widget’s content height.
 
 Provide the current slider value in script output `values.duration`; `onChange` receives `VALUE` when the drag ends. Control labels are hidden, with their titles kept for accessibility. Set a width on sliders to give them space. Add `"endStop": { "value": 0, "label": "∞" }` for one more stop past `max`, set apart by a notch: dragging past 240 snaps the knob onto it, and `onChange` receives `0` (see [`slider`](popups.md)).
 

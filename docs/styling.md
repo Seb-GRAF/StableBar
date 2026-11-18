@@ -63,7 +63,7 @@ An unmapped non-main mode activates only `mode`. Aliases start with a letter and
 
 ## Presentation roles and workspace defaults
 
-`role` is an explicit annotation on a widget or any layout/popup block. The allowed names are `time`, `primary`, `secondary`, `key`, `value`, `heading`, `button`, `meter` and `separator`; unknown names are errors. Nothing selects widgets by type or ID. In particular, two `clock` widgets can use `time` and `secondary` independently. Omitting a role keeps the existing style; Built-in supplies an empty fallback for each role.
+`role` is an explicit annotation on a widget or any layout/popup block. The allowed names are `time`, `primary`, `secondary`, `key`, `value`, `heading`, `button`, `meter`, `separator` and `slider`; unknown names are errors. Sliders have the default role described below; other blocks and widgets are not selected by type or ID. In particular, two `clock` widgets can use `time` and `secondary` independently. Built-in supplies an empty fallback for each role.
 
 ```json
 {
@@ -82,6 +82,21 @@ An unmapped non-main mode activates only `mode`. Aliases start with a letter and
 ```
 
 A selected theme can style any subset of roles. Configuration files, includes and profiles can override those styles. Widget packages (including command-capable packages) may annotate widgets and blocks, but cannot define global `roles`, `workspaceDefaults` or `modeAliases`. Role styles accept only style properties: they cannot change actions, providers, visibility, display filters or the row/column structure of a layout.
+
+A slider without `filled` or an explicit role follows `roles.slider` when that role sets a style
+property. It then draws as a filled bar, with `background` as its track and `accent` as its fill.
+An empty or missing role keeps macOS's slider; `"roles": { "slider": null }` clears a theme's
+slider style. `"filled": false` always keeps the native control. `"filled": true` always draws
+filled in the block's own style and takes a role only when explicitly assigned. An explicit
+role other than `slider` also keeps the native control when `filled` is omitted.
+
+This applies to popup sliders, hover layouts and Sound's built-in hover control. Automatically
+styled sliders fit the widget's content height inline, or a line of text when it has no fixed
+height. Popups and hover tooltips use the role's height, 28 points by default. Existing explicit
+filled sliders keep their configured sizing.
+
+[Themed sliders](../examples/themed-sliders.json) styles Sound's popup and built-in hover control
+without adding `filled` or an explicit role to either slider.
 
 Layers apply from lowest to highest:
 

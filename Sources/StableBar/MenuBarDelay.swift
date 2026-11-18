@@ -9,10 +9,29 @@ func setMenuBarHidden(_ hidden: Bool, canReveal: Bool = PrivateAPI.setMenuBarVis
     _ = setAlpha(connection, 0, 1, hidden ? 0 : 1)
 }
 
+/// The calls that hide and reveal the macOS menu bar, so that a test can stand in for them.
+struct MenuBarVisibility: Sendable {
+    /// Milliseconds a click sent to MenuBarAgent takes to reach the item's app and open a menu there, with room to spare.
+    static let clickDelivery = 100
+
+    var shows: @Sendable (CGDirectDisplayID) -> Bool = { menuBarShows(on: $0) }
+    var setHidden: @Sendable (Bool) -> Void = { setMenuBarHidden($0) }
+    var setShown: @Sendable (Bool, CGDirectDisplayID) -> Void = { setMenuBarShown($0, on: $1) }
+}
+
 /// Reveals or hides the hidden macOS menu bar on one display. On a macOS without the private call, nothing changes.
 func setMenuBarShown(_ shown: Bool, on display: CGDirectDisplayID) {
     guard let connection = PrivateAPI.mainConnectionID?(), let set = PrivateAPI.setMenuBarVisibilityOverride else { return }
     _ = set(connection, display, shown)
+}
+
+/// Ends a reveal on every display. macOS keeps one after the process that asked for it is gone, so a StableBar that
+/// quit or was killed mid-reveal would leave a menu bar that should hide showing.
+func endMenuBarReveals() {
+    var displays = [CGDirectDisplayID](repeating: 0, count: 32)
+    var count: UInt32 = 0
+    guard CGGetActiveDisplayList(UInt32(displays.count), &displays, &count) == .success else { return }
+    for display in displays.prefix(Int(count)) { setMenuBarShown(false, on: display) }
 }
 
 func menuBarShows(on display: CGDirectDisplayID) -> Bool {

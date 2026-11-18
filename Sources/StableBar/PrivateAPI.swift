@@ -20,6 +20,11 @@ enum PrivateAPI {
     static let setMenuBarVisibilityOverride = symbol(
         "SLSSetMenuBarVisibilityOverrideOnDisplay", as: (@convention(c) (Int32, CGDirectDisplayID, Bool) -> CGError).self)
 
+    // Clicking in the macOS menu bar without the pointer. A mouse event posted to an app names the window it's for in a
+    // field CoreGraphics has no name for, and carries its place in that window.
+    static let eventWindowField = CGEventField(rawValue: 51)
+    static let setEventWindowLocation = symbol("CGEventSetWindowLocation", as: (@convention(c) (CGEvent, CGPoint) -> Void).self)
+
     // Reading Spaces. The copy calls return an array the caller owns.
     static let getActiveSpace = symbol("CGSGetActiveSpace", as: (@convention(c) (Int32) -> UInt64).self)
     static let copyManagedDisplaySpaces = symbol(

@@ -12,6 +12,7 @@ struct GeneralSettingsView: View {
     /// Observed, so the reminder to finish setup updates while Settings is open.
     @AppStorage(SetupProgress.skippedKey) private var setupSkipped = false
     @AppStorage(SetupProgress.completedKey) private var setupCompleted = false
+    @State private var managerGap: ManagerGap?
 
     var body: some View {
         ScrollViewReader { scroll in
@@ -40,9 +41,20 @@ struct GeneralSettingsView: View {
                             unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
                         bar.toggle("Keep windows clear of the bar", "keepWindowsClear", default: false,
                                    hint: "Moves ordinary windows out from under the bar. Leave it off when AeroSpace, yabai, OmniWM or Rift sets gaps.")
+                        if let managerGap {
+                            HStack(spacing: 8) {
+                                Label("\(managerGap.warning) \(managerGap.setting)", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.callout)
+                                    .foregroundStyle(SettingsPalette.warning)
+                                Spacer()
+                                Button("Check Again") { Task { await checkManagerGap() } }
+                            }
+                            .groupRow()
+                        }
                         NotificationClearanceSettings(bar: bar, macOSVersion: macOSVersion)
                     }
                     .id(SettingsSearchResult.windows.id)
+                    .task { await checkManagerGap() }
                     SettingsGroup("Hover") {
                         let bar = StyleFields(store: store, path: "bar",
                             values: (try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:],
@@ -103,6 +115,7 @@ struct GeneralSettingsView: View {
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([store.configurationURL]) }
                             Button("Reload", action: store.reloadConfiguration)
                         }
+                        ICloudSyncSettings(store: store)
                     }
                     .id(SettingsSearchResult.configuration.id)
                     SettingsGroup("Command line") {
@@ -155,6 +168,11 @@ struct GeneralSettingsView: View {
         } control: {
             Button("Reconnect", action: workspaces.reconnect).disabled(!workspaces.isRunning)
         }
+    }
+
+    private func checkManagerGap() async {
+        guard let configuration = store.configuration else { return }
+        managerGap = await store.windowClearance.checkManagerGap(configuration)
     }
 
     private func row<Label: View, Control: View>(@ViewBuilder label: () -> Label, @ViewBuilder control: () -> Control) -> some View {

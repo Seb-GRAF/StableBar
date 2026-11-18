@@ -315,7 +315,8 @@ final class WidgetPopup {
     let pins = PopupPins()
 
     init(present: @escaping (PopupPanel, Bool) -> Void = { panel, onHover in
-        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil); panel.makeFirstResponder(nil) }
+        if onHover { panel.orderFront(nil) } else { panel.makeKeyAndOrderFront(nil) }
+        panel.makeFirstResponder(nil)
     }, mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }, clock: any Clock<Duration> = ContinuousClock()) {
         self.present = present
         self.mouseLocation = mouseLocation
@@ -399,6 +400,17 @@ final class WidgetPopup {
             do {
                 try await self?.waitForHoverPath()
                 try await self?.clock.sleep(for: .milliseconds(200))
+                try Task.checkCancellation()
+            } catch { return }
+            self?.close()
+        }
+    }
+
+    /// Closes the open popup after `duration`, unless the pointer moves into it or it's pinned first.
+    func close(after duration: Duration) {
+        hoverTask = Task { [weak self] in
+            do {
+                try await self?.clock.sleep(for: duration)
                 try Task.checkCancellation()
             } catch { return }
             self?.close()
@@ -495,6 +507,8 @@ final class WidgetPopup {
                     .foregroundStyle(appearance.foreground)
                     .padding(.horizontal, appearance.paddingHorizontal)
                     .padding(.vertical, appearance.paddingVertical)
+                    // Its blocks read this screen's look, such as its slider role, not the laptop's.
+                    .environment(\.screenKind, kind)
             }
             .modifier(PopupBackground(style: style, glass: bar.glass, backgrounds: backgrounds))
             .padding(shadowInset)
