@@ -62,6 +62,15 @@ import Testing
     #expect(placing.handle(.menuBarChanged(failure: "timed out", request: 1)).isEmpty)
 }
 
+@Test func skippingSetupDropsAChoiceWaitingForAccess() {
+    var placing = SetupPlacement()
+    _ = placing.handle(.chose(.top, menuBarHides: false))
+    _ = placing.handle(.accessChecked(.denied, request: 1))
+    _ = placing.handle(.skipped)
+    #expect(placing.awaitingAccess == nil)
+    #expect(placing.handle(.accessAllowed(menuBarHides: false)).isEmpty)
+}
+
 @Test func aRefusedChangeExplainsAutomationAccess() {
     var placing = SetupPlacement()
     _ = placing.handle(.chose(.belowMenuBar, menuBarHides: true))

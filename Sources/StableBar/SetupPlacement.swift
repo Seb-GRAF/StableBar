@@ -1,6 +1,7 @@
 /// Where setup puts the bar, chosen on its first step, and the change to the macOS menu bar that choice needs: the top
 /// edge hides the menu bar and the other places show it, which takes Automation access to System Events first. The
-/// latest choice wins: an answer or a change that arrives for an earlier choice is dropped.
+/// latest choice wins: an answer or a change that arrives for an earlier choice is dropped, and so is one that arrives
+/// after Skip setup.
 struct SetupPlacement: StateMachine, Equatable {
     typealias Placement = SetupPreferences.Placement
 
@@ -14,6 +15,8 @@ struct SetupPlacement: StateMachine, Equatable {
         case placed(Placement)
         /// The menu bar change failed, and setup shows why.
         case failed(Placement)
+        /// Setup closed without saving: a choice waiting for access no longer applies.
+        case skipped
     }
 
     enum Event: Equatable {
@@ -49,7 +52,7 @@ struct SetupPlacement: StateMachine, Equatable {
 
     var choice: Placement? {
         switch phase {
-        case .unchosen: nil
+        case .unchosen, .skipped: nil
         case .checkingAccess(let placement), .awaitingAccess(let placement), .changingMenuBar(let placement),
              .placed(let placement), .failed(let placement): placement
         }
@@ -85,7 +88,7 @@ struct SetupPlacement: StateMachine, Equatable {
             let detail = failure.contains("-1743") ? MenuBarAutoHide.accessHint : failure
             return [.showError("StableBar couldn’t \(placement == .top ? "hide" : "show") the macOS menu bar. \(detail)")]
         case .skipped:
-            request += 1
+            phase = .skipped
             return []
         }
     }
