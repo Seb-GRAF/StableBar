@@ -236,7 +236,7 @@ struct AppearanceView: View {
                 Text("Widgets, popups and packages that use a color follow it.").font(.system(size: 11.5)).foregroundStyle(.secondary)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(store.themeTokenColors(in: document)) { token in
+                ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
                     let property = store.propertySources(path: tokens.path, key: token.name, defaultsPath: tokens.defaultsPath, values: tokens.values)
                     let color = (try? property.editingValue?.decoded(HexColor.self)) ?? token.color
                     TokenColorButton(title: token.title, color: color, dark: appearance.colorScheme == .dark,

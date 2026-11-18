@@ -6,6 +6,7 @@ struct ThemeTokenColor: Identifiable {
     let title: String
     let color: HexColor
     var id: String { name }
+    var isShared: Bool { themeTokens.contains { $0.name == name } }
 }
 
 extension BarStore {
@@ -13,7 +14,8 @@ extension BarStore {
 
     func themeTokenColors(in document: [String: ConfigurationValue]) -> [ThemeTokenColor] {
         let tokens = (try? document["tokens"]?.decoded([String: ConfigurationValue].self)) ?? [:]
-        return themeTokens.compactMap { token in
+        let others = tokens.keys.filter { name in !themeTokens.contains { $0.name == name } }
+        return (themeTokens + others.map { (name: $0, title: friendly($0)) }).compactMap { token in
             (try? tokens[token.name]?.decoded(HexColor.self)).map { ThemeTokenColor(name: token.name, title: token.title, color: $0) }
         }
     }
@@ -269,7 +271,7 @@ private struct FillPopover: View {
                 switch mode {
                 case .theme:
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 2), GridItem(.flexible())], spacing: 2) {
-                        ForEach(tokens) { token in
+                        ForEach(tokens.filter(\.isShared)) { token in
                             TokenChoice(token: token, tokens: tokens, isSelected: fill == .token(token.name)) {
                                 fill = .token(token.name)
                                 write()
@@ -300,7 +302,7 @@ private struct FillPopover: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Use a theme color for this stop").font(.subheadline).foregroundStyle(.secondary)
                         HStack(spacing: 5) {
-                            ForEach(tokens) { token in
+                            ForEach(tokens.filter(\.isShared)) { token in
                                 ChipButton(title: token.title, cornerRadius: 10) {
                                     editGradient { $0.stops[stop].color = .token(token.name) }
                                     loadColor()
