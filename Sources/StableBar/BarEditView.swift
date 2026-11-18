@@ -451,11 +451,29 @@ struct BarEditTile: View {
                 Menu("Shows On") {
                     WidgetScreensMenu(store: store, widget: entry.widget, screen: ScreenKind(screen)) { editing.set(entry.id, $0, on: display) }
                 }
+                groupCommands(on: screen)
             }
             Button("Remove Widget") { editing.remove(entry.id, on: display) }
             Divider()
             Button(editing.menuTitle, action: editing.end)
         }
+    }
+
+    @ViewBuilder private func groupCommands(on screen: BarDisplay) -> some View {
+        let grouping = WidgetGrouping(store: store)
+        if let group = entry.widget.group {
+            Divider()
+            Button("Edit Group “\(friendly(group))”…") { editing.editGroup(group) }
+            Button("Leave Group") { editing.leaveGroup(entry.id, on: display) }
+                .disabled(!grouping.canLeave(entry.id))
+        } else {
+            let choices = grouping.choices(for: entry.id, among: editing.widgets(on: screen))
+            if !choices.isEmpty { Divider() }
+            ForEach(choices, id: \.self) { choice in
+                Button(choice.title(names: editing.names)) { editing.group(entry.id, choice, on: display) }
+            }
+        }
+        Divider()
     }
 
     private var tile: some View {

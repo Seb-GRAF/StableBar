@@ -80,39 +80,6 @@ jobs:
             echo "site=true" >> "$GITHUB_OUTPUT"
           fi
 
-  # GitHub runs only a few macOS jobs at once for the whole account, and pull requests can hold them
-  # all for an hour. A run on main cancels the pull request runs it finds waiting or running, and
-  # Resume pull requests restarts their cancelled jobs once main's macOS jobs are done.
-  pause-pull-requests:
-    name: Pause pull requests
-    needs: current
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.current.outputs.build == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    outputs:
-      runs: ${{ steps.pause.outputs.runs }}
-    steps:
-      - name: Cancel pull request runs
-        id: pause
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          paused=()
-          for status in requested pending queued in_progress; do
-            for run in $(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&status=$status&per_page=100" \
-                --jq '.workflow_runs[].id'); do
-              if gh run cancel "$run"; then
-                paused+=("$run")
-              else
-                echo "::warning::Couldn't cancel run $run."
-              fi
-            done
-          done
-          echo "runs=${paused[*]}" >> "$GITHUB_OUTPUT"
-
   test:
     name: Test
     needs: current
@@ -282,8 +249,7 @@ jobs:
           retention-days: 1
 
   # Draws main's docs images and scenes, for the pull requests based on this commit: their Draw
-  # screens job compares with these instead of drawing the base again. Resume pull requests doesn't
-  # wait for it, as the runs it restarts are based on older commits.
+  # screens job compares with these instead of drawing the base again.
   main-screens:
     name: Draw main's screens
     env:
@@ -313,6 +279,47 @@ jobs:
           path: ${{ runner.temp }}/screens/
           retention-days: 7
           if-no-files-found: error
+
+  # Draw screens takes the base's side from main's run of the base. When that run is still going,
+  # this waits for its screens on Linux, so a Mac doesn't draw the base all over again. It gives up
+  # once the run ends without them, and after 40 minutes.
+  main-screens-wait:
+    name: Wait for main's screens
+    needs: current
+    if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Wait for main's screens of the base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base=$(git rev-parse HEAD^)
+          for _ in {1..80}; do
+            read -r run status <<< "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
+              --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"')"
+            if [[ -z "${run:-}" ]]; then
+              echo "main's CI has no run of $base, so the base draws its own screens."
+              exit 0
+            fi
+            if (( $(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run/artifacts?name=screens-main-$base" --jq .total_count) > 0 )); then
+              echo "main's run $run drew the screens of $base."
+              exit 0
+            fi
+            if [[ "$status" == completed ]]; then
+              echo "main's run $run ended without screens of $base, so the base draws its own."
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "main's run $run is still going after 40 minutes, so the base draws its own screens."
 
   # Builds the DMG as the beta does, for pull requests that change the scripts, resources or this
   # workflow. Pull requests get no Developer ID, so the app is ad-hoc signed; only the beta and
@@ -404,11 +411,12 @@ jobs:
   # the base, and only the scenes the pull request adds or edits are drawn from the base. This job
   # runs the pull request's code with a read-only token: screens.yml, which runs from the default
   # branch, posts the comparison and the Visual review status.
+  # Waits for Test, so a push whose tests fail, or that a newer push replaces first, draws nothing.
   screens:
     name: Draw screens
     env:
       STABLEBAR_PREBUILT_DIR: release-build
-    needs: [current, build]
+    needs: [current, build, test, main-screens-wait]
     if: github.event_name == 'pull_request' && needs.current.outputs.screens == 'true'
     runs-on: macos-26
     timeout-minutes: 45
@@ -446,34 +454,39 @@ jobs:
           cp -R "$RUNNER_TEMP/scenes" scenes
       # main's images of the scene files the pull request changes go, and the base draws those it
       # adds or edits. Without main's screens of the base, the base draws everything. The screens
-      # come only from CI's run of the push to main: a pull request's run can upload an artifact of
-      # the same name.
+      # and the base's release build come only from CI's run of the push to main: a pull request's
+      # run can upload artifacts of the same names.
       - name: Download main's screens of the base
         id: main
         env:
           GH_TOKEN: ${{ github.token }}
+          APP: ${{ needs.current.outputs.app }}
         run: |
           base=$(git rev-parse HEAD)
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
             --jq '.workflow_runs[0].id // empty')
+          draw=true
           if [[ -n "$run" ]] && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name "screens-main-$base" --dir "$RUNNER_TEMP/before"; then
             echo "found=true" >> "$GITHUB_OUTPUT"
             while IFS= read -r -d '' scene; do
               rm -f "$RUNNER_TEMP/before/scenes/$(basename "$scene" .json)"-{dark,light}.png
             done < <(git diff -z --name-only --no-renames HEAD "$GITHUB_SHA" -- 'scenes/*.json')
             git diff -z --name-only --no-renames --diff-filter=AM HEAD "$GITHUB_SHA" -- 'scenes/*.json' > "$RUNNER_TEMP/redrawn-scenes"
-            if [[ -s "$RUNNER_TEMP/redrawn-scenes" ]]; then
-              echo "draw=true" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "draw=true" >> "$GITHUB_OUTPUT"
+            [[ -s "$RUNNER_TEMP/redrawn-scenes" ]] || draw=false
+          fi
+          echo "draw=$draw" >> "$GITHUB_OUTPUT"
+          if [[ "$draw" == true && "$APP" == true && -n "$run" ]] \
+              && gh run download "$run" --repo "$GITHUB_REPOSITORY" --name release-build --dir "$RUNNER_TEMP/base-build"; then
+            mkdir "$RUNNER_TEMP/base-release"
+            tar -xf "$RUNNER_TEMP/base-build/release-build.tar" -C "$RUNNER_TEMP/base-release"
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Identify Swift toolchain
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true' && steps.main.outputs.build != 'true'
         id: swift
         run: echo "version=$({ swift --version; xcodebuild -version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
-        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true'
+        if: needs.current.outputs.app == 'true' && steps.main.outputs.draw == 'true' && steps.main.outputs.build != 'true'
         with:
           path: .build
           key: ${{ runner.os }}-${{ runner.arch }}-release-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}-${{ github.sha }}
@@ -489,10 +502,11 @@ jobs:
         env:
           APP: ${{ needs.current.outputs.app }}
           MAIN: ${{ steps.main.outputs.found }}
+          BASE_BUILD: ${{ steps.main.outputs.build == 'true' && format('{0}/base-release', runner.temp) || '' }}
         run: |
           mkdir -p "$RUNNER_TEMP/before"
           if [[ "$APP" == true ]]; then
-            STABLEBAR_PREBUILT_DIR= ./scripts/build.sh "$RUNNER_TEMP/base.app"
+            STABLEBAR_PREBUILT_DIR="$BASE_BUILD" ./scripts/build.sh "$RUNNER_TEMP/base.app"
             app="$RUNNER_TEMP/base.app/Contents/MacOS/StableBar"
             [[ "$MAIN" == true ]] || "$app" --render-docs-images "$RUNNER_TEMP/before/docs"
           else
@@ -804,36 +818,3 @@ jobs:
           git -C tap -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -am "stablebar $version"
           git -C tap push
-
-  # Runs after every macOS job of main's run, whether it passed, failed or was cancelled. A paused run
-  # is left alone once its pull request is closed, has a newer commit or a newer run, or someone
-  # already restarted it.
-  resume-pull-requests:
-    name: Resume pull requests
-    needs: [pause-pull-requests, test, build, docs-images, beta, release]
-    if: always() && needs.pause-pull-requests.outputs.runs != ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-      pull-requests: read
-    steps:
-      - name: Restart cancelled jobs
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RUNS: ${{ needs.pause-pull-requests.outputs.runs }}
-        run: |
-          heads=$(gh api --paginate "repos/$GH_REPO/pulls?state=open&per_page=100" --jq '.[].head.sha')
-          for run in $RUNS; do
-            read -r sha state <<< "$(gh api "repos/$GH_REPO/actions/runs/$run" --jq '"\(.head_sha) \(.status)/\(.conclusion)"')"
-            newest=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?event=pull_request&head_sha=$sha&per_page=1" \
-              --jq '.workflow_runs[0].id') || true
-            if [[ "$state" != completed/cancelled ]]; then
-              echo "Run $run is $state; leaving it."
-            elif ! grep -qx "$sha" <<< "$heads" || [[ "$newest" != "$run" ]]; then
-              echo "Run $run is no longer its pull request's newest; leaving it."
-            elif ! gh run rerun "$run" --failed; then
-              echo "::warning::Couldn't restart run $run."
-            fi
-          done
