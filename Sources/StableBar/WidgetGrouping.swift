@@ -43,11 +43,13 @@ struct WidgetGrouping {
     let mainDocument: () throws -> [String: ConfigurationValue]
 
     /// A new group's definition, whose look Settings then offers to change: a faint backdrop that works in light and dark,
-    /// or no style when `groupDefaults` gives every group a background, so the group follows the theme.
+    /// with the corners and padding `groupDefaults` doesn't set, or no style when it gives every group a background.
     static func newGroup(defaults: WidgetStyle, groupDefaults: WidgetStyle) -> ConfigurationValue {
         guard groupDefaults.background == nil else { return .object([:]) }
-        return .object(["style": .object(["background": .string("#8080802e"), "cornerRadius": .number(defaults.cornerRadius ?? 14),
-                                          "paddingHorizontal": .number(4)])])
+        var style: [String: ConfigurationValue] = ["background": .string("#8080802e")]
+        if groupDefaults.cornerRadius == nil { style["cornerRadius"] = .number(defaults.cornerRadius ?? 14) }
+        if groupDefaults.paddingHorizontal == nil { style["paddingHorizontal"] = .number(4) }
+        return .object(["style": .object(style)])
     }
 
     /// The choices for `id` among `listed`, the widgets one screen shows in their order: the units on either side of

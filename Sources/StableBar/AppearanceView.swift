@@ -291,15 +291,16 @@ struct AppearanceView: View {
 
     private var groups: some View {
         let groups = editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen))
+        let look = screen.map { store.configuration?.onScreen($0) } ?? store.configuration
+        let flared = look?.groupDefaults.flare != nil
         return ThemeGroup(title: "Groups") {
             groups.color("Background", "background")
-            groups.color("Border", "borderColor")
-            groups.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
+            groups.color("Border", "borderColor").disabled(flared)
+            groups.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5).disabled(flared)
             groups.number("Corner radius", "cornerRadius", default: 0, in: 0...40)
             groups.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30)
             groups.number("Vertical padding", "paddingVertical", default: 0, in: 0...20)
-            groups.number("Spacing", "spacing", default: (screen.map { store.configuration?.onScreen($0) } ?? store.configuration)?.bar.spacing ?? 8,
-                          in: 0...30)
+            groups.number("Spacing", "spacing", default: look?.bar.spacing ?? 8, in: 0...30)
         }
         .frame(maxWidth: .infinity)
     }

@@ -182,6 +182,20 @@ private let row = #"""
     #expect(bar.store.configuration?.groups["group"]?.style.background == .color(HexColor(0x112233ff)))
 }
 
+@MainActor @Test func groupingWithKeepsTheCornersAndPaddingGroupDefaultsSets() throws {
+    let bar = try GroupingFixture(#"""
+    {"groupDefaults":{"cornerRadius":20},"widgets":[
+      {"id":"a","type":"text","text":"A","position":"right"},
+      {"id":"b","type":"text","text":"B","position":"right"}
+    ]}
+    """#)
+    defer { bar.close() }
+    try bar.apply(bar.grouping.edits(.groupWith("b"), for: "a"))
+    let style = try bar.fixture.document()["groups"]?.decoded([String: [String: [String: ConfigurationValue]]].self)["group"]?["style"]
+    #expect(style == ["background": .string("#8080802e"), "paddingHorizontal": .number(4)])
+    #expect(bar.store.configuration?.groups["group"]?.style.cornerRadius == 20)
+}
+
 @MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheMainFile() throws {
     let bar = try GroupingFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     defer { bar.close() }
