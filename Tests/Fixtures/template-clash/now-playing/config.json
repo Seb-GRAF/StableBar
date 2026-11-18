@@ -1,0 +1,14 @@
+{
+  "templates": {
+    "Player": {
+      "type": "text",
+      "position": "left",
+      "text": "x",
+      "layout": { "type": "row", "children": [
+        { "type": "symbol", "name": "play.fill" },
+        { "type": "text", "text": "Now playing" }
+      ] }
+    }
+  },
+  "widgets": [{ "id": "now-playing", "template": "Player" }]
+}

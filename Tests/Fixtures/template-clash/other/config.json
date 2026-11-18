@@ -1,0 +1,8 @@
+{
+  "templates": {
+    "Player": {
+      "layout": { "type": "row", "children": [{ "type": "text", "text": "OTHER PACKAGE LAYOUT" }] }
+    }
+  },
+  "widgets": [{ "id": "other-clock", "type": "clock", "format": "HH:mm", "position": "right", "template": "Player" }]
+}
