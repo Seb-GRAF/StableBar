@@ -49,20 +49,23 @@ export function retryPlan(xml, output) {
   if (names.length === 0) return { error: "The test run failed, but its report lists no failed Swift Testing test to run again." };
   const { total, inTests } = failureCounts(xml);
   if (total > inTests) return { error: `The report counts ${total} failures but names tests for only ${inTests}, so the others can't run again.` };
-  const count = new Set(testCases(xml).filter(failed).map(({ suite, name }) => `${suite}\n${name}`)).size;
-  if (count > maxRetried) return { error: `${count} tests failed, more than the ${maxRetried} that run again.` };
-  return { names, filter: filterFor(names) };
+  const tests = [...new Map(testCases(xml).filter(failed).map(({ suite, name }) => [`${suite}\n${name}`, { suite, name }])).values()];
+  if (tests.length > maxRetried) return { error: `${tests.length} tests failed, more than the ${maxRetried} that run again.` };
+  return { names, tests, filter: filterFor(names) };
 }
 
-/** Whether the retry's report `xml` shows each of `names` passing: run, not skipped, and without a failure. */
-export function retryPassed(xml, names) {
+/**
+ * Whether the retry's report `xml` shows each of `tests` passing, matched by suite and name: run, not skipped, and
+ * without a failure. Another suite's test of the same name doesn't count.
+ */
+export function retryPassed(xml, tests) {
   const cases = testCases(xml);
-  const unproven = names.filter((name) => {
-    const runs = cases.filter((testCase) => testCase.name === name);
+  const unproven = tests.filter(({ suite, name }) => {
+    const runs = cases.filter((testCase) => testCase.suite === suite && testCase.name === name);
     return runs.length === 0 || runs.some(({ body }) => /<(failure|error|skipped)\b/.test(body));
   });
-  if (unproven.length > 0) return { error: `The retry didn't show these tests passing: ${unproven.join(", ")}.` };
-  return { names };
+  if (unproven.length > 0) return { error: `The retry didn't show these tests passing: ${unproven.map(({ name }) => name).join(", ")}.` };
+  return { tests };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
@@ -76,5 +79,5 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
     console.log(JSON.stringify({ error: `There's no test report at ${report}.` }));
     process.exit(0);
   }
-  console.log(JSON.stringify(passed ? retryPassed(xml, JSON.parse(rest[0]).names) : retryPlan(xml, readFileSync(rest[0], "utf8"))));
+  console.log(JSON.stringify(passed ? retryPassed(xml, JSON.parse(rest[0]).tests) : retryPlan(xml, readFileSync(rest[0], "utf8"))));
 }

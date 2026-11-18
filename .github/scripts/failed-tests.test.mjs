@@ -48,7 +48,7 @@ test("filterFor matches each name literally", () => {
 
 test("retryPlan runs a few failed Swift Testing tests again, and nothing after XCTest failures, crashes or many failures", () => {
   assert.deepEqual(retryPlan(report({ "aTest()": "Expectation failed", "other()": null }), output),
-    { names: ["aTest()"], filter: String.raw`(?:^|[./])aTest\(\)` });
+    { names: ["aTest()"], tests: [{ suite: "StableBarTests", name: "aTest()" }], filter: String.raw`(?:^|[./])aTest\(\)` });
   assert.match(retryPlan(report({ "aTest()": "Expectation failed" }),
     `${output}Test Case '-[StableBarTests.PackagesViewTests testReview]' failed (1.2 seconds).\n`).error, /XCTest/);
   assert.match(retryPlan(report({ "aTest()": "Expectation failed" }), `${output}error: Exited with unexpected signal code 6\n`).error, /crashed/);
@@ -65,12 +65,17 @@ test("retryPlan runs a few failed Swift Testing tests again, and nothing after X
   assert.match(retryPlan(sameName, output).error, new RegExp(`${maxRetried + 1} tests failed`));
 });
 
-test("retryPassed needs each retried test to have run and passed", () => {
-  const names = ["aTest()", "rejects(json:)"];
-  assert.deepEqual(retryPassed(report({ "aTest()": null, "rejects(json:)": null }), names), { names });
-  assert.match(retryPassed(report({ "aTest()": null }), names).error, /rejects\(json:\)/);
-  assert.match(retryPassed(report({ "aTest()": null, "rejects(json:)": "skipped" }), names).error, /rejects\(json:\)/);
-  assert.match(retryPassed(report({ "aTest()": "Expectation failed", "rejects(json:)": null }), names).error, /aTest\(\)/);
+test("retryPassed needs each retried test to have run and passed in its own suite", () => {
+  const tests = ["aTest()", "rejects(json:)"].map((name) => ({ suite: "StableBarTests", name }));
+  assert.deepEqual(retryPassed(report({ "aTest()": null, "rejects(json:)": null }), tests), { tests });
+  assert.match(retryPassed(report({ "aTest()": null }), tests).error, /rejects\(json:\)/);
+  assert.match(retryPassed(report({ "aTest()": null, "rejects(json:)": "skipped" }), tests).error, /rejects\(json:\)/);
+  assert.match(retryPassed(report({ "aTest()": "Expectation failed", "rejects(json:)": null }), tests).error, /aTest\(\)/);
+  // A same-named test from another suite passing proves nothing for the one that failed.
+  const sibling = `<testsuites><testsuite failures="0" errors="0">
+<testcase classname="StableBarTests.Other" name="check()" time="1" />
+</testsuite></testsuites>`;
+  assert.match(retryPassed(sibling, [{ suite: "StableBarTests.Mine", name: "check()" }]).error, /check\(\)/);
 });
 
 test("the command prints the plan as JSON, and an error when the report is missing", () => {
@@ -78,10 +83,10 @@ test("the command prints the plan as JSON, and an error when the report is missi
   writeFileSync(join(folder, "results-swift-testing.xml"), report({ "aTest()": "Expectation failed" }));
   writeFileSync(join(folder, "output.txt"), output);
   const run = (...files) => JSON.parse(execFileSync(process.execPath, [new URL("./failed-tests.mjs", import.meta.url).pathname, ...files], { encoding: "utf8" }));
-  assert.deepEqual(run(join(folder, "results-swift-testing.xml"), join(folder, "output.txt")), { names: ["aTest()"], filter: String.raw`(?:^|[./])aTest\(\)` });
+  const plan = run(join(folder, "results-swift-testing.xml"), join(folder, "output.txt"));
+  assert.deepEqual(plan, { names: ["aTest()"], tests: [{ suite: "StableBarTests", name: "aTest()" }], filter: String.raw`(?:^|[./])aTest\(\)` });
   assert.match(run(join(folder, "missing.xml"), join(folder, "output.txt")).error, /no test report/);
   writeFileSync(join(folder, "retry-swift-testing.xml"), report({ "aTest()": null }));
-  const plan = JSON.stringify({ names: ["aTest()"], filter: String.raw`aTest\(\)` });
-  assert.deepEqual(run("--passed", join(folder, "retry-swift-testing.xml"), plan), { names: ["aTest()"] });
-  assert.match(run("--passed", join(folder, "results-swift-testing.xml"), plan).error, /aTest\(\)/);
+  assert.deepEqual(run("--passed", join(folder, "retry-swift-testing.xml"), JSON.stringify(plan)), { tests: plan.tests });
+  assert.match(run("--passed", join(folder, "results-swift-testing.xml"), JSON.stringify(plan)).error, /aTest\(\)/);
 });
