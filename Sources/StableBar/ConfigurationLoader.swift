@@ -723,7 +723,8 @@ struct ConfigurationLoader: Sendable {
         document = try preparePackageAssets(.object(layer.values), origins: layer.origins, boundaries: packageBoundaries)
             .decoded([String: ConfigurationValue].self)
         origins = layer.origins.filter { finalPaths.contains($0.key) }
-        contributions = layer.contributions.filter { finalPaths.contains($0.key) }
+        // Profile paths stay so Settings can tell which files set a profile's conditions.
+        contributions = layer.contributions.filter { finalPaths.contains($0.key) || $0.key.hasPrefix("profiles.") }
         widgetPackageNames = Dictionary(uniqueKeysWithValues: ids.compactMap { id in
             guard let source = origins["widgets.\(id).id"], let name = packageNames[source.file] else { return nil }
             return (id, name)

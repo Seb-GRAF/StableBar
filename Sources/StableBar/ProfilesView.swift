@@ -68,8 +68,10 @@ struct ProfilesView: View {
             let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                                        themesDirectory: store.themesDirectory)
             themeOptions = await Task.detached { catalog.profileThemeOptions }.value
-            network = SystemContext.wifiNetwork()
-            locationAccess = CLLocationManager().authorizationStatus == .authorizedAlways
+            if !offline {
+                network = SystemContext.wifiNetwork()
+                locationAccess = CLLocationManager().authorizationStatus == .authorizedAlways
+            }
         }
         .onAppear {
             guard !offline else { return }
@@ -293,7 +295,7 @@ struct ProfilesView: View {
                 Text(condition.met ? "True now" : "Not true now").font(.system(size: 11)).foregroundStyle(.tertiary)
                 Spacer()
                 Menu(condition.value) {
-                    ForEach(condition.choices, id: \.title) { choice in
+                    ForEach(Array(condition.choices.enumerated()), id: \.offset) { _, choice in
                         Toggle(choice.title, isOn: Binding(get: { choice.isOn }, set: { _ in choice.choose() }))
                     }
                 }

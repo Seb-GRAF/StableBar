@@ -731,11 +731,14 @@ final class BarStore: NSObject {
     }
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
+        let profilesChanged = profiles != loader.profiles
         adopt(loader)
         if effectiveDocument == loader.document, screenDocuments == loader.screenDocuments, configuration?.providers == next.providers {
             origins = loader.origins
             activeProfiles = loader.activeProfiles
             configurationError = nil
+            // A profile that doesn't change the bar can still need the Wi-Fi network, camera or microphone watched.
+            if profilesChanged { onConfigurationChange?() }
             return
         }
         popup.close()
