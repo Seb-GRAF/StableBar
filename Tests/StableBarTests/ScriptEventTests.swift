@@ -120,7 +120,7 @@ import Testing
     let started = directory.appending(path: "started")
     let release = directory.appending(path: "release")
     var widget: [String: Any] = [
-        "id": "replace", "type": "script", "position": "right", "interval": NSNull(),
+        "id": "replace", "type": "script", "position": "right", "interval": NSNull(), "timeout": 120,
         "command": "printf 'old\\n' >> \"$LOG\"; printf Old"
     ]
     var configuration: [String: Any] = [

@@ -231,6 +231,11 @@ enum SceneRenderer {
                 case .behavior: editor.widgetTab = .behavior
                 case .size, .look, .placement: break
                 }
+            } else if let group = scene.group {
+                guard configuration.widgets.contains(where: { $0.group == group }) else {
+                    throw CommandFailure(message: "group: No widget in the configuration is in group \(group).")
+                }
+                editor.showGroup(group)
             } else if let tab = scene.tab, tab.isBarTab {
                 editor.section = .widgets
                 editor.barItem = .bar

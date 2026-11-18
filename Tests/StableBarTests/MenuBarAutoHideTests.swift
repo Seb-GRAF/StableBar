@@ -569,6 +569,29 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(store.sessionEdits.count == before)
 }
 
+/// Skip setup while setup checks again whether a placement waiting for Automation access may go ahead: access turning
+/// out allowed after setup closed doesn't apply the discarded placement.
+@MainActor
+@Test func skippingSetupWhileAccessIsCheckedAgainLeavesTheMenuBarAlone() async throws {
+    let check = HeldCall<MenuBarAutoHide.Access>()
+    var checks = 0
+    let (session, fixture, store, changes) = try setupSession { _ in
+        checks += 1
+        return checks == 1 ? .denied : await check.wait()
+    }
+    defer { store.stop(); fixture.close() }
+    await session.place(.top)
+    try #require(session.placementAwaitingAccess == .top)
+    session.refreshAccess()
+    for _ in 0..<100 where !check.started { await Task.yield() }
+    try #require(check.started)
+    session.cancel()
+    check.answer(.allowed)
+    for _ in 0..<1000 where changes().isEmpty { await Task.yield() }
+    #expect(changes().isEmpty)
+    #expect(!session.menuBarHides)
+}
+
 /// A setup session whose menu bar changes go through `change`, which can hold or fail them, while macOS reports the
 /// menu bar through `hides`.
 @MainActor
