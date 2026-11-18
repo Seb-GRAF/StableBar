@@ -20,6 +20,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **`main`'s CI doesn't preempt pull requests** (2026-11-17). From 2026-11-16, a run on `main` cancelled the pull request runs it found and restarted their cancelled jobs once its own were done. Main stopped waiting, but in its first day this threw away about 1,600 macOS minutes of cut-off jobs, showed pull requests as failed until the restart, and reran them against the `main` from before the merge. Before it, only one run on `main` had waited long for a Mac (88 minutes). Pull requests now spend fewer macOS minutes instead; if `main` waits again, the answer is a merge queue or more runners, not cancelling pull requests.
 - **CI builds with one pinned Xcode** (2026-11-08, [#479]). A runner image update can't change the toolchain under a pull request; moving to a newer Xcode is a pull request of its own.
 - **Commit messages are checked before they leave the Mac** (2026-11-08, [#485]). Git hooks check them in every tool, and Claude Code also builds when an agent stops. `STABLEBAR_SKIP_HOOKS=1` turns the hooks off for one person.
+- **A flaky test doesn't block a pull request** (2026-11-17). When up to five Swift Testing tests fail, the Test job runs them once more on their own and passes with a warning naming those that pass then. They still get fixed, in a pull request of their own. A test that fails twice, an XCTest failure, a crash, a hang or more failures fail the job.
 
 ## Code
 
