@@ -763,6 +763,8 @@ final class BarStore: NSObject {
             var environment = next.environment
             environment["NAME"] = name
             environment["CONFIG_DIR"] = configurationURL.deletingLastPathComponent().path
+            environment["STABLEBAR"] = Bundle.main.executablePath
+            environment["STABLEBAR_CONFIG"] = sharedConfigurationURL.path
             if let events = registry[provider.type]?.events, !events.isEmpty {
                 script.onOutputChange = { [weak self, weak script] previous, output in
                     for event in events {
@@ -1180,6 +1182,8 @@ final class BarStore: NSObject {
         var environment = configuration.environment.merging(widget.environment) { _, widget in widget }
         environment["NAME"] = widget.id
         environment["CONFIG_DIR"] = configurationURL.deletingLastPathComponent().path
+        environment["STABLEBAR"] = Bundle.main.executablePath
+        environment["STABLEBAR_CONFIG"] = sharedConfigurationURL.path
         return environment
     }
 
