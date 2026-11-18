@@ -1,0 +1,10 @@
+{
+  "id": "uptime",
+  "name": "Uptime",
+  "version": "1.0.0",
+  "entry": "config.json",
+  "description": "How long the Mac has been on.",
+  "settings": {
+    "interval": { "type": "number", "title": "Refresh every (seconds)", "default": 60 }
+  }
+}

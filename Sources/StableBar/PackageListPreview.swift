@@ -35,6 +35,20 @@ struct WidgetSample: View {
     let widget: WidgetConfiguration
 
     var body: some View {
+        WidgetSampleContent(widget: widget, inheritedStyle: WidgetStyle())
+            .font(.system(size: 12, weight: .medium))
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 7))
+            .allowsHitTesting(false)
+    }
+}
+
+/// A widget drawn with sample data, its blocks inheriting `inheritedStyle` as on the bar.
+struct WidgetSampleContent: View {
+    let widget: WidgetConfiguration
+    let inheritedStyle: WidgetStyle
+
+    var body: some View {
         Group {
             switch widget.content {
             case .workspaces:
@@ -46,15 +60,11 @@ struct WidgetSample: View {
             default:
                 let label = widget.label(output: output, activeApp: "Finder", date: Date(timeIntervalSince1970: 1_792_573_260))
                 let layout = widget.defaultLayout(label, output: output, appIcon: false)!
-                PopupBlockView(block: layout, inheritedStyle: WidgetStyle(), fields: label.fields,
+                PopupBlockView(block: layout, inheritedStyle: inheritedStyle, fields: label.fields,
                                context: BlockContext(samples: (0..<60).map { [0.2, 0.35, 0.24, 0.5, 0.38, 0.24][$0 % 6] },
                                                      values: output.values ?? [:], fillsWidth: false, open: { _ in }, runAction: { _, _ in }))
             }
         }
-        .font(.system(size: 12, weight: .medium))
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 7))
-        .allowsHitTesting(false)
     }
 
     private var output: ScriptOutput {

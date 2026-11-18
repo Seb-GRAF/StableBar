@@ -4,7 +4,7 @@ import Foundation
 /// `StableBar --render-scenes` reads these from `scenes/`, and scene.schema.json describes them. A scene
 /// runs nothing: commands, providers and window managers are replaced by the samples it gives.
 struct SceneFile: Decodable {
-    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide, share }
+    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide, share, shareLink, barLinkReview }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it, `feedback` for Send feedback in Help, or `crashes` for Crashes in Status.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, help, feedback, crashes }
@@ -35,7 +35,8 @@ struct SceneFile: Decodable {
     var configuration: Configuration
     /// Package folders, relative to the scene file, installed as `--install-package` installs them. Packages are read
     /// from beside the configuration, so a scene with packages gives its configuration inline, and it's written to the
-    /// scene's work folder.
+    /// scene's work folder. With `barLink` or `shareLink`, they're installed from the Store, and with `barLink` the Store
+    /// lists them.
     var packages: [String] = []
     /// Script outputs keyed by widget id or provider name: an object as a script prints it, or plain text.
     var outputs: [String: ConfigurationValue] = [:]
@@ -76,6 +77,10 @@ struct SceneFile: Decodable {
     var package: String?
     /// A linked theme's folder, relative to the scene file, shown above the Theme gallery.
     var themeLink: String?
+    /// A bar link's JSON payload, relative to the scene file, shown above the Theme gallery, or whose review `barLinkReview` draws.
+    var barLink: String?
+    /// The bar link's widgets that its card shows unticked.
+    var untickedWidgets: [String] = []
     /// What the Uninstall sheet shows, for `uninstall`.
     var uninstall: Uninstall?
     /// The star request the update popup shows, for `update`.
@@ -97,7 +102,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
-             themeLink, starRequest, setup, applicationMove, windowsUnderBar, macOSMajorVersion, appearances,
+             themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -193,6 +198,8 @@ struct SceneFile: Decodable {
         tab = try values.decodeIfPresent(Tab.self, forKey: .tab)
         package = try values.decodeIfPresent(String.self, forKey: .package)
         themeLink = try values.decodeIfPresent(String.self, forKey: .themeLink)
+        barLink = try values.decodeIfPresent(String.self, forKey: .barLink)
+        untickedWidgets = try values.decodeIfPresent([String].self, forKey: .untickedWidgets) ?? []
         uninstall = try values.decodeIfPresent(Uninstall.self, forKey: .uninstall)
         starRequest = try values.decodeIfPresent(StarRequestLine.self, forKey: .starRequest)
         setup = try values.decodeIfPresent(Setup.self, forKey: .setup)
@@ -247,6 +254,16 @@ struct SceneFile: Decodable {
         if themeLink != nil, draw != .settings || widget != nil || section != .theme {
             throw DecodingError.dataCorruptedError(forKey: .themeLink, in: values,
                                                    debugDescription: "themeLink belongs to the theme section of Settings.")
+        }
+        if barLink != nil, draw != .barLinkReview, draw != .settings || widget != nil || section != .theme {
+            throw DecodingError.dataCorruptedError(forKey: .barLink, in: values,
+                                                   debugDescription: "barLink belongs to the theme section of Settings or to a barLinkReview scene.")
+        }
+        if draw == .barLinkReview, barLink == nil {
+            throw DecodingError.dataCorruptedError(forKey: .barLink, in: values, debugDescription: "A barLinkReview scene names its barLink.")
+        }
+        if !untickedWidgets.isEmpty, barLink == nil {
+            throw DecodingError.dataCorruptedError(forKey: .untickedWidgets, in: values, debugDescription: "untickedWidgets belongs to a barLink.")
         }
         if menu != nil, draw != .popup {
             throw DecodingError.dataCorruptedError(forKey: .menu, in: values, debugDescription: "A menu belongs to a popup scene.")

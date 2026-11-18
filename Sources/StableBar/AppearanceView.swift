@@ -168,6 +168,14 @@ struct AppearanceView: View {
                 LinkedThemeErrorCard(message: message) { store.pendingLinks.themeError = nil }
                     .padding(.bottom, 4)
             }
+            if let candidate = store.pendingLinks.bar, candidate.state != .used {
+                LinkedBarCard(candidate: candidate, editor: editor, screen: screen, everyBar: editor.themeChangesEveryBar)
+                    .id(candidate.look.choice.directory)
+                    .padding(.bottom, 4)
+            } else if let message = store.pendingLinks.barError {
+                LinkedThemeErrorCard(message: message) { store.pendingLinks.barError = nil }
+                    .padding(.bottom, 4)
+            }
             SettingsSegments(selection: $filter, options: [(.all, "All"), (.included, "Included"), (.store, "Store")],
                              stretches: false)
                 .fixedSize()

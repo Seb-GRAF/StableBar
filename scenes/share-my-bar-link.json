@@ -1,0 +1,30 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "packages": [
+      { "id": "weather", "version": "1.0.0" },
+      { "id": "local-clock", "version": "1.0.0", "settings": { "format": "%I:%M %p", "fontSize": 13, "foreground": "#ffd27f" } }
+    ],
+    "providers": {
+      "github": { "type": "http", "url": "https://api.github.com/notifications", "interval": 300, "output": { "text": "/count" } }
+    },
+    "widgets": [
+      { "id": "widget-0a1b2c3d", "type": "appleMenu", "position": "left" },
+      { "id": "widget-1b2c3d4e", "type": "activeApp", "position": "left" },
+      { "id": "uptime", "type": "script", "command": "uptime", "interval": 60, "position": "right" },
+      { "id": "github", "type": "provider", "provider": "github", "position": "right" },
+      { "id": "widget-2c3d4e5f", "type": "audio", "position": "right" },
+      { "id": "widget-3d4e5f6a", "type": "clock", "position": "right" }
+    ],
+    "widgetOrder": ["widget-0a1b2c3d", "widget-1b2c3d4e", "weather", "uptime", "github", "local-clock", "widget-2c3d4e5f", "widget-3d4e5f6a"]
+  },
+  "packages": ["../examples/packages/weather", "../examples/packages/local-clock"],
+  "outputs": {
+    "uptime": "3 days",
+    "github": "4",
+    "local-clock": "9:41 AM",
+    "weather": { "text": "21", "fields": { "unit": "°C" } }
+  },
+  "draw": "shareLink",
+  "height": 1000
+}

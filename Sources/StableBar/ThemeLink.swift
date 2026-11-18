@@ -62,12 +62,12 @@ struct ThemeLink: Equatable, Sendable {
         return components.url!
     }
 
-    private static func encoded(_ data: Data) -> String {
+    static func encoded(_ data: Data) -> String {
         data.base64EncodedString().replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
     }
 
-    private static func decoded(_ text: String) -> Data? {
+    static func decoded(_ text: String) -> Data? {
         let unpadded = text.prefix { $0 != "=" }
         let padding = (4 - unpadded.utf8.count % 4) % 4
         guard padding != 3 else { return nil }

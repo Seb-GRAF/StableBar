@@ -96,23 +96,34 @@ struct ThemeCard: View {
 
 struct ThemeSampleBar: View {
     let look: Configuration
+    /// The widgets to draw with sample data, in their places, instead of workspaces, Finder, a battery and the time.
+    let widgets: [WidgetConfiguration]?
 
     var barStyle: WidgetStyle { look.bar.style.resolved(for: StyleStates()) }
     var stripHeight: Double { max(0, look.bar.height - 2 * look.bar.margin) }
     private let workspace: WorkspaceConfiguration?
 
-    init(look: Configuration) {
+    init(look: Configuration, widgets: [WidgetConfiguration]? = nil) {
         self.look = look
+        self.widgets = widgets
         workspace = try? look.workspaceDefaults.merging(nil)
     }
 
     var body: some View {
         HStack(spacing: look.bar.spacing) {
-            workspaces(active: 1)
-            tile(role: .primary) { Text("Finder") }
-            Spacer(minLength: 0)
-            tile(role: .value) { battery }
-            tile(role: .time) { Text("9:41") }
+            if let widgets {
+                ForEach(widgets.filter { $0.position == .left }, content: sample)
+                Spacer(minLength: 0)
+                ForEach(widgets.filter { [.notchLeft, .center, .notchRight].contains($0.position) }, content: sample)
+                Spacer(minLength: 0)
+                ForEach(widgets.filter { $0.position == .right }, content: sample)
+            } else {
+                workspaces(active: 1)
+                tile(role: .primary) { Text("Finder") }
+                Spacer(minLength: 0)
+                tile(role: .value) { battery }
+                tile(role: .time) { Text("9:41") }
+            }
         }
         .lineLimit(1)
         .padding(.horizontal, look.bar.inset)
@@ -179,6 +190,16 @@ struct ThemeSampleBar: View {
                         .fill(style.background?.shapeStyle ?? AnyShapeStyle(appearance.accent))
                 }
             }
+    }
+
+    @ViewBuilder private func sample(_ widget: WidgetConfiguration) -> some View {
+        if widget.content == .workspaces {
+            workspaces(active: 1)
+        } else {
+            let style = resolveStyle([look.defaults, look.roleStyle(widget.role), widget.barStyle])
+            WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks)
+                .modifier(ThemeSampleTile(style: style))
+        }
     }
 
     func tile<Content: View>(role: PresentationRole, @ViewBuilder content: () -> Content) -> some View {

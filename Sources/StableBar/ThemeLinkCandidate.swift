@@ -100,20 +100,7 @@ final class ThemeLinkCandidate {
         let themeChoices = themeChoices
         do {
             let screenTheme = try selectedScreenTheme(on: kind, in: store)
-            let client = store.packageStoreClient
-            let packages = client.packages
-            try Self.checkInstalledID(choice.manifest.id, packages: packages)
-            let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
-            let installed: ThemeChoice
-            if FileManager.default.fileExists(atPath: directory.path) {
-                guard try sameFiles(at: directory) else {
-                    throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
-                }
-                installed = ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
-            } else {
-                let inspection = try await install(choice.directory)
-                installed = ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
-            }
+            let installed = try await installedTheme(in: store.packageStoreClient.packages)
             guard !discarded else { return }
             guard self.themeChoices == themeChoices,
                   store.configurationURL == configurationURL,
@@ -136,6 +123,20 @@ final class ThemeLinkCandidate {
             }
             candidateState = .failed(errorMessage(error))
         }
+    }
+
+    /// Installs the linked theme, or finds the same files already installed under its ID and version.
+    func installedTheme(in packages: WidgetPackageStore) async throws -> ThemeChoice {
+        try Self.checkInstalledID(choice.manifest.id, packages: packages)
+        let directory = try packages.directory(id: choice.manifest.id, version: choice.manifest.version)
+        if FileManager.default.fileExists(atPath: directory.path) {
+            guard try sameFiles(at: directory) else {
+                throw ThemeLinkError.versionTaken(id: choice.manifest.id, version: choice.manifest.version)
+            }
+            return ThemeChoice(manifest: choice.manifest, directory: directory, isBundled: false)
+        }
+        let inspection = try await install(choice.directory)
+        return ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false)
     }
 
     func discard() {

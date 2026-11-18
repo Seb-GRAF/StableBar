@@ -7,6 +7,8 @@ struct PackagesView: View {
     var reviewing: WidgetPackageInspection?
     /// The source the reviewed package is added from; nil for a folder.
     var reviewingSourceID: String?
+    /// The settings the review starts from, in place of the ones the bar has saved for the package.
+    var reviewingSettings: [String: ConfigurationValue]?
     var onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)?
     var onAdded: (() -> Void)?
     var onWorkingChanged: ((Bool) -> Void)?
@@ -24,6 +26,7 @@ struct PackagesView: View {
 
     init(store: BarStore, indexURL: URL = PackageIndex.url, selectedPackageID: String? = nil,
          reviewing: WidgetPackageInspection? = nil, reviewingSourceID: String? = nil,
+         reviewingSettings: [String: ConfigurationValue]? = nil,
          onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)? = nil,
          onAdded: (() -> Void)? = nil, onWorkingChanged: ((Bool) -> Void)? = nil,
          searchTarget: Binding<String?> = .constant(nil)) {
@@ -31,6 +34,7 @@ struct PackagesView: View {
         self.selectedPackageID = selectedPackageID
         self.reviewing = reviewing
         self.reviewingSourceID = reviewingSourceID
+        self.reviewingSettings = reviewingSettings
         self.onEnable = onEnable
         self.onAdded = onAdded
         self.onWorkingChanged = onWorkingChanged
@@ -84,7 +88,7 @@ struct PackagesView: View {
         .task {
             await library.loadInstalled()
             if let reviewing {
-                await library.select(reviewing.directory, sourceID: reviewingSourceID)
+                await library.select(reviewing.directory, sourceID: reviewingSourceID, settings: reviewingSettings)
             } else {
                 await gallery.refresh()
                 if let selectedPackageID {
