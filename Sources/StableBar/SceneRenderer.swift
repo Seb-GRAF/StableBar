@@ -302,6 +302,12 @@ enum SceneRenderer {
             try await OffscreenSnapshot.write(AccessibilityGuideView(icon: icon ?? NSApp.applicationIconImage) {}
                 .padding(24).background(Color(nsColor: .windowBackgroundColor)),
                                               size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
+        case .share:
+            let share = BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: setupMenuBarHeight,
+                                 wallpaper: nil)
+            try await OffscreenSnapshot.write(BarShareView(share: share),
+                                              size: NSSize(width: CGFloat(scene.width ?? 640), height: CGFloat(scene.height ?? 600)),
+                                              dark: dark, settle: settle, ready: { share.png != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),

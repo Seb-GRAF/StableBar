@@ -48,7 +48,7 @@ To install the latest stable release with [Homebrew](https://brew.sh) instead, r
 
 ## First launch
 
-The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](../Resources/config.json), with the bar on the top edge, or below the menu bar when the menu bar doesn't hide, where it starts with Workspaces, System and Sound. Subsequent launches keep your file. If it is a symbolic link, Setup, Settings and command-line saves update the linked file and keep the link. Right-click the bar or use its macOS menu-bar icon to choose **Edit Bar in Place**, **Try Themes…**, **Get Widgets…**, **Settings…** or **Quit StableBar**; the menu-bar icon also offers [**Hide Bar**](#hide-the-bar). **Get Widgets…** opens **Settings → Store**. While editing, the menus offer **Finish Editing Bar**. **Settings → General** controls login, window and notification clearance, access and workspace connections, opens or reloads the configuration file, and links to updates, setup and help. Placement is in **Settings → Bar → Bar → Placement**.
+The first launch creates `~/.config/stablebar/config.json` from [Resources/config.json](../Resources/config.json), with the bar on the top edge, or below the menu bar when the menu bar doesn't hide, where it starts with Workspaces, System and Sound. Subsequent launches keep your file. If it is a symbolic link, Setup, Settings and command-line saves update the linked file and keep the link. Right-click the bar or use its macOS menu-bar icon to choose **Edit Bar in Place**, **Try Themes…**, **Get Widgets…**, [**Share My Bar…**](#share-your-bar), **Settings…** or **Quit StableBar**; the menu-bar icon also offers [**Hide Bar**](#hide-the-bar). **Get Widgets…** opens **Settings → Store**. While editing, the menus offer **Finish Editing Bar**. **Settings → General** controls login, window and notification clearance, access and workspace connections, opens or reloads the configuration file, and links to updates, setup and help. Placement is in **Settings → Bar → Bar → Placement**.
 
 Keep personal settings in `~/.config/stablebar/config.json` and personal scripts in `~/.config/stablebar/widgets/`, outside the repository. Point commands directly at those scripts. `Resources/config.json` is the shared starter configuration; rebuilding the app does not overwrite your personal file. Local scripts should load any supporting files from their own directory.
 
@@ -67,6 +67,17 @@ To hide it while an app is in front, set `bar.hidden` in a [profile](configurati
 ```
 
 The bar shows only when neither **Hide Bar** nor the configuration hides it, so **Show Bar** doesn't bring back a bar that `bar.hidden` hides. While the bar is hidden, its popup closes, providers set to `whenVisible` pause as they do when none of their widgets is visible, and [window and notification clearance](#keeping-windows-clear-of-the-bar) leaves windows where they are.
+
+## Share your bar
+
+Choose **Share My Bar…** in the bar's right-click menu or the menu-bar icon's menu, or the button above the bar's preview in **Settings → Bar**, to share your bar. The right-click menu uses that screen's bar; the menu-bar icon uses the screen under the pointer, and Settings the screen it shows. As with Settings, StableBar appears in the Dock while the window is open, and clicking its Dock icon brings the window back. The window makes an image of your bar for social media: the bar as it is now, with its real data and the time, at its place over your desktop wallpaper. It needs no screen-recording permission.
+
+Pick a size:
+
+- **Bar only**: the bar across the screen's width, on a strip of wallpaper, at twice the screen's width in pixels.
+- **Landscape 16:9** (3200 × 1800), **Square 1:1** (2160 × 2160) or **Portrait 4:5** (2160 × 2700): the top of your desktop, or its bottom with a bar at the bottom, scaled to the image's width. When the image is taller than your screen, the wallpaper fills it.
+
+**Copy Image** puts the PNG on the clipboard, **Save Image…** writes it to a file, and **Share…** opens the macOS share menu for AirDrop, Messages, Mail and more. A dynamic or aerial wallpaper that has no still image is replaced with StableBar's own backdrop.
 
 ## Updates
 

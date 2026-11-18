@@ -4,7 +4,7 @@ import Foundation
 /// `StableBar --render-scenes` reads these from `scenes/`, and scene.schema.json describes them. A scene
 /// runs nothing: commands, providers and window managers are replaced by the samples it gives.
 struct SceneFile: Decodable {
-    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide }
+    enum Draw: String, Decodable, CaseIterable { case bar, editBar, popup, settings, uninstall, update, setup, accessibilityGuide, share }
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it, `feedback` for Send feedback in Help, or `crashes` for Crashes in Status.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, help, feedback, crashes }
