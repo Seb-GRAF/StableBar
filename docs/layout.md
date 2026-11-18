@@ -73,7 +73,7 @@ Use `"overflow": "never"` for essential widgets. If these alone exceed the avail
 
 A named group has one shared background, padding, border and spacing. Members must use the same `position`; their first appearance places the group. To make one without editing the file, right-click a widget in [**Settings → Bar**](settings.md) or while editing the bar in place and choose **Group With** the widget beside it. In Settings, the new group opens so you can choose its look; on the bar, choose **Edit Group…** for that. A group overflows as one unit, takes its highest member priority, and stays visible if any member sets `overflow` to `never`.
 
-Every group starts from `groupDefaults`, then its own `style`, property by property. A theme drawn as pills sets its pill look there once, and the groups you make follow it too. Set it in **Settings → Theme → Groups** or **Settings → Bar → Every group**. **Group With** gives a new group its faint backdrop only while `groupDefaults` has no background; otherwise the group takes the shared look.
+Every group starts from `groupDefaults`, then its own `style`, property by property. A theme drawn as pills sets its pill look there once, and the groups you make follow it too. Set it in **Settings → Theme → Groups** or **Settings → Bar → Every group**. **Group With** gives a new group its faint backdrop only while `groupDefaults` has no background; otherwise the group takes the shared look. A `null` in a group's style inherits the shared value, as a widget's does from `defaults`; for no background on one group, give it a transparent color such as `#00000000`.
 
 ```json
 "groupDefaults": { "background": "#8080802e", "cornerRadius": 14, "paddingHorizontal": 4 }

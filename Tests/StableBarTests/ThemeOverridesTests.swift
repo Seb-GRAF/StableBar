@@ -158,6 +158,20 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertFalse(result.values.contains { $0.path.contains("templates") || $0.path.contains("appearance") })
     }
 
+    func testAGroupsOwnStyleReplacesTheThemesGroupDefaults() throws {
+        let main: [String: ConfigurationValue] = [
+            "groupDefaults": .object(["cornerRadius": .number(4)]),
+            "groups": .object(["mine": .object(["style": .object(["background": .string("#808080"), "spacing": .number(2)])])])
+        ]
+        let theme: [String: ConfigurationValue] = ["groupDefaults": .object(["background": .string("#112233"), "cornerRadius": .number(14)])]
+        let overrides = ThemeOverrides(main: main, theme: theme, widgets: [])
+        XCTAssertEqual(overrides.values.map(\.title), ["Every group: corner radius", "Mine group: background"])
+        var ids: [String] = []
+        let reset = try overrides.resetEdit.applying(to: main, widgetIDs: &ids)
+        XCTAssertNil(reset["groupDefaults"])
+        XCTAssertEqual(reset["groups"], .object(["mine": .object(["style": .object(["spacing": .number(2)])])]))
+    }
+
     func testColorsNullsAndNestedPresentationPropertiesAreNamedAndResetPrecisely() throws {
         let fixture = try ThemeGalleryFixture(##"""
         {"bar":{"appearance":"dark","style":{"cornerRadius":9}},"tokens":{"text":{"light":"#111111","dark":"#222222"},"custom":"#333333"},
