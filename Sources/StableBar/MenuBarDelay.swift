@@ -9,26 +9,14 @@ func setMenuBarHidden(_ hidden: Bool, canReveal: Bool = PrivateAPI.setMenuBarVis
     _ = setAlpha(connection, 0, 1, hidden ? 0 : 1)
 }
 
-/// How much of the macOS menu bar shows while it's hidden by `setMenuBarHidden`: 0 is none of it, 1 all.
-func setMenuBarOpacity(_ opacity: Float) {
-    guard let connection = PrivateAPI.mainConnectionID?(), let setAlpha = PrivateAPI.setMenuBarInsetAndAlpha else { return }
-    _ = setAlpha(connection, 0, 1, opacity)
-}
-
-/// The calls that hide, reveal and fade the macOS menu bar, so that a test can stand in for them.
+/// The calls that hide and reveal the macOS menu bar, so that a test can stand in for them.
 struct MenuBarVisibility: Sendable {
-    /// macOS 27.2 gives a mouse event to the menu bar from an opacity of 0.05, and to the window beneath it at 0.02.
-    static let clickableOpacity: Float = 0.06
-    /// Milliseconds until the window server has drawn a menu bar's new opacity, with room to spare.
-    static let opacityChange = 50
     /// Milliseconds a click sent to MenuBarAgent takes to reach the item's app and open a menu there, with room to spare.
     static let clickDelivery = 100
 
     var shows: @Sendable (CGDirectDisplayID) -> Bool = { menuBarShows(on: $0) }
-    var isInPlace: @Sendable (CGDirectDisplayID) -> Bool = { menuBarIsInPlace(on: $0) }
     var setHidden: @Sendable (Bool) -> Void = { setMenuBarHidden($0) }
     var setShown: @Sendable (Bool, CGDirectDisplayID) -> Void = { setMenuBarShown($0, on: $1) }
-    var setOpacity: @Sendable (Float) -> Void = { setMenuBarOpacity($0) }
 }
 
 /// Reveals or hides the hidden macOS menu bar on one display. On a macOS without the private call, nothing changes.
@@ -49,13 +37,6 @@ func endMenuBarReveals() {
 func menuBarShows(on display: CGDirectDisplayID) -> Bool {
     let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
     return MenuBarStripState(windows: windows, displays: [display: CGDisplayBounds(display)]).showsMenuBar(on: display)
-}
-
-/// Whether the menu bar on `display` shows and has finished sliding down, which takes it about 200 milliseconds. Until
-/// then its items are above where Accessibility says they are.
-func menuBarIsInPlace(on display: CGDirectDisplayID) -> Bool {
-    let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
-    return MenuBarStripState(windows: windows, displays: [display: CGDisplayBounds(display)]).menuBarsInPlace.contains(display)
 }
 
 struct MenuBarHover {

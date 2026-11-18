@@ -17,6 +17,8 @@ struct ScriptEvent: Sendable {
         var variables = resolved.merging(environment) { _, event in event }
         variables["NAME"] = configured["NAME"]
         variables["CONFIG_DIR"] = configured["CONFIG_DIR"]
+        variables["STABLEBAR"] = configured["STABLEBAR"]
+        variables["STABLEBAR_CONFIG"] = configured["STABLEBAR_CONFIG"]
         variables["SENDER"] = sender
         return variables
     }
@@ -144,6 +146,8 @@ final class ScriptWidget {
         var variables = environment.merging(provider.environment) { _, value in value }
         variables["NAME"] = environment["NAME"]
         variables["CONFIG_DIR"] = environment["CONFIG_DIR"]
+        variables["STABLEBAR"] = environment["STABLEBAR"]
+        variables["STABLEBAR_CONFIG"] = environment["STABLEBAR_CONFIG"]
         guard let type = registry[provider.type] else {
             stop()
             error = "Unknown data source type: \(provider.type)."

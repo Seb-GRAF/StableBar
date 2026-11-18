@@ -467,10 +467,11 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     }
 }
 
-@Test @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn() throws {
+@Test(arguments: [false, true]) @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
+    {"roles":\#(roles),"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
     """#)
     store.preparePresentations()
     for (id, json) in [("sound", #"{"text":"62%","icon":"speaker.wave.2","value":0.62,"values":{"volume":0.62}}"#),
@@ -520,10 +521,11 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
     }
 }
 
-@Test @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay() throws {
+@Test(arguments: [false, true]) @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
+    {"roles":\#(roles),"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
      "hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,
                     "onChange":"set-duration","style":{"width":100,"height":16}}}]}
     """#)

@@ -84,7 +84,7 @@ func diskStateIsStrictlyAboveItsThreshold(available: Int64, state: String) {
 }
 
 @Test func diskDisplayOffersMeterAndValueButNoGraph() throws {
-    #expect(WidgetMetricDisplay.choices(for: "disk") == [.standard, .icon, .value, .meter, .custom])
+    #expect(WidgetMetricDisplay.choices(for: "disk") == [.standard, .icon, .value, .meter, .labelValueMeter, .custom])
     #expect(WidgetMetricDisplay.standard.layout(for: ["disk"]) == .null)
     #expect(WidgetMetricDisplay.current(nil, sources: ["disk"]) == .standard)
     for choice in WidgetMetricDisplay.choices(for: "disk") where choice != .custom {
