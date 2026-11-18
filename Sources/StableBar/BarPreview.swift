@@ -6,6 +6,7 @@ struct BarPreview: View {
     let kind: ScreenKind
     let names: [String: String]
     let selected: String?
+    var selectedGroup: String?
     let select: (String?) -> Void
     let session: WidgetDragSession
     let move: (String, WidgetPosition, String?) -> Void
@@ -36,6 +37,11 @@ struct BarPreview: View {
                                     ZStack(alignment: .topLeading) {
                                         ForEach(configuration.widgets.filter { frames[$0.id] != nil }) { widget in
                                             outline(widget, frame: frames[widget.id]!)
+                                        }
+                                        if let selectedGroup, let style = configuration.groups[selectedGroup]?.style,
+                                           let frame = configuration.widgets.filter({ $0.group == selectedGroup })
+                                               .compactMap({ frames[$0.id] }).reduce(nil, { $0?.union($1) ?? $1 }) {
+                                            groupOutline(style, around: frame)
                                         }
                                         if session.active != nil {
                                             ForEach(layout.positions, id: \.self) { position in
@@ -73,6 +79,23 @@ struct BarPreview: View {
         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(SettingsPalette.groupBorder))
         .help("Click a widget to edit it, or drag to move it")
         .onChange(of: session.active) { if session.active == nil { insertion = nil } }
+    }
+
+    /// The selected group's outline, around its widgets and its own padding.
+    private func groupOutline(_ style: WidgetStyle, around widgets: CGRect) -> some View {
+        let leading = style.paddingLeading ?? style.paddingHorizontal ?? 0
+        let trailing = style.paddingTrailing ?? style.paddingHorizontal ?? 0
+        let top = style.paddingTop ?? style.paddingVertical ?? 0
+        let bottom = style.paddingBottom ?? style.paddingVertical ?? 0
+        let frame = CGRect(x: widgets.minX - leading, y: widgets.minY - top,
+                           width: widgets.width + leading + trailing, height: widgets.height + top + bottom)
+        return RoundedRectangle(cornerRadius: (style.cornerRadius ?? 0) + 3)
+            .strokeBorder(Color.accentColor, lineWidth: 2)
+            .padding(-3)
+            .frame(width: frame.width, height: frame.height)
+            .position(x: frame.midX, y: frame.midY)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private func outline(_ widget: WidgetConfiguration, frame: CGRect) -> some View {

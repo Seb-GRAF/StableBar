@@ -69,7 +69,7 @@ extension SourcePermission {
 extension WidgetContent {
     var permissions: [SourcePermission] {
         switch self {
-        case let .menuBarItems(_, shown, _) where shown.references.contains { $0.display == .live }: [.accessibility, .screenRecording]
+        case let .menuBarItems(_, _, shown, _) where shown.references.contains { $0.display == .live }: [.accessibility, .screenRecording]
         case .appMenu, .appleMenu(click: .menu), .controlCenter, .menuBarItems: [.accessibility]
         default: []
         }
@@ -224,7 +224,7 @@ extension DataSourceType {
     /// Its output sets its own `interval`, so the runner reads it again at the next minute or phase
     /// boundary.
     static let calendar = DataSourceType(name: "calendar", isNative: true, symbol: "calendar", settings: [],
-                                         optionalSettings: [.calendars, .lookahead, .soon, .now], continuous: false,
+                                         optionalSettings: [.calendars, .lookahead, .todayOnly, .soon, .now], continuous: false,
                                          changeNotifications: [.EKEventStoreChanged], permission: .calendars) { provider, _ in
         let metrics = CalendarMetrics()
         return PollingSource { _ in .output(.success(await metrics.read(provider))) }

@@ -1,7 +1,7 @@
 import Foundation
 
 struct ConfigurationEdit: Codable, Sendable {
-    enum Action: String, Codable { case set, add, remove, reorder, screens, bar, defaults, popupDefaults, roles, workspaceDefaults, tokens, providers, modeAliases, workspaceSource, unset, profile, profiles, package, packageSource, theme }
+    enum Action: String, Codable { case set, add, remove, reorder, screens, bar, defaults, popupDefaults, roles, workspaceDefaults, tokens, providers, modeAliases, groups, workspaceSource, unset, profile, profiles, package, packageSource, theme }
     let action: Action
     var id: String?
     var properties: [String: ConfigurationValue]?
@@ -77,7 +77,7 @@ struct ConfigurationEdit: Codable, Sendable {
                 root["widgetOrder"] = .array(ids!.map(ConfigurationValue.string))
             }
             widgetIDs = order
-        case .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .providers, .modeAliases:
+        case .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .providers, .modeAliases, .groups:
             let key = action.rawValue
             root[key] = .object(try requiredProperties()).overriding(root[key] ?? .object([:]))
         case .unset:
@@ -157,7 +157,7 @@ private func changeDefinition(_ id: String, in document: inout [String: Configur
     return false
 }
 
-private enum RemovalScope { case document, profile, object }
+private enum RemovalScope { case document, profile, groups, object }
 
 private func removing(_ keys: [String: ConfigurationValue], from object: [String: ConfigurationValue],
                       scope: RemovalScope = .object) -> [String: ConfigurationValue] {
@@ -166,8 +166,10 @@ private func removing(_ keys: [String: ConfigurationValue], from object: [String
         if case let .object(nested) = value, !nested.isEmpty {
             if case let .object(current) = result[key] {
                 let profileConfiguration = scope == .profile && key == "configuration"
-                let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : .object)
-                result[key] = remaining.isEmpty && !profileConfiguration ? nil : .object(remaining)
+                let groups = scope == .document && key == "groups"
+                let remaining = removing(nested, from: current, scope: profileConfiguration ? .document : groups ? .groups : .object)
+                // Widgets still name a group whose last value is removed; only `null` for the group removes it.
+                result[key] = remaining.isEmpty && !profileConfiguration && scope != .groups ? nil : .object(remaining)
             } else if scope == .document, case let .array(current) = result[key], ["widgets", "profiles"].contains(key) {
                 // A root unset can address several named definitions in one undoable change, and null removes a profile.
                 // Widgets are removed with `remove`, which also drops the references to them.
@@ -521,10 +523,16 @@ func writeConfiguration(_ data: Data, to url: URL) throws {
     let target = url.resolvingSymlinksInPath()
     if FileManager.default.fileExists(atPath: target.path) {
         if try Data(contentsOf: target) == data { return }
-        guard FileManager.default.isWritableFile(atPath: target.path) else {
-            throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
-        }
+        try requireWritable(target)
     }
     do { try data.write(to: target, options: .atomic) }
     catch { throw CommandFailure(message: "The configuration file could not be saved. \(error.localizedDescription)") }
+}
+
+func requireWritable(_ url: URL) throws {
+    let target = url.resolvingSymlinksInPath()
+    guard FileManager.default.isWritableFile(atPath: target.path),
+          FileManager.default.isWritableFile(atPath: target.deletingLastPathComponent().path) else {
+        throw CommandFailure(message: "The configuration file is read-only. Allow writing to it and try again.")
+    }
 }

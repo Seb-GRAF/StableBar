@@ -50,8 +50,17 @@ struct NativeWidgetSettings: View {
             case "calendar":
                 SettingsGroup("Upcoming meetings") {
                     number("Look ahead", "lookahead", provider.lookahead, in: 1...168, unit: "h")
+                    SettingRow(title: "Today only", hint: "Shows No meetings after today's last meeting") {
+                        Toggle("Today only", isOn: Binding(get: { provider.todayOnly }, set: {
+                            editor.setProvider(["todayOnly": .bool($0)], for: widget)
+                        }))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
                     number("Upcoming warning", "soon", Double(provider.soon), in: 1...120, unit: "min")
                     number("Starting warning", "now", Double(provider.now), in: 0...60, unit: "min")
+                }
+                SettingsGroup("Calendars") {
+                    CalendarsSettings(editor: editor, widget: widget, selected: provider.calendars)
                 }
             case "privacy":
                 SettingsGroup("Microphone & camera") {

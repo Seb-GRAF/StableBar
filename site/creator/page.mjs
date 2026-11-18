@@ -73,7 +73,7 @@ function colorInput(control, value, suffix = "") {
 function controlValue(control, r) {
   if (control.group === "about") return state.manifest[control.id.split(".")[1]] ?? "";
   const fallbacks = { "bar.height": 40, "bar.margin": 0, "bar.cornerRadius": 0, "bar.borderWidth": 0,
-    "bar.borderEdges": "bottom", "workspaces.underlineOffsetY": 0, "popups.gap": 6 };
+    "bar.borderEdges": "bottom", "workspaces.appIconSize": 14, "workspaces.underlineOffsetY": 0, "popups.gap": 6 };
   const value = at(r, control.paths[0]) ?? fallbacks[control.id];
   if (control.kind === "number") {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -249,8 +249,8 @@ function previewHTML() {
     <div class="preview-group">
     <div class="preview-tile preview-workspaces">
     <span class="preview-workspace">1</span>
-    <span class="preview-workspace is-focused">2<span class="preview-underline"></span></span>
-    <span class="preview-workspace is-visible">3<span class="preview-underline is-visible"></span></span>
+    <span class="preview-workspace is-focused">2<img class="preview-app-icon" src="images/apps/finder.svg" alt=""><span class="preview-underline"></span></span>
+    <span class="preview-workspace is-visible">3<img class="preview-app-icon" src="images/apps/ghostty.webp" alt=""><span class="preview-underline is-visible"></span></span>
     </div>
     <div class="preview-tile preview-app-menus">
     <span class="preview-app-name">Finder</span>${["File", "Edit", "View", "Go", "Window", "Help"].map(text => `<span class="preview-menu-entry">${text}</span>`).join("")}</div>

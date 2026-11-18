@@ -986,7 +986,7 @@ struct SetupTourView: View {
         let hides = (session.placementAwaitingAccess ?? session.placement) == .top
         let (symbol, title, detail) = switch permission {
         case .accessibility:
-            ("accessibility", "Accessibility",
+            ("accessibility", session.system.macOSVersion.accessibilityName,
              "App menus, the Apple menu and Menu bar items open macOS menus. Window clearance and switching desktops use it too.")
         case .automation:
             ("menubar.rectangle", "Automation", "Lets StableBar control System Events to \(hides ? "hide" : "show") the macOS menu bar.")
@@ -1058,7 +1058,7 @@ struct SetupTourView: View {
 
     private func permissionButton(_ kind: SetupPermission.Action, for permission: SetupPermission,
                                   action: @escaping () -> Void) -> some View {
-        permissionButton(kind.title, accessibilityLabel: kind.accessibilityLabel(for: permission), action: action)
+        permissionButton(kind.title, accessibilityLabel: kind.accessibilityLabel(for: permission, on: session.system.macOSVersion), action: action)
     }
 
     private func permissionButton(_ title: String, accessibilityLabel: String? = nil,

@@ -1138,6 +1138,14 @@
         "hideWhenEmpty": {
           "$ref": "#/definitions/string"
         },
+        "showWhen": {
+          "$ref": "#/definitions/blockConditions",
+          "description": "Show the block only while one of these conditions matches the widget's output, or the list row's fields."
+        },
+        "hideWhen": {
+          "$ref": "#/definitions/blockConditions",
+          "description": "Hide the block while one of these conditions matches the widget's output, or the list row's fields."
+        },
         "scrollSpeed": {
           "$ref": "#/definitions/number"
         },
@@ -1473,6 +1481,20 @@
             }
           ]
         },
+        "layoutGlyphs": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            {
+              "$ref": "#/definitions/reference"
+            }
+          ],
+          "description": "yabai space layouts (bsp, stack, float) to text glyphs shown after the workspace name."
+        },
         "hideApps": {
           "$ref": "#/definitions/strings",
           "description": "App bundle IDs or app names to leave out, matched like appGlyphs keys."
@@ -1662,6 +1684,10 @@
           "$ref": "#/definitions/boolean",
           "description": "Open the list of menu bar items when the pointer rests on menuBarItems widgets; false opens it on click. On by default."
         },
+        "rightClickInMenuBar": {
+          "$ref": "#/definitions/boolean",
+          "description": "Experimental. A right-click on an item of a menuBarItems widget whose menu the bar doesn't draw right-clicks the item in the macOS menu bar, for apps that give right-clicks an action of their own. Needs macOS 27 or later. Off by default: a right-click opens the item as a click does."
+        },
         "shown": {
           "type": [
             "array",
@@ -1815,6 +1841,13 @@
         }
       }
     },
+    "blockConditions": {
+      "description": "A condition as a rule's when takes, or a list of them, any of which matches.",
+      "oneOf": [
+        { "$ref": "#/definitions/ruleCondition" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/ruleCondition" } }
+      ]
+    },
     "ruleCondition": {
       "type": "object",
       "additionalProperties": false,
@@ -1953,6 +1986,9 @@
         },
         "lookahead": {
           "$ref": "#/definitions/number"
+        },
+        "todayOnly": {
+          "$ref": "#/definitions/boolean"
         },
         "soon": {
           "$ref": "#/definitions/number"

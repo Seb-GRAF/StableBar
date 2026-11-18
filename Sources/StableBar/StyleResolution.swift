@@ -350,8 +350,12 @@ struct RuleCondition: Decodable, Equatable, Sendable {
     }
 
     func matches(_ output: ScriptOutput) -> Bool {
-        if let field { return output.fields?[field] == equals }
-        guard let value, let number = output.values?[value] else { return false }
+        matches(fields: output.fields ?? [:], values: output.values ?? [:])
+    }
+
+    func matches(fields: [String: String], values: [String: Double]) -> Bool {
+        if let field { return fields[field] == equals }
+        guard let value, let number = values[value] else { return false }
         return (below.map { number <= $0 } ?? true) && (above.map { number >= $0 } ?? true)
     }
 }

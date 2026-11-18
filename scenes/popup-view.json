@@ -39,6 +39,7 @@
             "wifi": {
               "type": "column",
               "children": [
+                { "type": "text", "text": "Wi-Fi", "style": { "fontWeight": "bold", "fontSize": 15 } },
                 { "type": "toggle", "title": "Wi-Fi", "source": "wifi", "onChange": "true" },
                 { "type": "divider" },
                 {

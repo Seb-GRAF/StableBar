@@ -139,11 +139,17 @@ final class BarEditing {
         (store?.configuration?.onScreen(ScreenKind(display)).widgets ?? []).filter { $0.enabled && (isActive || !visibility(of: $0, on: display).isHidden) }
     }
 
+    /// Each widget's name, by its ID.
+    var names: [String: String] {
+        guard let store else { return [:] }
+        return WidgetDisplayName.names(for: store.configuration?.widgets ?? [], packageNames: store.widgetPackageNames,
+                                       providers: store.configuration?.providers ?? [:])
+    }
+
     func entries(on display: BarDisplay) -> [BarEditWidget] {
         guard let store else { return [] }
         let widgets = widgets(on: display)
-        let names = WidgetDisplayName.names(for: store.configuration?.widgets ?? [], packageNames: store.widgetPackageNames,
-                                           providers: store.configuration?.providers ?? [:])
+        let names = names
         return widgets.map { widget in
             let visibility = visibility(of: widget, on: display)
             let transparent = store.presentations[widget.id]?.style(on: ScreenKind(display)).base.opacity == 0
@@ -276,7 +282,28 @@ final class BarEditing {
 
     func select(_ id: String) {
         guard isActive, let store, store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
-        store.onCustomizeWidget?(id)
+        store.onCustomizeItem?(.widget(id))
+    }
+
+    func group(_ id: String, _ choice: WidgetGrouping.Choice, on displayID: Int) {
+        guard isActive else { return }
+        perform(on: displayID) {
+            guard let store = self.store else { return }
+            try store.customizationHistory.change(WidgetGrouping(store: store).edits(choice, for: id))
+        }
+    }
+
+    func leaveGroup(_ id: String, on displayID: Int) {
+        guard isActive else { return }
+        perform(on: displayID) {
+            guard let store = self.store else { return }
+            try store.customizationHistory.change(WidgetGrouping(store: store).leaving(id))
+        }
+    }
+
+    func editGroup(_ group: String) {
+        guard isActive, let store, store.configuration?.groups[group] != nil else { return }
+        store.onCustomizeItem?(.group(group))
     }
 
     private func screenKind(_ displayID: Int?) -> ScreenKind? {
@@ -317,7 +344,7 @@ final class BarEditing {
 
 private enum BarEditContent {
     static func hasContent(_ block: PopupBlock, fields: [String: String], output: ScriptOutput?, menu: [WidgetMenuItem]) -> Bool {
-        if let field = block.hideWhenEmpty, fields[field, default: ""].isEmpty { return false }
+        if block.isHidden(fields: fields, values: output?.values ?? [:]) { return false }
         switch block.content {
         case let .row(children), let .column(children):
             return children.contains { hasContent($0, fields: fields, output: output, menu: menu) }

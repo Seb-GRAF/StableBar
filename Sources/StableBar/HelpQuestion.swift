@@ -38,7 +38,7 @@ struct HelpQuestion: Identifiable {
 
     ## Why do windows go under the bar?
 
-    macOS gives a custom bar no way to reserve screen space, so StableBar has to move windows out of the way itself. If you don't use a tiling window manager, turn on **Settings → General → Windows and notifications → Keep windows clear of the bar** and allow StableBar in **System Settings → Privacy & Security → Accessibility**. StableBar then moves windows that overlap the bar below it, and makes them shorter when they would run into the Dock.
+    macOS gives a custom bar no way to reserve screen space, so StableBar has to move windows out of the way itself. If you don't use a tiling window manager, turn on **Settings → General → Windows and notifications → Keep windows clear of the bar** and allow StableBar in **System Settings → Privacy & Security → Accessibility** (**Device Control and Data Access** from macOS 27). StableBar then moves windows that overlap the bar below it, and makes them shorter when they would run into the Dock.
 
     If a window manager arranges your windows, leave that switch off and give the window manager a top gap as tall as the bar, 40 points by default, plus any `bar.offset`:
 
@@ -61,13 +61,13 @@ struct HelpQuestion: Identifiable {
 
     ## Where is the configuration file, and how do I apply a change?
 
-    It's `~/.config/stablebar/config.json`. **Settings → General → Configuration file** opens it, shows it in Finder or reloads it.
+    It's `~/.config/stablebar/config.json`. **Settings → General → Configuration file** opens it, shows it in Finder or reloads it. To use the same bar on several Macs, turn on **Sync with iCloud** there; see [Sync across Macs](configuration.md#sync-across-macs).
 
     StableBar watches the file and applies a change as soon as you save it. If the change has a mistake, the bar keeps the last working configuration and shows an error indicator; click it to see the error in Settings. Changes you make in Settings apply at once and save to your configuration. See [The configuration file](configuration.md#the-configuration-file).
 
     ## Why don't the app menus or the Apple menu open?
 
-    They need Accessibility access. Allow StableBar in **System Settings → Privacy & Security → Accessibility**, or click **Allow…** in **Settings → General → Access**. Until you do, App menus shows a warning icon, and clicking the Apple logo asks for access.
+    They need Accessibility access. Allow StableBar in **System Settings → Privacy & Security → Accessibility** (**Device Control and Data Access** from macOS 27), or click **Allow…** in **Settings → General → Access**. Until you do, App menus shows a warning icon, and clicking the Apple logo asks for access.
 
     The menus follow the app that owns the macOS menu bar, so while Settings or another StableBar window is in front, they keep the previous app's menus. Menus that don't fit, for example beside the notch, are behind **»**. See [App menus](widgets.md#app-menus).
 
@@ -75,7 +75,7 @@ struct HelpQuestion: Identifiable {
 
     Setup asks for these in its permissions step, and **Settings → General → Access** lists the ones your bar needs:
 
-    - **Accessibility**, for the app menus, the Apple menu, Menu bar items, Workspaces and keeping windows clear of the bar.
+    - **Accessibility** (**Device Control and Data Access** from macOS 27), for the app menus, the Apple menu, Menu bar items, Workspaces and keeping windows clear of the bar.
     - **Automation**, to control System Events, which hides or shows the macOS menu bar.
     - **Calendars**, for Meetings and other calendar widgets.
 

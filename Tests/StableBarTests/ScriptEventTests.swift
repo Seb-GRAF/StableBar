@@ -120,7 +120,7 @@ import Testing
     let started = directory.appending(path: "started")
     let release = directory.appending(path: "release")
     var widget: [String: Any] = [
-        "id": "replace", "type": "script", "position": "right", "interval": NSNull(),
+        "id": "replace", "type": "script", "position": "right", "interval": NSNull(), "timeout": 120,
         "command": "printf 'old\\n' >> \"$LOG\"; printf Old"
     ]
     var configuration: [String: Any] = [
@@ -368,4 +368,15 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(script.output.text == "frontApp:Safari")
+}
+
+@Test func notificationInfoKeepsDatesAndLeavesOutData() {
+    let payload: [String: Any] = [
+        "Name": "Song", "Play Date": Date(timeIntervalSince1970: 0), "Artwork": Data([1, 2, 3]),
+        "Album": ["Year": 1999, "Added": Date(timeIntervalSince1970: 60), "Tracks": [1, Data(), Date(timeIntervalSince1970: 120)]]
+    ]
+    #expect(notificationInfo(payload) == """
+        {"Album":{"Added":"1970-01-01T00:01:00Z","Tracks":[1,"1970-01-01T00:02:00Z"],"Year":1999},\
+        "Name":"Song","Play Date":"1970-01-01T00:00:00Z"}
+        """)
 }

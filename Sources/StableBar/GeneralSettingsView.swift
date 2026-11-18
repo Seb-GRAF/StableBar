@@ -115,6 +115,7 @@ struct GeneralSettingsView: View {
                             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([store.configurationURL]) }
                             Button("Reload", action: store.reloadConfiguration)
                         }
+                        ICloudSyncSettings(store: store)
                     }
                     .id(SettingsSearchResult.configuration.id)
                     SettingsGroup("Command line") {
