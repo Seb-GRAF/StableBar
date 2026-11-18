@@ -154,6 +154,25 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     #expect(editor.undoSteps.count == 1)
 }
 
+@MainActor @Test func settingsSavesOneAppInAppAndSeveralInApps() throws {
+    let fixture = try ThemeGalleryFixture(#"{"widgets":[],"profiles":[{"name":"Work","when":{"app":"com.test.Editor"},"configuration":{}}]}"#)
+    defer { fixture.close() }
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.reloadConfiguration()
+    let editor = ConfigurationEditor(store: store)
+    func savedConditions() throws -> ConfigurationValue? {
+        store.flushCustomization()
+        return try #require(fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self).first)["when"]
+    }
+
+    editor.setProfileCondition("Work", \.appList, value: ["com.test.Editor", "com.test.Mail"], control: "app")
+    #expect(editor.error == nil)
+    #expect(try savedConditions() == .object(["apps": .array([.string("com.test.Editor"), .string("com.test.Mail")])]))
+    editor.setProfileCondition("Work", \.appList, value: ["com.test.Mail"], control: "app")
+    #expect(try savedConditions() == .object(["app": .string("com.test.Mail")]))
+}
+
 @MainActor @Test func tryingAnotherThemeTurnsOffAProfileForTheSelectedOne() throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }

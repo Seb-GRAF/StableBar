@@ -307,7 +307,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         statusItem.menu = menu
-        store.onConfigurationChange = { [weak self] in self?.updatePanels() }
+        store.onConfigurationChange = { [weak self] in
+            guard let self else { return }
+            updatePanels()
+            systemContext?.watch(store.profiles.filter(\.enabled))
+        }
         store.onCustomize = { [weak self] in self?.showCustomization() }
         store.onShowCrashes = { [weak self] in self?.showCrashes() }
         store.onCustomizePackages = { [weak self] in
@@ -372,6 +376,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             systemContext = SystemContext { [store] in store.refreshContext() }
             systemContext!.start()
+            systemContext!.watch(store.profiles.filter(\.enabled))
             if let kind = applicationMoveResume.pendingKind {
                 switch kind {
                 case .setup: showSetup()

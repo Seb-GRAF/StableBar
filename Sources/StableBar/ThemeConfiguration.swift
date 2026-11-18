@@ -48,6 +48,13 @@ struct ConfigurationContext: Sendable, Equatable {
     var onBattery = false
     var displayCount = 1
     var externalDisplay = false
+    /// The names of the connected screens.
+    var displays: [String] = []
+    /// The Wi-Fi network's name: empty off Wi-Fi, without Location access, or when no profile checks it.
+    var wifi = ""
+    /// Whether an app uses a camera or the microphone, read only when a profile checks them.
+    var camera = false
+    var microphone = false
     var app = ""
     /// The ID of the theme the bar is drawn with, set by the loader once it has settled the theme.
     var theme = "built-in"
@@ -82,12 +89,21 @@ struct ProfileConditions: Codable, Equatable, Sendable {
     var onBattery: Bool?
     var displayCount: Int?
     var externalDisplay: Bool?
+    /// The name of a screen that must be connected.
+    var display: String?
+    var wifi: String?
+    var camera: Bool?
+    var microphone: Bool?
     var app: String?
+    /// Several apps, any of which in front matches. Settings writes `app` for one app, which older releases read.
+    var apps: [String]?
     var theme: String?
     /// A condition from a newer release, which this one can't check, so the profile never matches on its own.
     var unknownCondition = false
 
-    enum CodingKeys: String, CodingKey, CaseIterable { case appearance, onBattery, displayCount, externalDisplay, app, theme }
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case appearance, onBattery, displayCount, externalDisplay, display, wifi, camera, microphone, app, apps, theme
+    }
 
     init() {}
 
@@ -98,18 +114,45 @@ struct ProfileConditions: Codable, Equatable, Sendable {
         onBattery = try values.decodeIfPresent(Bool.self, forKey: .onBattery)
         displayCount = try values.decodeIfPresent(Int.self, forKey: .displayCount)
         externalDisplay = try values.decodeIfPresent(Bool.self, forKey: .externalDisplay)
+        display = try values.decodeIfPresent(String.self, forKey: .display)
+        wifi = try values.decodeIfPresent(String.self, forKey: .wifi)
+        camera = try values.decodeIfPresent(Bool.self, forKey: .camera)
+        microphone = try values.decodeIfPresent(Bool.self, forKey: .microphone)
         app = try values.decodeIfPresent(String.self, forKey: .app)
+        apps = try values.decodeIfPresent([String].self, forKey: .apps)
         theme = try values.decodeIfPresent(String.self, forKey: .theme)
     }
 
+    /// `app` and `apps` as one list. Setting it writes `app` for one app and `apps` for several.
+    var appList: [String]? {
+        get { app == nil && apps == nil ? nil : (app.map { [$0] } ?? []) + (apps ?? []) }
+        set {
+            app = newValue?.count == 1 ? newValue?.first : nil
+            apps = (newValue?.count ?? 0) > 1 ? newValue : nil
+        }
+    }
+
     func matches(_ context: ConfigurationContext) -> Bool {
-        !unknownCondition
-            && (appearance == nil || appearance == context.appearance)
-            && (onBattery == nil || onBattery == context.onBattery)
-            && (displayCount == nil || displayCount == context.displayCount)
-            && (externalDisplay == nil || externalDisplay == context.externalDisplay)
-            && (app == nil || app == context.app)
-            && (theme == nil || theme == context.theme)
+        !unknownCondition && unmet(in: context).isEmpty
+    }
+
+    /// The conditions `context` doesn't meet.
+    func unmet(in context: ConfigurationContext) -> [CodingKeys] {
+        let appInFront = appList?.contains(context.app) ?? true
+        let met: [(CodingKeys, Bool)] = [
+            (.appearance, appearance == nil || appearance == context.appearance),
+            (.onBattery, onBattery == nil || onBattery == context.onBattery),
+            (.displayCount, displayCount == nil || displayCount == context.displayCount),
+            (.externalDisplay, externalDisplay == nil || externalDisplay == context.externalDisplay),
+            (.display, display.map { context.displays.contains($0) } ?? true),
+            (.wifi, wifi == nil || wifi == context.wifi),
+            (.camera, camera == nil || camera == context.camera),
+            (.microphone, microphone == nil || microphone == context.microphone),
+            (.app, app == nil || appInFront),
+            (.apps, apps == nil || appInFront),
+            (.theme, theme == nil || theme == context.theme),
+        ]
+        return met.filter { !$0.1 }.map(\.0)
     }
 }
 

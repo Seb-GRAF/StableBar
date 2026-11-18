@@ -66,6 +66,7 @@ final class BarStore: NSObject {
         sources: packageSources.filter { !$0.isStore })
     @ObservationIgnored lazy var packageLibrary = PackageLibrary(store: self)
     var themesDirectory: URL? { configurationLoader.themesDirectory }
+    var profileContext: ConfigurationContext { configurationLoader.profileContext }
     /// The Store and the configured private sources. An invalid list leaves only the Store.
     var packageSources: [PackageSource] { (try? PackageSource.configured(in: effectiveDocument)) ?? [.store] }
     var context = ConfigurationContext()
@@ -256,10 +257,13 @@ final class BarStore: NSObject {
         }
     }
 
-    func refreshContext(_ next: ConfigurationContext = SystemContext.current()) {
-        var nextWithSameApp = next
-        nextWithSameApp.app = context.app
-        let reload = nextWithSameApp != context || (next.app != context.app && configurationLoader.matchesApps)
+    func refreshContext(_ next: ConfigurationContext? = nil) {
+        let next = next ?? SystemContext.current(checking: profiles.filter(\.enabled))
+        var nextWithSameAppAndDisplays = next
+        nextWithSameAppAndDisplays.app = context.app
+        nextWithSameAppAndDisplays.displays = context.displays
+        let reload = nextWithSameAppAndDisplays != context || (next.app != context.app && configurationLoader.matchesApps)
+            || (next.displays != context.displays && configurationLoader.matchesDisplays)
         context = next
         if reload { readConfiguration(leavingEditMode: false) }
     }
