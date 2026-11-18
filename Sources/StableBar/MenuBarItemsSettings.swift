@@ -9,6 +9,7 @@ struct MenuBarItemsSettings: View {
     let hidden: [MenuBarItemsEntry]
     @State private var selection: String?
     @State private var target: String?
+    @Environment(\.macOSVersion) private var macOSVersion
 
     var body: some View {
         let items = store.appMenu.menuBarItems
@@ -18,7 +19,7 @@ struct MenuBarItemsSettings: View {
         let hiddenCells = cells(hidden, items: items, source: MenuBarItemSource.hidden)
         let all = bar + row + hiddenCells
         VStack(alignment: .leading, spacing: 14) {
-            Text(items.isEmpty ? "Allow StableBar in Privacy & Security → Accessibility to list the items in the menu bar."
+            Text(items.isEmpty ? "Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to list the items in the menu bar."
                  : "Drag items to choose where they go, or right-click one. Select an item to change it.")
                 .font(.caption).foregroundStyle(.secondary)
             tray("On the bar", hint: "In this order", placement: .bar, cells: bar, all: all)

@@ -2,13 +2,15 @@ import Foundation
 import CryptoKit
 
 struct RuntimeRequest: Codable {
-    enum Action: String, Codable { case query, batch, reset, refresh, popup, focus, trigger, reload, customize, uninstallPackage, report, status, quit }
+    enum Action: String, Codable { case query, batch, reset, refresh, popup, openPopup, closePopup, focus, trigger, reload, customize, uninstallPackage, report, status, quit }
     let action: Action
     var id: String?
     var version: String?
     var edits: [ConfigurationEdit]?
     var persist = false
     var environment: [String: String]?
+    /// Seconds an `openPopup` stays open.
+    var duration: Double?
 }
 
 /// The command line exits with status 3 for it, so a script can tell it from a refused command.
@@ -26,7 +28,13 @@ struct RuntimeResponse: Codable {
 final class RuntimeControl {
     private var port: CFMessagePort?
     private var source: CFRunLoopSource?
+    private var url: URL?
+    private var moveObserver: NSObjectProtocol?
     let handle: (RuntimeRequest) throws -> ConfigurationValue
+
+    /// Posted after the configuration folder moves, such as into iCloud Drive. Commands find a bar by the path its
+    /// configuration resolves to, so the bar names its port again.
+    static let configurationFolderMoved = Notification.Name("StableBarConfigurationFolderMoved")
 
     init(handle: @escaping (RuntimeRequest) throws -> ConfigurationValue) { self.handle = handle }
 
@@ -51,6 +59,15 @@ final class RuntimeControl {
         guard let port else { throw CommandFailure(message: "Another StableBar instance already controls this configuration.") }
         source = CFMessagePortCreateRunLoopSource(nil, port, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        self.url = url
+        moveObserver = moveObserver ?? NotificationCenter.default.addObserver(
+            forName: Self.configurationFolderMoved, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let url = self.url else { return }
+                    self.stop()
+                    try? self.start(url: url)
+                }
+            }
     }
 
     func stop() {

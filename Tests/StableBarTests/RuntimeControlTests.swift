@@ -147,6 +147,35 @@ import Testing
     #expect(store.configuration?.bar.height == 36)
 }
 
+@Test @MainActor func aThemeChangeForAllSetupsWritesNoBarWhileAnotherIsReadOnly() throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let shared = directory.appending(path: "config.json")
+    try Data(#"{"bar":{"height":36},"widgets":[]}"#.utf8).write(to: shared)
+    let own = directory.appending(path: "setup-laptop+monitor.json")
+    let ownData = Data(#"{"bar":{"height":30},"widgets":[]}"#.utf8)
+    try ownData.write(to: own)
+    let displays = [BarDisplay(id: 1, isBuiltIn: true, isMain: false, notch: nil), BarDisplay(id: 2, isBuiltIn: false, isMain: true, notch: nil)]
+    let store = BarStore(configurationURL: shared)
+    defer { store.stop() }
+    store.start(on: ScreenSetup(displays))
+    let editor = ConfigurationEditor(store: store)
+    try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: shared.path)
+    editor.change(ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(15)]), everyBar: true)
+    #expect(throws: CommandFailure.self) { try editor.history.flush() }
+    #expect(try Data(contentsOf: own) == ownData)
+
+    try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: shared.path)
+    editor.change(ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(15)]), everyBar: true)
+    try editor.history.flush()
+    let changed = try Data(contentsOf: own)
+    try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: shared.path)
+    #expect(throws: CommandFailure.self) { try editor.history.undo() }
+    #expect(try Data(contentsOf: own) == changed)
+    #expect(editor.undoSteps.count == 1)
+}
+
 @Test @MainActor func aPreviewedScreenSetupCopiesAnotherBarAndListsEachSetupOnce() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -288,6 +317,22 @@ import Testing
 @Test @MainActor func liveCommandsTellAMissingBarFromAFailedCommand() {
     let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/config.json")
     #expect(throws: BarNotRunning.self) { try RuntimeControl.send(RuntimeRequest(action: .status), url: url) }
+}
+
+@Test func popupCommandsOpenOrCloseAndRejectDurationsThatArentNumbers() throws {
+    func request(_ arguments: [String]) throws -> RuntimeRequest {
+        guard case let .control(_, request) = try LaunchCommand(arguments: arguments) else { throw CommandFailure(message: "Expected a control command") }
+        return request
+    }
+    let timed = try request(["--popup", "agenda", "--open", "--duration", "2.5"])
+    #expect((timed.action, timed.id, timed.duration) == (.openPopup, "agenda", 2.5))
+    let any = try request(["--popup", "--close"])
+    #expect((any.action, any.id) == (.closePopup, nil))
+    #expect(try request(["--popup", "agenda", "--close"]).action == .closePopup)
+    #expect(try request(["--popup", "agenda"]).action == .popup)
+    for duration in ["inf", "nan", "soon"] {
+        #expect(throws: CommandFailure.self) { try LaunchCommand(arguments: ["--popup", "agenda", "--open", "--duration", duration]) }
+    }
 }
 
 @Test @MainActor func acceptedSessionEditsSurviveAutomaticProfileChanges() throws {

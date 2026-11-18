@@ -56,11 +56,12 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 ## Architecture rules
 
-`ArchitectureRulesTests` checks the first three; its numbers may only go down.
+`ArchitectureRulesTests` checks the first four; its numbers may only go down.
 
 - Don't add stored properties to `BarStore`. New state goes into a type of its own, owned by `BarStore` or by the feature that needs it.
 - A helper that points back at `BarStore`, or at another owner, holds it `weak`: a view or a task can keep the helper alive after its owner is gone. Don't add `unowned`.
 - Private macOS API lives in `PrivateAPI.swift`, looked up at runtime: on a macOS without one of its calls, the call is nil and its feature turns off instead of crashing. Never use `@_silgen_name`, which binds at launch, and never force-unwrap a lookup. A new call needs a maintainer's OK.
+- A decision about state, such as where setup puts the bar (`SetupPlacement`), lives in a `StateMachine`: one enum for its mode rather than separate `Bool`s, and `handle(event)` returning an effect. Its owner holds the windows, timers and tasks, sends it events and performs each effect after `handle` returns. The state machine's file imports no UI framework and starts no work, so a plain unit test covers every transition. New state starts this way; existing state moves over when a bug in it is fixed.
 - The configuration file is StableBar's public API: people's files, Store packages and themes depend on it. Keep changes additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. An older build skips the properties of a file saved by a newer release, with a warning; keep that working.
 
 ## Decide or ask
@@ -85,7 +86,7 @@ A configuration change rarely lives in one place. Before calling one done, say w
 - A `fix`, `feat` or `perf` pull request needs an issue. Before opening it, search with the `triage` skill. If an open issue covers the problem, link it. If none does, file one with `triage` (the request for the pull request covers filing it) and link that. If triage finds the problem already fixed or declined, tell the developer before going on. Other types, such as `ci`, `test`, `docs` or `chore`, can skip the issue.
 - Titles follow Conventional Commits in plain words, such as `fix: keep the clock visible on a notched display`. Every commit message is checked too, and the types of the commits that reach `main` decide the next release (see [Commits and releases](CONTRIBUTING.md#commits-and-releases)).
 - Fill in the [pull request template](.github/pull_request_template.md), and end the description with the model and harness that did the work. The `Description` check fails without that line, and `Linked issue` fails a `fix`, `feat` or `perf` pull request that closes no issue.
-- CodeRabbit reviews every pull request. Answer each of its comments by fixing the code or replying why not, then resolve the thread: unresolved threads block merging.
+- cubic reviews every pull request, and CodeRabbit reviews those labeled `deep-review`. The label is added automatically when a pull request changes more than 400 lines or a file in [.github/deep-review-paths](.github/deep-review-paths); add it yourself, or ask a maintainer to, when a change is risky, such as when cubic's review points out a risk. Answer each comment from either by fixing the code or replying why not, then resolve the thread: unresolved threads block merging. Don't post `@coderabbitai review`: each request uses up one of the pull request author's few CodeRabbit reviews per hour, and the Deep review workflow already asks CodeRabbit again every hour when its limit held a review back.
 - Upload screenshots and recordings to the pull request; never commit them. The images in `docs/images` are the exception: they illustrate the README and the guide, and CI draws them (see [Docs images](CONTRIBUTING.md#docs-images)).
 - Keep to one problem per pull request.
 

@@ -170,6 +170,7 @@ final class ConfigurationHistory {
         let before = try Data(contentsOf: store.configurationURL)
         let after = try store.customizationData(edits, editing: before)
         let otherBars = everyBar ? try store.otherBars(applying: edits) : []
+        for bar in otherBars { try requireWritable(bar.url) }
         try store.writeCustomization(after, replacing: before)
         for bar in otherBars { try writeConfiguration(bar.after, to: bar.url) }
         record(Step(before: before, after: after, profile: editingProfile, otherBars: otherBars))
@@ -293,6 +294,7 @@ final class ConfigurationHistory {
             notice = "Undo history was cleared because another bar’s configuration file changed outside Settings."
             return false
         }
+        for bar in otherBars { try requireWritable(bar.url) }
         try store.writeCustomization(data, replacing: current)
         for bar in otherBars { try writeConfiguration(bar.restored, to: bar.url) }
         lastFile = data
@@ -302,7 +304,7 @@ final class ConfigurationHistory {
     }
 
     private func control(for edit: ConfigurationEdit) -> Control? {
-        guard [.set, .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .providers, .modeAliases].contains(edit.action),
+        guard [.set, .screens, .bar, .defaults, .popupDefaults, .roles, .workspaceDefaults, .tokens, .providers, .modeAliases, .groups].contains(edit.action),
               let properties = edit.properties else { return nil }
         return Control(action: edit.action, id: edit.id, paths: propertyPaths(properties), name: nil)
     }

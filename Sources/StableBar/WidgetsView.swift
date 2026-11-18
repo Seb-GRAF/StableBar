@@ -43,6 +43,7 @@ struct WidgetsView: View {
     @State private var addingAt: WidgetPosition?
     @State private var sharing: ScreenSetup?
     @State private var scrollPositions: [String: String] = [:]
+    @State private var collapsedGroups: Set<String> = []
 
     init(editor: ConfigurationEditor) {
         self.editor = editor
@@ -54,6 +55,7 @@ struct WidgetsView: View {
     private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.screenSetup?.kinds.contains($0) == true } }
     private var screen: ScreenKind { kinds.contains(editor.barScreen) ? editor.barScreen : kinds.first ?? editor.barScreen }
     private var selectedWidget: String? { editor.barItem == .widget ? editor.selectedID : nil }
+    private var selectedGroup: String? { editor.barItem == .group ? editor.selectedGroup : nil }
 
     var body: some View {
         let names = WidgetDisplayName.names(for: widgets, packageNames: store.widgetPackageNames, providers: store.configuration?.providers ?? [:])
@@ -61,7 +63,7 @@ struct WidgetsView: View {
             VStack(spacing: 0) {
                 ScreenBand(editor: editor, kinds: kinds, screen: screen) { sharing = $0 }
                     .padding(.vertical, 12)
-                BarPreview(store: store, kind: screen, names: names, selected: selectedWidget, select: { id in
+                BarPreview(store: store, kind: screen, names: names, selected: selectedWidget, selectedGroup: selectedGroup, select: { id in
                     if let id { select(id) } else { select(.bar) }
                 }, session: dragSession, move: { move($0, to: $1, before: $2) })
             }
@@ -99,6 +101,7 @@ struct WidgetsView: View {
         let hidden = widgets.filter { widget in !shown.contains { $0.id == widget.id } }
         let positions = WidgetPlacement.positions(widgets: widgets, hasNotchedDisplay: NSScreen.screens.contains { $0.auxiliaryTopLeftArea != nil })
         let changed = profileWidgets
+        let grouping = WidgetGrouping(store: store)
         return VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -127,8 +130,19 @@ struct WidgetsView: View {
                                 .accessibilityLabel("Add a widget to \(position.title)")
                                 .popover(isPresented: addPopover(shown: addingAt == position), arrowEdge: .trailing) { addPopoverContent }
                             }
-                            ForEach(section) { widget in
-                                widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown, changed: changed.contains(widget.id))
+                            ForEach(BarUnit.make(widgets: section, groups: store.configuration?.groups ?? [:])) { unit in
+                                if let group = unit.widgets[0].group {
+                                    groupRow(group, members: unit.widgets, position: position, listed: shown, grouping: grouping)
+                                    if !collapsedGroups.contains(group) {
+                                        ForEach(unit.widgets) { widget in
+                                            widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown,
+                                                      changed: changed.contains(widget.id), names: names, grouping: grouping, grouped: true)
+                                        }
+                                    }
+                                } else {
+                                    widgetRow(unit.widgets[0], name: names[unit.widgets[0].id] ?? unit.widgets[0].id, position: position,
+                                              listed: shown, changed: changed.contains(unit.widgets[0].id), names: names, grouping: grouping)
+                                }
                             }
                             WidgetDragRow(session: dragSession, widgetID: nil, name: "", insertionKey: dropKey(position),
                                           select: { if section.isEmpty { openAdd(at: position) } }, move: { move($0, to: position) }) {
@@ -168,7 +182,16 @@ struct WidgetsView: View {
                     .padding(.bottom, 10)
                 }
                 .onChange(of: selectedWidget, initial: true) {
-                    if let selectedWidget { proxy.scrollTo(selectedWidget) }
+                    guard let selectedWidget else { return }
+                    if let group = widgets.first(where: { $0.id == selectedWidget })?.group, collapsedGroups.remove(group) != nil {
+                        // The widget's row exists only once the expanded group draws.
+                        DispatchQueue.main.async { proxy.scrollTo(selectedWidget) }
+                    } else {
+                        proxy.scrollTo(selectedWidget)
+                    }
+                }
+                .onChange(of: selectedGroup, initial: true) {
+                    if let selectedGroup { proxy.scrollTo("group:\(selectedGroup)") }
                 }
             }
             Divider()
@@ -202,7 +225,66 @@ struct WidgetsView: View {
             .padding(.bottom, 4)
     }
 
-    private func widgetRow(_ widget: WidgetConfiguration, name: String, position: WidgetPosition, listed: [WidgetConfiguration], changed: Bool) -> some View {
+    private func groupRow(_ group: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
+                          grouping: WidgetGrouping) -> some View {
+        let selected = selectedGroup == group
+        let first = members[0]
+        let title = friendly(group)
+        let subtitle = members.count == 1 ? "Group · 1 widget" : "Group · \(members.count) widgets"
+        let collapsed = collapsedGroups.contains(group)
+        return ListRow(selected: selected) { _ in
+            // Dragging the group drags its first widget, and moving a widget moves its whole group.
+            WidgetDragRow(session: dragSession, widgetID: first.id, name: title, insertionKey: dropKey(position, before: first.id),
+                          select: { editor.showGroup(group) }, move: { move($0, to: position, before: first.id) }) {
+                WidgetRowLabel(symbol: WidgetGrouping.symbol, name: title, subtitle: subtitle, selected: selected)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(title) group")
+            .accessibilityValue(subtitle)
+            .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { editor.showGroup(group) }
+            .accessibilityAction(named: Text(collapsed ? "Show widgets" : "Hide widgets")) { toggle(group) }
+            .accessibilityAction(named: Text("Move up")) { moveBy(-1, id: first.id, listed: listed) }
+            .accessibilityAction(named: Text("Move down")) { moveBy(1, id: first.id, listed: listed) }
+        }
+        .overlay(alignment: .leading) {
+            Button { toggle(group) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(collapsed ? 0 : 90))
+                    .frame(width: 16, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.secondary))
+            .help(collapsed ? "Show the group's widgets" : "Hide the group's widgets")
+            .accessibilityHidden(true)
+        }
+        .overlay(alignment: .top) { insertionLine(position.rawValue + "/" + first.id) }
+        .id("group:\(group)")
+        .contextMenu {
+            Button("Move up") { moveBy(-1, id: first.id, listed: listed) }
+            Button("Move down") { moveBy(1, id: first.id, listed: listed) }
+            Menu("Move to") {
+                ForEach(WidgetPlacement.destinations, id: \.self) { target in
+                    Button(target.title) { move(first.id, to: target) }
+                }
+            }
+            Divider()
+            Button("Ungroup") { editor.ungroup(group) }
+                .disabled(grouping.ungroupBlocker(group) != nil)
+        }
+    }
+
+    /// Collapsing the group of the selected widget selects the group, so selecting the widget again expands it.
+    private func toggle(_ group: String) {
+        guard collapsedGroups.remove(group) == nil else { return }
+        collapsedGroups.insert(group)
+        if widgets.first(where: { $0.id == selectedWidget })?.group == group { editor.showGroup(group) }
+    }
+
+    private func widgetRow(_ widget: WidgetConfiguration, name: String, position: WidgetPosition, listed: [WidgetConfiguration], changed: Bool,
+                           names: [String: String], grouping: WidgetGrouping, grouped: Bool = false) -> some View {
         let selected = selectedWidget == widget.id
         let subtitle = store.screensTitle(for: widget)
         return ListRow(selected: selected, eye: ("eye", "Hide on this screen", { editor.setWidget(widget, shown: false, on: screen) })) { hovering in
@@ -219,7 +301,12 @@ struct WidgetsView: View {
             .accessibilityAction(named: Text("Move up")) { moveBy(-1, id: widget.id, listed: listed) }
             .accessibilityAction(named: Text("Move down")) { moveBy(1, id: widget.id, listed: listed) }
         }
-        .overlay(alignment: .top) { insertionLine(position.rawValue + "/" + widget.id) }
+        .overlay(alignment: .top) { if !grouped { insertionLine(position.rawValue + "/" + widget.id) } }
+        .padding(.leading, grouped ? 14 : 0)
+        .overlay(alignment: .leading) {
+            if grouped { Rectangle().fill(SettingsPalette.groupBorder).frame(width: 1).padding(.leading, 7).padding(.vertical, 2) }
+        }
+        .id(widget.id)
         .contextMenu {
             Button("Move up") { moveBy(-1, id: widget.id, listed: listed) }
             Button("Move down") { moveBy(1, id: widget.id, listed: listed) }
@@ -229,6 +316,18 @@ struct WidgetsView: View {
                 }
             }
             Divider()
+            if let group = widget.group {
+                Button("Edit Group “\(friendly(group))”") { editor.showGroup(group) }
+                Button("Leave Group") { editor.leaveGroup(widget.id) }
+                    .disabled(!grouping.canLeave(widget.id))
+                Divider()
+            } else {
+                let choices = grouping.choices(for: widget.id, among: listed)
+                ForEach(choices, id: \.self) { choice in
+                    Button(choice.title(names: names)) { editor.group(widget.id, choice) }
+                }
+                if !choices.isEmpty { Divider() }
+            }
             screensAndRemove(widget)
         }
     }
@@ -341,6 +440,8 @@ struct WidgetsView: View {
         case .everyWidget: scrollPositions["everyWidget"] = scroll
         case .widget:
             if let id = editor.selectedID { scrollPositions["widget/\(id)/\(editor.widgetTab)"] = scroll }
+        case .group:
+            if let group = editor.selectedGroup { scrollPositions["group/\(group)"] = scroll }
         }
         editor.searchTarget = nil
     }

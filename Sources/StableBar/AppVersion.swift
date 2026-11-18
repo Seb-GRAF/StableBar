@@ -70,9 +70,19 @@ func compareReleases(_ first: String, _ second: String) -> ComparisonResult {
     case (nil, _): return .orderedDescending
     case (_, nil): return .orderedAscending
     case let (a?, b?):
+        // Digits-only identifiers compare as numbers and come before the others, which compare as ASCII text.
+        // Numbers compare by length, then digit by digit, so ones too large for Int still order correctly.
+        func number(_ identifier: Substring) -> Substring? {
+            identifier.allSatisfy { $0.isASCII && $0.isNumber } ? identifier.drop { $0 == "0" } : nil
+        }
         for (x, y) in zip(a, b) where x != y {
-            if let x = Int(x), let y = Int(y) { return x < y ? .orderedAscending : .orderedDescending }
-            return x.compare(y, options: .numeric)
+            switch (number(x), number(y)) {
+            case let (m?, n?) where m == n: continue
+            case let (m?, n?): return (m.count, m) < (n.count, n) ? .orderedAscending : .orderedDescending
+            case (_?, nil): return .orderedAscending
+            case (nil, _?): return .orderedDescending
+            case (nil, nil): return x < y ? .orderedAscending : .orderedDescending
+            }
         }
         return a.count == b.count ? .orderedSame : a.count < b.count ? .orderedAscending : .orderedDescending
     }

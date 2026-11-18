@@ -5,9 +5,10 @@ private struct YabaiSpace: Decodable {
     let display: Int
     let isFocused: Bool
     let isVisible: Bool
+    let type: String
 
     enum CodingKeys: String, CodingKey {
-        case index, display
+        case index, display, type
         case isFocused = "has-focus"
         case isVisible = "is-visible"
     }
@@ -20,10 +21,12 @@ private struct YabaiWindow: Decodable {
     let app: String
     let space: Int
     let hasFocus: Bool?
+    let stackIndex: Int
 
     enum CodingKeys: String, CodingKey {
         case id, title, pid, app, space
         case hasFocus = "has-focus"
+        case stackIndex = "stack-index"
     }
 }
 
@@ -58,13 +61,14 @@ func yabaiSnapshot(spaces: Data, windows: Data, displays: Data,
             for window in windows where window.space == space.index {
                 let bundleID = bundleIDs[window.pid] ?? window.app
                 let app = WorkspaceApp(workspace: name, name: window.app, bundleID: bundleID)
-                workspaceWindows.append(WorkspaceWindow(id: window.id, title: window.title, app: app, isFocused: window.hasFocus == true))
+                workspaceWindows.append(WorkspaceWindow(id: window.id, title: window.title, app: app, isFocused: window.hasFocus == true,
+                                                        stackIndex: window.stackIndex))
                 if seen.insert(bundleID).inserted {
                     apps.append(app)
                 }
             }
             return Workspace(name: name, isFocused: space.isFocused, isVisible: space.isVisible, monitor: monitor + 1,
                              apps: apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending },
-                             windows: workspaceWindows)
+                             windows: workspaceWindows, layout: space.type)
         }
 }
