@@ -1,0 +1,66 @@
+{
+  "package": "{\n  \"entry\": \"config.json\",\n  \"id\": \"shared-5c1e0b7a\",\n  \"kind\": \"theme\",\n  \"name\": \"Catppuccin (shared)\",\n  \"version\": \"1.0.0\"\n}",
+  "config": "{\n  \"tokens\": {\n    \"surface\": { \"light\": \"#eff1f5\", \"dark\": \"#313244\" },\n    \"surfaceRaised\": { \"light\": \"#ccd0da\", \"dark\": \"#45475a\" },\n    \"text\": { \"light\": \"#4c4f69\", \"dark\": \"#cdd6f4\" },\n    \"textMuted\": { \"light\": \"#6c6f85\", \"dark\": \"#a6adc8\" },\n    \"accent\": { \"light\": \"#8839ef\", \"dark\": \"#cba6f7\" },\n    \"track\": { \"light\": \"#bcc0cc\", \"dark\": \"#585b70\" },\n    \"hairline\": { \"light\": \"#4c4f691f\", \"dark\": \"#cdd6f41f\" },\n    \"warning\": { \"light\": \"#c64f00\", \"dark\": \"#fab387\" },\n    \"critical\": { \"light\": \"#d20f39\", \"dark\": \"#f38ba8\" }\n  },\n  \"bar\": {\n    \"style\": {\n      \"background\": { \"light\": \"#dce0e8ee\", \"dark\": \"#11111bee\" }\n    }\n  },\n  \"defaults\": {\n    \"foreground\": \"@token.text\",\n    \"background\": \"@token.surface\",\n    \"hoverBackground\": \"@token.surfaceRaised\",\n    \"borderColor\": null,\n    \"accent\": \"@token.accent\",\n    \"shadowColor\": null,\n    \"accentText\": { \"light\": \"#eff1f5\", \"dark\": \"#1e1e2e\" },\n    \"cornerRadius\": 14,\n    \"fontSize\": 13,\n    \"fontWeight\": \"medium\"\n  },\n  \"popupDefaults\": {\n    \"background\": { \"light\": \"#eff1f5ee\", \"dark\": \"#1e1e2eee\" },\n    \"borderColor\": \"@token.hairline\",\n    \"shadowColor\": { \"light\": \"#4c4f6926\", \"dark\": \"#00000066\" }\n  },\n  \"workspaceDefaults\": {\n    \"indicator\": \"background\",\n    \"style\": {\n      \"foreground\": \"@token.textMuted\",\n      \"cornerRadius\": 14,\n      \"states\": {\n        \"focused\": {\n          \"background\": \"@token.accent\",\n          \"foreground\": { \"light\": \"#eff1f5\", \"dark\": \"#1e1e2e\" }\n        }\n      }\n    }\n  }\n}\n",
+  "widgets": [
+    {
+      "id": "workspaces",
+      "type": "workspaces",
+      "position": "left"
+    },
+    {
+      "id": "app",
+      "type": "activeApp",
+      "position": "left"
+    },
+    {
+      "id": "sound",
+      "type": "audio",
+      "position": "right"
+    },
+    {
+      "id": "battery",
+      "type": "battery",
+      "position": "right"
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "position": "right",
+      "format": "EEE d MMM  HH:mm",
+      "role": "time"
+    }
+  ],
+  "packages": [
+    {
+      "id": "weather",
+      "version": "1.2.0",
+      "settings": {
+        "units": "metric"
+      }
+    },
+    {
+      "id": "uptime",
+      "version": "1.0.0",
+      "settings": {
+        "interval": 300
+      }
+    }
+  ],
+  "widgetOverrides": {
+    "weather": {
+      "position": "right"
+    },
+    "uptime": {
+      "position": "right"
+    }
+  },
+  "widgetOrder": [
+    "workspaces",
+    "app",
+    "weather",
+    "uptime",
+    "sound",
+    "battery",
+    "clock"
+  ]
+}

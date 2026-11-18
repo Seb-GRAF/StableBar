@@ -10,6 +10,8 @@ struct PackageDetailView: View {
     let library: PackageLibrary
     let draft: PackageDraft
     let reviewing: Bool
+    /// Reviewed with other packages in one Form that adds them all, so it draws only its sections, without an Add button.
+    var reviewingWithOthers = false
     @Binding var tab: PackageDetailTab
     @Binding var additions: [String]
     var onEnable: ((WidgetPackageInspection, [String: ConfigurationValue]) throws -> Void)?
@@ -20,34 +22,17 @@ struct PackageDetailView: View {
     @State private var showingCommands = false
 
     var body: some View {
+        if reviewingWithOthers {
+            sections
+        } else {
+            page
+        }
+    }
+
+    private var page: some View {
         let manifest = draft.inspection.manifest
-        VStack(spacing: 0) {
-            Form {
-                Section {
-                    VStack(alignment: .leading, spacing: 14) {
-                        header
-                        if !reviewing {
-                            SettingsSegments(selection: $tab, options: [(.overview, "Overview"), (.settings, "Settings"), (.access, "Access"), (.versions, "Versions")],
-                                             stretches: false)
-                                .fixedSize()
-                        }
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-                if reviewing {
-                    overview
-                    settings
-                    access
-                } else {
-                    switch tab {
-                    case .overview: overview
-                    case .settings: settings
-                    case .access: access
-                    case .versions: versions
-                    }
-                }
-            }
+        return VStack(spacing: 0) {
+            Form { sections }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .frame(maxWidth: 720)
@@ -82,6 +67,33 @@ struct PackageDetailView: View {
         }
     }
 
+    @ViewBuilder private var sections: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                if !reviewing {
+                    SettingsSegments(selection: $tab, options: [(.overview, "Overview"), (.settings, "Settings"), (.access, "Access"), (.versions, "Versions")],
+                                     stretches: false)
+                        .fixedSize()
+                }
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+        }
+        if reviewing {
+            overview
+            settings
+            access
+        } else {
+            switch tab {
+            case .overview: overview
+            case .settings: settings
+            case .access: access
+            case .versions: versions
+            }
+        }
+    }
+
     private var header: some View {
         let manifest = draft.inspection.manifest
         let source = library.origin(draft)
@@ -99,7 +111,7 @@ struct PackageDetailView: View {
             }
             Spacer(minLength: 8)
             ProgressView().controlSize(.small).opacity(draft.working || draft.checking ? 1 : 0)
-            actions
+            if !reviewingWithOthers { actions }
         }
     }
 

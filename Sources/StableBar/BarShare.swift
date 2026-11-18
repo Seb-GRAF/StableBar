@@ -80,6 +80,8 @@ final class BarShare {
     @ObservationIgnored private let menuBar: Double
     /// Nil when the wallpaper has no still image, as a dynamic or aerial one can.
     @ObservationIgnored private let wallpaper: NSImage?
+    /// The bar link and what it carries, or why the bar can't be shared as one.
+    private(set) var link: Result<BarLink.Sharing, Error>?
 
     init(store: BarStore, display: BarDisplay, screen: CGSize, menuBar: Double, wallpaper: NSImage?) {
         self.store = store
@@ -116,11 +118,14 @@ final class BarShare {
             .clipped()
             .environment(\.fixedDate, fixedDate)
         png = try? await OffscreenSnapshot.png(desktop, size: size, pixels: pixels, dark: dark, settle: .seconds(1), name: "Share My Bar")
+        // Made right after the drawing, on the main actor, so the link carries the bar the image shows.
+        link = Result { try BarLink.sharing(store, on: display) }
     }
 }
 
 struct BarShareView: View {
     @Bindable var share: BarShare
+    @State var showsDetails = false
     @Environment(\.fixedDate) private var fixedDate
     @Environment(\.colorScheme) private var colorScheme
     @State private var anchor = NSView()
@@ -135,6 +140,7 @@ struct BarShareView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(maxWidth: .infinity)
+                linkBox
             }
             .padding(20)
         }
@@ -178,6 +184,68 @@ struct BarShareView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
     }
 
+    @ViewBuilder private var linkBox: some View {
+        switch share.link {
+        case let .success(sharing)?:
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                        .font(.system(size: 13))
+                        .frame(width: 28, height: 28)
+                        .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 7))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Bar link").font(.system(size: 13, weight: .semibold))
+                        Text("Anyone with StableBar can try your bar and keep the widgets they like. Scripts and private settings stay on your Mac.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    Button("Copy Link") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(sharing.link.absoluteString, forType: .string)
+                    }
+                    .disabled(share.png == nil)
+                }
+                .padding(14)
+                DisclosureGroup(isExpanded: $showsDetails) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SharedRow(symbol: "paintpalette", name: "Look", detail: sharing.look)
+                        ForEach(Array(sharing.widgets.filter { $0.leftOut == nil }.enumerated()), id: \.offset) { _, widget in
+                            SharedRow(symbol: widget.symbol, name: widget.name, store: widget.store,
+                                      detail: widget.settings.isEmpty ? nil : widget.settings.joined(separator: " · "))
+                        }
+                        let stays = sharing.widgets.filter { $0.leftOut != nil || !$0.settingsLeftOut.isEmpty }
+                        if !stays.isEmpty {
+                            Text("Stays on your Mac")
+                                .font(.system(size: 11.5, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 12)
+                                .padding(.bottom, 4)
+                            ForEach(Array(stays.enumerated()), id: \.offset) { _, widget in
+                                SharedRow(symbol: widget.symbol, name: widget.name,
+                                          detail: widget.leftOut ?? widget.settingsLeftOut.joined(separator: " · "), dimmed: true)
+                            }
+                        }
+                    }
+                    .padding(.top, 6)
+                } label: {
+                    Button { withAnimation { showsDetails.toggle() } } label: {
+                        Text("What it shares").frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+            }
+            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
+        case let .failure(error)?:
+            Text(errorMessage(error)).foregroundStyle(.secondary).textSelection(.enabled)
+        case nil: EmptyView()
+        }
+    }
+
     private func copy() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setData(share.png!, forType: .png)
@@ -199,5 +267,34 @@ struct BarShareView: View {
         } catch {
             NSAlert(error: error).runModal()
         }
+    }
+}
+
+/// A row of "What it shares": the look, a widget the link carries, or what stays on this Mac.
+private struct SharedRow: View {
+    let symbol: String
+    let name: String
+    var store = false
+    var detail: String?
+    var dimmed = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 12))
+                .frame(width: 24, height: 24)
+                .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 6))
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(name).lineLimit(1)
+                    if store { PackageOriginBadge(source: .store) }
+                }
+                if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
+            }
+        }
+        .foregroundStyle(dimmed ? .secondary : .primary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 7)
+        .overlay(alignment: .top) { SettingsPalette.separator.frame(height: 1) }
     }
 }

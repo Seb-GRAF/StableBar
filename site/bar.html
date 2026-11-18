@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A shared bar · StableBar</title>
+<meta name="description" content="Open a bar someone shared in StableBar: its look and its widgets.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#86cbf2">
+<link rel="icon" href="favicon.ico" sizes="32x32">
+<link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script>
+document.documentElement.dataset.mode = localStorage.getItem("mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+if (document.documentElement.dataset.mode === "dark") document.querySelector('meta[name="theme-color"]').content = "#232662";
+</script>
+</head>
+<body class="doc">
+<a class="skip" href="#main">Skip to content</a>
+<div class="page">
+  <header class="top">
+    <a class="brand" href="./"><img src="images/icon-64.png" alt="">StableBar</a>
+    <nav class="nav">
+      <a href="https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md">Guide</a>
+      <a href="./#store">Store</a>
+    </nav>
+  </header>
+  <main id="main" class="legal">
+    <h1>A shared bar</h1>
+    <p id="intro">Someone shared their StableBar with you: its look and its widgets. It opens in <strong>Settings → Theme</strong>, where you can try it on your bar before you use it.</p>
+    <div class="get" id="open"><a class="cta" href="./">Open in StableBar</a></div>
+    <div id="download" hidden>
+      <p id="download-reason">Nothing opened? StableBar may not be on this Mac yet. Download it, open it once, then come back to this page and choose <strong>Open in StableBar</strong>.</p>
+      <div class="get"><a class="cta" href="./#install">Download StableBar</a></div>
+    </div>
+  </main>
+  <footer>
+    <a href="./">Home</a>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="https://github.com/Seb-GRAF/StableBar">Source on GitHub</a>
+  </footer>
+</div>
+<script>
+// The bar travels in the fragment, which the browser never sends to a server.
+const download = document.querySelector("#download");
+if (location.hash.startsWith("#v=")) {
+  const link = "stablebar://bar?" + location.hash.slice(1);
+  document.querySelector("#open a").href = link;
+  let opened = false;
+  addEventListener("blur", () => { opened = true; });
+  addEventListener("visibilitychange", () => { if (document.hidden) opened = true; });
+  location.href = link;
+  setTimeout(() => { if (!opened) download.hidden = false; }, 2000);
+} else {
+  document.querySelector("#intro").textContent = "This page opens a bar someone shared with StableBar, but its link is incomplete. Ask them to send it again.";
+  document.querySelector("#open").remove();
+  document.querySelector("#download-reason").textContent = "To share your own bar, download StableBar.";
+  download.hidden = false;
+}
+</script>
+</body>
+</html>
