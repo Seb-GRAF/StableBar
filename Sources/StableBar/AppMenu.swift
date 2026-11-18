@@ -26,6 +26,9 @@ struct AppMenuEntry {
 final class AppMenu: NSObject {
     private(set) var appleMenu: AppMenuItem?
     private(set) var items: [AppMenuItem] = []
+    /// The owner and icon belong to the last successfully published menu snapshot.
+    private(set) var menuOwner: NSRunningApplication?
+    private(set) var menuOwnerIcon: NSImage?
     private(set) var isTrusted: Bool
     var hidesAccessWarning = false
     @ObservationIgnored private let checkAccess: () -> Bool
@@ -110,6 +113,8 @@ final class AppMenu: NSObject {
         }
         if next.first != appleMenu { appleMenu = next.first }
         if Array(next.dropFirst()) != items { items = Array(next.dropFirst()) }
+        menuOwner = app
+        menuOwnerIcon = app?.icon
         return true
     }
 
@@ -134,7 +139,7 @@ final class AppMenu: NSObject {
     private func belongsToMenuBarApp(_ item: AppMenuItem) -> Bool {
         var pid: pid_t = 0
         AXUIElementGetPid(item.element, &pid)
-        return pid == app?.processIdentifier
+        return pid == menuOwner?.processIdentifier
     }
 
     /// The popup that shows a menu's entries.

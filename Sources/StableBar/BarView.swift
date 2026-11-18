@@ -818,7 +818,7 @@ struct WidgetView: View {
             let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
             AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
                         expanded: barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
-                        displayMode: displayMode, appIcon: store.activeApp?.icon,
+                        displayMode: displayMode, appIcon: store.appMenu.menuOwnerIcon,
                         appearance: appearance, padding: padding,
                         openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess, expansionChanged: { expanded in
@@ -1398,7 +1398,9 @@ private struct AppMenuRow: View {
     let padding: EdgeInsets
 
     var body: some View {
-        AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, appearance: appearance, padding: padding,
+        AppMenuView(appMenu: store.appMenu, items: store.appMenu.items,
+                    displayMode: widget.appMenuDisplayMode, appIcon: store.appMenu.menuOwnerIcon,
+                    appearance: appearance, padding: padding,
                     openAnchor: store.presentations[widget.id]?.innerPopupAnchor, open: { item, anchor in
             guard let popup = store.appMenu.popup(for: item) else { return }
             store.innerPopup.toggle(popup, widget: widget, defaults: defaults, store: store, anchor: anchor)

@@ -595,7 +595,7 @@ struct BarInspector: View {
                 iconGroup(widget)
             case let .appMenu(expandOnHover, displayMode):
                 SettingsGroup("App menus") {
-                    SettingRow(title: "App title", hint: "Show the frontmost app name or its icon") {
+                    SettingRow(title: "App title", hint: "Show the menu-owning app’s name or icon") {
                         Picker("App title", selection: Binding(get: { displayMode }, set: {
                             editor.set(["displayMode": .string($0.rawValue)], for: widget.id)
                         })) {
@@ -604,7 +604,7 @@ struct BarInspector: View {
                         }
                         .labelsHidden().controlSize(.small)
                     }
-                    SettingRow(title: "Expand on hover", hint: "Show only the app’s name until the pointer is over the widget") {
+                    SettingRow(title: "Expand on hover", hint: "Show only the selected app title until the pointer is over the widget") {
                         Toggle("Expand on hover", isOn: Binding(get: { expandOnHover }, set: {
                             editor.set(["expandOnHover": .bool($0)], for: widget.id)
                         }))

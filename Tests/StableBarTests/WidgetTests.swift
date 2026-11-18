@@ -7,12 +7,14 @@ import Testing
 
 @Test(arguments: [
     (#"{"id":"menus","type":"appMenu","position":"left"}"#, AppMenuDisplayMode.name),
+    (#"{"id":"menus","type":"appMenu","position":"left","displayMode":null}"#, .name),
     (#"{"id":"menus","type":"appMenu","position":"left","displayMode":"name"}"#, .name),
     (#"{"id":"menus","type":"appMenu","position":"left","displayMode":"icon"}"#, .icon),
 ])
 func appMenuDisplayModeDecodesWithBackwardCompatibleDefault(_ json: String, _ expected: AppMenuDisplayMode) throws {
     let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(json.utf8))
     #expect(widget.content == .appMenu(expandOnHover: false, displayMode: expected))
+    #expect(widget.appMenuDisplayMode == expected)
 }
 
 @Test func appMenuDisplayModeRejectsUnknownValuesAndSelectsOnlyAppTitleIcon() throws {

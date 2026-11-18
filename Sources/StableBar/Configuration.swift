@@ -498,6 +498,10 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     }
 
     var group: String? { ownGroup ?? joinedGroup }
+    var appMenuDisplayMode: AppMenuDisplayMode {
+        guard case let .appMenu(_, displayMode) = content else { return .name }
+        return displayMode
+    }
     var barStyle: WidgetStyle { WidgetStyle(background: background).inheriting(style) }
     var tooltipStyle: WidgetStyle { WidgetStyle(background: tooltipBackground).inheriting(style) }
 

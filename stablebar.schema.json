@@ -1670,8 +1670,11 @@
           "description": "Show only the app title until hovered in appMenu widgets. Off by default."
         },
         "displayMode": {
-          "enum": ["name", "icon"],
-          "description": "Show the frontmost app's name (default) or its macOS icon in appMenu widgets."
+          "anyOf": [
+            { "enum": ["name", "icon"] },
+            { "type": "null" }
+          ],
+          "description": "Show the menu-owning app's name (default) or its macOS icon in appMenu widgets."
         },
         "click": {
           "anyOf": [
