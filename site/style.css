@@ -867,6 +867,8 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
 .nav { display: flex; flex-wrap: wrap; gap: 4px 20px; font: 600 17px/1 var(--hand); }
 .nav a { padding: 8px 0; color: var(--link); text-decoration: none; }
 .nav a:hover { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
+/* main's clip would cut the pen lines printed off the sheet's buttons */
+.doc main { overflow-x: visible; }
 .legal { padding: 34px 0 40px; }
 .legal h1 { rotate: none; font-size: clamp(36px, 7vw, 54px); line-height: 1.05; }
 .legal .updated { margin-top: 10px; font: 600 16px/1.3 var(--hand); color: var(--red); }
@@ -880,9 +882,19 @@ h3 { font: 800 22px/1.2 var(--display); font-variation-settings: "INFM" 70, "BNC
 .legal code { font: 15px var(--mono); }
 .doc footer { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 22px 0 28px; background: var(--rule) left top / 160px 10px repeat-x; font-size: 15.5px; }
 .doc footer a { color: var(--link); text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); }
+
+/* A shared bar: the bar a link carries, in its look, along the top of a screen */
+.shared-bar { margin-top: 26px; overflow: hidden; }
+.shared-bar .theme-preview { padding-bottom: 48px; }
+.shared-bar .preview-group { flex: none; }
+.shared-bar svg { width: 15px; height: 15px; flex: none; fill: currentColor; }
+.brings { display: grid; grid-template-columns: max-content 1fr; gap: 6px 22px; margin-top: 22px; }
+.brings dt { font: 600 17px/1.55 var(--hand); font-variation-settings: "INFM" 100, "BNCE" 60; color: var(--text-2); }
 @media (max-width: 719.98px) {
   .doc .page { margin: 26px 12px 36px; padding: 4px 20px 6px; }
   .doc { font-size: 17px; }
+  .brings { grid-template-columns: 1fr; gap: 0; }
+  .brings dd + dt { margin-top: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
