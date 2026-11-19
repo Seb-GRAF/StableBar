@@ -30,7 +30,6 @@ final class BarShareWindow: NSObject, NSWindowDelegate {
                 window.standardWindowButton(button)?.isHidden = true
             }
             window.minSize = NSSize(width: 520, height: 360)
-            window.isMovableByWindowBackground = true
             window.hidesOnDeactivate = false
             window.isReleasedWhenClosed = false
             window.delegate = self
@@ -335,7 +334,7 @@ struct BarShareView: View {
         .overlay(alignment: .bottom) {
             if showsLink { linkCard.padding(.top, 56).padding(.bottom, 70) }
         }
-        .background { backdrop }
+        .background { backdrop.overlay(WindowDragArea()) }
         .ignoresSafeArea()
         // The window stays dark over any image, while `colorScheme` still gives a bar without its own appearance its look.
         .environment(\.colorScheme, .dark)
@@ -615,6 +614,18 @@ struct BarShareView: View {
             NSAlert(error: error).runModal()
         }
     }
+}
+
+/// Moves the window when dragged, wherever no control above it takes the click. A window's
+/// `isMovableByWindowBackground` doesn't move it from SwiftUI content.
+struct WindowDragArea: NSViewRepresentable {
+    final class DragView: NSView {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
+    }
+
+    func makeNSView(context: Context) -> DragView { DragView() }
+    func updateNSView(_ nsView: DragView, context: Context) {}
 }
 
 /// A translucent fill and edge over the blurred image, for the window's controls. Their capsules are circular: a
