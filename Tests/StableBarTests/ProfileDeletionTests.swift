@@ -105,6 +105,23 @@ import Testing
     #expect(try Data(contentsOf: fixture.url) == saved)
 }
 
+@MainActor @Test func profilesGroupByWhereTheyComeFrom() throws {
+    let fixture = try ProfileFixture(#"""
+    {"includes":["shared.json"],"widgets":[],"profiles":[
+      {"name":"night","when":{"appearance":"dark"},"configuration":{}},
+      {"name":"Léman edits","when":{"theme":"leman"},"configuration":{"bar":{"height":30}}},
+      {"name":"dark","enabled":false,"configuration":{}},
+      {"name":"Nord at night","when":{"theme":"nord","appearance":"dark"},"configuration":{}}
+    ]}
+    """#, include: #"{"profiles":[{"name":"dark","configuration":{}},{"name":"travel","when":{"theme":"nord"},"configuration":{}}]}"#)
+    defer { fixture.close() }
+    let groups = ProfileGroups(store: fixture.store)
+    #expect(groups.yours.map(\.name) == ["night", "Nord at night"])
+    #expect(groups.themeEdits.map(\.name) == ["Léman edits"])
+    #expect(groups.elsewhere.map(\.profile.name) == ["dark", "travel"])
+    #expect(groups.elsewhere.map { URL(filePath: $0.file).lastPathComponent } == ["shared.json", "shared.json"])
+}
+
 @MainActor private final class ProfileFixture {
     let url: URL
     let store: BarStore

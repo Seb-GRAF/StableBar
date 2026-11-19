@@ -1,0 +1,29 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": { "id": "nord" },
+    "packages": [{ "id": "vpn-status", "version": "1.0.0" }],
+    "widgets": [
+      { "id": "clock", "type": "clock", "position": "right" },
+      { "id": "date", "type": "clock", "format": "EEE d MMM", "position": "right" }
+    ],
+    "profiles": [
+      {
+        "name": "Laptop",
+        "when": { "displayCount": 1 },
+        "configuration": { "bar": { "height": 30 } }
+      },
+      {
+        "name": "Nord edits",
+        "when": { "theme": "nord" },
+        "configuration": {
+          "tokens": { "accent": "#a3be8c" },
+          "widgetOverrides": { "date": { "background": "@token.accent" } }
+        }
+      }
+    ]
+  },
+  "packages": ["../Tests/Fixtures/vpn-status"],
+  "draw": "settings",
+  "section": "profiles"
+}

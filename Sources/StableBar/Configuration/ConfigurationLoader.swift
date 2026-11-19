@@ -448,8 +448,8 @@ struct ConfigurationLoader: Sendable {
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private(set) var screenDocuments: [String: [String: ConfigurationValue]] = [:]
     private var packageBoundaries: [String: URL] = [:]
-    private var packageNames: [String: String] = [:]
-    private var packageIDs: [String: String] = [:]
+    private(set) var packageNames: [String: String] = [:]
+    private(set) var packageIDs: [String: String] = [:]
     private var packageHosts: [String: [String]] = [:]
     private var essentialsPopupNames: [String: String] = [:]
 

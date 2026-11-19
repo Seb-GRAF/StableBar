@@ -1,0 +1,7 @@
+{
+  "id": "vpn-status",
+  "name": "VPN Status",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json"
+}

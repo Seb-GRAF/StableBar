@@ -1,0 +1,13 @@
+{
+  "tokens": { "vpnStatusColor": "#1d1d1f" },
+  "widgets": [
+    { "id": "vpn-status", "type": "text", "text": "VPN", "position": "right", "style": { "foreground": "@token.vpnStatusColor" } }
+  ],
+  "profiles": [
+    {
+      "name": "VPN Status in dark mode",
+      "when": { "appearance": "dark" },
+      "configuration": { "tokens": { "vpnStatusColor": "#ffffff" } }
+    }
+  ]
+}
