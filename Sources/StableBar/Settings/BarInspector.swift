@@ -346,6 +346,7 @@ struct BarInspector: View {
             styleState(widget)
         }
         SettingsGroup("Colors") {
+            LightDarkHeader()
             style.color("Text color", "foreground")
             let configuration = store.configuration!.onScreen(screen)
             let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
@@ -361,6 +362,7 @@ struct BarInspector: View {
             backgrounds.color("Popup background", "popupBackground")
             backgrounds.color("Tooltip background", "tooltipBackground")
             style.hoverBackground("Hover background")
+            style.color("Border color", "borderColor")
             style.color("Accent", "accent")
         }
         SettingsGroup("Text") {
@@ -369,13 +371,9 @@ struct BarInspector: View {
             style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)
         }
         SettingsGroup("Padding and corners") {
-            BoxModel(style: style, name: names[widget.id] ?? widget.id)
-            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
-                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
-                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
-                    style.colorButton("Border color", "borderColor")
-                }
-            }
+            style.padding(default: 10, 6)
+            style.number("Corner radius", "cornerRadius", default: 14, in: 0...40, slider: true)
+            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
         }
         if widget.content == .workspaces {
             SettingsGroup("Workspaces") {
@@ -392,17 +390,23 @@ struct BarInspector: View {
         let count = own.everyTheme + own.onTheme
         let theme = editor.selectedTheme.name
         let state = if own.onTheme > 0 {
-            "Own style on \(theme) · \(count) \(count == 1 ? "change" : "changes")"
+            Text("\(Text("Own style on \(theme)").fontWeight(.semibold)) \(Text("· \(count) \(count == 1 ? "change" : "changes")").foregroundStyle(.secondary))")
         } else if count > 0 {
-            "Own style · \(count) \(count == 1 ? "value" : "values")"
+            Text("\(Text("Own style").fontWeight(.semibold)) \(Text("· \(count) \(count == 1 ? "value" : "values")").foregroundStyle(.secondary))")
         } else {
-            "Follows \(theme)"
+            Text("Follows \(theme)").foregroundStyle(.secondary)
         }
-        return SettingsCallout(systemImage: "paintbrush", text: Text(state)) {
+        return HStack(spacing: 10) {
+            Image(systemName: count > 0 ? "pencil" : "paintbrush").foregroundStyle(count > 0 ? Color.teal : Color.secondary)
+            state
+            Spacer(minLength: 8)
             if count > 0 {
                 Button("Reset style") { editor.resetStyle(of: widget) }.controlSize(.small)
             }
         }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .settingsCard()
         .padding(.top, 12)
     }
 

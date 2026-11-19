@@ -9,6 +9,7 @@ struct WidgetsLookSection: View {
 
     var body: some View {
         LookSection(title: "Widgets", editor: editor, paths: [style.path], everyBar: everyBar, expansion: expansion) {
+            LightDarkHeader()
             style.color("Text color", "foreground")
             style.color("Background", "background")
             style.hoverBackground("Hover background")
@@ -19,7 +20,8 @@ struct WidgetsLookSection: View {
             style.font(fontFamilies)
             style.weight()
             style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)
-            BoxModel(style: style, name: "Widget")
+            style.padding(default: 10, 6)
+            style.number("Corner radius", "cornerRadius", default: 14, in: 0...40, slider: true)
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
         }
     }
@@ -37,6 +39,7 @@ struct GroupsLookSection: View {
 
     var body: some View {
         LookSection(title: title, editor: editor, paths: [style.path], everyBar: everyBar, expansion: expansion) {
+            LightDarkHeader()
             style.color("Background", "background")
             style.color("Border color", "borderColor").disabled(flared)
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5,
@@ -65,6 +68,7 @@ struct PopupsLookSection: View {
         let padding = PopupConfiguration.defaultPadding
         LookSection(title: "Popups", editor: editor, paths: [style.path, "\(bar.path).popupOffset"], everyBar: everyBar,
                     expansion: expansion) {
+            LightDarkHeader()
             style.color("Text color", "foreground")
             style.color("Background", "background")
             style.color("Border color", "borderColor")
@@ -95,6 +99,7 @@ struct BarLookSection: View {
         LookSection(title: "Bar", editor: editor,
                     paths: [style.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" }, everyBar: everyBar,
                     expansion: expansion) {
+            LightDarkHeader()
             style.color("Background", "background")
             style.color("Border color", "borderColor")
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)

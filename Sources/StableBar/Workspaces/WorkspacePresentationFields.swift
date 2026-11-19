@@ -16,6 +16,7 @@ struct WorkspacePresentationFields: View {
         let indicator = fields("indicatorStyle")
         let cell = fields("style")
         let app = fields("appStyle")
+        LightDarkHeader()
         root.choice("Indicator", "indicator", choices: ["background", "underline", "none"], default: "background")
         indicator.choice("Underline placement", "placement", choices: IndicatorPlacement.allCases.map(\.rawValue), default: "cell")
         indicator.color("Underline", "background")

@@ -436,27 +436,12 @@ struct StyleFields {
 
     func color(_ title: String, _ key: String) -> some View {
         let property = property(key)
-        let value = fill(key, property)
-        let tokens = store.themeTokenColors
-        let source = store.propertySourceText(property)
-        // The row chooses: a ViewThatFits inside it would be offered only part of the row's width.
-        return ViewThatFits(in: .horizontal) {
-            ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
-                SettingRow(title: title, property: property, source: source, reset: property.saved.map { saved in { reset(saved) } }) {
-                    fillButton(title, key, value: value, tokens: tokens, axis: axis)
-                }
+        return SettingRow(title: title, property: property, source: store.propertySourceText(property),
+                          reset: property.saved.map { saved in { reset(saved) } }) {
+            FillButton(title: title, value: fill(key, property), tokens: store.themeTokenColors,
+                       allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key), allowsNone: key != "foreground") {
+                set([key: $0])
             }
-        }
-    }
-
-    func colorButton(_ title: String, _ key: String) -> some View {
-        fillButton(title, key, value: fill(key, property(key)), tokens: store.themeTokenColors, axis: .horizontal)
-    }
-
-    private func fillButton(_ title: String, _ key: String, value: ConfigurationValue?, tokens: [ThemeTokenColor], axis: Axis) -> some View {
-        FillButton(title: title, value: value, tokens: tokens, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key),
-                   allowsNone: key != "foreground", axis: axis) {
-            set([key: $0])
         }
     }
 
@@ -473,16 +458,10 @@ struct StyleFields {
                                              widgetID: widgetID, values: values, hover: true)
         let origin = property.saved?.origin ?? drawn.flatMap { store.origins[$0.path] }
         let value = origin?.token.map { .string("@token.\($0)") } ?? property.editingFill
-        let tokens = store.themeTokenColors
-        let source = store.propertySourceText(property)
-        return ViewThatFits(in: .horizontal) {
-            ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
-                SettingRow(title: title, property: property, source: source,
-                           reset: property.saved.map { source in { resetHoverBackground(source) } }) {
-                    FillButton(title: title, value: value, tokens: tokens, allowsGradient: true, allowsNone: true, axis: axis) {
-                        set(HoverBackgroundRow.properties($0))
-                    }
-                }
+        return SettingRow(title: title, property: property, source: store.propertySourceText(property),
+                          reset: property.saved.map { source in { resetHoverBackground(source) } }) {
+            FillButton(title: title, value: value, tokens: store.themeTokenColors, allowsGradient: true, allowsNone: true) {
+                set(HoverBackgroundRow.properties($0))
             }
         }
     }
@@ -500,6 +479,28 @@ struct StyleFields {
         NumberDraft(value: numberBinding(key, default: fallback)) { binding in
             row(title, key, scrub: Scrub(value: binding, range: range, step: step), hint: hint) { _ in
                 NumberField(title: title, value: binding, range: range, step: step, unit: unit, slider: slider)
+            }
+        }
+    }
+
+    /// Horizontal and vertical padding in one row, each with its own revert arrow.
+    func padding(default horizontal: Double, _ vertical: Double) -> some View {
+        SettingRow(title: "Padding") {
+            HStack(spacing: 8) {
+                paddingField("Sides", "paddingHorizontal", default: horizontal)
+                paddingField("Top and bottom", "paddingVertical", default: vertical)
+            }
+        }
+    }
+
+    private func paddingField(_ label: String, _ key: String, default fallback: Double) -> some View {
+        let property = property(key)
+        let title = styleTitle([key])
+        return NumberDraft(value: numberBinding(key, property, default: fallback)) { value in
+            HStack(spacing: 6) {
+                RevertSettingButton(title: title, property: property, reset: property.saved.map { saved in { reset(saved) } })
+                Text(label).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize().scrubbing(Scrub(value: value, range: 0...30))
+                NumberField(title: title, value: value, range: 0...30)
             }
         }
     }
@@ -570,14 +571,14 @@ struct StyleFields {
             HStack(spacing: 7) {
                 Text(selectedTitle).lineLimit(1)
                 Spacer(minLength: 0)
-                Image(systemName: "arrowtriangle.down.fill").font(.system(size: 7)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold)).foregroundStyle(.secondary)
             }
             .font(.callout)
             .padding(.horizontal, 10)
-            .frame(width: 200, height: 28)
-            .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 7))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(SettingsPalette.groupBorder))
-            .contentShape(RoundedRectangle(cornerRadius: 7))
+            .frame(width: FillButton.sideWidth, height: 24)
+            .background(SettingsPalette.control, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(SettingsPalette.groupBorder))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -592,7 +593,11 @@ struct StyleFields {
     }
 
     func numberBinding(_ key: String, default fallback: Double) -> Binding<Double> {
-        let value = if case let .number(number) = property(key).editingValue { number } else { fallback }
+        numberBinding(key, property(key), default: fallback)
+    }
+
+    private func numberBinding(_ key: String, _ property: PropertySources, default fallback: Double) -> Binding<Double> {
+        let value = if case let .number(number) = property.editingValue { number } else { fallback }
         return Binding(get: { value }, set: { if $0 != value { set([key: .number($0)]) } })
     }
 

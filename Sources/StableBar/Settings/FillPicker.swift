@@ -22,18 +22,18 @@ extension BarStore {
 }
 
 struct FillButton: View {
+    /// The width of each side's button, also the width of the controls that line up with them.
+    static let sideWidth = 168.0
     let title: String
     let value: ConfigurationValue?
     let tokens: [ThemeTokenColor]
     var allowsGradient = false
     var allowsNone = false
     var arrowEdge: Edge = .leading
-    var axis: Axis = .horizontal
     let set: (ConfigurationValue) -> Void
 
     var body: some View {
-        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 6)) : AnyLayout(VStackLayout(spacing: 6))
-        layout {
+        HStack(spacing: 6) {
             ForEach([false, true], id: \.self) { isDark in
                 SideButton(title: title, value: colorSide(dark: isDark, of: value), dark: isDark, tokens: tokens,
                            allowsGradient: allowsGradient, allowsNone: allowsNone, arrowEdge: arrowEdge) {
@@ -60,9 +60,25 @@ struct TokenColorButton: View {
     private var sides: some View {
         ForEach([false, true], id: \.self) { isDark in
             SideButton(title: title, value: colorSide(dark: isDark, of: color.configurationValue), dark: isDark, tokens: [],
-                       themeColor: true, width: 128, arrowEdge: .bottom) {
+                       themeColor: true, arrowEdge: .bottom) {
                 set(settingColorSide(dark: isDark, of: color.configurationValue, to: $0))
             }
+        }
+    }
+}
+
+/// Names the light and dark columns of the color rows below it in a group.
+struct LightDarkHeader: View {
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 6) {
+                Label("Light", systemImage: "sun.max").frame(width: FillButton.sideWidth, alignment: .leading)
+                Label("Dark", systemImage: "moon").frame(width: FillButton.sideWidth, alignment: .leading)
+            }
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(.secondary)
+        } label: {
+            Spacer()
         }
     }
 }
@@ -76,7 +92,6 @@ private struct SideButton: View {
     var allowsGradient = false
     var allowsNone = false
     var themeColor = false
-    var width = 176.0
     var arrowEdge: Edge = .leading
     let set: (ConfigurationValue) -> Void
     @State private var isPresented = false
@@ -87,20 +102,17 @@ private struct SideButton: View {
         let label = label(fill)
         Button { isPresented.toggle() } label: {
             HStack(spacing: 6) {
-                Image(systemName: dark ? "moon" : "sun.max")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 12)
-                FillChip(fill: fill, tokens: tokens)
+                FillChip(fill: fill, tokens: tokens, width: 15, height: 15, cornerRadius: 4)
                     .environment(\.colorScheme, dark ? .dark : .light)
                 label.lineLimit(1)
             }
-            .font(.callout)
-            .padding(.horizontal, 7)
-            .frame(width: width, height: 28, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(isHovered ? 0.11 : 0.07)))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.08)))
-            .contentShape(RoundedRectangle(cornerRadius: 7))
+            .font(.system(size: 12))
+            .padding(.leading, 4)
+            .padding(.trailing, 7)
+            .frame(width: FillButton.sideWidth, height: 24, alignment: .leading)
+            .background(isHovered ? SettingsPalette.controlHover : SettingsPalette.control, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(SettingsPalette.groupBorder))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
@@ -113,14 +125,16 @@ private struct SideButton: View {
     }
 
     private func label(_ fill: FillChoice) -> Text {
-        let detail = { (text: String) in Text(" \(text)").font(.system(size: 10)).foregroundStyle(.tertiary) }
+        let detail = { (text: String) in Text(" \(text)").font(.system(size: 10.5)).foregroundStyle(.secondary) }
         switch fill {
         case .none:
             return Text("None")
         case let .token(name):
             return Text(tokens.first { $0.name == name }?.title ?? name) + detail("theme")
         case let .color(color):
-            return Text(String(format: "#%06X", color.rgba(dark: dark) >> 8))
+            let rgba = color.rgba(dark: dark)
+            let hex = Text(String(format: "#%06X", rgba >> 8))
+            return rgba & 0xff == 0xff ? hex : hex + Text(" \(Int((Double(rgba & 0xff) / 2.55).rounded()))%")
         case let .gradient(gradient):
             return Text("Gradient") + detail("\(gradient.angle)°")
         }
@@ -703,7 +717,12 @@ private struct FillChip: View {
             Checkerboard()
             switch fill {
             case .none:
-                Color.clear
+                Color.white
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: height))
+                    path.addLine(to: CGPoint(x: width, y: 0))
+                }
+                .stroke(Color.red, lineWidth: 1.5)
             case let .gradient(gradient):
                 GradientSwatch(stops: gradient.stops, angle: gradient.angle, tokens: tokens)
             default:

@@ -53,9 +53,7 @@ struct SettingsGroup<Content: View>: View {
                 VStack(spacing: 0) { content }
                     .labeledContentStyle(GroupRowStyle())
                     .padding(.top, -1)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
+                    .settingsCard()
             }
         }
         .padding(.top, isExpanded == nil || expanded ? 22 : 14)
@@ -90,5 +88,12 @@ extension View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .overlay(alignment: .top) { SettingsPalette.separator.frame(height: 1) }
+    }
+
+    /// The card a group's rows sit in, clipped to its rounded corners.
+    func settingsCard() -> some View {
+        clipShape(RoundedRectangle(cornerRadius: 10))
+            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
     }
 }

@@ -262,6 +262,7 @@ struct AppearanceView: View {
         let changes = editor.lookChanges(under: [tokens.path])
         return SettingsGroup("Theme colors", detail: changeCount(changes.count), reset: editor.reset(changes, everyBar: editor.themeChangesEveryBar),
                              isExpanded: expansion("Theme colors", opens: true)) {
+            LightDarkHeader()
             ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
                 let property = store.propertySources(path: tokens.path, key: token.name, defaultsPath: tokens.defaultsPath, values: tokens.values)
                 let color = (try? property.editingValue?.decoded(HexColor.self)) ?? token.color
@@ -408,6 +409,7 @@ struct ThemeAdvancedSheet: View {
             role.font(fontFamilies)
             role.weight()
             role.number("Font size", "fontSize", default: 13)
+            LightDarkHeader()
             role.color("Text", "foreground")
             role.color("Background", "background")
             role.color("Border", "borderColor")

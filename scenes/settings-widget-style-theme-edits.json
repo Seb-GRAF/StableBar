@@ -3,5 +3,6 @@
   "configuration": "../Tests/Fixtures/widget-style-theme-edits/config.json",
   "draw": "settings",
   "widget": "clock",
-  "tab": "style"
+  "tab": "style",
+  "height": 1250
 }
