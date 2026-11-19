@@ -1524,7 +1524,7 @@ extension AppMenuView {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Group {
                     if displayMode.showsIcon(forMenuIndex: index, isAppleMenu: isAppleMenu), let appIcon {
-                        Image(nsImage: appIcon).resizable().scaledToFit().frame(width: 20, height: 20)
+                        Image(nsImage: appIcon).resizable().scaledToFit().frame(width: appearance.iconSize, height: appearance.iconSize)
                     } else {
                         Text(item.title).fontWeight(index == 0 ? .bold : nil)
                     }
@@ -1595,7 +1595,7 @@ private struct AppMenuTitle: View {
                 if isAppleMenu {
                     Image(systemName: "apple.logo").accessibilityLabel(item.title)
                 } else if let appIcon {
-                    Image(nsImage: appIcon).resizable().scaledToFit().frame(width: 20, height: 20)
+                    Image(nsImage: appIcon).resizable().scaledToFit().frame(width: appearance.iconSize, height: appearance.iconSize)
                         .accessibilityLabel(item.title)
                 } else {
                     Text(item.title).fontWeight(index == 0 ? .bold : nil)
