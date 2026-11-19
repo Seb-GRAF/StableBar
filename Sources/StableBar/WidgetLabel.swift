@@ -48,7 +48,7 @@ extension BarStore {
     /// switching apps redraws no other widget.
     func label(for widget: WidgetConfiguration, date: Date = .now) -> WidgetLabel {
         widget.label(output: widgetScripts.scripts[widget.id]?.output,
-                     activeApp: widget.content == .activeApp ? activeApp?.localizedName : nil, date: date)
+                     activeApp: widget.content == .activeApp ? appWatcher.activeApp?.localizedName : nil, date: date)
     }
 }
 

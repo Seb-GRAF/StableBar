@@ -106,12 +106,12 @@ final class BarEditing {
 
     func undo() {
         guard isActive, let store else { return }
-        perform(on: store.activeDisplayID) { try self.store?.customizationHistory.undo() }
+        perform(on: store.appWatcher.activeDisplayID) { try self.store?.customizationHistory.undo() }
     }
 
     func redo() {
         guard isActive, let store else { return }
-        perform(on: store.activeDisplayID) { try self.store?.customizationHistory.redo() }
+        perform(on: store.appWatcher.activeDisplayID) { try self.store?.customizationHistory.redo() }
     }
 
     func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
@@ -120,7 +120,7 @@ final class BarEditing {
         // The bar reads this while laying out every widget, so it observes `layout`, never `workspaces`.
         let layout = store.workspaceStore.layout
         var reasons: [BarWidgetVisibility.Reason] = []
-        if !(presentation?.display ?? widget.display).includes(display, activeID: layout.focusedMonitor ?? store.activeDisplayID) {
+        if !(presentation?.display ?? widget.display).includes(display, activeID: layout.focusedMonitor ?? store.appWatcher.activeDisplayID) {
             reasons.append(.display)
         }
         if presentation?.hidden == true { reasons.append(.output) }
@@ -163,7 +163,7 @@ final class BarEditing {
         let label = store.label(for: widget).overlaid(by: store.barPresentation.presentations[widget.id]?.temporaryFields)
         let output = store.widgetScripts.scripts[widget.id]?.output
         let layout = widget.layout ?? widget.defaultLayout(label, output: output,
-                                                           appIcon: widget.content == .activeApp && store.activeApp?.icon != nil,
+                                                           appIcon: widget.content == .activeApp && store.appWatcher.activeApp?.icon != nil,
                                                            providerType: store.configuration?.providerType(of: widget))
         let drawsCells = switch widget.content {
         case .workspaces, .appMenu, .appleMenu, .stableBar: true

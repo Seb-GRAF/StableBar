@@ -83,7 +83,7 @@ enum SceneRenderer {
         }
         store.workspaceStore.dockBadges.labels = scene.dockBadges
         store.workspaceStore.refreshDesktopShortcuts()
-        store.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
+        store.appWatcher.activeApp = SampleApp(bundleIdentifier: scene.activeApp ?? "com.apple.finder")
         store.windowClearance.checkManagerGap = { configuration in
             let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
             return scene.windowsUnderBar.flatMap {

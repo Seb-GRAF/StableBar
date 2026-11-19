@@ -1097,7 +1097,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     try Data(script.utf8).write(to: executable)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
     store.workspaceStore.executablePath = { executable.path }
-    store.activeApp = nil
+    store.appWatcher.activeApp = nil
     store.configurationStore.reloadConfiguration()
     defer { store.stop() }
     for _ in 0..<100 {
@@ -1218,7 +1218,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     let config = try loader.load(directory.appending(path: "config.json"))
     let store = BarStore(configurationURL: directory.appending(path: "config.json"))
     store.configuration = config
-    store.activeApp = nil
+    store.appWatcher.activeApp = nil
     store.workspaceStore.workspaces = [Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1),
                                         Workspace(name: "2", isFocused: false, isVisible: true, monitor: 2)]
     let shared = ScriptWidget()

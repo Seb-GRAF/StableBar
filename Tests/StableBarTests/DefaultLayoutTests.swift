@@ -100,10 +100,10 @@ private enum FrontmostApp {
     for item in cases {
         let widget = try decode(WidgetConfiguration.self, item.widget)
         let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
-        if case .thisProcess = item.app { store.activeApp = NSRunningApplication.current } else { store.activeApp = nil }
+        if case .thisProcess = item.app { store.appWatcher.activeApp = NSRunningApplication.current } else { store.appWatcher.activeApp = nil }
         let app: (name: String?, icon: NSImage?) = switch item.app {
         case .noApp: (nil, nil)
-        case .thisProcess: (store.activeApp?.localizedName, store.activeApp?.icon)
+        case .thisProcess: (store.appWatcher.activeApp?.localizedName, store.appWatcher.activeApp?.icon)
         case let .named(name): (name, icon)
         }
         if let json = item.output {
@@ -558,7 +558,7 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
         await confirmation("The text widget stays valid", expectedCount: 0) { invalidated in
             withObservationTracking { _ = WidgetBlocks(widget: app, store: store, style: style, runAction: { _, _ in }).body } onChange: { redrawn() }
             withObservationTracking { _ = WidgetBlocks(widget: note, store: store, style: style, runAction: { _, _ in }).body } onChange: { invalidated() }
-            store.activeApp = NSRunningApplication.current
+            store.appWatcher.activeApp = NSRunningApplication.current
         }
     }
 }

@@ -278,7 +278,7 @@ private struct ScreenThumbnail: View {
     private func blocks(_ positions: [WidgetPosition]) -> some View {
         let displays = NSScreen.screens.map(BarDisplay.init)
         let widgets = (store.configuration?.onScreen(kind).widgets ?? []).filter {
-            positions.contains($0.position) && $0.enabled && kind.shows($0.display, among: displays, activeID: store.activeDisplayID)
+            positions.contains($0.position) && $0.enabled && kind.shows($0.display, among: displays, activeID: store.appWatcher.activeDisplayID)
         }
         return ForEach(widgets) { widget in
             Capsule().fill(color(widget)).frame(width: widget.content.isClock ? 13 : 7, height: 4)

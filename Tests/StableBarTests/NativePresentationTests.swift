@@ -269,9 +269,9 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     defer { store.stop() }
     var owner = MenuApplication(pid: 100, bundleID: "com.apple.finder")
     var ownerChanged: (@MainActor () -> Void)?
-    store.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
-    store.menuBarApp = { owner }
-    store.observeMenuBarApp = { changed in
+    store.appWatcher.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
+    store.appWatcher.menuBarApp = { owner }
+    store.appWatcher.observeMenuBarApp = { changed in
         ownerChanged = changed
         return NSObject()
     }
@@ -289,7 +289,7 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     await store.appMenu.readTask?.value
     #expect(source.reads == [100, 300])
     #expect(store.appMenu.menuOwner?.processIdentifier == owner.processIdentifier)
-    #expect(store.appMenu.menuOwner?.processIdentifier != store.activeApp?.processIdentifier)
+    #expect(store.appMenu.menuOwner?.processIdentifier != store.appWatcher.activeApp?.processIdentifier)
 }
 
 @Test @MainActor func appleMenuKeepsItsIconWhenTheSourceAppChanges() throws {

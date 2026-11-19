@@ -61,11 +61,11 @@ struct PopupView: View {
                         }, selectInputSource: { id in
                             guard store.barEditing.allowsWidgetActions else { return }
                             if popup.dismissOnAction { store.popup.close() }
-                            store.selectInputSource(id, widget: widget)
+                            store.widgetScripts.selectInputSource(id, widget: widget)
                         }, selectOutputDevice: { id in
                             guard store.barEditing.allowsWidgetActions else { return }
                             if popup.dismissOnAction { store.popup.close() }
-                            store.selectOutputDevice(id, widget: widget)
+                            store.widgetScripts.selectOutputDevice(id, widget: widget)
                         }, openSubmenu: { [screenKind] element, row in
                             store.appMenu.openSubmenu(element, beside: row) { submenu in
                                 PopupView(popup: submenu, style: style, store: store, widget: widget).environment(\.screenKind, screenKind)
@@ -86,7 +86,7 @@ struct PopupView: View {
                             }
                         }, menuBarItemAnchor: store.barPresentation.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
                             store.popup.close()
-                            store.move(.item(item), to: placement, before: nil, in: widget)
+                            store.widgetScripts.move(.item(item), to: placement, before: nil, in: widget)
                         }, states: states, update: store.update) { action, environment in
                             if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
                             store.widgetScripts.runAction(action, widget: widget,

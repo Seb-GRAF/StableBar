@@ -269,6 +269,38 @@ final class WidgetScripts {
         return task
     }
 
+    func move(_ source: MenuBarItemSource, to placement: MenuBarItemPlacement, before index: Int?, in widget: WidgetConfiguration) {
+        guard let store, case let .menuBarItems(_, _, _, hidden) = widget.content else { return }
+        let properties = menuBarItemsProperties(shown: widget.shownMenuBarItems, hidden: hidden, moving: source, to: placement, before: index,
+                                                among: store.appMenu.menuBarItems)
+        do {
+            try store.customizationHistory.change(ConfigurationEdit(action: .set, id: widget.id, properties: properties))
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
+    /// Selects the keyboard input source with `id`, or without one, the next, for a click on `widget`.
+    func selectInputSource(_ id: String?, widget: WidgetConfiguration) {
+        do {
+            try InputSourceMonitor.select(id)
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
+    /// Makes the audio device with `id` the default output, for a click on `widget`.
+    func selectOutputDevice(_ id: String, widget: WidgetConfiguration) {
+        do {
+            try AudioMonitor.setOutputDevice(id)
+            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+        } catch {
+            actionErrors[widget.id] = errorMessage(error)
+        }
+    }
+
     func stop() {
         for script in scripts.values { script.stop() }
         for provider in providers.values { provider.stop() }
