@@ -43,134 +43,28 @@ struct BarView: View {
     let display: BarDisplay
     var nativeDecorations = false
     var preview = false
-    /// Only the view in a bar's own panel follows `--focus`, not Settings' or the setup's.
-    private var focusesWidgets: Bool { nativeDecorations && store.barPanel(display.id)?.focusesWidgets == true }
     @State private var measuredWidths: [String: CGFloat] = [:]
     @State private var measuredUnits: Set<String> = []
     @State private var restingWidths: [String: CGFloat] = [:]
     /// Each unit with App menus measured with only the app name and », by unit ID.
     @State private var narrowestWidths: [String: CGFloat] = [:]
     @FocusState private var focusedWidget: String?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack(alignment: .top) {
             // The edit bar starts from the widths this bar measured, so switching draws every widget where it was.
             if store.barEditing.isActive && !preview {
-                BarEditView(store: store, display: display, widths: restingWidths)
+                BarEditStart(store: store, display: display, widths: $restingWidths)
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
                 let notch = config.bar.layoutNotch(on: display)
                 let widgets = store.barEditing.widgets(on: display)
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
-                GeometryReader { geometry in
-                    let growth = Dictionary(uniqueKeysWithValues: units.map { unit in
-                        (unit.id, max((measuredWidths[unit.id] ?? 0) - (restingWidths[unit.id] ?? 0), 0))
-                    })
-                    let minimums = Dictionary(uniqueKeysWithValues: units.compactMap { unit in
-                        Self.minimumWidth(resting: restingWidths[unit.id], narrowest: narrowestWidths[unit.id]).map { (unit.id, $0) }
-                    })
-                    let items = units.map { unit in
-                        BarLayoutItem(id: unit.id, position: unit.position, width: restingWidths[unit.id] ?? 0, priority: unit.priority,
-                                      canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!,
-                                      minimumWidth: minimums[unit.id])
-                    }
-                    let moreWidth = measuredWidths[Self.moreWidgetsUnit.id] ?? 0
-                    let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
-                                                  notchSpacing: config.bar.notchSpacing, notch: notch, overflowWidth: moreWidth)
-                        .plan(width: geometry.size.width / scale, items: items)
-                    let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
-                    ZStack(alignment: .topLeading) {
-                        Color.clear.allowsHitTesting(false)
-                        ForEach(units) { unit in
-                            if let placement = plan.placements[unit.id] {
-                                let alignment: Alignment = switch unit.position {
-                                case .left: .leading
-                                case .right: .trailing
-                                case .notchLeft, .center, .notchRight: .center
-                                }
-                                unitView(unit, config: config, width: placement.width, minimum: minimums[unit.id])
-                                    .environment(\.appMenuShrink, minimums[unit.id] != nil ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
-                                    .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
-                                    .environment(\.barFocus, $focusedWidget)
-                                    .environment(\.focusesWidgets, focusesWidgets)
-                                    .geometryGroup()
-                                    .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
-                                    .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
-                                        anchors.viewports[unit.id] = bounds
-                                    }
-                                    .offset(x: placement.x)
-                                    .transition(visibilityTransition(unit.transition ?? config.bar.motion.transition, still: reduceMotion))
-                            }
-                        }
-                        ForEach(plan.overflow, id: \.atEnd) { overflow in
-                            let overflowUnits = overflow.ids.map { id in units.first { $0.id == id }! }
-                            MoreWidgetsButton(units: overflowUnits, config: config, store: store, display: display,
-                                              id: Self.moreWidgetsID(overflowUnits[0].position, notched: notch != nil))
-                                .frame(width: moreWidth, height: geometry.size.height / scale)
-                                .offset(x: overflow.x)
-                                .transition(.opacity)
-                        }
-                    }
-                    .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
-                    .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow.map(\.ids))
-                    .onMoveCommand { direction in
-                        focusedWidget = Self.focusTarget(from: focusedWidget, moving: direction, units: units, placements: plan.placements)
-                    }
-                    .onChange(of: focusesWidgets) {
-                        focusedWidget = focusesWidgets ? Self.focusTarget(from: nil, moving: .right, units: units, placements: plan.placements) : nil
-                    }
-                    .overlay {
-                        HStack(spacing: 0) {
-                            ForEach(units + [Self.moreWidgetsUnit]) { unit in
-                                BarUnitView(unit: unit, config: config, store: store, display: display.id)
-                                    .fixedSize()
-                                    .background {
-                                        GeometryReader { proxy in
-                                            Color.clear.preference(key: BarWidthPreference.self, value: [unit.id: proxy.size.width])
-                                        }
-                                    }
-                            }
-                            // Units with App menus again, down to the app name and », as narrow as they get.
-                            ForEach(units.filter(\.hasShrinkingAppMenus)) { unit in
-                                BarUnitView(unit: unit, config: config, store: store, display: display.id)
-                                    .environment(\.appMenuShrink, .greatestFiniteMagnitude)
-                                    .fixedSize()
-                                    .background {
-                                        GeometryReader { proxy in
-                                            Color.clear.preference(key: BarNarrowestWidthPreference.self, value: [unit.id: proxy.size.width])
-                                        }
-                                    }
-                            }
-                        }
-                        .fixedSize()
-                        .hidden()
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                        .modifier(MeasuringCopy())
-                        .onPreferenceChange(BarNarrowestWidthPreference.self) { widths in
-                            if widths != narrowestWidths { narrowestWidths = widths }
-                        }
-                    }
-                    // Keeps the last width of units that leave, so a returning widget is planned at its size.
-                    .onPreferenceChange(BarWidthPreference.self) { widths in
-                        let animates = BarUnit.animatesResize(units, measured: measuredUnits, from: measuredWidths, to: widths,
-                                                              reduceMotion: reduceMotion, providerType: config.providerType(of:))
-                        measuredUnits = Set(widths.keys)
-                        let expanded = Set(units.filter { unit in
-                            unit.widgets.contains { store.barPresentation.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
-                        }.map(\.id))
-                        withAnimation(animates ? config.bar.animation.value : nil) {
-                            measuredWidths.merge(widths) { $1 }
-                            restingWidths.merge(widths.filter { !expanded.contains($0.key) }) { $1 }
-                        }
-                    }
-                    .onChange(of: visible, initial: true) { _, ids in if !preview { store.widgetScripts.setVisibleWidgets(ids: ids, displayID: display.id) } }
-                    .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
-                    .scaleEffect(scale, anchor: .topLeading)
-                }
+                PlacedUnits(store: store, display: display, nativeDecorations: nativeDecorations, preview: preview, config: config,
+                            units: units, scale: scale, notch: notch, measuredWidths: $measuredWidths, measuredUnits: $measuredUnits,
+                            restingWidths: $restingWidths, narrowestWidths: $narrowestWidths, focusedWidget: $focusedWidget)
                 .background(alignment: .topLeading) {
                     if config.bar.fillNotch, !config.bar.belowMenuBar, let notch = config.bar.notch(on: display) {
                         UnevenRoundedRectangle(bottomLeadingRadius: 11, bottomTrailingRadius: 11)
@@ -210,10 +104,138 @@ struct BarView: View {
             }
         }
     }
+}
+
+struct PlacedUnits: View {
+    let store: BarStore
+    let display: BarDisplay
+    let nativeDecorations: Bool
+    let preview: Bool
+    let config: Configuration
+    let units: [BarUnit]
+    let scale: CGFloat
+    let notch: ClosedRange<CGFloat>?
+    /// Only the view in a bar's own panel follows `--focus`, not Settings' or the setup's.
+    private var focusesWidgets: Bool { nativeDecorations && store.barPanel(display.id)?.focusesWidgets == true }
+    @Binding var measuredWidths: [String: CGFloat]
+    @Binding var measuredUnits: Set<String>
+    @Binding var restingWidths: [String: CGFloat]
+    @Binding var narrowestWidths: [String: CGFloat]
+    @FocusState.Binding var focusedWidget: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        GeometryReader { geometry in
+            let growth = Dictionary(uniqueKeysWithValues: units.map { unit in
+                (unit.id, max((measuredWidths[unit.id] ?? 0) - (restingWidths[unit.id] ?? 0), 0))
+            })
+            let minimums = Dictionary(uniqueKeysWithValues: units.compactMap { unit in
+                BarView.minimumWidth(resting: restingWidths[unit.id], narrowest: narrowestWidths[unit.id]).map { (unit.id, $0) }
+            })
+            let items = units.map { unit in
+                BarLayoutItem(id: unit.id, position: unit.position, width: restingWidths[unit.id] ?? 0, priority: unit.priority,
+                              canOverflow: unit.canOverflow, isSpacer: unit.isSpacer, growth: growth[unit.id]!,
+                              minimumWidth: minimums[unit.id])
+            }
+            let moreWidth = measuredWidths[BarView.moreWidgetsUnit.id] ?? 0
+            let plan = AdaptiveBarPlanner(inset: config.bar.inset, spacing: config.bar.spacing,
+                                          notchSpacing: config.bar.notchSpacing, notch: notch, overflowWidth: moreWidth)
+                .plan(width: geometry.size.width / scale, items: items)
+            let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
+            ZStack(alignment: .topLeading) {
+                Color.clear.allowsHitTesting(false)
+                ForEach(units) { unit in
+                    if let placement = plan.placements[unit.id] {
+                        let alignment: Alignment = switch unit.position {
+                        case .left: .leading
+                        case .right: .trailing
+                        case .notchLeft, .center, .notchRight: .center
+                        }
+                        unitView(unit, width: placement.width, minimum: minimums[unit.id])
+                            .environment(\.appMenuShrink, minimums[unit.id] != nil ? max((restingWidths[unit.id] ?? 0) - placement.width, 0) : 0)
+                            .environment(\.barExpansion, plan.cramped.contains(unit.id) ? .cramped : growth[unit.id]! > 0 ? .granted : .collapsed)
+                            .environment(\.barFocus, $focusedWidget)
+                            .environment(\.focusesWidgets, focusesWidgets)
+                            .geometryGroup()
+                            .frame(width: placement.width, height: geometry.size.height / scale, alignment: alignment)
+                            .transformAnchorPreference(key: BarAnchorPreference.self, value: .bounds) { anchors, bounds in
+                                anchors.viewports[unit.id] = bounds
+                            }
+                            .offset(x: placement.x)
+                            .transition(visibilityTransition(unit.transition ?? config.bar.motion.transition, still: reduceMotion))
+                    }
+                }
+                ForEach(plan.overflow, id: \.atEnd) { overflow in
+                    let overflowUnits = overflow.ids.map { id in units.first { $0.id == id }! }
+                    MoreWidgetsButton(units: overflowUnits, config: config, store: store, display: display,
+                                      id: BarView.moreWidgetsID(overflowUnits[0].position, notched: notch != nil))
+                        .frame(width: moreWidth, height: geometry.size.height / scale)
+                        .offset(x: overflow.x)
+                        .transition(.opacity)
+                }
+            }
+            .animation(reduceMotion ? nil : config.bar.animation.value, value: store.update?.version != nil)
+            .animation(reduceMotion ? nil : config.bar.animation.value, value: plan.overflow.map(\.ids))
+            .onMoveCommand { direction in
+                focusedWidget = BarView.focusTarget(from: focusedWidget, moving: direction, units: units, placements: plan.placements)
+            }
+            .onChange(of: focusesWidgets) {
+                focusedWidget = focusesWidgets ? BarView.focusTarget(from: nil, moving: .right, units: units, placements: plan.placements) : nil
+            }
+            .overlay {
+                HStack(spacing: 0) {
+                    ForEach(units + [BarView.moreWidgetsUnit]) { unit in
+                        BarUnitView(unit: unit, config: config, store: store, display: display.id)
+                            .fixedSize()
+                            .background {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(key: BarWidthPreference.self, value: [unit.id: proxy.size.width])
+                                }
+                            }
+                    }
+                    // Units with App menus again, down to the app name and », as narrow as they get.
+                    ForEach(units.filter(\.hasShrinkingAppMenus)) { unit in
+                        BarUnitView(unit: unit, config: config, store: store, display: display.id)
+                            .environment(\.appMenuShrink, .greatestFiniteMagnitude)
+                            .fixedSize()
+                            .background {
+                                GeometryReader { proxy in
+                                    Color.clear.preference(key: BarNarrowestWidthPreference.self, value: [unit.id: proxy.size.width])
+                                }
+                            }
+                    }
+                }
+                .fixedSize()
+                .hidden()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .modifier(MeasuringCopy())
+                .onPreferenceChange(BarNarrowestWidthPreference.self) { widths in
+                    if widths != narrowestWidths { narrowestWidths = widths }
+                }
+            }
+            // Keeps the last width of units that leave, so a returning widget is planned at its size.
+            .onPreferenceChange(BarWidthPreference.self) { widths in
+                let animates = BarUnit.animatesResize(units, measured: measuredUnits, from: measuredWidths, to: widths,
+                                                      reduceMotion: reduceMotion, providerType: config.providerType(of:))
+                measuredUnits = Set(widths.keys)
+                let expanded = Set(units.filter { unit in
+                    unit.widgets.contains { store.barPresentation.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
+                }.map(\.id))
+                withAnimation(animates ? config.bar.animation.value : nil) {
+                    measuredWidths.merge(widths) { $1 }
+                    restingWidths.merge(widths.filter { !expanded.contains($0.key) }) { $1 }
+                }
+            }
+            .onChange(of: visible, initial: true) { _, ids in if !preview { store.widgetScripts.setVisibleWidgets(ids: ids, displayID: display.id) } }
+            .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
+            .scaleEffect(scale, anchor: .topLeading)
+        }
+    }
 
     @ViewBuilder
-    private func unitView(_ unit: BarUnit, config: Configuration, width: CGFloat, minimum: CGFloat?) -> some View {
-        if Self.scrolls(width: width, resting: restingWidths[unit.id, default: 0], minimum: minimum) {
+    private func unitView(_ unit: BarUnit, width: CGFloat, minimum: CGFloat?) -> some View {
+        if BarView.scrolls(width: width, resting: restingWidths[unit.id, default: 0], minimum: minimum) {
             ScrollView(.horizontal) {
                 BarUnitView(unit: unit, config: config, store: store, display: display.id).fixedSize()
             }
@@ -221,6 +243,16 @@ struct BarView: View {
         } else {
             BarUnitView(unit: unit, config: config, store: store, display: display.id)
         }
+    }
+}
+
+private struct BarEditStart: View {
+    let store: BarStore
+    let display: BarDisplay
+    @Binding var widths: [String: CGFloat]
+
+    var body: some View {
+        BarEditView(store: store, display: display, widths: widths)
     }
 }
 
