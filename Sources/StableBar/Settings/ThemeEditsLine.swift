@@ -17,10 +17,13 @@ struct ThemeEditsLine: View {
     var body: some View {
         if !edits.changes.isEmpty || !edits.everyTheme.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                if !edits.changes.isEmpty {
+                if edits.changes.isEmpty {
+                    everyTheme.padding(.horizontal, 14).padding(.vertical, 10)
+                } else {
                     HStack(spacing: 10) {
-                        Image(systemName: "pencil").foregroundStyle(.secondary).accessibilityHidden(true)
+                        Image(systemName: "pencil").foregroundStyle(.teal).accessibilityHidden(true)
                         Text("\(Text(name).fontWeight(.semibold)) \(Text("· \(count(edits.changes.count))").foregroundStyle(.secondary))")
+                            .font(.system(size: 13))
                         Spacer(minLength: 8)
                         Button(showsChanges ? "Hide Changes" : "Show Changes") { withAnimation(.snappy) { showsChanges.toggle() } }
                             .buttonStyle(.link)
@@ -35,39 +38,22 @@ struct ThemeEditsLine: View {
                         } actions: { change in
                             Button("Apply to Every Theme") { editor.change(edits.applyingToEveryTheme(change), everyBar: editor.themeChangesEveryBar) }
                         }
-                        .padding(.bottom, 8)
+                        .padding(.leading, 14)
+                        .padding(.trailing, 8)
+                        .padding(.bottom, 10)
+                        .overlay(alignment: .top) { SettingsPalette.separator.frame(height: 1) }
                     }
-                }
-                if !edits.everyTheme.isEmpty {
-                    if !edits.changes.isEmpty { SettingsPalette.separator.frame(height: 1) }
-                    HStack(spacing: 10) {
-                        Text("\(count(edits.everyTheme.count, of: "setting")) \(edits.everyTheme.count == 1 ? "applies" : "apply") to every theme: \(summary(edits.everyTheme))")
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        Spacer(minLength: 8)
-                        Button(showsEveryTheme ? "Hide" : "Show") { withAnimation(.snappy) { showsEveryTheme.toggle() } }.buttonStyle(.link)
-                        Button("Keep with \(name) Only") {
-                            editor.change(edits.keepingWithTheme(edits.everyTheme, name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    if showsEveryTheme {
-                        ThemeEditList(store: editor.store, changes: edits.everyTheme, theme: name) { change in
-                            editor.change(change.removal, everyBar: editor.themeChangesEveryBar)
-                        } actions: { change in
-                            Button("Keep with \(name) Only") {
-                                editor.change(edits.keepingWithTheme([change], name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
-                            }
-                        }
-                        .padding(.bottom, 8)
+                    if !edits.everyTheme.isEmpty {
+                        everyTheme
+                            .padding(10)
+                            .background(SettingsPalette.background, in: RoundedRectangle(cornerRadius: 8))
+                            .padding([.horizontal, .bottom], 10)
                     }
                 }
             }
             .font(.system(size: 12))
             .controlSize(.small)
-            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
+            .settingsCard()
             .sheet(isPresented: $reverting) {
                 RevertThemeSheet(edits: edits, theme: name) {
                     reverting = false
@@ -83,6 +69,30 @@ struct ThemeEditsLine: View {
         }
     }
 
+    /// The look values of the main file that apply under every theme, with the way to keep them with this theme.
+    private var everyTheme: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Text("\(count(edits.everyTheme.count, of: "setting")) \(edits.everyTheme.count == 1 ? "applies" : "apply") to every theme: \(summary(edits.everyTheme))")
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button(showsEveryTheme ? "Hide" : "Show") { withAnimation(.snappy) { showsEveryTheme.toggle() } }.buttonStyle(.link)
+                Button("Keep with \(name) Only") {
+                    editor.change(edits.keepingWithTheme(edits.everyTheme, name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
+                }
+            }
+            if showsEveryTheme {
+                ThemeEditList(store: editor.store, changes: edits.everyTheme, theme: name) { change in
+                    editor.change(change.removal, everyBar: editor.themeChangesEveryBar)
+                } actions: { change in
+                    Button("Keep with \(name) Only") {
+                        editor.change(edits.keepingWithTheme([change], name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
+                    }
+                }
+            }
+        }
+    }
+
     private func count(_ number: Int, of noun: String = "change") -> String {
         "\(number) \(noun)\(number == 1 ? "" : "s")"
     }
@@ -93,7 +103,7 @@ struct ThemeEditsLine: View {
     }
 }
 
-/// Each edit, by section, in columns: its value, the theme's own value, a revert arrow and `actions`.
+/// Each edit under its section: its value, the theme's own value, a revert arrow and `actions`.
 private struct ThemeEditList<Actions: View>: View {
     let store: BarStore
     let changes: [ThemeEdit]
@@ -104,38 +114,37 @@ private struct ThemeEditList<Actions: View>: View {
     var body: some View {
         let sections = changes.reduce(into: [String]()) { if !$0.contains($1.section) { $0.append($1.section) } }
         let tokens = store.themeTokenColors
-        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
-            GridRow {
-                Color.clear.frame(height: 1)
-                Text("Yours").frame(width: 130, alignment: .leading)
-                Text(theme).lineLimit(1).frame(width: 130, alignment: .leading)
-                Color.clear.frame(width: 46, height: 1)
-            }
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.secondary)
+        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 0) {
             ForEach(sections, id: \.self) { section in
                 Text(section)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .padding(.top, 6)
+                    .padding(.top, 9)
+                    .padding(.bottom, 2)
                     .gridCellColumns(4)
                 ForEach(changes.filter { $0.section == section }) { change in
                     GridRow {
                         Text(change.title).lineLimit(1).truncationMode(.middle).help(change.title)
-                        ThemeEditValue(value: change.value, tokens: tokens).frame(width: 130, alignment: .leading)
-                        Group {
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ThemeEditValue(value: change.value, tokens: tokens).frame(width: 170, alignment: .leading)
+                        HStack(spacing: 4) {
                             if let value = change.themeValue {
-                                ThemeEditValue(value: value, tokens: tokens)
-                            } else {
-                                Text("—").foregroundStyle(.tertiary)
+                                Text("\(theme):")
+                                ThemeEditValue(value: value, tokens: tokens).layoutPriority(1)
                             }
                         }
-                        .frame(width: 130, alignment: .leading)
-                        HStack(spacing: 2) {
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(width: 200, alignment: .leading)
+                        HStack(spacing: 0) {
                             Button {
                                 revert(change)
                             } label: {
-                                Image(systemName: "arrow.uturn.backward").frame(width: 22, height: 22).contentShape(Rectangle())
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .frame(width: 22, height: 22)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
@@ -148,19 +157,20 @@ private struct ThemeEditList<Actions: View>: View {
                             }
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
-                            .fixedSize()
+                            .frame(width: 22, height: 22)
                             .accessibilityLabel("More for \(change.title)")
                         }
                     }
+                    .frame(minHeight: 26)
                 }
             }
         }
-        .padding(.horizontal, 14)
+        .font(.system(size: 13))
     }
 }
 
-/// A value in one line: a color as its swatches, with a theme color's name or a single color's hex, anything else as
-/// short text. The whole value is in its help.
+/// A value in one line: a theme color as its swatches and name, another color as each side's swatch and hex, anything
+/// else as short text. The whole value is in its help.
 private struct ThemeEditValue: View {
     let value: ConfigurationValue
     let tokens: [ThemeTokenColor]
@@ -168,17 +178,14 @@ private struct ThemeEditValue: View {
     var body: some View {
         HStack(spacing: 5) {
             if let sides = colorSides(value) {
-                HStack(spacing: 2) {
-                    ForEach(Array(sides.enumerated()), id: \.offset) { _, rgba in
-                        RoundedRectangle(cornerRadius: 3).fill(HexColor(rgba).color).frame(width: 12, height: 12)
-                            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.primary.opacity(0.15)))
-                    }
-                }
-                .accessibilityHidden(true)
                 if case let .string(text) = value, text.hasPrefix("@token.") {
+                    HStack(spacing: 2) { ForEach(Array(sides.enumerated()), id: \.offset) { swatch($1) } }
                     Text(tokens.first { $0.name == text.dropFirst(7) }?.title ?? String(text.dropFirst(7)))
-                } else if sides.count == 1 {
-                    Text(String(format: "#%06X", sides[0] >> 8)).monospacedDigit()
+                } else {
+                    ForEach(Array(sides.enumerated()), id: \.offset) { _, rgba in
+                        swatch(rgba)
+                        Text(String(format: "#%06X", rgba >> 8)).monospacedDigit()
+                    }
                 }
             } else {
                 Text(text)
@@ -186,6 +193,12 @@ private struct ThemeEditValue: View {
         }
         .lineLimit(1)
         .help(value.sourceDescription)
+    }
+
+    private func swatch(_ rgba: UInt32) -> some View {
+        RoundedRectangle(cornerRadius: 3).fill(HexColor(rgba).color).frame(width: 12, height: 12)
+            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.primary.opacity(0.15)))
+            .accessibilityHidden(true)
     }
 
     /// A color's light and dark sides, one when they match, with theme colors resolved.
