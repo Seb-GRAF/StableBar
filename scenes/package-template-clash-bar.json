@@ -1,0 +1,11 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "packages": [
+      { "id": "sample-now-playing", "version": "1.0.0" },
+      { "id": "sample-other", "version": "1.0.0" }
+    ]
+  },
+  "packages": ["../Tests/Fixtures/template-clash/now-playing", "../Tests/Fixtures/template-clash/other"],
+  "draw": "bar"
+}

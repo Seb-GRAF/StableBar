@@ -1,0 +1,7 @@
+{
+  "id": "sample-now-playing",
+  "name": "Sample now playing",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json"
+}

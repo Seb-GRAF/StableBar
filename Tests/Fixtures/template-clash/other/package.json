@@ -1,0 +1,7 @@
+{
+  "id": "sample-other",
+  "name": "Sample other",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json"
+}
