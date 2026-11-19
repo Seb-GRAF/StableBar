@@ -2,6 +2,8 @@ name: CI
 
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
   push:
     branches: [main]
   workflow_dispatch:
@@ -365,7 +367,7 @@ jobs:
 
   commits:
     name: Commit messages
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -379,10 +381,11 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Lint commit messages
         env:
-          FROM: ${{ github.event.pull_request.base.sha }}
-          TO: ${{ github.event.pull_request.head.sha }}
+          FROM: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          TO: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: npx commitlint --from "$FROM" --to "$TO" --verbose
       - name: Lint pull request title
+        if: github.event_name == 'pull_request'
         env:
           TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$TITLE" | npx commitlint --verbose

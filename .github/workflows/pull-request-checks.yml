@@ -3,9 +3,12 @@ name: Pull request
 # Checks the pull request itself: the issue it closes and its description. pull_request_target runs
 # the default branch's copy of this workflow and of .github/scripts with a read-only token, so a pull
 # request never runs its own code here. The checks' logic and its tests are in .github/scripts.
+# In the merge queue both checks pass without a pull request to read: they passed before it joined.
 on:
   pull_request_target:
     types: [opened, edited, reopened, synchronize, ready_for_review]
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
@@ -13,7 +16,7 @@ permissions:
   issues: read
 
 concurrency:
-  group: pull-request-checks-${{ github.event.pull_request.number }}
+  group: pull-request-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -24,11 +27,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request_target'
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
       - uses: actions/github-script@v9
+        if: github.event_name == 'pull_request_target'
         with:
           script: |
             const { checkLinkedIssue } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pull-request-checks.mjs`);
@@ -56,11 +61,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request_target'
         with:
           ref: ${{ github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
       - uses: actions/github-script@v9
+        if: github.event_name == 'pull_request_target'
         with:
           script: |
             const { checkDescription } = await import(`${process.env.GITHUB_WORKSPACE}/.github/scripts/pull-request-checks.mjs`);
