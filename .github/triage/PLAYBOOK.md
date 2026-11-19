@@ -126,6 +126,13 @@ separate clone of `main` and follow its `CONTRIBUTING.md`, never the diagnosis c
   reproduce, Expected, Environment, Evidence, Related), `feature_request.yml` for an idea
   (Problem, Proposal, Possible today, Related).
 - Take Environment from the context file, with the version the problem happened on.
+- When the problem is about how the bar looks or where built-in or Store widgets sit, and
+  the bar's right-click menu has **Share My Bar…** (releases after 0.17.0), ask the user to
+  choose it on the screen that shows the problem, check **What it shares**, and paste what
+  **Copy Link** copies. Put the link in Evidence with a note that it leaves out script
+  widgets, custom providers, profiles, screen layouts and the other screens' bars. Without
+  `gh`, leave it out of the prefilled link, which it can make too long, and remind the user
+  to paste it into the issue once it exists.
 - Use a plain, specific title with no prefix.
 - When an open issue covers it, comment there with this user's environment and evidence
   instead of filing a duplicate. A confirmed duplicate with fresh evidence helps more
