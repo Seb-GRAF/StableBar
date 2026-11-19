@@ -832,16 +832,17 @@ struct WidgetView: View {
             }
         case let .appleMenu(click) where widget.layout == nil:
             let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
+            let logo = widget.icon.flatMap { $0.isEmpty ? nil : $0 } ?? "apple.logo"
             if hasOwnClick {
-                Image(systemName: "apple.logo").accessibilityLabel("Apple")
+                Image(systemName: logo).accessibilityLabel("Apple")
                     .foregroundStyle(appearance.foreground)
                     .padding(padding)
             } else if click == .menu, store.appMenu.isTrusted, let appleMenu = store.appMenu.appleMenu {
-                AppMenuView(appMenu: store.appMenu, items: [appleMenu], isAppleMenu: true,
+                AppMenuView(appMenu: store.appMenu, items: [appleMenu], isAppleMenu: true, appleLogo: logo,
                             appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor,
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
-                AppleLogoButton(appearance: appearance, padding: padding, label: click.title,
+                AppleLogoButton(logo: logo, appearance: appearance, padding: padding, label: click.title,
                                 help: click == .menu && !store.appMenu.isTrusted ? "Allow StableBar in Privacy & Security → \(macOSVersion.accessibilityName) to open the Apple menu. Click to open System Settings and drag StableBar into the list." : nil) {
                     clickAppleLogo(click, anchor: clickAnchor)
                 } hover: {
@@ -1445,6 +1446,7 @@ struct AppMenuView: View {
     var isAppleMenu = false
     var displayMode: AppMenuDisplayMode = .name
     var appIcon: NSImage?
+    var appleLogo = "apple.logo"
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     var openAnchor: ObjectIdentifier?
@@ -1485,7 +1487,7 @@ struct AppMenuView: View {
                 let anchor = anchors[index].map(ObjectIdentifier.init)
                 AppMenuTitle(item: item, index: index, isAppleMenu: isAppleMenu,
                              appIcon: displayMode.showsIcon(forMenuIndex: index, isAppleMenu: isAppleMenu) ? appIcon : nil,
-                             appearance: appearance, padding: padding,
+                             appleLogo: appleLogo, appearance: appearance, padding: padding,
                              highlighted: openAnchor.map { $0 == anchor } ?? (hoveredItem == item), anchors: $anchors) {
                     open(item, anchors[index]!)
                 }
@@ -1582,6 +1584,7 @@ private struct AppMenuTitle: View {
     let index: Int
     let isAppleMenu: Bool
     let appIcon: NSImage?
+    let appleLogo: String
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     let highlighted: Bool
@@ -1594,7 +1597,7 @@ private struct AppMenuTitle: View {
         Button(action: open) {
             Group {
                 if isAppleMenu {
-                    Image(systemName: "apple.logo").accessibilityLabel(item.title)
+                    Image(systemName: appleLogo).accessibilityLabel(item.title)
                 } else if let appIcon {
                     Image(nsImage: appIcon).resizable().scaledToFit().frame(width: appearance.iconSize, height: appearance.iconSize)
                         .accessibilityLabel(item.title)
@@ -1619,6 +1622,7 @@ private struct AppMenuTitle: View {
 
 /// The Apple logo as a button, drawn like the Apple menu's logo, for clicks that don't open the menu and until the menu is read.
 private struct AppleLogoButton: View {
+    let logo: String
     let appearance: WidgetAppearance
     let padding: EdgeInsets
     let label: String
@@ -1630,7 +1634,7 @@ private struct AppleLogoButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "apple.logo").accessibilityLabel(label)
+            Image(systemName: logo).accessibilityLabel(label)
                 .foregroundStyle(appearance.foreground)
                 .padding(padding)
                 .background {
