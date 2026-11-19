@@ -160,7 +160,7 @@ struct BarView: View {
                                                               reduceMotion: reduceMotion, providerType: config.providerType(of:))
                         measuredUnits = Set(widths.keys)
                         let expanded = Set(units.filter { unit in
-                            unit.widgets.contains { store.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
+                            unit.widgets.contains { store.barPresentation.presentations[$0.id]?.expandedDisplays.contains(display.id) == true }
                         }.map(\.id))
                         withAnimation(animates ? config.bar.animation.value : nil) {
                             measuredWidths.merge(widths) { $1 }

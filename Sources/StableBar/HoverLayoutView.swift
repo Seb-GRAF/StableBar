@@ -17,7 +17,7 @@ struct HoverLayoutView<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let expanded = barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true)
+        let expanded = barExpansion.map { $0 == .granted } ?? (store.barPresentation.presentations[widget.id]?.expandedDisplays.contains(monitor) == true)
         let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
         HoverExpansionLayout(expansion: expanded ? 1 : 0, spacing: appearance.spacing, controlsBefore: widget.position == .right) {
             controls
@@ -39,6 +39,6 @@ struct HoverLayoutView<Content: View>: View {
 
     private func expand(_ open: Bool) {
         guard !measuring, moreWidgetsAnchor == nil else { return }
-        store.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
+        store.barPresentation.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
     }
 }

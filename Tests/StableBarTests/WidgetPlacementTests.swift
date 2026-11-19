@@ -177,7 +177,7 @@ final class WidgetPlacementTests: XCTestCase {
         XCTAssertEqual(configuration.bar(on: .vertical).height, 30)
         XCTAssertEqual(configuration.onScreen(.vertical).defaults.fontSize, 12)
         XCTAssertNotEqual(store.screenDocuments["monitor"]?["tokens"], store.effectiveDocument["tokens"])
-        let clock = try XCTUnwrap(store.presentations["clock"])
+        let clock = try XCTUnwrap(store.barPresentation.presentations["clock"])
         XCTAssertEqual(clock.style(on: .laptop).base.fontSize, 16)
         XCTAssertEqual(clock.style(on: .vertical).base.fontSize, 12)
     }

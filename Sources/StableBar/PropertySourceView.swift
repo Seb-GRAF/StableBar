@@ -170,7 +170,7 @@ extension BarStore {
                 if let color = output.color { runtime.append(("Widget output color", WidgetStyle(foreground: color))) }
             }
             states = StyleStates(data: widgetDataStates(widgetScripts.scripts[widget.id]?.output, widget: widget, providers: configuration.providers).widget,
-                                 mode: modePresentation, hover: hover)
+                                 mode: barPresentation.modePresentation, hover: hover)
             scope = hover ? "Widget while hovered, with current data and mode states. Popup-open and workspace-cell states are separate."
                 : "Widget at rest, with current data and mode states. Hover, popup-open and workspace-cell states are separate."
         } else if let configuration, path == "bar.style" {
@@ -178,7 +178,7 @@ extension BarStore {
             for source in configuration.widgets {
                 if let style = widgetScripts.scripts[source.id]?.output.barStyle { runtime.append(("Output from \(source.id): barStyle", style)) }
             }
-            states = StyleStates(mode: modePresentation)
+            states = StyleStates(mode: barPresentation.modePresentation)
             scope = "Bar with the current mode state and widget output overrides."
         } else if hover {
             layers = [(try? ConfigurationValue.object(values).decoded(WidgetStyle.self)) ?? WidgetStyle()]

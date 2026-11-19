@@ -20,13 +20,13 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     """#)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
     store.configuration = config
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
-    #expect(store.presentations["time"]?.style.base.fontSize == 16)
-    #expect(store.presentations["time"]?.style.base.fontWeight == "light")
-    #expect(store.presentations["date"]?.style.base.fontSize == 12)
-    #expect(store.presentations["plain"]?.style.base.fontSize == 13)
-    #expect(store.presentations["explicit"]?.style.base.fontSize == 19)
+    #expect(store.barPresentation.presentations["time"]?.style.base.fontSize == 16)
+    #expect(store.barPresentation.presentations["time"]?.style.base.fontWeight == "light")
+    #expect(store.barPresentation.presentations["date"]?.style.base.fontSize == 12)
+    #expect(store.barPresentation.presentations["plain"]?.style.base.fontSize == 13)
+    #expect(store.barPresentation.presentations["explicit"]?.style.base.fontSize == 19)
     let time = config.widgets[0]
     let popup = try #require(time.popup)
     let defaults = config.popupDefaults.popupStyle(over: config.defaults)
@@ -176,7 +176,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     let script = ScriptWidget()
     try script.accept(ScriptOutput.read(Data(#"{"text":"Time","state":"critical"}"#.utf8)))
     store.widgetScripts.scripts["clock"] = script
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let widget = config.widgets[0], popup = try #require(widget.popup)
     let view = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults)), store: store, widget: widget)
@@ -204,7 +204,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     let script = ScriptWidget()
     try script.accept(ScriptOutput.read(Data(##"{"text":"Source","barStyle":{"borderColor":"#aabbcc"}}"##.utf8)))
     store.widgetScripts.scripts["source"] = script
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let snapshot = try store.snapshot(id: "time").decoded([String: ConfigurationValue].self)
     #expect(snapshot["role"] == .string("time"))
@@ -227,7 +227,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     """##)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
     store.configuration = config
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let widget = config.widgets[0], popup = try #require(widget.popup)
     let view = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: config.defaults), store: store, widget: widget)

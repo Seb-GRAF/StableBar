@@ -21,7 +21,7 @@ final class BarEditingTests: XCTestCase {
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "", hidden: true)
         store.widgetScripts.scripts["output"] = script
-        store.updatePresentations()
+        store.barPresentation.updatePresentations()
         let before = try Data(contentsOf: fixture.url)
         let document = store.effectiveDocument
         let editing = store.barEditing
@@ -47,7 +47,7 @@ final class BarEditingTests: XCTestCase {
         editing.end()
         XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
         XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
-        XCTAssertEqual(store.presentations["output"]?.hidden, true)
+        XCTAssertEqual(store.barPresentation.presentations["output"]?.hidden, true)
         XCTAssertEqual(store.configuration?.widgets[0].enabled, false)
     }
 
@@ -65,10 +65,10 @@ final class BarEditingTests: XCTestCase {
         defer { store.stop() }
         let empty = ScriptWidget()
         store.widgetScripts.scripts["empty"] = empty
-        store.updatePresentations()
+        store.barPresentation.updatePresentations()
         XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == "empty" })
         empty.error = "Failed"
-        store.updatePresentations()
+        store.barPresentation.updatePresentations()
         XCTAssertTrue(store.barEditing.widgets(on: laptop).contains { $0.id == "empty" })
         store.barEditing.begin()
         XCTAssertTrue(store.barEditing.entries(on: laptop).allSatisfy(\.usesPlaceholder))
@@ -76,7 +76,7 @@ final class BarEditingTests: XCTestCase {
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "Hello", display: .builtIn)
         store.widgetScripts.scripts["script"] = script
-        store.updatePresentations()
+        store.barPresentation.updatePresentations()
         XCTAssertFalse(try XCTUnwrap(store.barEditing.entries(on: laptop).last).usesPlaceholder)
         XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: external).last).visibility.isHidden)
         store.barEditing.end()

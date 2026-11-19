@@ -109,7 +109,7 @@ enum SceneRenderer {
         let now = DocsImages.date
         store.crashReports = CrashReports(directories: [crashes], defaults: crashDefaults, now: { now })
         try DocsImages.offline(store, in: directory)
-        store.preparePresentations()
+        store.barPresentation.preparePresentations()
         if let path = scene.themeLink {
             let source = URL(filePath: path, relativeTo: folder).standardizedFileURL
             let link = ThemeLink(manifest: try Data(contentsOf: source.appending(path: "package.json")),

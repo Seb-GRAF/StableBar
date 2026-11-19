@@ -609,7 +609,7 @@ private extension DataSourceRegistry {
     store.reloadConfiguration()
     let status = try #require(store.widgetScripts.scripts["status"])
     try await awaitCondition { status.output.fields?["saver.text"] == "Saved" }
-    let presentation = try #require(store.presentations["status"])
+    let presentation = try #require(store.barPresentation.presentations["status"])
     let clock = TestClock()
     presentation.clock = clock
     store.widgetScripts.refreshScripts(for: "tick")
@@ -672,10 +672,10 @@ private extension DataSourceRegistry {
     #expect(status.output.icon == nil && status.output.tooltip == nil)
     battery.change(to: ScriptOutput(text: "10%", values: ["percent": 0.1]))
     try await awaitCondition { status.output.values?["power.percent"] == 0.1 }
-    #expect(store.presentations["status"]?.style.state == "warning")
+    #expect(store.barPresentation.presentations["status"]?.style.state == "warning")
     sound.change(to: audio(0.7))
     try await awaitCondition { status.output.values?["sound.volume"] == 0.7 }
-    let presentation = try #require(store.presentations["status"])
+    let presentation = try #require(store.barPresentation.presentations["status"])
     let clock = TestClock()
     presentation.clock = clock
     sound.change(to: AudioMonitor.showingChange(to: audio(0.6), from: audio(0.7)))

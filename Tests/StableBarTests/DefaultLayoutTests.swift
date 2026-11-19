@@ -432,7 +432,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
                 {"id":"named","type":"provider","provider":"speakers","position":"right"},
                 {"id":"icon","type":"text","text":"","icon":"speaker.wave.3","position":"right"}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     for id in ["sound", "named"] {
         let script = ScriptWidget()
         script.output = try ScriptOutput.read(Data(#"""
@@ -451,7 +451,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         let rest = try drawing(id)
         #expect(rest.width == iconOnly.width && rest.height == iconOnly.height, "\(id) draws no graph and no volume at rest")
         #expect(rest.difference(from: iconOnly) <= tolerance, "\(id)")
-        let presentation = try #require(store.presentations[id])
+        let presentation = try #require(store.barPresentation.presentations[id])
         presentation.show(TemporaryOutput(fields: ["changedVolume": "62%"], duration: 30), output: 1)
         let changed = try drawing(id)
         #expect(changed.width > rest.width && changed.height == rest.height, "\(id) shows the volume beside its icon after a change")
@@ -473,7 +473,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     store.configuration = try decode(Configuration.self, #"""
     {"roles":\#(roles),"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     for (id, json) in [("sound", #"{"text":"62%","icon":"speaker.wave.2","value":0.62,"values":{"volume":0.62}}"#),
                        ("fixed", #"{"text":"HDMI","icon":"speaker.wave.2","fields":{"volumeAvailable":"false"}}"#)] {
         let script = ScriptWidget()
@@ -490,15 +490,15 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
             .environment(\.measuringBarWidths, true))
     }
     let rest = try drawing("sound", on: 1)
-    try #require(store.presentations["sound"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["sound"]).setExpanded(true, on: 1)
     let open = try drawing("sound", on: 1)
     #expect(open.width > rest.width + 2 * 72, "The slider and the volume open beside the icon")
     #expect(open.height == rest.height)
     #expect(try drawing("sound", on: 2).width == rest.width, "Other displays stay closed")
-    try #require(store.presentations["sound"]).setExpanded(false, on: 1)
+    try #require(store.barPresentation.presentations["sound"]).setExpanded(false, on: 1)
     #expect(try drawing("sound", on: 1).width == rest.width)
     let fixed = try drawing("fixed", on: 1)
-    try #require(store.presentations["fixed"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["fixed"]).setExpanded(true, on: 1)
     #expect(try drawing("fixed", on: 1).width == fixed.width, "A device without a volume control has no slider")
     #expect(SoundWidgetView.opensBeforeIcon(.right))
     #expect(WidgetPosition.allCases.filter(SoundWidgetView.opensBeforeIcon) == [.right], "Only the right of the bar grows to the left")
@@ -529,7 +529,7 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
      "hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,
                     "onChange":"set-duration","style":{"width":100,"height":16}}}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     let widget = try #require(store.configuration?.widgets.first)
     let layout = try #require(widget.hoverLayout)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: true, hovered: false, open: false)
@@ -540,12 +540,12 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
         }.environment(\.measuringBarWidths, true))
     }
     let rest = try drawing(on: 1)
-    try #require(store.presentations["timer"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["timer"]).setExpanded(true, on: 1)
     let open = try drawing(on: 1)
     #expect(open.width > rest.width + 190)
     #expect(open.height == rest.height)
     #expect(try drawing(on: 2).width == rest.width)
-    try #require(store.presentations["timer"]).setExpanded(false, on: 1)
+    try #require(store.barPresentation.presentations["timer"]).setExpanded(false, on: 1)
     #expect(try drawing(on: 1).width == rest.width)
 }
 

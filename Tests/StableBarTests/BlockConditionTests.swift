@@ -57,9 +57,9 @@ func blockConditionsRejectAnEmptyListAndWhatRulesReject(conditions: String) {
     let script = ScriptWidget()
     store.widgetScripts.scripts["meeting"] = script
     script.output = ScriptOutput(text: "No meetings", fields: ["phase": "none"])
-    store.updatePresentations()
-    #expect(store.presentations["meeting"]?.hidden == true)
+    store.barPresentation.updatePresentations()
+    #expect(store.barPresentation.presentations["meeting"]?.hidden == true)
     script.output = ScriptOutput(text: "No calendar access", fields: ["access": "denied"])
-    store.updatePresentations()
-    #expect(store.presentations["meeting"]?.hidden == false)
+    store.barPresentation.updatePresentations()
+    #expect(store.barPresentation.presentations["meeting"]?.hidden == false)
 }

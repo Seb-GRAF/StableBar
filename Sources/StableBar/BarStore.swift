@@ -64,6 +64,7 @@ final class BarStore: NSObject {
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self, saveDelay: customizationSaveDelay)
     @ObservationIgnored lazy var barEditing = BarEditing(store: self)
     @ObservationIgnored lazy var widgetScripts = WidgetScripts(store: self)
+    @ObservationIgnored lazy var barPresentation = BarPresentation(store: self)
     @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
         packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")),
         sources: packageSources.filter { !$0.isStore })
@@ -73,9 +74,6 @@ final class BarStore: NSObject {
     /// The Store and the configured private sources. An invalid list leaves only the Store.
     var packageSources: [PackageSource] { (try? PackageSource.configured(in: effectiveDocument)) ?? [.store] }
     var context = ConfigurationContext()
-    private(set) var presentations: [String: WidgetPresentation] = [:]
-    private(set) var barStyle = WidgetStyle()
-    private(set) var screenBarStyles: [String: WidgetStyle] = [:]
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
@@ -103,7 +101,7 @@ final class BarStore: NSObject {
         configurationLoader.appVersion = release
         configurationWatcher.onChange = { [weak self] in self?.scheduleReload() }
         workspaceStore.onModeChange = { [weak self] mode in
-            self?.updatePresentations()
+            self?.barPresentation.updatePresentations()
             if self?.managesConnections == true { self?.widgetScripts.send(.aerospaceMode, ["INFO": mode ?? ""]) }
         }
     }
@@ -727,7 +725,7 @@ final class BarStore: NSObject {
         origins = loader.origins
         activeProfiles = loader.activeProfiles
         screenDocuments = loader.screenDocuments
-        preparePresentations()
+        barPresentation.preparePresentations()
     }
 
     private func display(_ next: Configuration, loader: ConfigurationLoader) {
@@ -748,7 +746,7 @@ final class BarStore: NSObject {
         readAppMenu()
         readMenuBarItems()
         appMenu.mirror.references = next.liveMenuBarItems
-        preparePresentations()
+        barPresentation.preparePresentations()
         effectiveDocument = loader.document
         let sources = packageSources.filter { !$0.isStore }
         Task { [packageStoreClient] in await packageStoreClient.setPrivateSources(sources) }
@@ -761,110 +759,18 @@ final class BarStore: NSObject {
         onConfigurationChange?()
     }
 
-    /// Keeps one presentation per configured widget and has every running script re-resolve
-    /// styles when it updates. A script reports to the first store that prepares it, so a store
-    /// that only shows the bar's scripts, like the setup preview, doesn't take them over.
-    func preparePresentations() {
-        presentations = Dictionary(uniqueKeysWithValues: (configuration?.widgets ?? []).map {
-            ($0.id, presentations[$0.id] ?? WidgetPresentation())
-        })
-        for script in widgetScripts.scripts.values where script.onUpdate == nil {
-            script.onUpdate = { [weak self] in self?.updatePresentations() }
-        }
-        updatePresentations()
-    }
-
-    /// Resolves every widget's style and presence and the bar's style from the configuration and the
-    /// current outputs. Only changed values are assigned, so views of unaffected widgets stay valid.
-    func updatePresentations() {
-        guard let configuration else { return }
-        let output = { (id: String) in self.widgetScripts.scripts[id]?.output }
-        let overrides = OrderedStyleOverrides(widgets: configuration.widgets, output: output)
-        let outputNeedsMode = overrides.bar.usesModeStates || overrides.widgets.values.contains(where: \.usesModeStates)
-            || widgetScripts.scripts.values.contains { $0.output.style?.usesModeStates == true || $0.output.styles?.values.contains(where: \.usesModeStates) == true }
-        if managesConnections {
-            workspaceStore.configure(source: configuration.workspaceSource,
-                                     workspaces: configuration.widgets.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) },
-                                     mode: configuration.needsModeConnection || outputNeedsMode)
-        }
-        let mode = modePresentation
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let screenOverrides = configuration.screenLooks.mapValues { OrderedStyleOverrides(widgets: $0.widgets, output: output) }
-        for widget in configuration.widgets {
-            let script = widgetScripts.scripts[widget.id]
-            let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
-                                                      role: configuration.roleStyle(widget.role)))
-            let usesMode = base.usesModeStates || configuration.usesSliderModeStates(widget) || widget.layout?.usesModeStates(roles: configuration.roles) == true
-                || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
-                || widget.overlay?.usesModeStates(roles: configuration.roles) == true
-                || script?.output.styles?.values.contains(where: \.usesModeStates) == true
-            let animation = script?.output.animation ?? widget.animation ?? configuration.bar.animation
-            let states = widgetDataStates(script?.output, widget: widget, providers: configuration.providers)
-            let hidesWhenEmpty = switch widget.content {
-            case .script: true
-            case let .provider(name): configuration.providers[name]?.whenVisible != true
-            default: false
-            }
-            var screenStyles: [String: ResolvedWidgetStyle] = [:]
-            for (kind, look) in configuration.screenLooks {
-                guard let own = look.widgets.first(where: { $0.id == widget.id }) else { continue }
-                let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind]!, own: script?.output,
-                                                          role: look.roleStyle(own.role)))
-                let screenStates = widgetDataStates(script?.output, widget: own, providers: configuration.providers)
-                let screenUsesMode = usesMode || base.usesModeStates || look.usesSliderModeStates(own)
-                    || own.layout?.usesModeStates(roles: look.roles) == true
-                    || own.hoverLayout?.usesModeStates(roles: look.roles) == true
-                    || own.overlay?.usesModeStates(roles: look.roles) == true
-                screenStyles[kind] = ResolvedWidgetStyle(base: base, state: screenStates.widget, parts: screenStates.parts,
-                                                         mode: screenUsesMode ? modePresentation(on: ScreenKind(rawValue: kind)!) : ModePresentation())
-            }
-            presentations[widget.id]?.update(style: ResolvedWidgetStyle(base: base, state: states.widget, parts: states.parts,
-                                                                        mode: usesMode ? mode : ModePresentation()),
-                                             screenStyles: screenStyles,
-                                             hidden: (script?.output.hidden == true || hidesWhenEmpty && !barEditing.hasContent(widget))
-                                                 && script?.error == nil,
-                                             display: script?.output.display,
-                                             visibility: visibilityAnimation(widget.transition ?? configuration.bar.motion.transition, animation: animation,
-                                                                             reduceMotion: reduceMotion))
-            presentations[widget.id]?.show(script?.output.temporary, output: script?.outputNumber ?? 0,
-                                           animation: reduceMotion ? nil : animation)
-        }
-        let bar = resolveStyle(barStyleLayers(configuration.bar.style, overrides: overrides), states: StyleStates(mode: mode))
-        if barStyle != bar { barStyle = bar }
-        let kinds = ScreenKind.allCases.filter { configuration.screenLooks[$0.rawValue] != nil }
-        let screenBars = Dictionary(uniqueKeysWithValues: kinds.map { kind in
-            (kind.rawValue, resolveStyle(barStyleLayers(configuration.bar(on: kind).style, overrides: overrides),
-                                         states: StyleStates(mode: modePresentation(on: kind))))
-        })
-        if screenBarStyles != screenBars { screenBarStyles = screenBars }
-    }
-
-    func barStyle(on kind: ScreenKind) -> WidgetStyle {
-        screenBarStyles[kind.rawValue] ?? barStyle
-    }
-
-    var modePresentation: ModePresentation {
-        ModePresentation(mode: configuration?.workspaceSource == .aerospace ? workspaceStore.mode : nil,
-                         aliases: configuration?.modeAliases ?? [:])
-    }
-
-    func modePresentation(on kind: ScreenKind) -> ModePresentation {
-        ModePresentation(mode: configuration?.workspaceSource == .aerospace ? workspaceStore.mode : nil,
-                         aliases: configuration?.look(on: kind).modeAliases ?? [:])
-    }
-
     func setPopupVisibleWidget(_ id: String?, anchor: NSView? = nil) {
         widgetScripts.popupWidgetID = id
         appMenu.closeSubmenus(after: nil)
         innerPopup.close()
         let anchor = anchor.map(ObjectIdentifier.init)
-        for (widgetID, presentation) in presentations { presentation.setPopupAnchor(widgetID == id ? anchor : nil) }
+        for (widgetID, presentation) in barPresentation.presentations { presentation.setPopupAnchor(widgetID == id ? anchor : nil) }
         widgetScripts.updateSuspension()
     }
 
     func setInnerPopupAnchor(_ anchor: NSView?, of id: String) {
         appMenu.closeSubmenus(after: nil)
-        presentations[id]?.setInnerPopupAnchor(anchor.map(ObjectIdentifier.init))
+        barPresentation.presentations[id]?.setInnerPopupAnchor(anchor.map(ObjectIdentifier.init))
     }
 
     /// Runs again what started with the app's own environment while the login shell's was still being read.
@@ -963,7 +869,7 @@ final class BarStore: NSObject {
                 "defaults": effectiveDocument["defaults"] ?? .object([:]),
                 "origins": .object(origins.filter { $0.key.hasPrefix("widgets.\(id).") }.mapValues { .string($0.description) })]
             result["mode"] = workspaceStore.mode.map(ConfigurationValue.string) ?? .null
-            result["modeStates"] = .array(StyleStates(mode: modePresentation).names.map(ConfigurationValue.string))
+            result["modeStates"] = .array(StyleStates(mode: barPresentation.modePresentation).names.map(ConfigurationValue.string))
             result["modeConnectionError"] = workspaceStore.connectionError.map(ConfigurationValue.string) ?? .null
             if let widget = configuration?.widgets.first(where: { $0.id == id }) {
                 let prefixes = ["widgets.\(id)", "defaults", "popupDefaults", "workspaceDefaults", "modeAliases", "roles"]
@@ -972,7 +878,7 @@ final class BarStore: NSObject {
                     prefixes.contains { entry.key == $0 || entry.key.hasPrefix($0 + ".") }
                 }.mapValues { .string($0.description) })
                 result["role"] = widget.role.map { .string($0.rawValue) } ?? .null
-                result["resolvedStyle"] = presentations[id]?.style.style(hovered: false).configurationValue ?? .object([:])
+                result["resolvedStyle"] = barPresentation.presentations[id]?.style.style(hovered: false).configurationValue ?? .object([:])
                 result["presentationLayers"] = .array(presentationLayers(for: widget))
                 if widget.content == .workspaces {
                     result["workspacePresentation"] = .object(try configuration!.workspaceDefaults.mergedProperties(definition["workspace"]))
@@ -991,8 +897,8 @@ final class BarStore: NSObject {
                     ?? .string(script.diagnostics.lastStdout)
                 result["error"] = script.error.map(ConfigurationValue.string) ?? .null
                 result["values"] = .object((script.output.values ?? [:]).mapValues(ConfigurationValue.number))
-                result["state"] = presentations[id]?.style.state.map(ConfigurationValue.string) ?? .null
-                result["temporaryFields"] = presentations[id]?.temporaryFields
+                result["state"] = barPresentation.presentations[id]?.style.state.map(ConfigurationValue.string) ?? .null
+                result["temporaryFields"] = barPresentation.presentations[id]?.temporaryFields
                     .map { ConfigurationValue.object($0.mapValues(ConfigurationValue.string)) } ?? .null
                 if let name = configuration?.widgets.first(where: { $0.id == id })?.providerName,
                    let provider = configuration?.providers[name], let type = registry[provider.type] {
@@ -1010,9 +916,9 @@ final class BarStore: NSObject {
             }
         return .object(["configuration": .object(effectiveDocument),
                         "mode": workspaceStore.mode.map(ConfigurationValue.string) ?? .null,
-                        "modeStates": .array(StyleStates(mode: modePresentation).names.map(ConfigurationValue.string)),
+                        "modeStates": .array(StyleStates(mode: barPresentation.modePresentation).names.map(ConfigurationValue.string)),
                         "modeConnectionError": workspaceStore.connectionError.map(ConfigurationValue.string) ?? .null,
-                        "resolvedBarStyle": barStyle.configurationValue,
+                        "resolvedBarStyle": barPresentation.barStyle.configurationValue,
                         "barPresentationLayers": .array(barLayers),
                         "origins": .object(origins.mapValues { .string($0.description) }),
                         "profiles": .array(activeProfiles.map(ConfigurationValue.string)),
@@ -1115,88 +1021,6 @@ final class BarStore: NSObject {
         reloadObserver = nil
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
-    }
-}
-
-/// One widget's resolved style and presence, observed per widget so one widget's update doesn't
-/// invalidate the views of the others.
-@MainActor @Observable
-final class WidgetPresentation {
-    private(set) var style = ResolvedWidgetStyle(base: WidgetStyle())
-    private(set) var screenStyles: [String: ResolvedWidgetStyle] = [:]
-    /// Displays where hovering expands the widget: an app menu with `expandOnHover`, or the Sound
-    /// widget with its volume slider. The bar's measuring copy, which no pointer reaches, reads it.
-    var expandedDisplays: Set<Int> = []
-    /// Output `hidden`, unless the widget has an error to show.
-    private(set) var hidden = false
-    /// Output `display`, which replaces the configured one.
-    private(set) var display: DisplaySelection?
-    /// The view that anchors this widget's open popup: only that instance shows `open`.
-    private(set) var popupAnchor: ObjectIdentifier?
-    private(set) var innerPopupAnchor: ObjectIdentifier?
-    /// Fields from the latest output's `temporary`, shown over the widget's own until they expire.
-    private(set) var temporaryFields: [String: String]?
-    /// The `temporary` that shows.
-    @ObservationIgnored private var temporary: TemporaryOutput?
-    /// The number of the last output `show` was given.
-    @ObservationIgnored private var shownOutput = 0
-    @ObservationIgnored private(set) var expiry: Task<Void, Never>?
-    /// What a `temporary` output's duration runs on; tests set a clock they advance themselves.
-    @ObservationIgnored var clock: any Clock<Duration> = ContinuousClock()
-
-    /// Assigns only what changed: equal assignments must not invalidate the widget's views. With a
-    /// `visibility` animation, a change of `hidden` animates the widget in or out.
-    func update(style: ResolvedWidgetStyle, screenStyles: [String: ResolvedWidgetStyle] = [:], hidden: Bool, display: DisplaySelection?,
-                visibility: WidgetAnimation? = nil) {
-        if self.style != style { self.style = style }
-        if self.screenStyles != screenStyles { self.screenStyles = screenStyles }
-        if self.hidden != hidden {
-            if let visibility { visibility.animate { self.hidden = hidden } } else { self.hidden = hidden }
-        }
-        if self.display != display { self.display = display }
-    }
-
-    func style(on kind: ScreenKind) -> ResolvedWidgetStyle {
-        screenStyles[kind.rawValue] ?? style
-    }
-
-    /// Expands or collapses the widget on `display`, with `animation` when given.
-    func setExpanded(_ expanded: Bool, on display: Int, animation: WidgetAnimation? = nil) {
-        guard expandedDisplays.contains(display) != expanded else { return }
-        var displays = expandedDisplays
-        if expanded { displays.insert(display) } else { displays.remove(display) }
-        if let animation { animation.animate { expandedDisplays = displays } } else { expandedDisplays = displays }
-    }
-
-    func setPopupAnchor(_ anchor: ObjectIdentifier?) {
-        if popupAnchor != anchor { popupAnchor = anchor }
-    }
-
-    func setInnerPopupAnchor(_ anchor: ObjectIdentifier?) {
-        if innerPopupAnchor != anchor { innerPopupAnchor = anchor }
-    }
-
-    /// Shows the `temporary` of a new output for its duration. `output` numbers the output, so the
-    /// same output applied again changes nothing. An output without one, or with the same one while
-    /// it shows, lets the current one run out. With an `animation`, the fields come and go with it.
-    func show(_ next: TemporaryOutput?, output: Int, animation: WidgetAnimation? = nil) {
-        guard output != shownOutput else { return }
-        shownOutput = output
-        guard let next, next != temporary else { return }
-        temporary = next
-        expiry?.cancel()
-        if temporaryFields != next.fields { setTemporaryFields(next.fields, animation: animation) }
-        let clock = clock
-        expiry = Task { [weak self] in
-            try? await clock.sleep(for: .seconds(next.duration))
-            guard !Task.isCancelled, let self else { return }
-            temporary = nil
-            setTemporaryFields(nil, animation: animation)
-        }
-    }
-
-    private func setTemporaryFields(_ fields: [String: String]?, animation: WidgetAnimation?) {
-        if let animation { animation.animate { temporaryFields = fields } } else { temporaryFields = fields }
     }
 }
 
