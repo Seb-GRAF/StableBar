@@ -78,11 +78,13 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   `onChange`, `onSubmit`, `onStop`, `onStar`, `set`), every `image` block and every list whose
   row is one of those. Script and custom provider widgets, widgets from folders or private
   sources, includes, templates, `environment` and `packageSources` stay behind. A Store package
-  carries its ID, version, its widgets' positions and its number, boolean and choice settings;
-  secret and free-text settings keep the package's defaults. The recipient applies the same
-  filters, installs packages from the Store, through its review when they need one, gets the
-  version the Store lists (the link's while it's the newest), and leaves out packages the Store
-  doesn't list. **Use this bar**
+  carries its ID, version, its widgets' positions and own `group`s, and its number, boolean and
+  choice settings; secret and free-text settings keep the package's defaults. The recipient
+  applies the same filters, installs packages from the Store, through its review when they need
+  one, gets the version the Store lists (the link's while it's the newest), and leaves out
+  packages the Store doesn't list. A Store version already on the recipient's bar skips the
+  review and keeps its settings, with the link's over them. Without the link's look,
+  a widget keeps its `group` only when the bar already has that group. **Use this bar**
   replaces the main file's widgets, packages, widget overrides and order, screen layouts and the
   widget changes in its profiles, and with **Every screen** the look that Save as Theme would
   move, in one undoable change; widgets that included files add stay. Limits: 64 KB for the URL,
