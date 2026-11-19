@@ -8,7 +8,7 @@ import Testing
 private let sources = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     .deletingLastPathComponent().appending(path: "Sources")
 
-/// Every Swift file under `Sources`, nested ones too, by its path from there, such as `StableBar/BarStore.swift`.
+/// Every Swift file under `Sources`, nested ones too, by its path from there, such as `StableBar/Bar/BarStore.swift`.
 private func swiftSources() throws -> [(path: String, text: String)] {
     let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
     return try files.filter { $0.pathExtension == "swift" }.map { file in
@@ -45,7 +45,7 @@ private func swiftSources() throws -> [(path: String, text: String)] {
             \(file.path) binds a private symbol at launch, so a macOS without it can't open StableBar: \
             look it up in PrivateAPI.swift (AGENTS.md)
             """)
-        guard file.path != "StableBar/PrivateAPI.swift" else { continue }
+        guard file.path != "StableBar/System/PrivateAPI.swift" else { continue }
         #expect(file.text.firstMatch(of: #/\b(dlsym|dlopen)\b|PrivateFrameworks/#) == nil,
                 "\(file.path) calls private macOS API: add it to PrivateAPI.swift, with a maintainer's OK (AGENTS.md)")
     }

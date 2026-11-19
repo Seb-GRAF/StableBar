@@ -53,32 +53,32 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 
 ## Architecture
 
-- [Configuration.swift](Sources/StableBar/Configuration.swift): config, widget definitions and style inheritance.
-- [StyleResolution.swift](Sources/StableBar/StyleResolution.swift): style layers and states resolved in one place for bar widgets, workspace cells, layout blocks and the bar, and the rules that set data states.
-- [WidgetLabel.swift](Sources/StableBar/WidgetLabel.swift): what each widget type shows and the default layout it draws.
-- [BarStore.swift](Sources/StableBar/BarStore.swift): live reload, shared provider lifetimes, visibility, sleep and each widget's resolved style.
-- [ConfigurationLoader.swift](Sources/StableBar/ConfigurationLoader.swift): includes, profiles, tokens and provenance.
-- [ConfigurationEdits.swift](Sources/StableBar/ConfigurationEdits.swift): file-preserving edits shared by CLI and editor.
-- [RuntimeControl.swift](Sources/StableBar/RuntimeControl.swift): local request/reply control endpoint.
-- [ConfigurationEditor.swift](Sources/StableBar/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
-- [NativeMetrics.swift](Sources/StableBar/NativeMetrics.swift): CPU, memory, network and calendar readings.
-- [AudioMonitor.swift](Sources/StableBar/AudioMonitor.swift): output-device readings and CoreAudio change listeners.
-- [PowerMonitor.swift](Sources/StableBar/PowerMonitor.swift): battery readings and power-change notifications.
-- [WidgetPackage.swift](Sources/StableBar/WidgetPackage.swift): package inspection, installation, store downloads and version selection.
-- [Workspaces.swift](Sources/StableBar/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
-- [Yabai.swift](Sources/StableBar/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
-- [ScriptWidget.swift](Sources/StableBar/ScriptWidget.swift): the runner that applies a data source's output, with diagnostics, retries and suspension.
-- [DataSource.swift](Sources/StableBar/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
-- [DataSourceRegistry.swift](Sources/StableBar/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
-- [BuiltInEvents.swift](Sources/StableBar/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
-- [BarView.swift](Sources/StableBar/BarView.swift): native rendering and selection animation.
-- [LayoutConfiguration.swift](Sources/StableBar/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
-- [PopupConfiguration.swift](Sources/StableBar/PopupConfiguration.swift): popup layout blocks.
-- [PopupView.swift](Sources/StableBar/PopupView.swift): shared popup rendering and script bindings.
-- [WidgetPopup.swift](Sources/StableBar/WidgetPopup.swift): anchored panel, dismissal and screen placement.
-- [StableBarApp.swift](Sources/StableBar/StableBarApp.swift): non-activating panels and application lifecycle.
+- [Configuration.swift](Sources/StableBar/Configuration/Configuration.swift): config, widget definitions and style inheritance.
+- [StyleResolution.swift](Sources/StableBar/Configuration/StyleResolution.swift): style layers and states resolved in one place for bar widgets, workspace cells, layout blocks and the bar, and the rules that set data states.
+- [WidgetLabel.swift](Sources/StableBar/Bar/WidgetLabel.swift): what each widget type shows and the default layout it draws.
+- [BarStore.swift](Sources/StableBar/Bar/BarStore.swift): live reload, shared provider lifetimes, visibility, sleep and each widget's resolved style.
+- [ConfigurationLoader.swift](Sources/StableBar/Configuration/ConfigurationLoader.swift): includes, profiles, tokens and provenance.
+- [ConfigurationEdits.swift](Sources/StableBar/Configuration/ConfigurationEdits.swift): file-preserving edits shared by CLI and editor.
+- [RuntimeControl.swift](Sources/StableBar/App/RuntimeControl.swift): local request/reply control endpoint.
+- [ConfigurationEditor.swift](Sources/StableBar/Settings/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
+- [NativeMetrics.swift](Sources/StableBar/DataSources/NativeMetrics.swift): CPU, memory, network and calendar readings.
+- [AudioMonitor.swift](Sources/StableBar/DataSources/AudioMonitor.swift): output-device readings and CoreAudio change listeners.
+- [PowerMonitor.swift](Sources/StableBar/DataSources/PowerMonitor.swift): battery readings and power-change notifications.
+- [WidgetPackage.swift](Sources/StableBar/Packages/WidgetPackage.swift): package inspection, installation, store downloads and version selection.
+- [Workspaces.swift](Sources/StableBar/Workspaces/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
+- [Yabai.swift](Sources/StableBar/Workspaces/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
+- [ScriptWidget.swift](Sources/StableBar/DataSources/ScriptWidget.swift): the runner that applies a data source's output, with diagnostics, retries and suspension.
+- [DataSource.swift](Sources/StableBar/DataSources/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
+- [DataSourceRegistry.swift](Sources/StableBar/DataSources/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
+- [BuiltInEvents.swift](Sources/StableBar/DataSources/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
+- [BarView.swift](Sources/StableBar/Bar/BarView.swift): native rendering and selection animation.
+- [LayoutConfiguration.swift](Sources/StableBar/Configuration/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
+- [PopupConfiguration.swift](Sources/StableBar/Configuration/PopupConfiguration.swift): popup layout blocks.
+- [PopupView.swift](Sources/StableBar/Popups/PopupView.swift): shared popup rendering and script bindings.
+- [WidgetPopup.swift](Sources/StableBar/Popups/WidgetPopup.swift): anchored panel, dismissal and screen placement.
+- [StableBarApp.swift](Sources/StableBar/App/StableBarApp.swift): non-activating panels and application lifecycle.
 
-There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
+There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/System/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
 
 ## How we work
 
@@ -151,7 +151,7 @@ Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their st
 
 ## Docs images
 
-`scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data, a fixed date (Thursday 22 October 2026, 09:41 UTC) and a local, empty Store index, and writes them as WebP. Two runs of one commit on one Mac draw the same pixels. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main` and on pull requests that change the app, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/DocsImages.swift).
+`scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data, a fixed date (Thursday 22 October 2026, 09:41 UTC) and a local, empty Store index, and writes them as WebP. Two runs of one commit on one Mac draw the same pixels. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main` and on pull requests that change the app, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/Rendering/DocsImages.swift).
 
 ## Scenes
 
