@@ -4,39 +4,37 @@ struct SettingsGroup<Content: View>: View {
     let title: String
     let detail: String?
     let reset: (() -> Void)?
-    /// Makes the group collapse to its header, which then toggles it.
-    let isExpanded: Binding<Bool>?
+    /// Makes the header a button that closes the group.
+    let close: (() -> Void)?
     @ViewBuilder let content: Content
 
-    init(_ title: String, detail: String? = nil, reset: (() -> Void)? = nil, isExpanded: Binding<Bool>? = nil,
+    init(_ title: String, detail: String? = nil, reset: (() -> Void)? = nil, close: (() -> Void)? = nil,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.detail = detail
         self.reset = reset
-        self.isExpanded = isExpanded
+        self.close = close
         self.content = content()
     }
 
     var body: some View {
-        let expanded = isExpanded?.wrappedValue ?? true
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                if let isExpanded {
+                if let close {
                     Button {
-                        withAnimation(.snappy(duration: 0.2)) { isExpanded.wrappedValue.toggle() }
+                        withAnimation(.snappy(duration: 0.2)) { close() }
                     } label: {
                         HStack(spacing: 6) {
-                            Image(systemName: "chevron.right")
+                            Image(systemName: "chevron.down")
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(.secondary)
-                                .rotationEffect(.degrees(expanded ? 90 : 0))
                             heading
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(title)
-                    .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+                    .accessibilityValue("Expanded")
                 } else {
                     heading
                 }
@@ -49,14 +47,12 @@ struct SettingsGroup<Content: View>: View {
                 }
             }
             .padding(.horizontal, 4)
-            if expanded {
-                VStack(spacing: 0) { content }
-                    .labeledContentStyle(GroupRowStyle())
-                    .padding(.top, -1)
-                    .settingsCard()
-            }
+            VStack(spacing: 0) { content }
+                .labeledContentStyle(GroupRowStyle())
+                .padding(.top, -1)
+                .settingsCard()
         }
-        .padding(.top, isExpanded == nil || expanded ? 22 : 14)
+        .padding(.top, 22)
         .id(title)
     }
 
@@ -66,6 +62,45 @@ struct SettingsGroup<Content: View>: View {
             if let detail { Text("· \(detail)").font(.system(size: 11.5)) }
         }
         .foregroundStyle(.secondary)
+    }
+}
+
+/// A closed group as a row of a card: a click opens it. `detail` sits on the right, with Reset when there's one.
+struct ClosedSettingsGroup: View {
+    let title: String
+    let detail: String?
+    let reset: (() -> Void)?
+    let open: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button {
+                withAnimation(.snappy(duration: 0.2)) { open() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.secondary)
+                    Text(title)
+                    Spacer(minLength: 8)
+                    if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary) }
+                }
+                .padding(.leading, 16)
+                .frame(minHeight: 46)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue("Collapsed")
+            if let reset {
+                Button("Reset", action: reset)
+                    .buttonStyle(.link)
+                    .font(.system(size: 12))
+                    .accessibilityLabel("Reset \(title)")
+            }
+        }
+        .padding(.trailing, 16)
+        .overlay(alignment: .top) { SettingsPalette.separator.frame(height: 1) }
     }
 }
 

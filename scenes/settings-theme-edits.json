@@ -2,5 +2,6 @@
   "$schema": "../scene.schema.json",
   "configuration": "../Tests/Fixtures/theme-edits/config.json",
   "draw": "settings",
-  "section": "theme"
+  "section": "theme",
+  "height": 2600
 }
