@@ -66,6 +66,7 @@ struct ThemeEdits {
     /// How many style values each widget keeps under every theme, in its definition or the main file's overrides.
     let widgetStyles: [String: Int]
     private let configuration: [String: ConfigurationValue]
+    private let profileNames: [String]
 
     static let none = ThemeEdits(main: [:], themeID: "")
 
@@ -76,6 +77,7 @@ struct ThemeEdits {
         let profile = Self.profile(for: themeID, in: main)
         self.profile = profile.flatMap { $0["name"].flatMap { try? $0.decoded(String.self) } }
         configuration = (try? profile?["configuration"]?.decoded([String: ConfigurationValue].self)) ?? [:]
+        profileNames = ((try? main["profiles"]?.decoded([ConfigurationProfile].self)) ?? []).map(\.name)
         let themed = (try? theme["tokens"]?.decoded([String: ConfigurationValue].self)) ?? [:]
         changes = lookValues(in: configuration, tokens: { _ in true }, widgets: names, theme: theme)
         everyTheme = lookValues(in: main, tokens: { name in themed[name] != nil || themeTokens.contains { $0.name == name } },
@@ -145,9 +147,22 @@ struct ThemeEdits {
         [removal(of: [change]), change.setting()].compactMap { $0 }
     }
 
-    /// Moves `values` that apply under every theme into the theme's profile, created as `name` if there's none.
-    func keepingWithTheme(_ values: [ThemeEdit], name: String) -> [ConfigurationEdit] {
-        values.map(\.removal) + values.map { $0.setting(profile: profile ?? name, themeID: themeID) }
+    /// The profile that keeps the edits: the existing one, else "<theme> edits", numbered past the main file's other
+    /// profiles.
+    func profileName(theme: String) -> String {
+        if let profile { return profile }
+        var name = "\(theme) edits"
+        var number = 2
+        while profileNames.contains(name) {
+            name = "\(theme) edits \(number)"
+            number += 1
+        }
+        return name
+    }
+
+    /// Moves `values` that apply under every theme into the theme's profile.
+    func keepingWithTheme(_ values: [ThemeEdit], theme: String) -> [ConfigurationEdit] {
+        values.map(\.removal) + values.map { $0.setting(profile: profileName(theme: theme), themeID: themeID) }
     }
 }
 
@@ -293,7 +308,8 @@ extension ConfigurationEditor {
         let (look, rest) = lookPart(of: edit)
         guard var look else { return change(edit, everyBar: everyBar) }
         let theme = selectedTheme
-        let profile = themeEdits().profile
+        let edits = themeEdits()
+        let profile = edits.profile
         if edit.action == .unset {
             guard let profile else { return change(edit, everyBar: everyBar) }
             look.profile = profile
@@ -301,7 +317,7 @@ extension ConfigurationEditor {
             catch { self.error = errorMessage(error) }
             return
         }
-        look.profile = profile ?? "\(theme.name) edits"
+        look.profile = edits.profileName(theme: theme.name)
         look.profileConditions = ["theme": .string(theme.id)]
         if let rest { change([rest, look], everyBar: everyBar) } else { change(look, everyBar: everyBar) }
     }

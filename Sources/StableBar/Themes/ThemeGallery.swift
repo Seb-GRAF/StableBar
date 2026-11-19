@@ -297,10 +297,12 @@ final class ThemeGallery {
             let installed = try await client.install(source, from: nil, origin: .saved)
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
-            // A theme can't hold widget styles, so they become the new theme's edits.
-            var changes = edits.changes.filter { $0.path.first == "widgetOverrides" }
-                .map { $0.setting(profile: "\(name) edits", themeID: choice.manifest.id) }
-            changes += [edits.revertEdit].compactMap { $0 }
+            // A theme can't hold widget styles, so they become the new theme's edits, after the old ones go: saving a
+            // theme under its own name keeps the same profile.
+            let profile = ThemeEdits(main: main, themeID: choice.manifest.id).profileName(theme: name)
+            var changes = [edits.revertEdit].compactMap { $0 }
+            changes += edits.changes.filter { $0.path.first == "widgetOverrides" }
+                .map { $0.setting(profile: profile, themeID: choice.manifest.id) }
             if selecting { changes.append(try store.configurationStore.themeEdit(for: choice)) }
             perform(on: key) { try store.customizationHistory.change(changes, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }

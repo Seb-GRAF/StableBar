@@ -147,7 +147,7 @@ struct ThemeEditsTests {
         """#)
         defer { fixture.close(); store.stop() }
         var edits = editor.gallery.edits
-        editor.change(edits.keepingWithTheme(edits.everyTheme, name: "Test theme edits"))
+        editor.change(edits.keepingWithTheme(edits.everyTheme, theme: "Test theme"))
         #expect(try fixture.document()["defaults"] == nil)
         #expect(try profiles(fixture).first?["configuration"] == .object(["defaults": .object(["fontSize": .number(15)])]))
         #expect(store.configuration?.defaults.fontSize == 15)
@@ -177,5 +177,40 @@ struct ThemeEditsTests {
         #expect(try profiles(fixture).first?["configuration"] == .object(["defaults": .object(["cornerRadius": .number(3)])]))
         #expect(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self).first?["style"] == nil)
         #expect(store.customizationHistory.undoSteps.count == 1)
+    }
+
+    @Test func savingAThemeUnderItsOwnNameKeepsItsWidgetEdits() async throws {
+        let (fixture, store, editor) = try await editor(#"""
+        {"theme":{"id":"test-theme","version":"1"},"widgets":[{"id":"clock","type":"clock","position":"right"}],
+         "profiles":[{"name":"Test theme edits","when":{"theme":"test-theme"},
+                      "configuration":{"defaults":{"fontSize":14},"widgetOverrides":{"clock":{"background":"#000000"}}}}]}
+        """#)
+        defer { fixture.close(); store.stop() }
+
+        await editor.gallery.save(try #require(editor.gallery.selectedChoice), as: "Test theme")
+
+        #expect(editor.gallery.selectedKey == "test-theme/1.0.0")
+        #expect(try profiles(fixture) == [[
+            "name": .string("Test theme edits"), "when": .object(["theme": .string("test-theme")]),
+            "configuration": .object(["widgetOverrides": .object(["clock": .object(["background": .string("#000000")])])])
+        ]])
+    }
+
+    @Test func savingAThemeLeavesAnotherProfileWithItsEditsName() async throws {
+        let (fixture, store, editor) = try await editor(#"""
+        {"theme":{"id":"test-theme","version":"1"},"widgets":[{"id":"clock","type":"clock","position":"right"}],
+         "profiles":[{"name":"Mine edits","when":{"appearance":"dark"},"configuration":{}},
+                     {"name":"Test theme edits","when":{"theme":"test-theme"},
+                      "configuration":{"widgetOverrides":{"clock":{"background":"#000000"}}}}]}
+        """#)
+        defer { fixture.close(); store.stop() }
+
+        await editor.gallery.save(try #require(editor.gallery.selectedChoice), as: "Mine")
+
+        #expect(try profiles(fixture) == [
+            ["name": .string("Mine edits"), "when": .object(["appearance": .string("dark")]), "configuration": .object([:])],
+            ["name": .string("Mine edits 2"), "when": .object(["theme": .string("mine")]),
+             "configuration": .object(["widgetOverrides": .object(["clock": .object(["background": .string("#000000")])])])]
+        ])
     }
 }

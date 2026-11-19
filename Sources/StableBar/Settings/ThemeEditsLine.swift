@@ -78,7 +78,7 @@ struct ThemeEditsLine: View {
                 Spacer(minLength: 8)
                 Button(showsEveryTheme ? "Hide" : "Show") { withAnimation(.snappy) { showsEveryTheme.toggle() } }.buttonStyle(.link)
                 Button("Keep with \(name) Only") {
-                    editor.change(edits.keepingWithTheme(edits.everyTheme, name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
+                    editor.change(edits.keepingWithTheme(edits.everyTheme, theme: name), everyBar: editor.themeChangesEveryBar)
                 }
             }
             if showsEveryTheme {
@@ -86,7 +86,7 @@ struct ThemeEditsLine: View {
                     editor.change(change.removal, everyBar: editor.themeChangesEveryBar)
                 } actions: { change in
                     Button("Keep with \(name) Only") {
-                        editor.change(edits.keepingWithTheme([change], name: "\(name) edits"), everyBar: editor.themeChangesEveryBar)
+                        editor.change(edits.keepingWithTheme([change], theme: name), everyBar: editor.themeChangesEveryBar)
                     }
                 }
             }
@@ -293,7 +293,7 @@ private struct SaveAsThemeSheet: View {
                     close()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(name.isEmpty)
+                .disabled(packageSlug(name).isEmpty)
             }
         }
         .padding(24)
