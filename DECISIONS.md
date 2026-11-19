@@ -85,7 +85,11 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   doesn't list. **Use this bar**
   replaces the main file's widgets, packages, widget overrides and order, screen layouts and the
   widget changes in its profiles, and with **Every screen** the look that Save as Theme would
-  move, in one undoable change; widgets that included files add stay. Limits: 64 KB for the URL,
+  move, in one undoable change; widgets that included files add stay. When the link centers
+  widgets and the Mac has a notched display under a top bar, **Try on Bar** and **Use this bar**
+  also write a `screens.laptop.layout` that puts them left of the notch: the bar puts them right
+  of it with the right-hand ones, where a bar made on a wide monitor doesn't fit. Other screens
+  keep them centered. Limits: 64 KB for the URL,
   128 KB for the decoded payload, 32 levels of JSON nesting and 4,096 JSON values. Theme links
   don't change.
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.

@@ -1428,9 +1428,10 @@ struct ThemeLinkCandidateTests {
         #expect(store.configuration?.widgets.map(\.id) == ["mine"])
     }
 
-    @Test func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep() async throws {
+    @Test(arguments: [(false, "top"), (true, "top"), (true, "bottom")])
+    func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep(notched: Bool, position: String) async throws {
         let fixture = try ThemeGalleryFixture(#"""
-            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"bottom"},
+            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"\#(position)"},
              "screens":{"laptop":{"layout":{"left":["mine"]}}},
              "profiles":[{"name":"Work","enabled":false,"configuration":{"widgetOverrides":{"mine":{"text":"Work"}}}}],
              "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"},
@@ -1441,8 +1442,11 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         try DocsImages.offline(store, in: fixture.directory)
         let original = try Data(contentsOf: fixture.url)
-        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        var link = try linkedBar()
+        link.widgets[4]["position"] = .string("center")
+        let candidate = try BarLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
+        candidate.hasNotchedDisplay = { notched }
         await candidate.loadStore()
         #expect(candidate.widgets.filter { $0.source == .unlisted }.map(\.id) == ["weather", "uptime"])
         await candidate.use()
@@ -1452,8 +1456,11 @@ struct ThemeLinkCandidateTests {
         #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
         let document = try fixture.document()
         #expect(document["defaults"] == nil)
-        #expect(document["bar"] == .object(["position": .string("bottom")]))
-        #expect(document["screens"] == nil)
+        #expect(document["bar"] == .object(["position": .string(position)]))
+        #expect(document["screens"] == (notched && position == "top" ? .object(["laptop": .object(["layout": .object([
+            "left": .array([.string("workspaces"), .string("app")]), "notchLeft": .array([.string("clock")]),
+            "notchRight": .array([]), "right": .array([.string("sound"), .string("battery")])
+        ])])]) : nil))
         #expect(document["profiles"] == .array([.object(["name": .string("Work"), "enabled": .bool(false), "configuration": .object([:])])]))
         #expect(store.customizationHistory.undoSteps.count == 1)
         try store.customizationHistory.undo()
