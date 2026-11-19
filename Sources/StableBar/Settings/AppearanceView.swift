@@ -7,8 +7,6 @@ struct AppearanceView: View {
     @State private var advanced: AdvancedSheet?
     @State private var screen: ScreenKind?
     @State private var fontFamilies: [String] = []
-    @State private var savingTheme = false
-    @State private var themeName = ""
 
     private var store: BarStore { editor.store }
     private var gallery: ThemeGallery { editor.gallery }
@@ -47,7 +45,9 @@ struct AppearanceView: View {
                                 .padding(.top, 10).padding(.bottom, 4)
                         }
                         themes(appearance)
-                        if screen == nil, !gallery.linkedThemeIsActive { overrides }
+                        if screen == nil, editor.editingProfile == nil, let theme = gallery.selectedChoice {
+                            ThemeEditsLine(editor: editor, theme: theme).padding(.top, 12)
+                        }
                         colors(appearance)
                         HStack(alignment: .top, spacing: 20) {
                             VStack(spacing: 22) {
@@ -121,30 +121,7 @@ struct AppearanceView: View {
                     .buttonStyle(.link)
                     .font(.system(size: 12))
                 }
-                if screen == nil, editor.editingProfile == nil, let choice = gallery.choices.first(where: { $0.key == gallery.selectedKey }) {
-                    Button("Save as Theme…") {
-                        themeName = choice.isBundled || choice.manifest.repository != nil ? "My \(choice.manifest.name)" : choice.manifest.name
-                        savingTheme = true
-                    }
-                    .buttonStyle(.link)
-                    .font(.system(size: 12))
-                    .sheet(isPresented: $savingTheme) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Save as Theme").font(.headline)
-                            TextField("Name", text: $themeName).frame(width: 360)
-                            HStack {
-                                Spacer()
-                                Button("Cancel") { savingTheme = false }.keyboardShortcut(.cancelAction)
-                                Button("Save") {
-                                    Task { await gallery.save(choice, as: themeName, everyBar: editor.themeChangesEveryBar) }
-                                    savingTheme = false
-                                }
-                                .keyboardShortcut(.defaultAction)
-                                .disabled(themeName.isEmpty)
-                            }
-                        }
-                        .padding(24)
-                    }
+                if screen == nil, editor.editingProfile == nil, let choice = gallery.selectedChoice {
                     if !choice.isBundled {
                         Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) }
                             .buttonStyle(.link)
@@ -226,15 +203,6 @@ struct AppearanceView: View {
                              source: entry.sourceID == PackageSource.storeID ? nil : .privateSource(gallery.sourceName(entry.sourceID))) {
                 Task { await gallery.get(entry, on: screen, everyBar: editor.themeChangesEveryBar) }
             }
-        }
-    }
-
-    @ViewBuilder private var overrides: some View {
-        if let theme = gallery.overrideTheme {
-            ThemeOverrideNotice(overrides: gallery.overrides, name: theme.title) {
-                editor.change(gallery.overrides.resetEdit, everyBar: editor.themeChangesEveryBar)
-            }
-            .padding(.top, 12)
         }
     }
 
@@ -564,12 +532,12 @@ private extension ConfigurationEditor {
         let nest = { (properties: [String: ConfigurationValue]) in path.dropFirst().reversed().reduce(properties) { [$1: .object($0)] } }
         return StyleFields(store: store, path: path.joined(separator: "."),
                            defaultsPath: screen == nil ? defaultsPath : keys.joined(separator: "."), values: values,
-                           set: { self.change(ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: path[0])!, properties: nest($0)),
-                                              everyBar: self.themeChangesEveryBar) },
+                           set: { self.changeLook(ConfigurationEdit(action: ConfigurationEdit.Action(rawValue: path[0])!, properties: nest($0)),
+                                                  everyBar: self.themeChangesEveryBar) },
                            unset: { self.unset([path[0]: .object(nest($0))]) })
     }
 
     func unset(_ properties: [String: ConfigurationValue]) {
-        change(ConfigurationEdit(action: .unset, properties: properties), everyBar: themeChangesEveryBar)
+        changeLook(ConfigurationEdit(action: .unset, properties: properties), everyBar: themeChangesEveryBar)
     }
 }

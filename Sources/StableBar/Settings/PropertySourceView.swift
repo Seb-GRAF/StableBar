@@ -143,11 +143,14 @@ extension BarStore {
         }
         let definition = widgetID.flatMap { origins["widgets.\($0).id"] }
         let mainDefinition = definition?.file == configurationStore.configurationURL.standardizedFileURL.path
+        let theme = configurationStore.selectedThemeKey.prefix { $0 != "/" }
+        let themeEdits = profiles.first { $0.when?.onlyTheme == String(theme) && activeProfiles.contains($0.name) }?.name
         let saved = own.last { source in
             guard let origin = source.origin, origin.file == configurationStore.configurationURL.standardizedFileURL.path else { return false }
             if let profile = customizationHistory.editingProfile {
                 return origin.profile == profile && !origin.detail.contains("(template ")
             }
+            if let themeEdits, origin.profile == themeEdits { return !origin.detail.contains("(template ") }
             if widgetID != nil, mainDefinition {
                 return origin.profile == definition?.profile && !origin.detail.contains("(template ") && !origin.detail.contains("(widget override)")
             }
@@ -246,7 +249,14 @@ extension BarStore {
             path = ["profiles", profile, "configuration"] + path
         }
         let mask = path.dropFirst().reversed().reduce(ConfigurationValue.null) { .object([$1: $0]) }
-        try customizationHistory.change(ConfigurationEdit(action: .unset, properties: [path[0]: mask]), everyBar: everyBar)
+        let edit = ConfigurationEdit(action: .unset, properties: [path[0]: mask])
+        // A theme's profile of edits goes once its last edit does.
+        if let profile = origin.profile, profile != customizationHistory.editingProfile,
+           profiles.first(where: { $0.name == profile })?.when?.onlyTheme != nil {
+            try customizationHistory.change(removingEmptyThemeEdits([edit], profile: profile), everyBar: everyBar)
+        } else {
+            try customizationHistory.change(edit, everyBar: everyBar)
+        }
     }
 }
 

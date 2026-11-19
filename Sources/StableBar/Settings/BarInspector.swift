@@ -63,10 +63,6 @@ struct BarInspector: View {
     @State private var resetting: WidgetConfiguration?
     private var store: BarStore { editor.store }
 
-    private static let styleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "fontName", "fontWeight", "fontSize",
-                                    "paddingHorizontal", "paddingVertical", "paddingLeading", "paddingTrailing", "paddingTop", "paddingBottom",
-                                    "cornerRadius", "borderWidth", "borderColor"]
-
     var body: some View {
         let widget = editor.barItem == .widget ? store.configuration?.onScreen(screen).widgets.first { $0.id == editor.selectedID } : nil
         let group = editor.barItem == .group ? editor.selectedGroup.flatMap { store.configuration?.groups[$0] != nil ? $0 : nil } : nil
@@ -324,7 +320,7 @@ struct BarInspector: View {
             return nil
         } ?? [:]
         let style = StyleFields(store: store, path: "groups.\(group).style", defaultsPath: "groupDefaults", values: values,
-                                set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
+                                set: { editor.changeLook(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
                                 unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
         let grouping = WidgetGrouping(store: store)
         groupStylePanel(style, flared: store.configuration?.groups[group]?.style.flare != nil)
@@ -370,13 +366,13 @@ struct BarInspector: View {
 
     private var defaultsStyle: StyleFields {
         StyleFields(store: store, path: "defaults", values: document("defaults"),
-                    set: { editor.change(ConfigurationEdit(action: .defaults, properties: $0)) },
+                    set: { editor.changeLook(ConfigurationEdit(action: .defaults, properties: $0)) },
                     unset: { unset(["defaults": .object($0)]) })
     }
 
     private var groupDefaultsStyle: StyleFields {
         StyleFields(store: store, path: "groupDefaults", values: document("groupDefaults"),
-                    set: { editor.change(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
+                    set: { editor.changeLook(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
                     unset: { unset(["groupDefaults": .object($0)]) })
     }
 
@@ -393,7 +389,7 @@ struct BarInspector: View {
                         ?? resolveStyle([defaults, widget.style, WidgetStyle(background: widget.popupBackground)])).background?.configurationValue ?? .null,
                     "tooltipBackground": widget.tooltipStyle.inheriting(defaults).background?.configurationValue ?? .null
                 ], set: { editor.set($0, for: widget.id) },
-                    unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
+                    unset: { editor.changeLook(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
                 backgrounds.color("Widget background", "background")
                 backgrounds.color("Popup background", "popupBackground")
                 backgrounds.color("Tooltip background", "tooltipBackground")
@@ -429,16 +425,11 @@ struct BarInspector: View {
                     unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
             }
         }
-        if let widget, Self.styleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
+        if let widget, widgetStyleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
             || ["background", "popupBackground", "tooltipBackground"].contains(where: {
                 store.propertySources(path: "widgets.\(widget.id)", key: $0, widgetID: widget.id, values: [:]).saved != nil
             }) {
-            Button("Go back to the Every widget look") {
-                editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: [
-                    "style": .object(Dictionary(uniqueKeysWithValues: Self.styleKeys.map { ($0, ConfigurationValue.null) }).merging(HoverBackgroundRow.reset) { $1 }),
-                    "background": .null, "popupBackground": .null, "tooltipBackground": .null
-                ]))
-            }
+            Button("Go back to the Every widget look") { editor.resetStyle(of: widget) }
             .controlSize(.small)
             .frame(maxWidth: .infinity)
             .padding(.top, 12)
@@ -465,7 +456,7 @@ struct BarInspector: View {
         case .style:
             stylePanel(StyleFields(store: store, path: "widgets.\(widget.id).style", defaultsPath: "defaults", widgetID: widget.id,
                                    values: editor.style(for: widget.id), set: { editor.set(["style": .object($0)], for: widget.id) },
-                                   unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) }),
+                                   unset: { editor.changeLook(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) }),
                        name: names[widget.id] ?? widget.id, widget: widget)
         case .behavior: behaviorPanel(widget)
         }
@@ -882,7 +873,7 @@ struct BarInspector: View {
         if let kind {
             editor.change(ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["bar": .object(properties)])]))
         } else {
-            editor.change(ConfigurationEdit(action: .bar, properties: properties))
+            editor.changeLook(ConfigurationEdit(action: .bar, properties: properties))
         }
     }
 
@@ -891,7 +882,7 @@ struct BarInspector: View {
     }
 
     private func unset(_ properties: [String: ConfigurationValue]) {
-        editor.change(ConfigurationEdit(action: .unset, properties: properties))
+        editor.changeLook(ConfigurationEdit(action: .unset, properties: properties))
     }
 }
 

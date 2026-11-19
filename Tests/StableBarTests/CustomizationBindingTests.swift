@@ -312,7 +312,7 @@ import Testing
                 else { editor.change(ConfigurationEdit(action: .defaults, properties: properties)) }
             },
             unset: { properties in
-                if widget { editor.change(ConfigurationEdit(action: .unset, id: "time", properties: ["style": .object(properties)])) }
+                if widget { editor.changeLook(ConfigurationEdit(action: .unset, id: "time", properties: ["style": .object(properties)])) }
                 else { editor.change(ConfigurationEdit(action: .unset, properties: ["defaults": .object(properties)])) }
             })
         var property = editor.store.propertySources(path: path, key: "hoverBackground", defaultsPath: defaultsPath,

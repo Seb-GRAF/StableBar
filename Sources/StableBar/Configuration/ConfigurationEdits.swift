@@ -9,6 +9,8 @@ struct ConfigurationEdit: Codable, Sendable {
     var name: String?
     var profiles: [[String: ConfigurationValue]]?
     var profile: String?
+    /// The `when` that `profile` gets when this edit creates it.
+    var profileConditions: [String: ConfigurationValue]?
 
     enum CodingKeys: String, CodingKey { case action, id, properties, ids, name, profiles }
 
@@ -34,8 +36,11 @@ struct ConfigurationEdit: Codable, Sendable {
         if let profile {
             var edit = self
             edit.profile = nil
+            edit.profileConditions = nil
             var profiles = try root["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
-            if !profiles.contains(where: { $0["name"] == .string(profile) }) { profiles.append(["name": .string(profile)]) }
+            if !profiles.contains(where: { $0["name"] == .string(profile) }) {
+                profiles.append(["name": .string(profile)].merging(profileConditions.map { ["when": .object($0)] } ?? [:]) { $1 })
+            }
             let index = profiles.firstIndex { $0["name"] == .string(profile) }!
             let configuration = try (profiles[index]["configuration"] ?? .object([:])).decoded([String: ConfigurationValue].self)
             profiles[index]["configuration"] = .object(try edit.applying(to: configuration, widgetIDs: &widgetIDs))

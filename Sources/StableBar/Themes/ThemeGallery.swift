@@ -11,7 +11,7 @@ func savingLook(of main: [String: ConfigurationValue], into theme: [String: Conf
     -> (theme: [String: ConfigurationValue], removal: [String: ConfigurationValue]) {
     var moved: [String: ConfigurationValue] = [:]
     var removal: [String: ConfigurationValue] = [:]
-    for property in ["defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "groups"] where main[property] != nil {
+    for property in themeLookKeys where main[property] != nil {
         moved[property] = main[property]
         removal[property] = .null
     }
@@ -37,7 +37,7 @@ final class ThemeGallery {
     private let refreshDelay: Duration
     private let loadPreview: @Sendable (ThemeChoice, URL?) throws -> ThemePreview
     private var generation = 0
-    private var overrideError: String?
+    private var editsError: String?
     @ObservationIgnored private(set) var refreshTask: Task<Void, Never>?
     /// Store entry `key` → its downloaded theme. Store cards' previews, progress and errors use the same keys.
     private var downloaded: [String: ThemeChoice] = [:]
@@ -51,7 +51,10 @@ final class ThemeGallery {
     private(set) var errors: [String: String] = [:]
     private(set) var progress: [String: String] = [:]
     private(set) var storeUnavailable = false
-    private(set) var overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
+    /// The selected theme's edits, and the look values of the main file that apply under every theme.
+    private(set) var edits = ThemeEdits.none
+    /// The themes the main file keeps edits for.
+    private(set) var editedThemes: Set<String> = []
 
     init(store: BarStore, client: PackageStoreClient? = nil, refreshDelay: Duration = .milliseconds(250),
          loadPreview: @escaping @Sendable (ThemeChoice, URL?) throws -> ThemePreview = { try ThemePreview(choice: $0, themesDirectory: $1) }) {
@@ -70,10 +73,7 @@ final class ThemeGallery {
         }
     }
 
-    var overrideTheme: ThemeChoice? {
-        if linkedThemeIsActive { return store.pendingLinks.theme?.choice }
-        return choices.first { $0.key == selectedKey }
-    }
+    var selectedChoice: ThemeChoice? { choices.first { $0.key == selectedKey } }
 
     /// Store themes, without versions installed from their own source or from no source.
     /// Another source's copy of the same version keeps its card, whose Get explains the conflict.
@@ -98,12 +98,11 @@ final class ThemeGallery {
     }
 
     func error(for key: String) -> String? {
-        let overrideKey = linkedThemeIsActive ? store.pendingLinks.theme?.choice.linkedPreviewKey : overrideTheme?.key
-        return errors[key] ?? previewErrors[key] ?? (key == overrideKey ? overrideError : nil)
+        errors[key] ?? previewErrors[key] ?? (key == selectedKey ? editsError : nil)
     }
 
     func configurationChanged() {
-        updateOverrides()
+        updateEdits()
         scheduleRefresh()
     }
 
@@ -111,7 +110,7 @@ final class ThemeGallery {
         store.configuration?.bar.appearance ?? (store.configurationStore.context.appearance == "dark" ? .dark : .light)
     }
 
-    func contextChanged() { updateOverrides() }
+    func contextChanged() { updateEdits() }
 
     private func scheduleRefresh() {
         refreshTask?.cancel()
@@ -155,7 +154,7 @@ final class ThemeGallery {
         previews = previews.filter { available.contains($0.key) }
         previewErrors = previewErrors.filter { available.contains($0.key) }
         for (key, result) in results { accept(result, key: key) }
-        updateOverrides()
+        updateEdits()
         if let choice = store.pendingLinks.theme?.choice { await linkedPreview(for: choice) }
     }
 
@@ -173,11 +172,11 @@ final class ThemeGallery {
     }
 
     func linkedPreview(for choice: ThemeChoice) async {
-        guard previews[choice.linkedPreviewKey] == nil else { updateOverrides(); return }
+        guard previews[choice.linkedPreviewKey] == nil else { updateEdits(); return }
         let result = await previewResult(for: choice)
         guard !Task.isCancelled, store.pendingLinks.theme?.choice.directory == choice.directory else { return }
         accept(result, key: choice.linkedPreviewKey)
-        updateOverrides()
+        updateEdits()
     }
 
     func dismissLinkedTheme(_ candidate: ThemeLinkCandidate) {
@@ -197,20 +196,23 @@ final class ThemeGallery {
         }
     }
 
-    private func updateOverrides() {
-        overrideError = nil
-        overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
-        guard let selected = overrideTheme else { return }
+    private func updateEdits() {
+        editsError = nil
         do {
-            let theme = try selected.overrideLayer(settings: store.configurationStore.themeSettings(for: selected, in: store.effectiveDocument),
-                                                   activeProfiles: store.activeProfiles)
-            var main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
-            if let profile = store.customizationHistory.editingProfile {
-                main = try main["profiles"]?.decoded([ConfigurationProfile].self).first { $0.name == profile }?.configuration ?? [:]
-            }
-            overrides = ThemeOverrides(main: main, theme: theme.values, widgets: store.configuration?.widgets ?? [],
-                                       activeProfiles: store.activeProfiles)
-        } catch { overrideError = errorMessage(error) }
+            let main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
+            editedThemes = ThemeEdits.editedThemes(in: main)
+            let theme = try selectedChoice.map {
+                try $0.overrideLayer(settings: store.configurationStore.themeSettings(for: $0, in: store.effectiveDocument),
+                                     activeProfiles: store.activeProfiles).values
+            } ?? [:]
+            let widgets = store.configuration?.widgets ?? []
+            edits = ThemeEdits(main: main, themeID: String(selectedKey.prefix { $0 != "/" }), theme: theme,
+                               names: WidgetDisplayName.names(for: widgets, packageNames: store.widgetPackageNames,
+                                                              providers: store.configuration?.providers ?? [:]))
+        } catch {
+            edits = .none
+            editsError = errorMessage(error)
+        }
     }
 
     func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
@@ -257,7 +259,9 @@ final class ThemeGallery {
         } catch { errors[key] = errorMessage(error) }
     }
 
-    func save(_ current: ThemeChoice, as name: String, everyBar: Bool = false) async {
+    /// Saves `current` with its edits as a new theme. Selecting it keeps the bar as it is; otherwise `current` stays
+    /// selected without its edits.
+    func save(_ current: ThemeChoice, as name: String, everyBar: Bool = false, selecting: Bool = true) async {
         let key = current.key
         errors[key] = nil
         defer { configurationChanged() }
@@ -265,7 +269,10 @@ final class ThemeGallery {
             var loader = ConfigurationLoader()
             let theme = try loader.readPackage(at: current.directory, manifest: current.manifest,
                                                settings: store.configurationStore.themeSettings(for: current)).values
-            let saved = try savingLook(of: store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits), into: theme)
+            let main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
+            let edits = ThemeEdits(main: main, themeID: current.manifest.id)
+            let saved = try savingLook(of: ThemeEdits.profile(for: current.manifest.id, in: main)?["configuration"]?
+                .decoded([String: ConfigurationValue].self) ?? [:], into: theme)
             let id = packageSlug(name)
             let versions = try await client.installed().filter { $0.id == id }.map(\.version)
             var patch = 0
@@ -281,10 +288,12 @@ final class ThemeGallery {
             let installed = try await client.install(source, from: nil)
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
-            perform(on: key) {
-                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: saved.removal), store.configurationStore.themeEdit(for: choice)],
-                                                      everyBar: everyBar)
-            }
+            // A theme can't hold widget styles, so they become the new theme's edits.
+            var changes = edits.changes.filter { $0.path.first == "widgetOverrides" }
+                .map { $0.setting(profile: "\(name) edits", themeID: choice.manifest.id) }
+            changes += [edits.revertEdit].compactMap { $0 }
+            if selecting { changes.append(try store.configurationStore.themeEdit(for: choice)) }
+            perform(on: key) { try store.customizationHistory.change(changes, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
     }
 

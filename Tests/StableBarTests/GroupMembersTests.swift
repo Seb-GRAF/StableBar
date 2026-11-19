@@ -215,10 +215,10 @@ func aThemeProfileNarrowsOrClearsTheThemesMembers(members: String, joined: [Stri
     #expect(edits.allSatisfy { $0.properties?["group"] == nil })
 }
 
-@Test func aMembersListInTheMainFileIsOneReadableOverride() throws {
+@Test func aMembersListInTheMainFileIsOneValueThatAppliesToEveryTheme() throws {
     let main = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(#"""
     {"groups":{"pill":{"members":[{"type":"clock","role":"time"}]}}}
     """#.utf8))
     let theme = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(pillTheme.utf8))
-    #expect(ThemeOverrides(main: main, theme: theme, widgets: []).values.map(\.title) == ["Pill group: members"])
+    #expect(ThemeEdits(main: main, themeID: "test-theme", theme: theme).everyTheme.map(\.title) == ["Pill group: members"])
 }
