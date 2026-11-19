@@ -42,6 +42,7 @@ final class BarPresentation {
         let mode = modePresentation
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let screenOverrides = configuration.screenLooks.mapValues { OrderedStyleOverrides(widgets: $0.widgets, output: output) }
+        let screenWidgets = configuration.screenLooks.mapValues { look in Dictionary(uniqueKeysWithValues: look.widgets.map { ($0.id, $0) }) }
         for widget in configuration.widgets {
             let script = store.widgetScripts.scripts[widget.id]
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
@@ -59,7 +60,7 @@ final class BarPresentation {
             }
             var screenStyles: [String: ResolvedWidgetStyle] = [:]
             for (kind, look) in configuration.screenLooks {
-                guard let own = look.widgets.first(where: { $0.id == widget.id }) else { continue }
+                guard let own = screenWidgets[kind]![widget.id] else { continue }
                 let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind]!, own: script?.output,
                                                           role: look.roleStyle(own.role)))
                 let screenStates = widgetDataStates(script?.output, widget: own, providers: configuration.providers)
