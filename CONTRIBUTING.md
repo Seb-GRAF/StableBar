@@ -53,13 +53,20 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 
 ## Architecture
 
+The sources are grouped by area in [Sources/StableBar](Sources/StableBar): `App` (launch, the command line, updates, moving and uninstalling the app, reports), `Bar`, `Editing` (editing the bar in place), `Popups`, `Configuration`, `DataSources` (scripts, providers and what they read), `Workspaces`, `MenuBar` (App menus, menu bar items and the menu bar's behavior), `Packages`, `Themes` (themes and bar links), `Settings`, `Setup`, `Rendering` (offscreen scenes and docs images) and `System`.
+
 - [Configuration.swift](Sources/StableBar/Configuration/Configuration.swift): config, widget definitions and style inheritance.
 - [StyleResolution.swift](Sources/StableBar/Configuration/StyleResolution.swift): style layers and states resolved in one place for bar widgets, workspace cells, layout blocks and the bar, and the rules that set data states.
 - [WidgetLabel.swift](Sources/StableBar/Bar/WidgetLabel.swift): what each widget type shows and the default layout it draws.
-- [BarStore.swift](Sources/StableBar/Bar/BarStore.swift): live reload, shared provider lifetimes, visibility, sleep and each widget's resolved style.
+- [BarStore.swift](Sources/StableBar/Bar/BarStore.swift): one bar's parts, and showing a configuration across them in order.
+- [ConfigurationStore.swift](Sources/StableBar/Configuration/ConfigurationStore.swift): the files that make up a bar, live reload, edits, migrations and writes, screen setups and theme trials.
+- [WidgetScripts.swift](Sources/StableBar/DataSources/WidgetScripts.swift): shared provider lifetimes, events, click actions, visibility and sleep.
+- [BarPresentation.swift](Sources/StableBar/Bar/BarPresentation.swift): each widget's resolved style and presence, and the bar's style.
+- [AppWatcher.swift](Sources/StableBar/Bar/AppWatcher.swift): the front app, the active display and the app that owns the menu bar.
 - [ConfigurationLoader.swift](Sources/StableBar/Configuration/ConfigurationLoader.swift): includes, profiles, tokens and provenance.
 - [ConfigurationEdits.swift](Sources/StableBar/Configuration/ConfigurationEdits.swift): file-preserving edits shared by CLI and editor.
 - [RuntimeControl.swift](Sources/StableBar/App/RuntimeControl.swift): local request/reply control endpoint.
+- [RuntimeCommands.swift](Sources/StableBar/App/RuntimeCommands.swift): what a running bar answers on that endpoint.
 - [ConfigurationEditor.swift](Sources/StableBar/Settings/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
 - [NativeMetrics.swift](Sources/StableBar/DataSources/NativeMetrics.swift): CPU, memory, network and calendar readings.
 - [AudioMonitor.swift](Sources/StableBar/DataSources/AudioMonitor.swift): output-device readings and CoreAudio change listeners.
@@ -71,10 +78,13 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 - [DataSource.swift](Sources/StableBar/DataSources/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
 - [DataSourceRegistry.swift](Sources/StableBar/DataSources/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
 - [BuiltInEvents.swift](Sources/StableBar/DataSources/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
-- [BarView.swift](Sources/StableBar/Bar/BarView.swift): native rendering and selection animation.
+- [BarView.swift](Sources/StableBar/Bar/BarView.swift): the bar's layout: measuring widgets, planning space and overflow.
+- [WidgetView.swift](Sources/StableBar/Bar/WidgetView.swift): one widget on the bar, its clicks and its popup.
+- [WorkspaceView.swift](Sources/StableBar/Workspaces/WorkspaceView.swift): workspaces, their app icons and the selection animation.
 - [LayoutConfiguration.swift](Sources/StableBar/Configuration/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
 - [PopupConfiguration.swift](Sources/StableBar/Configuration/PopupConfiguration.swift): popup layout blocks.
-- [PopupView.swift](Sources/StableBar/Popups/PopupView.swift): shared popup rendering and script bindings.
+- [PopupView.swift](Sources/StableBar/Popups/PopupView.swift): a popup's frame, background and pin controls.
+- [PopupBlockView.swift](Sources/StableBar/Popups/PopupBlockView.swift): the blocks a popup draws and their script bindings.
 - [WidgetPopup.swift](Sources/StableBar/Popups/WidgetPopup.swift): anchored panel, dismissal and screen placement.
 - [StableBarApp.swift](Sources/StableBar/App/StableBarApp.swift): non-activating panels and application lifecycle.
 
