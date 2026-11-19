@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import StableBar
 
@@ -38,6 +39,36 @@ import Testing
     share().badge = false
     #expect(!share().badge)
     #expect(BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: 24, wallpaper: nil).badge)
+}
+
+@MainActor @Test func aClickOnTheBackgroundMovesTheWindowAndOneOnAControlDoesnt() throws {
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let share = BarShare(store: store, display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil),
+                         screen: CGSize(width: 1512, height: 982), menuBar: 24, wallpaper: nil)
+    // SwiftUI hit-tests only a window that's on screen.
+    let window = NSPanel(contentRect: CGRect(x: 0, y: 0, width: 680, height: 460), styleMask: [.borderless],
+                         backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.alphaValue = 0
+    defer { window.close() }
+    let host = NSHostingView(rootView: BarShareView(share: share))
+    host.sizingOptions = []
+    window.contentView = host
+    window.orderFrontRegardless()
+    host.layoutSubtreeIfNeeded()
+    /// Whether a click at `point`, from the top left, reaches the view that moves the window.
+    func movesWindow(at point: CGPoint) -> Bool {
+        let local = CGPoint(x: point.x, y: host.isFlipped ? point.y : host.bounds.height - point.y)
+        return host.hitTest(host.convert(local, to: host.superview)) is WindowDragArea.DragView
+    }
+    // Between the screen menu and the close button, beside the image and beside the toolbar.
+    for point in [CGPoint(x: 340, y: 28), CGPoint(x: 20, y: 230), CGPoint(x: 10, y: 450)] {
+        #expect(movesWindow(at: point), "\(point)")
+    }
+    // The screen menu, the close button and the toolbar's middle.
+    for point in [CGPoint(x: 40, y: 28), CGPoint(x: 652, y: 28), CGPoint(x: 340, y: 424)] {
+        #expect(!movesWindow(at: point), "\(point)")
+    }
 }
 
 @Test func sceneDrawsShareMyBarInAShape() throws {
