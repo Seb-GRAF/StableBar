@@ -69,6 +69,18 @@ struct GeneralSettingsView: View {
                                    hint: "Hovering a slider widget, such as Sound, widens it in the bar instead of opening a tooltip.")
                     }
                     .id(SettingsSearchResult.hover.id)
+                    SettingsGroup("Animation") {
+                        let bar = StyleFields(store: store, path: "bar",
+                            values: (try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)) ?? [:],
+                            set: { editor.change(ConfigurationEdit(action: .bar, properties: $0)) },
+                            unset: { editor.change(ConfigurationEdit(action: .unset, properties: ["bar": .object($0)])) })
+                        let motion = (try? bar.values["motion"]?.decoded(BarMotion.self)) ?? .smooth
+                        bar.choice("Motion", "motion", choices: BarMotion.allCases.map(\.rawValue), default: BarMotion.smooth.rawValue)
+                        bar.choice("Popups", "popupTransition", choices: PopupTransition.allCases.map(\.rawValue), default: motion.popupTransition.rawValue)
+                        bar.toggle("Morph between popups", "morphPopups", default: true,
+                                   hint: "Opening another widget's popup or tooltip moves the open one into it.")
+                    }
+                    .id(SettingsSearchResult.animation.id)
                     SettingsGroup("Workspaces") {
                         let source = store.configuration?.workspaceSource ?? .aerospace
                         let path = shellEnvironment.withLock { $0["PATH", default: ""] }

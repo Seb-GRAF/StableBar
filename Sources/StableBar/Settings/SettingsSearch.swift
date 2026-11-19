@@ -39,7 +39,7 @@ enum SettingsSearchResult: String, CaseIterable, Identifiable {
         case .colors: ("Theme colors", .appearance, "Theme › Theme colors", "tokens accent text surface palette")
         case .glass: ("Liquid Glass", .appearance, "Theme › Liquid Glass", "transparency see-through blur")
         case .popups: ("Popup colors and spacing", .appearance, "Theme › Popups", "popover background border shadow weight padding spacing gap margin offset px pt")
-        case .animation: ("Animation", .appearance, "Theme › Animation", "motion smooth subtle snappy bouncy speed transition fade unfold slide zoom popup morph")
+        case .animation: ("Animation", .general, "General › Animation", "motion smooth subtle snappy bouncy speed transition fade unfold slide zoom popup morph")
         case .roles: ("Presentation roles", .appearance, "Theme › Advanced", "role time status style")
         case .workspaceStyle: ("Workspace look", .appearance, "Theme › Advanced", "defaults indicator empty focused")
         case .modeAliases: ("AeroSpace mode names", .appearance, "Theme › Advanced", "mode aliases mapping")
