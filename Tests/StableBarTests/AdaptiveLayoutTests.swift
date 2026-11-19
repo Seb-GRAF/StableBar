@@ -154,6 +154,21 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
             == ManagerGap(manager: .omniwm, position: .bottom, points: 46))
 }
 
+@Test func managerConfigurationFindsTheFileEachManagerReads() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    #expect(managerConfiguration(.aerospace, home: home, xdg: nil) == nil)
+    for path in [".config/aerospace/aerospace.toml", "xdg/omniwm/settings.toml"] {
+        try FileManager.default.createDirectory(at: home.appending(path: path).deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: home.appending(path: path))
+    }
+    #expect(managerConfiguration(.aerospace, home: home, xdg: nil) == home.appending(path: ".config/aerospace/aerospace.toml"))
+    #expect(managerConfiguration(.omniwm, home: home, xdg: home.appending(path: "xdg").path) == home.appending(path: "xdg/omniwm/settings.toml"))
+    #expect(managerConfiguration(.omniwm, home: home, xdg: "xdg") == nil)
+    try Data().write(to: home.appending(path: ".aerospace.toml"))
+    #expect(managerConfiguration(.aerospace, home: home, xdg: nil) == home.appending(path: ".aerospace.toml"))
+}
+
 @Test func notificationClearanceMovesBannerWindowsBelowTheBarOnce() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1800, height: 1169),
         visibleFrame: CGRect(x: 0, y: 0, width: 1800, height: 1131),

@@ -87,9 +87,16 @@ enum SceneRenderer {
         store.windowClearance.checkManagerGap = { configuration in
             let screen = CGRect(x: 0, y: 0, width: 1512, height: 982)
             return scene.windowsUnderBar.flatMap {
-                managerGap($0, windows: [screen], displays: [WindowClearanceDisplay(frame: screen, visibleFrame: screen, configuration: configuration,
-                                                                                    display: display, desktopTop: screen.maxY)],
-                           menuBarHides: true)
+                var gap = managerGap($0, windows: [screen], displays: [WindowClearanceDisplay(frame: screen, visibleFrame: screen, configuration: configuration,
+                                                                                              display: display, desktopTop: screen.maxY)],
+                                     menuBarHides: true)
+                let file = switch $0 {
+                case .yabai: ".yabairc"
+                case .omniwm: ".config/omniwm/settings.toml"
+                default: ".config/aerospace/aerospace.toml"
+                }
+                gap?.configuration = FileManager.default.homeDirectoryForCurrentUser.appending(path: file)
+                return gap
             }
         }
         // Crashes and Send feedback read these samples, never the crash reports of the Mac that draws.

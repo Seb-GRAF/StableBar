@@ -47,6 +47,9 @@ struct GeneralSettingsView: View {
                                     .font(.callout)
                                     .foregroundStyle(SettingsPalette.warning)
                                 Spacer()
+                                if let file = managerGap.configuration {
+                                    Button("Open \(file.lastPathComponent)") { openInTextEditor(file) }
+                                }
                                 Button("Check Again") { Task { await checkManagerGap() } }
                             }
                             .groupRow()

@@ -853,9 +853,14 @@ struct SetupTourView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Label(managerGap.warning, systemImage: "exclamationmark.triangle").font(.system(size: 13, weight: .semibold))
                     Text(managerGap.setting)
-                    Button("Check Again") { Task { await checkManagerGap() } }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.white.opacity(0.8))
+                    HStack(spacing: 16) {
+                        if let file = managerGap.configuration {
+                            Button("Open \(file.lastPathComponent)") { openInTextEditor(file) }
+                        }
+                        Button("Check Again") { Task { await checkManagerGap() } }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.8))
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.6))

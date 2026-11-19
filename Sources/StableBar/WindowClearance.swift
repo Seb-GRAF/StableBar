@@ -1,6 +1,7 @@
 import AppKit
 @preconcurrency import ApplicationServices
 import Observation
+import UniformTypeIdentifiers
 
 struct WindowClearanceDisplay: Equatable {
     let frame: CGRect
@@ -58,6 +59,7 @@ struct ManagerGap: Equatable {
     let manager: WorkspaceSource
     let position: BarPosition
     let points: Int
+    var configuration: URL?
 
     var warning: String { "\(manager.title) leaves windows under the bar." }
 
@@ -66,9 +68,27 @@ struct ManagerGap: Equatable {
         return switch manager {
         case .yabai: "Run yabai -m config external_bar all:\(position == .top ? "\(points):0" : "0:\(points)"), and add it to your yabai configuration."
         case .omniwm: "Set gaps.outer.\(edge) to \(points) in OmniWM’s settings.toml."
-        default: "Set outer.\(edge) = \(points) under [gaps] in ~/.aerospace.toml, then run aerospace reload-config."
+        default:
+            "Set outer.\(edge) = \(points) under [gaps] in \(configuration.map { ($0.path as NSString).abbreviatingWithTildeInPath } ?? "~/.aerospace.toml"), then run aerospace reload-config."
         }
     }
+}
+
+/// The configuration file `manager` reads, when there is one. AeroSpace looks for `~/.aerospace.toml` before its
+/// folder in `XDG_CONFIG_HOME`, and OmniWM ignores an `XDG_CONFIG_HOME` that isn't an absolute path.
+func managerConfiguration(_ manager: WorkspaceSource, home: URL, xdg: String?) -> URL? {
+    if manager == .yabai { return try? YabaiSetupSignals.configuration(home: home, xdg: xdg) }
+    let config = xdg.flatMap { $0.hasPrefix("/") ? URL(filePath: $0) : nil } ?? home.appending(path: ".config")
+    let candidates = manager == .aerospace
+        ? [home.appending(path: ".aerospace.toml"), config.appending(path: "aerospace/aerospace.toml")]
+        : [config.appending(path: "omniwm/settings.toml")]
+    return candidates.first { FileManager.default.fileExists(atPath: $0.path) }
+}
+
+/// Opens `file` in the app for plain text rather than the app for its type: a yabairc is executable, and Terminal would run it.
+func openInTextEditor(_ file: URL) {
+    guard let editor = NSWorkspace.shared.urlForApplication(toOpen: .plainText) else { return }
+    NSWorkspace.shared.open([file], withApplicationAt: editor, configuration: NSWorkspace.OpenConfiguration())
 }
 
 /// The gap `manager` needs when one of `windows` starts under the bar, measured as the manager measures its gaps:
@@ -164,7 +184,10 @@ final class WindowClearance: NSObject {
                 }
             }
         }
-        return managerGap(manager, windows: windows ?? [], displays: displays, menuBarHides: MenuBarAutoHide.isOn())
+        var gap = managerGap(manager, windows: windows ?? [], displays: displays, menuBarHides: MenuBarAutoHide.isOn())
+        gap?.configuration = managerConfiguration(manager, home: FileManager.default.homeDirectoryForCurrentUser,
+                                                  xdg: shellEnvironment.withLock { $0["XDG_CONFIG_HOME"] })
+        return gap
     }
 
     private struct WatchedApplication {
