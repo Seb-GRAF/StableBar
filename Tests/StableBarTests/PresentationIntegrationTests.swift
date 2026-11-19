@@ -664,6 +664,21 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     #expect(presentations == 0)
 }
 
+@Test @MainActor func clickOnAnAnchorOutsideAnyWindowOpensNothing() throws {
+    let configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
+    {"widgets":[{"id":"battery","type":"text","text":"Battery","position":"right",
+      "popup":{"style":{},"layout":{"type":"text","text":"Charging"}}}]}
+    """#.utf8))
+    var presentations = 0
+    let popup = WidgetPopup(present: { _, _ in presentations += 1 })
+    let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
+    store.configuration = configuration
+    defer { store.stop() }
+    let widget = configuration.widgets[0]
+    popup.toggle(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: NSView())
+    #expect(presentations == 0)
+}
+
 /// Under a bar at the top of the display, a popup's window reaches into the menu bar by its shadow's margin. macOS moves
 /// a window out of the menu bar when it's shown, which would leave the popup far below the bar.
 @Test(.enabled("needs a display that keeps its top for the menu bar") { await MainActor.run { menuBarScreen != nil } })
