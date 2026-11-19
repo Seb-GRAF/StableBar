@@ -221,9 +221,9 @@ final class WidgetSetup {
         let configuration = store.configuration!
         let displays = NSScreen.screens.map(BarDisplay.init)
         var edits = configuration.widgets.compactMap { widget -> ConfigurationEdit? in
-            let shown = source.shows(widget.display, among: displays, activeID: store.activeDisplayID)
-            guard shown != kind.shows(widget.display, among: displays, activeID: store.activeDisplayID) else { return nil }
-            let kinds = ScreenKind.allCases.filter { $0 == kind ? shown : $0.shows(widget.display, among: displays, activeID: store.activeDisplayID) }
+            let shown = source.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID)
+            guard shown != kind.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID) else { return nil }
+            let kinds = ScreenKind.allCases.filter { $0 == kind ? shown : $0.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
             return ConfigurationEdit(action: .set, id: widget.id, properties: ["display": .array(kinds.map { .string($0.selection) })])
         }
         edits.append(ConfigurationEdit(action: .unset, properties: ["screens": .object([kind.rawValue: .object(["bar": .null])])]))
@@ -241,7 +241,7 @@ final class WidgetSetup {
 
     private func layoutEdit(_ widgets: [WidgetConfiguration], shownOn source: ScreenKind, on kind: ScreenKind) -> ConfigurationEdit {
         let displays = NSScreen.screens.map(BarDisplay.init)
-        let shown = widgets.filter { source.shows($0.display, among: displays, activeID: store.activeDisplayID) }
+        let shown = widgets.filter { source.shows($0.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
         let layout = Dictionary(uniqueKeysWithValues: WidgetPosition.allCases.map { position in
             (position.rawValue, ConfigurationValue.array(shown.filter { $0.position == position }.map { .string($0.id) }))
         })

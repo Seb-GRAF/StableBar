@@ -314,7 +314,7 @@ struct BarInspector: View {
     private func groupMembers(_ group: String) -> [WidgetConfiguration] {
         let displays = NSScreen.screens.map(BarDisplay.init)
         return (store.configuration?.onScreen(screen).widgets ?? []).filter {
-            $0.enabled && $0.group == group && screen.shows($0.display, among: displays, activeID: store.activeDisplayID)
+            $0.enabled && $0.group == group && screen.shows($0.display, among: displays, activeID: store.appWatcher.activeDisplayID)
         }
     }
 
@@ -447,7 +447,7 @@ struct BarInspector: View {
 
 
     @ViewBuilder private func widgetPanel(_ widget: WidgetConfiguration) -> some View {
-        if !screen.shows(widget.display, among: NSScreen.screens.map(BarDisplay.init), activeID: store.activeDisplayID) {
+        if !screen.shows(widget.display, among: NSScreen.screens.map(BarDisplay.init), activeID: store.appWatcher.activeDisplayID) {
             SettingsCallout(systemImage: "eye.slash", text: Text("Not shown on \(screen.phrase).")) {
                 Button("Show here") { editor.setWidget(widget, shown: true, on: screen) }.controlSize(.small)
             }
@@ -898,7 +898,7 @@ struct BarInspector: View {
 extension ConfigurationEditor {
     func setWidget(_ widget: WidgetConfiguration, shown: Bool, on kind: ScreenKind) {
         let displays = NSScreen.screens.map(BarDisplay.init)
-        let kinds = ScreenKind.allCases.filter { $0 == kind ? shown : $0.shows(widget.display, among: displays, activeID: store.activeDisplayID) }
+        let kinds = ScreenKind.allCases.filter { $0 == kind ? shown : $0.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
         var properties: [String: ConfigurationValue] = ["display": .array(kinds.map { .string($0.selection) })]
         if shown && !widget.enabled { properties["enabled"] = .bool(true) }
         set(properties, for: widget.id)

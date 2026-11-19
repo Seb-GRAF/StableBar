@@ -215,7 +215,7 @@ enum DocsImages {
         try offline(store, in: directory)
         store.workspaceStore.executablePath = { aerospace.path }
         store.configurationStore.reloadConfiguration()
-        store.activeApp = SampleApp(bundleIdentifier: "com.apple.finder")
+        store.appWatcher.activeApp = SampleApp(bundleIdentifier: "com.apple.finder")
         return store
     }
 

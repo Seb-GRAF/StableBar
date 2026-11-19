@@ -67,7 +67,7 @@ struct MenuBarItemsView: View {
     /// The grid symbol's menu takes the place of the widget's, so it ends with the widget's commands.
     @ViewBuilder private func symbolCommands(_ position: Int, count: Int) -> some View {
         MenuBarItemCommands(source: .shown(position), shownCount: count, isSymbol: true) { placement, index in
-            store.move(.shown(position), to: placement, before: index, in: widget)
+            store.widgetScripts.move(.shown(position), to: placement, before: index, in: widget)
         }
         WidgetContextMenu(widget: widget, store: store, display: display, dividerAbove: true)
     }

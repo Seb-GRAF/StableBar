@@ -41,7 +41,7 @@ private func output(_ json: String) throws -> ScriptOutput {
         await confirmation("The text label stays valid", expectedCount: 0) { invalidated in
             withObservationTracking { _ = store.label(for: app) } onChange: { changed() }
             withObservationTracking { _ = store.label(for: note) } onChange: { invalidated() }
-            store.activeApp = NSRunningApplication.current
+            store.appWatcher.activeApp = NSRunningApplication.current
         }
     }
     _ = NSApplication.shared

@@ -451,8 +451,8 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = try store(#"{"configuration": {"widgets": []}, "activeApp": "com.apple.calculator", "draw": "bar"}"#, in: directory)
     defer { store.stop() }
-    #expect(store.activeApp?.localizedName == "Calculator")
-    #expect(store.activeApp?.icon != nil)
+    #expect(store.appWatcher.activeApp?.localizedName == "Calculator")
+    #expect(store.appWatcher.activeApp?.icon != nil)
 }
 
 @Test @MainActor func sceneStoreShowsAStablePath() throws {

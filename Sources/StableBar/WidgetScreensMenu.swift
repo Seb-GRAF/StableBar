@@ -9,7 +9,7 @@ struct WidgetScreensMenu: View {
 
     var body: some View {
         let displays = NSScreen.screens.map(BarDisplay.init)
-        let shown = ScreenKind.allCases.filter { widget.enabled && $0.shows(widget.display, among: displays, activeID: store.activeDisplayID) }
+        let shown = ScreenKind.allCases.filter { widget.enabled && $0.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
         let choice = widget.enabled ? WidgetScreenChoice(widget.display) : nil
         item("All screens", isOn: choice == .all || choice == .several && shown == ScreenKind.allCases) { show(WidgetScreenChoice.all.properties!) }
         item("Only on \(screen.phrase)", isOn: choice == .several && shown == [screen]) { show(["display": .array([.string(screen.selection)])]) }
@@ -44,7 +44,7 @@ extension BarStore {
         guard widget.enabled else { return "Hidden everywhere" }
         guard case .any = widget.display else { return WidgetScreenChoice(widget.display).title }
         let displays = NSScreen.screens.map(BarDisplay.init)
-        let kinds = ScreenKind.allCases.filter { $0.shows(widget.display, among: displays, activeID: activeDisplayID) }
+        let kinds = ScreenKind.allCases.filter { $0.shows(widget.display, among: displays, activeID: appWatcher.activeDisplayID) }
         if kinds.isEmpty { return "Hidden everywhere" }
         return kinds == ScreenKind.allCases ? "All screens" : kinds.map(\.name).joined(separator: " and ") + " only"
     }

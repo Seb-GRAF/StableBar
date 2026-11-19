@@ -97,7 +97,7 @@ struct WidgetView: View {
             let click = { if store.barEditing.allowsWidgetActions { OpenTarget(open)!.open() } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if store.configuration?.providerType(of: widget) == DataSourceType.inputSource.name, !hasOwnClick {
-            let click = { if store.barEditing.allowsWidgetActions { store.selectInputSource(nil, widget: widget) } }
+            let click = { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectInputSource(nil, widget: widget) } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if case let .appleMenu(appleClick) = widget.content, widget.layout != nil, !hasOwnClick {
             let click = { clickAppleLogo(appleClick, anchor: clickAnchor) }
@@ -298,7 +298,7 @@ struct WidgetView: View {
         .onHover { hoverChanged($0, tooltip: tooltip, output: output) }
         .animation(hoverAnimation(hovered, reduceMotion: reduceMotion), value: hovered)
         .animation(reduceMotion ? nil : animation.value, value: style)
-        .animation(reduceMotion ? nil : animation.value, value: widget.content == .activeApp ? store.activeApp : nil)
+        .animation(reduceMotion ? nil : animation.value, value: widget.content == .activeApp ? store.appWatcher.activeApp : nil)
         .accessibilityHint(tooltip ?? "")
         .accessibilityIdentifier(widget.id)
         .contextMenu { WidgetContextMenu(widget: widget, store: store, display: monitor) }
@@ -515,7 +515,7 @@ struct WidgetBlocks: View {
     var body: some View {
         let script = store.widgetScripts.scripts[widget.id]
         let label = store.label(for: widget, date: date).overlaid(by: store.barPresentation.presentations[widget.id]?.temporaryFields)
-        let appIcon = widget.content == .activeApp ? store.activeApp?.icon : nil
+        let appIcon = widget.content == .activeApp ? store.appWatcher.activeApp?.icon : nil
         let providerType = store.configuration?.providerType(of: widget)
         if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil, providerType: providerType) {
             PopupBlockView(block: layout, inheritedStyle: style.inherited, fields: label.fields,
@@ -527,8 +527,8 @@ struct WidgetBlocks: View {
                                                  fillsWidth: fillsWidth, open: { if store.barEditing.allowsWidgetActions { $0.open() } },
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
-                                                 selectInputSource: { if store.barEditing.allowsWidgetActions { store.selectInputSource($0, widget: widget) } },
-                                                 selectOutputDevice: { if store.barEditing.allowsWidgetActions { store.selectOutputDevice($0, widget: widget) } },
+                                                 selectInputSource: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectInputSource($0, widget: widget) } },
+                                                 selectOutputDevice: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectOutputDevice($0, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }

@@ -97,7 +97,7 @@ struct WidgetsView: View {
 
     private func list(_ names: [String: String]) -> some View {
         let displays = NSScreen.screens.map(BarDisplay.init)
-        let shown = widgets.filter { $0.enabled && screen.shows($0.display, among: displays, activeID: store.activeDisplayID) }
+        let shown = widgets.filter { $0.enabled && screen.shows($0.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
         let hidden = widgets.filter { widget in !shown.contains { $0.id == widget.id } }
         let positions = WidgetPlacement.positions(widgets: widgets, hasNotchedDisplay: NSScreen.screens.contains { $0.auxiliaryTopLeftArea != nil })
         let changed = profileWidgets
