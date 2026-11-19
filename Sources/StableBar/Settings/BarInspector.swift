@@ -215,7 +215,7 @@ struct BarInspector: View {
                 Button("Troubleshoot…") { editor.troubleshoot(widget.id) }
             }
             Divider()
-            Button("Reset to defaults…") { resetting = widget }
+            Button("Reset widget…") { resetting = widget }
             Button("Remove from bar", role: .destructive) { remove(widget.id) }
                 .disabled(!editor.canRemove(widget))
         } label: {
@@ -338,6 +338,9 @@ struct BarInspector: View {
     }
 
     @ViewBuilder private func stylePanel(_ style: StyleFields, widget: WidgetConfiguration) -> some View {
+        if editor.editingProfile == nil {
+            styleState(widget)
+        }
         SettingsGroup("Colors") {
             style.color("Text color", "foreground")
             let configuration = store.configuration!.onScreen(screen)
@@ -378,15 +381,25 @@ struct BarInspector: View {
                     unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
             }
         }
-        if widgetStyleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
-            || ["background", "popupBackground", "tooltipBackground"].contains(where: {
-                store.propertySources(path: "widgets.\(widget.id)", key: $0, widgetID: widget.id, values: [:]).saved != nil
-            }) {
-            Button("Go back to the Every widget look") { editor.resetStyle(of: widget) }
-            .controlSize(.small)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
+    }
+
+    private func styleState(_ widget: WidgetConfiguration) -> some View {
+        let own = editor.ownStyle(of: widget)
+        let count = own.everyTheme + own.onTheme
+        let theme = editor.selectedTheme.name
+        let state = if own.onTheme > 0 {
+            "Own style on \(theme) · \(count) \(count == 1 ? "change" : "changes")"
+        } else if count > 0 {
+            "Own style · \(count) \(count == 1 ? "value" : "values")"
+        } else {
+            "Follows \(theme)"
         }
+        return SettingsCallout(systemImage: "paintbrush", text: Text(state)) {
+            if count > 0 {
+                Button("Reset style") { editor.resetStyle(of: widget) }.controlSize(.small)
+            }
+        }
+        .padding(.top, 12)
     }
 
 
