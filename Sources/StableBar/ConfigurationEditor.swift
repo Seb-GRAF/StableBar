@@ -116,7 +116,7 @@ final class ConfigurationEditor {
 
     func reset(_ widget: WidgetConfiguration) {
         let keys = definedInMainFile(widget)
-            ? ["style", "background", "popupBackground", "tooltipBackground", "role", "rules", "transition", "animation", "tooltip", "onClick", "open", "actions", "expandOnHover", "openOnHover", "rightClickInMenuBar", "shown", "hidden", "format", "timeZone", "workspace", "click"]
+            ? ["style", "background", "popupBackground", "tooltipBackground", "role", "rules", "transition", "animation", "tooltip", "onClick", "open", "actions", "expandOnHover", "displayMode", "openOnHover", "rightClickInMenuBar", "shown", "hidden", "format", "timeZone", "workspace", "click"]
             : WidgetConfiguration.CodingKeys.allCases.map(\.stringValue).filter { !["id", "position", "display", "enabled", "group"].contains($0) }
         change(ConfigurationEdit(action: .unset, id: widget.id, properties: Dictionary(uniqueKeysWithValues: keys.map { ($0, .null) })))
     }

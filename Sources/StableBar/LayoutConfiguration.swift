@@ -90,7 +90,12 @@ struct BarUnit: Identifiable {
     var canOverflow: Bool { widgets.allSatisfy { $0.overflow == .automatic } }
     var isSpacer: Bool { widgets.count == 1 && widgets[0].content == .spacer }
     /// Whether the unit has App menus that hide their last menus behind » to fit.
-    var hasShrinkingAppMenus: Bool { widgets.contains { $0.content == .appMenu(expandOnHover: false) && $0.layout == nil } }
+    var hasShrinkingAppMenus: Bool {
+        widgets.contains {
+            guard case .appMenu(expandOnHover: false, displayMode: _) = $0.content else { return false }
+            return $0.layout == nil
+        }
+    }
 
     /// How the unit enters and leaves the bar: the first transition its widgets set.
     var transition: WidgetTransition? { widgets.lazy.compactMap(\.transition).first }
@@ -121,11 +126,16 @@ struct BarUnit: Identifiable {
         !reduceMotion && units.contains { unit in
             previous[unit.id] != widths[unit.id] && unit.widgets.contains {
                 $0.id == AppUpdate.widgetID
-                    || (($0.content == .activeApp || $0.content == .appMenu(expandOnHover: true) || $0.hoverLayout != nil || providerType($0) == DataSourceType.audio.name)
+                    || (($0.content == .activeApp || isExpandingAppMenu($0.content) || $0.hoverLayout != nil || providerType($0) == DataSourceType.audio.name)
                         && measured.contains(unit.id))
             }
         }
     }
+}
+
+private func isExpandingAppMenu(_ content: WidgetContent) -> Bool {
+    if case .appMenu(expandOnHover: true, displayMode: _) = content { return true }
+    return false
 }
 
 struct BarLayoutItem {
