@@ -599,6 +599,7 @@ jobs:
       STABLEBAR_PREBUILT_DIR: release-build
     needs: [test, build]
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.channel == 'beta'))
+    environment: release
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
@@ -684,6 +685,7 @@ jobs:
       STABLEBAR_PREBUILT_DIR: release-build
     needs: [test, build, docs-images]
     if: github.event_name == 'workflow_dispatch' && inputs.channel == 'stable' && github.ref == 'refs/heads/main'
+    environment: release
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
