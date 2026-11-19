@@ -435,13 +435,23 @@ struct StyleFields {
     let unset: ([String: ConfigurationValue]) -> Void
 
     func color(_ title: String, _ key: String) -> some View {
-        row(title, key) { _ in colorButton(title, key) }
+        // The row chooses: a ViewThatFits inside it would be offered only part of the row's width.
+        ViewThatFits(in: .horizontal) {
+            ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
+                row(title, key) { _ in colorButton(title, key, axis: axis) }
+            }
+        }
     }
 
     func colorButton(_ title: String, _ key: String) -> some View {
+        colorButton(title, key, axis: .horizontal)
+    }
+
+    private func colorButton(_ title: String, _ key: String, axis: Axis) -> some View {
         let property = property(key)
         return FillButton(title: title, value: origin(key).flatMap(\.token).map { .string("@token.\($0)") } ?? property.editingFill,
-                   tokens: store.themeTokenColors, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key), allowsNone: key != "foreground") {
+                   tokens: store.themeTokenColors, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key), allowsNone: key != "foreground",
+                   axis: axis) {
             set([key: $0])
         }
     }
@@ -454,11 +464,15 @@ struct StyleFields {
         let property = store.propertySources(path: path, key: "hoverBackground", defaultsPath: defaultsPath,
                                              widgetID: widgetID, values: values, hover: true)
         let origin = property.saved?.origin ?? drawn.flatMap { store.origins[$0.path] }
-        return SettingRow(title: title, property: property, source: store.propertySourceText(property),
-                          reset: property.saved.map { source in { resetHoverBackground(source) } }) {
-            FillButton(title: title, value: origin?.token.map { .string("@token.\($0)") } ?? property.editingFill,
-                       tokens: store.themeTokenColors, allowsGradient: true, allowsNone: true) {
-                set(HoverBackgroundRow.properties($0))
+        return ViewThatFits(in: .horizontal) {
+            ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
+                SettingRow(title: title, property: property, source: store.propertySourceText(property),
+                           reset: property.saved.map { source in { resetHoverBackground(source) } }) {
+                    FillButton(title: title, value: origin?.token.map { .string("@token.\($0)") } ?? property.editingFill,
+                               tokens: store.themeTokenColors, allowsGradient: true, allowsNone: true, axis: axis) {
+                        set(HoverBackgroundRow.properties($0))
+                    }
+                }
             }
         }
     }
