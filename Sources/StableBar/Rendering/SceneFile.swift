@@ -94,6 +94,8 @@ struct SceneFile: Decodable {
     var windowsUnderBar: WorkspaceSource?
     /// The screen Share My Bar draws the bar on.
     var shareScreen = BarShareScreen.this
+    /// The shape of the image Share My Bar draws.
+    var sharePreset = BarSharePreset.bar
     /// The macOS version for feature availability in setup and Settings, pinned independently of the render host.
     var macOSMajorVersion = 26
     var appearances: [Appearance] = Appearance.allCases
@@ -104,7 +106,7 @@ struct SceneFile: Decodable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
-             themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, macOSMajorVersion, appearances,
+             themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, sharePreset, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
 
@@ -223,6 +225,10 @@ struct SceneFile: Decodable {
         shareScreen = try values.decodeIfPresent(BarShareScreen.self, forKey: .shareScreen) ?? .this
         if values.contains(.shareScreen), draw != .share && draw != .shareLink {
             throw DecodingError.dataCorruptedError(forKey: .shareScreen, in: values, debugDescription: "shareScreen draws share or shareLink.")
+        }
+        sharePreset = try values.decodeIfPresent(BarSharePreset.self, forKey: .sharePreset) ?? .bar
+        if values.contains(.sharePreset), draw != .share && draw != .shareLink {
+            throw DecodingError.dataCorruptedError(forKey: .sharePreset, in: values, debugDescription: "sharePreset draws share or shareLink.")
         }
         macOSMajorVersion = try values.decodeIfPresent(Int.self, forKey: .macOSMajorVersion) ?? 26
         if macOSMajorVersion < 14 {

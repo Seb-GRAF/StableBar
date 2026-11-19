@@ -192,6 +192,10 @@
       "description": "For `share` and `shareLink`: the screen Share My Bar draws the bar on. `this` is the scene's 1512 by 982 point screen without a notch, and `air13`, `pro14` and `pro16` a 13-inch MacBook Air, 14-inch and 16-inch MacBook Pro at their default sizes, with the notch. this by default.",
       "enum": ["this", "air13", "pro14", "pro16"]
     },
+    "sharePreset": {
+      "description": "For `share` and `shareLink`: the shape of the image Share My Bar draws. `bar` is the bar alone on a strip of wallpaper, and `landscape`, `square` and `portrait` are 16:9, 1:1 and 4:5. bar by default.",
+      "enum": ["bar", "landscape", "square", "portrait"]
+    },
     "macOSMajorVersion": {
       "description": "The macOS major version for feature availability in setup and Settings. 26 by default, independently of the Mac that draws.",
       "type": "integer",
