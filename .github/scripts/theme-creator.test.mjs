@@ -548,7 +548,7 @@ test("slug matches the app", () => {
 test("reserved ids are the app's", () => {
   const folders = readdirSync(new URL("Resources/themes/", root), { withFileTypes: true })
     .filter(entry => entry.isDirectory()).map(entry => entry.name);
-  const catalog = read("Sources/StableBar/ThemeCatalog.swift").toString();
+  const catalog = read("Sources/StableBar/Themes/ThemeCatalog.swift").toString();
   const legacy = catalog.match(/let legacyThemeIDs: Set<String> = \[([^\]]+)\]/)[1];
   const legacyIDs = [...legacy.matchAll(/"([^"]+)"/g)].map(match => match[1]);
   assert.deepEqual(BASE_IDS, baseIDs);
