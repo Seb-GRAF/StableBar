@@ -226,6 +226,41 @@ final class PackageInstallRecordTests: XCTestCase {
         XCTAssertEqual(try fixture.packages.record(id: "clock"), team)
     }
 
+    @MainActor func testLocalInstallsRecordWhyTheyCameFromNoSource() async throws {
+        let fixture = try ThemeGalleryFixture(); defer { fixture.close() }
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: fixture.directory.appending(path: "index.json"))
+        let recordFile = fixture.directory.appending(path: "packages/test-theme/\(PackageInstallRecord.fileName)")
+        _ = try await client.install(fixture.theme("{}", install: false).directory, from: nil, origin: .barLink)
+        var shared = PackageInstallRecord.local
+        shared.origin = .barLink
+        XCTAssertEqual(try fixture.packages.record(id: "test-theme"), shared)
+        XCTAssertEqual(PackageOrigin.installed(record: shared, version: "1", listedInStore: false, sources: [.store]), .barLink)
+        // A record written before origins existed reads as a folder, and a folder's record is still written without one.
+        try #"{"source":"local"}"#.write(to: recordFile, atomically: true, encoding: .utf8)
+        XCTAssertEqual(try fixture.packages.record(id: "test-theme"), .local)
+        XCTAssertEqual(PackageOrigin.installed(record: try fixture.packages.record(id: "test-theme"), version: "1", listedInStore: false,
+                                               sources: [.store]), .local)
+        _ = try await client.install(fixture.theme("{}", version: "2", install: false).directory, from: nil)
+        XCTAssertFalse(try String(contentsOf: recordFile, encoding: .utf8).contains("origin"))
+    }
+
+    @MainActor func testUninstallingAThemeRemovesEveryVersionAndItsRecord() async throws {
+        let fixture = try ThemeGalleryFixture(); defer { fixture.close() }
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: fixture.directory.appending(path: "index.json"))
+        for version in ["1.0.0", "1.0.1"] {
+            _ = try await client.install(fixture.theme("{}", id: "my-theme", version: version, install: false).directory, from: nil, origin: .saved)
+        }
+        _ = try fixture.theme("{}", id: "other-theme")
+        let store = try fixture.store()
+        defer { store.stop() }
+        let library = PackageLibrary(store: store, client: client)
+        defer { library.stopUpdateChecks() }
+        try await library.uninstallTheme(id: "my-theme")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.directory.appending(path: "packages/my-theme").path))
+        XCTAssertNil(try fixture.packages.record(id: "my-theme"))
+        XCTAssertEqual(library.installed.map(\.id), ["other-theme"])
+    }
+
     func testStoreInstallsRecordTheirSource() async throws {
         let fixture = try ThemeGalleryFixture(); defer { fixture.close() }
         let store = LocalPackageIndex(fixture: fixture), acme = LocalPackageIndex(fixture: fixture, folder: "acme")

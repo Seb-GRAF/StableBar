@@ -16,6 +16,11 @@
       "type": "array",
       "items": { "type": "string" }
     },
+    "packageOrigins": {
+      "description": "Why packages, by their path in packages, were installed from no source, as Settings and the Store show it: saved with Save as Theme, from a theme link, or the look of a bar link. The others came from a folder.",
+      "type": "object",
+      "additionalProperties": { "enum": ["saved", "themeLink", "barLink"] }
+    },
     "outputs": {
       "description": "Script outputs by widget id or provider name: an object as a script prints it, or plain text.",
       "type": "object",

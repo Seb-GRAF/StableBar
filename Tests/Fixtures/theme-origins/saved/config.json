@@ -1,0 +1,7 @@
+{
+  "bar": {
+    "margin": 6,
+    "style": { "background": { "light": "#edf3f2ee", "dark": "#0f1d21ee" }, "cornerRadius": 14 }
+  },
+  "defaults": { "foreground": { "light": "#12343b", "dark": "#dcebe8" }, "accent": "#7a4fd6" }
+}

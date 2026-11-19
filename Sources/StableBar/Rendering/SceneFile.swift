@@ -38,6 +38,8 @@ struct SceneFile: Decodable {
     /// scene's work folder. With `barLink` or `shareLink`, they're installed from the Store, and with `barLink` the Store
     /// lists them.
     var packages: [String] = []
+    /// Why packages, by their path in `packages`, were installed from no source; the others came from a folder.
+    var packageOrigins: [String: PackageInstallRecord.Origin] = [:]
     /// Script outputs keyed by widget id or provider name: an object as a script prints it, or plain text.
     var outputs: [String: ConfigurationValue] = [:]
     /// Graph samples keyed by widget id or provider name.
@@ -103,7 +105,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
+        case configuration, packages, packageOrigins, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
              themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -176,6 +178,7 @@ struct SceneFile: Decodable {
         if !packages.isEmpty, case .file = configuration {
             throw DecodingError.dataCorruptedError(forKey: .packages, in: values, debugDescription: "A scene with packages gives its configuration inline.")
         }
+        packageOrigins = try values.decodeIfPresent([String: PackageInstallRecord.Origin].self, forKey: .packageOrigins) ?? [:]
         outputs = try values.decodeIfPresent([String: ConfigurationValue].self, forKey: .outputs) ?? [:]
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)

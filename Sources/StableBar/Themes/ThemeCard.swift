@@ -5,12 +5,17 @@ struct ThemeCard: View {
     let look: Configuration?
     var appearance: BarAppearance = .light
     var isSelected = false
+    var isEdited = false
     var progress: String?
     var error: String?
     var isStore = false
     var source: PackageOrigin? = .included
+    /// The context menu of an installed theme that isn't bundled. Delete… asks first.
+    var showInFinder: (() -> Void)?
+    var delete: (() -> Void)?
     let select: () -> Void
     @State private var hovering = false
+    @State private var confirmingDelete = false
 
     var body: some View {
         Group {
@@ -24,6 +29,20 @@ struct ThemeCard: View {
             }
         }
         .onHover { hovering = $0 }
+        .contextMenu {
+            if let showInFinder { Button("Show in Finder", action: showInFinder) }
+            if delete != nil {
+                Divider()
+                Button("Delete…", role: .destructive) { confirmingDelete = true }
+                    .disabled(isSelected)
+                    .help(isSelected ? "Choose another theme first" : "")
+            }
+        }
+        .confirmationDialog("Delete \(title)?", isPresented: $confirmingDelete) {
+            if let delete { Button("Delete", role: .destructive, action: delete) }
+        } message: {
+            Text("Every installed version of \(title) will be deleted. This cannot be undone.")
+        }
     }
 
     private var card: some View {
@@ -51,6 +70,15 @@ struct ThemeCard: View {
                     }
                 }
                 .frame(minWidth: 72, minHeight: 20, maxHeight: 20)
+                if isEdited {
+                    Text("Edited")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.teal)
+                        .padding(.horizontal, 6)
+                        .frame(height: 17)
+                        .background(Color.teal.opacity(0.15), in: RoundedRectangle(cornerRadius: 5))
+                        .fixedSize()
+                }
                 Image(systemName: "checkmark")
                     .font(.system(size: 11, weight: .bold))
                     .foregroundStyle(Color.accentColor)

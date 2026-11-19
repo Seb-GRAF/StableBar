@@ -37,8 +37,9 @@ enum SceneRenderer {
         }
         let packages = WidgetPackageStore(directory: directory.appending(path: "packages"))
         for path in scene.packages {
-            _ = try packages.install(URL(filePath: path, relativeTo: folder).standardizedFileURL,
-                                     record: scene.barLink == nil && scene.draw != .shareLink ? .local : PackageInstallRecord(.store))
+            var record = scene.barLink == nil && scene.draw != .shareLink ? PackageInstallRecord.local : PackageInstallRecord(.store)
+            record.origin = scene.packageOrigins[path]
+            _ = try packages.install(URL(filePath: path, relativeTo: folder).standardizedFileURL, record: record)
         }
         let store = BarStore(configurationURL: configurationURL, themesDirectory: themes)
         var loader = ConfigurationLoader()

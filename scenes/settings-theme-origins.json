@@ -1,0 +1,17 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {},
+  "packages": [
+    "../Tests/Fixtures/theme-origins/saved",
+    "../Tests/Fixtures/theme-origins/shared",
+    "../Tests/Fixtures/linked-theme",
+    "../examples/packages/tonhalle-line"
+  ],
+  "packageOrigins": {
+    "../Tests/Fixtures/theme-origins/saved": "saved",
+    "../Tests/Fixtures/theme-origins/shared": "barLink",
+    "../Tests/Fixtures/linked-theme": "themeLink"
+  },
+  "draw": "settings",
+  "section": "theme"
+}

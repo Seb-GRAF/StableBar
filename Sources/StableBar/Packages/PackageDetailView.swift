@@ -156,6 +156,18 @@ struct PackageDetailView: View {
                 row("folder", "A folder on this Mac", hint: "\(path). StableBar doesn’t review local folders.") {
                     PackageOriginBadge(source: .local)
                 }
+            case .saved?:
+                row("person", "Saved by you with Save as Theme", hint: path) {
+                    PackageOriginBadge(source: .saved)
+                }
+            case .themeLink?:
+                row("link", "From a theme link", hint: path) {
+                    PackageOriginBadge(source: .themeLink)
+                }
+            case .barLink?:
+                row("person.2", "The look of a shared bar", hint: path) {
+                    PackageOriginBadge(source: .barLink)
+                }
             case let .privateSource(name)?:
                 row("lock", "From \(name)", hint: [library.sourceHost(of: draft), library.privateSourceHint(draft)]
                     .compactMap { $0 }.joined(separator: ". ")) {

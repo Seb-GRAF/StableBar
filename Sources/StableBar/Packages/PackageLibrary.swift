@@ -718,6 +718,18 @@ final class PackageLibrary {
         }
     }
 
+    /// Uninstalls every version of theme `id`, as a gallery card stands for the whole theme. Reads the versions from
+    /// disk, since the Store may not have loaded them.
+    func uninstallTheme(id: String) async throws {
+        guard let store else { return }
+        for manifest in try await client.installed() where manifest.id == id {
+            try store.configurationStore.uninstallPackage(id: id, version: manifest.version, fromCustomization: true)
+            drafts[manifest.versionKey] = nil
+        }
+        if draft?.inspection.manifest.id == id { draft = nil }
+        await loadInstalled()
+    }
+
     private func edit(_ draft: PackageDraft, enabled: Bool) -> ConfigurationEdit {
         let manifest = draft.inspection.manifest
         return ConfigurationEdit(action: manifest.kind == .theme ? .theme : .package, properties: [

@@ -1,0 +1,4 @@
+{
+  "bar": { "style": { "background": "#1f2a30ee", "cornerRadius": 12 } },
+  "defaults": { "foreground": "#e6efe9", "accent": "#e0a458" }
+}
