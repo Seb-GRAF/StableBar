@@ -212,7 +212,7 @@ struct DiagnosticsView: View {
             Section {
                 LabeledContent("Configuration file") {
                     Button("Open", action: store.openConfiguration)
-                    Button("Reload", action: store.reloadConfiguration)
+                    Button("Reload", action: store.configurationStore.reloadConfiguration)
                 }
                 snapshotControls
             } header: {

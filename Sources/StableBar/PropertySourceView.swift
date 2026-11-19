@@ -142,9 +142,9 @@ extension BarStore {
             own += configurationSources(path, keys: ["states", "hover", "background"]).filter { $0.value != .null }
         }
         let definition = widgetID.flatMap { origins["widgets.\($0).id"] }
-        let mainDefinition = definition?.file == configurationURL.standardizedFileURL.path
+        let mainDefinition = definition?.file == configurationStore.configurationURL.standardizedFileURL.path
         let saved = own.last { source in
-            guard let origin = source.origin, origin.file == configurationURL.standardizedFileURL.path else { return false }
+            guard let origin = source.origin, origin.file == configurationStore.configurationURL.standardizedFileURL.path else { return false }
             if let profile = customizationHistory.editingProfile {
                 return origin.profile == profile && !origin.detail.contains("(template ")
             }

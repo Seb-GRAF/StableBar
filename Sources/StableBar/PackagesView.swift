@@ -43,7 +43,7 @@ struct PackagesView: View {
         _setup = State(initialValue: WidgetSetup(store: store))
         _tab = State(initialValue: selectedPackageID == nil ? .overview : .settings)
         if reviewing != nil || indexURL != PackageIndex.url {
-            let packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
+            let packages = WidgetPackageStore(directory: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"))
             // A review shares the app's client, which knows the private source it installs for.
             let client = indexURL == PackageIndex.url ? nil : PackageStoreClient(packages: packages, indexURL: indexURL)
             _library = State(initialValue: PackageLibrary(store: store, client: client, reviewing: reviewing != nil))

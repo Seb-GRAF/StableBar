@@ -133,7 +133,7 @@ import Testing
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let original = try #require(store.widgetScripts.scripts["replace"])
     for _ in 0..<100 {
         if original.output.text == "Old" { break }
@@ -150,7 +150,7 @@ import Testing
     widget["command"] = "printf 'new\\n' >> \"$LOG\"; printf New"
     configuration["widgets"] = [widget]
     try JSONSerialization.data(withJSONObject: configuration).write(to: url, options: .atomic)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let replacement = try #require(store.widgetScripts.scripts["replace"])
     #expect(replacement !== original)
     for _ in 0..<100 {
@@ -186,7 +186,7 @@ import Testing
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["history"])
     for _ in 0..<100 {
         if script.output.text == "Ready" { break }
@@ -202,7 +202,7 @@ import Testing
     try #require(script.error == "Offline")
     widget["style"] = ["background": "#112233"]
     try JSONSerialization.data(withJSONObject: ["widgets": [widget]]).write(to: url, options: .atomic)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.widgetScripts.scripts["history"] === script)
     #expect(script.output.text == "Ready")
@@ -230,7 +230,7 @@ import Testing
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["environment"])
     let bar = "\(try #require(Bundle.main.executablePath))|\(url.path)"
     let startup = "root|widget|environment|\(directory.path)|\(bar)|startup|initial"
@@ -316,7 +316,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["external"])
     let home = try #require(shellEnvironment.withLock { $0["HOME"] })
     for _ in 0..<100 {
@@ -358,7 +358,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["front"])
     for _ in 0..<100 {
         if script.output.text == "startup:none" { break }

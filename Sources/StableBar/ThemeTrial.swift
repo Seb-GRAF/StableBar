@@ -13,10 +13,10 @@ final class ThemeTrial {
     init(store: BarStore) {
         self.store = store
         store.barEditing.end()
-        choices = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                               themesDirectory: store.themesDirectory, selectedKey: store.selectedThemeKey).choices
-            .onePerTheme(keeping: [store.selectedThemeKey])
-        selectedIndex = choices.firstIndex { $0.key == store.selectedThemeKey } ?? 0
+        choices = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                               themesDirectory: store.configurationStore.themesDirectory, selectedKey: store.configurationStore.selectedThemeKey).choices
+            .onePerTheme(keeping: [store.configurationStore.selectedThemeKey])
+        selectedIndex = choices.firstIndex { $0.key == store.configurationStore.selectedThemeKey } ?? 0
     }
 
     var choice: ThemeChoice? { choices.indices.contains(selectedIndex) ? choices[selectedIndex] : nil }
@@ -30,7 +30,7 @@ final class ThemeTrial {
         guard isActive, !choices.isEmpty else { return }
         selectedIndex = (selectedIndex + offset + choices.count) % choices.count
         do {
-            try store.tryTheme(choices[selectedIndex])
+            try store.configurationStore.tryTheme(choices[selectedIndex])
             previewFailed = false
             error = nil
         } catch {
@@ -42,8 +42,8 @@ final class ThemeTrial {
     func keep() {
         guard canKeep, let choice else { return }
         do {
-            try store.customizationHistory.change(store.themeEdit(for: choice))
-            store.endThemeTrial()
+            try store.customizationHistory.change(store.configurationStore.themeEdit(for: choice))
+            store.configurationStore.endThemeTrial()
             isActive = false
             error = nil
         } catch { self.error = "This theme couldn’t be saved. Try again or cancel." }
@@ -51,7 +51,7 @@ final class ThemeTrial {
 
     func cancel() {
         guard isActive else { return }
-        store.endThemeTrial()
+        store.configurationStore.endThemeTrial()
         isActive = false
     }
 

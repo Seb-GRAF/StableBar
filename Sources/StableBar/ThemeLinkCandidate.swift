@@ -11,7 +11,7 @@ final class ThemeLinkCandidate {
     let validationOriginPathBytes: Int
     private var candidateState: State = .ready
     var state: State {
-        if candidateState == .trying, store?.themeTrialDirectory != choice.directory { return .ready }
+        if candidateState == .trying, store?.configurationStore.themeTrialDirectory != choice.directory { return .ready }
         return candidateState
     }
     private weak var store: BarStore?
@@ -45,7 +45,7 @@ final class ThemeLinkCandidate {
             guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
             guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
             let id = inspection.manifest.id
-            let bundled = store.themesDirectory?.appending(path: id)
+            let bundled = store.configurationStore.themesDirectory?.appending(path: id)
             if legacyThemeIDs.contains(id) || bundled.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
                 throw ThemeLinkError.reservedID(id)
             }
@@ -74,10 +74,10 @@ final class ThemeLinkCandidate {
         store.barEditing.end()
         store.onWindowRequest?(.endThemeTrial)
         do {
-            try store.tryTheme(choice)
+            try store.configurationStore.tryTheme(choice)
             candidateState = .trying
         } catch {
-            store.endThemeTrial()
+            store.configurationStore.endThemeTrial()
             candidateState = .failed(errorMessage(error))
         }
     }
@@ -86,7 +86,7 @@ final class ThemeLinkCandidate {
 
     func cancelTrial() {
         guard state == .trying else { return }
-        if store?.themeTrialDirectory == choice.directory { store?.endThemeTrial() }
+        if store?.configurationStore.themeTrialDirectory == choice.directory { store?.configurationStore.endThemeTrial() }
         candidateState = .ready
     }
 
@@ -94,32 +94,32 @@ final class ThemeLinkCandidate {
         guard !discarded, !using, state != .used, let store else { return }
         using = true
         defer { using = false }
-        let configurationURL = store.configurationURL
-        let selectedKey = store.selectedThemeKey
-        let trialDirectory = store.themeTrialDirectory
+        let configurationURL = store.configurationStore.configurationURL
+        let selectedKey = store.configurationStore.selectedThemeKey
+        let trialDirectory = store.configurationStore.themeTrialDirectory
         let themeChoices = themeChoices
         do {
             let screenTheme = try selectedScreenTheme(on: kind, in: store)
             let installed = try await installedTheme(in: store.packageStoreClient.packages)
             guard !discarded else { return }
             guard self.themeChoices == themeChoices,
-                  store.configurationURL == configurationURL,
-                  store.selectedThemeKey == selectedKey,
-                  store.themeTrialDirectory == trialDirectory,
+                  store.configurationStore.configurationURL == configurationURL,
+                  store.configurationStore.selectedThemeKey == selectedKey,
+                  store.configurationStore.themeTrialDirectory == trialDirectory,
                   try selectedScreenTheme(on: kind, in: store) == screenTheme else {
-                candidateState = store.themeTrialDirectory == choice.directory ? .trying : .ready
+                candidateState = store.configurationStore.themeTrialDirectory == choice.directory ? .trying : .ready
                 return
             }
-            try store.applyTheme(installed, on: kind, everyBar: everyBar)
+            try store.configurationStore.applyTheme(installed, on: kind, everyBar: everyBar)
             store.onWindowRequest?(.endThemeTrial)
-            store.endThemeTrial()
+            store.configurationStore.endThemeTrial()
             candidateState = .used
             try? FileManager.default.removeItem(at: choice.directory)
         } catch {
             guard !discarded else { return }
-            if let trialDirectory, store.themeTrialDirectory == trialDirectory {
+            if let trialDirectory, store.configurationStore.themeTrialDirectory == trialDirectory {
                 store.onWindowRequest?(.endThemeTrial)
-                store.endThemeTrial()
+                store.configurationStore.endThemeTrial()
             }
             candidateState = .failed(errorMessage(error))
         }

@@ -8,7 +8,7 @@ import Testing
     {"widgets":[{"id":"clock","type":"clock","position":"right"},{"id":"note","type":"text","text":"Hi","position":"left"}]}
     """#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); fixture.close() }
     var shown: [NSWindow] = []
     let settings = CustomizationWindow(present: { shown.append($0) })

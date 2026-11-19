@@ -94,7 +94,7 @@ import Testing
 @MainActor @Test func aProfileAddedOnlyFromTheCommandLineIsNotDeletedFromSettings() throws {
     let fixture = try ProfileFixture(#"{"widgets":[]}"#)
     defer { fixture.close() }
-    try fixture.store.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
+    try fixture.store.configurationStore.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
         ["name": .string("temporary"), "configuration": .object([:])]
     ])], persist: false)
     let editor = ConfigurationEditor(store: fixture.store)
@@ -116,7 +116,7 @@ import Testing
         try Data(configuration.utf8).write(to: url)
         if let include { try Data(include.utf8).write(to: directory.appending(path: "shared.json")) }
         store = BarStore(configurationURL: url, themesDirectory: nil, customizationSaveDelay: .zero)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
     }
 

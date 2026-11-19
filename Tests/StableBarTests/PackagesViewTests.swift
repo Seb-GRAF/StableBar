@@ -21,7 +21,7 @@ final class PackagesViewTests: XCTestCase {
             try fixture.write(#"{"packages":[{"id":"date","version":"1","settings":{"format":"yyyy-MM-dd"}}],"profiles":[{"name":"work","configuration":{}}]}"#, to: fixture.url)
             let store = try fixture.store()
             defer { store.stop() }
-            try store.applyEdits([], persist: false)
+            try store.configurationStore.applyEdits([], persist: false)
             let library = PackageLibrary(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
             defer { library.stopUpdateChecks() }
             _ = try await index.add(id: "date", kind: "widgets", configuration: configuration, settings: settings, version: "2")
@@ -57,7 +57,7 @@ final class PackagesViewTests: XCTestCase {
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNotNil(store.configurationError)
         XCTAssertTrue(store.effectiveDocument.isEmpty)
         _ = NSApplication.shared
@@ -929,7 +929,7 @@ final class PackagesViewTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertEqual(draft.settings["location"], .string("Paris"))
         XCTAssertEqual(draft.secrets["token"], "unsaved credential")
-        try store.setSessionEdits([.init(action: .package, properties: [
+        try store.configurationStore.setSessionEdits([.init(action: .package, properties: [
             "id": .string("weather"), "version": .string("1"),
             "settings": .object(["location": .string("Temporary")])
         ])])
@@ -943,7 +943,7 @@ final class PackagesViewTests: XCTestCase {
         let savedWithSession = try XCTUnwrap(fixture.document()["packages"]?.decoded([WidgetPackageSelection].self).first)
         XCTAssertEqual(savedWithSession.settings, ["location": .string("Paris"), "units": .string("imperial")])
         XCTAssertEqual(store.configuration?.widgets.first?.content, .text("Temporary"))
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         draft.inspectionTask?.cancel()
     }
 

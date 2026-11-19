@@ -77,7 +77,7 @@ enum DocsImages {
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             try await save(details.background { backdrop(dark: dark) }, "essentials", size: NSSize(width: 1100, height: 1050), stores: [essentials])
-            essentials.showScreenSetup(ScreenSetup([display]))
+            essentials.configurationStore.showScreenSetup(ScreenSetup([display]))
             let essentialsEditor = ConfigurationEditor(store: essentials)
             essentialsEditor.showWidget("system")
             essentialsEditor.widgetTab = .content
@@ -89,7 +89,7 @@ enum DocsImages {
                            "essentials-clock-settings", size: NSSize(width: 1080, height: 760), stores: [essentials])
             essentials.stop()
 
-            bar.showScreenSetup(ScreenSetup([display]))
+            bar.configurationStore.showScreenSetup(ScreenSetup([display]))
             let editor = ConfigurationEditor(store: bar)
             editor.section = .appearance
             try await save(SettingsView(store: bar, editor: editor).background(Color(nsColor: .windowBackgroundColor)), "settings",
@@ -214,7 +214,7 @@ enum DocsImages {
         let store = BarStore(configurationURL: url, registry: registry)
         try offline(store, in: directory)
         store.workspaceStore.executablePath = { aerospace.path }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         store.activeApp = SampleApp(bundleIdentifier: "com.apple.finder")
         return store
     }

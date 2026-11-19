@@ -65,8 +65,8 @@ struct ProfilesView: View {
             if editor.searchTarget == SettingsSearchResult.profiles.id { editor.searchTarget = nil }
         }
         .task {
-            let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                                       themesDirectory: store.themesDirectory)
+            let catalog = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                       themesDirectory: store.configurationStore.themesDirectory)
             themeOptions = await Task.detached { catalog.profileThemeOptions }.value
             if !offline {
                 network = SystemContext.wifiNetwork()
@@ -277,8 +277,8 @@ struct ProfilesView: View {
 
     private var context: ConfigurationContext {
         var context = store.profileContext
-        context.app = store.context.app
-        context.displays = store.context.displays
+        context.app = store.configurationStore.context.app
+        context.displays = store.configurationStore.context.displays
         context.wifi = live.wifi
         context.camera = live.camera
         context.microphone = live.microphone
@@ -488,7 +488,7 @@ struct ProfilesView: View {
 
     @ViewBuilder private func changeRows(_ profile: ConfigurationProfile) -> some View {
         let changes = self.changes(profile.configuration)
-        let main = try? store.editedMainDocument(replaying: store.customizationEdits)["profiles"]?
+        let main = try? store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)["profiles"]?
             .decoded([ConfigurationProfile].self).first { $0.name == profile.name }?.configuration
         let removable = Set(self.changes(main ?? [:]).map(\.path))
         let names = WidgetDisplayName.names(for: store.configuration?.widgets ?? [], packageNames: store.widgetPackageNames,

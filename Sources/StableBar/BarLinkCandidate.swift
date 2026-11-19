@@ -43,7 +43,7 @@ final class BarLinkCandidate {
     private var trialDirectory: URL?
     private var candidateState: State = .ready
     var state: State {
-        if candidateState == .trying, store?.themeTrialDirectory != trialDirectory { return .ready }
+        if candidateState == .trying, store?.configurationStore.themeTrialDirectory != trialDirectory { return .ready }
         return candidateState
     }
     private weak var store: BarStore?
@@ -52,7 +52,7 @@ final class BarLinkCandidate {
     init(link: BarLink, store: BarStore) throws {
         look = try ThemeLinkCandidate(link: link.theme, store: store)
         do {
-            preview = try ThemePreview(choice: look.choice, themesDirectory: store.themesDirectory)
+            preview = try ThemePreview(choice: look.choice, themesDirectory: store.configurationStore.themesDirectory)
             builtIns = try link.widgets.map { try ConfigurationValue.object($0).decoded(WidgetConfiguration.self) }
             let families = NSFontManager.shared.availableFontFamilies
             let values = configurationValues(try JSONDecoder().decode(ConfigurationValue.self, from: link.theme.configuration))
@@ -144,25 +144,25 @@ final class BarLinkCandidate {
             if !appliesLook {
                 let screens = try store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
                 let screenTheme = try kind.flatMap { screens[$0.rawValue]?["theme"] }?.decoded(WidgetPackageSelection.self)
-                let key = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? store.selectedThemeKey
-                guard let current = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                                                 themesDirectory: store.themesDirectory, selectedKey: key).choices.first(where: { $0.key == key }) else {
+                let key = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? store.configurationStore.selectedThemeKey
+                guard let current = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                                 themesDirectory: store.configurationStore.themesDirectory, selectedKey: key).choices.first(where: { $0.key == key }) else {
                     throw CommandFailure(message: "The theme \(key) isn’t installed.")
                 }
                 choice = current
             }
-            try store.tryTheme(choice, edits: edits(in: store, on: kind))
+            try store.configurationStore.tryTheme(choice, edits: edits(in: store, on: kind))
             trialDirectory = choice.directory
             candidateState = .trying
         } catch {
-            store.endThemeTrial()
+            store.configurationStore.endThemeTrial()
             candidateState = .failed(errorMessage(error))
         }
     }
 
     func cancelTrial() {
         guard state == .trying else { return }
-        if store?.themeTrialDirectory == trialDirectory { store?.endThemeTrial() }
+        if store?.configurationStore.themeTrialDirectory == trialDirectory { store?.configurationStore.endThemeTrial() }
         candidateState = .ready
     }
 
@@ -172,26 +172,26 @@ final class BarLinkCandidate {
         guard !discarded, !working, entries != nil, state != .used, let store else { return }
         working = true
         defer { working = false }
-        let configurationURL = configurationURL ?? store.configurationURL
+        let configurationURL = configurationURL ?? store.configurationStore.configurationURL
         do {
             guard try await installPackages(in: store, then: .use(kind, everyBar: everyBar, configurationURL: configurationURL)) else { return }
             var themeEdits: [ConfigurationEdit] = []
             if appliesLook {
                 let theme = try await look.installedTheme(in: store.packageStoreClient.packages)
-                themeEdits = try store.themeEdits(for: theme, on: kind)
+                themeEdits = try store.configurationStore.themeEdits(for: theme, on: kind)
             }
-            guard !discarded, store.configurationURL == configurationURL else { return }
+            guard !discarded, store.configurationStore.configurationURL == configurationURL else { return }
             // The trial's edits don't apply over the saved bar, so it ends first.
             store.onWindowRequest?(.endThemeTrial)
-            store.endThemeTrial()
+            store.configurationStore.endThemeTrial()
             try store.customizationHistory.change(themeEdits + edits(in: store, on: kind), everyBar: everyBar)
             candidateState = .used
             look.discard()
         } catch {
             guard !discarded else { return }
-            if let trialDirectory, store.themeTrialDirectory == trialDirectory {
+            if let trialDirectory, store.configurationStore.themeTrialDirectory == trialDirectory {
                 store.onWindowRequest?(.endThemeTrial)
-                store.endThemeTrial()
+                store.configurationStore.endThemeTrial()
             }
             candidateState = .failed(errorMessage(error))
         }
@@ -271,7 +271,7 @@ final class BarLinkCandidate {
     /// With a notched display under a top bar, the laptop screen's layout puts the centered widgets left of the notch: the
     /// bar puts them right of it with the right ones, where a bar made on a wider screen doesn't fit.
     private func edits(in store: BarStore, on kind: ScreenKind?) throws -> [ConfigurationEdit] {
-        let main = try store.editedMainDocument()
+        let main = try store.configurationStore.editedMainDocument()
         var removal: [String: ConfigurationValue] = [:]
         if appliesLook, kind == nil {
             var loader = ConfigurationLoader()

@@ -132,16 +132,16 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
     defer { store.stop(); fixture.close(); defaults.removePersistentDomain(forName: domain) }
     let screenSetup = ScreenSetup([BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: nil)])
     if ownBar {
-        try FileManager.default.copyItem(at: fixture.url, to: store.ownBarURL(for: screenSetup))
+        try FileManager.default.copyItem(at: fixture.url, to: store.configurationStore.ownBarURL(for: screenSetup))
     }
-    store.prepareScreenSetup(screenSetup)
+    store.configurationStore.prepareScreenSetup(screenSetup)
     let preferences = SetupPreferences(appearance: .dark, clock: .twelveHour, workspaces: .spaces,
                                        keepWindowsClear: true, keepNotificationsClear: false, deferMeetings: true)
     let snapshot = ApplicationMoveResume.Setup(step: SetupSession.Step.touches.rawValue,
         preferences: preferences, preset: .developer, openAtLogin: true,
         menuBarHidAtStart: false, stableBarHidMenuBarAtStart: false, opensAtLoginAtStart: false)
     let edit = ConfigurationEdit(action: .bar, properties: ["height": .number(38)])
-    let record = ApplicationMoveResume(kind: .setup, configuration: fixture.url, barConfiguration: store.configurationURL,
+    let record = ApplicationMoveResume(kind: .setup, configuration: fixture.url, barConfiguration: store.configurationStore.configurationURL,
                                        setup: snapshot, edits: [.init(edit)], failure: "Recovered setup.")
     try resumeStore.save(record)
     let launchResume = ApplicationMoveLaunchResume()
@@ -150,8 +150,8 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
     #expect(launchResume.wasResuming)
     #expect(launchResume.pendingKind == .setup)
     #expect(defaults.data(forKey: ApplicationMoveResumeStore.key) == nil)
-    #expect(store.sessionEdits.first?.properties == edit.properties)
-    store.reloadConfiguration()
+    #expect(store.configurationStore.sessionEdits.first?.properties == edit.properties)
+    store.configurationStore.reloadConfiguration()
     let window = SetupWindow(launchResume: launchResume)
     var system = SetupSystem()
     system.defaults = defaults
@@ -177,7 +177,7 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
     #expect(session.preferences.clock == .twentyFourHour)
     #expect(launchResume.take(for: .setup) == nil)
     session.cancel()
-    #expect(store.sessionEdits.first?.properties == edit.properties)
+    #expect(store.configurationStore.sessionEdits.first?.properties == edit.properties)
 }
 
 @Test @MainActor func applicationMoveManualSettingsOpenBeforeAutomaticResumeKeepsTheFailure() throws {
@@ -207,11 +207,11 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
 func applicationMoveResumesSetupChoicesWithoutSavingThem(step: Int) async throws {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); fixture.close() }
     let original = try Data(contentsOf: fixture.url)
     let existingEdit = ConfigurationEdit(action: .bar, properties: ["height": .number(38)])
-    try store.setSessionEdits([existingEdit])
+    try store.configurationStore.setSessionEdits([existingEdit])
     var hides = false
     let suite = "StableBarTests.MoveResume.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: suite))
@@ -266,8 +266,8 @@ func applicationMoveResumesSetupChoicesWithoutSavingThem(step: Int) async throws
         await Task.yield()
     }
     #expect(!hides)
-    #expect(store.sessionEdits.count == 1)
-    #expect(store.sessionEdits.first?.properties == existingEdit.properties)
+    #expect(store.configurationStore.sessionEdits.count == 1)
+    #expect(store.configurationStore.sessionEdits.first?.properties == existingEdit.properties)
     #expect(try Data(contentsOf: fixture.url) == original)
 }
 
@@ -275,7 +275,7 @@ func applicationMoveResumesSetupChoicesWithoutSavingThem(step: Int) async throws
 func applicationMoveRestoresOpenAtLoginOnlyInApplications(inApplications: Bool) throws {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); fixture.close() }
     let domain = "StableBarTests.MoveLogin.\(UUID().uuidString)"
     let defaults = try #require(UserDefaults(suiteName: domain))

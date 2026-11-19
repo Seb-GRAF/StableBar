@@ -51,7 +51,7 @@ import Testing
     store.workspaceStore.executablePath = { throw CommandFailure(message: "AeroSpace is not on your login shell's PATH.") }
     store.workspaceStore.reconnectDelay = 30
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["s"])
     for _ in 0..<200 {
         if script.output.text == "1" && store.workspaceStore.connectionError != nil { break }

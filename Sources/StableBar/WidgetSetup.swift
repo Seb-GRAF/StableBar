@@ -36,9 +36,9 @@ final class WidgetSetup {
         }
         self.widgetsForInsertion = widgetsForInsertion ?? {
             var loader = ConfigurationLoader()
-            loader.themesDirectory = store.themesDirectory
-            let root = try store.editedDocument([], replaying: store.customizationEdits)
-            return try loader.load(store.configurationURL, data: configurationData(root), context: store.context).widgets
+            loader.themesDirectory = store.configurationStore.themesDirectory
+            let root = try store.configurationStore.editedDocument([], replaying: store.configurationStore.customizationEdits)
+            return try loader.load(store.configurationStore.configurationURL, data: configurationData(root), context: store.configurationStore.context).widgets
         }
     }
 
@@ -116,9 +116,9 @@ final class WidgetSetup {
 
     func savedSettings(for manifest: WidgetPackageManifest) throws -> [String: ConfigurationValue] {
         var loader = ConfigurationLoader()
-        loader.themesDirectory = store.themesDirectory
-        let root = try store.editedDocument([], replaying: store.customizationEdits)
-        let document = try loader.compose(store.configurationURL, data: configurationData(root), context: store.context)
+        loader.themesDirectory = store.configurationStore.themesDirectory
+        let root = try store.configurationStore.editedDocument([], replaying: store.configurationStore.customizationEdits)
+        let document = try loader.compose(store.configurationStore.configurationURL, data: configurationData(root), context: store.configurationStore.context)
         var selections = try document["packages"]?.decoded([WidgetPackageSelection].self) ?? []
         if let theme = document["theme"] { selections.append(try theme.decoded(WidgetPackageSelection.self)) }
         return (selections.first { $0.id == manifest.id }?.settings ?? [:]).filter { name, value in
@@ -133,14 +133,14 @@ final class WidgetSetup {
             "enabled": .bool(true), "settings": .object(settings)
         ])
         var loader = ConfigurationLoader()
-        loader.themesDirectory = store.themesDirectory
-        let root = try store.editedDocument([selection], replaying: [])
-        let configured = try loader.load(store.configurationURL, data: configurationData(root), context: store.context)
+        loader.themesDirectory = store.configurationStore.themesDirectory
+        let root = try store.configurationStore.editedDocument([selection], replaying: [])
+        let configured = try loader.load(store.configurationStore.configurationURL, data: configurationData(root), context: store.configurationStore.context)
         // Package widget IDs are global. Include existing disabled widgets when adding a
         // previously enabled package again, and leave unrelated widgets in place.
         var packageLoader = ConfigurationLoader()
         let layer = try packageLoader.readPackage(at: inspection.directory, manifest: inspection.manifest, settings: settings)
-        let packageConfiguration = try ConfigurationValue.object(packageLoader.finish(layer, context: store.context)).decoded(Configuration.self)
+        let packageConfiguration = try ConfigurationValue.object(packageLoader.finish(layer, context: store.configurationStore.context)).decoded(Configuration.self)
         let ids = Set(packageConfiguration.widgets.map(\.id))
         let added = configured.widgets.filter { ids.contains($0.id) }
         guard !added.isEmpty else { throw CommandFailure(message: "This package has no widgets for the current setup.") }
@@ -176,7 +176,7 @@ final class WidgetSetup {
     }
 
     func move(_ id: String, to position: WidgetPosition, before anchor: String? = nil, on kind: ScreenKind? = nil) throws {
-        try store.requireSavedWidget(id)
+        try store.configurationStore.requireSavedWidget(id)
         try store.customizationHistory.change(editsMoving(id, to: position, before: anchor, on: kind))
     }
 
@@ -193,7 +193,7 @@ final class WidgetSetup {
     }
 
     func move(_ id: String, by offset: Int, on kind: ScreenKind? = nil, listed: (WidgetConfiguration) -> Bool = { _ in true }) throws {
-        try store.requireSavedWidget(id)
+        try store.configurationStore.requireSavedWidget(id)
         try store.customizationHistory.change(editsMoving(id, by: offset, on: kind, listed: listed))
     }
 
@@ -206,7 +206,7 @@ final class WidgetSetup {
     }
 
     private func hasOwnLayout(_ kind: ScreenKind, in configuration: Configuration) -> Bool {
-        configuration.screenLayouts[kind.rawValue] != nil || Set(store.screenSetup?.kinds ?? []).count > 1
+        configuration.screenLayouts[kind.rawValue] != nil || Set(store.configurationStore.screenSetup?.kinds ?? []).count > 1
     }
 
     private func arrange(_ widgets: [WidgetConfiguration], on kind: ScreenKind) throws {

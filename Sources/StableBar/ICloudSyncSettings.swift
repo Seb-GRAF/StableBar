@@ -8,7 +8,7 @@ struct ICloudSyncSettings: View {
     @State private var working = false
     @State private var error: String?
 
-    private var sync: ICloudSync { ICloudSync(folder: store.configurationURL.deletingLastPathComponent()) }
+    private var sync: ICloudSync { ICloudSync(folder: store.configurationStore.configurationURL.deletingLastPathComponent()) }
 
     /// Only the default folder: a configuration opened with `--config` can sit in a folder of unrelated files.
     private var syncs: Bool {
@@ -79,8 +79,8 @@ extension BarStore {
     /// Reads the bar again after its folder was replaced, choosing the screen setup's bar again: the new folder can lack
     /// the setup's own bar, or have one.
     func reloadMovedFolder() {
-        let before = configurationURL
-        if let screenSetup { showScreenSetup(screenSetup) }
-        if configurationURL == before { reloadConfiguration() }
+        let before = configurationStore.configurationURL
+        if let screenSetup = configurationStore.screenSetup { configurationStore.showScreenSetup(screenSetup) }
+        if configurationStore.configurationURL == before { configurationStore.reloadConfiguration() }
     }
 }

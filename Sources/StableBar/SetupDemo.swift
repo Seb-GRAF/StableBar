@@ -215,7 +215,7 @@ struct SetupDemo: View {
                                                       isPortrait: display.isPortrait), preview: true)
         }
         .frame(height: target.height)
-        .environment(\.colorScheme, store.context.appearance == "dark" ? .dark : .light)
+        .environment(\.colorScheme, store.configurationStore.context.appearance == "dark" ? .dark : .light)
     }
 
     /// A part of the bar that drops into its slot, sparks, and is labelled while the bar is built.

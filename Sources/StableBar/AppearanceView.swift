@@ -12,7 +12,7 @@ struct AppearanceView: View {
 
     private var store: BarStore { editor.store }
     private var gallery: ThemeGallery { editor.gallery }
-    private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.screenSetup?.kinds.contains($0) == true } }
+    private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.configurationStore.screenSetup?.kinds.contains($0) == true } }
     private var document: [String: ConfigurationValue] { screen.flatMap { store.screenDocuments[$0.rawValue] } ?? store.effectiveDocument }
     private var screenTheme: WidgetPackageSelection? {
         let screens = (try? store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
@@ -32,10 +32,10 @@ struct AppearanceView: View {
                                     .fixedSize()
                             }
                             Spacer()
-                            if editor.editingProfile == nil, !store.screenSetupsWithOwnBars.isEmpty {
+                            if editor.editingProfile == nil, !store.configurationStore.screenSetupsWithOwnBars.isEmpty {
                                 SettingsSegments(selection: $editor.themeChangesEveryBar,
                                                  options: [(true, "All setups"),
-                                                           (false, store.configurationURL == store.sharedConfigurationURL ? "Shared bar only" : "This setup only")],
+                                                           (false, store.configurationStore.configurationURL == store.configurationStore.sharedConfigurationURL ? "Shared bar only" : "This setup only")],
                                                  stretches: false)
                                     .fixedSize()
                             }
@@ -101,7 +101,7 @@ struct AppearanceView: View {
         .onChange(of: kinds) { if let screen, !kinds.contains(screen) { self.screen = nil } }
         .onChange(of: store.effectiveDocument) { _, _ in gallery.configurationChanged() }
         .onChange(of: store.configurationError) { _, _ in gallery.contextChanged() }
-        .onChange(of: store.context) { _, _ in gallery.contextChanged() }
+        .onChange(of: store.configurationStore.context) { _, _ in gallery.contextChanged() }
         .onChange(of: store.pendingLinks.theme?.choice.directory) { _, _ in gallery.contextChanged() }
         .onChange(of: store.pendingLinks.theme?.state) { _, _ in gallery.contextChanged() }
     }

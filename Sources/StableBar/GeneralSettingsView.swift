@@ -110,13 +110,13 @@ struct GeneralSettingsView: View {
                     .id(SettingsSearchResult.access.id)
                     SettingsGroup("Configuration file") {
                         row {
-                            Text(store.configurationURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                            Text(store.configurationStore.configurationURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                                 .font(.system(size: 12, design: .monospaced))
                                 .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         } control: {
                             Button("Open", action: store.openConfiguration)
-                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([store.configurationURL]) }
-                            Button("Reload", action: store.reloadConfiguration)
+                            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([store.configurationStore.configurationURL]) }
+                            Button("Reload", action: store.configurationStore.reloadConfiguration)
                         }
                         ICloudSyncSettings(store: store)
                     }

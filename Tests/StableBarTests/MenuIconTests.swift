@@ -7,7 +7,7 @@ import Testing
     defer { fixture.close() }
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let bar = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     defer { bar.close() }
     let menu = NSMenu()
@@ -25,7 +25,7 @@ import Testing
                                                                     "Settings…", "Quit StableBar"])
 
     try fixture.write("{", to: fixture.url)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     delegate.menuWillOpen(menu)
     let problem = try #require(menu.items.first { $0.action == #selector(AppDelegate.showStatus) })
     #expect(problem.image != nil)

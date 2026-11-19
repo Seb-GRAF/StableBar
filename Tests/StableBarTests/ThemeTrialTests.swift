@@ -42,7 +42,7 @@ final class ThemeTrialTests: XCTestCase {
         }
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
-        XCTAssertTrue(store.customizationEdits.isEmpty)
+        XCTAssertTrue(store.configurationStore.customizationEdits.isEmpty)
         trial.cancel()
     }
 
@@ -72,7 +72,7 @@ final class ThemeTrialTests: XCTestCase {
             let gallery = ThemeGallery(store: store)
             await gallery.refresh()
             let choice = try XCTUnwrap(gallery.choices.first { $0.key == scenario.key })
-            let edit = try store.themeEdit(for: choice)
+            let edit = try store.configurationStore.themeEdit(for: choice)
             XCTAssertEqual(edit.action, .theme)
             XCTAssertEqual(edit.properties, scenario.properties)
             var ids: [String] = []
@@ -90,7 +90,7 @@ final class ThemeTrialTests: XCTestCase {
                 XCTAssertNil(trial.error)
             }
             XCTAssertEqual(trial.choice?.key, choice.key)
-            XCTAssertEqual(try store.themeEdit(for: choice).properties, edit.properties)
+            XCTAssertEqual(try store.configurationStore.themeEdit(for: choice).properties, edit.properties)
             trial.keep()
             XCTAssertNil(trial.error)
             XCTAssertFalse(trial.isActive)
@@ -130,7 +130,7 @@ final class ThemeTrialTests: XCTestCase {
                     gallery.select(choice)
                     XCTAssertNil(gallery.errors[key])
                 }
-                XCTAssertEqual(store.selectedThemeKey, key)
+                XCTAssertEqual(store.configurationStore.selectedThemeKey, key)
                 let selection = try XCTUnwrap(fixture.document()["theme"]?.decoded([String: ConfigurationValue].self))
                 XCTAssertEqual(selection["settings"], .null)
                 XCTAssertEqual(selection["version"], choice.isBundled ? .null : .string("1"))
@@ -161,7 +161,7 @@ final class ThemeTrialTests: XCTestCase {
         XCTAssertNil(trial.error)
         XCTAssertEqual(store.configuration?.bar.height, 95)
         XCTAssertEqual(clearance(), before)
-        XCTAssertEqual(store.clearanceConfiguration?.bar.keepWindowsClear, true)
+        XCTAssertEqual(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear, true)
         trial.cancel()
         XCTAssertEqual(clearance(), before)
         let keeping = ThemeTrial(store: store)
@@ -188,7 +188,7 @@ final class ThemeTrialTests: XCTestCase {
             let edit = ConfigurationEdit(action: .theme, properties: [
                 "id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(63)])
             ])
-            try store.setSessionEdits([edit])
+            try store.configurationStore.setSessionEdits([edit])
             let gallery = ThemeGallery(store: store)
             await gallery.refresh()
             XCTAssertEqual(gallery.previews[installed.key]?.light.bar.height, 40)
@@ -201,7 +201,7 @@ final class ThemeTrialTests: XCTestCase {
             trial.previous()
             XCTAssertNil(trial.error)
             XCTAssertEqual(store.configuration?.bar.height, 63)
-            try store.applyEdits([ConfigurationEdit(action: .theme, properties: [
+            try store.configurationStore.applyEdits([ConfigurationEdit(action: .theme, properties: [
                 "id": .string("test-theme"), "version": .string("1"), "settings": .object(["size": .number(71)])
             ])], persist: false)
             let pending = try encodedEdits(store)
@@ -223,7 +223,7 @@ final class ThemeTrialTests: XCTestCase {
         let installed = try fixture.theme(#"{"bar":{"height":57},"defaults":{"fontSize":22}}"#)
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        try store.setSessionEdits(pendingEdits)
+        try store.configurationStore.setSessionEdits(pendingEdits)
         let original = try Data(contentsOf: fixture.url)
         let included = try Data(contentsOf: fixture.directory.appending(path: "included.json"))
         let theme = try Data(contentsOf: installed.directory.appending(path: "config.json"))
@@ -257,7 +257,7 @@ final class ThemeTrialTests: XCTestCase {
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        try store.setSessionEdits(pendingEdits)
+        try store.configurationStore.setSessionEdits(pendingEdits)
         let original = try Data(contentsOf: fixture.url)
         let edits = try encodedEdits(store)
         let trial = ThemeTrial(store: store)
@@ -352,7 +352,7 @@ final class ThemeTrialTests: XCTestCase {
         _ = try fixture.theme(#"{"bar":{"height":57},"profiles":[{"name":"two screens","when":{"displayCount":2},"configuration":{"bar":{"height":64}}}]}"#)
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        store.context.displayCount = 2
+        store.configurationStore.context.displayCount = 2
         let displays = [BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: nil),
                         BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)]
         var heights: [[CGFloat]] = []
@@ -399,7 +399,7 @@ final class ThemeTrialTests: XCTestCase {
         failing.previous()
         let invalid = Data(#"{"bar":{"height":"invalid"},"widgets":[]}"#.utf8)
         try invalid.write(to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNotNil(store.configurationError)
         failing.cancel()
         XCTAssertEqual(store.effectiveDocument, document)
@@ -415,13 +415,13 @@ final class ThemeTrialTests: XCTestCase {
             let store = try loadedStore(fixture)
             defer { store.stop() }
             let themeEdit = ConfigurationEdit(action: .theme, properties: ["id": .string("phosphor")])
-            try store.setSessionEdits([themeEdit] + pendingEdits)
+            try store.configurationStore.setSessionEdits([themeEdit] + pendingEdits)
             let trial = ThemeTrial(store: store)
             XCTAssertEqual(trial.choice?.key, "phosphor")
             trial.next()
             XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 0)
-            try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["inset": .number(23)])], persist: false)
-            store.reloadConfiguration()
+            try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["inset": .number(23)])], persist: false)
+            store.configurationStore.reloadConfiguration()
             XCTAssertNotEqual(store.configuration?.defaults.cornerRadius, 0)
             XCTAssertEqual(store.configuration?.bar.inset, 23)
             let edits = try encodedEdits(store)
@@ -557,7 +557,7 @@ final class ThemeTrialTests: XCTestCase {
         try fixture.write("{", to: fixture.url)
         let failed = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
         defer { failed.stop() }
-        failed.reloadConfiguration()
+        failed.configurationStore.reloadConfiguration()
         XCTAssertNotNil(failed.configurationError)
         AppDelegate(store: failed).menuWillOpen(menu)
         XCTAssertFalse(menu.items.contains { $0.title == "Try Themes…" })
@@ -578,7 +578,7 @@ final class ThemeTrialTests: XCTestCase {
 
     @MainActor private func loadedStore(_ fixture: ThemeGalleryFixture) throws -> BarStore {
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(store.configurationError)
         _ = try XCTUnwrap(store.configuration)
         return store
@@ -587,6 +587,6 @@ final class ThemeTrialTests: XCTestCase {
     @MainActor private func encodedEdits(_ store: BarStore) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        return try encoder.encode(store.sessionEdits)
+        return try encoder.encode(store.configurationStore.sessionEdits)
     }
 }

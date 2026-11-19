@@ -273,7 +273,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
         let url = directory.appending(path: "\(name).png")
         try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url, settle: settle)
         images.append(try #require(NSBitmapImageRep(data: Data(contentsOf: url))))
-        #expect(store.sessionEdits.isEmpty)
+        #expect(store.configurationStore.sessionEdits.isEmpty)
         #expect(store.widgetScripts.scripts.isEmpty)
     }
     #expect(images[0].pixelsWide == 2400)
@@ -463,8 +463,8 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     let first = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "one"), themes: themes)
     let second = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "two"), themes: themes)
     defer { first.stop(); second.stop() }
-    #expect(first.configurationURL == second.configurationURL)
-    #expect(first.configurationURL.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
+    #expect(first.configurationStore.configurationURL == second.configurationStore.configurationURL)
+    #expect(first.configurationStore.configurationURL.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
 }
 
 @Test @MainActor func sceneStoreKeepsProfiles() throws {
@@ -492,7 +492,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
                                             in: directory.appending(path: appearance.rawValue), themes: themes, appearance: appearance)
         defer { store.stop() }
         return (store.configuration?.bar.height,
-                "context=\(store.context.appearance) active=\(store.activeProfiles) error=\(String(describing: store.configurationError)) whens=\(store.profiles.map { String(describing: $0.when) })")
+                "context=\(store.configurationStore.context.appearance) active=\(store.activeProfiles) error=\(String(describing: store.configurationError)) whens=\(store.profiles.map { String(describing: $0.when) })")
     }
     let light = try height(.light), dark = try height(.dark)
     #expect(light.0 == 30, "\(light.1)")

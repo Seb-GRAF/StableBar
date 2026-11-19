@@ -181,7 +181,7 @@ struct PackageDetailView: View {
         } header: {
             VStack(alignment: .leading, spacing: 12) {
                 if draft.screenshotData != nil || draft.themePreview != nil || !draft.inspection.widgets.isEmpty {
-                    let appearance = store.configuration?.bar.appearance ?? (store.context.appearance == "dark" ? BarAppearance.dark : .light)
+                    let appearance = store.configuration?.bar.appearance ?? (store.configurationStore.context.appearance == "dark" ? BarAppearance.dark : .light)
                     PackagePreview(screenshotData: draft.screenshotData, look: draft.themePreview?.configuration(for: appearance), widgets: draft.inspection.widgets)
                         .frame(height: 150)
                         .environment(\.colorScheme, appearance.colorScheme)

@@ -159,7 +159,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     let store = BarStore(configurationURL: root)
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<500 {
         if store.workspaceStore.mode == "tailing" { break }
         try await Task.sleep(for: .milliseconds(10))
@@ -170,7 +170,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     try script.accept(ScriptOutput.read(Data(##"{"text":"Ready","barStyle":{"borderColor":"#ffffff","borderEdges":"bottom"}}"##.utf8)))
     #expect(store.barPresentation.barStyle.borderEdges == .all)
     #expect(store.barPresentation.barStyle.borderColor == HexColor(0xaa8844ff))
-    try store.applyEdits([ConfigurationEdit(action: .theme, properties: ["id": .string("blue"), "version": .string("1.0.0")])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .theme, properties: ["id": .string("blue"), "version": .string("1.0.0")])], persist: false)
     #expect(store.barPresentation.barStyle.borderColor == HexColor(0x4488aaff))
     #expect(store.barPresentation.barStyle.borderEdges == .all)
     #expect(store.widgetScripts.scripts["s"] === script)
@@ -181,7 +181,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     #expect(store.barPresentation.barStyle.borderEdges == .bottom)
     let before = store.configuration?.modeAliases
     #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .modeAliases, properties: ["tailing": .string("")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .modeAliases, properties: ["tailing": .string("")])], persist: false)
     }
     #expect(store.configuration?.modeAliases == before)
 }
@@ -199,7 +199,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     let store = BarStore(configurationURL: root)
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["s"])
     for _ in 0..<100 {
         if script.output.text == "ready" { break }
@@ -213,13 +213,13 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     }
     #expect(store.barPresentation.barStyle.borderEdges == .all)
     #expect(store.barPresentation.presentations["s"]?.style.base.fontSize == 15) // legacy self-targeted widgetStyles
-    try store.applyEdits([ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(14)])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(14)])], persist: false)
     #expect(store.workspaceStore.mode == "tailing")
     #expect(store.widgetScripts.scripts["s"] === script)
     #expect(try String(contentsOf: calls, encoding: .utf8).split(separator: "\n").count == 1)
     let switched = "{\"workspaceSource\":\"yabai\"," + json.dropFirst()
     try Data(switched.utf8).write(to: root)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.workspaceStore.mode == nil)
     #expect(!store.workspaceStore.isRunning)
