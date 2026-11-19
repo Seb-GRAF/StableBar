@@ -28,9 +28,9 @@ struct BoxModel: View {
                 .overlay(alignment: .topLeading) { field("Corner radius", "cornerRadius", corner, symbol: "square.dashed") }
                 .frame(height: 150)
             HStack(spacing: 12) {
-                Label("side padding", systemImage: "arrow.left.and.right")
-                Label("top and bottom", systemImage: "arrow.up.and.down")
-                Label("corners", systemImage: "square.dashed")
+                Label("horizontal padding", systemImage: "arrow.left.and.right")
+                Label("vertical padding", systemImage: "arrow.up.and.down")
+                Label("corner radius", systemImage: "square.dashed")
                 Text("Drag a symbol, or use ↑ ↓ in a field").foregroundStyle(.tertiary)
             }
             .labelStyle(LegendLabelStyle())

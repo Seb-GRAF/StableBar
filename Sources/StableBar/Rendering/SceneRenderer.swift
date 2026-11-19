@@ -259,7 +259,7 @@ enum SceneRenderer {
                 case .content: editor.widgetTab = .content
                 case .style: editor.widgetTab = .style
                 case .behavior: editor.widgetTab = .behavior
-                case .size, .look, .placement: break
+                case .look, .placement: break
                 }
             } else if let group = scene.group {
                 guard configuration.widgets.contains(where: { $0.group == group }) else {
@@ -269,11 +269,7 @@ enum SceneRenderer {
             } else if let tab = scene.tab, tab.isBarTab {
                 editor.section = .widgets
                 editor.barItem = .bar
-                editor.barTab = switch tab {
-                case .look: .look
-                case .placement: .placement
-                default: .size
-                }
+                editor.barTab = tab == .placement ? .placement : .look
             } else {
                 switch scene.section ?? .general {
                 case .general: editor.section = .general

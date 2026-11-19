@@ -29,7 +29,7 @@ final class ConfigurationEditor {
     var barItem = BarItem.widget
     /// The group Settings shows while `barItem` is `group`.
     var selectedGroup: String?
-    var barTab = BarTab.size
+    var barTab = BarTab.look
     var widgetTab = WidgetTab.content
     var barScreen = ScreenKind.laptop
     var themeChangesEveryBar = true

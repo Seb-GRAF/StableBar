@@ -2,19 +2,30 @@ import SwiftUI
 
 struct SettingsGroup<Content: View>: View {
     let title: String
+    let reset: (() -> Void)?
     @ViewBuilder let content: Content
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+    init(_ title: String, reset: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.reset = reset
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+            HStack {
+                Text(title)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let reset {
+                    Button("Reset", action: reset)
+                        .buttonStyle(.link)
+                        .font(.system(size: 11.5))
+                        .accessibilityLabel("Reset \(title)")
+                }
+            }
+            .padding(.horizontal, 4)
             VStack(spacing: 0) { content }
                 .labeledContentStyle(GroupRowStyle())
                 .padding(.top, -1)

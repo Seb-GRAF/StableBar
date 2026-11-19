@@ -8,11 +8,11 @@ struct SceneFile: Decodable {
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it, `feedback` for Send feedback in Help, or `crashes` for Crashes in Status.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, help, feedback, crashes }
-    /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (size, look, placement).
+    /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (look, placement).
     enum Tab: String, Decodable, CaseIterable {
-        case content, style, behavior, size, look, placement
+        case content, style, behavior, look, placement
 
-        var isBarTab: Bool { [.size, .look, .placement].contains(self) }
+        var isBarTab: Bool { [.look, .placement].contains(self) }
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }

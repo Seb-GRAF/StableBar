@@ -1,0 +1,128 @@
+import SwiftUI
+
+struct WidgetsLookSection: View {
+    let editor: ConfigurationEditor
+    let style: StyleFields
+    let fontFamilies: [String]
+    var everyBar = false
+
+    var body: some View {
+        LookSection(title: "Widgets", editor: editor, paths: [style.path], everyBar: everyBar) {
+            style.color("Text color", "foreground")
+            style.color("Background", "background")
+            style.hoverBackground("Hover background")
+            style.color("Border color", "borderColor")
+            style.color("Shadow color", "shadowColor")
+            style.color("Accent", "accent")
+            style.color("Accent text color", "accentText")
+            style.font(fontFamilies)
+            style.weight()
+            style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)
+            BoxModel(style: style, name: "Widget")
+            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
+        }
+    }
+}
+
+struct GroupsLookSection: View {
+    let editor: ConfigurationEditor
+    let style: StyleFields
+    let flared: Bool
+    /// The space between the group's widgets when it sets none.
+    let spacing: Double
+    var title = "Groups"
+    var everyBar = false
+
+    var body: some View {
+        LookSection(title: title, editor: editor, paths: [style.path], everyBar: everyBar) {
+            style.color("Background", "background")
+            style.color("Border color", "borderColor").disabled(flared)
+            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5,
+                         hint: flared ? "A group with a flare draws no border" : nil).disabled(flared)
+            style.number("Corner radius", "cornerRadius", default: 0, in: 0...40, slider: true)
+            style.number("Flare", "flare", default: 0, in: 0...30, slider: true, hint: "Curves the top corners outward, like the notch")
+            style.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30, slider: true)
+            style.number("Vertical padding", "paddingVertical", default: 0, in: 0...20, slider: true)
+            style.number("Space between widgets", "spacing", default: spacing, in: 0...30, slider: true)
+        }
+    }
+}
+
+/// `style` sets popups over the widgets' look; `spacing` sets their padding and spacing, which popups don't take from
+/// widgets; `bar` sets their gap below the bar.
+struct PopupsLookSection: View {
+    let editor: ConfigurationEditor
+    let style: StyleFields
+    let spacing: StyleFields
+    let bar: StyleFields
+    let fontFamilies: [String]
+    var everyBar = false
+
+    var body: some View {
+        let padding = PopupConfiguration.defaultPadding
+        LookSection(title: "Popups", editor: editor, paths: [style.path, "\(bar.path).popupOffset"], everyBar: everyBar) {
+            style.color("Text color", "foreground")
+            style.color("Background", "background")
+            style.color("Border color", "borderColor")
+            style.color("Shadow color", "shadowColor")
+            style.font(fontFamilies)
+            style.weight()
+            style.number("Text size", "fontSize", default: 13, in: 6...40)
+            style.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
+            spacing.number("Horizontal padding", "paddingHorizontal", default: padding.paddingHorizontal!, in: 0...40)
+            spacing.number("Vertical padding", "paddingVertical", default: padding.paddingVertical!, in: 0...40)
+            spacing.number("Spacing", "spacing", default: PopupConfiguration.blockSpacing, in: 0...40,
+                           hint: "Unset, a popup's blocks sit 12 apart and the items of a row, column or list 6. A value sets both.")
+            bar.number("Gap below the bar", "popupOffset", default: BarSettings().popupOffset, in: 0...40,
+                       hint: "Also moves tooltips and hover controls. A popup's own offset wins.")
+        }
+    }
+}
+
+/// `bar` sets the bar's size and margin, `style` its background and border.
+struct BarLookSection: View {
+    let editor: ConfigurationEditor
+    let bar: StyleFields
+    let style: StyleFields
+    var everyBar = false
+
+    var body: some View {
+        LookSection(title: "Bar", editor: editor,
+                    paths: [style.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" }, everyBar: everyBar) {
+            style.color("Background", "background")
+            style.color("Border color", "borderColor")
+            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
+            style.row("Border edges", "borderEdges") { _ in
+                SettingsSegments(selection: style.stringBinding("borderEdges", default: BarBorderEdges.bottom.rawValue),
+                                 options: BarBorderEdges.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
+            }
+            style.number("Corner radius", "cornerRadius", default: 0, in: 0...40, slider: true)
+            bar.number("Height", "height", default: 40, in: 16...100, slider: true)
+            bar.number("Side inset", "inset", default: 12, in: 0...100)
+            bar.number("Space between widgets", "spacing", default: 8, in: 0...50)
+            bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
+        }
+    }
+}
+
+/// A section's rows, with Reset in the header while the selected theme has edits under `paths`, the `StyleFields`
+/// paths the rows edit.
+private struct LookSection<Content: View>: View {
+    let title: String
+    let editor: ConfigurationEditor
+    let paths: [String]
+    let everyBar: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let edits = editor.themeEdits()
+        let changes = edits.changes.filter { change in
+            paths.contains { change.path.starts(with: $0.split(separator: ".").map(String.init)) }
+        }
+        // While a profile is being edited, every change goes into that profile, so the theme's edits can't be removed.
+        let reset = editor.editingProfile == nil ? edits.removal(of: changes) : nil
+        SettingsGroup(title, reset: reset.map { edit in { editor.change(edit, everyBar: everyBar) } }) {
+            content
+        }
+    }
+}
