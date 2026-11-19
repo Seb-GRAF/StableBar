@@ -4,40 +4,19 @@ struct SettingsGroup<Content: View>: View {
     let title: String
     let detail: String?
     let reset: (() -> Void)?
-    /// Makes the header a button that closes the group.
-    let close: (() -> Void)?
     @ViewBuilder let content: Content
 
-    init(_ title: String, detail: String? = nil, reset: (() -> Void)? = nil, close: (() -> Void)? = nil,
-         @ViewBuilder content: () -> Content) {
+    init(_ title: String, detail: String? = nil, reset: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
         self.detail = detail
         self.reset = reset
-        self.close = close
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                if let close {
-                    Button {
-                        withAnimation(.snappy(duration: 0.2)) { close() }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(.secondary)
-                            heading
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(title)
-                    .accessibilityValue("Expanded")
-                } else {
-                    heading
-                }
+                heading
                 Spacer()
                 if let reset {
                     Button("Reset", action: reset)
@@ -65,23 +44,26 @@ struct SettingsGroup<Content: View>: View {
     }
 }
 
-/// A closed group as a row of a card: a click opens it. `detail` sits on the right, with Reset when there's one.
-struct ClosedSettingsGroup: View {
+/// A section's row in a card: a click opens or closes the section under it. `detail` sits on the right, with Reset when
+/// there's one.
+struct DisclosureRow: View {
     let title: String
     let detail: String?
+    let isOpen: Bool
     let reset: (() -> Void)?
-    let open: () -> Void
+    let toggle: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
             Button {
-                withAnimation(.snappy(duration: 0.2)) { open() }
+                withAnimation(.snappy(duration: 0.2)) { toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(.secondary)
-                    Text(title)
+                        .rotationEffect(.degrees(isOpen ? 90 : 0))
+                    Text(title).fontWeight(.semibold)
                     Spacer(minLength: 8)
                     if let detail { Text(detail).font(.system(size: 12)).foregroundStyle(.secondary) }
                 }
@@ -91,7 +73,7 @@ struct ClosedSettingsGroup: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(title)
-            .accessibilityValue("Collapsed")
+            .accessibilityValue(isOpen ? "Expanded" : "Collapsed")
             if let reset {
                 Button("Reset", action: reset)
                     .buttonStyle(.link)
@@ -104,7 +86,7 @@ struct ClosedSettingsGroup: View {
     }
 }
 
-private struct GroupRowStyle: LabeledContentStyle {
+struct GroupRowStyle: LabeledContentStyle {
     func makeBody(configuration: LabeledContentStyleConfiguration) -> some View {
         HStack(spacing: 10) {
             configuration.label.frame(maxWidth: .infinity, alignment: .leading)

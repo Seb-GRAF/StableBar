@@ -241,31 +241,22 @@ struct AppearanceView: View {
         }
     }
 
-    /// Customize's sections in order. An open one is a group of its own; closed ones next to each other share a card.
-    @ViewBuilder private var customize: some View {
-        let isOpen = { (section: CustomizeSection) in expanded[section.title] ?? !section.changes.isEmpty }
-        let runs = customizeSections.reduce(into: [[CustomizeSection]]()) { runs, section in
-            if !isOpen(section), let last = runs.last?.last, !isOpen(last) { runs[runs.count - 1].append(section) } else { runs.append([section]) }
-        }
+    /// Customize's sections in one card, each a row that opens its rows under it.
+    private var customize: some View {
         let everyBar = editor.themeChangesEveryBar
-        ForEach(runs, id: \.[0].title) { run in
-            if isOpen(run[0]) {
-                SettingsGroup(run[0].title, detail: changeCount(run[0].changes.count), reset: editor.reset(run[0].changes, everyBar: everyBar),
-                              close: { expanded[run[0].title] = false }) {
-                    run[0].rows()
-                }
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(run, id: \.title) { section in
-                        ClosedSettingsGroup(title: section.title, detail: changeCount(section.changes.count) ?? section.note,
-                                            reset: editor.reset(section.changes, everyBar: everyBar)) { expanded[section.title] = true }
-                    }
-                }
-                .padding(.top, -1)
-                .settingsCard()
-                .padding(.top, 14)
+        return VStack(spacing: 0) {
+            ForEach(customizeSections, id: \.title) { section in
+                let isOpen = expanded[section.title] ?? !section.changes.isEmpty
+                DisclosureRow(title: section.title, detail: changeCount(section.changes.count) ?? section.note, isOpen: isOpen,
+                              reset: editor.reset(section.changes, everyBar: everyBar)) { expanded[section.title] = !isOpen }
+                    .id(section.title)
+                if isOpen { section.rows() }
             }
         }
+        .labeledContentStyle(GroupRowStyle())
+        .padding(.top, -1)
+        .settingsCard()
+        .padding(.top, 14)
     }
 
     /// The sections for the screens Editing names, the look ones the same as the bar editor's.
