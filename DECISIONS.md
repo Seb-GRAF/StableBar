@@ -84,7 +84,8 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   one, gets the version the Store lists (the link's while it's the newest), and leaves out
   packages the Store doesn't list. A Store version already on the recipient's bar skips the
   review and keeps its settings, with the link's over them. Without the link's look,
-  a widget keeps its `group` only when the bar already has that group. **Use this bar**
+  a widget keeps its `group` only when the bar already has that group. Each group a widget keeps
+  gets an empty entry in the main file's `groups`, so the widgets stay valid under another theme. **Use this bar**
   replaces the main file's widgets, packages, widget overrides and order, screen layouts and the
   widget changes in its profiles, and with **Every screen** the look that Save as Theme would
   move, in one undoable change; widgets that included files add stay. When the link centers

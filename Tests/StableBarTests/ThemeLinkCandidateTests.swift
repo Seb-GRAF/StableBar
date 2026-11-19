@@ -1447,6 +1447,10 @@ struct ThemeLinkCandidateTests {
         let original = try Data(contentsOf: fixture.url)
         var link = try linkedBar()
         link.widgets[4]["position"] = .string("center")
+        link.widgets[3]["group"] = .string("status")
+        var look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        look["groups"] = .object(["status": .object(["style": .object(["cornerRadius": .number(8)])])])
+        link.theme = ThemeLink(manifest: link.theme.manifest, configuration: try configurationData(look))
         let candidate = try BarLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
         candidate.hasNotchedDisplay = { notched }
@@ -1464,6 +1468,14 @@ struct ThemeLinkCandidateTests {
             "left": .array([.string("workspaces"), .string("app")]), "notchLeft": .array([.string("clock")]),
             "notchRight": .array([]), "right": .array([.string("sound"), .string("battery")])
         ])])]) : nil))
+        #expect(document["groups"] == .object(["status": .object([:])]))
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        gallery.select(try #require(gallery.choices.first { $0.key == "built-in" }))
+        #expect(gallery.errors["built-in"] == nil)
+        #expect(store.configurationError == nil)
+        #expect(store.configuration?.widgets.first { $0.id == "battery" }?.group == "status")
+        try store.customizationHistory.undo()
         #expect(document["profiles"] == .array([.object(["name": .string("Work"), "enabled": .bool(false), "configuration": .object([:])])]))
         #expect(store.customizationHistory.undoSteps.count == 1)
         try store.customizationHistory.undo()

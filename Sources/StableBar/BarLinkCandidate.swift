@@ -299,10 +299,14 @@ final class BarLinkCandidate {
             ]))
             ids.formUnion(inspection.widgets.map(\.id))
         }
-        // The link's groups come with its look, so without it a widget keeps only a group this bar has.
+        // The link's groups come with its look, so without it a widget keeps only a group this bar has. The main file names
+        // each group a widget keeps, so the widget stays valid once another theme is chosen.
+        var named: [String: ConfigurationValue] = [:]
         func grouped(_ properties: [String: ConfigurationValue]) -> [String: ConfigurationValue] {
-            guard !appliesLook, case let .string(group)? = properties["group"], store.configuration?.groups[group] == nil else { return properties }
-            return properties.filter { $0.key != "group" }
+            guard case let .string(group)? = properties["group"] else { return properties }
+            guard appliesLook || store.configuration?.groups[group] != nil else { return properties.filter { $0.key != "group" } }
+            named[group] = .object([:])
+            return properties
         }
         for (widget, builtIn) in zip(link.widgets, builtIns) where !unticked.contains(builtIn.id) {
             edits.append(ConfigurationEdit(action: .add, properties: grouped(widget)))
@@ -311,6 +315,7 @@ final class BarLinkCandidate {
         for (id, properties) in link.widgetOverrides.sorted(by: { $0.key < $1.key }) where ids.contains(id) {
             edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : grouped(properties)))
         }
+        if !named.isEmpty { edits.append(ConfigurationEdit(action: .groups, properties: named)) }
         edits.append(ConfigurationEdit(action: .reorder, ids: link.widgetOrder.filter { ids.contains($0) && !unticked.contains($0) }))
         let widgets = previewWidgets
         if hasNotchedDisplay(), store.configuration?.onScreen(.laptop).bar.position == .top,
