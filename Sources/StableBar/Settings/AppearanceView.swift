@@ -3,7 +3,6 @@ import SwiftUI
 
 struct AppearanceView: View {
     @Bindable var editor: ConfigurationEditor
-    @State private var filter = ThemeFilter.all
     @State private var advanced: AdvancedSheet?
     @State private var screen: ScreenKind?
     @State private var fontFamilies: [String] = []
@@ -23,30 +22,23 @@ struct AppearanceView: View {
             ScrollViewReader { scroll in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            if kinds.count > 1 {
-                                SettingsSegments(selection: $screen, options: [(nil, "Every screen")] + kinds.map { ($0, $0.screenTitle) },
-                                                 stretches: false)
-                                    .fixedSize()
-                            }
-                            Spacer()
-                            if editor.editingProfile == nil, !store.configurationStore.screenSetupsWithOwnBars.isEmpty {
-                                SettingsSegments(selection: $editor.themeChangesEveryBar,
-                                                 options: [(true, "All setups"),
-                                                           (false, store.configurationStore.configurationURL == store.configurationStore.sharedConfigurationURL ? "Shared bar only" : "This setup only")],
-                                                 stretches: false)
-                                    .fixedSize()
-                            }
-                            ProfilePicker(editor: editor)
-                        }
-                        .padding(.top, 16)
+                        header
+                        scopeLine
                         if let configuration = store.configuration {
                             ThemePreviewStrip(look: screen.map(configuration.onScreen) ?? configuration, appearance: appearance)
-                                .padding(.top, 10).padding(.bottom, 4)
+                                .padding(.top, 12).padding(.bottom, 4)
                         }
                         themes(appearance)
                         if screen == nil, editor.editingProfile == nil, let theme = gallery.selectedChoice {
                             ThemeEditsLine(editor: editor, theme: theme).padding(.top, 12)
+                        }
+                        if screen == nil, editor.editingProfile == nil, let theme = gallery.selectedChoice {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Customize \(theme.manifest.name)").font(.system(size: 14, weight: .semibold))
+                                Text("Your changes stay with \(theme.manifest.name). Other themes keep their own look.")
+                                    .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 28)
                         }
                         colors(appearance)
                         HStack(alignment: .top, spacing: 20) {
@@ -106,38 +98,101 @@ struct AppearanceView: View {
         .onChange(of: store.pendingLinks.theme?.state) { _, _ in gallery.contextChanged() }
     }
 
-    private func themes(_ appearance: BarAppearance) -> some View {
+    /// The page's title, what it edits and the bar's appearance.
+    private var header: some View {
         let bar = editor.fields(["bar"], on: screen, values: editor.values("bar", on: screen))
         let source = store.propertySources(path: bar.path, key: "appearance", defaultsPath: bar.defaultsPath, values: bar.values)
         let saved = try? source.editingValue?.decoded(BarAppearance.self)
-        let shown = shownThemes
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Text("Theme").font(.system(size: 13, weight: .semibold))
-                if let screen, screenTheme != nil {
-                    Button("Use the theme of every screen") {
-                        editor.unset(["screens": .object([screen.rawValue: .object(["theme": .null])])])
-                    }
-                    .buttonStyle(.link)
-                    .font(.system(size: 12))
+        return HStack(spacing: 10) {
+            Text("Theme").font(.system(size: 15, weight: .semibold))
+            if let screen, screenTheme != nil {
+                Button("Use the theme of every screen") {
+                    editor.unset(["screens": .object([screen.rawValue: .object(["theme": .null])])])
                 }
-                if screen == nil, editor.editingProfile == nil, let choice = gallery.selectedChoice {
-                    if !choice.isBundled {
-                        Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) }
-                            .buttonStyle(.link)
-                            .font(.system(size: 12))
-                    }
-                }
-                Spacer()
-                RevertSettingButton(title: "Appearance", property: source, reset: source.saved.map { saved in { reset(saved) } })
-                SettingsSegments(selection: Binding(get: { saved }, set: {
-                    if $0 != saved { bar.set(["appearance": $0.map { .string($0.rawValue) } ?? .null]) }
-                }), options: [(nil, "Automatic"), (.light, "Light"), (.dark, "Dark")], stretches: false)
-                .fixedSize()
+                .buttonStyle(.link)
+                .font(.system(size: 12))
             }
-            .padding(.top, 24)
-            .padding(.horizontal, 2)
-            .id(SettingsSearchResult.theme.id)
+            Spacer()
+            if kinds.count > 1 || hasSetups || !themeProfiles.isEmpty { editingMenu }
+            RevertSettingButton(title: "Appearance", property: source, reset: source.saved.map { saved in { reset(saved) } })
+            SettingsSegments(selection: Binding(get: { saved }, set: {
+                if $0 != saved { bar.set(["appearance": $0.map { .string($0.rawValue) } ?? .null]) }
+            }), options: [(nil, "Automatic"), (.light, "Light"), (.dark, "Dark")], stretches: false)
+            .fixedSize()
+        }
+        .padding(.top, 18)
+        .padding(.horizontal, 2)
+        .id(SettingsSearchResult.theme.id)
+    }
+
+    private var hasSetups: Bool { editor.editingProfile == nil && !store.configurationStore.screenSetupsWithOwnBars.isEmpty }
+    private var themeProfiles: [ConfigurationProfile] { store.profiles.filter { $0.when?.onlyTheme == nil } }
+    private var setupTitle: String {
+        store.configurationStore.configurationURL == store.configurationStore.sharedConfigurationURL ? "Shared bar only" : "This setup only"
+    }
+
+    private var editingTitle: String {
+        var parts = [screen?.screenTitle ?? "All screens"]
+        if hasSetups, !editor.themeChangesEveryBar { parts.append(setupTitle.lowercased()) }
+        if let profile = editor.editingProfile { parts.append("profile \(profile)") }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Which screens, setups and profile the page edits.
+    private var editingMenu: some View {
+        Menu {
+            if kinds.count > 1 {
+                Section("Screens") {
+                    Picker("Screens", selection: $screen) {
+                        Text("All screens").tag(ScreenKind?.none)
+                        ForEach(kinds, id: \.self) { Text($0.screenTitle).tag(Optional($0)) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                }
+            }
+            if hasSetups {
+                Section("Screen setups") {
+                    Picker("Screen setups", selection: $editor.themeChangesEveryBar) {
+                        Text("All setups").tag(true)
+                        Text(setupTitle).tag(false)
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                }
+            }
+            if !themeProfiles.isEmpty {
+                Section("Profile") {
+                    Picker("Profile", selection: Binding(get: { editor.editingProfile ?? "" }, set: {
+                        if $0 != (editor.editingProfile ?? "") { $0.isEmpty ? editor.endProfileEditing() : editor.editBar(for: $0) }
+                    })) {
+                        Text("No profile").tag("")
+                        ForEach(themeProfiles, id: \.name) { Text($0.name).tag($0.name) }
+                    }
+                    .pickerStyle(.inline).labelsHidden()
+                }
+            }
+        } label: {
+            Text("Editing: \(editingTitle)")
+        }
+        .menuStyle(.button)
+        .controlSize(.small)
+        .fixedSize()
+    }
+
+    /// Says in words when the page edits less than every screen and setup.
+    @ViewBuilder private var scopeLine: some View {
+        if let screen {
+            ScopeLine(text: "Editing \(screen.phrase) only. Other screens keep their look.", action: "Edit All Screens") { self.screen = nil }
+        } else if hasSetups, !editor.themeChangesEveryBar {
+            ScopeLine(text: "Changes apply to this setup only. Other setups keep their look.", action: "Apply to All Setups") {
+                editor.themeChangesEveryBar = true
+            }
+        }
+    }
+
+    private func themes(_ appearance: BarAppearance) -> some View {
+        let sections = gallerySections
+        let items = sections.flatMap(\.items)
+        return VStack(alignment: .leading, spacing: 10) {
             if let candidate = store.pendingLinks.theme, candidate.state != .used {
                 LinkedThemeCard(candidate: candidate, editor: editor, screen: screen, everyBar: editor.themeChangesEveryBar)
                     .id(candidate.choice.directory)
@@ -154,39 +209,38 @@ struct AppearanceView: View {
                 LinkedThemeErrorCard(message: message) { store.pendingLinks.barError = nil }
                     .padding(.bottom, 4)
             }
-            SettingsSegments(selection: $filter, options: [(.all, "All"), (.included, "Included"), (.store, "Store")],
-                             stretches: false)
-                .fixedSize()
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                ForEach(shown) { card($0, appearance: appearance) }
+            ForEach(sections, id: \.title) { section in
+                Text(section.title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.secondary)
+                    .padding(.top, 8).padding(.horizontal, 2)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(section.items) { card($0, appearance: appearance) }
+                }
             }
-            ForEach(shown) { item in
+            ForEach(items) { item in
                 if let error = gallery.error(for: item.id) {
                     Label("\(item.title): \(error)", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
             }
-            if gallery.storeUnavailable && filter != .included {
+            if gallery.storeUnavailable {
                 Text("The Store is unavailable. Your installed themes are ready to use.")
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
+        .padding(.top, 8)
     }
 
-    private var shownThemes: [ThemeItem] {
-        let included = gallery.choices.filter(\.isBundled).map(ThemeItem.installed)
+    /// The themes that come with StableBar, yours, and the Store's, each section shown when it has a theme.
+    private var gallerySections: [(title: String, items: [ThemeItem])] {
         let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
-        let others = (installed.filter { !$0.isBundled }.map(ThemeItem.installed) + gallery.storeThemes.map(ThemeItem.store))
-            .sorted { $0.title < $1.title }
-        switch filter {
-        case .all: return included + others
-        case .included: return included
-        case .store: return others.filter { item in
-            if case let .installed(choice) = item { return ![.installed, .local].contains(gallery.source(of: choice)) }
-            return true
-        }
-        }
+            .filter { !$0.isBundled }
+        let yours = installed.filter { [.installed, .local].contains(gallery.source(of: $0)) }
+        let fromSources = installed.filter { ![.installed, .local].contains(gallery.source(of: $0)) }.map(ThemeItem.installed)
+            + gallery.storeThemes.map(ThemeItem.store)
+        return [("Included", gallery.choices.filter(\.isBundled).map(ThemeItem.installed)),
+                ("Yours", yours.map(ThemeItem.installed).sorted { $0.title < $1.title }),
+                ("Store", fromSources.sorted { $0.title < $1.title })].filter { !$0.items.isEmpty }
     }
 
     private func card(_ item: ThemeItem, appearance: BarAppearance) -> ThemeCard {
@@ -362,10 +416,6 @@ struct SampleWallpaper: View {
     var body: some View { Wallpaper() }
 }
 
-private enum ThemeFilter {
-    case all, included, store
-}
-
 private enum ThemeItem: Identifiable {
     case installed(ThemeChoice)
     case store(PackageIndex.Entry)
@@ -539,5 +589,26 @@ private extension ConfigurationEditor {
 
     func unset(_ properties: [String: ConfigurationValue]) {
         changeLook(ConfigurationEdit(action: .unset, properties: properties), everyBar: themeChangesEveryBar)
+    }
+}
+
+/// A tinted line saying what the page edits when it's less than everything, with the way back.
+private struct ScopeLine: View {
+    let text: String
+    let action: String
+    let perform: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(text)
+            Spacer(minLength: 8)
+            Button(action, action: perform).controlSize(.small)
+        }
+        .font(.callout)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.accentColor.opacity(0.35)))
+        .padding(.top, 10)
     }
 }

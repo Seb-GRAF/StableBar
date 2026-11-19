@@ -24,6 +24,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 ## Code
 
+- **Settings keeps edits to the look with their theme** (2026-11-19, [#853]). What Settings changes about the look (theme colors, the shared widget, group, popup and bar styles, the bar's look and a widget's Style tab) goes into the main file's profile whose only condition is the selected theme, created on the first edit, so switching themes leaves it with that theme and choosing the theme again brings it back. Such a profile applies even while another profile is pinned. Look values in the main file outside profiles apply under every theme: Settings lists them and moves them in or out, but saves a look edit there only through **Apply to every theme**.
+- **Delete removes every version of a theme** (2026-11-19, [#853]). A gallery card stands for a whole theme, and saving a theme again adds a version, so **Delete…** uninstalls each installed version. Widget packages keep one **Uninstall…** per version ([#279]).
+- **A one-color image tints rather than switching by appearance** (2026-11-19, [#853]). `"tinted": true` draws an image in its text color, which follows the bar's real color. Choosing a light or a dark image by appearance can't: a bar like Notch's stays black in light mode.
 - **Sliders may take a role implicitly** (2026-11-17). Sliders with neither `filled` nor another role follow a nonempty `slider` role, so themes can style controls without owning widget layouts. Explicit `filled` choices retain their behavior, and an empty role retains the native control. Other blocks still require explicit roles.
 - **Window managers own their gaps** (2026-11-13). StableBar does not turn macOS menu-bar auto-hide off to reserve space: that changes the usable screen area underneath existing window-manager gaps, and the reserved height does not follow StableBar’s height. Keep windows clear remains a correction for ordinary windows after a drag.
 - **`BarStore` only wires one bar together** (2026-11-19). It had grown to 74 stored properties and 1,400 lines. Its concerns moved, unchanged, into types of their own: `ConfigurationStore` (files, edits, reload, migrations, theme trials), `WidgetScripts` (scripts, providers, events, click actions, suspension), `BarPresentation` (resolved styles), `AppWatcher` (front app and menu bar owner) and the runtime commands; the sources are grouped in folders by area. Every scene and docs image drew the same pixels before and after, and the command line printed the same. It was a restructuring, not a rewrite: existing state still moves into a `StateMachine` when a bug in it is fixed.
@@ -108,6 +111,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#100]: https://github.com/stablebox/StableBar/pull/100
 [#220]: https://github.com/stablebox/StableBar/issues/220
 [#223]: https://github.com/stablebox/StableBar/issues/223
+[#279]: https://github.com/stablebox/StableBar/issues/279
 [#309]: https://github.com/stablebox/StableBar/pull/309
 [#335]: https://github.com/stablebox/StableBar/issues/335
 [#337]: https://github.com/stablebox/StableBar/pull/337
@@ -129,3 +133,4 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#772]: https://github.com/stablebox/StableBar/issues/772
 [#773]: https://github.com/stablebox/StableBar/pull/773
 [#807]: https://github.com/stablebox/StableBar/issues/807
+[#853]: https://github.com/stablebox/StableBar/issues/853
