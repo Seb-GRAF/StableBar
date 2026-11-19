@@ -3,7 +3,7 @@ import Observation
 
 let savedThemeBarProperties: Set<String> = [
     "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch",
-    "popupOffset"
+    "popupOffset", "glass"
 ]
 
 /// `theme` with the look of `main` merged in, as Save as Theme saves it, and the unset that takes that look out of `main`.

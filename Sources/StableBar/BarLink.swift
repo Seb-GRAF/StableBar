@@ -17,7 +17,7 @@ struct BarLink: Equatable, Sendable {
     var widgets: [[String: ConfigurationValue]] = []
     /// Store packages, from the Store source only.
     var packages: [Package] = []
-    /// The position or `enabled: false` of each widget of `packages`, by widget ID.
+    /// The position and own group, or `enabled: false`, of each widget of `packages`, by widget ID.
     var widgetOverrides: [String: [String: ConfigurationValue]] = [:]
     /// Every widget the link carries, in bar order.
     var widgetOrder: [String] = []
@@ -90,7 +90,7 @@ struct BarLink: Equatable, Sendable {
                 return Package(id: selection.id, version: version, settings: selection.settings)
             }
             widgetOverrides = try payload["widgetOverrides"]!.decoded([String: [String: ConfigurationValue]].self)
-                .mapValues { $0.filter { ["position", "enabled"].contains($0.key) } }
+                .mapValues { $0.filter { ["position", "group", "enabled"].contains($0.key) } }
             widgetOrder = order
         } catch { throw .damaged }
     }
@@ -262,7 +262,9 @@ extension BarLink {
                         link.widgetOverrides[other.id] = ["enabled": .bool(false)]
                     }
                 }
-                link.widgetOverrides[widget.id] = ["position": .string(widget.position.rawValue)]
+                link.widgetOverrides[widget.id] = [
+                    "position": .string(widget.position.rawValue), "group": widget.ownGroup.map(ConfigurationValue.string) ?? .null
+                ]
             } else {
                 var definition = definitions.first { $0["id"] == .string(widget.id) }!
                 definition["position"] = .string(widget.position.rawValue)

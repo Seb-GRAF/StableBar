@@ -12,7 +12,7 @@ export const ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 const themeKeys = new Set(["tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults", "bar", "groups", "profiles"]);
 // Keep this list aligned with ThemeLinkCandidate’s appearance-only bar properties.
 const barProperties = new Set([
-  "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset",
+  "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch", "popupOffset", "glass",
 ]);
 const isObject = value => value !== null && typeof value === "object" && !Array.isArray(value);
 const withoutBOM = text => text.startsWith("\ufeff") ? text.slice(1) : text;

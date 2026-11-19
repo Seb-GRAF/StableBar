@@ -990,7 +990,8 @@ struct ThemeLinkCandidateTests {
         ("style.paddingLeading", 0, 1_000), ("style.paddingTrailing", 0, 1_000),
         ("style.paddingTop", 0, 1_000), ("style.paddingBottom", 0, 1_000),
         ("style.states.hover.height", 0, 1_000), ("style.states.height.spacing", 0, 1_000),
-        ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1)
+        ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1),
+        ("glass.transparency", 0, 1)
     ], [false, true])
     func barNumbersStayWithinTheirSettingsRanges(
         range: (String, Double, Double), inProfile: Bool
@@ -1350,6 +1351,7 @@ struct ThemeLinkCandidateTests {
              "profiles":[{"name":"Work","configuration":{"defaults":{"cornerRadius":4}}}],
              "packages":[{"id":"weather","version":"1.0.0","settings":{"units":"imperial","interval":300,"city":"Bern"}},
                          {"id":"notes","version":"1.0.0"},{"id":"team","version":"1.0.0"}],
+             "groups":{"status":{}},"widgetOverrides":{"weather":{"group":"status"}},
              "providers":{"speakers":{"type":"audio"}},
              "widgets":[
                {"id":"clock","type":"clock","position":"right","onClick":"open -a Calendar","style":{"foreground":"@token.myBlue"}},
@@ -1391,6 +1393,7 @@ struct ThemeLinkCandidateTests {
         #expect(link.widgets == [["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
                                   "style": .object(["foreground": .string("#0000ff")])]])
         #expect(link.packages == [BarLink.Package(id: "weather", version: "1.0.0", settings: ["units": .string("imperial"), "interval": .number(300)])])
+        #expect(link.widgetOverrides == ["weather": ["position": .string("right"), "group": .string("status")]])
         #expect(link.widgetOrder == ["weather", "clock"])
         let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.manifest)
         #expect(manifest["name"] == .string("Catppuccin (shared)"))
@@ -1428,9 +1431,10 @@ struct ThemeLinkCandidateTests {
         #expect(store.configuration?.widgets.map(\.id) == ["mine"])
     }
 
-    @Test func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep() async throws {
+    @Test(arguments: [(false, "top"), (true, "top"), (true, "bottom")])
+    func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep(notched: Bool, position: String) async throws {
         let fixture = try ThemeGalleryFixture(#"""
-            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"bottom"},
+            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"\#(position)"},
              "screens":{"laptop":{"layout":{"left":["mine"]}}},
              "profiles":[{"name":"Work","enabled":false,"configuration":{"widgetOverrides":{"mine":{"text":"Work"}}}}],
              "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"},
@@ -1441,8 +1445,15 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         try DocsImages.offline(store, in: fixture.directory)
         let original = try Data(contentsOf: fixture.url)
-        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        var link = try linkedBar()
+        link.widgets[4]["position"] = .string("center")
+        link.widgets[3]["group"] = .string("status")
+        var look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        look["groups"] = .object(["status": .object(["style": .object(["cornerRadius": .number(8)])])])
+        link.theme = ThemeLink(manifest: link.theme.manifest, configuration: try configurationData(look))
+        let candidate = try BarLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
+        candidate.hasNotchedDisplay = { notched }
         await candidate.loadStore()
         #expect(candidate.widgets.filter { $0.source == .unlisted }.map(\.id) == ["weather", "uptime"])
         await candidate.use()
@@ -1452,8 +1463,19 @@ struct ThemeLinkCandidateTests {
         #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
         let document = try fixture.document()
         #expect(document["defaults"] == nil)
-        #expect(document["bar"] == .object(["position": .string("bottom")]))
-        #expect(document["screens"] == nil)
+        #expect(document["bar"] == .object(["position": .string(position)]))
+        #expect(document["screens"] == (notched && position == "top" ? .object(["laptop": .object(["layout": .object([
+            "left": .array([.string("workspaces"), .string("app")]), "notchLeft": .array([.string("clock")]),
+            "notchRight": .array([]), "right": .array([.string("sound"), .string("battery")])
+        ])])]) : nil))
+        #expect(document["groups"] == .object(["status": .object([:])]))
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        gallery.select(try #require(gallery.choices.first { $0.key == "built-in" }))
+        #expect(gallery.errors["built-in"] == nil)
+        #expect(store.configurationError == nil)
+        #expect(store.configuration?.widgets.first { $0.id == "battery" }?.group == "status")
+        try store.customizationHistory.undo()
         #expect(document["profiles"] == .array([.object(["name": .string("Work"), "enabled": .bool(false), "configuration": .object([:])])]))
         #expect(store.customizationHistory.undoSteps.count == 1)
         try store.customizationHistory.undo()
@@ -1554,16 +1576,51 @@ struct ThemeLinkCandidateTests {
         #expect(store.customizationHistory.undoSteps.count == 1)
     }
 
+    @Test(arguments: [true, false])
+    func aStoreVersionOnTheBarSkipsTheReviewAndTakesTheLinksSettingsAndGroup(onBar: Bool) async throws {
+        let fixture = try ThemeGalleryFixture(onBar ? #"{"packages":[{"id":"weather","version":"1","settings":{"units":"imperial","city":"Bern"}}]}"# : "{}")
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "weather", kind: "widgets", configuration: #"{"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"}]}"#,
+                                settings: #"{"units":{"type":"string","choices":["metric","imperial"],"default":"metric"},"city":{"type":"string","default":"Zurich"}}"#,
+                                hosts: #"["api.open-meteo.com"]"#, name: "Weather")
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        _ = try await client.install(id: "weather", from: PackageSource.storeID)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        store.packageStoreClient = client
+        var link = try linkedBar()
+        var look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        look["groups"] = .object(["status": .object([:])])
+        link.theme = ThemeLink(manifest: link.theme.manifest, configuration: try configurationData(look))
+        link.widgetOverrides["weather"] = ["position": .string("right"), "group": .string("status")]
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        await candidate.use()
+        guard onBar else {
+            #expect(candidate.reviews.map(\.manifest.id) == ["weather"])
+            return
+        }
+        #expect(candidate.state == .used)
+        let packages = try #require(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self))
+        #expect(packages.map(\.settings) == [["units": .string("metric"), "city": .string("Bern")]])
+        #expect(store.configuration?.widgets.first { $0.id == "weather" }?.ownGroup == "status")
+    }
+
     @Test func anUntickedLookKeepsTheBarsLookAndAppliesOnlyTheWidgets() async throws {
         let fixture = try ThemeGalleryFixture(#"""
-            {"theme":{"id":"gruvbox"},"defaults":{"cornerRadius":2},
+            {"theme":{"id":"gruvbox"},"defaults":{"cornerRadius":2},"groups":{"mine":{}},
              "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"}]}
             """#)
         defer { fixture.close() }
         let store = try loadedStore(fixture)
         defer { store.stop() }
         try DocsImages.offline(store, in: fixture.directory)
-        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        var link = try linkedBar()
+        link.widgets[0]["group"] = .string("theirs")
+        link.widgets[1]["group"] = .string("mine")
+        let candidate = try BarLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
         await candidate.loadStore()
         candidate.appliesLook = false
@@ -1579,6 +1636,7 @@ struct ThemeLinkCandidateTests {
         #expect(store.selectedThemeKey == "gruvbox")
         #expect(store.configuration?.defaults.cornerRadius == 2)
         #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        #expect(store.configuration?.widgets.map(\.ownGroup) == [nil, "mine", nil, nil, nil])
         #expect(try fixture.document()["defaults"] == .object(["cornerRadius": .number(2)]))
     }
 

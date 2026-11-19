@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 
 @MainActor @Observable
@@ -19,6 +19,8 @@ final class BarLinkCandidate {
     /// The link's look, checked as a theme link and kept in a temporary folder until it's used.
     let look: ThemeLinkCandidate
     let preview: ThemePreview
+    /// The fonts the look names that this Mac doesn't have, which the bar shows in the system font.
+    let missingFonts: [String]
     private let builtIns: [WidgetConfiguration]
     /// The Store's entry and files for each package the Store lists, once they have loaded.
     private(set) var entries: [(entry: PackageIndex.Entry, inspection: WidgetPackageInspection)]?
@@ -28,8 +30,12 @@ final class BarLinkCandidate {
     var unticked: Set<String> = []
     /// Whether Try on Bar and Use this bar apply the link's look; otherwise the bar keeps its own.
     var appliesLook = true
+    /// Tests replace it to stand for a Mac with or without a notched display.
+    var hasNotchedDisplay: () -> Bool = { NSScreen.screens.map(BarDisplay.init).contains { $0.notch != nil } }
     private(set) var working = false
     private var installed: [String: (inspection: WidgetPackageInspection, settings: [String: ConfigurationValue])] = [:]
+    /// The packages of `installed` that were already on the bar, whose settings are read again each time.
+    private var reused: Set<String> = []
     /// What the Store's review goes on with once it adds its packages.
     private(set) var pending: Action?
     /// Each listed Store widget as the preview draws it: a text widget with its package's name and symbol.
@@ -48,6 +54,14 @@ final class BarLinkCandidate {
         do {
             preview = try ThemePreview(choice: look.choice, themesDirectory: store.themesDirectory)
             builtIns = try link.widgets.map { try ConfigurationValue.object($0).decoded(WidgetConfiguration.self) }
+            let families = NSFontManager.shared.availableFontFamilies
+            let values = configurationValues(try JSONDecoder().decode(ConfigurationValue.self, from: link.theme.configuration))
+            missingFonts = Set(values.compactMap { path, value in
+                // A reference names a token or setting, not a font; a face name such as Menlo-Bold works too.
+                guard path.hasSuffix(".fontName"), case let .string(name) = value, name != "system", !name.hasPrefix("@"),
+                      !families.contains(name), NSFont(name: name, size: 13) == nil else { return nil }
+                return name
+            }).sorted()
         } catch {
             look.discard()
             throw error
@@ -220,12 +234,24 @@ final class BarLinkCandidate {
         }
     }
 
-    /// Installs the chosen Store packages that need no review. False when some do: they're then `reviews`, and `action`
-    /// goes on once the review adds them.
+    /// Installs the chosen Store packages that need no review, and takes a Store version already on the bar as it is,
+    /// with the link's settings over the bar's: it already runs. False when some need a review: they're then `reviews`,
+    /// and `action` goes on once the review adds them.
     private func installPackages(in store: BarStore, then action: Action) async throws -> Bool {
+        let packages = store.packageStoreClient.packages
+        let onBar = try store.effectiveDocument["packages"]?.decoded([WidgetPackageSelection].self) ?? []
         var reviews: [WidgetPackageInspection] = []
-        for (entry, inspection) in chosenEntries where installed[entry.id] == nil {
-            if inspection.requiresReview {
+        for (entry, inspection) in chosenEntries where installed[entry.id] == nil || reused.contains(entry.id) {
+            let record = try packages.record(id: entry.id)
+            let directory = try packages.directory(id: entry.id, version: entry.version)
+            if reused.contains(entry.id) || onBar.contains(where: { $0.id == entry.id && $0.version == entry.version && $0.enabled })
+                && FileManager.default.fileExists(atPath: directory.path)
+                && record?.source == PackageSource.storeID && record?.isLocal(version: entry.version) == false {
+                // The bar's settings for it can change between Try on Bar and Use this bar.
+                reused.insert(entry.id)
+                let saved = try WidgetSetup(store: store).savedSettings(for: inspection.manifest)
+                installed[entry.id] = (inspection, saved.merging(settings(for: inspection.manifest)) { $1 })
+            } else if inspection.requiresReview {
                 reviews.append(inspection)
             } else {
                 let inspection = try await store.packageStoreClient.installWithoutReview(entry)
@@ -242,6 +268,8 @@ final class BarLinkCandidate {
 
     /// With the look ticked and every screen, removes the bar's own look. With a widget ticked, removes the bar's
     /// widgets, packages and their places, then adds the link's ticked widgets. Widgets that included files add stay.
+    /// With a notched display under a top bar, the laptop screen's layout puts the centered widgets left of the notch: the
+    /// bar puts them right of it with the right ones, where a bar made on a wider screen doesn't fit.
     private func edits(in store: BarStore, on kind: ScreenKind?) throws -> [ConfigurationEdit] {
         let main = try store.editedMainDocument()
         var removal: [String: ConfigurationValue] = [:]
@@ -271,14 +299,34 @@ final class BarLinkCandidate {
             ]))
             ids.formUnion(inspection.widgets.map(\.id))
         }
+        // The link's groups come with its look, so without it a widget keeps only a group this bar has. The main file names
+        // each group a widget keeps, so the widget stays valid once another theme is chosen.
+        var named: [String: ConfigurationValue] = [:]
+        func grouped(_ properties: [String: ConfigurationValue]) -> [String: ConfigurationValue] {
+            guard case let .string(group)? = properties["group"] else { return properties }
+            guard appliesLook || store.configuration?.groups[group] != nil else { return properties.filter { $0.key != "group" } }
+            named[group] = .object([:])
+            return properties
+        }
         for (widget, builtIn) in zip(link.widgets, builtIns) where !unticked.contains(builtIn.id) {
-            edits.append(ConfigurationEdit(action: .add, properties: widget))
+            edits.append(ConfigurationEdit(action: .add, properties: grouped(widget)))
         }
         // An unticked widget of a package another widget needs comes with the package, hidden.
         for (id, properties) in link.widgetOverrides.sorted(by: { $0.key < $1.key }) where ids.contains(id) {
-            edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : properties))
+            edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : grouped(properties)))
         }
+        if !named.isEmpty { edits.append(ConfigurationEdit(action: .groups, properties: named)) }
         edits.append(ConfigurationEdit(action: .reorder, ids: link.widgetOrder.filter { ids.contains($0) && !unticked.contains($0) }))
+        let widgets = previewWidgets
+        if hasNotchedDisplay(), store.configuration?.onScreen(.laptop).bar.position == .top,
+           widgets.contains(where: { $0.position == .center }) {
+            func ids(_ positions: [WidgetPosition]) -> ConfigurationValue {
+                .array(positions.flatMap { position in widgets.filter { $0.position == position } }.map { .string($0.id) })
+            }
+            edits.append(ConfigurationEdit(action: .screens, properties: [ScreenKind.laptop.rawValue: .object(["layout": .object([
+                "left": ids([.left]), "notchLeft": ids([.notchLeft, .center]), "notchRight": ids([.notchRight]), "right": ids([.right])
+            ])])]))
+        }
         return edits
     }
 

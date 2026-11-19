@@ -84,7 +84,19 @@ struct LinkedBarCard: View {
     private var choices: some View {
         let widgets = candidate.widgets
         return VStack(alignment: .leading, spacing: 12) {
-            Toggle("Look: \(candidate.look.choice.manifest.name)", isOn: Bindable(candidate).appliesLook)
+            Toggle(isOn: Bindable(candidate).appliesLook) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Look: \(candidate.look.choice.manifest.name)")
+                    let fonts = candidate.missingFonts
+                    if candidate.appliesLook, !fonts.isEmpty {
+                        Text(fonts.count == 1
+                             ? "Uses the font \(fonts[0]), which isn’t on this Mac. Your bar shows the system font until you install it."
+                             : "Uses the fonts \(fonts.formatted(.list(type: .and))), which aren’t on this Mac. Your bar shows the system font until you install them.")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 20) {
                     builtIns(widgets).frame(maxWidth: .infinity, alignment: .leading)

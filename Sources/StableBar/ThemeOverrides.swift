@@ -117,6 +117,7 @@ private func overrideTitle(_ path: [String]) -> String {
     case "groups": return "\(friendly(tail.first ?? "")) group: \(detailTitle(Array(tail.dropFirst().filter { $0 != "style" })))"
     case "bar":
         if tail == ["height"] { return "Bar height" }
+        if tail.first == "glass" { return tail.count == 1 ? "Liquid Glass" : "Liquid Glass: \(detailTitle(Array(tail.dropFirst())))" }
         return "Bar: \(detailTitle(tail.filter { $0 != "style" }))"
     default: return styleTitle(path)
     }

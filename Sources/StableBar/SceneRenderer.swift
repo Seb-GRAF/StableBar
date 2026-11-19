@@ -327,8 +327,9 @@ enum SceneRenderer {
         case .share, .shareLink:
             let share = BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: setupMenuBarHeight,
                                  wallpaper: nil)
+            share.format.screen = scene.shareScreen
             try await OffscreenSnapshot.write(BarShareView(share: share, showsDetails: scene.draw == .shareLink),
-                                              size: NSSize(width: CGFloat(scene.width ?? 640), height: CGFloat(scene.height ?? 600)),
+                                              size: NSSize(width: CGFloat(scene.width ?? 480), height: CGFloat(scene.height ?? 460)),
                                               dark: dark, settle: settle, ready: { share.png != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
