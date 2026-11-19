@@ -1,0 +1,13 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "apple", "type": "appleMenu", "position": "left", "icon": "leaf" },
+      { "id": "lock", "type": "appleMenu", "position": "left", "click": "lockScreen", "icon": "lock" },
+      { "id": "settings", "type": "appleMenu", "position": "left", "click": "systemSettings" },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "right" }
+    ]
+  },
+  "draw": "bar",
+  "width": 500
+}

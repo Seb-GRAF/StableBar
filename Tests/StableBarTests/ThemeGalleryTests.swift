@@ -8,7 +8,7 @@ final class ThemeGalleryTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([ConfigurationEdit(action: .bar, properties: ["margin": .number(12)])])
+        try store.configurationStore.setSessionEdits([ConfigurationEdit(action: .bar, properties: ["margin": .number(12)])])
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
         XCTAssertEqual(gallery.selectedKey, "built-in")
@@ -29,7 +29,7 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertEqual(gallery.selectedKey, "phosphor")
         try store.customizationHistory.undo()
         XCTAssertEqual(gallery.selectedKey, "built-in")
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testOlderThemesKeepTheirAppearanceAsCustomAndCanBeReplacedAndUndone() async throws {
@@ -140,7 +140,7 @@ final class ThemeGalleryTests: XCTestCase {
     @MainActor func testSaveAsThemeMovesYourLookIntoANewThemeWithOneUndoStep() async throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"theme":{"id":"phosphor"},"tokens":{"accent":"#ff0000","brand":"#00ff00"},"defaults":{"fontSize":17},
-         "bar":{"offset":30,"height":34,"popupOffset":12},
+         "bar":{"offset":30,"height":34,"popupOffset":12,"glass":{"enabled":true,"transparency":0.5}},
          "widgets":[{"id":"clock","type":"clock","position":"right","style":{"foreground":"@token.brand"}}]}
         """#)
         defer { fixture.close() }
@@ -291,7 +291,7 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertTrue(gallery.choices.contains { $0.key == entry.versionKey })
         let actionError = gallery.errors[entry.versionKey]
         try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":[]}"#, to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         gallery.configurationChanged()
         await gallery.refreshTask?.value
         XCTAssertNotNil(gallery.previews[entry.versionKey])
@@ -324,8 +324,8 @@ final class ThemeGalleryTests: XCTestCase {
             XCTAssertTrue(preview.light.widgets.isEmpty)
             XCTAssertTrue(preview.dark.providers.isEmpty)
         }
-        XCTAssertTrue(store.scripts.isEmpty)
-        XCTAssertTrue(store.providers.isEmpty)
+        XCTAssertTrue(store.widgetScripts.scripts.isEmpty)
+        XCTAssertTrue(store.widgetScripts.providers.isEmpty)
         XCTAssertFalse(store.workspaceStore.isRunning)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
     }
@@ -368,8 +368,8 @@ final class ThemeGalleryTests: XCTestCase {
             })
             await gallery.refresh()
             for system in ["light", "dark"] {
-                store.context.appearance = system
-                store.context.app = "another app"
+                store.configurationStore.context.appearance = system
+                store.configurationStore.context.app = "another app"
                 gallery.contextChanged()
                 XCTAssertEqual(gallery.previewAppearance.rawValue, appearance == "automatic" ? system : appearance)
                 XCTAssertNil(gallery.refreshTask)
@@ -512,7 +512,7 @@ final class ThemeGalleryTests: XCTestCase {
         let store = try fixture.store()
         defer { store.stop() }
         try fixture.write("{", to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNotNil(store.configurationError)
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
@@ -520,7 +520,7 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertFalse(gallery.previews.isEmpty)
         XCTAssertNotNil(gallery.error(for: gallery.selectedKey))
         try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         gallery.contextChanged()
         XCTAssertNil(gallery.error(for: gallery.selectedKey))
         XCTAssertTrue(gallery.previewErrors.isEmpty)

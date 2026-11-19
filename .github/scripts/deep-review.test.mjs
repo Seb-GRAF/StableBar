@@ -10,7 +10,7 @@ test("needsDeepReview asks for more than 400 changed lines", () => {
 });
 
 test("needsDeepReview matches the listed paths", () => {
-  for (const file of ["Sources/StableBar/PrivateAPI.swift", "Sources/StableBar/ICloudSyncSettings.swift",
+  for (const file of ["Sources/StableBar/System/PrivateAPI.swift", "Sources/StableBar/Settings/ICloudSyncSettings.swift",
     ".github/workflows/ci.yml", ".github/scripts/fixtures/screens.json", "scripts/build.sh", "Package.resolved"])
     assert.equal(needsDeepReview(["docs/widgets.md", file], 10), true, file);
   for (const file of ["Sources/StableBar/BarStore.swift", "Sources/StableBar/Settings/PrivateAPI.swift",

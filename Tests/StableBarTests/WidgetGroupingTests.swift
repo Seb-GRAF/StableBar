@@ -10,7 +10,7 @@ import Testing
         fixture = try ThemeGalleryFixture(json)
         if let includes { try fixture.write(includes, to: fixture.directory.appending(path: "included.json")) }
         store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
     }
 
     var grouping: WidgetGrouping { WidgetGrouping(store: store) }
@@ -169,7 +169,7 @@ private let row = #"""
       {"id":"c","type":"text","text":"C","position":"right"}
     ]}
     """##, to: bar.fixture.url)
-    bar.store.reloadConfiguration()
+    bar.store.configurationStore.reloadConfiguration()
     let groups = try #require(bar.store.configuration?.groups)
     #expect(groups["time"]?.style.background == .color(HexColor(0x112233ff)))
     #expect(groups["time"]?.style.cornerRadius == 14)
@@ -202,7 +202,7 @@ private let row = #"""
     _ = try bar.fixture.theme(##"{"groups":{"time":{"style":{"background":"#000000"},"members":[{"type":"clock"}]}}}"##)
     try bar.fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#,
                           to: bar.fixture.url)
-    bar.store.reloadConfiguration()
+    bar.store.configurationStore.reloadConfiguration()
     #expect(bar.groups() == ["clock": "time"])
     try bar.apply(try bar.grouping.dissolving("time"))
     #expect(bar.groups() == ["clock": "-"])
@@ -243,7 +243,7 @@ private let row = #"""
     let bar = try GroupingFixture(row)
     defer { bar.close() }
     var opened: [CustomizationTarget] = []
-    bar.store.onCustomizeItem = { opened.append($0) }
+    bar.store.onWindowRequest = { if case let .customizeItem(target) = $0 { opened.append(target) } }
     let editing = bar.store.barEditing
     editing.group("a", .groupWith("b"), on: 1)
     editing.editGroup("group")

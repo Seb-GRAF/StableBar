@@ -41,7 +41,7 @@ final class ConfigurationEditorTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         let profile = try XCTUnwrap(store.profiles.first)
         editor.set(["text": .string("Pending")], for: "a")
@@ -65,7 +65,7 @@ final class ConfigurationEditorTests: XCTestCase {
             defer { fixture.close() }
             let store = try fixture.store()
             defer { store.stop() }
-            store.reloadConfiguration()
+            store.configurationStore.reloadConfiguration()
             let original = try Data(contentsOf: fixture.url)
             let profile = try XCTUnwrap(store.profiles.first)
             let editor = ConfigurationEditor(store: store)
@@ -253,7 +253,7 @@ final class ConfigurationEditorTests: XCTestCase {
         editor.selectedID = "b"
         editor.set(["style": .object(["fontSize": .number(12)])], for: "a")
         XCTAssertNil(editor.error)
-        XCTAssertTrue(store.customizationEdits.isEmpty)
+        XCTAssertTrue(store.configurationStore.customizationEdits.isEmpty)
         XCTAssertTrue(editor.undoSteps.isEmpty)
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
     }

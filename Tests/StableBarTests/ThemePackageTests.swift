@@ -1224,12 +1224,12 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         try writePackageFile(#"{"includes":["module.json"],"widgets":[]}"#, to: url)
         let store = BarStore(configurationURL: url)
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configuration?.bar.height == 48)
-        try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(52)])], persist: false)
-        try store.uninstallPackage(id: "sample", version: "2")
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(52)])], persist: false)
+        try store.configurationStore.uninstallPackage(id: "sample", version: "2")
         #expect(try packages.list().map(\.version) == ["1"])
-        #expect(store.sessionEdits.isEmpty)
+        #expect(store.configurationStore.sessionEdits.isEmpty)
         let command = try LaunchCommand(arguments: ["--config", url.path, "--uninstall-package", "sample", "1"])
         guard case let .control(target, request) = command else { Issue.record("Expected control command"); return }
         #expect(target == url)
@@ -1238,7 +1238,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         #expect(!FileManager.default.fileExists(atPath: packages.directory.appending(path: "sample/1").path))
         #expect(try String(contentsOf: module, encoding: .utf8) == imported)
         #expect(FileManager.default.fileExists(atPath: source.appending(path: "config.json").path))
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(store.configuration?.bar.height == 52)
         let saved = try kind == "theme"
@@ -1265,9 +1265,9 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try writePackageFile(#"{"packages":[{"id":"clock","version":"1"}]}"#, to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.applyEdits([ConfigurationEdit(action: .package, properties: ["id": .string("clock"), "version": .string("2")])], persist: false)
-    try store.uninstallPackage(id: "clock", version: "1")
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .package, properties: ["id": .string("clock"), "version": .string("2")])], persist: false)
+    try store.configurationStore.uninstallPackage(id: "clock", version: "1")
     _ = try store.handle(RuntimeRequest(action: .reset))
     #expect(store.configurationError == nil)
     #expect(store.configuration?.widgets[0].content == .text("2"))
@@ -1288,9 +1288,9 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try writePackageFile(original, to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for (id, version) in [("sample", "1"), ("sample", "missing"), ("../source", "1")] {
-        #expect(throws: (any Error).self) { try store.uninstallPackage(id: id, version: version) }
+        #expect(throws: (any Error).self) { try store.configurationStore.uninstallPackage(id: id, version: version) }
         #expect(try String(contentsOf: url, encoding: .utf8) == original)
         #expect(try packages.list().map(\.version) == ["1"])
         #expect(store.configuration?.bar.height == 48)
@@ -1311,8 +1311,8 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try writePackageFile(#"{"packages":[{"id":"clock","version":"1"}],"widgetOverrides":{"clock":{"enabled":false}}}"#, to: laptopBar)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.uninstallPackage(id: "clock", version: "1")
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.uninstallPackage(id: "clock", version: "1")
     var loader = ConfigurationLoader()
     let document = try loader.compose(laptopBar)
     #expect(try packages.list().isEmpty)
@@ -1340,8 +1340,8 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     try writePackageFile(#"{"screens":{"vertical":{"theme":{"id":"sample","version":"1"}}}}"#, to: verticalBar)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.uninstallPackage(id: "sample", version: "1")
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.uninstallPackage(id: "sample", version: "1")
     var loader = ConfigurationLoader()
     let screens = try #require(loader.compose(url)["screens"]).decoded([String: [String: ConfigurationValue]].self)
     #expect(screens.keys.sorted() == ["laptop"])
@@ -1672,10 +1672,10 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         .write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.providers["weather"]?.hosts == nil)
     try Data(#"{"packages":[{"id":"weather","version":"1"}]}"#.utf8).write(to: url)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.providers["weather"]?.hosts == ["api.package-redirect.example"])
 }
 

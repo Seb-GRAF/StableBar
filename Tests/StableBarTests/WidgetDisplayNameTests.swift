@@ -98,10 +98,10 @@ final class WidgetDisplayNameTests: XCTestCase {
             let expected = widget.id == "widget-1a2b3c4d" ? "Clock & date" : "Weather"
             XCTAssertEqual(WidgetDisplayName.name(for: widget, packageName: store.widgetPackageNames[widget.id]), expected)
         }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertEqual(store.widgetPackageNames, ["current": "Weather", "forecast": "Weather", "widget-00000001": "Weather"])
         try fixture.write(#"{"id":"weather","name":"Forecast","version":"1","entry":"config.json"}"#, to: package.appending(path: "package.json"))
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertEqual(store.widgetPackageNames, ["current": "Forecast", "forecast": "Forecast", "widget-00000001": "Forecast"])
         XCTAssertEqual(WidgetDisplayName.names(for: try XCTUnwrap(store.configuration?.widgets), packageNames: store.widgetPackageNames)["widget-00000001"], "Forecast 2")
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)

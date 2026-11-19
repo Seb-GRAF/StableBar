@@ -11,7 +11,7 @@ struct LinkedThemeCardTests {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         let gallery = editor.gallery
         await gallery.refresh()
@@ -38,7 +38,7 @@ struct LinkedThemeCardTests {
         }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
 
@@ -66,7 +66,7 @@ struct LinkedThemeCardTests {
         let original = try Data(contentsOf: ownBar)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
         let card = LinkedThemeCard(candidate: candidate, editor: ConfigurationEditor(store: store), screen: .monitor, everyBar: false)
@@ -85,7 +85,7 @@ struct LinkedThemeCardTests {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
         let editor = ConfigurationEditor(store: store)
@@ -98,7 +98,7 @@ struct LinkedThemeCardTests {
         card.cancelTrial()
 
         #expect(candidate.state == .ready)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.pendingLinks.theme === candidate)
         #expect(FileManager.default.fileExists(atPath: candidate.choice.directory.path))
 
@@ -106,7 +106,7 @@ struct LinkedThemeCardTests {
 
         #expect(store.pendingLinks.theme == nil)
         #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
-        #expect(gallery.overrideTheme?.key == store.selectedThemeKey)
+        #expect(gallery.overrideTheme?.key == store.configurationStore.selectedThemeKey)
     }
 
     @Test(arguments: [false, true], [false, true])
@@ -116,7 +116,7 @@ struct LinkedThemeCardTests {
         let selected = try fixture.theme(#"{"bar":{"height":42}}"#)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let client = store.packageStoreClient
         let started = AsyncStream.makeStream(of: Void.self)
         let release = AsyncStream.makeStream(of: Void.self)
@@ -143,8 +143,8 @@ struct LinkedThemeCardTests {
         await use.value
 
         #expect(try fixture.document() == chosenDocument)
-        #expect(store.selectedThemeKey == (onScreen ? "built-in" : selected.key))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == (onScreen ? "built-in" : selected.key))
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.count == undoCount)
         #expect(candidate.state == .ready)
         #expect(store.pendingLinks.theme === candidate)
@@ -171,7 +171,7 @@ struct LinkedThemeCardTests {
         let selected = try fixture.theme(#"{"bar":{"height":42}}"#)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let client = store.packageStoreClient
         let started = AsyncStream.makeStream(of: Void.self)
         let release = AsyncStream.makeStream(of: Void.self)
@@ -185,26 +185,26 @@ struct LinkedThemeCardTests {
         let card = LinkedThemeCard(candidate: candidate, editor: ConfigurationEditor(store: store))
         candidate.tryOnBar()
         var endedTrial = false
-        store.onEndThemeTrial = { endedTrial = true }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { endedTrial = true } }
 
         let use = Task { await card.useTheme() }
         for await _ in started.stream { break }
         switch change {
-        case .tryAnother: try store.tryTheme(selected)
+        case .tryAnother: try store.configurationStore.tryTheme(selected)
         case .cancel: candidate.cancelTrial()
-        case .saveAnother: try store.applyTheme(selected)
+        case .saveAnother: try store.configurationStore.applyTheme(selected)
         }
         let chosenDocument = try fixture.document()
-        let selectedKey = store.selectedThemeKey
+        let selectedKey = store.configurationStore.selectedThemeKey
         let undoCount = store.customizationHistory.undoSteps.count
-        let trialDirectory = store.themeTrialDirectory
+        let trialDirectory = store.configurationStore.themeTrialDirectory
         let height = store.configuration?.bar.height
         release.continuation.yield(())
         await use.value
 
         #expect(try fixture.document() == chosenDocument)
-        #expect(store.selectedThemeKey == selectedKey)
-        #expect(store.themeTrialDirectory == trialDirectory)
+        #expect(store.configurationStore.selectedThemeKey == selectedKey)
+        #expect(store.configurationStore.themeTrialDirectory == trialDirectory)
         #expect(store.configuration?.bar.height == height)
         #expect(!endedTrial)
         #expect(store.customizationHistory.undoSteps.count == undoCount)
@@ -216,7 +216,7 @@ struct LinkedThemeCardTests {
 
         card.dismiss()
 
-        #expect(store.themeTrialDirectory == (change == .tryAnother ? selected.directory : nil))
+        #expect(store.configurationStore.themeTrialDirectory == (change == .tryAnother ? selected.directory : nil))
         #expect(store.pendingLinks.theme == nil)
         #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
     }
@@ -231,7 +231,7 @@ struct LinkedThemeCardTests {
         let second = try fixture.theme(#"{"bar":{"height":44}}"#, id: "second-theme")
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         editor.gallery.select(first)
         let client = store.packageStoreClient
@@ -253,18 +253,18 @@ struct LinkedThemeCardTests {
             editor.gallery.select(second)
             editor.gallery.select(first)
         case .tryAnother:
-            try store.tryTheme(second)
-            store.endThemeTrial()
+            try store.configurationStore.tryTheme(second)
+            store.configurationStore.endThemeTrial()
         }
-        #expect(store.selectedThemeKey == first.key)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == first.key)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         let chosenDocument = try fixture.document()
         let undoCount = store.customizationHistory.undoSteps.count
         release.continuation.yield(())
         await use.value
 
         #expect(try fixture.document() == chosenDocument)
-        #expect(store.selectedThemeKey == first.key)
+        #expect(store.configurationStore.selectedThemeKey == first.key)
         #expect(store.customizationHistory.undoSteps.count == undoCount)
         #expect(candidate.state == .ready)
         #expect(store.pendingLinks.theme === candidate)
@@ -272,7 +272,7 @@ struct LinkedThemeCardTests {
         await card.useTheme()
 
         #expect(candidate.state == .used)
-        #expect(store.selectedThemeKey == candidate.choice.key)
+        #expect(store.configurationStore.selectedThemeKey == candidate.choice.key)
     }
 
     @Test(arguments: [false, true])
@@ -281,7 +281,7 @@ struct LinkedThemeCardTests {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
         let editor = ConfigurationEditor(store: store)
@@ -292,14 +292,14 @@ struct LinkedThemeCardTests {
         if tryThemes {
             let trial = ThemeTrial(store: store)
             trial.next()
-            #expect(store.themeTrialDirectory != candidate.choice.directory)
+            #expect(store.configurationStore.themeTrialDirectory != candidate.choice.directory)
             #expect(candidate.state == .ready)
             candidate.cancelTrial()
-            #expect(store.themeTrialDirectory == trial.choice?.directory)
+            #expect(store.configurationStore.themeTrialDirectory == trial.choice?.directory)
             trial.cancel()
         } else {
             store.barEditing.begin()
-            #expect(store.themeTrialDirectory == nil)
+            #expect(store.configurationStore.themeTrialDirectory == nil)
             #expect(candidate.state == .ready)
         }
         gallery.contextChanged()
@@ -333,7 +333,7 @@ struct LinkedThemeCardTests {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         let gallery = editor.gallery
         await gallery.refresh()
@@ -426,7 +426,7 @@ struct LinkedThemeCardTests {
         let original = try Data(contentsOf: fixture.url)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         let gallery = editor.gallery
         await gallery.refresh()
