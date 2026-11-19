@@ -16,7 +16,7 @@ private let threeWidgets = ##"""
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
     store.configuration = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
     for widget in store.configuration?.widgets ?? [] {
-        if case .script = widget.content { store.scripts[widget.id] = ScriptWidget() }
+        if case .script = widget.content { store.widgetScripts.scripts[widget.id] = ScriptWidget() }
     }
     store.preparePresentations()
     return store
@@ -28,7 +28,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func outputUpdatesInvalidateOnlyTheWidgetsTheyRestyle() async throws {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
     let third = try #require(store.presentations["c"])
@@ -66,7 +66,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func hiddenAndDisplayOutputChangeOnlyTheirWidgetsPresence() async throws {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
     try await confirmation("a's presence changes", expectedCount: 1) { changed in
@@ -87,10 +87,10 @@ private func output(_ json: String) throws -> ScriptOutput {
     let store = try makeStore(threeWidgets)
     let text = try #require(store.configuration?.widgets.first { $0.id == "c" })
     await confirmation("No widget re-reads an action error", expectedCount: 0) { invalidated in
-        withObservationTracking { _ = store.actionErrors["a"] } onChange: { invalidated() }
-        await store.runAction("true", widget: text).value
+        withObservationTracking { _ = store.widgetScripts.actionErrors["a"] } onChange: { invalidated() }
+        await store.widgetScripts.runAction("true", widget: text).value
     }
-    #expect(store.actionErrors.isEmpty)
+    #expect(store.widgetScripts.actionErrors.isEmpty)
 }
 
 @Test @MainActor func reloadingResolvesScriptStylesInTheStore() async throws {
@@ -115,11 +115,11 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func aStoreThatOnlyShowsAnotherStoresScriptsLeavesThemReportingToIt() throws {
     let bar = try makeStore(threeWidgets)
-    let a = try #require(bar.scripts["a"])
+    let a = try #require(bar.widgetScripts.scripts["a"])
     try a.accept(output(##"{"text":"1","style":{"foreground":"#ff0000"}}"##))
     let preview = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
     preview.configuration = bar.configuration
-    preview.scripts = bar.scripts
+    preview.widgetScripts.scripts = bar.widgetScripts.scripts
     preview.preparePresentations()
     #expect(preview.presentations["a"]?.style.base.foreground == HexColor(0xff0000ff))
     try a.accept(output(##"{"text":"2","style":{"foreground":"#00ff00"}}"##))
@@ -129,7 +129,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 @Test @MainActor func scriptUpdatesInvalidateOnlyTheViewsTheyAffect() throws {
     let store = try makeStore(threeWidgets)
     let configuration = try #require(store.configuration)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let bar = BarView(store: store, display: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: nil))
     let widgets = Dictionary(uniqueKeysWithValues: configuration.widgets.map {
         ($0.id, WidgetView(widget: $0, defaults: configuration.defaults, popupDefaults: configuration.popupDefaults, store: store,
@@ -172,7 +172,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["status"])
+    let script = try #require(store.widgetScripts.scripts["status"])
     let presentation = try #require(store.presentations["status"])
     for _ in 0..<100 {
         if presentation.hidden { break }
@@ -239,7 +239,7 @@ private func output(_ json: String) throws -> ScriptOutput {
       {"id":"a","type":"script","command":"true","position":"left"},
       {"id":"b","type":"script","command":"true","position":"left"}]}
     """##)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
     try await confirmation("a enters warning", expectedCount: 1) { restyled in
@@ -269,10 +269,10 @@ private func output(_ json: String) throws -> ScriptOutput {
     defer { store.stop() }
     store.reloadConfiguration()
     for _ in 0..<100 {
-        if store.scripts["power"]?.output.text == "Low" { break }
+        if store.widgetScripts.scripts["power"]?.output.text == "Low" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
-    #expect(store.scripts["power"]?.output.text == "Low")
+    #expect(store.widgetScripts.scripts["power"]?.output.text == "Low")
     #expect(store.presentations["power"]?.style.state == (state.isEmpty ? nil : state))
     guard case let .object(snapshot) = try store.snapshot(id: "power") else {
         Issue.record("Expected an object snapshot")
@@ -290,7 +290,7 @@ private func output(_ json: String) throws -> ScriptOutput {
       {"id":"clock","type":"clock","position":"right"}]}
     """#.utf8))
     let battery = ScriptWidget()
-    store.scripts = ["compact": battery, "detail": battery]
+    store.widgetScripts.scripts = ["compact": battery, "detail": battery]
     store.preparePresentations()
     let compact = try #require(store.presentations["compact"])
     let detail = try #require(store.presentations["detail"])
@@ -314,7 +314,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     {"widgets":[{"id":"a","type":"script","command":"true","position":"left","transition":"fade"},
                 {"id":"b","type":"script","command":"true","position":"left"}]}
     """##)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
     try await confirmation("a hides", expectedCount: 1) { hidden in
@@ -331,7 +331,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func temporaryOutputShowsItsFieldsForItsDurationThenExpires() async throws {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let second = try #require(store.presentations["b"])
     let clock = TestClock()
@@ -362,7 +362,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func aDifferentTemporaryOutputStartsOverWhileTheSameOneDoesNot() async throws {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     let clock = TestClock()
     first.clock = clock
@@ -393,8 +393,8 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func theSameTemporaryOutputShowsAgainAfterItExpires() async throws {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
-    let b = try #require(store.scripts["b"])
+    let a = try #require(store.widgetScripts.scripts["a"])
+    let b = try #require(store.widgetScripts.scripts["b"])
     let first = try #require(store.presentations["a"])
     let clock = TestClock()
     first.clock = clock
@@ -416,7 +416,7 @@ private func output(_ json: String) throws -> ScriptOutput {
 /// Whether `a`'s temporary output keeps running out on the same schedule after `update` while it shows.
 @MainActor private func keepsItsExpiry(after update: (BarStore) throws -> Void) throws -> Bool {
     let store = try makeStore(threeWidgets)
-    let a = try #require(store.scripts["a"])
+    let a = try #require(store.widgetScripts.scripts["a"])
     let first = try #require(store.presentations["a"])
     try a.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":30}}"#))
     let expiry = try #require(first.expiry)
@@ -427,12 +427,12 @@ private func output(_ json: String) throws -> ScriptOutput {
 
 @Test @MainActor func onlyADifferentTemporaryOutputStartsOverWhileItShows() throws {
     #expect(try keepsItsExpiry { store in
-        try store.scripts["a"]?.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":30}}"#))
+        try store.widgetScripts.scripts["a"]?.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":30}}"#))
     })
     #expect(try !keepsItsExpiry { store in
-        try store.scripts["a"]?.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":31}}"#))
+        try store.widgetScripts.scripts["a"]?.accept(output(#"{"text":"","temporary":{"fields":{"text":"62"},"duration":31}}"#))
     }, "A different one starts over")
-    #expect(try keepsItsExpiry { store in try store.scripts["b"]?.accept(output(#"{"text":"B"}"#)) })
+    #expect(try keepsItsExpiry { store in try store.widgetScripts.scripts["b"]?.accept(output(#"{"text":"B"}"#)) })
 }
 
 @Test func malformedTemporaryOutputIsAnError() throws {

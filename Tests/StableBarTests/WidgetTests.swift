@@ -111,7 +111,7 @@ func appMenuDisplayModeDecodesWithBackwardCompatibleDefault(_ json: String, _ ex
     let widget = try JSONDecoder().decode(WidgetConfiguration.self, from: Data(#"{"id":"cpu","type":"script","command":"echo","position":"right","popup":{"height":200,"style":{},"layout":{"type":"field","field":"usage"}}}"#.utf8))
     let store = BarStore()
     let script = ScriptWidget()
-    store.scripts[widget.id] = script
+    store.widgetScripts.scripts[widget.id] = script
     let view = PopupView(popup: widget.popup!, style: WidgetStyle(), store: store, widget: widget)
     await confirmation("Popup observes new fields") { changed in
         withObservationTracking { _ = view.body } onChange: { changed() }

@@ -110,9 +110,9 @@ private enum FrontmostApp {
             let script = ScriptWidget()
             script.output = try ScriptOutput.read(Data(json.utf8))
             script.samples = [0.1, 0.6, 0.35, 0.8, 0.12]
-            store.scripts[widget.id] = script
+            store.widgetScripts.scripts[widget.id] = script
         }
-        let script = store.scripts[widget.id]
+        let script = store.widgetScripts.scripts[widget.id]
         for (index, style) in styles.enumerated() {
             let resolution = ResolvedWidgetStyle(base: resolveStyle([style, widget.style]))
             for (hovered, open) in [(false, false), (true, false), (false, true), (true, true)] {
@@ -439,7 +439,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         {"text":"62%","icon":"speaker.wave.3","value":0.62,"values":{"volume":0.62},"fields":{"device":"Speakers","muted":"false"}}
         """#.utf8))
         script.samples = [0.1, 0.6, 0.35, 0.8, 0.62]
-        store.scripts[id] = script
+        store.widgetScripts.scripts[id] = script
     }
     let widgets = try #require(store.configuration?.widgets)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: false, hovered: false, open: false)
@@ -459,7 +459,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         #expect(try drawing(id).difference(from: iconOnly) <= tolerance, "\(id) hides the volume when muted")
         var levels: [Drawing] = []
         for volume in [0, 0.2, 0.5, 0.9] {
-            store.scripts[id]?.output.icon = AudioMonitor.icon(volume: volume, muted: false)
+            store.widgetScripts.scripts[id]?.output.icon = AudioMonitor.icon(volume: volume, muted: false)
             levels.append(try drawing(id))
         }
         #expect(levels.allSatisfy { $0.width == rest.width && $0.height == rest.height }, "\(id) keeps its width at every level")
@@ -478,7 +478,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
                        ("fixed", #"{"text":"HDMI","icon":"speaker.wave.2","fields":{"volumeAvailable":"false"}}"#)] {
         let script = ScriptWidget()
         script.output = try ScriptOutput.read(Data(json.utf8))
-        store.scripts[id] = script
+        store.widgetScripts.scripts[id] = script
     }
     let widgets = try #require(store.configuration?.widgets)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: false, hovered: false, open: false)

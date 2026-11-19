@@ -53,9 +53,9 @@ enum SceneRenderer {
             case let .provider(name):
                 let script = try providers[name] ?? sample(scene, keys: [widget.id, name])
                 providers[name] = script
-                store.scripts[widget.id] = script
+                store.widgetScripts.scripts[widget.id] = script
             case .script:
-                store.scripts[widget.id] = try sample(scene, keys: [widget.id])
+                store.widgetScripts.scripts[widget.id] = try sample(scene, keys: [widget.id])
             default:
                 break
             }

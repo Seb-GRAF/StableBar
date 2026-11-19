@@ -175,7 +175,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     store.configuration = config
     let script = ScriptWidget()
     try script.accept(ScriptOutput.read(Data(#"{"text":"Time","state":"critical"}"#.utf8)))
-    store.scripts["clock"] = script
+    store.widgetScripts.scripts["clock"] = script
     store.preparePresentations()
     defer { store.stop() }
     let widget = config.widgets[0], popup = try #require(widget.popup)
@@ -203,7 +203,7 @@ private func presentationConfiguration(_ json: String) throws -> Configuration {
     store.origins = loader.origins
     let script = ScriptWidget()
     try script.accept(ScriptOutput.read(Data(##"{"text":"Source","barStyle":{"borderColor":"#aabbcc"}}"##.utf8)))
-    store.scripts["source"] = script
+    store.widgetScripts.scripts["source"] = script
     store.preparePresentations()
     defer { store.stop() }
     let snapshot = try store.snapshot(id: "time").decoded([String: ConfigurationValue].self)

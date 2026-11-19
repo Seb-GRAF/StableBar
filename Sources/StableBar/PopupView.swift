@@ -13,21 +13,21 @@ struct PopupView: View {
     private var mode: ModePresentation {
         let roles = store.configuration?.look(on: screenKind).roles ?? [:]
         guard style.usesModeStates || popup.usesModeStates(roles: roles)
-            || store.scripts[widget.id]?.output.styles?.values.contains(where: \.usesModeStates) == true else { return ModePresentation() }
+            || store.widgetScripts.scripts[widget.id]?.output.styles?.values.contains(where: \.usesModeStates) == true else { return ModePresentation() }
         return store.modePresentation(on: screenKind)
     }
 
     var presentationStyle: WidgetStyle { style.resolved(for: StyleStates(mode: mode)) }
 
     var body: some View {
-        let script = store.scripts[widget.id]
+        let script = store.widgetScripts.scripts[widget.id]
         let states = StyleStates(mode: mode)
         let appearance = WidgetAppearance(presentationStyle, defaults: WidgetStyle(spacing: PopupConfiguration.blockSpacing))
         let fields = script?.output.fields ?? [:]
         let lists = script?.output.lists ?? [:]
         let samples = script?.samples ?? []
         let menu = script?.output.menu ?? widget.menu ?? []
-        let error = script?.error ?? store.actionErrors[widget.id]
+        let error = script?.error ?? store.widgetScripts.actionErrors[widget.id]
         let fillsHeight = store.popup.pins.resized.contains(widget.id)
         let content = VStack(alignment: .leading, spacing: appearance.spacing) {
                 // The layout always slides in from and out to the leading edge and a view the trailing one, so going in and
@@ -89,8 +89,8 @@ struct PopupView: View {
                             store.move(.item(item), to: placement, before: nil, in: widget)
                         }, states: states, update: store.update) { action, environment in
                             if environment.isEmpty ? popup.dismissOnAction : popup.dismissOnControl { store.popup.close() }
-                            store.runAction(action, widget: widget,
-                                            event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
+                            store.widgetScripts.runAction(action, widget: widget,
+                                                          event: ScriptEvent(sender: environment.isEmpty ? "mouse.clicked" : "control.changed", environment: environment))
                         }, topLevel: true, back: view == nil ? nil : { navigation.view = nil })
                     }
                     .id(navigation.view)

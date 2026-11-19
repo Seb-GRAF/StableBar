@@ -28,7 +28,7 @@ struct SoundWidgetView: View {
     static func opensBeforeIcon(_ position: WidgetPosition) -> Bool { position == .right }
 
     var body: some View {
-        let volume = store.scripts[widget.id]?.output.values?["volume"]
+        let volume = store.widgetScripts.scripts[widget.id]?.output.values?["volume"]
         let expanded = volume != nil && (barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true))
         let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
         Group {
@@ -74,7 +74,7 @@ struct VolumeSlider: View {
                                                           step: 0.01, endStop: nil, action: .set(.volume)))
 
     var body: some View {
-        if let volume = store.scripts[widget.id]?.output.values?["volume"] {
+        if let volume = store.widgetScripts.scripts[widget.id]?.output.values?["volume"] {
             let shown = level ?? volume
             let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
             let roles = store.configuration?.look(on: screenKind).roles ?? [:]
@@ -125,9 +125,9 @@ struct VolumeSlider: View {
         level = volume
         do {
             try AudioMonitor.setVolume(volume)
-            if store.actionErrors[widget.id] != nil { store.actionErrors[widget.id] = nil }
+            if store.widgetScripts.actionErrors[widget.id] != nil { store.widgetScripts.actionErrors[widget.id] = nil }
         } catch {
-            store.actionErrors[widget.id] = error.localizedDescription
+            store.widgetScripts.actionErrors[widget.id] = error.localizedDescription
         }
     }
 }

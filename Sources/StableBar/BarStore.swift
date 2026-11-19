@@ -16,10 +16,8 @@ final class BarStore: NSObject {
     var configurationError: String?
     /// Properties the bar skips because a file was written for a newer release.
     var configurationWarning: String?
-    var actionErrors: [String: String] = [:]
     var activeApp = NSWorkspace.shared.frontmostApplication
     var activeDisplayID = 1
-    var scripts: [String: ScriptWidget] = [:]
     let workspaceStore: WorkspaceStore
     let windowClearance = WindowClearance()
     let menuBarDelay = MenuBarDelay()
@@ -65,6 +63,7 @@ final class BarStore: NSObject {
     private let customizationSaveDelay: Duration
     @ObservationIgnored lazy var customizationHistory = ConfigurationHistory(store: self, saveDelay: customizationSaveDelay)
     @ObservationIgnored lazy var barEditing = BarEditing(store: self)
+    @ObservationIgnored lazy var widgetScripts = WidgetScripts(store: self)
     @ObservationIgnored lazy var packageStoreClient = PackageStoreClient(
         packages: WidgetPackageStore(directory: configurationURL.deletingLastPathComponent().appending(path: "packages")),
         sources: packageSources.filter { !$0.isStore })
@@ -77,24 +76,15 @@ final class BarStore: NSObject {
     private(set) var presentations: [String: WidgetPresentation] = [:]
     private(set) var barStyle = WidgetStyle()
     private(set) var screenBarStyles: [String: WidgetStyle] = [:]
-    private(set) var providers: [String: ScriptWidget] = [:]
-    private var visibleWidgets: [Int: Set<String>] = [:]
-    private var pauses: Set<PauseReason> = []
-    private var popupWidgetID: String?
-    private(set) var inspectedWidgetID: String?
-    private(set) var inspectorOpen = false
     private var configurationLoader = ConfigurationLoader()
     // A trial changes the displayed composition, never the saved or command-line edits.
     private var normalComposition: (configuration: Configuration, loader: ConfigurationLoader)?
     private var triedTheme: (choice: ThemeChoice, edits: [ConfigurationEdit])?
-    private var managesConnections = false
+    private(set) var managesConnections = false
     private let configurationWatcher = ConfigurationWatcher()
     private(set) var reloadTask: Task<Void, Never>?
-    private var eventObservers: [NSObjectProtocol] = []
     private var reloadObserver: NSObjectProtocol?
     private var menuBarAppObservation: AnyObject?
-    private var actions: [UUID: Task<Void, Never>] = [:]
-    private var actionTails: [String: (id: UUID, task: Task<Void, Never>)] = [:]
 
     init(configurationURL: URL = LaunchCommand.configurationURL, registry: DataSourceRegistry = .builtIn,
          popup: WidgetPopup = WidgetPopup(), themesDirectory: URL? = bundledThemesDirectory,
@@ -114,7 +104,7 @@ final class BarStore: NSObject {
         configurationWatcher.onChange = { [weak self] in self?.scheduleReload() }
         workspaceStore.onModeChange = { [weak self] mode in
             self?.updatePresentations()
-            if self?.managesConnections == true { self?.send(.aerospaceMode, ["INFO": mode ?? ""]) }
+            if self?.managesConnections == true { self?.widgetScripts.send(.aerospaceMode, ["INFO": mode ?? ""]) }
         }
     }
 
@@ -128,7 +118,7 @@ final class BarStore: NSObject {
             guard let self else { return }
             popup.close()
             let focused = workspaceStore.workspaces.first(where: \.isFocused)
-            send(.workspace, ["INFO": (workspaceStore.source == .rift ? focused?.label : focused?.name) ?? "", "SID": String(focused?.monitor ?? activeDisplayID)])
+            widgetScripts.send(.workspace, ["INFO": (workspaceStore.source == .rift ? focused?.label : focused?.name) ?? "", "SID": String(focused?.monitor ?? activeDisplayID)])
         }
         do {
             let directory = sharedConfigurationURL.deletingLastPathComponent()
@@ -197,7 +187,7 @@ final class BarStore: NSObject {
         if let screen = NSScreen.main { activeDisplayID = BarDisplay(screen: screen).id }
         popup.close()
         refreshContext()
-        send(.frontApp, ["INFO": activeApp?.localizedName ?? "Desktop"])
+        widgetScripts.send(.frontApp, ["INFO": activeApp?.localizedName ?? "Desktop"])
     }
 
     private func readAppMenu() {
@@ -235,9 +225,9 @@ final class BarStore: NSObject {
                                                 among: appMenu.menuBarItems)
         do {
             try customizationHistory.change(ConfigurationEdit(action: .set, id: widget.id, properties: properties))
-            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+            if widgetScripts.actionErrors[widget.id] != nil { widgetScripts.actionErrors[widget.id] = nil }
         } catch {
-            actionErrors[widget.id] = errorMessage(error)
+            widgetScripts.actionErrors[widget.id] = errorMessage(error)
         }
     }
 
@@ -245,9 +235,9 @@ final class BarStore: NSObject {
     func selectInputSource(_ id: String?, widget: WidgetConfiguration) {
         do {
             try InputSourceMonitor.select(id)
-            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+            if widgetScripts.actionErrors[widget.id] != nil { widgetScripts.actionErrors[widget.id] = nil }
         } catch {
-            actionErrors[widget.id] = errorMessage(error)
+            widgetScripts.actionErrors[widget.id] = errorMessage(error)
         }
     }
 
@@ -255,9 +245,9 @@ final class BarStore: NSObject {
     func selectOutputDevice(_ id: String, widget: WidgetConfiguration) {
         do {
             try AudioMonitor.setOutputDevice(id)
-            if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
+            if widgetScripts.actionErrors[widget.id] != nil { widgetScripts.actionErrors[widget.id] = nil }
         } catch {
-            actionErrors[widget.id] = errorMessage(error)
+            widgetScripts.actionErrors[widget.id] = errorMessage(error)
         }
     }
 
@@ -752,64 +742,7 @@ final class BarStore: NSObject {
             return
         }
         popup.close()
-        let previous = configuration?.widgets ?? []
-        for (id, script) in scripts {
-            let old = previous.first { $0.id == id }
-            let new = next.widgets.first { $0.id == id && $0.enabled }
-            if case .provider = old?.content {
-                scripts.removeValue(forKey: id)
-                continue
-            }
-            if old?.content != new?.content || old?.timeout != new?.timeout
-                || old?.environment != new?.environment || configuration?.environment != next.environment {
-                script.stop()
-                scripts.removeValue(forKey: id)
-            }
-        }
-        let usedProviders = next.activeProviders
-        for (name, script) in providers {
-            if !usedProviders.contains(name) || configuration?.providers[name] != next.providers[name]
-                || configuration?.environment != next.environment {
-                script.stop()
-                providers.removeValue(forKey: name)
-            }
-        }
-        for name in usedProviders where providers[name] == nil {
-            let script = ScriptWidget()
-            let provider = next.providers[name]!
-            var environment = next.environment
-            environment["NAME"] = name
-            environment["CONFIG_DIR"] = configurationURL.deletingLastPathComponent().path
-            environment["STABLEBAR"] = Bundle.main.executablePath
-            environment["STABLEBAR_CONFIG"] = sharedConfigurationURL.path
-            if let events = registry[provider.type]?.events, !events.isEmpty {
-                script.onOutputChange = { [weak self, weak script] previous, output in
-                    for event in events {
-                        if let variables = event.variables(from: previous, to: output) { self?.send(event, variables, from: script) }
-                    }
-                }
-            }
-            if provider.type == DataSourceType.merge.name {
-                script.start(schedule: SourceSchedule(continuous: true)) { [weak self] in
-                    MergeSource(inputs: provider.providers) { self?.providers[$0] }
-                }
-            } else {
-                script.start(provider: provider, registry: registry, environment: environment)
-            }
-            providers[name] = script
-        }
-        for widget in next.widgets where widget.enabled {
-            switch widget.content {
-            case let .provider(name): scripts[widget.id] = providers[name]
-            case let .script(command, interval) where scripts[widget.id] == nil:
-                let script = ScriptWidget()
-                scripts[widget.id] = script
-                script.start(command: command, interval: interval, timeout: widget.timeout,
-                             environment: commandEnvironment(widget, configuration: next))
-            default: break
-            }
-        }
-        let needsWorkspaces = next.widgets.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) }
+        widgetScripts.run(next)
         configuration = next
         managesConnections = true
         readAppMenu()
@@ -823,20 +756,8 @@ final class BarStore: NSObject {
         origins = loader.origins
         activeProfiles = loader.activeProfiles
         configurationError = nil
-        let center = DistributedNotificationCenter.default()
-        for observer in eventObservers { center.removeObserver(observer) }
-        let events = Set(next.widgets.filter(\.enabled).flatMap(\.events) + usedProviders.flatMap { next.providers[$0]!.events }
-                         + (needsWorkspaces && next.workspaceSource == .yabai ? [BuiltInEvent.yabai.rawValue] : []))
-        eventObservers = events.map { event in
-            center.addObserver(forName: Notification.Name(event), object: nil, queue: .main) { [weak self] notification in
-                var environment = withoutShellVariables(notification.userInfo as? [String: String] ?? [:])
-                if environment["INFO"] == nil, let info = notification.userInfo as? [String: Any] {
-                    environment["INFO"] = notificationInfo(info)
-                }
-                MainActor.assumeIsolated { self?.refreshScripts(for: event, environment: environment) }
-            }
-        }
-        updateSuspension()
+        widgetScripts.observeEvents(of: next)
+        widgetScripts.updateSuspension()
         onConfigurationChange?()
     }
 
@@ -847,7 +768,7 @@ final class BarStore: NSObject {
         presentations = Dictionary(uniqueKeysWithValues: (configuration?.widgets ?? []).map {
             ($0.id, presentations[$0.id] ?? WidgetPresentation())
         })
-        for script in scripts.values where script.onUpdate == nil {
+        for script in widgetScripts.scripts.values where script.onUpdate == nil {
             script.onUpdate = { [weak self] in self?.updatePresentations() }
         }
         updatePresentations()
@@ -857,10 +778,10 @@ final class BarStore: NSObject {
     /// current outputs. Only changed values are assigned, so views of unaffected widgets stay valid.
     func updatePresentations() {
         guard let configuration else { return }
-        let output = { (id: String) in self.scripts[id]?.output }
+        let output = { (id: String) in self.widgetScripts.scripts[id]?.output }
         let overrides = OrderedStyleOverrides(widgets: configuration.widgets, output: output)
         let outputNeedsMode = overrides.bar.usesModeStates || overrides.widgets.values.contains(where: \.usesModeStates)
-            || scripts.values.contains { $0.output.style?.usesModeStates == true || $0.output.styles?.values.contains(where: \.usesModeStates) == true }
+            || widgetScripts.scripts.values.contains { $0.output.style?.usesModeStates == true || $0.output.styles?.values.contains(where: \.usesModeStates) == true }
         if managesConnections {
             workspaceStore.configure(source: configuration.workspaceSource,
                                      workspaces: configuration.widgets.contains { $0.enabled && ($0.content == .workspaces || $0.display == .active) },
@@ -870,7 +791,7 @@ final class BarStore: NSObject {
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let screenOverrides = configuration.screenLooks.mapValues { OrderedStyleOverrides(widgets: $0.widgets, output: output) }
         for widget in configuration.widgets {
-            let script = scripts[widget.id]
+            let script = widgetScripts.scripts[widget.id]
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
                                                       role: configuration.roleStyle(widget.role)))
             let usesMode = base.usesModeStates || configuration.usesSliderModeStates(widget) || widget.layout?.usesModeStates(roles: configuration.roles) == true
@@ -932,23 +853,13 @@ final class BarStore: NSObject {
                          aliases: configuration?.look(on: kind).modeAliases ?? [:])
     }
 
-    func setVisibleWidgets(ids: Set<String>, displayID: Int) {
-        visibleWidgets[displayID] = ids
-        updateSuspension()
-    }
-
-    func retainDisplays(_ ids: Set<Int>) {
-        visibleWidgets = visibleWidgets.filter { ids.contains($0.key) }
-        updateSuspension()
-    }
-
     func setPopupVisibleWidget(_ id: String?, anchor: NSView? = nil) {
-        popupWidgetID = id
+        widgetScripts.popupWidgetID = id
         appMenu.closeSubmenus(after: nil)
         innerPopup.close()
         let anchor = anchor.map(ObjectIdentifier.init)
         for (widgetID, presentation) in presentations { presentation.setPopupAnchor(widgetID == id ? anchor : nil) }
-        updateSuspension()
+        widgetScripts.updateSuspension()
     }
 
     func setInnerPopupAnchor(_ anchor: NSView?, of id: String) {
@@ -956,81 +867,12 @@ final class BarStore: NSObject {
         presentations[id]?.setInnerPopupAnchor(anchor.map(ObjectIdentifier.init))
     }
 
-    func setInspectedWidget(_ id: String?) {
-        inspectedWidgetID = id
-        updateSuspension()
-    }
-
-    func setInspectorOpen(_ open: Bool) {
-        inspectorOpen = open
-        if !open { inspectedWidgetID = nil }
-        updateSuspension()
-    }
-
-    func widgetStatus(for widget: WidgetConfiguration) -> WidgetStatus {
-        if !widget.enabled { return .disabled }
-        if let error = actionErrors[widget.id] { return .failed("Click action: \(error)") }
-        let script = scripts[widget.id]
-        if let error = script?.error { return .failed(error) }
-        for input in configuration?.providerNames(readBy: widget).dropFirst() ?? [] {
-            if let error = providers[input]?.error { return .failed("\(input): \(error)") }
-        }
-        if widget.content == .workspaces, let error = workspaceStore.error { return .failed(error) }
-        if !widget.permissions(source: configuration?.workspaceSource ?? .aerospace).isEmpty, !appMenu.isTrusted {
-            return .accessNeeded(.accessibility)
-        }
-        if let name = widget.providerName, let provider = configuration?.providers[name] {
-            let sources = provider.type == DataSourceType.merge.name
-                ? provider.providers.map { ("\($0).access", configuration!.providers[$0]!.type) } : [("access", provider.type)]
-            for (field, type) in sources {
-                if let permission = registry[type]?.permission, let access = script?.output.fields?[field], access != "granted" {
-                    return .accessNeeded(permission)
-                }
-            }
-        }
-        if script?.diagnostics.suspended == true { return .paused }
-        if let script {
-            if script.diagnostics.lastUpdated == nil { return .starting }
-            if let name = widget.providerName, let provider = configuration?.providers[name],
-               registry[provider.type]?.continuous == true, script.diagnostics.running {
-                return .connected
-            }
-            if script.diagnostics.running { return .updating }
-        }
-        return .working
-    }
-
-    func setPaused(_ paused: Bool, because reason: PauseReason) {
-        if paused { pauses.insert(reason) } else { pauses.remove(reason) }
-        updateSuspension()
-    }
-
     /// Runs again what started with the app's own environment while the login shell's was still being read.
     func loginShellEnvironmentLoaded() {
         workspaceStore.reconnect()
         var restarted = Set<ObjectIdentifier>()
-        for script in Array(scripts.values) + Array(providers.values) where restarted.insert(ObjectIdentifier(script)).inserted {
+        for script in Array(widgetScripts.scripts.values) + Array(widgetScripts.providers.values) where restarted.insert(ObjectIdentifier(script)).inserted {
             script.refresh(ScriptEvent(sender: "startup"))
-        }
-    }
-
-    private func updateSuspension() {
-        workspaceStore.dockBadges.isWatching = managesConnections && pauses.isEmpty && configuration?.showsDockBadges == true
-        var visible = visibleWidgets.values.reduce(into: Set<String>()) { $0.formUnion($1) }
-        if let popupWidgetID { visible.insert(popupWidgetID) }
-        if inspectorOpen, let inspectedWidgetID { visible.insert(inspectedWidgetID) }
-        for (name, provider) in providers {
-            let definition = configuration?.providers[name]
-            let sendsSubscribedEvents = registry[definition?.type ?? ""]?.events
-                .contains { configuration?.subscribedEvents.contains($0.rawValue) == true } == true
-            let hidden = definition?.whenVisible == true && !sendsSubscribedEvents
-                && !(configuration?.widgets.contains { configuration!.providerNames(readBy: $0).contains(name) && visible.contains($0.id) } ?? false)
-            if !pauses.isEmpty || hidden { provider.suspend() } else { provider.resume() }
-        }
-        for widget in configuration?.widgets ?? [] {
-            if case .script = widget.content {
-                if !pauses.isEmpty { scripts[widget.id]?.suspend() } else { scripts[widget.id]?.resume() }
-            }
         }
     }
 
@@ -1058,11 +900,11 @@ final class BarStore: NSObject {
             try uninstallPackage(id: id, version: version)
         case .reset: try setSessionEdits([])
         case .refresh:
-            guard let id = request.id, let script = scripts[id] else { throw CommandFailure(message: "Refresh requires a running widget id.") }
+            guard let id = request.id, let script = widgetScripts.scripts[id] else { throw CommandFailure(message: "Refresh requires a running widget id.") }
             guard !script.diagnostics.suspended else {
                 throw CommandFailure(message: "Widget is suspended. Choose Resume for testing in Status or make a consumer visible before refreshing.")
             }
-            refresh(configuration!.widgets.first { $0.id == id }!, event: ScriptEvent(sender: "manual"))
+            widgetScripts.refresh(configuration!.widgets.first { $0.id == id }!, event: ScriptEvent(sender: "manual"))
         case .closePopup where request.id == nil:
             popup.closeAll()
         case .popup, .openPopup, .closePopup:
@@ -1073,9 +915,9 @@ final class BarStore: NSObject {
             if let duration = request.duration, duration <= 0 || duration > 86_400 {
                 throw CommandFailure(message: "--duration must be greater than zero and at most one day (86400 seconds).")
             }
-            if popupWidgetID == id || popup.pins.ids.contains(id) {
+            if widgetScripts.popupWidgetID == id || popup.pins.ids.contains(id) {
                 if request.action == .openPopup { break }
-                if popupWidgetID == id { popup.close() } else { popup.closePinned(id) }
+                if widgetScripts.popupWidgetID == id { popup.close() } else { popup.closePinned(id) }
                 break
             }
             if request.action == .closePopup { break }
@@ -1103,7 +945,7 @@ final class BarStore: NSObject {
             bar.focusWidgets()
         case .trigger:
             guard let event = request.id else { throw CommandFailure(message: "Trigger requires an event name.") }
-            refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
+            widgetScripts.refreshScripts(for: event, environment: withoutShellVariables(request.environment ?? [:]))
         case .query: break
         // AppDelegate, which owns the bar's windows, hides or shows them before passing these on.
         case .hide, .show, .toggle: break
@@ -1140,7 +982,7 @@ final class BarStore: NSObject {
                 result["icon"] = shown.icon.map(ConfigurationValue.string) ?? .null
                 result["fields"] = .object(shown.fields.mapValues(ConfigurationValue.string))
             }
-            if let script = scripts[id] {
+            if let script = widgetScripts.scripts[id] {
                 let encoder = JSONEncoder()
                 encoder.dateEncodingStrategy = .iso8601
                 result["diagnostics"] = try JSONDecoder().decode(ConfigurationValue.self, from: encoder.encode(script.diagnostics))
@@ -1163,7 +1005,7 @@ final class BarStore: NSObject {
         let barLayers: [ConfigurationValue] = [.object(["source": .string("bar.style"),
             "style": configuration?.bar.style.configurationValue ?? .object([:])])]
             + (configuration?.widgets ?? []).compactMap { widget in
-                scripts[widget.id]?.output.barStyle.map { .object(["source": .string("output.\(widget.id).barStyle"),
+                widgetScripts.scripts[widget.id]?.output.barStyle.map { .object(["source": .string("output.\(widget.id).barStyle"),
                                                                  "style": $0.configurationValue]) }
             }
         return .object(["configuration": .object(effectiveDocument),
@@ -1175,7 +1017,7 @@ final class BarStore: NSObject {
                         "origins": .object(origins.mapValues { .string($0.description) }),
                         "profiles": .array(activeProfiles.map(ConfigurationValue.string)),
                         "sessionEdits": .number(Double(sessionEdits.count)),
-                        "popup": popupWidgetID.map(ConfigurationValue.string) ?? .null,
+                        "popup": widgetScripts.popupWidgetID.map(ConfigurationValue.string) ?? .null,
                         "error": configurationError.map(ConfigurationValue.string) ?? .null,
                         "warning": configurationWarning.map(ConfigurationValue.string) ?? .null].merging(AppVersion().fields) { $1 })
     }
@@ -1192,102 +1034,15 @@ final class BarStore: NSObject {
             layers.append(layer("widgets.\(widget.id).background", WidgetStyle(background: background)))
         }
         for source in configuration.widgets {
-            if let style = scripts[source.id]?.output.widgetStyles?[widget.id] {
+            if let style = widgetScripts.scripts[source.id]?.output.widgetStyles?[widget.id] {
                 layers.append(layer("output.\(source.id).widgetStyles.\(widget.id)", style))
             }
         }
-        if let own = scripts[widget.id]?.output {
+        if let own = widgetScripts.scripts[widget.id]?.output {
             if let style = own.style { layers.append(layer("output.\(widget.id).style", style)) }
             if let color = own.color { layers.append(layer("output.\(widget.id).color", WidgetStyle(foreground: color))) }
         }
         return layers
-    }
-
-    private func commandEnvironment(_ widget: WidgetConfiguration, configuration: Configuration) -> [String: String] {
-        var environment = configuration.environment.merging(widget.environment) { _, widget in widget }
-        environment["NAME"] = widget.id
-        environment["CONFIG_DIR"] = configurationURL.deletingLastPathComponent().path
-        environment["STABLEBAR"] = Bundle.main.executablePath
-        environment["STABLEBAR_CONFIG"] = sharedConfigurationURL.path
-        return environment
-    }
-
-    /// Sends one of StableBar's own events to the widgets and providers that subscribe to it.
-    /// `sender`, the provider whose change sent the event, isn't refreshed: it has the change already,
-    /// and a refresh would restart it.
-    func send(_ event: BuiltInEvent, _ variables: [String: String] = [:], from sender: ScriptWidget? = nil) {
-        refreshScripts(for: event.rawValue, environment: variables, skipping: sender)
-    }
-
-    func refreshScripts(for event: String, environment: [String: String] = [:], skipping sender: ScriptWidget? = nil) {
-        if event == BuiltInEvent.yabai.rawValue { workspaceStore.trigger() }
-        var refreshed = Set<ObjectIdentifier>()
-        if let sender { refreshed.insert(ObjectIdentifier(sender)) }
-        for widget in configuration?.widgets ?? [] where widget.enabled {
-            let providerEvents: [String]
-            if case let .provider(name) = widget.content { providerEvents = configuration!.providers[name]!.events }
-            else { providerEvents = [] }
-            let subscribed = (widget.events + providerEvents).contains(event)
-            if subscribed, let script = scripts[widget.id], refreshed.insert(ObjectIdentifier(script)).inserted {
-                script.refresh(ScriptEvent(sender: event, environment: environment))
-            }
-            for input in configuration!.providerNames(readBy: widget).dropFirst()
-            where subscribed || configuration!.providers[input]!.events.contains(event) {
-                if let script = providers[input], refreshed.insert(ObjectIdentifier(script)).inserted {
-                    script.refresh(ScriptEvent(sender: event, environment: environment))
-                }
-            }
-        }
-    }
-
-    /// Refreshes `widget` and, for a merge, the providers it combines, which hold its data.
-    func refresh(_ widget: WidgetConfiguration, event: ScriptEvent) {
-        scripts[widget.id]?.refresh(event)
-        for input in configuration!.providerNames(readBy: widget).dropFirst() { providers[input]?.refresh(event) }
-    }
-
-    @discardableResult
-    func runAction(_ command: String, widget: WidgetConfiguration,
-                   event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
-        runAction(.command(command), widget: widget, event: event)
-    }
-
-    @discardableResult
-    func runAction(_ action: BlockAction, widget: WidgetConfiguration,
-                   event: ScriptEvent = ScriptEvent(sender: "mouse.clicked")) -> Task<Void, Never> {
-        guard barEditing.allowsWidgetActions else { return Task {} }
-        let id = UUID()
-        let script = scripts[widget.id]
-        let environment = commandEnvironment(widget, configuration: configuration!)
-        let previous = actionTails[widget.id]?.task
-        let task = Task {
-            await previous?.value
-            defer {
-                actions.removeValue(forKey: id)
-                if actionTails[widget.id]?.id == id { actionTails.removeValue(forKey: widget.id) }
-            }
-            do {
-                try Task.checkCancellation()
-                switch action {
-                case let .command(command):
-                    _ = try await runCommand("/bin/zsh", arguments: ["-c", command],
-                                             timeout: widget.timeout, environment: event.commandEnvironment(environment))
-                case let .set(setting):
-                    let value = event.environment["VALUE"]!
-                    try await BlockingWork.run { try setting.set(value) }
-                }
-                if let script, scripts[widget.id] === script {
-                    refresh(widget, event: ScriptEvent(sender: "action", environment: event.environment))
-                }
-                if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
-            } catch {
-                if Task.isCancelled { return }
-                actionErrors[widget.id] = error.localizedDescription
-            }
-        }
-        actions[id] = task
-        actionTails[widget.id] = (id, task)
-        return task
     }
 
     func openConfiguration() {
@@ -1355,42 +1110,12 @@ final class BarStore: NSObject {
         configurationWatcher.stop()
         workspaceStore.stop()
         workspaceStore.dockBadges.isWatching = false
-        for script in scripts.values { script.stop() }
-        for provider in providers.values { provider.stop() }
-        providers.removeAll()
-        scripts.removeAll()
-        for action in actions.values { action.cancel() }
-        actions.removeAll()
-        actionTails.removeAll()
-        for observer in eventObservers { DistributedNotificationCenter.default().removeObserver(observer) }
+        widgetScripts.stop()
         if let reloadObserver { DistributedNotificationCenter.default().removeObserver(reloadObserver) }
         reloadObserver = nil
-        eventObservers.removeAll()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
     }
-}
-
-private func withoutShellVariables(_ environment: [String: String]) -> [String: String] {
-    let shell = shellEnvironment.withLock { $0 }
-    return environment.filter { shell[$0.key] == nil }
-}
-
-/// A distributed notification's payload as JSON. `JSONSerialization` raises an exception on values
-/// JSON can't hold, so dates become ISO 8601 strings and the rest, such as data, is left out.
-func notificationInfo(_ payload: [String: Any]) -> String? {
-    func jsonValue(_ value: Any) -> Any? {
-        switch value {
-        case let date as Date: date.formatted(.iso8601)
-        case let array as [Any]: array.compactMap(jsonValue)
-        case let dictionary as [String: Any]: dictionary.compactMapValues(jsonValue)
-        default: JSONSerialization.isValidJSONObject([value]) ? value : nil
-        }
-    }
-    guard let data = try? JSONSerialization.data(withJSONObject: payload.compactMapValues(jsonValue), options: [.sortedKeys]) else {
-        return nil
-    }
-    return String(decoding: data, as: UTF8.self)
 }
 
 /// One widget's resolved style and presence, observed per widget so one widget's update doesn't
@@ -1481,7 +1206,7 @@ extension BarStore {
         let widgets = configuration?.widgets ?? []
         let names = WidgetDisplayName.names(for: widgets, packageNames: widgetPackageNames, providers: configuration?.providers ?? [:])
         let failures = widgets.compactMap { widget -> String? in
-            guard case let .failed(error) = widgetStatus(for: widget) else { return nil }
+            guard case let .failed(error) = widgetScripts.widgetStatus(for: widget) else { return nil }
             return "Widget \(names[widget.id] ?? widget.id): \(error)"
         }
         let workspaces = if !widgets.contains(where: { $0.content == .workspaces }) { "" }

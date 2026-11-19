@@ -134,14 +134,14 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
     store.reloadConfiguration()
-    let original = try #require(store.scripts["replace"])
+    let original = try #require(store.widgetScripts.scripts["replace"])
     for _ in 0..<100 {
         if original.output.text == "Old" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     try #require(original.output.text == "Old")
     let originalWidget = try #require(store.configuration?.widgets.first)
-    let action = store.runAction("touch \"$STARTED\"; while [ ! -f \"$RELEASE\" ]; do sleep 0.01; done", widget: originalWidget)
+    let action = store.widgetScripts.runAction("touch \"$STARTED\"; while [ ! -f \"$RELEASE\" ]; do sleep 0.01; done", widget: originalWidget)
     for _ in 0..<100 {
         if FileManager.default.fileExists(atPath: started.path) { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -151,7 +151,7 @@ import Testing
     configuration["widgets"] = [widget]
     try JSONSerialization.data(withJSONObject: configuration).write(to: url, options: .atomic)
     store.reloadConfiguration()
-    let replacement = try #require(store.scripts["replace"])
+    let replacement = try #require(store.widgetScripts.scripts["replace"])
     #expect(replacement !== original)
     for _ in 0..<100 {
         if replacement.output.text == "New" { break }
@@ -162,7 +162,7 @@ import Testing
     await action.value
     try await Task.sleep(for: .milliseconds(120))
     #expect(replacement.output.text == "New")
-    #expect(store.actionErrors.isEmpty)
+    #expect(store.widgetScripts.actionErrors.isEmpty)
     #expect(try String(contentsOf: log, encoding: .utf8) == "old\nnew\n")
 }
 
@@ -187,7 +187,7 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["history"])
+    let script = try #require(store.widgetScripts.scripts["history"])
     for _ in 0..<100 {
         if script.output.text == "Ready" { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -204,7 +204,7 @@ import Testing
     try JSONSerialization.data(withJSONObject: ["widgets": [widget]]).write(to: url, options: .atomic)
     store.reloadConfiguration()
     #expect(store.configurationError == nil)
-    #expect(store.scripts["history"] === script)
+    #expect(store.widgetScripts.scripts["history"] === script)
     #expect(script.output.text == "Ready")
     #expect(script.samples == [0.3])
     #expect(script.error == "Offline")
@@ -231,7 +231,7 @@ import Testing
         try? FileManager.default.removeItem(at: directory)
     }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["environment"])
+    let script = try #require(store.widgetScripts.scripts["environment"])
     let bar = "\(try #require(Bundle.main.executablePath))|\(url.path)"
     let startup = "root|widget|environment|\(directory.path)|\(bar)|startup|initial"
     for _ in 0..<100 {
@@ -239,7 +239,7 @@ import Testing
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(script.output.text == startup)
-    store.refreshScripts(for: "custom", environment: [
+    store.widgetScripts.refreshScripts(for: "custom", environment: [
         "SHARED": "event", "NAME": "incorrect", "CONFIG_DIR": "incorrect", "STABLEBAR": "incorrect", "STABLEBAR_CONFIG": "incorrect",
         "SENDER": "incorrect", "INFO": "quoted ' = value"
     ])
@@ -274,7 +274,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         try? FileManager.default.removeItem(at: directory)
     }
     let widgets = try #require(store.configuration?.widgets)
-    let first = store.runAction("""
+    let first = store.widgetScripts.runAction("""
         printf 'begin:first\n' >> "$LOG"
         touch "$STARTED"
         while [ ! -f "$RELEASE" ]; do sleep 0.01; done
@@ -285,9 +285,9 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         try await Task.sleep(for: .milliseconds(20))
     }
     try #require(FileManager.default.fileExists(atPath: started.path))
-    let second = store.runAction("printf 'second\\n' >> \"$LOG\"", widget: widgets[0])
-    let third = store.runAction("printf 'third\\n' >> \"$LOG\"", widget: widgets[0])
-    let other = store.runAction("printf 'other\\n' >> \"$LOG\"", widget: widgets[1])
+    let second = store.widgetScripts.runAction("printf 'second\\n' >> \"$LOG\"", widget: widgets[0])
+    let third = store.widgetScripts.runAction("printf 'third\\n' >> \"$LOG\"", widget: widgets[0])
+    let other = store.widgetScripts.runAction("printf 'other\\n' >> \"$LOG\"", widget: widgets[1])
     await other.value
     #expect(try String(contentsOf: log, encoding: .utf8) == "begin:first\nother\n")
     if stop {
@@ -300,7 +300,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
     await third.value
     let expected = stop ? "begin:first\nother\n" : "begin:first\nother\nend:first\nsecond\nthird\n"
     #expect(try String(contentsOf: log, encoding: .utf8) == expected)
-    #expect(store.actionErrors.isEmpty)
+    #expect(store.widgetScripts.actionErrors.isEmpty)
 }
 
 @Test @MainActor func triggerDataCannotReplaceLoginShellVariables() async throws {
@@ -317,7 +317,7 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         try? FileManager.default.removeItem(at: directory)
     }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["external"])
+    let script = try #require(store.widgetScripts.scripts["external"])
     let home = try #require(shellEnvironment.withLock { $0["HOME"] })
     for _ in 0..<100 {
         if script.output.text == "\(home)|" { break }
@@ -359,13 +359,13 @@ func widgetActionsRunInOrderAndStoppingCancelsQueuedWork(stop: Bool) async throw
         try? FileManager.default.removeItem(at: directory)
     }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["front"])
+    let script = try #require(store.widgetScripts.scripts["front"])
     for _ in 0..<100 {
         if script.output.text == "startup:none" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(script.output.text == "startup:none")
-    store.send(.frontApp, ["INFO": "Safari"])
+    store.widgetScripts.send(.frontApp, ["INFO": "Safari"])
     for _ in 0..<100 {
         if script.output.text == "frontApp:Safari" { break }
         try await Task.sleep(for: .milliseconds(20))

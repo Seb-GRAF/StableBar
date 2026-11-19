@@ -413,7 +413,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.barEditing.screensChanged()
         themeTrial.cancel()
         store.popup.close()
-        store.retainDisplays(Set(NSScreen.screens.map { BarDisplay(screen: $0).id }))
+        store.widgetScripts.retainDisplays(Set(NSScreen.screens.map { BarDisplay(screen: $0).id }))
         store.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         store.refreshContext()
         updatePanels()
@@ -421,24 +421,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func sleeping() {
-        store.setPaused(true, because: .systemAsleep)
+        store.widgetScripts.setPaused(true, because: .systemAsleep)
         store.windowClearance.stop()
         store.menuBarDelay.stop()
         menuBarStrip.stop()
     }
 
     @objc private func woke() {
-        store.setPaused(false, because: .systemAsleep)
+        store.widgetScripts.setPaused(false, because: .systemAsleep)
         screensChanged()
-        store.send(.wake)
+        store.widgetScripts.send(.wake)
     }
 
-    @objc private func screensSlept() { store.setPaused(true, because: .displaysAsleep) }
-    @objc private func screensWoke() { store.setPaused(false, because: .displaysAsleep) }
-    @objc private func screenLocked() { store.setPaused(true, because: .screenLocked) }
-    @objc private func screenUnlocked() { store.setPaused(false, because: .screenLocked) }
-    @objc private func sessionResigned() { store.setPaused(true, because: .sessionInactive) }
-    @objc private func sessionBecameActive() { store.setPaused(false, because: .sessionInactive) }
+    @objc private func screensSlept() { store.widgetScripts.setPaused(true, because: .displaysAsleep) }
+    @objc private func screensWoke() { store.widgetScripts.setPaused(false, because: .displaysAsleep) }
+    @objc private func screenLocked() { store.widgetScripts.setPaused(true, because: .screenLocked) }
+    @objc private func screenUnlocked() { store.widgetScripts.setPaused(false, because: .screenLocked) }
+    @objc private func sessionResigned() { store.widgetScripts.setPaused(true, because: .sessionInactive) }
+    @objc private func sessionBecameActive() { store.widgetScripts.setPaused(false, because: .sessionInactive) }
 
     func clearanceDisplay(frame: CGRect, visibleFrame: CGRect, display: BarDisplay, desktopTop: CGFloat) -> WindowClearanceDisplay? {
         guard let configuration = store.clearanceConfiguration else { return nil }
@@ -460,7 +460,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         if hidden {
             store.popup.close()
-            store.retainDisplays([])
+            store.widgetScripts.retainDisplays([])
         }
         for (index, screen) in screens.enumerated() where !hidden {
             let id = ids[index]
@@ -637,7 +637,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !store.inspectorOpen, let window = barShare.window { window.makeKeyAndOrderFront(nil) } else { showCustomization() }
+        if !store.widgetScripts.inspectorOpen, let window = barShare.window { window.makeKeyAndOrderFront(nil) } else { showCustomization() }
         return false
     }
 

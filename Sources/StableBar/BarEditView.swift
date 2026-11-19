@@ -171,7 +171,7 @@ struct BarEditView: View {
                 Button("OK") { store.barEditing.error = nil }
             } message: { Text(store.barEditing.error ?? "") }
             .onChange(of: Set(entries.map(\.id)), initial: true) { _, ids in
-                store.setVisibleWidgets(ids: ids, displayID: display.id)
+                store.widgetScripts.setVisibleWidgets(ids: ids, displayID: display.id)
             }
         }
     }

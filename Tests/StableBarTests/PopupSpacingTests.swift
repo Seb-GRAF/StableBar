@@ -36,7 +36,7 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     defer { store.stop() }
     let script = ScriptWidget()
     try script.accept(ScriptOutput.read(Data(#"{"text":"Agenda","lists":{"days":[{"name":"Today"},{"name":"Tomorrow"}]}}"#.utf8)))
-    store.scripts["agenda"] = script
+    store.widgetScripts.scripts["agenda"] = script
     let widget = config.widgets[0], popup = try #require(widget.popup)
     let style = popup.baseStyle(widget: widget, defaults: config.popupDefaults.popupStyle(over: config.defaults))
     return NSHostingView(rootView: PopupView(popup: popup, style: style, store: store, widget: widget)).fittingSize.height

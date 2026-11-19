@@ -78,7 +78,7 @@ struct DiagnosticsView: View {
 
     init(editor: ConfigurationEditor) {
         self.editor = editor
-        _needingAttention = State(initialValue: Set((editor.store.configuration?.widgets ?? []).filter { editor.store.widgetStatus(for: $0).needsAttention }.map(\.id)))
+        _needingAttention = State(initialValue: Set((editor.store.configuration?.widgets ?? []).filter { editor.store.widgetScripts.widgetStatus(for: $0).needsAttention }.map(\.id)))
     }
 
     private var store: BarStore { editor.store }
@@ -149,7 +149,7 @@ struct DiagnosticsView: View {
             }
             .tag(DiagnosticsSelection.crashes)
             ForEach(widgets.sorted { needingAttention.contains($0.id) && !needingAttention.contains($1.id) }) { widget in
-                let status = store.widgetStatus(for: widget)
+                let status = store.widgetScripts.widgetStatus(for: widget)
                 Label {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(names[widget.id]!).foregroundStyle(.primary)
@@ -167,7 +167,7 @@ struct DiagnosticsView: View {
     }
 
     private var overview: some View {
-        let attention = widgets.filter { store.widgetStatus(for: $0).needsAttention }
+        let attention = widgets.filter { store.widgetScripts.widgetStatus(for: $0).needsAttention }
         return Form {
             Section {
                 LabeledContent("Widgets", value: String(widgets.count))
@@ -188,7 +188,7 @@ struct DiagnosticsView: View {
             if !attention.isEmpty {
                 Section {
                     ForEach(attention) { widget in
-                        let status = store.widgetStatus(for: widget)
+                        let status = store.widgetScripts.widgetStatus(for: widget)
                         Button { editor.diagnosticSelection = .widget(widget.id) } label: {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Circle().fill(status.color).frame(width: 8, height: 8)
@@ -247,8 +247,8 @@ struct DiagnosticsView: View {
     }
 
     private func details(_ widget: WidgetConfiguration) -> some View {
-        let status = store.widgetStatus(for: widget)
-        let script = store.scripts[widget.id]
+        let status = store.widgetScripts.widgetStatus(for: widget)
+        let script = store.widgetScripts.scripts[widget.id]
         return Form {
             Section {
                 Text(status.detail).textSelection(.enabled)
@@ -262,19 +262,19 @@ struct DiagnosticsView: View {
                 }
                 if let script, widget.enabled {
                     HStack {
-                        if store.inspectedWidgetID == widget.id {
+                        if store.widgetScripts.inspectedWidgetID == widget.id {
                             Button("Stop testing") {
-                                store.setInspectedWidget(nil)
+                                store.widgetScripts.setInspectedWidget(nil)
                                 notice = "Testing ended. This source follows its normal visibility settings again."
                             }
                         } else if script.diagnostics.suspended {
                             Button("Resume for testing") {
-                                store.setInspectedWidget(widget.id)
+                                store.widgetScripts.setInspectedWidget(widget.id)
                                 notice = "This source will stay active until you leave this widget or stop testing."
                             }
                         }
                         Button(refreshTitle(widget)) {
-                            store.refresh(widget, event: ScriptEvent(sender: "manual"))
+                            store.widgetScripts.refresh(widget, event: ScriptEvent(sender: "manual"))
                             notice = continuous(widget) ? "Connection restart requested." : "Refresh requested."
                         }
                         .disabled(script.diagnostics.suspended)
@@ -330,12 +330,12 @@ struct DiagnosticsView: View {
                 if let action = script?.output.onClick ?? widget.onClick {
                     Button(actionTask != nil ? "Running click action…" : "Test click action") {
                         let id = widget.id
-                        let action = store.runAction(action, widget: widget)
+                        let action = store.widgetScripts.runAction(action, widget: widget)
                         actionTask = Task {
                             await action.value
                             if Task.isCancelled { return }
                             actionTask = nil
-                            notice = store.actionErrors[id] ?? "Click action completed."
+                            notice = store.widgetScripts.actionErrors[id] ?? "Click action completed."
                         }
                     }
                     .disabled(actionTask != nil || !store.barEditing.allowsWidgetActions)
@@ -343,7 +343,7 @@ struct DiagnosticsView: View {
                 }
                 TextField("Event name", text: $event)
                 Button("Broadcast event to subscribers") {
-                    store.refreshScripts(for: event)
+                    store.widgetScripts.refreshScripts(for: event)
                     notice = "Broadcast “\(event)” to all subscribed widgets and data sources."
                 }
                 .disabled(event.isEmpty)
@@ -393,7 +393,7 @@ struct DiagnosticsView: View {
     }
 
     private func refreshTitle(_ widget: WidgetConfiguration) -> String {
-        if store.scripts[widget.id]?.error != nil { return "Retry now" }
+        if store.widgetScripts.scripts[widget.id]?.error != nil { return "Retry now" }
         return continuous(widget) ? "Restart connection" : "Refresh data"
     }
 
@@ -428,7 +428,7 @@ struct DiagnosticsView: View {
     }
 
     private func clearSelection() {
-        store.setInspectedWidget(nil)
+        store.widgetScripts.setInspectedWidget(nil)
         snapshotTask?.cancel()
         snapshotTask = nil
         snapshot = nil

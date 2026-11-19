@@ -293,7 +293,7 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     #expect(cpu["source"] == .object(["provider": .string("system"), "type": .string("system"), "push": .bool(true),
                                       "events": .array([])]))
     source.emit?(.output(.success(ScriptOutput(text: "from the fake"))))
-    try await awaitCondition { store.scripts["cpu"]?.output.text == "from the fake" }
+    try await awaitCondition { store.widgetScripts.scripts["cpu"]?.output.text == "from the fake" }
 }
 
 @Test @MainActor func aNativeReadingSetsItsOwnNextInterval() async throws {
@@ -381,31 +381,31 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     """#.utf8))
     let widget = store.configuration!.widgets[0]
     let script = ScriptWidget()
-    store.scripts[widget.id] = script
-    #expect(store.widgetStatus(for: widget) == .starting)
+    store.widgetScripts.scripts[widget.id] = script
+    #expect(store.widgetScripts.widgetStatus(for: widget) == .starting)
     try script.accept(ScriptOutput(text: "No calendar access", fields: ["access": "denied"]))
     #expect(script.error == nil)
-    #expect(store.widgetStatus(for: widget) == .accessNeeded(.calendars))
-    #expect(store.widgetStatus(for: widget).needsAttention)
+    #expect(store.widgetScripts.widgetStatus(for: widget) == .accessNeeded(.calendars))
+    #expect(store.widgetScripts.widgetStatus(for: widget).needsAttention)
     try script.accept(ScriptOutput(text: "No meetings", fields: ["access": "granted"]))
-    #expect(store.widgetStatus(for: widget) == .working)
+    #expect(store.widgetScripts.widgetStatus(for: widget) == .working)
     script.error = "Calendar unavailable"
-    #expect(store.widgetStatus(for: widget) == .failed("Calendar unavailable"))
-    store.actionErrors[widget.id] = "Meeting link failed"
-    #expect(store.widgetStatus(for: widget) == .failed("Click action: Meeting link failed"))
+    #expect(store.widgetScripts.widgetStatus(for: widget) == .failed("Calendar unavailable"))
+    store.widgetScripts.actionErrors[widget.id] = "Meeting link failed"
+    #expect(store.widgetScripts.widgetStatus(for: widget) == .failed("Click action: Meeting link failed"))
     let power = store.configuration!.widgets[1]
     let disabled = store.configuration!.widgets[2]
     let battery = ScriptWidget()
-    store.scripts[power.id] = battery
+    store.widgetScripts.scripts[power.id] = battery
     try battery.accept(ScriptOutput(text: "80%"))
     battery.diagnostics.running = true
-    #expect(store.widgetStatus(for: power) == .connected)
+    #expect(store.widgetScripts.widgetStatus(for: power) == .connected)
     battery.diagnostics.running = false
     battery.diagnostics.suspended = true
-    #expect(store.widgetStatus(for: power) == .paused)
-    store.actionErrors[disabled.id] = "An earlier error"
-    #expect(store.widgetStatus(for: disabled) == .disabled)
-    #expect(!store.widgetStatus(for: disabled).needsAttention)
+    #expect(store.widgetScripts.widgetStatus(for: power) == .paused)
+    store.widgetScripts.actionErrors[disabled.id] = "An earlier error"
+    #expect(store.widgetScripts.widgetStatus(for: disabled) == .disabled)
+    #expect(!store.widgetScripts.widgetStatus(for: disabled).needsAttention)
 }
 
 @Test @MainActor func aProviderWhoseTypeIsNotRegisteredReportsAnError() {
@@ -568,10 +568,10 @@ private extension DataSourceRegistry {
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
     store.reloadConfiguration()
-    let power = try #require(store.scripts["power"])
+    let power = try #require(store.widgetScripts.scripts["power"])
     #expect(power.diagnostics.suspended)
     #expect(!monitor.listening)
-    store.setVisibleWidgets(ids: ["power"], displayID: 1)
+    store.widgetScripts.setVisibleWidgets(ids: ["power"], displayID: 1)
     try await awaitCondition { power.output.text == "80%" && monitor.listening }
     monitor.change(to: ScriptOutput(text: "79%", value: 0.79))
     try await awaitCondition { power.output.text == "79%" }
@@ -582,14 +582,14 @@ private extension DataSourceRegistry {
     #expect(power.diagnostics.executionCount == 1)
     #expect(power.diagnostics.nextDelay == nil)
     #expect(power.samples == [0.8, 0.79])
-    store.setPaused(true, because: .systemAsleep)
+    store.widgetScripts.setPaused(true, because: .systemAsleep)
     #expect(!monitor.listening)
-    store.setPaused(false, because: .systemAsleep)
+    store.widgetScripts.setPaused(false, because: .systemAsleep)
     try await awaitCondition { monitor.listening }
     #expect(power.output.text == "79%")
     try store.applyEdits([ConfigurationEdit(action: .set, id: "power", properties: ["enabled": .bool(false)])], persist: false)
     #expect(!monitor.listening)
-    #expect(store.providers.isEmpty)
+    #expect(store.widgetScripts.providers.isEmpty)
 }
 
 @Test @MainActor func aMergeShowsEachTemporaryOutputItsInputsAccept() async throws {
@@ -607,22 +607,22 @@ private extension DataSourceRegistry {
     })
     defer { store.stop() }
     store.reloadConfiguration()
-    let status = try #require(store.scripts["status"])
+    let status = try #require(store.widgetScripts.scripts["status"])
     try await awaitCondition { status.output.fields?["saver.text"] == "Saved" }
     let presentation = try #require(store.presentations["status"])
     let clock = TestClock()
     presentation.clock = clock
-    store.refreshScripts(for: "tick")
+    store.widgetScripts.refreshScripts(for: "tick")
     try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
     try await clock.waitForSleepers()
     clock.advance(by: .seconds(1))
     try await awaitCondition { presentation.temporaryFields == nil }
-    store.refreshScripts(for: "tick")
+    store.widgetScripts.refreshScripts(for: "tick")
     try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saved"] }
     try await clock.waitForSleepers()
     clock.advance(by: .seconds(1))
     try await awaitCondition { presentation.temporaryFields == nil }
-    let saver = try #require(store.providers["saver"])
+    let saver = try #require(store.widgetScripts.providers["saver"])
     try saver.accept(ScriptOutput(text: "Saving", temporary: TemporaryOutput(fields: ["note": "Saving"], duration: 1)))
     try saver.accept(ScriptOutput(text: "Saved"))
     try await awaitCondition { presentation.temporaryFields == ["saver.note": "Saving"] }
@@ -654,15 +654,15 @@ private extension DataSourceRegistry {
         })
     defer { store.stop() }
     store.reloadConfiguration()
-    #expect(Set(store.providers.keys) == ["power", "sound", "meetings", "status"])
-    #expect(store.scripts["volume"] === store.providers["sound"])
-    let status = try #require(store.scripts["status"])
+    #expect(Set(store.widgetScripts.providers.keys) == ["power", "sound", "meetings", "status"])
+    #expect(store.widgetScripts.scripts["volume"] === store.widgetScripts.providers["sound"])
+    let status = try #require(store.widgetScripts.scripts["status"])
     try await awaitCondition { status.output.values?["sound.volume"] == 0.5 && status.output.fields?["meetings.access"] == "denied" }
     #expect(status.output.text.isEmpty)
     #expect(status.output.fields?["sound.device"] == "Speakers")
-    #expect(store.widgetStatus(for: store.configuration!.widgets[0]) == .accessNeeded(.calendars))
-    #expect(store.providers["power"]?.diagnostics.suspended == true)
-    store.setVisibleWidgets(ids: ["status"], displayID: 1)
+    #expect(store.widgetScripts.widgetStatus(for: store.configuration!.widgets[0]) == .accessNeeded(.calendars))
+    #expect(store.widgetScripts.providers["power"]?.diagnostics.suspended == true)
+    store.widgetScripts.setVisibleWidgets(ids: ["status"], displayID: 1)
     try await awaitCondition { status.output.values?["power.percent"] == 0.8 }
     #expect(status.output.fields?["power.text"] == "80%")
     #expect(status.output.fields?["power.icon"] == "battery.75percent")
@@ -687,13 +687,13 @@ private extension DataSourceRegistry {
     try await awaitCondition { status.output.values?["power.percent"] == 0.11 }
     #expect(presentation.temporaryFields == nil, "Another input's change doesn't show the volume again")
     let reads = Int(status.output.fields!["meetings.reads"]!)!
-    store.refreshScripts(for: "tick")
+    store.widgetScripts.refreshScripts(for: "tick")
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 1) }
-    store.refresh(store.configuration!.widgets[0], event: ScriptEvent(sender: "manual"))
+    store.widgetScripts.refresh(store.configuration!.widgets[0], event: ScriptEvent(sender: "manual"))
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 2) }
-    store.refreshScripts(for: "repaint")
+    store.widgetScripts.refreshScripts(for: "repaint")
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 3) }
-    await store.runAction("true", widget: store.configuration!.widgets[0]).value
+    await store.widgetScripts.runAction("true", widget: store.configuration!.widgets[0]).value
     try await awaitCondition { status.output.fields?["meetings.reads"] == String(reads + 4) }
 }
 
@@ -775,16 +775,16 @@ private func battery(_ state: String) -> ScriptOutput {
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
     store.reloadConfiguration()
-    let notice = try #require(store.scripts["notice"])
-    try await awaitCondition { notice.output.text == "none" && store.providers["battery"]?.diagnostics.lastUpdated != nil }
-    #expect(store.scripts["battery"] == nil)
+    let notice = try #require(store.widgetScripts.scripts["notice"])
+    try await awaitCondition { notice.output.text == "none" && store.widgetScripts.providers["battery"]?.diagnostics.lastUpdated != nil }
+    #expect(store.widgetScripts.scripts["battery"] == nil)
     monitor.change(to: battery("battery"))
     try await awaitCondition { notice.output.text == "battery" }
     monitor.change(to: battery("charged"))
     try await awaitCondition { notice.output.text == "ac" }
     try store.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["events": .array([])])], persist: false)
     #expect(!monitor.listening)
-    #expect(store.providers.isEmpty)
+    #expect(store.widgetScripts.providers.isEmpty)
 }
 
 @Test @MainActor func aProviderNamedAfterABuiltInSourceKeepsThatSourceFromStarting() async throws {
@@ -800,12 +800,12 @@ private func battery(_ state: String) -> ScriptOutput {
     defer { store.stop() }
     store.reloadConfiguration()
     #expect(store.configurationError == nil)
-    let notice = try #require(store.scripts["notice"])
-    try await awaitCondition { notice.output.text == "none" && store.scripts["helper"]?.output.text == "helper" }
-    store.refreshScripts(for: "powerSourceChange", environment: ["INFO": "battery"])
+    let notice = try #require(store.widgetScripts.scripts["notice"])
+    try await awaitCondition { notice.output.text == "none" && store.widgetScripts.scripts["helper"]?.output.text == "helper" }
+    store.widgetScripts.refreshScripts(for: "powerSourceChange", environment: ["INFO": "battery"])
     try await awaitCondition { notice.output.text == "battery" }
     #expect(sources.made.isEmpty)
-    #expect(Array(store.providers.keys) == ["battery"])
+    #expect(Array(store.widgetScripts.providers.keys) == ["battery"])
 }
 
 @Test @MainActor func aProviderWhoseEventsAreSubscribedIgnoresWhenVisible() async throws {
@@ -820,9 +820,9 @@ private func battery(_ state: String) -> ScriptOutput {
     defer { store.stop() }
     store.reloadConfiguration()
     try await awaitCondition { monitor.listening }
-    #expect(store.scripts["power"]?.diagnostics.suspended == false)
+    #expect(store.widgetScripts.scripts["power"]?.diagnostics.suspended == false)
     try store.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["enabled": .bool(false)])], persist: false)
-    #expect(store.scripts["power"]?.diagnostics.suspended == true)
+    #expect(store.widgetScripts.scripts["power"]?.diagnostics.suspended == true)
     #expect(!monitor.listening)
 }
 
@@ -837,8 +837,8 @@ private func battery(_ state: String) -> ScriptOutput {
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in sources.make() })
     defer { store.stop() }
     store.reloadConfiguration()
-    let power = try #require(store.scripts["power"])
-    let notice = try #require(store.scripts["notice"])
+    let power = try #require(store.widgetScripts.scripts["power"])
+    let notice = try #require(store.widgetScripts.scripts["notice"])
     try await awaitCondition { sources.made.first?.emit != nil && notice.output.text == "none" }
     let source = try #require(sources.made.first)
     source.emit?(.output(.success(battery("charging"))))
@@ -1052,8 +1052,8 @@ private struct RelayProbe {
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("audio") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
     store.reloadConfiguration()
-    let volume = try #require(store.scripts["volume"])
-    try await awaitCondition { volume.output.text == "start" && store.providers["audio"]?.diagnostics.lastUpdated != nil }
+    let volume = try #require(store.widgetScripts.scripts["volume"])
+    try await awaitCondition { volume.output.text == "start" && store.widgetScripts.providers["audio"]?.diagnostics.lastUpdated != nil }
     for level in 51...80 { monitor.change(to: audio(Double(level) / 100)) }
     try await awaitCondition { volume.output.text == "80" }
     #expect(volume.diagnostics.executionCount <= 3)

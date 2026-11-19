@@ -324,8 +324,8 @@ final class ThemeGalleryTests: XCTestCase {
             XCTAssertTrue(preview.light.widgets.isEmpty)
             XCTAssertTrue(preview.dark.providers.isEmpty)
         }
-        XCTAssertTrue(store.scripts.isEmpty)
-        XCTAssertTrue(store.providers.isEmpty)
+        XCTAssertTrue(store.widgetScripts.scripts.isEmpty)
+        XCTAssertTrue(store.widgetScripts.providers.isEmpty)
         XCTAssertFalse(store.workspaceStore.isRunning)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
     }
