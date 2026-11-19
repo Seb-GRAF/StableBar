@@ -19,6 +19,8 @@ final class BarLinkCandidate {
     /// The link's look, checked as a theme link and kept in a temporary folder until it's used.
     let look: ThemeLinkCandidate
     let preview: ThemePreview
+    /// The fonts the look names that this Mac doesn't have, which the bar shows in the system font.
+    let missingFonts: [String]
     private let builtIns: [WidgetConfiguration]
     /// The Store's entry and files for each package the Store lists, once they have loaded.
     private(set) var entries: [(entry: PackageIndex.Entry, inspection: WidgetPackageInspection)]?
@@ -52,6 +54,14 @@ final class BarLinkCandidate {
         do {
             preview = try ThemePreview(choice: look.choice, themesDirectory: store.themesDirectory)
             builtIns = try link.widgets.map { try ConfigurationValue.object($0).decoded(WidgetConfiguration.self) }
+            let families = NSFontManager.shared.availableFontFamilies
+            let values = configurationValues(try JSONDecoder().decode(ConfigurationValue.self, from: link.theme.configuration))
+            missingFonts = Set(values.compactMap { path, value in
+                // A reference names a token or setting, not a font; a face name such as Menlo-Bold works too.
+                guard path.hasSuffix(".fontName"), case let .string(name) = value, name != "system", !name.hasPrefix("@"),
+                      !families.contains(name), NSFont(name: name, size: 13) == nil else { return nil }
+                return name
+            }).sorted()
         } catch {
             look.discard()
             throw error
