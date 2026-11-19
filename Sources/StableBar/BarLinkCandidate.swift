@@ -220,12 +220,19 @@ final class BarLinkCandidate {
         }
     }
 
-    /// Installs the chosen Store packages that need no review. False when some do: they're then `reviews`, and `action`
-    /// goes on once the review adds them.
+    /// Installs the chosen Store packages that need no review, and takes a version already installed from the Store as
+    /// it is, with the link's settings over the bar's. False when some need a review: they're then `reviews`, and
+    /// `action` goes on once the review adds them.
     private func installPackages(in store: BarStore, then action: Action) async throws -> Bool {
+        let packages = store.packageStoreClient.packages
         var reviews: [WidgetPackageInspection] = []
         for (entry, inspection) in chosenEntries where installed[entry.id] == nil {
-            if inspection.requiresReview {
+            let record = try packages.record(id: entry.id)
+            if FileManager.default.fileExists(atPath: try packages.directory(id: entry.id, version: entry.version).path), let record,
+               record.source == PackageSource.storeID, !record.isLocal(version: entry.version) {
+                let saved = try WidgetSetup(store: store).savedSettings(for: inspection.manifest)
+                installed[entry.id] = (inspection, saved.merging(settings(for: inspection.manifest)) { $1 })
+            } else if inspection.requiresReview {
                 reviews.append(inspection)
             } else {
                 let inspection = try await store.packageStoreClient.installWithoutReview(entry)
@@ -271,12 +278,17 @@ final class BarLinkCandidate {
             ]))
             ids.formUnion(inspection.widgets.map(\.id))
         }
+        // The link's groups come with its look, so without it a widget keeps only a group this bar has.
+        func grouped(_ properties: [String: ConfigurationValue]) -> [String: ConfigurationValue] {
+            guard !appliesLook, case let .string(group)? = properties["group"], store.configuration?.groups[group] == nil else { return properties }
+            return properties.filter { $0.key != "group" }
+        }
         for (widget, builtIn) in zip(link.widgets, builtIns) where !unticked.contains(builtIn.id) {
-            edits.append(ConfigurationEdit(action: .add, properties: widget))
+            edits.append(ConfigurationEdit(action: .add, properties: grouped(widget)))
         }
         // An unticked widget of a package another widget needs comes with the package, hidden.
         for (id, properties) in link.widgetOverrides.sorted(by: { $0.key < $1.key }) where ids.contains(id) {
-            edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : properties))
+            edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : grouped(properties)))
         }
         edits.append(ConfigurationEdit(action: .reorder, ids: link.widgetOrder.filter { ids.contains($0) && !unticked.contains($0) }))
         return edits
