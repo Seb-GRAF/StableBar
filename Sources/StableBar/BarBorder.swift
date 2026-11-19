@@ -9,7 +9,7 @@ struct BarSurface: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
-        let style = store.barStyle(on: kind)
+        let style = store.barPresentation.barStyle(on: kind)
         content
             .clipShape(RoundedRectangle(cornerRadius: max(0, style.cornerRadius ?? 0)))
             .modifier(GlassBackground(fill: style.background ?? settings.background, glass: settings.glass, surface: \.bar,

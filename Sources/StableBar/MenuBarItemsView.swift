@@ -14,7 +14,7 @@ struct MenuBarItemsView: View {
 
     var body: some View {
         let shown = widget.shownMenuBarItems
-        let openAnchor = store.presentations[widget.id]?.popupAnchor
+        let openAnchor = store.barPresentation.presentations[widget.id]?.popupAnchor
         HStack(spacing: 0) {
             ForEach(Array(shown.enumerated()), id: \.offset) { position, entry in
                 switch entry {
@@ -73,7 +73,7 @@ struct MenuBarItemsView: View {
     }
 
     private func switches(to anchor: NSView) -> Bool {
-        let openAnchor = store.presentations[widget.id]?.popupAnchor
+        let openAnchor = store.barPresentation.presentations[widget.id]?.popupAnchor
         return openAnchor != nil && openAnchor != ObjectIdentifier(anchor) && store.popup.pinned
     }
 

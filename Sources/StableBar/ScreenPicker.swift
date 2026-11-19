@@ -216,7 +216,7 @@ private struct ScreenThumbnail: View {
                         }
                         .padding(.horizontal, 2)
                         .frame(height: 8)
-                        .background(barColor, in: RoundedRectangle(cornerRadius: min(3, store.barStyle(on: kind).cornerRadius ?? 0)))
+                        .background(barColor, in: RoundedRectangle(cornerRadius: min(3, store.barPresentation.barStyle(on: kind).cornerRadius ?? 0)))
                         .padding(2)
                     }
                     .overlay(alignment: .top) {
@@ -286,7 +286,7 @@ private struct ScreenThumbnail: View {
     }
 
     private var barColor: AnyShapeStyle {
-        (store.barStyle(on: kind).background ?? store.configuration?.onScreen(kind).bar.background)?.shapeStyle ?? AnyShapeStyle(Color.clear)
+        (store.barPresentation.barStyle(on: kind).background ?? store.configuration?.onScreen(kind).bar.background)?.shapeStyle ?? AnyShapeStyle(Color.clear)
     }
 
     private func color(_ widget: WidgetConfiguration) -> Color {

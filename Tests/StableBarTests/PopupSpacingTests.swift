@@ -142,7 +142,7 @@ private func padding(_ style: WidgetStyle) -> [Double?] {
     let popup = WidgetPopup(present: { panel, _ in presented = panel })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)

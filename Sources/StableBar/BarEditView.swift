@@ -42,7 +42,7 @@ struct BarEditView: View {
             }, groups: config.groups)
             let dragging = editing.dragSession.active != nil
             let named = dragging && editing.insertion?.displayID == display.id ? editing.insertion?.position : nil
-            let surface = BarEditSurface(barStyle: store.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme)
+            let surface = BarEditSurface(barStyle: store.barPresentation.barStyle(on: ScreenKind(display)), look: BarEditLook(config), colorScheme: colorScheme)
             GeometryReader { proxy in
                 let height = proxy.size.height / scale
                 let layout = layout(units: units, width: proxy.size.width / scale, height: height, config: config)
@@ -477,7 +477,7 @@ struct BarEditTile: View {
     }
 
     private var tile: some View {
-        let surface = BarEditSurface(barStyle: store.barStyle(on: kind), look: look, colorScheme: colorScheme)
+        let surface = BarEditSurface(barStyle: store.barPresentation.barStyle(on: kind), look: look, colorScheme: colorScheme)
         return Button { editing.select(entry.id) } label: {
             Group {
                 if entry.usesPlaceholder {

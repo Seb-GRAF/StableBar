@@ -116,7 +116,7 @@ final class BarEditing {
 
     func visibility(of widget: WidgetConfiguration, on display: BarDisplay) -> BarWidgetVisibility {
         guard let store else { return BarWidgetVisibility(reasons: []) }
-        let presentation = store.presentations[widget.id]
+        let presentation = store.barPresentation.presentations[widget.id]
         // The bar reads this while laying out every widget, so it observes `layout`, never `workspaces`.
         let layout = store.workspaceStore.layout
         var reasons: [BarWidgetVisibility.Reason] = []
@@ -152,7 +152,7 @@ final class BarEditing {
         let names = names
         return widgets.map { widget in
             let visibility = visibility(of: widget, on: display)
-            let transparent = store.presentations[widget.id]?.style(on: ScreenKind(display)).base.opacity == 0
+            let transparent = store.barPresentation.presentations[widget.id]?.style(on: ScreenKind(display)).base.opacity == 0
             return BarEditWidget(widget: widget, name: names[widget.id] ?? widget.id, visibility: visibility,
                                  usesPlaceholder: visibility.isHidden || !hasContent(widget) || transparent)
         }
@@ -160,7 +160,7 @@ final class BarEditing {
 
     func hasContent(_ widget: WidgetConfiguration) -> Bool {
         guard let store else { return false }
-        let label = store.label(for: widget).overlaid(by: store.presentations[widget.id]?.temporaryFields)
+        let label = store.label(for: widget).overlaid(by: store.barPresentation.presentations[widget.id]?.temporaryFields)
         let output = store.widgetScripts.scripts[widget.id]?.output
         let layout = widget.layout ?? widget.defaultLayout(label, output: output,
                                                            appIcon: widget.content == .activeApp && store.activeApp?.icon != nil,

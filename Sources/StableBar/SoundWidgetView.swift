@@ -29,7 +29,7 @@ struct SoundWidgetView: View {
 
     var body: some View {
         let volume = store.widgetScripts.scripts[widget.id]?.output.values?["volume"]
-        let expanded = volume != nil && (barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true))
+        let expanded = volume != nil && (barExpansion.map { $0 == .granted } ?? (store.barPresentation.presentations[widget.id]?.expandedDisplays.contains(monitor) == true))
         let appearance = WidgetAppearance(style.inherited, defaults: WidgetStyle())
         Group {
             if volume != nil {
@@ -54,7 +54,7 @@ struct SoundWidgetView: View {
 
     private func expand(_ open: Bool) {
         guard !measuring, moreWidgetsAnchor == nil else { return }
-        store.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
+        store.barPresentation.presentations[widget.id]?.setExpanded(open, on: monitor, animation: reduceMotion ? nil : motion.animation)
     }
 }
 

@@ -46,7 +46,7 @@ struct WidgetView: View {
     @Environment(\.macOSVersion) private var macOSVersion
 
     private var resolution: ResolvedWidgetStyle {
-        store.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
+        store.barPresentation.presentations[widget.id]?.style(on: screenKind) ?? ResolvedWidgetStyle(base: resolveStyle([defaults, widget.barStyle]))
     }
 
     private var clickAnchor: NSView { moreWidgetsAnchor ?? popupAnchor }
@@ -156,7 +156,7 @@ struct WidgetView: View {
     /// What VoiceOver reads after the widget's name: the text it shows at `date`, or the latest value of a graph shown
     /// without text.
     private func accessibilityValue(date: Date) -> String {
-        let text = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields).text
+        let text = store.label(for: widget, date: date).overlaid(by: store.barPresentation.presentations[widget.id]?.temporaryFields).text
         guard text.isEmpty, let value = store.widgetScripts.scripts[widget.id]?.output.value else { return text }
         return value.formatted(.percent.precision(.fractionLength(0)))
     }
@@ -202,7 +202,7 @@ struct WidgetView: View {
         let output = store.widgetScripts.scripts[widget.id]?.output
         let tooltip = store.widgetScripts.scripts[widget.id]?.error ?? widget.tooltip ?? output?.tooltip
         let resolution = self.resolution
-        let isOpen = store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor)
+        let isOpen = store.barPresentation.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor)
         let style = resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: isOpen)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let animation = output?.animation ?? widget.animation ?? defaultAnimation
@@ -382,13 +382,13 @@ struct WidgetView: View {
             let expands = expandOnHover && moreWidgetsAnchor == nil
             let appearance = WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle())
             AppMenuView(appMenu: store.appMenu, items: store.appMenu.items, expandOnHover: expands, hovering: hovered,
-                        expanded: barExpansion.map { $0 == .granted } ?? (store.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
+                        expanded: barExpansion.map { $0 == .granted } ?? (store.barPresentation.presentations[widget.id]?.expandedDisplays.contains(monitor) == true),
                         displayMode: displayMode, appIcon: store.appMenu.menuOwnerIcon,
                         appearance: appearance, padding: padding,
-                        openAnchor: store.presentations[widget.id]?.popupAnchor, open: openAppMenu,
+                        openAnchor: store.barPresentation.presentations[widget.id]?.popupAnchor, open: openAppMenu,
                         requestAccess: store.windowClearance.requestAccess, expansionChanged: { expanded in
                 if !measuring && expands {
-                    store.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
+                    store.barPresentation.presentations[widget.id]?.setExpanded(expanded, on: monitor, animation: reduceMotion ? nil : motion.animation)
                 }
             }, openOverflow: openAppMenus)
             .onChange(of: barExpansion == .cramped && hovered) { _, cramped in
@@ -403,7 +403,7 @@ struct WidgetView: View {
                     .padding(padding)
             } else if click == .menu, store.appMenu.isTrusted, let appleMenu = store.appMenu.appleMenu {
                 AppMenuView(appMenu: store.appMenu, items: [appleMenu], isAppleMenu: true, appleLogo: logo,
-                            appearance: appearance, padding: padding, openAnchor: store.presentations[widget.id]?.popupAnchor,
+                            appearance: appearance, padding: padding, openAnchor: store.barPresentation.presentations[widget.id]?.popupAnchor,
                             open: openAppMenu, requestAccess: store.windowClearance.requestAccess)
             } else {
                 AppleLogoButton(logo: logo, appearance: appearance, padding: padding, label: click.title,
@@ -514,7 +514,7 @@ struct WidgetBlocks: View {
 
     var body: some View {
         let script = store.widgetScripts.scripts[widget.id]
-        let label = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields)
+        let label = store.label(for: widget, date: date).overlaid(by: store.barPresentation.presentations[widget.id]?.temporaryFields)
         let appIcon = widget.content == .activeApp ? store.activeApp?.icon : nil
         let providerType = store.configuration?.providerType(of: widget)
         if let layout = block ?? widget.layout ?? widget.defaultLayout(label, output: script?.output, appIcon: appIcon != nil, providerType: providerType) {
@@ -560,7 +560,7 @@ private struct AppMenuRow: View {
         AppMenuView(appMenu: store.appMenu, items: store.appMenu.items,
                     displayMode: widget.appMenuDisplayMode, appIcon: store.appMenu.menuOwnerIcon,
                     appearance: appearance, padding: padding,
-                    openAnchor: store.presentations[widget.id]?.innerPopupAnchor, open: { item, anchor in
+                    openAnchor: store.barPresentation.presentations[widget.id]?.innerPopupAnchor, open: { item, anchor in
             guard let popup = store.appMenu.popup(for: item) else { return }
             store.innerPopup.toggle(popup, widget: widget, defaults: defaults, store: store, anchor: anchor)
         }, requestAccess: store.windowClearance.requestAccess)

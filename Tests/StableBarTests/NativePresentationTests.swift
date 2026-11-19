@@ -640,7 +640,7 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
         if sharedStore == nil {
             store.configuration = configuration
             store.workspaceStore.workspaces = workspaces
-            store.preparePresentations()
+            store.barPresentation.preparePresentations()
         }
         let geometry = configuration.barGeometry(for: display)
         let top = (NSScreen.main?.frame.maxY ?? 900) - 40

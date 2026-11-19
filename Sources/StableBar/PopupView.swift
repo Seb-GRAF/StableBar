@@ -14,7 +14,7 @@ struct PopupView: View {
         let roles = store.configuration?.look(on: screenKind).roles ?? [:]
         guard style.usesModeStates || popup.usesModeStates(roles: roles)
             || store.widgetScripts.scripts[widget.id]?.output.styles?.values.contains(where: \.usesModeStates) == true else { return ModePresentation() }
-        return store.modePresentation(on: screenKind)
+        return store.barPresentation.modePresentation(on: screenKind)
     }
 
     var presentationStyle: WidgetStyle { style.resolved(for: StyleStates(mode: mode)) }
@@ -84,7 +84,7 @@ struct PopupView: View {
                                 store.innerPopup.showTooltip(title, widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults),
                                                              store: store, anchor: anchor)
                             }
-                        }, menuBarItemAnchor: store.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
+                        }, menuBarItemAnchor: store.barPresentation.presentations[widget.id]?.innerPopupAnchor, placeMenuBarItem: { item, placement in
                             store.popup.close()
                             store.move(.item(item), to: placement, before: nil, in: widget)
                         }, states: states, update: store.update) { action, environment in

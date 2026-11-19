@@ -304,7 +304,7 @@ final class WidgetPopup {
         parentPopup = window as? PopupPanel
         let frame = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let edge = popupAttachmentEdge(anchor: frame, window: window.frame, geometry: (window as? BarPanel)?.barGeometry, position: bar.position)
-        let style = tooltipStyle(defaults: defaults, widget: widgetStyle, states: StyleStates(mode: store.modePresentation(on: kind)),
+        let style = tooltipStyle(defaults: defaults, widget: widgetStyle, states: StyleStates(mode: store.barPresentation.modePresentation(on: kind)),
                                  sidePadding: sidePadding)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
         let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)

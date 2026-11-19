@@ -21,7 +21,7 @@ private func swiftSources() throws -> [(path: String, text: String)] {
 @Test @MainActor func barStoreGainsNoStoredState() {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
     let stored = Mirror(reflecting: store).children.count
-    #expect(stored <= 59, "BarStore has \(stored) stored properties: put new state in a type of its own (AGENTS.md)")
+    #expect(stored <= 57, "BarStore has \(stored) stored properties: put new state in a type of its own (AGENTS.md)")
 }
 
 /// A view or a task can keep a helper alive after the `BarStore` it points back at is gone, so references back to it
