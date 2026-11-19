@@ -7,7 +7,7 @@ import SwiftUI
 /// it, as the account the tooltip names; otherwise the click opens the repository, where people press Star themselves.
 @MainActor @Observable
 final class StarRequest {
-    nonisolated static let repositoryPath = "Seb-GRAF/StableBar"
+    nonisolated static let repositoryPath = "stablebox/StableBar"
     nonisolated static let repository = URL(string: "https://github.com/\(repositoryPath)")!
     private static let answeredKey = "starRequestAnswered"
 

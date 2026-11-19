@@ -42,9 +42,9 @@ Until **Finish setup**, your choices are temporary changes, like command-line ch
 
 ## Download a release
 
-Stable releases after v0.4.0 on the [releases page](https://github.com/Seb-GRAF/StableBar/releases) include `StableBar.dmg`. Betas of the next version are marked **Pre-release**. Both are built for Apple silicon. Releases signed with a Developer ID are notarized and open like any app. Earlier ones are ad-hoc signed, so macOS blocks them the first time you open them: allow it in **System Settings → Privacy & Security → Open Anyway**.
+Stable releases after v0.4.0 on the [releases page](https://github.com/stablebox/StableBar/releases) include `StableBar.dmg`. Betas of the next version are marked **Pre-release**. Both are built for Apple silicon. Releases signed with a Developer ID are notarized and open like any app. Earlier ones are ad-hoc signed, so macOS blocks them the first time you open them: allow it in **System Settings → Privacy & Security → Open Anyway**.
 
-To install the latest stable release with [Homebrew](https://brew.sh) instead, run `brew install --cask seb-graf/tap/stablebar`.
+To install the latest stable release with [Homebrew](https://brew.sh) instead, run `brew install --cask stablebox/tap/stablebar`.
 
 ## First launch
 

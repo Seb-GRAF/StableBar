@@ -629,7 +629,7 @@ struct PackageIndex: Decodable, Sendable {
         }
     }
 
-    static let url = URL(string: "https://github.com/Seb-GRAF/stablebar-packages/releases/download/store/index.json")!
+    static let url = URL(string: "https://github.com/stablebox/stablebar-packages/releases/download/store/index.json")!
 
     /// Packages the index suggests when one of `tools` is on the PATH or one of `apps` is installed.
     struct Suggestion: Decodable, Sendable {

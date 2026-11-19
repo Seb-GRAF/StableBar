@@ -137,7 +137,7 @@ struct CrashReport: Identifiable, Equatable, Sendable {
             let fields = [("template", "bug_report.yml"), ("title", title), ("what-happens", happened),
                           ("environment", environment), ("evidence", markdown(frameLimit: frames, messageLimit: message, symbolLimit: 300))]
             let query = fields.map { "\($0)=\($1.addingPercentEncoding(withAllowedCharacters: Self.unreserved)!)" }.joined(separator: "&")
-            return URL(string: "https://github.com/Seb-GRAF/StableBar/issues/new?\(query)")!
+            return URL(string: "https://github.com/stablebox/StableBar/issues/new?\(query)")!
         }
         var frames = 60, message = 2000
         var result = url(frames: frames, message: message)

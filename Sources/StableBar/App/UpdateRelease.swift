@@ -19,7 +19,7 @@ struct UpdateRelease: Decodable, Sendable {
         var releases: [UpdateRelease] = []
         var page = 1
         while true {
-            let url = URL(string: "https://api.github.com/repos/Seb-GRAF/StableBar/releases?per_page=100&page=\(page)")!
+            let url = URL(string: "https://api.github.com/repos/stablebox/StableBar/releases?per_page=100&page=\(page)")!
             let batch = try decoder.decode([UpdateRelease].self, from: await fetch(url))
             releases.append(contentsOf: batch)
             if batch.count < 100 { break }

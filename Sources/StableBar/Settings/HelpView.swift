@@ -41,7 +41,7 @@ struct HelpView: View {
             Label("Send feedback", systemImage: "text.bubble").foregroundStyle(.primary).tag(HelpSelection.feedback)
             Section {
                 Button {
-                    NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md")!)
+                    NSWorkspace.shared.open(URL(string: "https://github.com/stablebox/StableBar/blob/main/docs/README.md")!)
                 } label: {
                     Label("User guide", systemImage: "book")
                 }
@@ -175,7 +175,7 @@ private struct HelpAnswer: View {
 
     /// Links to the guide's pages point at the guide on GitHub.
     private static func inline(_ text: String) -> some View {
-        let linked = text.replacingOccurrences(of: #"\]\(([a-z-]+\.md)"#, with: "](https://github.com/Seb-GRAF/StableBar/blob/main/docs/$1",
+        let linked = text.replacingOccurrences(of: #"\]\(([a-z-]+\.md)"#, with: "](https://github.com/stablebox/StableBar/blob/main/docs/$1",
                                                options: .regularExpression)
         return Text((try? AttributedString(markdown: linked, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
             ?? AttributedString(linked))

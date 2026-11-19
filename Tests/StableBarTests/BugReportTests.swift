@@ -65,7 +65,7 @@ private let bug = Feedback(kind: .bug, title: "The clock vanishes after sleep",
 
 @Test func feedbackFillsTheIssueFormOfItsKind() throws {
     let url = try #require(bug.issueURL())
-    #expect(url.absoluteString.hasPrefix("https://github.com/Seb-GRAF/StableBar/issues/new?"))
+    #expect(url.absoluteString.hasPrefix("https://github.com/stablebox/StableBar/issues/new?"))
     #expect(formFields(url) == ["template": "bug_report.yml", "title": "The clock vanishes after sleep", "what-happens": "It's gone.",
                                 "steps": "1. Sleep\n2. Wake", "expected": "It's back.", "environment": example.markdown])
     #expect(!url.absoluteString.contains("+"))

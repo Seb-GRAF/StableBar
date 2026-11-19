@@ -318,7 +318,7 @@ struct UpdateDetails: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            Link(destination: URL(string: "https://github.com/Seb-GRAF/StableBar/compare/v\(update.installedVersion)...v\(version)")!) {
+            Link(destination: URL(string: "https://github.com/stablebox/StableBar/compare/v\(update.installedVersion)...v\(version)")!) {
                 HStack(spacing: 3) {
                     Text("View all changes on GitHub")
                     Image(systemName: "arrow.up.right")

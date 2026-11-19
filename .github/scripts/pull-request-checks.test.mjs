@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { visibleText, needsIssue, closingIssueNumbers, checkLinkedIssue, checkDescription } from "./pull-request-checks.mjs";
 
-const repository = "Seb-GRAF/StableBar";
+const repository = "stablebox/StableBar";
 const template = readFileSync(new URL("../pull_request_template.md", import.meta.url), "utf8");
 const attribution = "Claude Opus 5.5 via Claude Code";
 const filled = ["## Problem", "The clock disappears on a notched display.", "",
@@ -12,7 +12,7 @@ const filled = ["## Problem", "The clock disappears on a notched display.", "",
 const summary = "\n<!-- This is an auto-generated comment: release notes by coderabbit.ai -->\n" +
   "## Summary by CodeRabbit\n* New stuff\n<!-- end of auto-generated comment: release notes by coderabbit.ai -->";
 const cubicButtons = "\n\n<!-- This is an auto-generated description by cubic. -->\n" +
-  '<a href="https://cubic.dev/pr/Seb-GRAF/StableBar/pull/1"><img alt="View guided diff" src="review.svg"></a>\n' +
+  '<a href="https://cubic.dev/pr/stablebox/StableBar/pull/1"><img alt="View guided diff" src="review.svg"></a>\n' +
   "<!-- End of auto-generated description by cubic. -->\n";
 const everything = ["Problem", "Changes", "Testing", "attribution line"];
 
@@ -42,8 +42,8 @@ test("needsIssue covers fix, feat and perf, with a scope or a bang", () => {
 test("closingIssueNumbers reads closing keywords for this repository only", () => {
   assert.deepEqual(closingIssueNumbers("Fixes #12", repository), [12]);
   assert.deepEqual(closingIssueNumbers("closes #3 and Resolves: #4, fixes #3", repository), [3, 4]);
-  assert.deepEqual(closingIssueNumbers("Fixes seb-graf/stablebar#12", repository), [12]);
-  assert.deepEqual(closingIssueNumbers("Fixed https://github.com/Seb-GRAF/StableBar/issues/12", repository), [12]);
+  assert.deepEqual(closingIssueNumbers("Fixes stablebox/stablebar#12", repository), [12]);
+  assert.deepEqual(closingIssueNumbers("Fixed https://github.com/stablebox/StableBar/issues/12", repository), [12]);
   assert.deepEqual(closingIssueNumbers("Fixes other/repo#12", repository), []);
   assert.deepEqual(closingIssueNumbers("See #12", repository), []);
   assert.deepEqual(closingIssueNumbers("<!-- Fixes #12 -->", repository), []);
@@ -54,7 +54,7 @@ test("closingIssueNumbers reads closing keywords for this repository only", () =
 test("checkLinkedIssue asks fix, feat and perf pull requests for an issue in this repository", () => {
   const pr = { title: "fix: keep the clock", body: "", repository, baseRef: "main", defaultBranch: "main", closingIssues: [] };
   assert.equal(checkLinkedIssue({ ...pr, title: "docs: explain the clock" }).ok, true);
-  assert.equal(checkLinkedIssue({ ...pr, closingIssues: [{ number: 12, repository: "seb-graf/stablebar" }] }).ok, true);
+  assert.equal(checkLinkedIssue({ ...pr, closingIssues: [{ number: 12, repository: "stablebox/stablebar" }] }).ok, true);
   assert.equal(checkLinkedIssue({ ...pr, closingIssues: [{ number: 12, repository: "other/repo" }] }).ok, false);
   assert.equal(checkLinkedIssue({ ...pr, body: "Fixes #12" }).ok, false);
   assert.equal(checkLinkedIssue({ ...pr, baseRef: "fix/parent", body: "Fixes #12" }).ok, true);

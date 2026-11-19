@@ -34,7 +34,7 @@ struct HelpQuestion: Identifiable {
     static let page = #"""
     # Questions
 
-    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page. If yours isn't here, ask it in [Q&A](https://github.com/Seb-GRAF/StableBar/discussions/categories/q-a).
+    These are short answers to common questions, each with a link to the guide for the details; **Settings → Help** in StableBar shows the same page. If yours isn't here, ask it in [Q&A](https://github.com/stablebox/StableBar/discussions/categories/q-a).
 
     ## Why do windows go under the bar?
 
@@ -156,7 +156,7 @@ struct HelpQuestion: Identifiable {
 
     To get betas, set the update track to **Beta** in **Settings → General → Updates**. You then get betas of the next version and stable releases, whichever is newer. Going back to **Stable** keeps your beta until a newer stable release is out.
 
-    Builds you make yourself, and releases not signed with a Developer ID, don't update themselves; get new versions from the [releases page](https://github.com/Seb-GRAF/StableBar/releases). See [Updates](getting-started.md#updates).
+    Builds you make yourself, and releases not signed with a Developer ID, don't update themselves; get new versions from the [releases page](https://github.com/stablebox/StableBar/releases). See [Updates](getting-started.md#updates).
 
     ## What do I do when StableBar crashes or something goes wrong?
 

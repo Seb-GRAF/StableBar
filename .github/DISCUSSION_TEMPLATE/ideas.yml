@@ -2,7 +2,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        An idea here can grow into a [feature request](https://github.com/Seb-GRAF/StableBar/issues/new?template=feature_request.yml) once it's clear what StableBar should do. Search [issues](https://github.com/Seb-GRAF/StableBar/issues?q=is%3Aissue) and [discussions](https://github.com/Seb-GRAF/StableBar/discussions) first: closed issues include declined requests and their reasons.
+        An idea here can grow into a [feature request](https://github.com/stablebox/StableBar/issues/new?template=feature_request.yml) once it's clear what StableBar should do. Search [issues](https://github.com/stablebox/StableBar/issues?q=is%3Aissue) and [discussions](https://github.com/stablebox/StableBar/discussions) first: closed issues include declined requests and their reasons.
 
   - type: textarea
     id: problem
