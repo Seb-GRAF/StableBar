@@ -170,7 +170,7 @@ final class ThemeLinkCandidate {
             "bar.margin": 0...40, "bar.style.borderWidth": 0...6, "bar.style.cornerRadius": 0...40,
             "bar.style.fontSize": 6...40,
             "bar.style.paddingHorizontal": 0...40, "bar.style.paddingVertical": 0...40,
-            "bar.style.opacity": 0...1, "bar.popupOffset": 0...40,
+            "bar.style.opacity": 0...1, "bar.popupOffset": 0...40, "bar.glass.transparency": 0...1,
             // Notch dimensions and other style numbers have no Settings control.
             "bar.notchWidth": 0...1_000, "bar.notchSpacing": 0...100,
             "bar.style.offsetX": -1_000...1_000, "bar.style.offsetY": -1_000...1_000
