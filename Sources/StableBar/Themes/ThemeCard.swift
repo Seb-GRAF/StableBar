@@ -10,9 +10,11 @@ struct ThemeCard: View {
     var error: String?
     var isStore = false
     var source: PackageOrigin? = .included
-    /// The context menu of an installed theme that isn't bundled. Delete… asks first.
+    /// The context menu of an installed theme that isn't bundled. Delete… asks first, and is off while the theme is
+    /// selected or `inUse` by every screen.
     var showInFinder: (() -> Void)?
     var delete: (() -> Void)?
+    var inUse = false
     let select: () -> Void
     @State private var hovering = false
     @State private var confirmingDelete = false
@@ -34,8 +36,8 @@ struct ThemeCard: View {
             if delete != nil {
                 Divider()
                 Button("Delete…", role: .destructive) { confirmingDelete = true }
-                    .disabled(isSelected)
-                    .help(isSelected ? "Choose another theme first" : "")
+                    .disabled(isSelected || inUse)
+                    .help(isSelected || inUse ? "Choose another theme first" : "")
             }
         }
         .confirmationDialog("Delete \(title)?", isPresented: $confirmingDelete) {

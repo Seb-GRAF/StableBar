@@ -31,7 +31,7 @@ struct AppearanceView: View {
                                 .padding(.top, 12).padding(.bottom, 4)
                         }
                         themes(appearance)
-                        if screen == nil, editor.editingProfile == nil, let theme = gallery.selectedChoice {
+                        if screen == nil, editor.editingProfile == nil, !gallery.linkedThemeIsActive, let theme = gallery.selectedChoice {
                             ThemeEditsLine(editor: editor, theme: theme).padding(.top, 12)
                         }
                         if screen == nil, editor.editingProfile == nil, let theme = gallery.selectedChoice {
@@ -229,7 +229,7 @@ struct AppearanceView: View {
                              isEdited: gallery.editedThemes.contains(choice.manifest.id),
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
                              showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
-                             delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }) {
+                             delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }, inUse: choice.key == gallery.selectedKey) {
                 gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar)
             }
         case let .store(entry):
@@ -279,6 +279,7 @@ struct AppearanceView: View {
                                      style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]))
         let workspaces = editor.fields(["workspaceDefaults"], on: screen, values: editor.values("workspaceDefaults", on: screen))
         let glass = editor.fields(["bar", "glass"], on: screen, values: (try? bar["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:])
+        let roles = editor.fields(["roles"], on: screen, values: [:])
         return [
             CustomizeSection(title: "Colors", changes: editor.lookChanges(under: [tokens.path])) { AnyView(colors(tokens)) },
             CustomizeSection(title: "Widgets", changes: editor.lookChanges(under: widgets.paths)) { AnyView(widgets.rows) },
@@ -292,7 +293,7 @@ struct AppearanceView: View {
             CustomizeSection(title: "Liquid Glass", changes: editor.lookChanges(under: [glass.path]), note: "Experimental") {
                 AnyView(self.glass(glass))
             },
-            CustomizeSection(title: "Advanced", changes: editor.lookChanges(under: ["roles"]), note: "Roles, AeroSpace mode names") {
+            CustomizeSection(title: "Advanced", changes: editor.lookChanges(under: [roles.path]), note: "Roles, AeroSpace mode names") {
                 AnyView(advancedRows)
             }
         ]
