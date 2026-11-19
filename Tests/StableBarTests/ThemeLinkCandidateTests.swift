@@ -232,7 +232,7 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         let trial = ThemeTrial(store: store)
         trial.next()
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         candidate.tryOnBar()
@@ -251,7 +251,7 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         let trial = ThemeTrial(store: store)
         trial.next()
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         if installationFails { try fixture.write("not a directory", to: fixture.packages.directory) }
         await candidate.use()
         #expect(!trial.isActive)
@@ -452,7 +452,7 @@ struct ThemeLinkCandidateTests {
         let replacement = Task { @MainActor in
             #expect(candidate.state == (tryFirst ? .trying : .ready))
             if linkedTrial { newerCandidate.tryOnBar() } else { trial.next() }
-            store.onEndThemeTrial = { trial.cancel() }
+            store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         }
 
         await candidate.use()

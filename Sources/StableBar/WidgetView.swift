@@ -109,7 +109,7 @@ struct WidgetView: View {
             let click = { if store.barEditing.allowsWidgetActions { store.appMenu.openControlCenter() } }
             pressable(Button(action: click) { tile }.buttonStyle(MouseDownButtonStyle()), click: click)
         } else if widget.content == .stableBar, !hasOwnClick {
-            let click = { if store.barEditing.allowsWidgetActions { store.onCustomize?() } }
+            let click = { if store.barEditing.allowsWidgetActions { store.onWindowRequest?(.customize) } }
             pressable(Button(action: click) { tile }.buttonStyle(.plain), click: click)
         } else if case let .menuBarItems(_, _, _, hidden) = widget.content, !widget.drawsMenuBarItems {
             let click = { toggleMenuBarItems(leavingOut: hidden.references, anchor: clickAnchor) }

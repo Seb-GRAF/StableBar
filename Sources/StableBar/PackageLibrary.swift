@@ -140,7 +140,7 @@ final class PackageLibrary {
         filter = .updates
         search = ""
         deselect()
-        store?.onCustomizePackages?()
+        store?.onWindowRequest?(.customizePackages)
     }
 
     var selectedID: String? { requestedID ?? draft?.inspection.manifest.id }

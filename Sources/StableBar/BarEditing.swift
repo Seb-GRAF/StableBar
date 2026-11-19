@@ -65,7 +65,7 @@ final class BarEditing {
     func begin() {
         guard isAvailable, !isActive, let store else { return }
         store.onEndCustomizationEditing?()
-        store.onEndThemeTrial?()
+        store.onWindowRequest?(.endThemeTrial)
         store.endThemeTrial()
         store.popup.close()
         error = nil
@@ -282,7 +282,7 @@ final class BarEditing {
 
     func select(_ id: String) {
         guard isActive, let store, store.configuration?.widgets.contains(where: { $0.id == id }) == true else { return }
-        store.onCustomizeItem?(.widget(id))
+        store.onWindowRequest?(.customizeItem(.widget(id)))
     }
 
     func group(_ id: String, _ choice: WidgetGrouping.Choice, on displayID: Int) {
@@ -303,7 +303,7 @@ final class BarEditing {
 
     func editGroup(_ group: String) {
         guard isActive, let store, store.configuration?.groups[group] != nil else { return }
-        store.onCustomizeItem?(.group(group))
+        store.onWindowRequest?(.customizeItem(.group(group)))
     }
 
     private func screenKind(_ displayID: Int?) -> ScreenKind? {

@@ -243,7 +243,7 @@ private let row = #"""
     let bar = try GroupingFixture(row)
     defer { bar.close() }
     var opened: [CustomizationTarget] = []
-    bar.store.onCustomizeItem = { opened.append($0) }
+    bar.store.onWindowRequest = { if case let .customizeItem(target) = $0 { opened.append(target) } }
     let editing = bar.store.barEditing
     editing.group("a", .groupWith("b"), on: 1)
     editing.editGroup("group")
