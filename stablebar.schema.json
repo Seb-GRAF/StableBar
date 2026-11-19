@@ -1111,6 +1111,10 @@
             }
           ]
         },
+        "tinted": {
+          "$ref": "#/definitions/boolean",
+          "description": "For image blocks: draw a one-color image, such as a logo, in the text color as symbols are; only its shape counts, not its colors."
+        },
         "name": {
           "$ref": "#/definitions/string"
         },

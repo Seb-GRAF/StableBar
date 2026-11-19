@@ -1,0 +1,49 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "plain",
+        "type": "text",
+        "text": "plain",
+        "position": "left",
+        "layout": {
+          "type": "row",
+          "children": [
+            { "type": "image", "path": "Resources/StatusBarIconTemplate@2x.png", "style": { "width": 16, "height": 16 } },
+            { "type": "text", "text": "plain" }
+          ]
+        }
+      },
+      {
+        "id": "tinted",
+        "type": "text",
+        "text": "tinted",
+        "position": "left",
+        "layout": {
+          "type": "row",
+          "children": [
+            { "type": "image", "path": "Resources/StatusBarIconTemplate@2x.png", "tinted": true, "style": { "width": 16, "height": 16 } },
+            { "type": "text", "text": "tinted" }
+          ]
+        }
+      },
+      {
+        "id": "own-color",
+        "type": "text",
+        "text": "own color",
+        "position": "left",
+        "style": { "foreground": "#ff9f0a" },
+        "layout": {
+          "type": "row",
+          "children": [
+            { "type": "image", "path": "Resources/StatusBarIconTemplate@2x.png", "tinted": true, "style": { "width": 16, "height": 16 } },
+            { "type": "text", "text": "own color" }
+          ]
+        }
+      }
+    ]
+  },
+  "draw": "bar",
+  "width": 400
+}

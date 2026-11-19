@@ -81,6 +81,12 @@ Every block accepts `style` and `alignment` (`leading`, `center`, `trailing`). F
 
 Text and field blocks can set `"shimmer": true` to sweep light across their text, as while something works; pair it with `hideWhenEmpty` to show it only then. Reduce Motion keeps it still. Text and field blocks can set `scrollSpeed` in points per second with a fixed `style.width`, or with a `style.maxWidth` so that text that fits takes only its own width instead of leaving a gap after it. Overflow scrolls back and forth with a pause at each end; fitting text and Reduce Motion do not scroll. `hideWhenEmpty` names a field: the block occupies no space when that field is absent or empty, which is useful for optional list-row headings and pipeline details.
 
+Image blocks can set `"tinted": true` to draw a one-color image, such as a logo, in the text color, as symbols are drawn: only its shape counts, not its colors, so one image suits light and dark mode, every theme and a widget's own `foreground`:
+
+```json
+{ "type": "image", "source": "logo", "tinted": true, "style": { "width": 16, "height": 16 } }
+```
+
 `showWhen` and `hideWhen` show or hide a block by what the output says. Each takes a condition like a [rule](styling.md#data-states)'s `when`: `{ "field": "phase", "equals": "live" }` compares a field, and `{ "value": "remaining", "below": 0.2 }` a number. Give a list of conditions to match any of them. `showWhen` shows the block only while one of its conditions matches, and `hideWhen` hides it while one does; like `hideWhenEmpty`, a hidden block takes no space. In a list row, conditions read the row's fields and the widget's values. They work the same in a widget's `layout`, `hoverLayout` and `overlay`. A meeting widget on the [calendar provider](providers.md#calendar) can count down before the meeting and show the time left while it runs:
 
 ```json

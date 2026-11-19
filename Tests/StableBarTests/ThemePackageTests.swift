@@ -1170,7 +1170,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     #expect(widget.style.fontSize == 19)
     #expect(widget.position == .left)
     #expect(widget.environment["PACKAGE_DIR"] == installed.directory.path)
-    guard case let .image(path, _, _) = widget.popup?.layout.content else {
+    guard case let .image(path, _, _, _) = widget.popup?.layout.content else {
         Issue.record("Expected package image")
         return
     }

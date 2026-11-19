@@ -121,7 +121,7 @@ indirect enum PopupContent: Sendable {
     case input(title: String, placeholder: String?, autofocus: Bool, sendButton: Bool, stop: (busy: String, command: String)?, command: String)
     case menu
     case divider
-    case image(path: String, source: String?, fit: ImageFit)
+    case image(path: String, source: String?, fit: ImageFit, tinted: Bool)
     case symbol(name: String, source: String?)
     /// A rule filled to `values[source]` or `fields[source]`, or with `segments`, that many equal pieces lit up to it.
     case progress(source: String, height: Double, segments: Int?)
@@ -196,7 +196,7 @@ struct PopupBlock: Decodable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
-        case path, fit, name, animation, styleSource, styleField, onClickField, lineWidth
+        case path, fit, tinted, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, showWhen, hideWhen, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField
         case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
@@ -389,7 +389,8 @@ struct PopupBlock: Decodable, Sendable {
         case "image":
             let source = try values.decodeIfPresent(String.self, forKey: .source)
             content = .image(path: source == nil ? try values.decode(String.self, forKey: .path) : "",
-                             source: source, fit: try values.decodeIfPresent(ImageFit.self, forKey: .fit) ?? .fit)
+                             source: source, fit: try values.decodeIfPresent(ImageFit.self, forKey: .fit) ?? .fit,
+                             tinted: try values.decodeIfPresent(Bool.self, forKey: .tinted) ?? false)
         case "symbol":
             let source = try values.decodeIfPresent(String.self, forKey: .source)
             content = .symbol(name: source == nil ? try values.decode(String.self, forKey: .name) : "", source: source)

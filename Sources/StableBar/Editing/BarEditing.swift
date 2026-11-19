@@ -351,7 +351,7 @@ private enum BarEditContent {
         case let .text(text): return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case let .field(name): return fields[name] == nil || fields[name]?.isEmpty == false
         case let .symbol(name, source): return !(source.flatMap { fields[$0] } ?? name).isEmpty
-        case let .image(path, source, _): return !(source.flatMap { fields[$0] } ?? path).isEmpty
+        case let .image(path, source, _, _): return !(source.flatMap { fields[$0] } ?? path).isEmpty
         case let .list(source, row, _):
             return output?.lists?[source]?.contains { hasContent(row, fields: $0, output: output, menu: menu) } == true
         case .menu: return !menu.isEmpty
