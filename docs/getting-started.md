@@ -70,12 +70,17 @@ The bar shows only when neither **Hide Bar** nor the configuration hides it, so 
 
 ## Share your bar
 
-Choose **Share My Bar…** in the bar's right-click menu or the menu-bar icon's menu, or the button above the bar's preview in **Settings → Bar**, to share your bar. The right-click menu uses that screen's bar; the menu-bar icon uses the screen under the pointer, and Settings the screen it shows. As with Settings, StableBar appears in the Dock while the window is open, and clicking its Dock icon brings the window back. The window makes an image of your bar for social media: the bar as it is now, with its real data and the time, at its place over your desktop wallpaper. It needs no screen-recording permission.
+Choose **Share My Bar…** in the bar's right-click menu or the menu-bar icon's menu, or the button above the bar's preview in **Settings → Bar**, to share your bar. The right-click menu uses that screen's bar; the menu-bar icon uses the screen under the pointer, and Settings the screen it shows. As with Settings, StableBar appears in the Dock while the panel is open, and clicking its Dock icon brings the panel back. The panel floats above other windows and makes an image of your bar for social media: the bar as it is now, with its real data and the time, at its place over your desktop wallpaper. It needs no screen-recording permission.
 
-Pick a size:
+Pick a screen:
+
+- **This screen**: the bar as it is on the screen you shared from, at that screen's width, with its notch if it has one.
+- **13″ MacBook Air** (1470 points wide), **14″ MacBook Pro** (1512) or **16″ MacBook Pro** (1728): the bar laid out for that MacBook's screen at its default size, with your laptop screen's layout and look. **Notch** draws the notch and lays the bar out around it; turn it off for a MacBook without one. A narrower screen gives a narrower image, where the bar shows larger.
+
+And a shape:
 
 - **Bar only**: the bar across the screen's width, on a strip of wallpaper, at twice the screen's width in pixels.
-- **Landscape 16:9** (3200 × 1800), **Square 1:1** (2160 × 2160) or **Portrait 4:5** (2160 × 2700): the top of your desktop, or its bottom with a bar at the bottom, scaled to the image's width. When the image is taller than your screen, the wallpaper fills it.
+- **16:9** (3200 × 1800), **Square** (2160 × 2160) or **4:5** (2160 × 2700): the top of your desktop, or its bottom with a bar at the bottom, scaled to the image's width. When the image is taller than the screen, the wallpaper fills it.
 
 **Copy Image** puts the PNG on the clipboard, **Save Image…** writes it to a file, and **Share…** opens the macOS share menu for AirDrop, Messages, Mail and more. A dynamic or aerial wallpaper that has no still image is replaced with StableBar's own backdrop.
 
