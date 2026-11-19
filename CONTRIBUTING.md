@@ -138,7 +138,8 @@ Both jobs sign and notarize the app with a Developer ID when the repository has 
 
 - the `DEVELOPER_ID_CERTIFICATE` secret: the Developer ID Application certificate and its private key, exported as a `.p12` and base64-encoded, with its password in the `DEVELOPER_ID_CERTIFICATE_PASSWORD` secret;
 - an App Store Connect API key for notarization: the `.p8` file's contents in the `NOTARY_API_KEY` secret, and its key ID and issuer ID in the `NOTARY_API_KEY_ID` and `NOTARY_API_ISSUER` variables;
-- the `SPARKLE_ED_PRIVATE_KEY` secret: the private EdDSA key whose public key is `SUPublicEDKey` in [Resources/Info.plist](Resources/Info.plist).
+- the `SPARKLE_ED_PRIVATE_KEY` secret: the private EdDSA key whose public key is `SUPublicEDKey` in [Resources/Info.plist](Resources/Info.plist);
+- the `RELEASE_APP_PRIVATE_KEY` secret: the release app's private key, with its client ID in the `RELEASE_APP_CLIENT_ID` variable. A stable release uses the app to push to `main` and to the Homebrew tap.
 
 `scripts/publish-appcast.sh` adds each signed release to `appcast.xml` in the `appcast` prerelease, the feed every release checks, with betas on Sparkle's `beta` channel. Each item carries its GitHub release notes, whose bullet points the update tile's popup lists, and a link to the release.
 
