@@ -2,11 +2,11 @@
 blank_issues_enabled: true
 contact_links:
   - name: Configuration help
-    url: https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md
+    url: https://github.com/stablebox/StableBar/blob/main/docs/README.md
     about: The user guide documents almost every configuration option, and examples/ holds working setups.
   - name: Ask a question
-    url: https://github.com/Seb-GRAF/StableBar/discussions/categories/q-a
+    url: https://github.com/stablebox/StableBar/discussions/categories/q-a
     about: Get help with installing, configuring or scripting your bar.
   - name: Share an idea
-    url: https://github.com/Seb-GRAF/StableBar/discussions/categories/ideas
+    url: https://github.com/stablebox/StableBar/discussions/categories/ideas
     about: Talk a feature through before it becomes a request.

@@ -1011,7 +1011,7 @@ struct SetupTourView: View {
                     }
                     Button("\(source.title) guide ↗") {
                         lower()
-                        NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/blob/main/docs/widgets.md#\(source == .yabai ? "yabai" : "omniwm")-workspaces")!)
+                        NSWorkspace.shared.open(URL(string: "https://github.com/stablebox/StableBar/blob/main/docs/widgets.md#\(source == .yabai ? "yabai" : "omniwm")-workspaces")!)
                     }
                 }
                 .buttonStyle(.plain)

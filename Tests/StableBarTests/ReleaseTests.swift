@@ -246,20 +246,20 @@ func unchangedAppRejectsCommitsThatCanChangeTheApp(message: String, path: String
 @Test @MainActor func updateChangesReadGeneratedAndChangelogNotes() {
     #expect(AppUpdate.changes(in: """
         ## What's Changed
-        * fix: ignore unchanged settings selections by @M4n0x in https://github.com/Seb-GRAF/StableBar/pull/61
+        * fix: ignore unchanged settings selections by @M4n0x in https://github.com/stablebox/StableBar/pull/61
 
         ## New Contributors
-        * @M4n0x made their first contribution in https://github.com/Seb-GRAF/StableBar/pull/59
+        * @M4n0x made their first contribution in https://github.com/stablebox/StableBar/pull/59
 
-        **Full Changelog**: https://github.com/Seb-GRAF/StableBar/compare/v0.5.0-beta.84...v0.5.0-beta.85
+        **Full Changelog**: https://github.com/stablebox/StableBar/compare/v0.5.0-beta.84...v0.5.0-beta.85
         """) == ["fix: ignore unchanged settings selections by @M4n0x"])
     #expect(AppUpdate.changes(in: """
-        ## [0.4.0](https://github.com/Seb-GRAF/StableBar/compare/v0.3.0...v0.4.0) (2026-10-15)
+        ## [0.4.0](https://github.com/stablebox/StableBar/compare/v0.3.0...v0.4.0) (2026-10-15)
 
         ### Features
 
-        * add yabai workspaces and profile editing ([5c30c63](https://github.com/Seb-GRAF/StableBar/commit/5c30c63))
-        """) == ["add yabai workspaces and profile editing ([5c30c63](https://github.com/Seb-GRAF/StableBar/commit/5c30c63))"])
+        * add yabai workspaces and profile editing ([5c30c63](https://github.com/stablebox/StableBar/commit/5c30c63))
+        """) == ["add yabai workspaces and profile editing ([5c30c63](https://github.com/stablebox/StableBar/commit/5c30c63))"])
 }
 
 @MainActor private final class ProbeUpdater: SPUUpdater {

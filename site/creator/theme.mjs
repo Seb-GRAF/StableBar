@@ -231,7 +231,7 @@ export function resolveTheme(base, config, appearance) {
   return resolved;
 }
 
-const docs = "https://github.com/Seb-GRAF/StableBar/blob/main/docs/";
+const docs = "https://github.com/stablebox/StableBar/blob/main/docs/";
 const indicatorIs = indicator => state => (state.config.workspaceDefaults?.indicator ?? "background") === indicator;
 
 function control(id, label, kind, paths, help, guide, appliesWhen,

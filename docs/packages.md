@@ -67,7 +67,7 @@ A package whose `package.json` sets `"kind": "widgets"` contains no commands, so
 
 ## Store
 
-**Settings → Store** lists widget packages from the [StableBar store](https://github.com/Seb-GRAF/stablebar-packages), with their descriptions and versions. Select one to download and inspect it, review its included widgets, setup and access requirements, then choose **Add to bar**. Loading the list does not download every package; only the chosen package is inspected. When the Store lists several versions of a package, it offers the newest one your StableBar can run, so a version that needs a newer StableBar doesn't replace the one you can use. A package with no version your StableBar can run shows the version it requires and cannot be installed. The reload button at the top of the Store refreshes the index. Installed packages remain available when the Store cannot be reached.
+**Settings → Store** lists widget packages from the [StableBar store](https://github.com/stablebox/stablebar-packages), with their descriptions and versions. Select one to download and inspect it, review its included widgets, setup and access requirements, then choose **Add to bar**. Loading the list does not download every package; only the chosen package is inspected. When the Store lists several versions of a package, it offers the newest one your StableBar can run, so a version that needs a newer StableBar doesn't replace the one you can use. A package with no version your StableBar can run shows the version it requires and cannot be installed. The reload button at the top of the Store refreshes the index. Installed packages remain available when the Store cannot be reached.
 
 With a [private source](#private-sources) added, the Store lists the packages of every source, and search covers them all. The source's name in the sidebar narrows the list to it, and its rows carry the name with a lock, as rows from a folder you opened carry **Local folder**. When two sources list the same package ID, both rows appear. Once one copy is installed, the other source's row shows **Installed from** the installing source instead of **Get**; uninstall that copy before getting the other.
 
@@ -82,7 +82,7 @@ StableBar --install-package clock --source acme
 
 A store package with a newer version is marked **Update available**. Choose **Review update**, review its setup and access, then add the new version; the old version stays installed so you can roll back. When the new version runs commands, contacts hosts or uses macOS permissions that the enabled version does not, StableBar lists them and asks before enabling it.
 
-Every store package is open source in [stablebar-packages](https://github.com/Seb-GRAF/stablebar-packages), and that repository's CI builds and publishes the archives, not the package's author. Themes and packages that contain no commands or `http` providers are published once they pass CI; packages with `http` providers will be too, once the Store's CI supports them. A maintainer reads every version of a package that runs commands before it is published. StableBar downloads the index and the archives over HTTPS and checks each archive against the SHA-256 in the index before reviewing it.
+Every store package is open source in [stablebar-packages](https://github.com/stablebox/stablebar-packages), and that repository's CI builds and publishes the archives, not the package's author. Themes and packages that contain no commands or `http` providers are published once they pass CI; packages with `http` providers will be too, once the Store's CI supports them. A maintainer reads every version of a package that runs commands before it is published. StableBar downloads the index and the archives over HTTPS and checks each archive against the SHA-256 in the index before reviewing it.
 
 These optional `package.json` keys describe a package, and the review shows them:
 
@@ -141,7 +141,7 @@ When a source fails, the Store names it and the reason, such as a refused token 
 
 ### Hosting a source
 
-A source is an `index.json` in the same format as the Store's in [stablebar-packages](https://github.com/Seb-GRAF/stablebar-packages), with the archives it lists. An entry can set `category`, one of `apps`, `system`, `time`, `developer`, `utilities` or `custom`, and `symbol`, an SF Symbol for its row; a widget package without a known category is listed under **Utilities**. Archive paths are relative to the index and must stay on its host. Each package's `source` repository URL is optional in a private index. Host it in one of these places:
+A source is an `index.json` in the same format as the Store's in [stablebar-packages](https://github.com/stablebox/stablebar-packages), with the archives it lists. An entry can set `category`, one of `apps`, `system`, `time`, `developer`, `utilities` or `custom`, and `symbol`, an SF Symbol for its row; a widget package without a known category is listed under **Utilities**. Archive paths are relative to the index and must stay on its host. Each package's `source` repository URL is optional in a private index. Host it in one of these places:
 
 - **A private GitHub repository:** commit the index and archives to a branch and use `https://raw.githubusercontent.com/OWNER/REPO/BRANCH/index.json`, with a token that can read the repository (see [Tokens](#tokens)). GitHub serves a private repository's release assets only through its API, so release assets don't work.
 - **GitLab's generic package registry:** upload the index and archives to one package version and use `https://<host>/api/v4/projects/<id>/packages/generic/<name>/<version>/index.json`, with a `read_api` token.
@@ -181,7 +181,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Get StableBar
         run: |
-          gh release download --repo Seb-GRAF/StableBar --pattern StableBar.dmg --dir "$RUNNER_TEMP"
+          gh release download --repo stablebox/StableBar --pattern StableBar.dmg --dir "$RUNNER_TEMP"
           hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/stablebar" "$RUNNER_TEMP/StableBar.dmg"
       - name: Build and publish
         run: |
@@ -216,7 +216,7 @@ done
 
 `--fail` stops `curl` on an HTTP error, such as a refused token, instead of saving or uploading the error page.
 
-**Linux CI, without macOS:** `scripts/build-index.sh` in [stablebar-packages](https://github.com/Seb-GRAF/stablebar-packages) writes the same format. It doesn't run StableBar's checks, so a package that StableBar would refuse only fails when someone installs it.
+**Linux CI, without macOS:** `scripts/build-index.sh` in [stablebar-packages](https://github.com/stablebox/stablebar-packages) writes the same format. It doesn't run StableBar's checks, so a package that StableBar would refuse only fails when someone installs it.
 
 ### Packages from a private source
 

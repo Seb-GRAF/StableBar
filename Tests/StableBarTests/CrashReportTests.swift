@@ -117,7 +117,7 @@ private let reportFile = URL(filePath: "/Users/someone/Library/Logs/DiagnosticRe
     let url = report.issueURL()
     let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
     #expect(components.host == "github.com")
-    #expect(components.path == "/Seb-GRAF/StableBar/issues/new")
+    #expect(components.path == "/stablebox/StableBar/issues/new")
     let fields = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
     #expect(fields["template"] == "bug_report.yml")
     #expect(fields["title"] == "StableBar quit unexpectedly: EXC_BAD_ACCESS in WidgetPopup.toggle(_:widget:defaults:store:anchor:)")

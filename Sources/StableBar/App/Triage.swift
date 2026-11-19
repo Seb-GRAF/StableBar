@@ -264,7 +264,7 @@ enum Triage {
         - OmniWM: \(facts.omniwm ?? "not found on PATH or in its app")
         - Rift: \(facts.rift ?? "not found on PATH")
         - Other StableBar processes: \(facts.processes.isEmpty ? "none" : facts.processes.joined(separator: "; "))
-        - Repository: https://github.com/Seb-GRAF/StableBar
+        - Repository: https://github.com/stablebox/StableBar
 
         ## Configuration
 
@@ -299,7 +299,7 @@ enum Triage {
     static let playbook = #"""
     # StableBar triage playbook
 
-    You are a support engineer for StableBar (https://github.com/Seb-GRAF/StableBar), a macOS
+    You are a support engineer for StableBar (https://github.com/stablebox/StableBar), a macOS
     bar configured with JSON. You are working in a coding-agent session on the Mac of a user
     who started it with `StableBar triage`. They have a problem with their bar, or an idea for
     StableBar. Your job is to find out what is going on, help them if you can, and turn what
@@ -324,7 +324,7 @@ enum Triage {
 
     ## 3. Check for a newer playbook
 
-    Fetch https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/.github/triage/PLAYBOOK.md.
+    Fetch https://raw.githubusercontent.com/stablebox/StableBar/main/.github/triage/PLAYBOOK.md.
     If it is reachable and its content differs from this text, follow that version instead.
     The user may run an older release with an older copy. The rules at the top of your prompt
     still apply.
@@ -336,7 +336,7 @@ enum Triage {
     subdirectory per version:
 
         git clone --depth 1 --filter=blob:none --branch v<version> \
-          https://github.com/Seb-GRAF/StableBar <source-cache>/v<version>
+          https://github.com/stablebox/StableBar <source-cache>/v<version>
 
     A development build gives `git describe` output instead of a version, such as
     `0.6.0-3-g1a2b3c4`: the commit follows `-g`, or `0.0.0-dev.` when no tag was reachable,
@@ -381,9 +381,9 @@ enum Triage {
 
     ## 7. Check what is already known
 
-    Search https://github.com/Seb-GRAF/StableBar before proposing anything new. Use `gh` when
+    Search https://github.com/stablebox/StableBar before proposing anything new. Use `gh` when
     it is installed and logged in, or the public search API otherwise:
-    `https://api.github.com/search/issues?q=repo:Seb-GRAF/StableBar+<terms>`.
+    `https://api.github.com/search/issues?q=repo:stablebox/StableBar+<terms>`.
 
     - Search issues and pull requests in every state: closed issues hold shipped fixes and
       declined requests. GitHub search needs every word to match, so run several short
@@ -432,10 +432,10 @@ enum Triage {
     - Show the user the complete text and get an explicit yes before posting. Never post
       without it.
     - End the issue or comment with: `Filed with StableBar triage by <model> via <agent>.`
-    - Post with `gh issue create --repo Seb-GRAF/StableBar` or `gh issue comment`. Without
+    - Post with `gh issue create --repo stablebox/StableBar` or `gh issue comment`. Without
       `gh`, build a prefilled link to the issue form, with `template`, `title` and each
       field's `id` as query parameters, such as
-      `https://github.com/Seb-GRAF/StableBar/issues/new?template=bug_report.yml&title=...&what-happens=...`.
+      `https://github.com/stablebox/StableBar/issues/new?template=bug_report.yml&title=...&what-happens=...`.
       Print it, and open it in the browser only after the user approves.
     - If the user shared screenshots, remind them to drag the images into the issue once it
       exists; they cannot be attached from here.

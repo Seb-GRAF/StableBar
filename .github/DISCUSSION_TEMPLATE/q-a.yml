@@ -2,7 +2,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Check the [questions](https://github.com/Seb-GRAF/StableBar/blob/main/docs/questions.md) and the [user guide](https://github.com/Seb-GRAF/StableBar/blob/main/docs/README.md) first; **Settings → Help** in StableBar shows the same answers. If StableBar does something the guide says it shouldn't, [report a bug](https://github.com/Seb-GRAF/StableBar/issues/new?template=bug_report.yml) instead.
+        Check the [questions](https://github.com/stablebox/StableBar/blob/main/docs/questions.md) and the [user guide](https://github.com/stablebox/StableBar/blob/main/docs/README.md) first; **Settings → Help** in StableBar shows the same answers. If StableBar does something the guide says it shouldn't, [report a bug](https://github.com/stablebox/StableBar/issues/new?template=bug_report.yml) instead.
 
   - type: textarea
     id: question

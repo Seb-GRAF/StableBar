@@ -36,7 +36,7 @@ struct AboutView: View {
                 UpdateSettings(update: update)
             } else {
                 SettingRow(title: "Releases page", hint: "This build doesn't install updates. Download new versions there.") {
-                    Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/Seb-GRAF/StableBar/releases")!) }
+                    Button("Open") { NSWorkspace.shared.open(URL(string: "https://github.com/stablebox/StableBar/releases")!) }
                 }
             }
         }

@@ -31,7 +31,7 @@ private func signedIn(starred: Bool = false, accepts: Bool = true) -> GitHubStar
     await request.refresh()
     var opened: [URL] = []
     await request.star { opened.append($0) }
-    #expect(opened == [URL(string: "https://github.com/Seb-GRAF/StableBar")!])
+    #expect(opened == [URL(string: "https://github.com/stablebox/StableBar")!])
     #expect(request.isShown)
     let relaunched = StarRequest(defaults: defaults, gitHub: noCLI)
     await relaunched.refresh()

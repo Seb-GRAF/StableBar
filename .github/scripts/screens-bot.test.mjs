@@ -10,7 +10,7 @@ import { readData, releaseTag } from "./screens-comment.mjs";
 import { apply, changePatterns, failRun, plan, pullRequestNumber } from "./screens-bot.mjs";
 
 const head = "a".repeat(40), oldHead = "c".repeat(40), base = "b".repeat(40);
-const repo = { owner: "Seb-GRAF", repo: "StableBar" };
+const repo = { owner: "stablebox", repo: "StableBar" };
 const bot = { login: "github-actions[bot]", type: "Bot" };
 const notFound = () => Object.assign(new Error("Not Found"), { status: 404 });
 const conclusions = { "Check revision": "success", "Test": "success", "Wait for main's screens": "success", "Build release": "success", "Draw screens": "success", "Draw website screens": "skipped" };
@@ -536,7 +536,7 @@ test("failRun marks an open pull request's head when the bot itself fails", asyn
   const { github, state } = fakeGitHub();
   await failRun({ github, context: runEvent(), number: 7 });
   assert.deepEqual(state.statuses, [{ ...repo, sha: head, state: "error", context: "Visual review",
-    description: "The screens bot failed: see the Screens workflow run.", target_url: "https://github.com/Seb-GRAF/StableBar/actions/runs/5" }]);
+    description: "The screens bot failed: see the Screens workflow run.", target_url: "https://github.com/stablebox/StableBar/actions/runs/5" }]);
   await failRun({ github, context: runEvent(), number: undefined });
   assert.equal(state.statuses.length, 1);
 });

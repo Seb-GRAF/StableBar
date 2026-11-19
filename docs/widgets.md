@@ -186,7 +186,7 @@ For glyphs from [sketchybar-app-font](https://github.com/kvndrsslr/sketchybar-ap
 
 ```sh
 curl -fLo ~/.config/stablebar/sketchybar-app-font.json \
-  https://raw.githubusercontent.com/Seb-GRAF/StableBar/main/examples/modules/sketchybar-app-font.json
+  https://raw.githubusercontent.com/stablebox/StableBar/main/examples/modules/sketchybar-app-font.json
 ```
 
 The module sets the `appGlyphs` token to the font's map of app names to ligatures, with `:default:` as the fallback. Include it and opt in from a workspace widget:

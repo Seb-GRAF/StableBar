@@ -432,7 +432,7 @@ export function readmeRow({ id, name, description }) {
 export async function storeManifest(id, fetchImpl = fetch) {
   checkID(id);
   try {
-    const response = await fetchImpl(`https://raw.githubusercontent.com/Seb-GRAF/stablebar-packages/main/packages/${id}/package.json`);
+    const response = await fetchImpl(`https://raw.githubusercontent.com/stablebox/stablebar-packages/main/packages/${id}/package.json`);
     if (response.status === 404) return null;
     if (!response.ok) fail("storeUnavailable");
     const manifest = await response.json();

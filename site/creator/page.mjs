@@ -749,7 +749,7 @@ function storeGuide() {
     <p class="small muted">Download and unzip your theme first. The rest happens in your browser.</p>
     <ol class="guide-steps">
     <li>
-    <strong>Fork <a href="https://github.com/Seb-GRAF/stablebar-packages/fork">stablebar-packages</a>.</strong>
+    <strong>Fork <a href="https://github.com/stablebox/stablebar-packages/fork">stablebar-packages</a>.</strong>
     <p>Make your own copy on GitHub.</p>
     </li>
     <li>
@@ -771,7 +771,7 @@ function storeGuide() {
     <p>Send your changes back to stablebar-packages.</p>
     </li>
     </ol>
-    <p class="guide-foot">Use your GitHub username as the author. <a class="guide-link" href="https://github.com/Seb-GRAF/stablebar-packages/blob/main/CONTRIBUTING.md">Read the Store guide</a>.</p>
+    <p class="guide-foot">Use your GitHub username as the author. <a class="guide-link" href="https://github.com/stablebox/stablebar-packages/blob/main/CONTRIBUTING.md">Read the Store guide</a>.</p>
     </div>
     <p class="feedback" role="status"></p>
     <div class="dialog-actions">

@@ -1649,7 +1649,7 @@ test("readme rows keep pipes and backslashes verbatim like the Store's script", 
 
 test("store lookup", async () => {
   const { manifest } = json("Tests/Fixtures/theme-link/readme-row.json");
-  const url = "https://raw.githubusercontent.com/Seb-GRAF/stablebar-packages/main/packages/fern/package.json";
+  const url = "https://raw.githubusercontent.com/stablebox/stablebar-packages/main/packages/fern/package.json";
   const response = status => async requested => {
     assert.equal(requested, url);
     return new Response(JSON.stringify(manifest), { status });

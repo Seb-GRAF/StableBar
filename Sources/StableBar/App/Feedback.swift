@@ -70,7 +70,7 @@ struct Feedback {
             let values = [("template", kind.template), ("title", title)]
                 + fields(listLimit: lists, lineLimit: lines, frameLimit: frames, messageLimit: message).map { ($0.id, $0.value) }
             let query = values.map { "\($0)=\($1.addingPercentEncoding(withAllowedCharacters: Self.unreserved)!)" }.joined(separator: "&")
-            return URL(string: "https://github.com/Seb-GRAF/StableBar/issues/new?\(query)")!
+            return URL(string: "https://github.com/stablebox/StableBar/issues/new?\(query)")!
         }
         var lists = 20, lines = 300, frames = 60, message = 2000
         var result = url(lists, lines, frames, message)
