@@ -70,21 +70,23 @@ The bar shows only when neither **Hide Bar** nor the configuration hides it, so 
 
 ## Share your bar
 
-Choose **Share My Bar…** in the bar's right-click menu or the menu-bar icon's menu, or the button above the bar's preview in **Settings → Bar**, to share your bar. The right-click menu uses that screen's bar; the menu-bar icon uses the screen under the pointer, and Settings the screen it shows. As with Settings, StableBar appears in the Dock while the panel is open, and clicking its Dock icon brings the panel back when Settings isn't open. The panel floats above other windows, and a larger panel shows a larger preview. It makes an image of your bar for social media: the bar as it is now, with its real data and the time, at its place over your desktop wallpaper. It needs no screen-recording permission.
+Choose **Share My Bar…** in the bar's right-click menu or the menu-bar icon's menu, or the button above the bar's preview in **Settings → Bar**, to share your bar. The right-click menu uses that screen's bar; the menu-bar icon uses the screen under the pointer, and Settings the screen it shows. As with Settings, StableBar appears in the Dock while the panel is open, and clicking its Dock icon brings the panel back when Settings isn't open. The panel has no title bar and floats above other windows: drag its background to move it, and close it with **×** at the top right, Esc or ⌘W. A larger panel shows a larger preview, over a blur of the image. It makes an image of your bar for social media: the bar as it is now, with its real data and the time, at its place over your desktop wallpaper. It needs no screen-recording permission.
 
-Pick a screen:
+Pick a screen in the menu at the top left:
 
-- **This screen**: the bar as it is on the screen you shared from, at that screen's width. On a screen with a notch, **Notch** draws it and lays the bar out around it; turn it off to leave the notch out.
+- **This screen**: the bar as it is on the screen you shared from, at that screen's width. On a screen with a notch, **Notch** in the same menu draws it and lays the bar out around it; turn it off to leave the notch out.
 - **13″ MacBook Air** (1470 points wide), **14″ MacBook Pro** (1512) or **16″ MacBook Pro** (1728): the bar laid out for that MacBook's screen at its default size, with your laptop screen's layout and look. **Notch** draws the notch and lays the bar out around it; turn it off for a MacBook without one. A narrower screen gives a narrower image, where the bar shows larger.
 
-And a shape:
+And a shape in the toolbar under the image:
 
-- **Bar only**: the bar across the screen's width, on a strip of wallpaper, at twice the screen's width in pixels.
-- **16:9** (3200 × 1800), **Square** (2160 × 2160) or **4:5** (2160 × 2700): the top of your desktop, or its bottom with a bar at the bottom, scaled to the image's width. When the image is taller than the screen, the wallpaper fills it.
+- **Bar**: the bar across the screen's width, on a strip of wallpaper, at twice the screen's width in pixels.
+- **16:9** (3200 × 1800), **1:1** (2160 × 2160) or **4:5** (2160 × 2700): the top of your desktop, or its bottom with a bar at the bottom, scaled to the image's width. When the image is taller than the screen, the wallpaper fills it.
 
-**Copy Image** puts the PNG on the clipboard, **Save Image…** writes it to a file, and **Share…** opens the macOS share menu for AirDrop, Messages, Mail and more. A dynamic or aerial wallpaper that has no still image is replaced with StableBar's own backdrop.
+The image carries StableBar's badge, its logo, name and website, in the bottom-right corner, or the top-right one with a bar at the bottom, so it sits on the wallpaper beyond the bar. To leave it out, point at the image and click **×** on the badge, or turn off **StableBar Badge** in the menu at the top left. **+ Badge** on the image, or the same menu, brings it back. StableBar remembers your choice for the next image.
 
-Under the image, **Bar link** gives you a [bar link](themes.md): anyone with StableBar can try your look and your built-in and Store widgets on their own bar, and keep the widgets they like. **Copy Link** copies it. **What it shares** opens a list of your look and each widget the link carries, with the settings a Store widget takes along, and under **Stays on your Mac**, the widgets it leaves out and why, such as a script widget, a custom provider, or a package from a folder or a private source, and the Store settings it doesn't carry: secrets and free text.
+The toolbar's buttons copy the image to the clipboard as PNG, save it to a file, open the bar link, and **Share** (or Return) opens the macOS share menu for AirDrop, Messages, Mail and more. A dynamic or aerial wallpaper that has no still image is replaced with StableBar's own backdrop.
+
+The link button opens your [bar link](themes.md) above the toolbar: anyone with StableBar can try your look and your built-in and Store widgets on their own bar, and keep the widgets they like. **Copy Link** copies it. **What it shares** opens a list of your look and each widget the link carries, with the settings a Store widget takes along, and under **Stays on your Mac**, the widgets it leaves out and why, such as a script widget, a custom provider, or a package from a folder or a private source, and the Store settings it doesn't carry: secrets and free text. Click the link button again, or press Esc, to close it.
 
 ## Updates
 

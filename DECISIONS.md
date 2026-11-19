@@ -10,6 +10,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **Merge commits by default** ([CONTRIBUTING](CONTRIBUTING.md#how-we-work)). semantic-release reads each commit that reaches `main`: a merge commit leaves it every commit to read, and a squash leaves one, for when a single commit should stand for the pull request. [Commits and releases](CONTRIBUTING.md#commits-and-releases) says which commits make a release and reach the changelog.
 - **An issue for every `fix`, `feat` or `perf`** (2026-10-31, [#390]). The issue holds the problem and the decision; the `Linked issue` check enforces it. Other types can skip it.
 - **Updates carry an EdDSA signature as well as the Developer ID** (2026-11-10, [#335]). Sparkle checks both, so the signing team or the key can change in a release while the other still matches. This replaces [#100]'s choice of the Developer ID alone. The feed isn't published without the `SPARKLE_ED_PRIVATE_KEY` secret, and [CONTRIBUTING](CONTRIBUTING.md#commits-and-releases) says how to back up and change the key.
+- **Release secrets live in the `release` environment** (2026-11-19). Only `main` can use it, so a workflow pushed on another branch can't read the signing, notarization and update keys. Anyone with write access can push such a branch, and a repository secret reaches it. The variables stay repository-wide.
 
 ## Reviews and checks
 

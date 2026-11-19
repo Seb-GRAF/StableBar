@@ -1,0 +1,25 @@
+name: Merge queue checks
+
+# Reports the Linked issue and Description checks for a merge group. They read the pull request,
+# which a merge group doesn't have, and passed before it joined. GitHub doesn't start merge_group in
+# pull-request-checks.yml, which also runs on pull_request_target, so they pass here instead.
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  linked-issue:
+    name: Linked issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Checked on the pull request before it joined the queue."
+
+  description:
+    name: Description
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Checked on the pull request before it joined the queue."
