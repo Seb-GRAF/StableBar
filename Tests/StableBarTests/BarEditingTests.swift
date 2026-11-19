@@ -20,7 +20,7 @@ final class BarEditingTests: XCTestCase {
         defer { store.stop() }
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "", hidden: true)
-        store.scripts["output"] = script
+        store.widgetScripts.scripts["output"] = script
         store.updatePresentations()
         let before = try Data(contentsOf: fixture.url)
         let document = store.effectiveDocument
@@ -43,7 +43,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
         XCTAssertFalse(script.diagnostics.running)
-        XCTAssertNil(store.scripts["off"])
+        XCTAssertNil(store.widgetScripts.scripts["off"])
         editing.end()
         XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
         XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
@@ -64,7 +64,7 @@ final class BarEditingTests: XCTestCase {
         let store = try fixture.store()
         defer { store.stop() }
         let empty = ScriptWidget()
-        store.scripts["empty"] = empty
+        store.widgetScripts.scripts["empty"] = empty
         store.updatePresentations()
         XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == "empty" })
         empty.error = "Failed"
@@ -75,7 +75,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.barEditing.entries(on: laptop).prefix(2).map(\.name), ["Text 1", "Text 2"])
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "Hello", display: .builtIn)
-        store.scripts["script"] = script
+        store.widgetScripts.scripts["script"] = script
         store.updatePresentations()
         XCTAssertFalse(try XCTUnwrap(store.barEditing.entries(on: laptop).last).usesPlaceholder)
         XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: external).last).visibility.isHidden)
@@ -325,7 +325,7 @@ final class BarEditingTests: XCTestCase {
         store.popup.toggle(try XCTUnwrap(widget.popup), widget: widget, defaults: WidgetStyle(), store: store, anchor: NSView())
         XCTAssertFalse(store.popup.isOpen)
         for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
-            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+            await store.widgetScripts.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         store.barEditing.end()
@@ -333,7 +333,7 @@ final class BarEditingTests: XCTestCase {
         store.barEditing.select("a")
         XCTAssertNil(selected)
         for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
-            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+            await store.widgetScripts.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
         }
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "xxxxx")
         XCTAssertEqual(store.configuration?.widgets.first?.onClick, widget.onClick)
@@ -750,12 +750,12 @@ final class BarEditingTests: XCTestCase {
         store.reloadConfiguration()
         store.barEditing.begin()
         XCTAssertTrue(store.barEditing.entries(on: laptop).isEmpty)
-        store.setVisibleWidgets(ids: ["off"], displayID: 1)
+        store.widgetScripts.setVisibleWidgets(ids: ["off"], displayID: 1)
         store.barEditing.move("off", to: .left)
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(store.configuration?.widgets.first?.enabled, false)
-        XCTAssertTrue(store.scripts.isEmpty)
+        XCTAssertTrue(store.widgetScripts.scripts.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         store.barEditing.end()
         XCTAssertTrue(store.barEditing.widgets(on: laptop).isEmpty)

@@ -161,22 +161,22 @@ extension BarStore {
         if let configuration, let widget, path == "widgets.\(widget.id).style" {
             layers = [configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]
             for source in configuration.widgets {
-                if let style = scripts[source.id]?.output.widgetStyles?[widget.id] {
+                if let style = widgetScripts.scripts[source.id]?.output.widgetStyles?[widget.id] {
                     runtime.append(("Output from \(source.id): widgetStyles", style))
                 }
             }
-            if let output = scripts[widget.id]?.output {
+            if let output = widgetScripts.scripts[widget.id]?.output {
                 if let style = output.style { runtime.append(("Widget output style", style)) }
                 if let color = output.color { runtime.append(("Widget output color", WidgetStyle(foreground: color))) }
             }
-            states = StyleStates(data: widgetDataStates(scripts[widget.id]?.output, widget: widget, providers: configuration.providers).widget,
+            states = StyleStates(data: widgetDataStates(widgetScripts.scripts[widget.id]?.output, widget: widget, providers: configuration.providers).widget,
                                  mode: modePresentation, hover: hover)
             scope = hover ? "Widget while hovered, with current data and mode states. Popup-open and workspace-cell states are separate."
                 : "Widget at rest, with current data and mode states. Hover, popup-open and workspace-cell states are separate."
         } else if let configuration, path == "bar.style" {
             layers = [configuration.bar.style]
             for source in configuration.widgets {
-                if let style = scripts[source.id]?.output.barStyle { runtime.append(("Output from \(source.id): barStyle", style)) }
+                if let style = widgetScripts.scripts[source.id]?.output.barStyle { runtime.append(("Output from \(source.id): barStyle", style)) }
             }
             states = StyleStates(mode: modePresentation)
             scope = "Bar with the current mode state and widget output overrides."

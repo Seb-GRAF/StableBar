@@ -39,7 +39,7 @@ final class BarShareWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         window = nil
         // Settings keeps StableBar in the Dock while it's open.
-        if store?.inspectorOpen != true { NSApplication.shared.setActivationPolicy(.accessory) }
+        if store?.widgetScripts.inspectorOpen != true { NSApplication.shared.setActivationPolicy(.accessory) }
     }
 }
 

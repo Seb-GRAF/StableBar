@@ -227,12 +227,12 @@ enum DocsImages {
         try await OffscreenSnapshot.write(content, size: size, dark: dark, settle: .seconds(3), ready: {
             ready() && !stores.contains { store in
                 (store.configuration!.widgets.contains { $0.content == .workspaces } && store.workspaceStore.workspaces.isEmpty)
-                    || store.scripts.values.contains { $0.outputNumber == 0 }
+                    || store.widgetScripts.scripts.values.contains { $0.outputNumber == 0 }
             }
         }, prepare: {
             for store in stores {
-                store.scripts["system-monitor"]?.samples = cpuHistory
-                store.scripts["system"]?.samples = cpuHistory
+                store.widgetScripts.scripts["system-monitor"]?.samples = cpuHistory
+                store.widgetScripts.scripts["system"]?.samples = cpuHistory
             }
         }, to: url)
     }

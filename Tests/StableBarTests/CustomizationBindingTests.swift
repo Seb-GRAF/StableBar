@@ -335,7 +335,7 @@ import Testing
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "Time", style: WidgetStyle(fontSize: 18,
             states: ["warning": WidgetStyle(fontSize: 22), "hover": WidgetStyle(fontSize: 26)]), state: .string("warning"))
-        editor.store.scripts["time"] = script
+        editor.store.widgetScripts.scripts["time"] = script
         editor.store.updatePresentations()
         let resting = editor.store.propertySources(path: "widgets.time.style", key: "fontSize", defaultsPath: "defaults",
                                                     widgetID: "time", values: editor.style(for: "time"))

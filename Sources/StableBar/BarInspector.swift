@@ -453,7 +453,7 @@ struct BarInspector: View {
             }
             .padding(.top, 12)
         }
-        let status = store.widgetStatus(for: widget)
+        let status = store.widgetScripts.widgetStatus(for: widget)
         if status.needsAttention {
             SettingsCallout(systemImage: status.symbol, text: Text("**\(status.title).** \(status.detail)")) {
                 Button("Troubleshoot…") { editor.troubleshoot(widget.id) }.controlSize(.small)
@@ -772,7 +772,7 @@ struct BarInspector: View {
     }
 
     @ViewBuilder private func clickRow(_ widget: WidgetConfiguration) -> some View {
-        let output = store.scripts[widget.id]?.output
+        let output = store.widgetScripts.scripts[widget.id]?.output
         switch WidgetClickChoice.control(for: widget, output: output) {
         case .hidden: EmptyView()
         case .explanation(let explanation):
@@ -838,7 +838,7 @@ struct BarInspector: View {
 
     private func setClick(_ choice: WidgetClickChoice, widget: WidgetConfiguration, value: String? = nil) {
         do {
-            editor.set(try choice.properties(for: widget, value: value, output: store.scripts[widget.id]?.output), for: widget.id)
+            editor.set(try choice.properties(for: widget, value: value, output: store.widgetScripts.scripts[widget.id]?.output), for: widget.id)
             clickError = nil
         } catch { clickError = errorMessage(error) }
     }

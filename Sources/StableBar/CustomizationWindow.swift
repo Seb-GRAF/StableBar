@@ -24,7 +24,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
 
     func show(store: BarStore, widgetID: String? = nil, groupID: String? = nil, section: CustomizationSection? = nil) {
         self.store = store
-        store.setInspectorOpen(true)
+        store.widgetScripts.setInspectorOpen(true)
         if editor == nil {
             let editor = ConfigurationEditor(store: store, endEditing: { [weak self] in self?.window?.endEditing(for: nil) })
             self.editor = editor
@@ -74,7 +74,7 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
         store?.flushCustomization()
         store?.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         store?.customizationHistory.clearNotice()
-        store?.setInspectorOpen(false)
+        store?.widgetScripts.setInspectorOpen(false)
         if barShare.window == nil { NSApplication.shared.setActivationPolicy(.accessory) }
         // SwiftUI views in a closed window still observe the store and redraw. The editor outlives the window.
         window = nil
@@ -309,7 +309,7 @@ private struct SettingsHeader: View {
     }
 
     private var attentionCount: Int {
-        (store.configuration?.widgets ?? []).filter { store.widgetStatus(for: $0).needsAttention }.count
+        (store.configuration?.widgets ?? []).filter { store.widgetScripts.widgetStatus(for: $0).needsAttention }.count
     }
 }
 

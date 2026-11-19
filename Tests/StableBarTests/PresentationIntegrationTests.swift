@@ -198,8 +198,8 @@ private var presentationRepository: URL {
     #expect(bar.panel.focusesWidgets)
     await bar.settle()
     try await press(36, "\r")
-    for _ in 0..<100 where store.actionErrors["bolt"] == nil { try await Task.sleep(for: .milliseconds(20)) }
-    #expect(store.actionErrors["bolt"] != nil)
+    for _ in 0..<100 where store.widgetScripts.actionErrors["bolt"] == nil { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(store.widgetScripts.actionErrors["bolt"] != nil)
     let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
     try await press(124, right)
     try await press(124, right)
@@ -778,7 +778,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     let initial = panel.frame
     #expect(initial == opened)
     for lines in [5, 100, 0] {
-        store.actionErrors[widget.id] = lines == 0 ? nil : Array(repeating: "Download progress", count: lines).joined(separator: "\n")
+        store.widgetScripts.actionErrors[widget.id] = lines == 0 ? nil : Array(repeating: "Download progress", count: lines).joined(separator: "\n")
         for _ in 0..<8 {
             panel.contentView!.layoutSubtreeIfNeeded()
             let host = panel.contentView!.subviews[0]
@@ -851,7 +851,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     popup.close()
     try click(other)
     #expect(popup.isOpen)
-    store.actionErrors[ask.id] = Array(repeating: "A longer answer", count: 5).joined(separator: "\n")
+    store.widgetScripts.actionErrors[ask.id] = Array(repeating: "A longer answer", count: 5).joined(separator: "\n")
     try await layOut(panel)
     #expect(panel.frame.height > home.height)
     #expect(abs(panel.frame.maxY - home.maxY) < 0.5)
@@ -869,7 +869,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     edges.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: corner.x - 120, y: corner.y - 200)))
     #expect(panel.frame == dragged)
     #expect(popup.pins.resized == ["ask"])
-    store.actionErrors[ask.id] = nil
+    store.widgetScripts.actionErrors[ask.id] = nil
     try await layOut(panel)
     #expect(panel.frame == dragged)
     #expect(panel.contentView!.subviews[0].frame == panel.contentView!.bounds)
@@ -1027,7 +1027,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     #expect(try alpha(of: shadow.contentView!, at: beside) > 0)
     #expect(try alpha(of: shadow.contentView!, at: NSPoint(x: panel.frame.width / 2, y: beside.y)) == 0)
     let opened = panel.frame
-    store.actionErrors[widget.id] = Array(repeating: "Pipeline failed", count: 5).joined(separator: "\n")
+    store.widgetScripts.actionErrors[widget.id] = Array(repeating: "Pipeline failed", count: 5).joined(separator: "\n")
     try await settle()
     #expect(panel.frame.height > opened.height)
     #expect(shadow.frame == panel.frame)
@@ -1101,14 +1101,14 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     store.reloadConfiguration()
     defer { store.stop() }
     for _ in 0..<100 {
-        if store.scripts["music"]?.output.fields?["track"] != nil && store.workspaceStore.mode == "main" { break }
+        if store.widgetScripts.scripts["music"]?.output.fields?["track"] != nil && store.workspaceStore.mode == "main" { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(store.configurationError == nil)
     let configuration = try #require(store.configuration)
     #expect(configuration.widgets.count >= 15)
-    let shared = try #require(store.providers["sample"])
-    #expect(store.scripts["music"] === shared && store.scripts["cpu"] === shared && store.scripts["memory"] === shared)
+    let shared = try #require(store.widgetScripts.providers["sample"])
+    #expect(store.widgetScripts.scripts["music"] === shared && store.widgetScripts.scripts["cpu"] === shared && store.widgetScripts.scripts["memory"] === shared)
     let laptop = OffscreenBar(configuration: configuration, display: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851),
                              width: 1512, sharedStore: store)
     let external = OffscreenBar(configuration: configuration, display: BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil),
@@ -1163,7 +1163,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
     #expect(!popup.isOpen)
     #expect(store.workspaceStore.mode == "tailing")
-    #expect(store.providers["sample"] === shared && source.starts == 1)
+    #expect(store.widgetScripts.providers["sample"] === shared && source.starts == 1)
     await laptop.settle()
     _ = try laptop.bitmap(name: "tonhalle-light-1512-command")
     _ = try external.bitmap(name: "tonhalle-light-2560-command")
@@ -1190,7 +1190,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     #expect(store.workspaceStore.mode == "tailing")
     #expect(store.barStyle.borderEdges != .all)
     #expect(store.presentations["time"]?.style.base.fontSize == store.configuration?.defaults.fontSize)
-    #expect(store.providers["sample"] === shared && source.starts == 1)
+    #expect(store.widgetScripts.providers["sample"] === shared && source.starts == 1)
     await laptop.settle()
     _ = try laptop.bitmap(name: "built-in-light-1512-command")
     _ = try external.bitmap(name: "built-in-light-2560-command")
@@ -1225,8 +1225,8 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     try shared.accept(ScriptOutput.read(Data(contentsOf: directory.appending(path: "sample.json"))))
     let mode = ScriptWidget()
     try mode.accept(ScriptOutput.read(Data(#"{"text":"","hidden":true}"#.utf8)))
-    for widget in config.widgets where widget.providerName == "sample" { store.scripts[widget.id] = shared }
-    store.scripts["mode"] = mode
+    for widget in config.widgets where widget.providerName == "sample" { store.widgetScripts.scripts[widget.id] = shared }
+    store.widgetScripts.scripts["mode"] = mode
     store.preparePresentations()
     defer { store.stop() }
     let laptopDisplay = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)

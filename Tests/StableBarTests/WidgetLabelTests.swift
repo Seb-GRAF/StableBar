@@ -65,7 +65,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     defer { store.stop() }
     store.reloadConfiguration()
     for _ in 0..<100 {
-        if store.scripts["jobs"]?.output.text == "Busy" { break }
+        if store.widgetScripts.scripts["jobs"]?.output.text == "Busy" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     guard case let .object(note) = try store.snapshot(id: "note"), case let .object(time) = try store.snapshot(id: "time"),

@@ -161,7 +161,7 @@ final class BarEditing {
     func hasContent(_ widget: WidgetConfiguration) -> Bool {
         guard let store else { return false }
         let label = store.label(for: widget).overlaid(by: store.presentations[widget.id]?.temporaryFields)
-        let output = store.scripts[widget.id]?.output
+        let output = store.widgetScripts.scripts[widget.id]?.output
         let layout = widget.layout ?? widget.defaultLayout(label, output: output,
                                                            appIcon: widget.content == .activeApp && store.activeApp?.icon != nil,
                                                            providerType: store.configuration?.providerType(of: widget))

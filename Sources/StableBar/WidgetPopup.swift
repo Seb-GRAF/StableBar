@@ -460,7 +460,7 @@ final class WidgetPopup {
         widgetID = widget.id
         self.store = store
         onClose = popup.onClose.map { ($0, widget) }
-        if let command = popup.onOpen { store.runAction(command, widget: widget, event: ScriptEvent(sender: "popup.opened")) }
+        if let command = popup.onOpen { store.widgetScripts.runAction(command, widget: widget, event: ScriptEvent(sender: "popup.opened")) }
         if parentPopup == nil {
             store.setPopupVisibleWidget(widget.id, anchor: anchor)
         } else {
@@ -707,7 +707,7 @@ final class WidgetPopup {
         close()
         // The widget can leave the bar, with a configuration change or its display, while its popup is pinned.
         guard let anchor = popup.anchor, let store = popup.store else {
-            if let onClose = popup.onClose { popup.store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
+            if let onClose = popup.onClose { popup.store?.widgetScripts.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
             dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source,
                     upward: popup.panel.opensUpward, animation: popup.animation)
             return
@@ -740,7 +740,7 @@ final class WidgetPopup {
         pins.ids.remove(id)
         spots[id] = (popup.panel.frame, true)
         pins.resized.remove(id)
-        if let onClose = popup.onClose { popup.store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
+        if let onClose = popup.onClose { popup.store?.widgetScripts.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
         dismiss([popup.panel, popup.shadow].compactMap { $0 }, transition: popup.transition, source: popup.source,
                 upward: popup.panel.opensUpward, animation: popup.animation)
     }
@@ -843,7 +843,7 @@ final class WidgetPopup {
     }
 
     func close() {
-        if let onClose { store?.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
+        if let onClose { store?.widgetScripts.runAction(onClose.command, widget: onClose.widget, event: ScriptEvent(sender: "popup.closed")) }
         onClose = nil
         stopWatching()
         if let widgetID { pins.resized.remove(widgetID) }

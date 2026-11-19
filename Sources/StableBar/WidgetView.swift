@@ -5,13 +5,13 @@ func widgetPopup(_ widget: WidgetConfiguration, store: BarStore) -> PopupConfigu
     if widget.id == AppUpdate.widgetID { return AppUpdate.popup }
     if let popup = widget.popup { return popup }
     if let name = widget.popupName { return store.configuration?.popups[name] }
-    if let menu = store.scripts[widget.id]?.output.menu ?? widget.menu, !menu.isEmpty {
+    if let menu = store.widgetScripts.scripts[widget.id]?.output.menu ?? widget.menu, !menu.isEmpty {
         return PopupConfiguration(
             style: WidgetStyle(fontSize: 12, spacing: 4),
             layout: PopupBlock(content: .menu)
         )
     }
-    if widget.details, widget.onClick == nil, widget.open == nil, store.scripts[widget.id]?.output.onClick == nil,
+    if widget.details, widget.onClick == nil, widget.open == nil, store.widgetScripts.scripts[widget.id]?.output.onClick == nil,
        let kind = EssentialsPopup.kind(for: widget, providerType: store.configuration?.providerType(of: widget)) {
         return kind.popup(timeZone: widget.timeZone)
     }
@@ -54,7 +54,7 @@ struct WidgetView: View {
     /// Whether the widget's own command, link, popup or menu takes its click, before a built-in click such as the Apple logo's.
     /// A menu counts even when empty, as in Settings.
     private var hasOwnClick: Bool {
-        let output = store.scripts[widget.id]?.output
+        let output = store.widgetScripts.scripts[widget.id]?.output
         return widgetPopup(widget, store: store) != nil || (output?.onClick ?? widget.onClick) != nil || widget.open != nil
             || (output?.menu ?? widget.menu) != nil
     }
@@ -157,7 +157,7 @@ struct WidgetView: View {
     /// without text.
     private func accessibilityValue(date: Date) -> String {
         let text = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields).text
-        guard text.isEmpty, let value = store.scripts[widget.id]?.output.value else { return text }
+        guard text.isEmpty, let value = store.widgetScripts.scripts[widget.id]?.output.value else { return text }
         return value.formatted(.percent.precision(.fractionLength(0)))
     }
 
@@ -195,12 +195,12 @@ struct WidgetView: View {
     /// How the widget's text, field and symbol blocks show changes.
     private var motion: BlockMotion {
         BlockMotion(transition: widget.transition ?? defaultTransition,
-                    animation: store.scripts[widget.id]?.output.animation ?? widget.animation ?? defaultAnimation)
+                    animation: store.widgetScripts.scripts[widget.id]?.output.animation ?? widget.animation ?? defaultAnimation)
     }
 
     var body: some View {
-        let output = store.scripts[widget.id]?.output
-        let tooltip = store.scripts[widget.id]?.error ?? widget.tooltip ?? output?.tooltip
+        let output = store.widgetScripts.scripts[widget.id]?.output
+        let tooltip = store.widgetScripts.scripts[widget.id]?.error ?? widget.tooltip ?? output?.tooltip
         let resolution = self.resolution
         let isOpen = store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(popupAnchor)
         let style = resolution.style(hovered: hovered || barFocus?.wrappedValue == widget.id, open: isOpen)
@@ -265,7 +265,7 @@ struct WidgetView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if let error = store.scripts[widget.id]?.error ?? store.actionErrors[widget.id] {
+            if let error = store.widgetScripts.scripts[widget.id]?.error ?? store.widgetScripts.actionErrors[widget.id] {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).font(.system(size: 8)).help(error)
             }
         }
@@ -282,8 +282,8 @@ struct WidgetView: View {
         .overlay {
             if store.barEditing.allowsWidgetActions, let actions = widget.actions {
                 WidgetActionCapture(actions: actions, display: monitor) { command, context in
-                    store.runAction(command, widget: widget,
-                                    event: ScriptEvent(sender: context.sender, environment: context.environment))
+                    store.widgetScripts.runAction(command, widget: widget,
+                                                  event: ScriptEvent(sender: context.sender, environment: context.environment))
                 }
             }
         }
@@ -355,13 +355,13 @@ struct WidgetView: View {
         case .systemSettings: OpenTarget("com.apple.systempreferences")!.open()
         case .lockScreen:
             let error = lockScreen()
-            if store.actionErrors[widget.id] != error { store.actionErrors[widget.id] = error }
+            if store.widgetScripts.actionErrors[widget.id] != error { store.widgetScripts.actionErrors[widget.id] = error }
         }
     }
 
     private func runAction(_ action: BlockAction, sender: String, button: String? = nil) {
         let context = WidgetActionContext(sender: sender, button: button, modifiers: NSEvent.modifierFlags, display: monitor)
-        store.runAction(action, widget: widget, event: ScriptEvent(sender: sender, environment: context.environment))
+        store.widgetScripts.runAction(action, widget: widget, event: ScriptEvent(sender: sender, environment: context.environment))
     }
 
     @ViewBuilder
@@ -442,7 +442,7 @@ struct WidgetView: View {
         case .spacer where widget.layout == nil:
             Spacer(minLength: resolution.base.minWidth ?? 0)
         default:
-            if store.scripts[widget.id]?.error != nil && !store.barEditing.hasContent(widget) {
+            if store.widgetScripts.scripts[widget.id]?.error != nil && !store.barEditing.hasContent(widget) {
                 Image(systemName: store.label(for: widget).icon ?? "exclamationmark.triangle")
                     .font(.system(size: WidgetAppearance(resolution.style(hovered: false, open: open), defaults: WidgetStyle()).iconSize))
             } else {
@@ -492,8 +492,8 @@ struct WidgetView: View {
         if environment.isEmpty {
             runAction(action, sender: "mouse.clicked", button: "left")
         } else {
-            store.runAction(action, widget: widget,
-                            event: ScriptEvent(sender: "control.changed", environment: environment.merging(["SID": String(monitor)]) { first, _ in first }))
+            store.widgetScripts.runAction(action, widget: widget,
+                                          event: ScriptEvent(sender: "control.changed", environment: environment.merging(["SID": String(monitor)]) { first, _ in first }))
         }
     }
 }
@@ -513,7 +513,7 @@ struct WidgetBlocks: View {
     @Environment(\.screenKind) private var screenKind
 
     var body: some View {
-        let script = store.scripts[widget.id]
+        let script = store.widgetScripts.scripts[widget.id]
         let label = store.label(for: widget, date: date).overlaid(by: store.presentations[widget.id]?.temporaryFields)
         let appIcon = widget.content == .activeApp ? store.activeApp?.icon : nil
         let providerType = store.configuration?.providerType(of: widget)

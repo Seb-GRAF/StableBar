@@ -167,7 +167,7 @@ struct BarView: View {
                             restingWidths.merge(widths.filter { !expanded.contains($0.key) }) { $1 }
                         }
                     }
-                    .onChange(of: visible, initial: true) { _, ids in if !preview { store.setVisibleWidgets(ids: ids, displayID: display.id) } }
+                    .onChange(of: visible, initial: true) { _, ids in if !preview { store.widgetScripts.setVisibleWidgets(ids: ids, displayID: display.id) } }
                     .frame(width: geometry.size.width / scale, height: geometry.size.height / scale)
                     .scaleEffect(scale, anchor: .topLeading)
                 }
@@ -203,7 +203,7 @@ struct BarView: View {
         .frame(maxHeight: .infinity, alignment: store.configuration?.bar(on: ScreenKind(display)).position == .bottom ? .bottom : .top)
         .allowsHitTesting(!preview)
         .accessibilityHidden(preview)
-        .onDisappear { if !preview { store.setVisibleWidgets(ids: [], displayID: display.id) } }
+        .onDisappear { if !preview { store.widgetScripts.setVisibleWidgets(ids: [], displayID: display.id) } }
         .contextMenu {
             if !preview {
                 BarContextMenu(store: store, display: display.id)

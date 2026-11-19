@@ -166,14 +166,14 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     }
     #expect(store.configurationError == nil)
     #expect(store.barStyle.borderColor == HexColor(0xaa8844ff))
-    let script = try #require(store.scripts["s"])
+    let script = try #require(store.widgetScripts.scripts["s"])
     try script.accept(ScriptOutput.read(Data(##"{"text":"Ready","barStyle":{"borderColor":"#ffffff","borderEdges":"bottom"}}"##.utf8)))
     #expect(store.barStyle.borderEdges == .all)
     #expect(store.barStyle.borderColor == HexColor(0xaa8844ff))
     try store.applyEdits([ConfigurationEdit(action: .theme, properties: ["id": .string("blue"), "version": .string("1.0.0")])], persist: false)
     #expect(store.barStyle.borderColor == HexColor(0x4488aaff))
     #expect(store.barStyle.borderEdges == .all)
-    #expect(store.scripts["s"] === script)
+    #expect(store.widgetScripts.scripts["s"] === script)
     #expect(store.workspaceStore.mode == "tailing")
     #expect(try String(contentsOf: calls, encoding: .utf8).split(separator: "\n").count == 1)
     store.workspaceStore.acceptMode("main")
@@ -200,7 +200,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
     store.reloadConfiguration()
-    let script = try #require(store.scripts["s"])
+    let script = try #require(store.widgetScripts.scripts["s"])
     for _ in 0..<100 {
         if script.output.text == "ready" { break }
         try await Task.sleep(for: .milliseconds(10))
@@ -215,7 +215,7 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     #expect(store.presentations["s"]?.style.base.fontSize == 15) // legacy self-targeted widgetStyles
     try store.applyEdits([ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(14)])], persist: false)
     #expect(store.workspaceStore.mode == "tailing")
-    #expect(store.scripts["s"] === script)
+    #expect(store.widgetScripts.scripts["s"] === script)
     #expect(try String(contentsOf: calls, encoding: .utf8).split(separator: "\n").count == 1)
     let switched = "{\"workspaceSource\":\"yabai\"," + json.dropFirst()
     try Data(switched.utf8).write(to: root)
