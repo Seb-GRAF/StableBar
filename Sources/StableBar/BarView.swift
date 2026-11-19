@@ -183,7 +183,7 @@ struct BarView: View {
                 .modifier(BarSurface(store: store, settings: config.bar, kind: ScreenKind(display)))
                 .overlay(alignment: .topTrailing) {
                     if let error = store.configurationError {
-                        Button { store.onCustomize?() } label: {
+                        Button { store.onWindowRequest?(.customize) } label: {
                             Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11)).foregroundStyle(.orange)
                         }
                         .buttonStyle(.plain)
@@ -232,7 +232,7 @@ private struct BarContextMenu: View {
         Group {
             Label { Text("StableBar") } icon: { if let heading = MenuIcon.heading { Image(nsImage: heading) } }
             if store.barEditing.isAvailable { item(store.barEditing.menuTitle, store.barEditing.menuIcon, action: store.barEditing.toggle) }
-            item("Try Themes…", .themes) { store.onTryThemes?(display) }
+            item("Try Themes…", .themes) { store.onWindowRequest?(.tryThemes(display)) }
             item("Get Widgets…", .store) { NSApp.sendAction(#selector(AppDelegate.getWidgets), to: NSApp.delegate, from: nil) }
             let error = store.configurationError ?? store.workspaceStore.error ?? store.configurationWarning
             if error != nil || store.crashReports.note != nil { Divider() }
@@ -241,11 +241,11 @@ private struct BarContextMenu: View {
                     NSApp.sendAction(#selector(AppDelegate.showStatus), to: NSApp.delegate, from: nil)
                 }
             }
-            if let note = store.crashReports.note { item(note, .problem) { store.onShowCrashes?() } }
+            if let note = store.crashReports.note { item(note, .problem) { store.onWindowRequest?(.showCrashes) } }
             Divider()
             item("Share My Bar…", .share) { if let screen = store.barPanel(display)?.screen { barShare.show(store: store, screen: screen) } }
             item("Send Feedback…", .feedback) { NSApp.sendAction(#selector(AppDelegate.showFeedback), to: NSApp.delegate, from: nil) }
-            item("Settings…", .settings) { store.onCustomize?() }
+            item("Settings…", .settings) { store.onWindowRequest?(.customize) }
             item("Quit StableBar", .quit) { NSApp.terminate(nil) }
         }
         .labelStyle(.titleAndIcon)
@@ -268,7 +268,7 @@ struct WidgetContextMenu: View {
         if store.barEditing.allowsWidgetActions, widget.actions?.rightClick == nil,
            store.configuration?.widgets.contains(where: { $0.id == widget.id }) == true {
             if dividerAbove { Divider() }
-            Button("Edit Widget…") { store.onCustomizeItem?(.widget(widget.id)) }
+            Button("Edit Widget…") { store.onWindowRequest?(.customizeItem(.widget(widget.id))) }
             Divider()
             BarContextMenu(store: store, display: display)
         }

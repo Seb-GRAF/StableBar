@@ -72,7 +72,7 @@ final class ThemeLinkCandidate {
     func tryOnBar() {
         guard !discarded, !using, state != .used, let store else { return }
         store.barEditing.end()
-        store.onEndThemeTrial?()
+        store.onWindowRequest?(.endThemeTrial)
         do {
             try store.tryTheme(choice)
             candidateState = .trying
@@ -111,14 +111,14 @@ final class ThemeLinkCandidate {
                 return
             }
             try store.applyTheme(installed, on: kind, everyBar: everyBar)
-            store.onEndThemeTrial?()
+            store.onWindowRequest?(.endThemeTrial)
             store.endThemeTrial()
             candidateState = .used
             try? FileManager.default.removeItem(at: choice.directory)
         } catch {
             guard !discarded else { return }
             if let trialDirectory, store.themeTrialDirectory == trialDirectory {
-                store.onEndThemeTrial?()
+                store.onWindowRequest?(.endThemeTrial)
                 store.endThemeTrial()
             }
             candidateState = .failed(errorMessage(error))

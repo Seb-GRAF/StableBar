@@ -312,27 +312,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             updatePanels()
             systemContext?.watch(store.profiles.filter(\.enabled))
         }
-        store.onCustomize = { [weak self] in self?.showCustomization() }
-        store.onShowCrashes = { [weak self] in self?.showCrashes() }
-        store.onCustomizePackages = { [weak self] in
-            guard let self else { return }
-            customization.show(store: store, section: .packages)
-        }
-        store.onCustomizeItem = { [weak self] target in
-            guard let self else { return }
-            switch target {
-            case let .widget(id): customization.show(store: store, widgetID: id)
-            case let .group(group): customization.show(store: store, groupID: group)
+        store.onWindowRequest = { [weak self] request in
+            switch request {
+            case .customize: self?.showCustomization()
+            case .showCrashes: self?.showCrashes()
+            case .customizePackages:
+                guard let self else { return }
+                customization.show(store: store, section: .packages)
+            case let .customizeItem(target):
+                guard let self else { return }
+                switch target {
+                case let .widget(id): customization.show(store: store, widgetID: id)
+                case let .group(group): customization.show(store: store, groupID: group)
+                }
+            case let .tryThemes(displayID):
+                let screens = NSScreen.screens
+                guard screens.indices.contains(displayID - 1) else { return }
+                self?.showThemeTrial(on: screens[displayID - 1])
+            case .endThemeTrial: self?.themeTrial.cancel()
             }
         }
-        store.onEndThemeTrial = { [weak self] in self?.themeTrial.cancel() }
         store.barPanel = { [weak self] displayID in
             self?.panels.values.first { $0.screen.map(BarDisplay.init)?.id == displayID }
-        }
-        store.onTryThemes = { [weak self] displayID in
-            let screens = NSScreen.screens
-            guard screens.indices.contains(displayID - 1) else { return }
-            self?.showThemeTrial(on: screens[displayID - 1])
         }
         do {
             let control = RuntimeControl { [weak self, store] request in

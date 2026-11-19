@@ -185,7 +185,7 @@ struct LinkedThemeCardTests {
         let card = LinkedThemeCard(candidate: candidate, editor: ConfigurationEditor(store: store))
         candidate.tryOnBar()
         var endedTrial = false
-        store.onEndThemeTrial = { endedTrial = true }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { endedTrial = true } }
 
         let use = Task { await card.useTheme() }
         for await _ in started.stream { break }

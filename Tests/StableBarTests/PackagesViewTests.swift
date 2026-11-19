@@ -136,7 +136,7 @@ final class PackagesViewTests: XCTestCase {
         reopened.notifiesAboutUpdates = true
         XCTAssertNotNil(reopened.updateWidget)
         var opened = false
-        store.onCustomizePackages = { opened = true }
+        store.onWindowRequest = { if case .customizePackages = $0 { opened = true } }
         reopened.filter = .themes
         reopened.search = "unrelated"
         reopened.openUpdates()

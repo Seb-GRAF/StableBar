@@ -314,7 +314,7 @@ final class BarEditingTests: XCTestCase {
         let marker = fixture.directory.appending(path: "actions")
         let command = "printf x >> '\(marker.path)'"
         var selected: String?
-        store.onCustomizeItem = { if case let .widget(id) = $0 { selected = id } }
+        store.onWindowRequest = { if case let .customizeItem(.widget(id)) = $0 { selected = id } }
         store.barEditing.begin()
         store.barEditing.select("a")
         XCTAssertEqual(selected, "a")
@@ -385,7 +385,9 @@ final class BarEditingTests: XCTestCase {
         let before = try Data(contentsOf: fixture.url)
         store.barEditing.begin()
         // Opening Settings activates StableBar and refreshes the frontmost-app context.
-        store.onCustomizeItem = { [weak store] _ in store?.refreshContext(ConfigurationContext(app: "com.stablebar")) }
+        store.onWindowRequest = { [weak store] request in
+            if case .customizeItem = request { store?.refreshContext(ConfigurationContext(app: "com.stablebar")) }
+        }
         store.barEditing.select("clock")
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(store.activeProfiles, ["App"])
@@ -442,7 +444,7 @@ final class BarEditingTests: XCTestCase {
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertNotEqual(store.effectiveDocument, normal)
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         store.barEditing.begin()
         XCTAssertFalse(trial.isActive)
         XCTAssertEqual(store.effectiveDocument, normal)

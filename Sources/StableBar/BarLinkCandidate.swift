@@ -139,7 +139,7 @@ final class BarLinkCandidate {
         do {
             guard try await installPackages(in: store, then: .tryOnBar(kind)), !discarded else { return }
             store.barEditing.end()
-            store.onEndThemeTrial?()
+            store.onWindowRequest?(.endThemeTrial)
             var choice = look.choice
             if !appliesLook {
                 let screens = try store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self) ?? [:]
@@ -182,7 +182,7 @@ final class BarLinkCandidate {
             }
             guard !discarded, store.configurationURL == configurationURL else { return }
             // The trial's edits don't apply over the saved bar, so it ends first.
-            store.onEndThemeTrial?()
+            store.onWindowRequest?(.endThemeTrial)
             store.endThemeTrial()
             try store.customizationHistory.change(themeEdits + edits(in: store, on: kind), everyBar: everyBar)
             candidateState = .used
@@ -190,7 +190,7 @@ final class BarLinkCandidate {
         } catch {
             guard !discarded else { return }
             if let trialDirectory, store.themeTrialDirectory == trialDirectory {
-                store.onEndThemeTrial?()
+                store.onWindowRequest?(.endThemeTrial)
                 store.endThemeTrial()
             }
             candidateState = .failed(errorMessage(error))

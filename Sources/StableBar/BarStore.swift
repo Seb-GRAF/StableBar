@@ -1,6 +1,15 @@
 import AppKit
 import Observation
 
+enum WindowRequest {
+    case customize
+    case showCrashes
+    case customizePackages
+    case customizeItem(CustomizationTarget)
+    case tryThemes(Int)
+    case endThemeTrial
+}
+
 @MainActor @Observable
 final class BarStore: NSObject {
     var configuration: Configuration?
@@ -34,16 +43,11 @@ final class BarStore: NSObject {
     private(set) var screenSetup: ScreenSetup?
     let registry: DataSourceRegistry
     var onConfigurationChange: (() -> Void)?
-    var onCustomize: (() -> Void)?
-    var onShowCrashes: (() -> Void)?
-    var onCustomizeItem: ((CustomizationTarget) -> Void)?
-    var onCustomizePackages: (() -> Void)?
+    var onWindowRequest: ((WindowRequest) -> Void)?
     let pendingLinks = PendingLinks()
     var onCustomizeProfile: ((String) -> Void)?
     var onEndCustomizationEditing: (() -> Void)?
-    var onTryThemes: ((Int) -> Void)?
     var barPanel: (Int) -> BarPanel? = { _ in nil }
-    var onEndThemeTrial: (() -> Void)?
     var effectiveDocument: [String: ConfigurationValue] = [:]
     var screenDocuments: [String: [String: ConfigurationValue]] = [:]
     var origins: [String: ConfigurationOrigin] = [:]
@@ -1041,8 +1045,8 @@ final class BarStore: NSObject {
             // Terminating right away would exit before the command gets its reply.
             Task { NSApp.terminate(nil) }
         case .customize:
-            if let id = request.id { onCustomizeItem?(.widget(id)) }
-            else { onCustomize?() }
+            if let id = request.id { onWindowRequest?(.customizeItem(.widget(id))) }
+            else { onWindowRequest?(.customize) }
         case .reload:
             barEditing.end()
             try applyEdits([], persist: false)
