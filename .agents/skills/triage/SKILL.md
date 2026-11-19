@@ -17,6 +17,20 @@ Restate the report as one underlying problem. Triage independent problems separa
 reporter's details: StableBar version, macOS version, displays, AeroSpace use and config.
 Ask for missing details only when you cannot search or reproduce without them.
 
+For a problem with how the bar looks or where built-in or Store widgets sit, a bar link is the
+detail to ask for when you cannot reproduce without it, on releases after 0.17.0: the reporter
+chooses **Share My Bar…**, checks **What it shares** and pastes what **Copy Link** copies. The link
+(`https://stablebar.app/bar.html#v=1&d=…` or `stablebar://bar?v=1&d=…`) carries the look and the
+built-in and Store widgets of one screen's bar, without script widgets, custom providers, profiles,
+screen layouts or includes. Read it instead of opening it, which would reach the running bar: `d`
+is base64url without padding over raw DEFLATE, and inflates to JSON.
+
+```sh
+python3 -c 'import base64, json, sys, zlib
+d = sys.argv[1].split("d=")[-1].split("&")[0]
+print(json.dumps(json.loads(zlib.decompress(base64.urlsafe_b64decode(d + "=" * (-len(d) % 4)), -15)), indent=2))' '<bar link>'
+```
+
 ## 2. Check every source
 
 Complete these checks before deciding. Without `gh` auth, search issues and PRs through the public
