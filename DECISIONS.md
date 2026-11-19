@@ -26,6 +26,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 
 - **Sliders may take a role implicitly** (2026-11-17). Sliders with neither `filled` nor another role follow a nonempty `slider` role, so themes can style controls without owning widget layouts. Explicit `filled` choices retain their behavior, and an empty role retains the native control. Other blocks still require explicit roles.
 - **Window managers own their gaps** (2026-11-13). StableBar does not turn macOS menu-bar auto-hide off to reserve space: that changes the usable screen area underneath existing window-manager gaps, and the reserved height does not follow StableBar’s height. Keep windows clear remains a correction for ordinary windows after a drag.
+- **`BarStore` only wires one bar together** (2026-11-19). It had grown to 74 stored properties and 1,400 lines. Its concerns moved, unchanged, into types of their own: `ConfigurationStore` (files, edits, reload, migrations, theme trials), `WidgetScripts` (scripts, providers, events, click actions, suspension), `BarPresentation` (resolved styles), `AppWatcher` (front app and menu bar owner) and the runtime commands; the sources are grouped in folders by area. Every scene and docs image drew the same pixels before and after, and the command line printed the same. It was a restructuring, not a rewrite: existing state still moves into a `StateMachine` when a bug in it is fixed.
 - **Architecture rules are tests** (2026-11-08, [#484]). `ArchitectureRulesTests` caps `BarStore`'s stored state, a number that only goes down, allows no `unowned` reference ([#493]), keeps private macOS API in `PrivateAPI.swift` ([#490]) and keeps state machines free of UI frameworks, tasks, the clock and the system.
 - **Decisions about state are state machines, in plain Swift** (2026-11-17). A feature's state is one enum with a pure `handle(event)` that returns an effect for its owner to perform, so every transition has a unit test and no combination of flags can contradict another. A trial on `WidgetPopup`'s hover and click state with The Composable Architecture took 14 more packages and a 37% slower clean build, and its store refuses an action sent while it handles another, which AppKit callbacks do. The same reducer in plain Swift was as easy to test. `SetupPlacement` is the first: setup's placement choice had three fields and a counter checked in three places to drop stale answers. Existing state moves over when a bug in it is fixed, not in a rewrite.
 - **Private macOS API is a maintainer's call** (2026-11-08, [#484], [#490]). Every call lives in `PrivateAPI.swift` and is looked up at runtime, never with `@_silgen_name`, so a macOS without one turns off only its feature.
@@ -40,8 +41,8 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
   is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
   `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,
-  `style`, `notchWidth`, `notchSpacing`, `fillNotch` and `popupOffset`. Inside `bar`, numbers must
-  be literal; colors may use tokens or settings with `choices`. Free-text string settings under
+  `style`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and `glass`. Inside `bar`,
+  numbers must be literal; colors may use tokens or settings with `choices`. Free-text string settings under
   `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
   from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
   theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and
@@ -53,8 +54,8 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   refused. Bounds use the full property path: `bar.height` 16…100, `bar.inset` 0…100, `bar.spacing`
   0…50, `bar.margin` 0…40 and `bar.popupOffset` 0…40 (its pending control in [#664]). Within
   `bar.style` and its states, border width uses 0…6, corner radius 0…40, font size 6…40,
-  horizontal/vertical padding 0…40 and opacity 0…1. Gradients in `bar.background` and style
-  backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
+  horizontal/vertical padding 0…40 and opacity 0…1. `bar.glass.transparency` uses 0…1.
+  Gradients in `bar.background` and style backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
   Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.
@@ -78,14 +79,21 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   `onChange`, `onSubmit`, `onStop`, `onStar`, `set`), every `image` block and every list whose
   row is one of those. Script and custom provider widgets, widgets from folders or private
   sources, includes, templates, `environment` and `packageSources` stay behind. A Store package
-  carries its ID, version, its widgets' positions and its number, boolean and choice settings;
-  secret and free-text settings keep the package's defaults. The recipient applies the same
-  filters, installs packages from the Store, through its review when they need one, gets the
-  version the Store lists (the link's while it's the newest), and leaves out packages the Store
-  doesn't list. **Use this bar**
+  carries its ID, version, its widgets' positions and own `group`s, and its number, boolean and
+  choice settings; secret and free-text settings keep the package's defaults. The recipient
+  applies the same filters, installs packages from the Store, through its review when they need
+  one, gets the version the Store lists (the link's while it's the newest), and leaves out
+  packages the Store doesn't list. A Store version already on the recipient's bar skips the
+  review and keeps its settings, with the link's over them. Without the link's look,
+  a widget keeps its `group` only when the bar already has that group. Each group a widget keeps
+  gets an empty entry in the main file's `groups`, so the widgets stay valid under another theme. **Use this bar**
   replaces the main file's widgets, packages, widget overrides and order, screen layouts and the
   widget changes in its profiles, and with **Every screen** the look that Save as Theme would
-  move, in one undoable change; widgets that included files add stay. Limits: 64 KB for the URL,
+  move, in one undoable change; widgets that included files add stay. When the link centers
+  widgets and the Mac has a notched display under a top bar, **Try on Bar** and **Use this bar**
+  also write a `screens.laptop.layout` that puts them left of the notch: the bar puts them right
+  of it with the right-hand ones, where a bar made on a wide monitor doesn't fit. Other screens
+  keep them centered. Limits: 64 KB for the URL,
   128 KB for the decoded payload, 32 levels of JSON nesting and 4,096 JSON values. Theme links
   don't change.
 - **A native provider may read a macOS tool's output** (2026-11-16, [#220]). When no public API gives the data and the tool needs no permission, a native provider can run a macOS command-line tool, off the main actor and without a shell: `bluetooth` reads every connected device's battery from `system_profiler`. Apple doesn't document the tool's output keys, so a missing or renamed key leaves that value empty instead of failing the provider.

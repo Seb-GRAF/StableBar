@@ -106,7 +106,7 @@ import Testing
             picker.selection.wrappedValue = picker.selection.wrappedValue
             #expect(!store.setsInMainFile(try #require(store.origins["defaults.\(key)"])))
         }
-        #expect(store.sessionEdits.isEmpty)
+        #expect(store.configurationStore.sessionEdits.isEmpty)
         #expect(editor.undoSteps.isEmpty)
         #expect(store.origins == origins)
         try editor.history.flush()
@@ -129,7 +129,7 @@ import Testing
             set: { editor.change(ConfigurationEdit(action: .bar, properties: ["style": .object($0)])) },
             unset: { _ in })
         border.stringBinding("borderEdges", default: "bottom").wrappedValue = "bottom"
-        #expect(editor.store.sessionEdits.isEmpty)
+        #expect(editor.store.configurationStore.sessionEdits.isEmpty)
         #expect(editor.undoSteps.isEmpty)
         #expect(editor.store.origins["bar.style.borderEdges"] == nil)
     }
@@ -140,19 +140,19 @@ import Testing
         let initial = try customizationFields(editor, action: .defaults)
         initial.stringBinding("fontWeight", default: "medium").wrappedValue = "bold"
         #expect(editor.store.configuration?.defaults.fontWeight == "bold")
-        #expect(editor.store.customizationEdits.count == 1)
+        #expect(editor.store.configurationStore.customizationEdits.count == 1)
         #expect(editor.history.canUndo)
         editor.undo()
         let restored = try customizationFields(editor, action: .defaults)
         restored.stringBinding("fontWeight", default: "medium").wrappedValue = "regular"
-        #expect(editor.store.sessionEdits.isEmpty)
+        #expect(editor.store.configurationStore.sessionEdits.isEmpty)
         #expect(editor.undoSteps.isEmpty)
         #expect(editor.redoSteps.count == 1)
         editor.redo()
         let edited = try customizationFields(editor, action: .defaults)
         edited.stringBinding("fontWeight", default: "medium").wrappedValue = "bold"
         #expect(editor.store.configuration?.defaults.fontWeight == "bold")
-        #expect(editor.store.customizationEdits.isEmpty)
+        #expect(editor.store.configurationStore.customizationEdits.isEmpty)
         #expect(editor.undoSteps.count == 1)
     }
 }
@@ -170,7 +170,7 @@ import Testing
         #expect(editor.error == nil)
         #expect(editor.store.origins["defaults.foreground"]?.token == "text")
         #expect(editor.store.configuration?.defaults.foreground == color)
-        #expect(editor.store.customizationEdits.count == 1)
+        #expect(editor.store.configurationStore.customizationEdits.count == 1)
         let changed = TokenPicker(token: editor.store.origins["defaults.foreground"]?.token, color: color) {
             editor.change(ConfigurationEdit(action: .defaults, properties: ["foreground": $0]))
         }
@@ -178,7 +178,7 @@ import Testing
         #expect(editor.error == nil)
         #expect(editor.store.origins["defaults.foreground"]?.token == nil)
         #expect(editor.store.configuration?.defaults.foreground == color)
-        #expect(editor.store.customizationEdits.last?.properties?["foreground"] == color.configurationValue)
+        #expect(editor.store.configurationStore.customizationEdits.last?.properties?["foreground"] == color.configurationValue)
         #expect(editor.history.canUndo)
     }
 }
@@ -253,7 +253,7 @@ import Testing
         #expect(controlling.value == .number(20))
         try editor.store.removePropertySource(controlling)
         #expect(editor.store.configuration?.widgets[0].style.fontSize == 14)
-        let root = try editor.store.editedMainDocument(replaying: editor.store.customizationEdits)
+        let root = try editor.store.configurationStore.editedMainDocument(replaying: editor.store.configurationStore.customizationEdits)
         #expect(root["widgetOverrides"] == nil)
     }
 }
@@ -335,8 +335,8 @@ import Testing
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "Time", style: WidgetStyle(fontSize: 18,
             states: ["warning": WidgetStyle(fontSize: 22), "hover": WidgetStyle(fontSize: 26)]), state: .string("warning"))
-        editor.store.scripts["time"] = script
-        editor.store.updatePresentations()
+        editor.store.widgetScripts.scripts["time"] = script
+        editor.store.barPresentation.updatePresentations()
         let resting = editor.store.propertySources(path: "widgets.time.style", key: "fontSize", defaultsPath: "defaults",
                                                     widgetID: "time", values: editor.style(for: "time"))
         let hovered = editor.store.propertySources(path: "widgets.time.style", key: "fontSize", defaultsPath: "defaults",
@@ -411,7 +411,7 @@ private func withCustomizationEditor(_ configuration: String, included: String? 
     if let included { try Data(included.utf8).write(to: directory.appending(path: "settings.json")) }
     let store = BarStore(configurationURL: url, themesDirectory: nil)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     try body(ConfigurationEditor(store: store), url)
 }

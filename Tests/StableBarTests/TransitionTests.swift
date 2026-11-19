@@ -197,5 +197,5 @@ private struct Probe: View {
 }
 
 @Test func theBarMeasuresWidgetsInTheMeasuringCopy() {
-    #expect(String(reflecting: BarView.Body.self).contains("MeasuringCopy"))
+    #expect(String(reflecting: PlacedUnits.Body.self).contains("MeasuringCopy"))
 }

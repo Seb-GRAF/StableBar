@@ -9,16 +9,16 @@ final class ConfigurationHistoryTests: XCTestCase {
             defer { fixture.close() }
             let store = fixture.store
             let edits = try WidgetSetup(store: store).editsMoving("a", to: .right)
-            let result = try await store.prepareWidgetMove("a", edits: edits)
+            let result = try await store.configurationStore.prepareWidgetMove("a", edits: edits)
             let prepared = try XCTUnwrap(result)
             let change = ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Changed")])
             switch source {
             case "file": try Data(#"{"widgets":[{"id":"a","type":"text","position":"left","text":"External"}]}"#.utf8).write(to: fixture.url)
-            case "session": try store.applyEdits([change], persist: false)
+            case "session": try store.configurationStore.applyEdits([change], persist: false)
             default: try store.customizationHistory.change(change)
             }
             let current = try Data(contentsOf: fixture.url)
-            XCTAssertThrowsError(try store.writeWidgetMove(prepared))
+            XCTAssertThrowsError(try store.configurationStore.writeWidgetMove(prepared))
             XCTAssertEqual(try Data(contentsOf: fixture.url), current)
             XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
             XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
@@ -63,7 +63,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             XCTAssertEqual(fixture.store.configuration?.widgets[0].content, .text(text))
             XCTAssertEqual(try Data(contentsOf: fixture.url), original)
             XCTAssertTrue(history.undoSteps.isEmpty)
-            XCTAssertTrue(fixture.store.sessionEdits.isEmpty)
+            XCTAssertTrue(fixture.store.configurationStore.sessionEdits.isEmpty)
         }
         await history.writeTask?.value
         XCTAssertFalse(history.hasPendingChanges)
@@ -107,7 +107,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
         try history.flush()
         let after = try Data(contentsOf: fixture.url)
-        fixture.store.reloadConfiguration()
+        fixture.store.configurationStore.reloadConfiguration()
         XCTAssertEqual(history.undoSteps.count, 1)
         try history.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
@@ -149,7 +149,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         try history.flush()
         let external = Data(#"{"bar":{"height":55},"widgets":[]}"#.utf8)
         try external.write(to: fixture.url)
-        fixture.store.reloadConfiguration()
+        fixture.store.configurationStore.reloadConfiguration()
         XCTAssertFalse(history.canUndo)
         try history.change(ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(16)]))
         try history.flush()
@@ -194,7 +194,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         defer { fixture.close() }
         let store = fixture.store
         let history = store.customizationHistory
-        try store.applyEdits([
+        try store.configurationStore.applyEdits([
             ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")]),
             ConfigurationEdit(action: .bar, properties: ["height": .number(60)])
         ], persist: false)
@@ -202,16 +202,16 @@ final class ConfigurationHistoryTests: XCTestCase {
         try history.flush()
         XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(48)]))
         XCTAssertEqual(store.configuration?.bar.height, 60)
-        XCTAssertEqual(store.sessionEdits.count, 2)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 2)
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("Temporary"))
         try history.undo()
         XCTAssertEqual(store.configuration?.bar.height, 60)
-        XCTAssertEqual(store.sessionEdits.count, 2)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 2)
         try history.redo()
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertEqual(store.configuration?.bar.height, 60)
         try history.discardCommandLineChanges()
-        XCTAssertTrue(store.sessionEdits.isEmpty)
+        XCTAssertTrue(store.configurationStore.sessionEdits.isEmpty)
         XCTAssertEqual(store.configuration?.bar.height, 48)
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("A"))
         XCTAssertEqual(history.undoSteps.count, 1)
@@ -224,17 +224,17 @@ final class ConfigurationHistoryTests: XCTestCase {
         defer { fixture.close() }
         let store = fixture.store
         let editor = ConfigurationEditor(store: store)
-        try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
         editor.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
         editor.saveCommandLineChanges()
         XCTAssertNil(editor.error)
         XCTAssertFalse(editor.history.hasPendingChanges)
-        XCTAssertTrue(store.sessionEdits.isEmpty)
+        XCTAssertTrue(store.configurationStore.sessionEdits.isEmpty)
         XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(48)]))
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("Temporary"))
         XCTAssertNil(editor.history.notice)
         XCTAssertFalse(editor.history.canUndo)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(editor.history.notice)
         try editor.history.undo()
         XCTAssertEqual(store.configuration?.widgets[0].content, .text("Temporary"))
@@ -250,7 +250,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             if clearing != "pending undo" { try history.flush() }
             let external = Data(#"{"bar":{"height":55},"widgets":[]}"#.utf8)
             try external.write(to: fixture.url)
-            fixture.store.reloadConfiguration()
+            fixture.store.configurationStore.reloadConfiguration()
             XCTAssertNotNil(history.notice)
             switch clearing {
             case "pending undo":
@@ -277,13 +277,13 @@ final class ConfigurationHistoryTests: XCTestCase {
         let store = fixture.store
         let temporary = ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
                                                                       "position": .string("left"), "text": .string("Temporary")])
-        try store.applyEdits([temporary], persist: false)
+        try store.configurationStore.applyEdits([temporary], persist: false)
         let history = store.customizationHistory
         try history.change(ConfigurationEdit(action: .reorder, ids: ["b", "temporary", "a"]))
         XCTAssertEqual(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self).compactMap { $0["id"] }, [.string("b"), .string("a")])
         XCTAssertNil(try fixture.document()["widgetOrder"])
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a", "temporary"])
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         try history.undo()
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["a", "b", "temporary"])
         try history.redo()
@@ -293,8 +293,8 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.first(where: { $0.id == "a" })?.content, .text("Saved"))
         XCTAssertEqual(try fixture.document()["widgets"]?.decoded([[String: ConfigurationValue]].self).count, 2)
         XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Temporary"))
-        XCTAssertEqual(store.sessionEdits.count, 1)
-        store.reloadConfiguration()
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(store.configurationError)
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["b", "a", "temporary"])
     }
@@ -303,7 +303,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         let fixture = try Fixture()
         defer { fixture.close() }
         let store = fixture.store
-        try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
                                                                           "position": .string("left"), "text": .string("Temporary")])], persist: false)
         let original = try Data(contentsOf: fixture.url)
         let editor = ConfigurationEditor(store: store)
@@ -313,7 +313,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             XCTAssertEqual(editor.error, "Save or discard command-line changes before editing this widget.")
             XCTAssertFalse(editor.history.hasPendingChanges)
             XCTAssertEqual(try Data(contentsOf: fixture.url), original)
-            XCTAssertEqual(store.sessionEdits.count, 1)
+            XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
             XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Temporary"))
         }
         editor.saveCommandLineChanges()
@@ -322,7 +322,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         try editor.history.flush()
         XCTAssertNil(editor.error)
         XCTAssertEqual(store.configuration?.widgets.last?.content, .text("Saved"))
-        XCTAssertTrue(store.sessionEdits.isEmpty)
+        XCTAssertTrue(store.configurationStore.sessionEdits.isEmpty)
     }
 
     @MainActor func testCommandLineNoticeDiscardLeavesSavedCustomizeHistory() throws {
@@ -330,7 +330,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         defer { fixture.close() }
         let store = fixture.store
         let editor = ConfigurationEditor(store: store)
-        try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
         editor.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
         editor.discardCommandLineChanges()
         XCTAssertNil(editor.error)
@@ -348,7 +348,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             let history = fixture.store.customizationHistory
             try history.change(ConfigurationEdit(action: .bar, properties: ["height": .number(48)]))
             if stopping { fixture.store.stop() }
-            else { XCTAssertTrue(fixture.store.flushCustomization()) }
+            else { XCTAssertTrue(fixture.store.configurationStore.flushCustomization()) }
             XCTAssertFalse(history.hasPendingChanges)
             XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(48)]))
         }
@@ -367,14 +367,14 @@ final class ConfigurationHistoryTests: XCTestCase {
             let history = fixture.store.customizationHistory
             try beginPendingChange(failure, in: fixture)
             let repair = try breakFile(failure, in: fixture)
-            fixture.store.reloadConfiguration()
+            fixture.store.configurationStore.reloadConfiguration()
             await history.writeTask?.value
             XCTAssertFalse(history.hasPendingChanges, "\(failure)")
             XCTAssertTrue(history.error?.contains("could not be saved and was discarded") == true)
             XCTAssertTrue(history.undoSteps.isEmpty)
             try history.undo()
             try repair()
-            fixture.store.reloadConfiguration()
+            fixture.store.configurationStore.reloadConfiguration()
             XCTAssertNil(fixture.store.configurationError)
             XCTAssertFalse(history.hasPendingChanges)
             XCTAssertFalse(history.canUndo)
@@ -409,7 +409,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             try beginPendingChange(failure, in: fixture)
             let repair = try breakFile(failure, in: fixture)
             defer { try? repair() }
-            store.reloadConfiguration()
+            store.configurationStore.reloadConfiguration()
             XCTAssertNotNil(store.configurationError)
             let unavailable = failure == .deletedFile || failure == .unreadableFile
             switch action {
@@ -435,7 +435,7 @@ final class ConfigurationHistoryTests: XCTestCase {
                 XCTAssertNil(store.profiles.first?.when?.app)
             }
             try repair()
-            store.reloadConfiguration()
+            store.configurationStore.reloadConfiguration()
             XCTAssertNil(store.configurationError)
             XCTAssertFalse(history.hasPendingChanges)
             try history.undo()
@@ -562,7 +562,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         editor.setProfileCondition("work", \.app, value: "com.example", control: "app")
         let external = Data(#"{"widgets":[],"profiles":[{"name":"work","when":{"onBattery":true},"configuration":{}}]}"#.utf8)
         try external.write(to: fixture.url)
-        fixture.store.reloadConfiguration()
+        fixture.store.configurationStore.reloadConfiguration()
         XCTAssertEqual(fixture.store.profiles[0].when?.app, "com.example")
         XCTAssertEqual(fixture.store.profiles[0].when?.onBattery, true)
         try editor.history.flush()
@@ -582,7 +582,7 @@ final class ConfigurationHistoryTests: XCTestCase {
             if inherited {
                 try Data(profile.utf8).write(to: included)
                 try Data(#"{"widgets":[],"includes":["profiles.json"]}"#.utf8).write(to: fixture.url)
-                fixture.store.reloadConfiguration()
+                fixture.store.configurationStore.reloadConfiguration()
             }
             let original = try Data(contentsOf: fixture.url)
             let editor = ConfigurationEditor(store: fixture.store)
@@ -604,7 +604,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         defer { fixture.close() }
         let store = fixture.store
         let original = try Data(contentsOf: fixture.url)
-        try store.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
             ["name": .string("temporary"), "configuration": .object([:])]
         ])], persist: false)
         let editor = ConfigurationEditor(store: store)
@@ -615,7 +615,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
         XCTAssertTrue(editor.undoSteps.isEmpty)
         XCTAssertFalse(editor.history.hasPendingChanges)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         editor.discardCommandLineChanges()
         XCTAssertTrue(store.profiles.isEmpty)
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
@@ -643,7 +643,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         let fixture = try Fixture(configuration: #"{"widgets":[],"profiles":[{"name":"work","configuration":{}}]}"#)
         defer { fixture.close() }
         let store = fixture.store
-        try store.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .profiles, profiles: [
             ["name": .string("work"), "when": .object(["app": .string("com.temporary")]),
              "configuration": .object(["bar": .object(["margin": .number(10)])])]
         ])], persist: false)
@@ -659,7 +659,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertNil(saved[0].when?.app)
         XCTAssertEqual(saved.map(\.name), ["work", "extra"])
         XCTAssertEqual(saved[0].configuration["bar"], .object(["height": .number(48)]))
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         XCTAssertEqual(store.profiles[0].when?.app, "com.temporary")
         XCTAssertEqual(store.profiles[0].configuration["bar"], .object(["height": .number(48), "margin": .number(10)]))
     }
@@ -677,7 +677,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         let original = Data(#"{"widgets":[],"packages":[{"id":"sample","version":"1"}],"includes":["included.json"],"profiles":[{"name":"work","configuration":{"bar":{"offset":2}}}]}"#.utf8)
         try original.write(to: fixture.url)
         let store = fixture.store
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(store.configurationError)
         _ = try XCTUnwrap(store.profiles.first)
         let editor = ConfigurationEditor(store: store)
@@ -718,7 +718,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: package), packageData)
 
         try Data(String(decoding: packageData, as: UTF8.self).replacingOccurrences(of: "7", with: "9").utf8).write(to: package)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertEqual(store.profiles[0].configuration["bar"], .object(["height": .number(44), "spacing": .number(9), "offset": .null]))
     }
 
@@ -906,8 +906,8 @@ final class ConfigurationHistoryTests: XCTestCase {
         original["includes"] = .array([.string("profiles.json")])
         try configurationData(original).write(to: fixture.url)
         let store = fixture.store
-        store.reloadConfiguration()
-        try store.applyEdits([ConfigurationEdit(action: .profile), ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
+        store.configurationStore.reloadConfiguration()
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .profile), ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
         let editor = ConfigurationEditor(store: store)
         editor.editBar(for: "work")
         XCTAssertEqual(store.activeProfiles, ["work"])
@@ -941,8 +941,8 @@ final class ConfigurationHistoryTests: XCTestCase {
         XCTAssertNil(store.pinnedProfile)
         XCTAssertEqual(store.activeProfiles, ["home"])
         XCTAssertEqual(store.configuration?.bar.height, 60)
-        XCTAssertEqual(store.sessionEdits.count, 2)
-        try store.setSessionEdits([])
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 2)
+        try store.configurationStore.setSessionEdits([])
         XCTAssertEqual(store.pinnedProfile, "home")
     }
 
@@ -977,7 +977,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         let imported = Data(#"{"bar":{"glass":{"transparency":0.6,"popups":false}}}"#.utf8)
         try imported.write(to: included)
         try Data(#"{"widgets":[],"includes":["included.json"]}"#.utf8).write(to: fixture.url)
-        fixture.store.reloadConfiguration()
+        fixture.store.configurationStore.reloadConfiguration()
         let original = try Data(contentsOf: fixture.url)
         let editor = ConfigurationEditor(store: fixture.store)
         editor.change(ConfigurationEdit(action: .bar, properties: ["glass": .object(["enabled": .bool(true)])]))
@@ -1000,7 +1000,7 @@ final class ConfigurationHistoryTests: XCTestCase {
         let included = Data(#"{"templates":{"label":{"type":"text","position":"left","text":"Inherited"}},"widgets":[{"id":"inherited","template":"label"}]}"#.utf8)
         try included.write(to: module)
         try Data(#"{"includes":["module.json"]}"#.utf8).write(to: fixture.url)
-        fixture.store.reloadConfiguration()
+        fixture.store.configurationStore.reloadConfiguration()
         let history = fixture.store.customizationHistory
         try history.change(ConfigurationEdit(action: .set, id: "inherited", properties: ["text": .string("Customized")]))
         try history.flush()
@@ -1042,14 +1042,14 @@ final class ConfigurationHistoryTests: XCTestCase {
             try fixture.installPackage(kind: kind, version: "1")
             try fixture.installPackage(kind: kind, version: "2")
             let store = fixture.store
-            try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
+            try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
             let history = store.customizationHistory
             let edit = ConfigurationEdit(action: kind == "theme" ? .theme : .package, properties: ["id": .string("sample"), "version": .string("2")])
             try history.change(edit)
             XCTAssertNotNil(try fixture.document()[key])
             XCTAssertEqual(try fixture.document()["bar"], .object(["height": .number(40)]))
             XCTAssertEqual(store.configuration?.bar.height, 60)
-            XCTAssertEqual(store.sessionEdits.count, 1)
+            XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
             try history.undo()
             XCTAssertNil(try fixture.document()[key])
             XCTAssertEqual(store.configuration?.bar.height, 60)
@@ -1071,17 +1071,17 @@ final class ConfigurationHistoryTests: XCTestCase {
             try included.write(to: module)
             try Data(#"{"includes":["module.json"],"widgets":[]}"#.utf8).write(to: fixture.url)
             let store = fixture.store
-            store.reloadConfiguration()
-            try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
-            try store.uninstallPackage(id: "sample", version: "1", fromCustomization: true)
-            XCTAssertEqual(store.sessionEdits.count, 1)
+            store.configurationStore.reloadConfiguration()
+            try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(60)])], persist: false)
+            try store.configurationStore.uninstallPackage(id: "sample", version: "1", fromCustomization: true)
+            XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
             XCTAssertNil(try fixture.document()["bar"])
             XCTAssertNotNil(try fixture.document()[key])
             XCTAssertEqual(store.configuration?.bar.height, 60)
             XCTAssertEqual(try Data(contentsOf: module), included)
             XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.packageURL("1").path))
             XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.packageURL("2").path))
-            store.reloadConfiguration()
+            store.configurationStore.reloadConfiguration()
             XCTAssertNil(store.configurationError)
             XCTAssertFalse(store.customizationHistory.canUndo)
             XCTAssertTrue(store.customizationHistory.notice?.contains("uninstalled package") == true)
@@ -1093,11 +1093,11 @@ final class ConfigurationHistoryTests: XCTestCase {
         defer { fixture.close() }
         try fixture.installPackage(kind: "widgets", version: "1")
         let store = fixture.store
-        try store.applyEdits([ConfigurationEdit(action: .package, properties: ["id": .string("sample"), "version": .string("1")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .package, properties: ["id": .string("sample"), "version": .string("1")])], persist: false)
         let before = try Data(contentsOf: fixture.url)
-        XCTAssertThrowsError(try store.uninstallPackage(id: "sample", version: "1", fromCustomization: true))
+        XCTAssertThrowsError(try store.configurationStore.uninstallPackage(id: "sample", version: "1", fromCustomization: true))
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.packageURL("1").path))
     }
 }
@@ -1113,7 +1113,7 @@ private final class Fixture {
         url = directory.appending(path: "config.json")
         try Data(configuration.utf8).write(to: url)
         store = BarStore(configurationURL: url, themesDirectory: nil, customizationSaveDelay: .zero)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(store.configurationError)
     }
 

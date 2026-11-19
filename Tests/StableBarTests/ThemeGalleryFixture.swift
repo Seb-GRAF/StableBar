@@ -47,7 +47,7 @@ struct ThemeGalleryFixture {
         store.origins = loader.origins
         store.widgetPackageNames = loader.widgetPackageNames
         store.activeProfiles = loader.activeProfiles
-        store.preparePresentations()
+        store.barPresentation.preparePresentations()
         return store
     }
 }

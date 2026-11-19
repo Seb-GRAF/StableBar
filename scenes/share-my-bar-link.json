@@ -26,5 +26,5 @@
     "weather": { "text": "21", "fields": { "unit": "°C" } }
   },
   "draw": "shareLink",
-  "height": 1000
+  "height": 701
 }
