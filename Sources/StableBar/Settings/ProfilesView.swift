@@ -528,7 +528,7 @@ struct ProfilesView: View {
     private func changes(_ configuration: [String: ConfigurationValue]) -> [(path: [String], value: ConfigurationValue)] {
         func leaves(_ value: ConfigurationValue, _ path: [String]) -> [(path: [String], value: ConfigurationValue)] {
             if case let .object(object) = value, !object.isEmpty, path != ["theme"], object["gradient"] == nil,
-               (try? value.decoded(HexColor.self)) == nil {
+               changeColor(value) == nil {
                 return object.keys.sorted().flatMap { leaves(object[$0]!, path + [$0]) }
             }
             return [(path, value)]
@@ -577,8 +577,7 @@ struct ProfilesView: View {
         let token: String? = if case let .string(text) = value, text.hasPrefix("@token.") { String(text.dropFirst(7)) } else { nil }
         if path[0] == "widgets" || (path[0] == "widgetOverrides" && path.count == 3 && path[2] == "enabled") {
             EmptyView()
-        } else if let color = token.flatMap({ name in store.themeTokenColors.first { $0.name == name }?.color })
-                    ?? (try? value.decoded(HexColor.self)) {
+        } else if let color = changeColor(value) {
             HStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 4).fill(color.color).frame(width: 14, height: 14)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.gray.opacity(0.4)))
@@ -596,6 +595,12 @@ struct ProfilesView: View {
         } else {
             Text(valueText(path, value))
         }
+    }
+
+    /// The color a change sets, with theme colors substituted first: a side of a light and dark pair can name one.
+    private func changeColor(_ value: ConfigurationValue) -> HexColor? {
+        try? substituteConfigurationReferences(value, prefix: "@token.",
+            values: store.effectiveDocument["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]).decoded(HexColor.self)
     }
 
     private func valueText(_ path: [String], _ value: ConfigurationValue) -> String {

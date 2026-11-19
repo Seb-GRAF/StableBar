@@ -119,7 +119,7 @@ Define reusable JSON values in `tokens` and reference them with a whole string s
 }
 ```
 
-A color token can hold a light and dark pair, as `accent` does here, so it follows the appearance without a profile.
+A color token can hold a light and dark pair, as `accent` does here, so it follows the appearance without a profile. Either side of a pair can name a color token and takes that token's value for the same appearance: `{ "light": "@token.accent", "dark": "#30d33c" }` is the light `accent` in the light appearance and green in the dark one.
 
 Profiles match `appearance` (`light` or `dark`: `bar.appearance` when set, otherwise the system's), `onBattery`, `displayCount`, `externalDisplay`, the focused app's bundle identifier in `app`, and the ID of the theme the bar is drawn with in `theme`. Conditions in one profile must all match.
 
