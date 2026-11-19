@@ -1,0 +1,8 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Tests/Fixtures/widget-style-theme-edits/config.json",
+  "draw": "settings",
+  "widget": "clock",
+  "tab": "style",
+  "height": 1250
+}

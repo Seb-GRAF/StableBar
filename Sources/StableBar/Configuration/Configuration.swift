@@ -26,8 +26,9 @@ struct HexColor: Decodable, Equatable, Sendable {
         } else {
             try decoder.rejectUnknownKeys(CodingKeys.self)
             let values = try decoder.container(keyedBy: CodingKeys.self)
-            light = try HexColor.rgba(values.decode(String.self, forKey: .light), in: container)
-            dark = try HexColor.rgba(values.decode(String.self, forKey: .dark), in: container)
+            // A side set to a theme color arrives as that color's value, which can itself be a pair.
+            light = try values.decode(HexColor.self, forKey: .light).light
+            dark = try values.decode(HexColor.self, forKey: .dark).dark
         }
     }
 

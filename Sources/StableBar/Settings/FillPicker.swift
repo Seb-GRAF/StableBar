@@ -22,6 +22,8 @@ extension BarStore {
 }
 
 struct FillButton: View {
+    /// The width of each side's button, also the width of the controls that line up with them.
+    static let sideWidth = 168.0
     let title: String
     let value: ConfigurationValue?
     let tokens: [ThemeTokenColor]
@@ -29,51 +31,15 @@ struct FillButton: View {
     var allowsNone = false
     var arrowEdge: Edge = .leading
     let set: (ConfigurationValue) -> Void
-    @State private var isPresented = false
-    @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let fill = FillChoice(value)
-        let label = label(fill)
-        Button { isPresented.toggle() } label: {
-            HStack(spacing: 7) {
-                FillChip(fill: fill, tokens: tokens)
-                label.lineLimit(1)
+        HStack(spacing: 6) {
+            ForEach([false, true], id: \.self) { isDark in
+                SideButton(title: title, value: colorSide(dark: isDark, of: value), dark: isDark, tokens: tokens,
+                           allowsGradient: allowsGradient, allowsNone: allowsNone, arrowEdge: arrowEdge) {
+                    set(settingColorSide(dark: isDark, of: value, to: $0))
+                }
             }
-            .font(.callout)
-            .padding(.leading, 4)
-            .padding(.trailing, 24)
-            .frame(width: 200, height: 28, alignment: .leading)
-            .overlay(alignment: .trailing) {
-                Image(systemName: "arrowtriangle.down.fill").font(.system(size: 7)).foregroundStyle(.tertiary).padding(.trailing, 9)
-            }
-            .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(isHovered ? 0.11 : 0.07)))
-            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.primary.opacity(0.08)))
-            .contentShape(RoundedRectangle(cornerRadius: 7))
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(title)
-        .accessibilityValue(label)
-        .popover(isPresented: $isPresented, arrowEdge: arrowEdge) {
-            FillPopover(title: title, value: value, tokens: tokens, allowsGradient: allowsGradient, allowsNone: allowsNone,
-                        themeColor: false, dark: colorScheme == .dark, set: set)
-        }
-    }
-
-    private func label(_ fill: FillChoice) -> Text {
-        let detail = { (text: String) in Text(" \(text)").font(.system(size: 10)).foregroundStyle(.tertiary) }
-        switch fill {
-        case .none:
-            return Text("None")
-        case let .token(name):
-            return Text(tokens.first { $0.name == name }?.title ?? name) + detail("theme")
-        case let .color(color):
-            let text = Text(String(format: "#%06X", color.rgba(dark: colorScheme == .dark) >> 8))
-            return color.light == color.dark ? text : text + detail("light/dark")
-        case let .gradient(gradient):
-            return Text("Gradient") + detail("\(gradient.angle)°")
         }
     }
 }
@@ -81,45 +47,116 @@ struct FillButton: View {
 struct TokenColorButton: View {
     let title: String
     let color: HexColor
-    let dark: Bool
     let property: PropertySources
     let reset: (() -> Void)?
     let set: (ConfigurationValue) -> Void
-    @State private var isPresented = false
-    @State private var isHovered = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let shown = color.rgba(dark: dark)
-        let hex = String(format: "#%06X", shown >> 8)
-        Button { isPresented.toggle() } label: {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Text(hex).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                FillChip(fill: .color(color), tokens: [], width: 36, height: 36, cornerRadius: 8)
-                    .padding(.leading, 32)
-            }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: 9).fill(colorScheme == .dark ? Color.white.opacity(0.05) : .white))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(isHovered ? 0.3 : 0.08)))
-            .contentShape(RoundedRectangle(cornerRadius: 9))
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .trailing) {
-            RevertSettingButton(title: title, property: property, reset: reset)
-                .padding(.trailing, 56)
-        }
-        .onHover { isHovered = $0 }
-        .accessibilityLabel(title)
-        .accessibilityValue(hex)
-        .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            FillPopover(title: title, value: color.configurationValue, tokens: [], allowsGradient: false, allowsNone: false,
-                        themeColor: true, dark: dark, set: set)
+        SettingRow(title: title, property: property, reset: reset) {
+            HStack(spacing: 6) { sides }
         }
     }
+
+    private var sides: some View {
+        ForEach([false, true], id: \.self) { isDark in
+            SideButton(title: title, value: colorSide(dark: isDark, of: color.configurationValue), dark: isDark, tokens: [],
+                       themeColor: true, arrowEdge: .bottom) {
+                set(settingColorSide(dark: isDark, of: color.configurationValue, to: $0))
+            }
+        }
+    }
+}
+
+/// Names the light and dark columns of the color rows below it in a group.
+struct LightDarkHeader: View {
+    var body: some View {
+        LabeledContent {
+            HStack(spacing: 6) {
+                Label("Light", systemImage: "sun.max").frame(width: FillButton.sideWidth, alignment: .leading)
+                Label("Dark", systemImage: "moon").frame(width: FillButton.sideWidth, alignment: .leading)
+            }
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(.secondary)
+        } label: {
+            Spacer()
+        }
+    }
+}
+
+private struct SideButton: View {
+    let title: String
+    /// This side's value, or the whole value when it's a gradient or None.
+    let value: ConfigurationValue?
+    let dark: Bool
+    let tokens: [ThemeTokenColor]
+    var allowsGradient = false
+    var allowsNone = false
+    var themeColor = false
+    var arrowEdge: Edge = .leading
+    let set: (ConfigurationValue) -> Void
+    @State private var isPresented = false
+    @State private var isHovered = false
+
+    var body: some View {
+        let fill = FillChoice(value)
+        let label = label(fill)
+        Button { isPresented.toggle() } label: {
+            HStack(spacing: 6) {
+                FillChip(fill: fill, tokens: tokens, width: 15, height: 15, cornerRadius: 4)
+                    .environment(\.colorScheme, dark ? .dark : .light)
+                label.lineLimit(1)
+            }
+            .font(.system(size: 12))
+            .padding(.leading, 4)
+            .padding(.trailing, 7)
+            .frame(width: FillButton.sideWidth, height: 24, alignment: .leading)
+            .background(isHovered ? SettingsPalette.controlHover : SettingsPalette.control, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(SettingsPalette.groupBorder))
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel("\(title), \(dark ? "dark" : "light")")
+        .accessibilityValue(label)
+        .popover(isPresented: $isPresented, arrowEdge: arrowEdge) {
+            FillPopover(title: title, value: value, tokens: tokens, allowsGradient: allowsGradient, allowsNone: allowsNone,
+                        themeColor: themeColor, dark: dark, set: set)
+        }
+    }
+
+    private func label(_ fill: FillChoice) -> Text {
+        let detail = { (text: String) in Text(" \(text)").font(.system(size: 10.5)).foregroundStyle(.secondary) }
+        switch fill {
+        case .none:
+            return Text("None")
+        case let .token(name):
+            return Text(tokens.first { $0.name == name }?.title ?? name) + detail("theme")
+        case let .color(color):
+            let rgba = color.rgba(dark: dark)
+            let hex = Text(String(format: "#%06X", rgba >> 8))
+            return rgba & 0xff == 0xff ? hex : hex + Text(" \(Int((Double(rgba & 0xff) / 2.55).rounded()))%")
+        case let .gradient(gradient):
+            return Text("Gradient") + detail("\(gradient.angle)°")
+        }
+    }
+}
+
+private func colorSide(dark: Bool, of value: ConfigurationValue?) -> ConfigurationValue? {
+    if case let .object(pair)? = value, let side = pair[dark ? "dark" : "light"] { return side }
+    return value
+}
+
+/// `value` with its light or dark side set to `side`, a color or a theme color, as one value when both sides match.
+/// A gradient or None replaces both sides.
+func settingColorSide(dark: Bool, of value: ConfigurationValue?, to side: ConfigurationValue) -> ConfigurationValue {
+    guard case .string = side else { return side }
+    let other: ConfigurationValue = switch FillChoice(colorSide(dark: !dark, of: value)) {
+    case let .token(name): .string("@token.\(name)")
+    case let .color(color): HexColor(color.rgba(dark: !dark)).configurationValue
+    case .gradient, .none: side
+    }
+    if other == side { return side }
+    return .object(dark ? ["light": other, "dark": side] : ["light": side, "dark": other])
 }
 
 private enum FillChoice: Equatable {
@@ -156,10 +193,6 @@ private enum FillChoice: Equatable {
         case let .color(color): color.rgba(dark: dark)
         case let .gradient(gradient): gradient.stops[0].color.rgba(dark: dark, tokens: tokens)
         }
-    }
-
-    var hasDarkVariant: Bool {
-        if case let .color(color) = self { color.light != color.dark } else { false }
     }
 }
 
@@ -217,11 +250,11 @@ private struct FillPopover: View {
     let tokens: [ThemeTokenColor]
     let modes: [FillMode]
     let themeColor: Bool
+    /// The appearance whose side of the color this popover edits.
+    let dark: Bool
     let set: (ConfigurationValue) -> Void
     @State private var fill: FillChoice
     @State private var mode: FillMode
-    @State private var hasDarkVariant: Bool
-    @State private var editingDark: Bool
     @State private var stop = 0
     @State private var color: HSVA
     @State private var stopDragOrigin: Double?
@@ -246,11 +279,10 @@ private struct FillPopover: View {
         self.tokens = tokens
         modes = [.theme, .color] + (allowsGradient ? [.gradient] : []) + (allowsNone ? [.none] : [])
         self.themeColor = themeColor
+        self.dark = dark
         self.set = set
         _fill = State(initialValue: fill)
         _mode = State(initialValue: Self.mode(for: fill, allowsNone: allowsNone))
-        _hasDarkVariant = State(initialValue: themeColor || fill.hasDarkVariant)
-        _editingDark = State(initialValue: dark)
         _color = State(initialValue: HSVA(rgba: fill.rgba(dark: dark, tokens: tokens), hue: 0))
         _written = State(initialValue: fill.configurationValue)
     }
@@ -259,7 +291,6 @@ private struct FillPopover: View {
         VStack(alignment: .leading, spacing: 9) {
             Text(title).fontWeight(.semibold)
             if themeColor {
-                sidePicker
                 picker
                 Text("Saved in your configuration. Everything that uses \(title) follows.").font(.subheadline).foregroundStyle(.secondary)
             } else {
@@ -280,21 +311,6 @@ private struct FillPopover: View {
                     }
                     Text("Theme colors change with the theme and with light and dark mode.").font(.subheadline).foregroundStyle(.secondary)
                 case .color:
-                    HStack {
-                        Text("Different in Dark Mode")
-                        Spacer()
-                        Toggle("Different in Dark Mode", isOn: Binding(get: { hasDarkVariant }, set: { isOn in
-                            hasDarkVariant = isOn
-                            editingDark = isOn
-                            if !isOn, case let .color(current) = fill { fill = .color(HexColor(current.light)) }
-                            loadColor()
-                            write()
-                        }))
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.mini)
-                    }
-                    if hasDarkVariant { sidePicker }
                     picker
                 case .gradient:
                     if case let .gradient(gradient) = fill { gradientEditor(gradient) }
@@ -357,19 +373,9 @@ private struct FillPopover: View {
     private func reload() {
         fill = FillChoice(value)
         mode = Self.mode(for: fill, allowsNone: modes.contains(.none))
-        hasDarkVariant = themeColor || fill.hasDarkVariant
         stop = 0
         written = fill.configurationValue
         loadColor()
-    }
-
-    private var sidePicker: some View {
-        Picker("Appearance", selection: Binding(get: { editingDark }, set: { editingDark = $0; loadColor() })) {
-            Text("☀︎ Light").tag(false)
-            Text("☾ Dark").tag(true)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
     }
 
     private var picker: some View {
@@ -477,9 +483,7 @@ private struct FillPopover: View {
         stop = 0
         switch next {
         case .theme: break
-        case .color:
-            fill = current
-            hasDarkVariant = false
+        case .color: fill = current
         case .gradient: fill = .gradient(GradientChoice(colors: [current, .token("accent")], angle: 90))
         case .none: fill = .none
         }
@@ -488,8 +492,8 @@ private struct FillPopover: View {
     }
 
     private var workingRGBA: UInt32 {
-        if case let .gradient(gradient) = fill { return gradient.stops[stop].color.rgba(dark: editingDark, tokens: tokens) }
-        return fill.rgba(dark: editingDark, tokens: tokens)
+        if case let .gradient(gradient) = fill { return gradient.stops[stop].color.rgba(dark: dark, tokens: tokens) }
+        return fill.rgba(dark: dark, tokens: tokens)
     }
 
     private func loadColor() {
@@ -502,8 +506,6 @@ private struct FillPopover: View {
         case var .gradient(gradient):
             gradient.stops[stop].color = .color(HexColor(rgba))
             fill = .gradient(gradient)
-        case let .color(current) where hasDarkVariant:
-            fill = .color(editingDark ? HexColor(light: current.light, dark: rgba) : HexColor(light: rgba, dark: current.dark))
         default:
             fill = .color(HexColor(rgba))
         }
@@ -715,10 +717,12 @@ private struct FillChip: View {
             Checkerboard()
             switch fill {
             case .none:
-                Color.clear
-            case let .color(color) where color.light != color.dark:
-                LinearGradient(stops: [.init(color: HexColor(color.light).color, location: 0.5), .init(color: HexColor(color.dark).color, location: 0.5)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                Color.white
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: height))
+                    path.addLine(to: CGPoint(x: width, y: 0))
+                }
+                .stroke(Color.red, lineWidth: 1.5)
             case let .gradient(gradient):
                 GradientSwatch(stops: gradient.stops, angle: gradient.angle, tokens: tokens)
             default:

@@ -170,11 +170,14 @@ actor PackageStoreClient {
         try packages.inspect(directory, settings: settings)
     }
 
-    /// Installs a package from `source`, or from a local folder when it's nil.
+    /// Installs a package from `source`, or from a local folder when it's nil, recording `origin` as why.
     /// Throws `.claimed`, before copying anything, when another source installed the package's ID.
-    func install(_ directory: URL, from source: PackageSource?) throws -> WidgetPackageInspection {
+    func install(_ directory: URL, from source: PackageSource?,
+                 origin: PackageInstallRecord.Origin? = nil) throws -> WidgetPackageInspection {
+        var local = PackageInstallRecord.local
+        local.origin = origin
         do {
-            return try packages.install(directory, record: source.map(PackageInstallRecord.init) ?? .local,
+            return try packages.install(directory, record: source.map(PackageInstallRecord.init) ?? local,
                                         requestedName: source?.name ?? "a local folder")
         } catch {
             throw namingInstalledSource(error, id: try? packages.manifest(at: directory).id)

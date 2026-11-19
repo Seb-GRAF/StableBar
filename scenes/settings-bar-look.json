@@ -1,0 +1,8 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": "../Tests/Fixtures/bar-look/config.json",
+  "draw": "settings",
+  "section": "bar",
+  "tab": "look",
+  "height": 1000
+}

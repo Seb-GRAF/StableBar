@@ -448,8 +448,8 @@ struct ConfigurationLoader: Sendable {
     private(set) var templates: [String: [String: ConfigurationValue]] = [:]
     private(set) var screenDocuments: [String: [String: ConfigurationValue]] = [:]
     private var packageBoundaries: [String: URL] = [:]
-    private var packageNames: [String: String] = [:]
-    private var packageIDs: [String: String] = [:]
+    private(set) var packageNames: [String: String] = [:]
+    private(set) var packageIDs: [String: String] = [:]
     private var packageHosts: [String: [String]] = [:]
     private var essentialsPopupNames: [String: String] = [:]
 
@@ -611,7 +611,9 @@ struct ConfigurationLoader: Sendable {
         }
         if let selected, !names.contains(selected) { throw ThemeConfigurationError.unknownProfile(selected) }
         for profile in profiles where profile.enabled || profile.name == previewProfile {
-            let matches = selected.map { $0 == profile.name } ?? (profile.when?.matches(context) ?? true)
+            // A theme's edits belong to its look, so they still apply while another profile is pinned.
+            let matches = selected.map { $0 == profile.name || profile.when?.onlyTheme != nil && profile.when!.matches(context) }
+                ?? (profile.when?.matches(context) ?? true)
             if matches {
                 let source = layer.origins["profiles.\(profile.name).name"]!.inProfile(profile.name)
                 var origins = configurationOrigins(.object(profile.configuration), source: source)

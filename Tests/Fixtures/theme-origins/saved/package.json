@@ -1,0 +1,8 @@
+{
+  "id": "my-leman",
+  "name": "My Léman",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Based on Léman."
+}

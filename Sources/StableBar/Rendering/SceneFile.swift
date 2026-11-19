@@ -8,11 +8,11 @@ struct SceneFile: Decodable {
     enum Appearance: String, Decodable, CaseIterable { case dark, light }
     /// A Settings section, named as the toolbar names it, `feedback` for Send feedback in Help, or `crashes` for Crashes in Status.
     enum Section: String, Decodable, CaseIterable { case general, bar, theme, profiles, packages, help, feedback, crashes }
-    /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (size, look, placement).
+    /// A tab of a widget's Settings page (content, style, behavior), or of the bar's in the Bar section (look, placement).
     enum Tab: String, Decodable, CaseIterable {
-        case content, style, behavior, size, look, placement
+        case content, style, behavior, look, placement
 
-        var isBarTab: Bool { [.size, .look, .placement].contains(self) }
+        var isBarTab: Bool { [.look, .placement].contains(self) }
     }
     /// The Uninstall sheet's confirmation, or the steps that failed before StableBar quits.
     enum Uninstall: String, Decodable, CaseIterable { case confirm, failed }
@@ -38,6 +38,8 @@ struct SceneFile: Decodable {
     /// scene's work folder. With `barLink` or `shareLink`, they're installed from the Store, and with `barLink` the Store
     /// lists them.
     var packages: [String] = []
+    /// Why packages, by their path in `packages`, were installed from no source; the others came from a folder.
+    var packageOrigins: [String: PackageInstallRecord.Origin] = [:]
     /// Script outputs keyed by widget id or provider name: an object as a script prints it, or plain text.
     var outputs: [String: ConfigurationValue] = [:]
     /// Graph samples keyed by widget id or provider name.
@@ -105,7 +107,7 @@ struct SceneFile: Decodable {
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case configuration, packages, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
+        case configuration, packages, packageOrigins, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, draw, widget, group, view, section, tab, package, uninstall,
              themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, sharePreset, macOSMajorVersion, appearances,
              accessibilityDisplay, width, height
     }
@@ -178,6 +180,7 @@ struct SceneFile: Decodable {
         if !packages.isEmpty, case .file = configuration {
             throw DecodingError.dataCorruptedError(forKey: .packages, in: values, debugDescription: "A scene with packages gives its configuration inline.")
         }
+        packageOrigins = try values.decodeIfPresent([String: PackageInstallRecord.Origin].self, forKey: .packageOrigins) ?? [:]
         outputs = try values.decodeIfPresent([String: ConfigurationValue].self, forKey: .outputs) ?? [:]
         history = try values.decodeIfPresent([String: [Double]].self, forKey: .history) ?? [:]
         workspaces = try values.decodeIfPresent([ConfigurationValue].self, forKey: .workspaces)

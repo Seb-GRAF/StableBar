@@ -7,11 +7,10 @@ enum BarItem {
 }
 
 enum BarTab: CaseIterable {
-    case size, look, placement
+    case look, placement
 
     var title: String {
         switch self {
-        case .size: "Size"
         case .look: "Look"
         case .placement: "Placement"
         }
@@ -63,10 +62,6 @@ struct BarInspector: View {
     @State private var resetting: WidgetConfiguration?
     private var store: BarStore { editor.store }
 
-    private static let styleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "fontName", "fontWeight", "fontSize",
-                                    "paddingHorizontal", "paddingVertical", "paddingLeading", "paddingTrailing", "paddingTop", "paddingBottom",
-                                    "cornerRadius", "borderWidth", "borderColor"]
-
     var body: some View {
         let widget = editor.barItem == .widget ? store.configuration?.onScreen(screen).widgets.first { $0.id == editor.selectedID } : nil
         let group = editor.barItem == .group ? editor.selectedGroup.flatMap { store.configuration?.groups[$0] != nil ? $0 : nil } : nil
@@ -113,12 +108,13 @@ struct BarInspector: View {
                     } else if let group {
                         groupPanel(group)
                     } else if editor.barItem == .everyWidget {
-                        stylePanel(defaultsStyle, name: "Widget", widget: nil)
+                        WidgetsLookSection(editor: editor, style: defaultsStyle, fontFamilies: fontFamilies)
                         SettingsCallout(systemImage: "sparkle",
                                         text: Text("Widgets with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
                             .padding(.top, 12)
                     } else if editor.barItem == .everyGroup {
-                        groupStylePanel(groupDefaultsStyle, flared: store.configuration?.groupDefaults.flare != nil)
+                        GroupsLookSection(editor: editor, style: groupDefaultsStyle, flared: store.configuration?.groupDefaults.flare != nil,
+                                          spacing: store.configuration?.onScreen(screen).bar.spacing ?? 0)
                         SettingsCallout(systemImage: "sparkle",
                                         text: Text("Groups with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
                             .padding(.top, 12)
@@ -134,7 +130,11 @@ struct BarInspector: View {
             .scrollPosition(id: Binding(get: { scrollPositions[key] }, set: { scrollPositions[key] = $0 }), anchor: .top)
             .id(key)
         }
-        .task { fontFamilies = NSFontManager.shared.availableFontFamilies }
+        .task {
+            fontFamilies = NSFontManager.shared.availableFontFamilies
+            editor.gallery.contextChanged()
+        }
+        .onChange(of: store.effectiveDocument) { _, _ in editor.gallery.contextChanged() }
         .onChange(of: editor.selectedID) {
             customClockFormat = false
             clickError = nil
@@ -219,7 +219,7 @@ struct BarInspector: View {
                 Button("Troubleshoot…") { editor.troubleshoot(widget.id) }
             }
             Divider()
-            Button("Reset to defaults…") { resetting = widget }
+            Button("Reset widget…") { resetting = widget }
             Button("Remove from bar", role: .destructive) { remove(widget.id) }
                 .disabled(!editor.canRemove(widget))
         } label: {
@@ -248,28 +248,11 @@ struct BarInspector: View {
                 .padding(.bottom, 12)
         }
         switch editor.barTab {
-        case .size:
-            SettingsGroup("Size") {
-                bar.number("Height", "height", default: 40, in: 16...100, slider: true)
-                barStyle.number("Corner radius", "cornerRadius", default: 0, in: 0...40, slider: true)
-                bar.number("Side inset", "inset", default: 12, in: 0...100)
-                bar.number("Space between widgets", "spacing", default: 8, in: 0...50)
-            }
+        case .look:
+            BarLookSection(editor: editor, bar: bar, style: barStyle)
             SettingsCallout(systemImage: "arrow.left.and.right",
                             text: Text("Drag a label or a **↔** handle to change a value; hold Shift for steps of 10. The preview and your real bar follow as you drag."))
                 .padding(.top, 12)
-        case .look:
-            SettingsGroup("Background") {
-                barStyle.color("Fill", "background")
-            }
-            SettingsGroup("Border") {
-                barStyle.number("Width", "borderWidth", default: 0, in: 0...6, step: 0.5)
-                barStyle.color("Color", "borderColor")
-                barStyle.row("Edges", "borderEdges") { _ in
-                    SettingsSegments(selection: barStyle.stringBinding("borderEdges", default: BarBorderEdges.bottom.rawValue),
-                                     options: BarBorderEdges.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
-                }
-            }
         case .placement:
             SettingsGroup("Position") {
                 let position = (target.map { store.configuration?.bar(on: $0) } ?? store.configuration?.bar)?.position ?? .top
@@ -286,7 +269,6 @@ struct BarInspector: View {
                     bar.number("Offset from bottom", "offset", default: 0, in: 0...200,
                                hint: "Counts from the bottom edge of the display, under the Dock if it shows there.")
                 }
-                bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
             if let setup = store.configurationStore.screenSetup {
                 let ownsBar = store.configurationStore.configurationURL != store.configurationStore.sharedConfigurationURL
@@ -324,10 +306,11 @@ struct BarInspector: View {
             return nil
         } ?? [:]
         let style = StyleFields(store: store, path: "groups.\(group).style", defaultsPath: "groupDefaults", values: values,
-                                set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
+                                set: { editor.changeLook(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
                                 unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
         let grouping = WidgetGrouping(store: store)
-        groupStylePanel(style, flared: store.configuration?.groups[group]?.style.flare != nil)
+        GroupsLookSection(editor: editor, style: style, flared: store.configuration?.groups[group]?.style.flare != nil,
+                          spacing: store.configuration?.onScreen(screen).bar.spacing ?? 0, title: "Style")
         SettingsGroup("Widgets") {
             ForEach(groupMembers(group)) { member in
                 SettingRow(title: names[member.id] ?? member.id) {
@@ -346,82 +329,53 @@ struct BarInspector: View {
             .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
     }
 
-    @ViewBuilder private func groupStylePanel(_ style: StyleFields, flared: Bool) -> some View {
-        SettingsGroup("Background and border") {
-            style.color("Background", "background")
-            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
-                style.row("Border", "borderWidth", scrub: flared ? nil : Scrub(value: width, range: 0...6, step: 0.5),
-                          hint: flared ? "A group with a flare draws no border" : nil) { _ in
-                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5).disabled(flared)
-                    style.colorButton("Border color", "borderColor").disabled(flared)
-                }
-            }
-        }
-        SettingsGroup("Shape") {
-            style.number("Corners", "cornerRadius", default: 0, in: 0...40, slider: true)
-            style.number("Flare", "flare", default: 0, in: 0...30, slider: true, hint: "Curves the top corners outward, like the notch")
-        }
-        SettingsGroup("Spacing") {
-            style.number("Side padding", "paddingHorizontal", default: 0, in: 0...30, slider: true)
-            style.number("Top and bottom padding", "paddingVertical", default: 0, in: 0...20, slider: true)
-            style.number("Between widgets", "spacing", default: store.configuration?.onScreen(screen).bar.spacing ?? 0, in: 0...30, slider: true)
-        }
-    }
-
     private var defaultsStyle: StyleFields {
         StyleFields(store: store, path: "defaults", values: document("defaults"),
-                    set: { editor.change(ConfigurationEdit(action: .defaults, properties: $0)) },
+                    set: { editor.changeLook(ConfigurationEdit(action: .defaults, properties: $0)) },
                     unset: { unset(["defaults": .object($0)]) })
     }
 
     private var groupDefaultsStyle: StyleFields {
         StyleFields(store: store, path: "groupDefaults", values: document("groupDefaults"),
-                    set: { editor.change(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
+                    set: { editor.changeLook(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
                     unset: { unset(["groupDefaults": .object($0)]) })
     }
 
-    @ViewBuilder private func stylePanel(_ style: StyleFields, name: String, widget: WidgetConfiguration?) -> some View {
+    @ViewBuilder private func stylePanel(_ style: StyleFields, widget: WidgetConfiguration) -> some View {
+        if editor.editingProfile == nil {
+            styleState(widget)
+        }
         SettingsGroup("Colors") {
-            style.color("Text", "foreground")
-            if let widget {
-                let configuration = store.configuration!.onScreen(screen)
-                let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
-                let popup = widgetPopup(widget, store: store)
-                let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
-                    "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,
-                    "popupBackground": (popup?.baseStyle(widget: widget, defaults: defaults)
-                        ?? resolveStyle([defaults, widget.style, WidgetStyle(background: widget.popupBackground)])).background?.configurationValue ?? .null,
-                    "tooltipBackground": widget.tooltipStyle.inheriting(defaults).background?.configurationValue ?? .null
-                ], set: { editor.set($0, for: widget.id) },
-                    unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
-                backgrounds.color("Widget background", "background")
-                backgrounds.color("Popup background", "popupBackground")
-                backgrounds.color("Tooltip background", "tooltipBackground")
-            } else {
-                style.color("Background", "background")
-            }
+            LightDarkHeader()
+            style.color("Text color", "foreground")
+            let configuration = store.configuration!.onScreen(screen)
+            let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
+            let popup = widgetPopup(widget, store: store)
+            let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
+                "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,
+                "popupBackground": (popup?.baseStyle(widget: widget, defaults: defaults)
+                    ?? resolveStyle([defaults, widget.style, WidgetStyle(background: widget.popupBackground)])).background?.configurationValue ?? .null,
+                "tooltipBackground": widget.tooltipStyle.inheriting(defaults).background?.configurationValue ?? .null
+            ], set: { editor.set($0, for: widget.id) },
+                unset: { editor.changeLook(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
+            backgrounds.color("Widget background", "background")
+            backgrounds.color("Popup background", "popupBackground")
+            backgrounds.color("Tooltip background", "tooltipBackground")
             style.hoverBackground("Hover background")
+            style.color("Border color", "borderColor")
             style.color("Accent", "accent")
-            if widget == nil {
-                style.color("Accent text", "accentText")
-                style.color("Shadow", "shadowColor")
-            }
         }
         SettingsGroup("Text") {
             style.font(fontFamilies)
             style.weight()
-            style.number("Size", "fontSize", default: 13, in: 6...40, slider: true)
+            style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)
         }
         SettingsGroup("Padding and corners") {
-            BoxModel(style: style, name: name)
-            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
-                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
-                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
-                    style.colorButton("Border color", "borderColor")
-                }
-            }
+            style.padding(default: 10, 6)
+            style.number("Corner radius", "cornerRadius", default: 14, in: 0...40, slider: true)
+            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
         }
-        if let widget, widget.content == .workspaces {
+        if widget.content == .workspaces {
             SettingsGroup("Workspaces") {
                 WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults", widgetID: widget.id,
                     values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.properties(for: widget.id)["workspace"])) ?? [:],
@@ -429,20 +383,31 @@ struct BarInspector: View {
                     unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
             }
         }
-        if let widget, Self.styleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
-            || ["background", "popupBackground", "tooltipBackground"].contains(where: {
-                store.propertySources(path: "widgets.\(widget.id)", key: $0, widgetID: widget.id, values: [:]).saved != nil
-            }) {
-            Button("Go back to the Every widget look") {
-                editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: [
-                    "style": .object(Dictionary(uniqueKeysWithValues: Self.styleKeys.map { ($0, ConfigurationValue.null) }).merging(HoverBackgroundRow.reset) { $1 }),
-                    "background": .null, "popupBackground": .null, "tooltipBackground": .null
-                ]))
-            }
-            .controlSize(.small)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12)
+    }
+
+    private func styleState(_ widget: WidgetConfiguration) -> some View {
+        let own = editor.ownStyle(of: widget)
+        let count = own.everyTheme + own.onTheme
+        let theme = editor.selectedTheme.name
+        let state = if own.onTheme > 0 {
+            Text("\(Text("Own style on \(theme)").fontWeight(.semibold)) \(Text("· \(count) \(count == 1 ? "change" : "changes")").foregroundStyle(.secondary))")
+        } else if count > 0 {
+            Text("\(Text("Own style").fontWeight(.semibold)) \(Text("· \(count) \(count == 1 ? "value" : "values")").foregroundStyle(.secondary))")
+        } else {
+            Text("Follows \(theme)").foregroundStyle(.secondary)
         }
+        return HStack(spacing: 10) {
+            Image(systemName: count > 0 ? "pencil" : "paintbrush").foregroundStyle(count > 0 ? Color.teal : Color.secondary)
+            state
+            Spacer(minLength: 8)
+            if count > 0 {
+                Button("Reset style") { editor.resetStyle(of: widget) }.controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .settingsCard()
+        .padding(.top, 12)
     }
 
 
@@ -465,8 +430,8 @@ struct BarInspector: View {
         case .style:
             stylePanel(StyleFields(store: store, path: "widgets.\(widget.id).style", defaultsPath: "defaults", widgetID: widget.id,
                                    values: editor.style(for: widget.id), set: { editor.set(["style": .object($0)], for: widget.id) },
-                                   unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) }),
-                       name: names[widget.id] ?? widget.id, widget: widget)
+                                   unset: { editor.changeLook(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) }),
+                       widget: widget)
         case .behavior: behaviorPanel(widget)
         }
     }
@@ -882,7 +847,7 @@ struct BarInspector: View {
         if let kind {
             editor.change(ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["bar": .object(properties)])]))
         } else {
-            editor.change(ConfigurationEdit(action: .bar, properties: properties))
+            editor.changeLook(ConfigurationEdit(action: .bar, properties: properties))
         }
     }
 
@@ -891,7 +856,7 @@ struct BarInspector: View {
     }
 
     private func unset(_ properties: [String: ConfigurationValue]) {
-        editor.change(ConfigurationEdit(action: .unset, properties: properties))
+        editor.changeLook(ConfigurationEdit(action: .unset, properties: properties))
     }
 }
 

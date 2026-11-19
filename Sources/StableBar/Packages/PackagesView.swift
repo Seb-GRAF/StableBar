@@ -379,6 +379,9 @@ struct PackagesView: View {
         case let .unlisted(manifest):
             let badge: PackageOrigin? = switch library.origin(of: manifest) {
             case .local?: .local
+            case .saved?: .saved
+            case .themeLink?: .themeLink
+            case .barLink?: .barLink
             case let .privateSource(name)?: .privateSource(name)
             default: nil
             }

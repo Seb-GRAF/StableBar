@@ -427,8 +427,7 @@ struct WidgetsView: View {
         guard let target = editor.searchTarget.flatMap(SettingsSearchResult.init(rawValue:)) else { return }
         var scroll = "top"
         switch target {
-        case .barSize: editor.barTab = .size; select(.bar)
-        case .barLook: editor.barTab = .look; select(.bar)
+        case .barSize, .barLook: editor.barTab = .look; select(.bar)
         case .barPlacement: editor.barTab = .placement; select(.bar)
         case .screenSetups:
             editor.barTab = .placement

@@ -1,0 +1,37 @@
+{
+  "theme": {
+    "id": "leman"
+  },
+  "widgets": [
+    {
+      "id": "apple",
+      "type": "appleMenu",
+      "position": "left"
+    },
+    {
+      "id": "app-menu",
+      "type": "appMenu",
+      "position": "left"
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "position": "right",
+      "format": "EEE d MMM  HH:mm"
+    }
+  ],
+  "profiles": [
+    {
+      "name": "Léman edits",
+      "when": {
+        "theme": "leman"
+      },
+      "configuration": {
+        "bar": {
+          "height": 34,
+          "margin": 10
+        }
+      }
+    }
+  ]
+}

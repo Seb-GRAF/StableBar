@@ -1170,7 +1170,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     #expect(widget.style.fontSize == 19)
     #expect(widget.position == .left)
     #expect(widget.environment["PACKAGE_DIR"] == installed.directory.path)
-    guard case let .image(path, _, _) = widget.popup?.layout.content else {
+    guard case let .image(path, _, _, _) = widget.popup?.layout.content else {
         Issue.record("Expected package image")
         return
     }
@@ -1935,16 +1935,19 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
     var loader = ConfigurationLoader()
     let configuration = try loader.load(url, data: Data(##"""
     {"tokens":{"text":{"light":"#111111","dark":"#eeeeee"},"line":"#333333"},
-     "defaults":{"foreground":"@token.text","background":"#22222280","borderColor":{"light":"@token.line","dark":"#444444"}},
+     "defaults":{"foreground":"@token.text","background":"#22222280","borderColor":{"light":"@token.line","dark":"#444444"},
+                 "accent":{"light":"@token.text","dark":"#30d33c"},"accentText":{"light":"#30d33c","dark":"@token.text"}},
      "widgets":[]}
     """##.utf8))
     #expect(configuration.defaults.foreground == HexColor(light: 0x111111ff, dark: 0xeeeeeeff))
     #expect(configuration.defaults.background == .color(HexColor(0x22222280)))
     #expect(configuration.defaults.borderColor == HexColor(light: 0x333333ff, dark: 0x444444ff))
+    #expect(configuration.defaults.accent == HexColor(light: 0x111111ff, dark: 0x30d33cff))
+    #expect(configuration.defaults.accentText == HexColor(light: 0x30d33cff, dark: 0xeeeeeeff))
     for (color, message) in [
         (##"{"light":"#111111"}"##, "defaults.foreground: Missing property dark."),
         (##"{"light":"#111111","dark":"#222222","tint":"#333333"}"##, "defaults.foreground.tint: Unknown property."),
-        (##"{"light":"blue","dark":"#222222"}"##, "defaults.foreground: Use #RRGGBB or #RRGGBBAA for colors.")
+        (##"{"light":"blue","dark":"#222222"}"##, "defaults.foreground.light: Use #RRGGBB or #RRGGBBAA for colors.")
     ] {
         let error = #expect(throws: (any Error).self) {
             try loader.load(url, data: Data(#"{"widgets":[],"defaults":{"foreground":\#(color)}}"#.utf8))

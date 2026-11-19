@@ -21,7 +21,9 @@ struct ProfilesView: View {
 
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? {
-        store.profiles.first { $0.name == editor.selectedProfileName } ?? store.profiles.first
+        let groups = ProfileGroups(store: store)
+        let listed = groups.yours + groups.themeEdits + groups.elsewhere.map(\.profile)
+        return listed.first { $0.name == editor.selectedProfileName } ?? listed.first
     }
 
     var body: some View {
@@ -90,19 +92,34 @@ struct ProfilesView: View {
     }
 
     private var list: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let groups = ProfileGroups(store: store)
+        return VStack(alignment: .leading, spacing: 0) {
             Text("Profiles change your bar in some situations. To choose what each screen shows, use [Bar](settings:bar).")
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(EdgeInsets(top: 12, leading: 12, bottom: 6, trailing: 12))
             ScrollView {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(store.profiles, id: \.name) { card($0) }
-                    Text("When several match, the lower one wins.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(.secondary)
-                        .padding(4)
+                VStack(alignment: .leading, spacing: 14) {
+                    if !groups.yours.isEmpty {
+                        listGroup("Yours") {
+                            ForEach(groups.yours, id: \.name) { card($0) }
+                            Text("When several match, the lower one wins.")
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(.secondary)
+                                .padding(4)
+                        }
+                    }
+                    if !groups.themeEdits.isEmpty {
+                        listGroup("Theme edits") {
+                            ForEach(groups.themeEdits, id: \.name) { themeEditsCard($0) }
+                        }
+                    }
+                    if !groups.elsewhere.isEmpty {
+                        listGroup("From packages and themes") {
+                            ForEach(groups.elsewhere, id: \.profile.name) { card($0.profile, from: sourceName($0.file)) }
+                        }
+                    }
                 }
                 .padding(EdgeInsets(top: 6, leading: 8, bottom: 10, trailing: 8))
             }
@@ -113,10 +130,19 @@ struct ProfilesView: View {
         }
     }
 
-    private func card(_ profile: ConfigurationProfile) -> some View {
-        let isSelected = profile.name == selected?.name
+    private func listGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            content()
+        }
+    }
+
+    private func card(_ profile: ConfigurationProfile, from source: String? = nil) -> some View {
         let count = changes(profile.configuration).count
-        return VStack(alignment: .leading, spacing: 3) {
+        return listCard(profile) {
             HStack(spacing: 6) {
                 Text(profile.name).fontWeight(.semibold).lineLimit(1)
                 if store.activeProfiles.contains(profile.name) { badge("Active", SettingsPalette.success) }
@@ -128,22 +154,55 @@ struct ProfilesView: View {
             Text(count == 0 ? "Changes nothing yet" : "Changes \(count) \(count == 1 ? "thing" : "things")")
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
+            if let source {
+                Text("From \(source)")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+            }
         }
-        .padding(EdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 9))
-        .overlay {
-            RoundedRectangle(cornerRadius: 9).strokeBorder(isSelected ? SettingsPalette.profile
-                : hovered == profile.name ? Color.secondary.opacity(0.5) : SettingsPalette.groupBorder,
-                                                           lineWidth: isSelected ? 2 : 1)
+    }
+
+    /// A profile's card in the list: a click selects it.
+    private func listCard(_ profile: ConfigurationProfile, @ViewBuilder content: () -> some View) -> some View {
+        let isSelected = profile.name == selected?.name
+        return VStack(alignment: .leading, spacing: 3, content: content)
+            .padding(EdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9).strokeBorder(isSelected ? SettingsPalette.profile
+                    : hovered == profile.name ? Color.secondary.opacity(0.5) : SettingsPalette.groupBorder,
+                                                               lineWidth: isSelected ? 2 : 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+            .onHover { hovered = $0 ? profile.name : nil }
+            .onTapGesture { editor.selectedProfileName = profile.name }
+            .contextMenu { removalButton(profile) }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { editor.selectedProfileName = profile.name }
+    }
+
+    private func themeEditsCard(_ profile: ConfigurationProfile) -> some View {
+        let main = (try? store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)) ?? [:]
+        let count = ThemeEdits(main: main, themeID: profile.when!.onlyTheme!).changes.count
+        return listCard(profile) {
+            HStack(spacing: 6) {
+                Text(profile.name).fontWeight(.semibold).lineLimit(1)
+                Spacer(minLength: 0)
+                Button("Edit in Theme") { editor.section = .appearance }
+                    .controlSize(.small)
+            }
+            Text("\(sentence(profile)) · \(count) \(count == 1 ? "change" : "changes")")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
         }
-        .contentShape(RoundedRectangle(cornerRadius: 9))
-        .onHover { hovered = $0 ? profile.name : nil }
-        .onTapGesture { editor.selectedProfileName = profile.name }
-        .contextMenu { removalButton(profile) }
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { editor.selectedProfileName = profile.name }
+    }
+
+    private func sourceName(_ file: String) -> String {
+        let loader = store.configurationStore.configurationLoader
+        guard let name = loader.packageNames[file] else { return URL(filePath: file).lastPathComponent }
+        return themeOptions.contains { $0.id == loader.packageIDs[file] } ? "the \(name) theme" : name
     }
 
     private func badge(_ title: String, _ color: Color) -> some View {
@@ -528,7 +587,7 @@ struct ProfilesView: View {
     private func changes(_ configuration: [String: ConfigurationValue]) -> [(path: [String], value: ConfigurationValue)] {
         func leaves(_ value: ConfigurationValue, _ path: [String]) -> [(path: [String], value: ConfigurationValue)] {
             if case let .object(object) = value, !object.isEmpty, path != ["theme"], object["gradient"] == nil,
-               (try? value.decoded(HexColor.self)) == nil {
+               changeColor(value) == nil {
                 return object.keys.sorted().flatMap { leaves(object[$0]!, path + [$0]) }
             }
             return [(path, value)]
@@ -577,8 +636,7 @@ struct ProfilesView: View {
         let token: String? = if case let .string(text) = value, text.hasPrefix("@token.") { String(text.dropFirst(7)) } else { nil }
         if path[0] == "widgets" || (path[0] == "widgetOverrides" && path.count == 3 && path[2] == "enabled") {
             EmptyView()
-        } else if let color = token.flatMap({ name in store.themeTokenColors.first { $0.name == name }?.color })
-                    ?? (try? value.decoded(HexColor.self)) {
+        } else if let color = changeColor(value) {
             HStack(spacing: 5) {
                 RoundedRectangle(cornerRadius: 4).fill(color.color).frame(width: 14, height: 14)
                     .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.gray.opacity(0.4)))
@@ -596,6 +654,12 @@ struct ProfilesView: View {
         } else {
             Text(valueText(path, value))
         }
+    }
+
+    /// The color a change sets, with theme colors substituted first: a side of a light and dark pair can name one.
+    private func changeColor(_ value: ConfigurationValue) -> HexColor? {
+        try? substituteConfigurationReferences(value, prefix: "@token.",
+            values: store.effectiveDocument["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]).decoded(HexColor.self)
     }
 
     private func valueText(_ path: [String], _ value: ConfigurationValue) -> String {
@@ -627,6 +691,25 @@ struct ProfilesView: View {
             editor.change(ConfigurationEdit(action: .unset, properties: [
                 "profiles": .object([profile.name: .object(["configuration": mask])])
             ]))
+        }
+    }
+}
+
+struct ProfileGroups {
+    var yours: [ConfigurationProfile] = []
+    var themeEdits: [ConfigurationProfile] = []
+    var elsewhere: [(profile: ConfigurationProfile, file: String)] = []
+
+    @MainActor init(store: BarStore) {
+        let main = store.configurationStore.configurationURL.standardizedFileURL.path
+        for profile in store.profiles {
+            if let file = store.contributions["profiles.\(profile.name).name"]?.map(\.origin.file).first(where: { $0 != main }) {
+                elsewhere.append((profile, file))
+            } else if profile.when?.onlyTheme != nil {
+                themeEdits.append(profile)
+            } else {
+                yours.append(profile)
+            }
         }
     }
 }

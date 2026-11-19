@@ -169,7 +169,7 @@ Script output ignores unknown top-level fields, but styles, animations and menu 
 
 ## Animation
 
-`bar.motion` sets how the bar moves wherever a widget or popup sets no `animation` or `transition` of its own: widget changes such as colors and the workspace highlight, the widgets that slide aside when the active app or an app menu changes width, popups opening and closing, and changing text. Choose it in **Settings → Theme → Animation**:
+`bar.motion` sets how the bar moves wherever a widget or popup sets no `animation` or `transition` of its own: widget changes such as colors and the workspace highlight, the widgets that slide aside when the active app or an app menu changes width, popups opening and closing, and changing text. Choose it in **Settings → General → Animation**:
 
 - `smooth`, the default: widgets move over 0.35 seconds on a smooth curve, popups fade in over 0.25 seconds, and changing text cross-fades.
 - `subtle`: widgets ease out over 0.22 seconds, popups fade in over 0.15 seconds, and text changes at once.

@@ -3,6 +3,7 @@ import SwiftUI
 struct WidgetImage: View {
     let path: String
     let fit: ImageFit
+    var tinted = false
     @State private var image: NSImage?
     @State private var error = ""
     @Environment(\.offline) private var offline
@@ -10,7 +11,7 @@ struct WidgetImage: View {
     var body: some View {
         Group {
             if let image {
-                Image(nsImage: image).resizable().aspectRatio(contentMode: fit == .fill ? .fill : .fit)
+                Image(nsImage: image).renderingMode(tinted ? .template : .original).resizable().aspectRatio(contentMode: fit == .fill ? .fill : .fit)
             } else {
                 Color.clear
             }

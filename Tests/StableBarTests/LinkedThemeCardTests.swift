@@ -6,29 +6,6 @@ import Vision
 
 @MainActor
 struct LinkedThemeCardTests {
-    @Test func theOverrideNoticeFollowsALinkedTheme() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40},"widgets":[]}"#)
-        defer { fixture.close() }
-        let store = try fixture.store()
-        defer { store.stop() }
-        store.configurationStore.reloadConfiguration()
-        let editor = ConfigurationEditor(store: store)
-        let gallery = editor.gallery
-        await gallery.refresh()
-        #expect(store.receive([try link().link]) == .appearance)
-
-        gallery.contextChanged()
-
-        #expect(!gallery.overrides.values.isEmpty)
-        #expect(gallery.overrides.values.contains(ThemeOverride(path: ["bar", "height"], title: "Bar height")))
-        #expect(gallery.overrides.summary.contains("Bar height"))
-        let candidate = try #require(store.pendingLinks.theme)
-        candidate.tryOnBar()
-        gallery.contextChanged()
-        #expect(candidate.state == .trying)
-        #expect(gallery.overrides.values.contains(ThemeOverride(path: ["bar", "height"], title: "Bar height")))
-    }
-
     @Test func useThemeFollowsTheGallerysScreenSetupChoice() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
@@ -106,7 +83,6 @@ struct LinkedThemeCardTests {
 
         #expect(store.pendingLinks.theme == nil)
         #expect(!FileManager.default.fileExists(atPath: candidate.choice.directory.path))
-        #expect(gallery.overrideTheme?.key == store.configurationStore.selectedThemeKey)
     }
 
     @Test(arguments: [false, true], [false, true])
@@ -304,7 +280,6 @@ struct LinkedThemeCardTests {
         }
         gallery.contextChanged()
         #expect(gallery.linkedThemeIsActive)
-        #expect(gallery.overrideTheme?.directory == candidate.choice.directory)
         #expect(store.pendingLinks.theme === candidate)
     }
 
@@ -328,7 +303,7 @@ struct LinkedThemeCardTests {
         #expect(text.contains(message))
     }
 
-    @Test func aFailedCandidateLeavesTheOverrideNoticeWithTheSelectedTheme() async throws {
+    @Test func aFailedCandidateStaysOnItsCard() async throws {
         let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40},"widgets":[]}"#)
         defer { fixture.close() }
         let store = try fixture.store()
@@ -339,15 +314,12 @@ struct LinkedThemeCardTests {
         await gallery.refresh()
         #expect(store.receive([try link().link]) == .appearance)
         let candidate = try #require(store.pendingLinks.theme)
-        gallery.contextChanged()
-        #expect(!gallery.overrides.values.isEmpty)
         try fixture.write("not a directory", to: fixture.packages.directory)
 
         await LinkedThemeCard(candidate: candidate, editor: editor).useTheme()
 
         guard case .failed = candidate.state else { Issue.record("Expected an installation error"); return }
         #expect(store.pendingLinks.theme === candidate)
-        #expect(gallery.overrides.values.isEmpty)
     }
 
     @Test func linkedPreviewsShowTheThemeAloneAndSurviveGalleryRefreshes() async throws {
@@ -418,30 +390,6 @@ struct LinkedThemeCardTests {
 
         #expect(gallery.error(for: candidate.choice.linkedPreviewKey) == (linkedFails ? "This copy's preview failed." : nil))
         #expect(gallery.error(for: candidate.choice.key) == (linkedFails ? nil : "This copy's preview failed."))
-    }
-
-    @Test func resettingLinkedOverridesKeepsOtherSettingsAndIsUndoable() async throws {
-        let fixture = try ThemeGalleryFixture(#"{"bar":{"height":40,"margin":12},"widgets":[]}"#)
-        defer { fixture.close() }
-        let original = try Data(contentsOf: fixture.url)
-        let store = try fixture.store()
-        defer { store.stop() }
-        store.configurationStore.reloadConfiguration()
-        let editor = ConfigurationEditor(store: store)
-        let gallery = editor.gallery
-        await gallery.refresh()
-        #expect(store.receive([try link().link]) == .appearance)
-        gallery.contextChanged()
-
-        editor.change(gallery.overrides.resetEdit, everyBar: false)
-        gallery.contextChanged()
-
-        #expect(try fixture.document()["bar"] == .object(["margin": .number(12)]))
-        #expect(gallery.overrides.values.isEmpty)
-        #expect(store.pendingLinks.theme?.state == .ready)
-        #expect(store.customizationHistory.undoSteps.count == 1)
-        try store.customizationHistory.undo()
-        #expect(try Data(contentsOf: fixture.url) == original)
     }
 
     @Test func anOlderCardCannotDismissANewerLink() throws {

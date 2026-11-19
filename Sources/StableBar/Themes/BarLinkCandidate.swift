@@ -50,7 +50,7 @@ final class BarLinkCandidate {
     private var discarded = false
 
     init(link: BarLink, store: BarStore) throws {
-        look = try ThemeLinkCandidate(link: link.theme, store: store)
+        look = try ThemeLinkCandidate(link: link.theme, store: store, origin: .barLink)
         do {
             preview = try ThemePreview(choice: look.choice, themesDirectory: store.configurationStore.themesDirectory)
             builtIns = try link.widgets.map { try ConfigurationValue.object($0).decoded(WidgetConfiguration.self) }

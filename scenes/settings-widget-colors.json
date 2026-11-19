@@ -1,0 +1,20 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "style": {
+          "foreground": { "light": "@token.text", "dark": "#30d33c" },
+          "accent": { "light": "#30d33c", "dark": "@token.accent" }
+        }
+      }
+    ]
+  },
+  "draw": "settings",
+  "widget": "clock",
+  "tab": "style",
+  "height": 900
+}

@@ -29,7 +29,7 @@ final class ConfigurationEditor {
     var barItem = BarItem.widget
     /// The group Settings shows while `barItem` is `group`.
     var selectedGroup: String?
-    var barTab = BarTab.size
+    var barTab = BarTab.look
     var widgetTab = WidgetTab.content
     var barScreen = ScreenKind.laptop
     var themeChangesEveryBar = true
@@ -60,6 +60,7 @@ final class ConfigurationEditor {
         gallery = ThemeGallery(store: store)
         self.endEditing = endEditing
         selection = store.configuration?.widgets.first?.id
+        Task { [gallery] in await gallery.loadChoices() }
     }
 
     /// Commit field-editor text before changing its widget or replacing the document it edits.
@@ -118,7 +119,13 @@ final class ConfigurationEditor {
         let keys = definedInMainFile(widget)
             ? ["style", "background", "popupBackground", "tooltipBackground", "role", "rules", "transition", "animation", "tooltip", "onClick", "open", "actions", "expandOnHover", "displayMode", "openOnHover", "rightClickInMenuBar", "shown", "hidden", "format", "timeZone", "workspace", "click"]
             : WidgetConfiguration.CodingKeys.allCases.map(\.stringValue).filter { !["id", "position", "display", "enabled", "group"].contains($0) }
-        change(ConfigurationEdit(action: .unset, id: widget.id, properties: Dictionary(uniqueKeysWithValues: keys.map { ($0, .null) })))
+        let main = (try? store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)) ?? [:]
+        let themed = ThemeEdits.editedThemes(in: main).sorted().compactMap { theme in
+            let edits = ThemeEdits(main: main, themeID: theme)
+            return edits.removal(of: edits.widgetChanges(widget.id))
+        }
+        change([ConfigurationEdit(action: .unset, id: widget.id, properties: Dictionary(uniqueKeysWithValues: keys.map { ($0, .null) }))]
+               + themed)
     }
 
     func definedInMainFile(_ widget: WidgetConfiguration) -> Bool {
@@ -222,9 +229,9 @@ final class ConfigurationEditor {
     }
 
     /// Related edits, saved together with one Undo step.
-    func change(_ edits: [ConfigurationEdit]) {
+    func change(_ edits: [ConfigurationEdit], everyBar: Bool = false) {
         finishEditing()
-        do { try history.change(edits) }
+        do { try history.change(edits, everyBar: everyBar) }
         catch { self.error = errorMessage(error) }
         keepSelection()
     }
@@ -269,7 +276,7 @@ final class ConfigurationEditor {
             error = nil
             return
         }
-        change(ConfigurationEdit(action: .set, id: id, properties: properties))
+        changeLook(ConfigurationEdit(action: .set, id: id, properties: properties))
     }
 
     func setProvider(_ properties: [String: ConfigurationValue], for widget: WidgetConfiguration) {

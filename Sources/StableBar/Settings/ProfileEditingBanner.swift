@@ -26,12 +26,13 @@ struct ProfilePicker: View {
 
     var body: some View {
         let name = editor.editingProfile
+        let themeEdits = ProfileGroups(store: editor.store).themeEdits.map(\.name)
         Menu {
             Picker("Profile", selection: Binding(get: { name ?? "" }, set: {
                 if $0 != (name ?? "") { $0.isEmpty ? editor.endProfileEditing() : editor.editBar(for: $0) }
             })) {
                 Text("No profile").tag("")
-                ForEach(editor.store.profiles, id: \.name) { Text($0.name).tag($0.name) }
+                ForEach(editor.store.profiles.filter { !themeEdits.contains($0.name) }, id: \.name) { Text($0.name).tag($0.name) }
             }
             .pickerStyle(.inline)
         } label: {

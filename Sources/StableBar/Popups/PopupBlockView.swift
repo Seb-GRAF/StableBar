@@ -478,8 +478,8 @@ struct PopupBlockView: View {
                         .modifier(TransitioningContent(value: symbol, transition: transition, animation: animation, numeric: false))
                 }
             }
-        case let .image(path, source, fit):
-            WidgetImage(path: source.flatMap { fields[$0] } ?? path, fit: fit)
+        case let .image(path, source, fit, tinted):
+            WidgetImage(path: source.flatMap { fields[$0] } ?? path, fit: fit, tinted: tinted)
                 .frame(width: style.box.width ?? 52, height: style.box.height ?? 52)
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: appearance.cornerRadius))

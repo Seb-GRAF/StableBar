@@ -137,15 +137,19 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertTrue(gallery.storeThemes.isEmpty)
     }
 
-    @MainActor func testSaveAsThemeMovesYourLookIntoANewThemeWithOneUndoStep() async throws {
+    @MainActor func testSaveAsThemeMovesTheThemesEditsIntoANewThemeWithOneUndoStep() async throws {
         let fixture = try ThemeGalleryFixture(#"""
-        {"theme":{"id":"phosphor"},"tokens":{"accent":"#ff0000","brand":"#00ff00"},"defaults":{"fontSize":17},
-         "bar":{"offset":30,"height":34,"popupOffset":12,"glass":{"enabled":true,"transparency":0.5}},
-         "widgets":[{"id":"clock","type":"clock","position":"right","style":{"foreground":"@token.brand"}}]}
+        {"theme":{"id":"phosphor"},"tokens":{"brand":"#00ff00"},"bar":{"offset":30},
+         "widgets":[{"id":"clock","type":"clock","position":"right","style":{"foreground":"@token.brand"}}],
+         "profiles":[{"name":"Phosphor edits","when":{"theme":"phosphor"},"configuration":{
+           "tokens":{"accent":"#ff0000"},"defaults":{"fontSize":17},
+           "bar":{"height":34,"popupOffset":12,"glass":{"enabled":true,"transparency":0.5}},
+           "widgetOverrides":{"clock":{"background":"#000000"}}}}]}
         """#)
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
+        store.configurationStore.reloadConfiguration()
         let before = try Data(contentsOf: fixture.url)
         var look = store.effectiveDocument
         let gallery = ThemeGallery(store: store)
@@ -156,21 +160,26 @@ final class ThemeGalleryTests: XCTestCase {
         let document = try fixture.document()
         XCTAssertEqual(document["theme"], .object(["id": .string("my-phosphor"), "version": .string("1.0.0")]))
         XCTAssertEqual(document["tokens"], .object(["brand": .string("#00ff00")]))
-        XCTAssertNil(document["defaults"])
         XCTAssertEqual(document["bar"], .object(["offset": .number(30)]))
-        XCTAssertNotNil(document["widgets"])
+        XCTAssertEqual(try document["profiles"]?.decoded([[String: ConfigurationValue]].self), [[
+            "name": .string("My Phosphor edits"), "when": .object(["theme": .string("my-phosphor")]),
+            "configuration": .object(["widgetOverrides": .object(["clock": .object(["background": .string("#000000")])])])
+        ]])
         var saved = store.effectiveDocument
         look["theme"] = nil
         saved["theme"] = nil
         XCTAssertEqual(saved, look)
-        XCTAssertEqual(gallery.overrides.values.map(\.path), [["tokens", "brand"], ["widgets", "clock", "style", "foreground"]])
+        XCTAssertEqual(gallery.edits.changes.map(\.path), [["widgetOverrides", "clock", "background"]])
+        XCTAssertTrue(gallery.edits.everyTheme.isEmpty)
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.packages.directory.appending(path: "my-phosphor/1.0.0").path))
         await gallery.refresh()
-        await gallery.save(try XCTUnwrap(gallery.choices.first { $0.key == "phosphor" }), as: "My Phosphor")
-        XCTAssertEqual(gallery.selectedKey, "my-phosphor/1.0.1")
+        await gallery.save(try XCTUnwrap(gallery.choices.first { $0.key == "phosphor" }), as: "My Phosphor", selecting: false)
+        XCTAssertEqual(gallery.selectedKey, "phosphor")
+        XCTAssertNil(try fixture.document()["profiles"]?.decoded([ConfigurationProfile].self).first { $0.name == "Phosphor edits" })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.packages.directory.appending(path: "my-phosphor/1.0.1").path))
     }
 
     /// A name without ASCII letters or digits gives no theme id, so saving fails rather than inventing one.
@@ -230,24 +239,27 @@ final class ThemeGalleryTests: XCTestCase {
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
     }
 
-    @MainActor func testThemeColorsAppearInNoticeAndResetReturnsToTheThemeEvenWhenItDoesNotRedefineThem() async throws {
+    @MainActor func testAThemeColorEditIsTheThemesAndRevertReturnsToTheThemeEvenWhenItDoesNotRedefineIt() async throws {
         for themed in [false, true] {
             let fixture = try ThemeGalleryFixture(themed ? #"{"theme":{"id":"test-theme","version":"1"},"widgets":[]}"# : #"{"widgets":[]}"#)
             defer { fixture.close() }
             if themed { _ = try fixture.theme(#"{}"#) }
             let store = try fixture.store()
             defer { store.stop() }
-            let gallery = ThemeGallery(store: store)
+            store.configurationStore.reloadConfiguration()
+            let editor = ConfigurationEditor(store: store)
+            let gallery = editor.gallery
             await gallery.refresh()
-            XCTAssertTrue(gallery.overrides.values.isEmpty)
-            try store.customizationHistory.change(ConfigurationEdit(action: .tokens, properties: ["text": .string("#123456")]))
-            await gallery.refresh()
-            XCTAssertEqual(gallery.overrides.values.map(\.path), [["tokens", "text"]])
-            try store.customizationHistory.change(gallery.overrides.resetEdit)
-            await gallery.refresh()
-            XCTAssertTrue(gallery.overrides.values.isEmpty)
+            XCTAssertTrue(gallery.edits.changes.isEmpty)
+            editor.changeLook(ConfigurationEdit(action: .tokens, properties: ["text": .string("#123456")]))
+            try editor.history.flush()
+            gallery.configurationChanged()
+            XCTAssertEqual(gallery.edits.changes.map(\.path), [["tokens", "text"]])
+            editor.change(try XCTUnwrap(gallery.edits.revertEdit))
+            gallery.configurationChanged()
+            XCTAssertTrue(gallery.edits.changes.isEmpty)
             XCTAssertEqual(store.configuration?.defaults.foreground, HexColor(light: 0x1d1d1fff, dark: 0xf5f5f7ff))
-            XCTAssertNil(try fixture.document()["tokens"])
+            XCTAssertNil(try fixture.document()["profiles"])
             XCTAssertEqual(store.customizationHistory.undoSteps.count, 2)
         }
     }
@@ -344,7 +356,7 @@ final class ThemeGalleryTests: XCTestCase {
         for color in ["#111111", "#222222", "#333333"] {
             try store.customizationHistory.change(ConfigurationEdit(action: .tokens, properties: ["text": .string(color)]))
             gallery.configurationChanged()
-            XCTAssertEqual(gallery.overrides.values.map(\.path), [["tokens", "text"]])
+            XCTAssertEqual(gallery.edits.everyTheme.map(\.path), [["tokens", "text"]])
         }
         await gallery.refreshTask?.value
         await gallery.refresh()

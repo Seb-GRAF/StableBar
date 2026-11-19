@@ -116,6 +116,9 @@ enum PackageSourceError: LocalizedError, Equatable {
 /// Only that source can install other versions of the ID, so another source can't substitute the package.
 /// Versions an author installed from a folder under a source's ID are listed apart: they're the folder's files, not the source's.
 struct PackageInstallRecord: Codable, Equatable, Sendable {
+    /// Why a package was installed from no source: Save as Theme, a theme link, or the look of a bar link.
+    enum Origin: String, Codable, Sendable { case saved, themeLink, barLink }
+
     static let fileName = ".source.json"
     /// Opened from a folder: the ID is unclaimed, and the first source to install it claims it.
     static let local = PackageInstallRecord(source: PackageSource.localID, name: nil, url: nil)
@@ -128,6 +131,8 @@ struct PackageInstallRecord: Codable, Equatable, Sendable {
     /// as a local folder, and become the source's only when their files are the source's. Nil rather than empty, so
     /// records without any read and write as before.
     var localVersions: [String]?
+    /// Why a local package came from no source. Nil for a folder, so records without it read and write as before.
+    var origin: Origin?
 
     init(source: String, name: String?, url: URL?) {
         self.source = source

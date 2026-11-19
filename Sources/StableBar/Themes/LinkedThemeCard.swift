@@ -44,11 +44,6 @@ struct LinkedThemeCard: View {
                 if let error = gallery.error(for: candidate.choice.linkedPreviewKey) {
                     Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
                 }
-                if screen == nil {
-                    ThemeOverrideNotice(overrides: gallery.overrides, name: name) {
-                        editor.change(gallery.overrides.resetEdit, everyBar: everyBar)
-                    }
-                }
                 HStack(spacing: 10) {
                     Text(trying ? "Cancel returns to your saved theme." : "Your bar hasn’t changed.")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -142,31 +137,5 @@ struct LinkedThemeCardStyle: ViewModifier {
         content
             .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
             .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(Color.accentColor.opacity(0.45)))
-    }
-}
-
-struct ThemeOverrideNotice: View {
-    let overrides: ThemeOverrides
-    let name: String
-    let reset: () -> Void
-
-    var body: some View {
-        let tint = overrides.values.isEmpty ? Color.secondary : SettingsPalette.warning
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(overrides.notice(theme: name)).fontWeight(.semibold)
-                if !overrides.values.isEmpty { Text(overrides.summary).foregroundStyle(.secondary).help(overrides.summary) }
-            }
-            Spacer(minLength: 0)
-            Button("Reset them", action: reset)
-                .controlSize(.small)
-                .disabled(overrides.values.isEmpty)
-                .accessibilityLabel("Reset your settings that override this theme")
-        }
-        .font(.system(size: 12))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tint.opacity(0.3)))
     }
 }

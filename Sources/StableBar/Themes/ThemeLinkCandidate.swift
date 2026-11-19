@@ -22,7 +22,7 @@ final class ThemeLinkCandidate {
     /// while this theme installs still wins.
     @ObservationIgnored private var themeChoices = 0
 
-    init(link: ThemeLink, store: BarStore,
+    init(link: ThemeLink, store: BarStore, origin: PackageInstallRecord.Origin = .themeLink,
          install: (@Sendable (URL) async throws -> WidgetPackageInspection)? = nil) throws {
         try link.validateFiles()
         let directory = FileManager.default.temporaryDirectory.appending(path: "stablebar-theme-link-\(UUID().uuidString)")
@@ -60,7 +60,7 @@ final class ThemeLinkCandidate {
             validationOriginPathBytes = budget.consumedOriginPathBytes
             self.store = store
             self.install = install ?? { [client = store.packageStoreClient] directory in
-                try await client.install(directory, from: nil)
+                try await client.install(directory, from: nil, origin: origin)
             }
         } catch {
             try? FileManager.default.removeItem(at: directory)

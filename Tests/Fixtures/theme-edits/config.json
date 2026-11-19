@@ -1,0 +1,54 @@
+{
+  "theme": {
+    "id": "leman"
+  },
+  "bar": {
+    "margin": 8
+  },
+  "defaults": {
+    "fontName": "Futura"
+  },
+  "widgets": [
+    {
+      "id": "title",
+      "type": "text",
+      "text": "Finder",
+      "position": "left"
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "position": "right"
+    }
+  ],
+  "profiles": [
+    {
+      "name": "Léman edits",
+      "when": {
+        "theme": "leman"
+      },
+      "configuration": {
+        "tokens": {
+          "accent": {
+            "light": "#2f6fde",
+            "dark": "#7aa7ff"
+          }
+        },
+        "defaults": {
+          "fontSize": 12,
+          "cornerRadius": 12
+        },
+        "bar": {
+          "height": 34
+        },
+        "widgetOverrides": {
+          "clock": {
+            "style": {
+              "foreground": "@token.accent"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
