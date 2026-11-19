@@ -285,7 +285,7 @@ final class ThemeGallery {
                                    "description": .string("Based on \(current.manifest.name).")])
                 .write(to: source.appending(path: "package.json"))
             try configurationData(saved.theme).write(to: source.appending(path: "config.json"))
-            let installed = try await client.install(source, from: nil)
+            let installed = try await client.install(source, from: nil, origin: .saved)
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
             // A theme can't hold widget styles, so they become the new theme's edits.
@@ -295,6 +295,18 @@ final class ThemeGallery {
             if selecting { changes.append(try store.configurationStore.themeEdit(for: choice)) }
             perform(on: key) { try store.customizationHistory.change(changes, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
+    }
+
+    /// Deletes every installed version of `choice`, and the edits the main file keeps for it.
+    func delete(_ choice: ThemeChoice) async {
+        do {
+            try await store.packageLibrary.uninstallTheme(id: choice.manifest.id)
+            let main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
+            if let removal = ThemeEdits(main: main, themeID: choice.manifest.id).revertEdit {
+                try store.customizationHistory.change(removal)
+            }
+            await refresh()
+        } catch { errors[choice.key] = errorMessage(error) }
     }
 
     private func perform(on key: String, _ action: () throws -> Void) {

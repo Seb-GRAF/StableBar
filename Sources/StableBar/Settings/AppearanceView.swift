@@ -235,8 +235,9 @@ struct AppearanceView: View {
     private var gallerySections: [(title: String, items: [ThemeItem])] {
         let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
             .filter { !$0.isBundled }
-        let yours = installed.filter { [.installed, .local].contains(gallery.source(of: $0)) }
-        let fromSources = installed.filter { ![.installed, .local].contains(gallery.source(of: $0)) }.map(ThemeItem.installed)
+        let isYours = { (choice: ThemeChoice) in [.installed, .local, .saved, .themeLink, .barLink].contains(gallery.source(of: choice)) }
+        let yours = installed.filter(isYours)
+        let fromSources = installed.filter { !isYours($0) }.map(ThemeItem.installed)
             + gallery.storeThemes.map(ThemeItem.store)
         return [("Included", gallery.choices.filter(\.isBundled).map(ThemeItem.installed)),
                 ("Yours", yours.map(ThemeItem.installed).sorted { $0.title < $1.title }),
@@ -249,8 +250,12 @@ struct AppearanceView: View {
         case let .installed(choice):
             let selected = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? gallery.selectedKey
             return ThemeCard(title: choice.title, look: look, appearance: appearance, isSelected: selected == choice.key,
-                             progress: gallery.progress[item.id], error: gallery.error(for: item.id),
-                             source: gallery.source(of: choice)) { gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar) }
+                             isEdited: gallery.editedThemes.contains(choice.manifest.id),
+                             progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
+                             showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
+                             delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }) {
+                gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar)
+            }
         case let .store(entry):
             return ThemeCard(title: entry.name, look: look, appearance: appearance, progress: gallery.progress[item.id],
                              error: gallery.error(for: item.id), isStore: true,

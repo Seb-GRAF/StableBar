@@ -64,12 +64,13 @@ struct ThemeCard: View {
                                 .accessibilityLabel("Get \(title)")
                         }
                     } else if let source {
-                        PackageOriginBadge(source: source)
+                        // The gallery's Included section already says where these come from.
+                        if source != .included { PackageOriginBadge(source: source) }
                     } else {
                         Text("Installed").font(.system(size: 10.5)).foregroundStyle(.secondary)
                     }
                 }
-                .frame(minWidth: 72, minHeight: 20, maxHeight: 20)
+                .frame(minWidth: isStore ? 72 : nil, minHeight: 20, maxHeight: 20)
                 if isEdited {
                     Text("Edited")
                         .font(.system(size: 10.5, weight: .semibold))
