@@ -559,7 +559,8 @@ final class WidgetPopup {
             if !onHover { closePinned(widget.id) }
             return
         }
-        let window = anchor.window!
+        // A menu bar item's cell can still take a click after its anchor has left the window (#827).
+        guard let window = anchor.window else { return }
         let screen = window.screen!
         let bar = store.configuration!.bar(on: ScreenKind(BarDisplay(screen: screen)))
         let animation = popup.animation ?? bar.motion.popupAnimation
