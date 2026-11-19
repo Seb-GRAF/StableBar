@@ -1,0 +1,906 @@
+import AppKit
+import SwiftUI
+import UniformTypeIdentifiers
+
+enum BarItem {
+    case bar, everyWidget, everyGroup, widget, group
+}
+
+enum BarTab: CaseIterable {
+    case size, look, placement
+
+    var title: String {
+        switch self {
+        case .size: "Size"
+        case .look: "Look"
+        case .placement: "Placement"
+        }
+    }
+}
+
+enum WidgetTab: CaseIterable {
+    case content, style, behavior
+
+    var title: String {
+        switch self {
+        case .content: "Content"
+        case .style: "Style"
+        case .behavior: "Behavior"
+        }
+    }
+}
+
+private extension WidgetTransition {
+    var title: String {
+        switch self {
+        case .none: "None"
+        case .fade: "Fade"
+        case .roll: "Roll"
+        case .numeric: "Numeric"
+        }
+    }
+}
+
+struct BarInspector: View {
+    @Bindable var editor: ConfigurationEditor
+    let screen: ScreenKind
+    @Environment(\.fixedDate) private var fixedDate
+    let kinds: [ScreenKind]
+    let names: [String: String]
+    let source: (WidgetConfiguration) -> PackageOrigin
+    let useSharedBar: (ScreenSetup) -> Void
+    let remove: (String) -> Void
+    @Binding var scrollPositions: [String: String]
+    @State private var fontFamilies: [String] = []
+    @State private var customClockFormat = false
+    @State private var json = ""
+    @State private var editingJSON = false
+    @State private var webPage = ""
+    @State private var editingWebPage = false
+    @State private var clickError: String?
+    @State private var explainingSetup = false
+    @State private var barOnScreen = false
+    @State private var resetting: WidgetConfiguration?
+    private var store: BarStore { editor.store }
+
+    private static let styleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "fontName", "fontWeight", "fontSize",
+                                    "paddingHorizontal", "paddingVertical", "paddingLeading", "paddingTrailing", "paddingTop", "paddingBottom",
+                                    "cornerRadius", "borderWidth", "borderColor"]
+
+    var body: some View {
+        let widget = editor.barItem == .widget ? store.configuration?.onScreen(screen).widgets.first { $0.id == editor.selectedID } : nil
+        let group = editor.barItem == .group ? editor.selectedGroup.flatMap { store.configuration?.groups[$0] != nil ? $0 : nil } : nil
+        let key = widget.map { "widget/\($0.id)/\(editor.widgetTab)" } ?? group.map { "group/\($0)" }
+            ?? (editor.barItem == .everyWidget ? "everyWidget" : editor.barItem == .everyGroup ? "everyGroup" : "bar/\(editor.barTab)")
+        VStack(spacing: 0) {
+            Group {
+                if let widget {
+                    widgetHeader(widget)
+                } else if let group {
+                    header(Image(systemName: WidgetGrouping.symbol).font(.system(size: 18)), title: friendly(group)) {
+                        Text(groupMembers(group).isEmpty ? "Group"
+                             : "Group of \(groupMembers(group).map { names[$0.id] ?? $0.id }.formatted(.list(type: .and)))")
+                    }
+                } else if editor.barItem == .everyWidget {
+                    header(Text("Aa").font(.system(size: 17, weight: .medium)), title: "Every widget") {
+                        Text("Widgets use this look unless you style them yourself")
+                    }
+                } else if editor.barItem == .everyGroup {
+                    header(Image(systemName: WidgetGrouping.symbol).font(.system(size: 18)), title: "Every group") {
+                        Text("Groups use this look unless you style them yourself")
+                    }
+                } else {
+                    header(Image(systemName: "menubar.rectangle").font(.system(size: 18)), title: "Bar") { Text("The strip itself") }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+            if widget != nil {
+                SettingsSegments(selection: $editor.widgetTab, options: WidgetTab.allCases.map { ($0, $0.title) })
+                    .frame(maxWidth: 330)
+                    .padding(.horizontal, 20).padding(.bottom, 8)
+            } else if editor.barItem == .bar {
+                SettingsSegments(selection: $editor.barTab, options: BarTab.allCases.map { ($0, $0.title) })
+                    .frame(maxWidth: 330)
+                    .padding(.horizontal, 20).padding(.bottom, 8)
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear.frame(height: 0).id("top")
+                    if let widget {
+                        widgetPanel(widget)
+                    } else if let group {
+                        groupPanel(group)
+                    } else if editor.barItem == .everyWidget {
+                        stylePanel(defaultsStyle, name: "Widget", widget: nil)
+                        SettingsCallout(systemImage: "sparkle",
+                                        text: Text("Widgets with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
+                            .padding(.top, 12)
+                    } else if editor.barItem == .everyGroup {
+                        groupStylePanel(groupDefaultsStyle, flared: store.configuration?.groupDefaults.flare != nil)
+                        SettingsCallout(systemImage: "sparkle",
+                                        text: Text("Groups with their own values keep them. Use the revert arrow beside a value to follow this shared look again."))
+                            .padding(.top, 12)
+                    } else {
+                        barPanel
+                    }
+                }
+                .scrollTargetLayout()
+                .padding(.horizontal, 20)
+                .padding(.top, 2)
+                .padding(.bottom, 24)
+            }
+            .scrollPosition(id: Binding(get: { scrollPositions[key] }, set: { scrollPositions[key] = $0 }), anchor: .top)
+            .id(key)
+        }
+        .task { fontFamilies = NSFontManager.shared.availableFontFamilies }
+        .onChange(of: editor.selectedID) {
+            customClockFormat = false
+            clickError = nil
+        }
+        .sheet(isPresented: $editingJSON) {
+            JSONSheet(title: "\(names[editor.selectedID ?? ""] ?? "Widget") as JSON", text: json,
+                      apply: { editor.replaceProperties($0); return editor.error }, close: { editingJSON = false })
+        }
+        .sheet(isPresented: $editingWebPage) { webPageSheet }
+        .confirmationDialog("Reset \(resetting.map { names[$0.id] ?? $0.id } ?? "")?",
+                            isPresented: Binding(get: { resetting != nil }, set: { if !$0 { resetting = nil } }), presenting: resetting) { widget in
+            Button("Reset") { editor.reset(widget) }
+        } message: { widget in
+            Text(editor.definedInMainFile(widget)
+                 ? "Its style, role, rules, transition, tooltip, click action, format and workspace options go back to the defaults. What it shows and where it sits stay."
+                 : "Everything you changed goes back to how its package or imported file defines it. Where it sits and the screens it shows on stay.")
+        }
+    }
+
+
+    private func header<Icon: View, Subtitle: View>(_ icon: Icon, title: String, @ViewBuilder subtitle: () -> Subtitle) -> some View {
+        HStack(spacing: 10) {
+            icon
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 36, height: 36)
+                .background(Color.accentColor.opacity(0.2), in: RoundedRectangle(cornerRadius: 9))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 15, weight: .semibold)).lineLimit(1)
+                HStack(spacing: 6) { subtitle() }.font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func widgetHeader(_ widget: WidgetConfiguration) -> some View {
+        HStack(spacing: 10) {
+            header(Image(systemName: widget.content.symbol).font(.system(size: 18)), title: names[widget.id] ?? widget.id) {
+                Text(typeName(widget))
+                PackageOriginBadge(source: source(widget))
+            }
+            Text("Shows on").font(.system(size: 12)).foregroundStyle(.secondary)
+            Menu {
+                WidgetScreensMenu(store: store, widget: widget, screen: screen) { editor.set($0, for: widget.id) }
+            } label: {
+                Text(store.screensTitle(for: widget))
+            }
+            .fixedSize()
+            .help("Choose the screens this widget shows on")
+            moreMenu(widget)
+        }
+    }
+
+    private func moreMenu(_ widget: WidgetConfiguration) -> some View {
+        Menu {
+            Button("Edit as JSON…") {
+                var properties = editor.properties(for: widget.id)
+                properties["id"] = nil
+                json = (try? String(decoding: configurationData(properties), as: UTF8.self)) ?? "{}"
+                editingJSON = true
+            }
+            Button("Copy widget ID") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(widget.id, forType: .string)
+            }
+            Divider()
+            Section("Advanced") {
+                Picker("Presentation role", selection: Binding(get: { widget.role?.rawValue ?? "" }, set: {
+                    if $0 != (widget.role?.rawValue ?? "") { editor.set(["role": $0.isEmpty ? .null : .string($0)], for: widget.id) }
+                })) {
+                    Text("None").tag("")
+                    // The slider role styles slider blocks, not a whole widget.
+                    ForEach(PresentationRole.allCases.filter { $0 != .slider || widget.role == .slider }, id: \.rawValue) {
+                        Text($0.rawValue.capitalized).tag($0.rawValue)
+                    }
+                }
+                if widget.drawsTransitions {
+                    Picker("Transition", selection: string("transition", for: widget,
+                                                            fallback: (store.configuration?.bar.motion.transition ?? .none).rawValue)) {
+                        ForEach(WidgetTransition.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                    }
+                }
+                Button("Troubleshoot…") { editor.troubleshoot(widget.id) }
+            }
+            Divider()
+            Button("Reset to defaults…") { resetting = widget }
+            Button("Remove from bar", role: .destructive) { remove(widget.id) }
+                .disabled(!editor.canRemove(widget))
+        } label: {
+            Image(systemName: "ellipsis")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More")
+        .accessibilityLabel("More")
+    }
+
+
+    @ViewBuilder private var barPanel: some View {
+        let target = barOnScreen ? screen : nil
+        let values = target.map(barValues) ?? document("bar")
+        let bar = StyleFields(store: store, path: target.map { "screens.\($0.rawValue).bar" } ?? "bar", defaultsPath: barOnScreen ? "bar" : nil,
+                              values: values, set: { setBar($0, on: target) }, unset: { unsetBar($0, on: target) })
+        let barStyle = StyleFields(store: store, path: bar.path + ".style", defaultsPath: barOnScreen ? "bar.style" : nil,
+                                   values: (try? values["style"]?.decoded([String: ConfigurationValue].self)) ?? [:],
+                                   set: { setBar(["style": .object($0)], on: target) },
+                                   unset: { unsetBar(["style": .object($0)], on: target) })
+        if kinds.count > 1 || store.configuration?.screenLooks[screen.rawValue] != nil {
+            SettingsSegments(selection: $barOnScreen, options: [(false, "Every screen"), (true, screen.screenTitle)], stretches: false)
+                .fixedSize()
+                .padding(.bottom, 12)
+        }
+        switch editor.barTab {
+        case .size:
+            SettingsGroup("Size") {
+                bar.number("Height", "height", default: 40, in: 16...100, slider: true)
+                barStyle.number("Corner radius", "cornerRadius", default: 0, in: 0...40, slider: true)
+                bar.number("Side inset", "inset", default: 12, in: 0...100)
+                bar.number("Space between widgets", "spacing", default: 8, in: 0...50)
+            }
+            SettingsCallout(systemImage: "arrow.left.and.right",
+                            text: Text("Drag a label or a **↔** handle to change a value; hold Shift for steps of 10. The preview and your real bar follow as you drag."))
+                .padding(.top, 12)
+        case .look:
+            SettingsGroup("Background") {
+                barStyle.color("Fill", "background")
+            }
+            SettingsGroup("Border") {
+                barStyle.number("Width", "borderWidth", default: 0, in: 0...6, step: 0.5)
+                barStyle.color("Color", "borderColor")
+                barStyle.row("Edges", "borderEdges") { _ in
+                    SettingsSegments(selection: barStyle.stringBinding("borderEdges", default: BarBorderEdges.bottom.rawValue),
+                                     options: BarBorderEdges.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
+                }
+            }
+        case .placement:
+            SettingsGroup("Position") {
+                let position = (target.map { store.configuration?.bar(on: $0) } ?? store.configuration?.bar)?.position ?? .top
+                bar.row("Edge", "position") { _ in
+                    SettingsSegments(selection: bar.stringBinding("position", default: BarPosition.top.rawValue),
+                                     options: BarPosition.allCases.map { ($0.rawValue, $0.rawValue.capitalized) }, stretches: false)
+                }
+                if position == .top {
+                    bar.toggle("Below the menu bar", "belowMenuBar", default: false,
+                               hint: "Starts the bar under each display's macOS menu bar. Where the menu bar hides, the bar stays on the top edge.")
+                    bar.number("Offset from top", "offset", default: 0, in: 0...200,
+                               hint: "Below the menu bar, the offset counts from the bottom of the menu bar.")
+                } else {
+                    bar.number("Offset from bottom", "offset", default: 0, in: 0...200,
+                               hint: "Counts from the bottom edge of the display, under the Dock if it shows there.")
+                }
+                bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
+            }
+            if let setup = store.configurationStore.screenSetup {
+                let ownsBar = store.configurationStore.configurationURL != store.configurationStore.sharedConfigurationURL
+                let screens = kinds.map(\.name).joined(separator: " + ")
+                SettingsGroup("These screens") {
+                    SettingRow(title: ownsBar ? "\(screens) \(setup.kinds.count == 1 ? "has its" : "have their") own bar"
+                                              : "\(screens) \(setup.kinds.count == 1 ? "uses" : "use") the shared bar",
+                               hint: "Each set of connected screens can have its own widgets, theme and size.") {
+                        Button(ownsBar ? "Manage…" : "Give them their own bar…") { explainingSetup = true }
+                            .controlSize(.small)
+                            .popover(isPresented: $explainingSetup, arrowEdge: .bottom) {
+                                ScreenSetupPopover(editor: editor, setup: setup, title: screens) {
+                                    explainingSetup = false
+                                    useSharedBar($0)
+                                }
+                            }
+                    }
+                }
+            }
+        }
+    }
+
+
+    /// The group's widgets on this screen, in bar order.
+    private func groupMembers(_ group: String) -> [WidgetConfiguration] {
+        let displays = NSScreen.screens.map(BarDisplay.init)
+        return (store.configuration?.onScreen(screen).widgets ?? []).filter {
+            $0.enabled && $0.group == group && screen.shows($0.display, among: displays, activeID: store.appWatcher.activeDisplayID)
+        }
+    }
+
+    @ViewBuilder private func groupPanel(_ group: String) -> some View {
+        let values = store.configuration?.groups[group].flatMap { group -> [String: ConfigurationValue]? in
+            if case let .object(properties) = group.style.configurationValue { return properties }
+            return nil
+        } ?? [:]
+        let style = StyleFields(store: store, path: "groups.\(group).style", defaultsPath: "groupDefaults", values: values,
+                                set: { editor.change(ConfigurationEdit(action: .groups, properties: [group: .object(["style": .object($0)])])) },
+                                unset: { unset(["groups": .object([group: .object(["style": .object($0)])])]) })
+        let grouping = WidgetGrouping(store: store)
+        groupStylePanel(style, flared: store.configuration?.groups[group]?.style.flare != nil)
+        SettingsGroup("Widgets") {
+            ForEach(groupMembers(group)) { member in
+                SettingRow(title: names[member.id] ?? member.id) {
+                    Button("Leave Group") { editor.leaveGroup(member.id) }
+                        .controlSize(.small)
+                        .disabled(!grouping.canLeave(member.id))
+                        .help(grouping.leaveBlocker(member.id) ?? "Take this widget out of the group")
+                }
+            }
+        }
+        Button("Ungroup") { editor.ungroup(group) }
+            .controlSize(.small)
+            .disabled(grouping.ungroupBlocker(group) != nil)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
+            .help(grouping.ungroupBlocker(group) ?? "Take every widget out of this group")
+    }
+
+    @ViewBuilder private func groupStylePanel(_ style: StyleFields, flared: Bool) -> some View {
+        SettingsGroup("Background and border") {
+            style.color("Background", "background")
+            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
+                style.row("Border", "borderWidth", scrub: flared ? nil : Scrub(value: width, range: 0...6, step: 0.5),
+                          hint: flared ? "A group with a flare draws no border" : nil) { _ in
+                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5).disabled(flared)
+                    style.colorButton("Border color", "borderColor").disabled(flared)
+                }
+            }
+        }
+        SettingsGroup("Shape") {
+            style.number("Corners", "cornerRadius", default: 0, in: 0...40, slider: true)
+            style.number("Flare", "flare", default: 0, in: 0...30, slider: true, hint: "Curves the top corners outward, like the notch")
+        }
+        SettingsGroup("Spacing") {
+            style.number("Side padding", "paddingHorizontal", default: 0, in: 0...30, slider: true)
+            style.number("Top and bottom padding", "paddingVertical", default: 0, in: 0...20, slider: true)
+            style.number("Between widgets", "spacing", default: store.configuration?.onScreen(screen).bar.spacing ?? 0, in: 0...30, slider: true)
+        }
+    }
+
+    private var defaultsStyle: StyleFields {
+        StyleFields(store: store, path: "defaults", values: document("defaults"),
+                    set: { editor.change(ConfigurationEdit(action: .defaults, properties: $0)) },
+                    unset: { unset(["defaults": .object($0)]) })
+    }
+
+    private var groupDefaultsStyle: StyleFields {
+        StyleFields(store: store, path: "groupDefaults", values: document("groupDefaults"),
+                    set: { editor.change(ConfigurationEdit(action: .groupDefaults, properties: $0)) },
+                    unset: { unset(["groupDefaults": .object($0)]) })
+    }
+
+    @ViewBuilder private func stylePanel(_ style: StyleFields, name: String, widget: WidgetConfiguration?) -> some View {
+        SettingsGroup("Colors") {
+            style.color("Text", "foreground")
+            if let widget {
+                let configuration = store.configuration!.onScreen(screen)
+                let defaults = configuration.popupDefaults.popupStyle(over: configuration.defaults)
+                let popup = widgetPopup(widget, store: store)
+                let backgrounds = StyleFields(store: store, path: "widgets.\(widget.id)", widgetID: widget.id, values: [
+                    "background": resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]).background?.configurationValue ?? .null,
+                    "popupBackground": (popup?.baseStyle(widget: widget, defaults: defaults)
+                        ?? resolveStyle([defaults, widget.style, WidgetStyle(background: widget.popupBackground)])).background?.configurationValue ?? .null,
+                    "tooltipBackground": widget.tooltipStyle.inheriting(defaults).background?.configurationValue ?? .null
+                ], set: { editor.set($0, for: widget.id) },
+                    unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: $0)) })
+                backgrounds.color("Widget background", "background")
+                backgrounds.color("Popup background", "popupBackground")
+                backgrounds.color("Tooltip background", "tooltipBackground")
+            } else {
+                style.color("Background", "background")
+            }
+            style.hoverBackground("Hover background")
+            style.color("Accent", "accent")
+            if widget == nil {
+                style.color("Accent text", "accentText")
+                style.color("Shadow", "shadowColor")
+            }
+        }
+        SettingsGroup("Text") {
+            style.font(fontFamilies)
+            style.weight()
+            style.number("Size", "fontSize", default: 13, in: 6...40, slider: true)
+        }
+        SettingsGroup("Padding and corners") {
+            BoxModel(style: style, name: name)
+            NumberDraft(value: style.numberBinding("borderWidth", default: 0)) { width in
+                style.row("Border", "borderWidth", scrub: Scrub(value: width, range: 0...6, step: 0.5)) { _ in
+                    NumberField(title: "Border width", value: width, range: 0...6, step: 0.5)
+                    style.colorButton("Border color", "borderColor")
+                }
+            }
+        }
+        if let widget, widget.content == .workspaces {
+            SettingsGroup("Workspaces") {
+                WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults", widgetID: widget.id,
+                    values: (try? store.configuration?.workspaceDefaults.mergedProperties(editor.properties(for: widget.id)["workspace"])) ?? [:],
+                    set: { editor.set(["workspace": .object($0)], for: widget.id) },
+                    unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["workspace": .object($0)])) })
+            }
+        }
+        if let widget, Self.styleKeys.contains(where: { style.property($0).saved != nil }) || style.property("hoverBackground").saved != nil
+            || ["background", "popupBackground", "tooltipBackground"].contains(where: {
+                store.propertySources(path: "widgets.\(widget.id)", key: $0, widgetID: widget.id, values: [:]).saved != nil
+            }) {
+            Button("Go back to the Every widget look") {
+                editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: [
+                    "style": .object(Dictionary(uniqueKeysWithValues: Self.styleKeys.map { ($0, ConfigurationValue.null) }).merging(HoverBackgroundRow.reset) { $1 }),
+                    "background": .null, "popupBackground": .null, "tooltipBackground": .null
+                ]))
+            }
+            .controlSize(.small)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
+        }
+    }
+
+
+    @ViewBuilder private func widgetPanel(_ widget: WidgetConfiguration) -> some View {
+        if !screen.shows(widget.display, among: NSScreen.screens.map(BarDisplay.init), activeID: store.appWatcher.activeDisplayID) {
+            SettingsCallout(systemImage: "eye.slash", text: Text("Not shown on \(screen.phrase).")) {
+                Button("Show here") { editor.setWidget(widget, shown: true, on: screen) }.controlSize(.small)
+            }
+            .padding(.top, 12)
+        }
+        let status = store.widgetScripts.widgetStatus(for: widget)
+        if status.needsAttention {
+            SettingsCallout(systemImage: status.symbol, text: Text("**\(status.title).** \(status.detail)")) {
+                Button("Troubleshoot…") { editor.troubleshoot(widget.id) }.controlSize(.small)
+            }
+            .padding(.top, 12)
+        }
+        switch editor.widgetTab {
+        case .content: contentPanel(widget)
+        case .style:
+            stylePanel(StyleFields(store: store, path: "widgets.\(widget.id).style", defaultsPath: "defaults", widgetID: widget.id,
+                                   values: editor.style(for: widget.id), set: { editor.set(["style": .object($0)], for: widget.id) },
+                                   unset: { editor.change(ConfigurationEdit(action: .unset, id: widget.id, properties: ["style": .object($0)])) }),
+                       name: names[widget.id] ?? widget.id, widget: widget)
+        case .behavior: behaviorPanel(widget)
+        }
+    }
+
+    @ViewBuilder private func contentPanel(_ widget: WidgetConfiguration) -> some View {
+        if let name = widget.providerName, let type = store.configuration?.providers[name]?.type,
+           let source = ["battery": "percent", "audio": "volume", "system": "cpu", "disk": "disk"][type] {
+            let layout = editor.properties(for: widget.id)["layout"]
+            let metrics = type == "system" ? WidgetSystemMetrics.current(layout) : nil
+            let sources = metrics?.sources ?? [source]
+            let current = WidgetMetricDisplay.current(layout, sources: sources)
+            SettingsGroup("Display") {
+                if let metrics, current != .custom {
+                    SettingRow(title: "Shows") {
+                        Picker("Shows", selection: Binding(get: { metrics }, set: { metrics in
+                            editor.set(["layout": current.layout(for: metrics.sources)!], for: widget.id)
+                        })) {
+                            ForEach(WidgetSystemMetrics.allCases, id: \.self) { metrics in
+                                Text(metrics.title).tag(metrics)
+                            }
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
+                }
+                SettingRow(title: "Show") {
+                    Picker("Show", selection: Binding(get: { current }, set: { choice in
+                        if let layout = choice.layout(for: sources) { editor.set(["layout": layout], for: widget.id) }
+                    })) {
+                        ForEach(WidgetMetricDisplay.choices(for: source).filter { $0 != .custom || current == .custom }, id: \.self) { choice in
+                            Text(choice.title).tag(choice)
+                        }
+                    }
+                    .labelsHidden().frame(width: 180)
+                }
+            }
+        }
+        if let packageID = store.widgetPackageIDs[widget.id], !store.builtInWidgetIDs.contains(widget.id) {
+            SettingsCallout(systemImage: source(widget).symbol,
+                            text: Text("Settings from the **\(store.widgetPackageNames[widget.id] ?? packageID)** package, shared by its widgets.")) {
+                Button("Open package") { editor.showPackage(packageID) }.controlSize(.small)
+            }
+            .padding(.top, 12)
+            SettingsGroup("Package settings") {
+                WidgetPackageSettings(store: store, packageID: packageID) { editor.showPackage(packageID) }.groupRow()
+            }
+            iconGroup(widget)
+        } else {
+            switch widget.content {
+            case let .clock(format):
+                SettingsGroup("Clock & date") {
+                    TimelineView(.periodic(from: .now, by: format.contains("s") ? 1 : 60)) { context in
+                        Text(widget.label(output: nil, activeApp: nil, date: fixedDate ?? context.date).text)
+                            .font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit()
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+                    }
+                    .groupRow()
+                    clockFormats(widget, format: format).groupRow()
+                    SettingRow(title: "Time zone") {
+                        Picker("Time zone", selection: Binding(get: { widget.timeZone ?? "" }, set: {
+                            editor.set(["timeZone": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                        })) {
+                            Text("Follow this Mac").tag("")
+                            Text("UTC").tag("UTC")
+                            ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { zone in
+                                Text(zone.replacingOccurrences(of: "_", with: " ")).tag(zone)
+                            }
+                        }
+                        .labelsHidden().frame(width: 220)
+                    }
+                }
+                iconGroup(widget)
+            case let .provider(name):
+                NativeWidgetSettings(editor: editor, widget: widget, provider: store.configuration!.providers[name]!)
+                iconGroup(widget)
+            case .text:
+                SettingsGroup("Text") {
+                    TextDraft(text: string("text", for: widget)) { text in
+                        SettingRow(title: "Text") { TextField("Text", text: text).labelsHidden().frame(width: 220) }
+                    }
+                }
+                iconGroup(widget)
+            case .workspaces:
+                SettingsGroup("Workspaces") {
+                    SettingRow(title: "Show each window") {
+                        Toggle("Show each window", isOn: Binding(get: { widget.workspace?.windows == true }, set: {
+                            editor.set(["workspace": .object(["windows": .bool($0)])], for: widget.id)
+                        }).animation(.snappy(duration: 0.2)))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
+                    SettingRow(title: "Mark the focused window", hint: "Works with AeroSpace, OmniWM, Rift and yabai") {
+                        Toggle("Mark the focused window", isOn: Binding(get: { widget.workspace?.focusedWindowStyle != nil }, set: {
+                            editor.set(["workspace": .object(["focusedWindowStyle": $0 ? .object([:]) : .null])], for: widget.id)
+                        }).animation(.snappy(duration: 0.2)))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
+                    SettingRow(title: "Magnify on hover", hint: "Zoom app icons like the Dock and show the app’s name below the bar") {
+                        Toggle("Magnify on hover", isOn: Binding(get: { widget.workspace?.magnification != nil }, set: {
+                            editor.set(["workspace": .object(["magnification": $0 ? .number(1.5) : .null])], for: widget.id)
+                        }).animation(.snappy(duration: 0.2)))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
+                    if let magnification = widget.workspace?.magnification {
+                        let percent = Binding(get: { magnification * 100 }, set: {
+                            editor.set(["workspace": .object(["magnification": .number($0 / 100)])], for: widget.id)
+                        })
+                        NumberDraft(value: percent) { percent in
+                            SettingRow(title: "Magnification", scrub: Scrub(value: percent, range: 110...200, step: 5)) {
+                                NumberField(title: "Magnification", value: percent, range: 110...200, step: 5, unit: "%", slider: true)
+                            }
+                        }
+                    }
+                    SettingRow(title: "Dock badges", hint: "Mark the apps whose Dock icon has a badge, such as unread messages") {
+                        Picker("Dock badges", selection: Binding(get: { widget.workspace?.badges?.rawValue ?? "" }, set: {
+                            editor.set(["workspace": .object(["badges": $0.isEmpty ? .null : .string($0)])], for: widget.id)
+                        })) {
+                            Text("Off").tag("")
+                            Text("Dot").tag(DockBadgeStyle.dot.rawValue)
+                            Text("Count").tag(DockBadgeStyle.count.rawValue)
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
+                    SettingRow(title: "Hide apps", hint: "Bundle IDs or app names, separated by commas") {
+                        NameListField(title: "Hide apps", prompt: "com.1password.1password, Raycast", names: widget.workspace?.hideApps ?? []) {
+                            editor.set(["workspace": .object(["hideApps": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])], for: widget.id)
+                        }
+                    }
+                    SettingRow(title: "Hide workspaces", hint: "Names, separated by commas. The focused workspace still shows.") {
+                        NameListField(title: "Hide workspaces", prompt: "S, scratch", names: widget.workspace?.hideWorkspaces ?? []) {
+                            editor.set(["workspace": .object(["hideWorkspaces": $0.isEmpty ? .null : .array($0.map(ConfigurationValue.string))])],
+                                       for: widget.id)
+                        }
+                    }
+                    if widget.workspace?.windows == true {
+                        let length = Binding(get: { Double(widget.workspace?.titleLength ?? 0) }, set: {
+                            editor.set(["workspace": .object(["titleLength": .number($0)])], for: widget.id)
+                        })
+                        NumberDraft(value: length) { length in
+                            SettingRow(title: "Title length", scrub: Scrub(value: length, range: 0...200), hint: "0 shows only app icons") {
+                                NumberField(title: "Title length", value: length, range: 0...200, unit: "chars")
+                            }
+                        }
+                    }
+                }
+                iconGroup(widget)
+            case let .appMenu(expandOnHover, displayMode):
+                SettingsGroup("App menus") {
+                    SettingRow(title: "App title", hint: "Show the menu-owning app’s name or icon") {
+                        Picker("App title", selection: Binding(get: { displayMode }, set: {
+                            editor.set(["displayMode": .string($0.rawValue)], for: widget.id)
+                        })) {
+                            Text("Name").tag(AppMenuDisplayMode.name)
+                            Text("Icon").tag(AppMenuDisplayMode.icon)
+                        }
+                        .labelsHidden().controlSize(.small)
+                    }
+                    SettingRow(title: "Expand on hover", hint: "Show only the selected app title until the pointer is over the widget") {
+                        Toggle("Expand on hover", isOn: Binding(get: { expandOnHover }, set: {
+                            editor.set(["expandOnHover": .bool($0)], for: widget.id)
+                        }))
+                        .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                    }
+                }
+                iconGroup(widget)
+            case let .menuBarItems(_, _, _, hidden):
+                SettingsGroup("Menu bar items") {
+                    MenuBarItemsSettings(store: store, editor: editor, widget: widget, shown: widget.shownMenuBarItems, hidden: hidden)
+                }
+            case .appleMenu:
+                iconGroup(widget)
+            default:
+                if widget.content.drawsOwnView {
+                    SettingsCallout(systemImage: "sparkle",
+                                    text: Text("\(names[widget.id] ?? widget.id) has nothing to set here. Its look is in **Style** and its clicks in **Behavior**."))
+                        .padding(.top, 12)
+                }
+                iconGroup(widget)
+            }
+        }
+    }
+
+    private func iconGroup(_ widget: WidgetConfiguration) -> some View {
+        SettingsGroup("Icon") {
+            TextDraft(text: string("icon", for: widget)) { icon in
+                SettingRow(title: "Symbol", hint: "Any SF Symbol name") {
+                    Image(systemName: icon.wrappedValue).foregroundStyle(.secondary).frame(width: 20)
+                    TextField("Symbol", text: icon, prompt: Text("SF Symbol name")).labelsHidden().frame(width: 160)
+                }
+            }
+        }
+    }
+
+    private func clockFormats(_ widget: WidgetConfiguration, format: String) -> some View {
+        let custom = customClockFormat || !WidgetClockFormat.common.contains { $0.value == format }
+        return VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 5, alignment: .leading)], alignment: .leading, spacing: 5) {
+                ForEach(WidgetClockFormat.common, id: \.value) { choice in
+                    Button {
+                        withAnimation(.snappy(duration: 0.2)) {
+                            customClockFormat = false
+                            editor.set(["format": .string(choice.value)], for: widget.id)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(choice.title).font(.system(size: 10)).opacity(0.65)
+                            Text(choice.sample(at: fixedDate ?? .now)).font(.system(size: 12, weight: .medium)).monospacedDigit()
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(9)
+                        .background(!custom && format == choice.value ? Color.accentColor.opacity(0.16) : SettingsPalette.control,
+                                    in: RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(!custom && format == choice.value ? Color.accentColor : .clear))
+                        .contentShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(!custom && format == choice.value ? .isSelected : [])
+                }
+                chip("Custom…", selected: custom) { customClockFormat = true }
+            }
+            if custom {
+                HStack(spacing: 8) {
+                    TextDraft(text: string("format", for: widget, fallback: format)) {
+                        TextField("Date pattern", text: $0).labelsHidden().frame(width: 200)
+                    }
+                    Text("Date pattern, such as EEE HH:mm").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.snappy(duration: 0.2), action) } label: {
+            Text(title)
+                .font(.system(size: 12))
+                .monospacedDigit()
+                .foregroundStyle(selected ? .white : .primary)
+                .padding(.horizontal, 10)
+                .frame(height: 24)
+                .background(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(SettingsPalette.control), in: Capsule())
+                .overlay(Capsule().strokeBorder(selected ? .clear : SettingsPalette.groupBorder))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder private func behaviorPanel(_ widget: WidgetConfiguration) -> some View {
+        SettingsGroup("Clicks") {
+            if EssentialsPopup.kind(for: widget, providerType: store.configuration?.providerType(of: widget)) != nil,
+               widget.popup == nil, widget.popupName == nil {
+                SettingRow(title: "Details popup", hint: "Custom click actions take precedence") {
+                    Toggle("Details popup", isOn: Binding(get: { widget.details }, set: {
+                        editor.set(["details": .bool($0)], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            }
+            if case .essentials? = widgetPopup(widget, store: store)?.layout.content {
+                SettingRow(title: "Click") { Text("Show details").foregroundStyle(.secondary) }
+            } else {
+                clickRow(widget)
+            }
+            if let popup = widget.popup {
+                SettingRow(title: "Open its popup on hover") {
+                    Toggle("Open its popup on hover", isOn: Binding(get: { popup.openOnHover }, set: {
+                        editor.set(["popup": .object(["openOnHover": .bool($0)])], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            } else if case let .menuBarItems(openOnHover, _, _, _) = widget.content {
+                SettingRow(title: "Open on hover", hint: "When off, a click opens the list") {
+                    Toggle("Open on hover", isOn: Binding(get: { openOnHover }, set: {
+                        editor.set(["openOnHover": .bool($0)], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            }
+            if case let .menuBarItems(_, rightClickInMenuBar, _, _) = widget.content {
+                SettingRow(title: "Right-click items as in the menu bar",
+                           hint: "Experimental. Needs macOS 27 or later. When off, a right-click opens the item") {
+                    Toggle("Right-click items as in the menu bar", isOn: Binding(get: { rightClickInMenuBar }, set: {
+                        editor.set(["rightClickInMenuBar": .bool($0)], for: widget.id)
+                    }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                }
+            }
+            SettingRow(title: "Tooltip") {
+                TextDraft(text: Binding(get: { widget.tooltip ?? "" }, set: {
+                    editor.set(["tooltip": $0.isEmpty ? .null : .string($0)], for: widget.id)
+                })) {
+                    TextField("Tooltip", text: $0, prompt: Text("The widget’s own"))
+                        .labelsHidden()
+                        .frame(width: 200)
+                }
+            }
+        }
+        SettingsGroup("Position") {
+            SettingRow(title: "Group on the bar", hint: "Or drag it in the list") {
+                SettingsSegments(selection: Binding(get: { widget.position }, set: { if $0 != widget.position { move(widget.id, to: $0) } }),
+                                 options: WidgetPlacement.destinations.map { ($0, $0.title) }, stretches: false)
+                    .fixedSize()
+            }
+        }
+    }
+
+    @ViewBuilder private func clickRow(_ widget: WidgetConfiguration) -> some View {
+        let output = store.widgetScripts.scripts[widget.id]?.output
+        switch WidgetClickChoice.control(for: widget, output: output) {
+        case .hidden: EmptyView()
+        case .explanation(let explanation):
+            SettingRow(title: "When clicked", hint: explanation) {}
+        case .appleMenu(let click):
+            SettingRow(title: "When clicked", hint: click == .menu ? "Needs Accessibility access" : nil) {
+                Picker("When clicked", selection: Binding(get: { click }, set: {
+                    editor.set(["click": .string($0.rawValue)], for: widget.id)
+                })) {
+                    ForEach(AppleMenuClick.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+            }
+        case .choices:
+            let current = WidgetClickChoice.current(for: widget, output: output)
+            SettingRow(title: "When clicked", hint: clickError ?? widget.open) {
+                if let open = widget.open {
+                    Button(current == .application ? "Choose another app…" : "Edit web page…") {
+                        if current == .application { chooseApplication(widget) } else { webPage = open; editingWebPage = true }
+                    }
+                    .controlSize(.small)
+                }
+                Picker("When clicked", selection: Binding(get: { current }, set: { choice in
+                    guard choice != current else { return }
+                    switch choice {
+                    case .nothing: setClick(.nothing, widget: widget)
+                    case .application: chooseApplication(widget)
+                    case .webPage:
+                        webPage = current == .webPage ? widget.open ?? "" : "https://"
+                        editingWebPage = true
+                    case .advanced: break
+                    }
+                })) {
+                    ForEach(WidgetClickChoice.allCases.filter { $0 != .advanced }, id: \.self) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 200)
+            }
+        }
+    }
+
+    private var webPageSheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Open a web page").font(.headline)
+            TextField("Web address", text: $webPage).frame(width: 360)
+            if let clickError { Text(clickError).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { editingWebPage = false }.keyboardShortcut(.cancelAction)
+                Button("Done") {
+                    if let widget = store.configuration?.widgets.first(where: { $0.id == editor.selectedID }) {
+                        setClick(.webPage, widget: widget, value: webPage)
+                    }
+                    if clickError == nil { editingWebPage = false }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+    }
+
+
+    private func setClick(_ choice: WidgetClickChoice, widget: WidgetConfiguration, value: String? = nil) {
+        do {
+            editor.set(try choice.properties(for: widget, value: value, output: store.widgetScripts.scripts[widget.id]?.output), for: widget.id)
+            clickError = nil
+        } catch { clickError = errorMessage(error) }
+    }
+
+    private func chooseApplication(_ widget: WidgetConfiguration) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.applicationBundle]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose app"
+        if panel.runModal() == .OK, let url = panel.url {
+            setClick(.application, widget: widget, value: Bundle(url: url)?.bundleIdentifier)
+        }
+    }
+
+    private func move(_ id: String, to position: WidgetPosition) {
+        do { try WidgetSetup(store: store).move(id, to: position, on: screen) }
+        catch { editor.error = errorMessage(error) }
+    }
+
+    private func typeName(_ widget: WidgetConfiguration) -> String {
+        store.widgetPackageNames[widget.id] ?? WidgetDisplayName.title(for: widget.content, providers: store.configuration?.providers ?? [:])
+    }
+
+    private func string(_ key: String, for widget: WidgetConfiguration, fallback: String = "") -> Binding<String> {
+        let value = if case let .string(value) = editor.properties(for: widget.id)[key] { value } else { fallback }
+        return Binding(get: { value }, set: { if $0 != value { editor.set([key: .string($0)], for: widget.id) } })
+    }
+
+    private func document(_ key: String) -> [String: ConfigurationValue] {
+        (try? store.effectiveDocument[key]?.decoded([String: ConfigurationValue].self)) ?? [:]
+    }
+
+    private func barValues(_ kind: ScreenKind) -> [String: ConfigurationValue] {
+        let screens = (try? store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
+        let own = screens[kind.rawValue]?["bar"] ?? .object([:])
+        return (try? own.overriding(.object(document("bar"))).decoded([String: ConfigurationValue].self)) ?? [:]
+    }
+
+    private func setBar(_ properties: [String: ConfigurationValue], on kind: ScreenKind?) {
+        if let kind {
+            editor.change(ConfigurationEdit(action: .screens, properties: [kind.rawValue: .object(["bar": .object(properties)])]))
+        } else {
+            editor.change(ConfigurationEdit(action: .bar, properties: properties))
+        }
+    }
+
+    private func unsetBar(_ properties: [String: ConfigurationValue], on kind: ScreenKind?) {
+        unset(kind.map { ["screens": .object([$0.rawValue: .object(["bar": .object(properties)])])] } ?? ["bar": .object(properties)])
+    }
+
+    private func unset(_ properties: [String: ConfigurationValue]) {
+        editor.change(ConfigurationEdit(action: .unset, properties: properties))
+    }
+}
+
+extension ConfigurationEditor {
+    func setWidget(_ widget: WidgetConfiguration, shown: Bool, on kind: ScreenKind) {
+        let displays = NSScreen.screens.map(BarDisplay.init)
+        let kinds = ScreenKind.allCases.filter { $0 == kind ? shown : $0.shows(widget.display, among: displays, activeID: store.appWatcher.activeDisplayID) }
+        var properties: [String: ConfigurationValue] = ["display": .array(kinds.map { .string($0.selection) })]
+        if shown && !widget.enabled { properties["enabled"] = .bool(true) }
+        set(properties, for: widget.id)
+    }
+}

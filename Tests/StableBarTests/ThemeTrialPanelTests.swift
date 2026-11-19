@@ -55,7 +55,7 @@ final class ThemeTrialPanelTests: XCTestCase {
         _ = NSApplication.shared
         let screen = try XCTUnwrap(NSScreen.screens.first)
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         defer { store.stop() }
         let document = store.effectiveDocument
         let original = try Data(contentsOf: fixture.url)

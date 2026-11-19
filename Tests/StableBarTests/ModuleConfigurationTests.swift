@@ -332,7 +332,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     defer { store.stop() }
     store.start()
     let previous = try #require(store.configuration)
-    let script = try #require(store.scripts["status"])
+    let script = try #require(store.widgetScripts.scripts["status"])
     for _ in 0..<100 {
         if script.output.text == "startup" { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -347,7 +347,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(store.configuration?.bar.height == previous.bar.height)
     #expect(store.configuration?.widgets.map(\.id) == previous.widgets.map(\.id))
     #expect(store.configuration?.widgets[0].content == previous.widgets[0].content)
-    #expect(store.scripts["status"] === script)
+    #expect(store.widgetScripts.scripts["status"] === script)
     #expect(script.output.text == "startup")
     try writeConfiguration(document.replacingOccurrences(of: "37", with: "49"), to: module)
     for _ in 0..<100 {
@@ -356,17 +356,17 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     }
     #expect(store.configuration?.bar.height == 49)
     #expect(store.configurationError == nil)
-    #expect(store.scripts["status"] === script)
+    #expect(store.widgetScripts.scripts["status"] === script)
     #expect(script.output.text == "startup")
     try writeConfiguration(#"""
     {"includes":["../shared/status.json"],"widgetOverrides":{"status":{"enabled":false}}}
     """#, to: root)
     for _ in 0..<100 {
-        if store.scripts["status"] == nil { break }
+        if store.widgetScripts.scripts["status"] == nil { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(store.configuration?.widgets[0].enabled == false)
-    #expect(store.scripts["status"] == nil)
+    #expect(store.widgetScripts.scripts["status"] == nil)
     script.refresh(ScriptEvent(sender: "disabled"))
     try await Task.sleep(for: .milliseconds(100))
     #expect(script.output.text == "startup")
@@ -374,12 +374,12 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     {"includes":["../shared/status.json"],"widgetOverrides":{"status":{"enabled":true}}}
     """#, to: root)
     for _ in 0..<100 {
-        if store.scripts["status"]?.output.text == "startup" { break }
+        if store.widgetScripts.scripts["status"]?.output.text == "startup" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(store.configuration?.widgets[0].enabled == true)
-    #expect(store.scripts["status"]?.output.text == "startup")
-    #expect(store.scripts["status"] !== script)
+    #expect(store.widgetScripts.scripts["status"]?.output.text == "startup")
+    #expect(store.widgetScripts.scripts["status"] !== script)
     #expect(store.configurationError == nil)
 }
 

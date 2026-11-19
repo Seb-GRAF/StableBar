@@ -181,7 +181,7 @@ final class BarEditControlsTests: XCTestCase {
         XCTAssertEqual(presented.count, 2)
         XCTAssertTrue(presented.allSatisfy { $0.appearance == nil })
         for (appearance, name) in [(BarAppearance.dark, NSAppearance.Name.darkAqua), (.light, .aqua)] {
-            try store.applyEdits([.init(action: .bar, properties: ["appearance": .string(appearance.rawValue)])], persist: false)
+            try store.configurationStore.applyEdits([.init(action: .bar, properties: ["appearance": .string(appearance.rawValue)])], persist: false)
             controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
             XCTAssertEqual(presented.count, 2, "Appearance changes must reuse the controls")
             for panel in presented {
@@ -189,7 +189,7 @@ final class BarEditControlsTests: XCTestCase {
                 XCTAssertEqual(panel.contentView?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]), name)
             }
         }
-        try store.applyEdits([.init(action: .bar, properties: ["appearance": .null])], persist: false)
+        try store.configurationStore.applyEdits([.init(action: .bar, properties: ["appearance": .null])], persist: false)
         controls.update(store: store, bars: bars, visibleFrames: visibleFrames)
         for panel in presented {
             XCTAssertNil(panel.appearance)
@@ -247,9 +247,9 @@ final class BarEditControlsTests: XCTestCase {
             case "done": store.barEditing.end()
             case "escape": XCTAssertTrue(store.barEditing.handleKey(53))
             case "menu": store.barEditing.toggle()
-            case "reload": store.reloadConfiguration()
+            case "reload": store.configurationStore.reloadConfiguration()
             case "runtime reload": _ = try store.handle(RuntimeRequest(action: .reload))
-            case "invalid reload": try fixture.write("{", to: fixture.url); store.reloadConfiguration()
+            case "invalid reload": try fixture.write("{", to: fixture.url); store.configurationStore.reloadConfiguration()
             case "themes": ThemeTrial(store: store).cancel()
             default: store.stop()
             }

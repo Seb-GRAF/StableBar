@@ -106,7 +106,7 @@ func turningICloudSyncOnKeepsTheChosenConfigurationWhenICloudDriveHasOne(keep: I
     #expect(store.configuration?.bar.height == 30)
     try fixture.sync.turnOn(keeping: .iCloud)
     store.reloadMovedFolder()
-    #expect(store.configurationURL.lastPathComponent == "config.json")
+    #expect(store.configurationStore.configurationURL.lastPathComponent == "config.json")
     #expect(store.configurationError == nil)
     #expect(store.configuration?.bar.height == 48)
 }

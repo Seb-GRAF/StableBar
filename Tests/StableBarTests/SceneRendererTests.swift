@@ -39,10 +39,10 @@ private func scene(_ json: String) throws -> SceneFile {
     }
     """#, in: directory)
     defer { store.stop() }
-    #expect(store.scripts["shell"]?.output.text == "Sample")
-    #expect(store.scripts["cpu"]?.output.text == "18%")
-    #expect(store.scripts["cpu"]?.samples == [0.1, 0.2])
-    #expect(store.scripts["silent"]?.output.text == "")
+    #expect(store.widgetScripts.scripts["shell"]?.output.text == "Sample")
+    #expect(store.widgetScripts.scripts["cpu"]?.output.text == "18%")
+    #expect(store.widgetScripts.scripts["cpu"]?.samples == [0.1, 0.2])
+    #expect(store.widgetScripts.scripts["silent"]?.output.text == "")
 }
 
 @Test @MainActor func sceneStoreRunsNoCommand() async throws {
@@ -64,7 +64,7 @@ private func scene(_ json: String) throws -> SceneFile {
     defer { store.stop() }
     try await Task.sleep(for: .seconds(1.5))
     // A started script records its start before its command launches, which can wait seconds for the login shell.
-    #expect(store.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
+    #expect(store.widgetScripts.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
     #expect(!FileManager.default.fileExists(atPath: widget.path))
     #expect(!FileManager.default.fileExists(atPath: provider.path))
 }
@@ -273,8 +273,8 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
         let url = directory.appending(path: "\(name).png")
         try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url, settle: settle)
         images.append(try #require(NSBitmapImageRep(data: Data(contentsOf: url))))
-        #expect(store.sessionEdits.isEmpty)
-        #expect(store.scripts.isEmpty)
+        #expect(store.configurationStore.sessionEdits.isEmpty)
+        #expect(store.widgetScripts.scripts.isEmpty)
     }
     #expect(images[0].pixelsWide == 2400)
     #expect(images[0].pixelsHigh == 2000)
@@ -298,7 +298,7 @@ func setupScenesOutsideFinishingTouchesDoNotWaitForAWorkspaceCheck(step: String)
     """#, in: directory)
     defer { store.stop() }
     #expect(!store.workspaceStore.isRunning)
-    #expect(store.scripts.isEmpty)
+    #expect(store.widgetScripts.scripts.isEmpty)
 }
 
 @Test @MainActor func popupSceneWithoutAPopupFails() async throws {
@@ -400,7 +400,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"), settle: .milliseconds(300))
     try await Task.sleep(for: .seconds(1))
     #expect(store.configuration?.widgets.map(\.id) == ["hello"])
-    #expect(store.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
+    #expect(store.widgetScripts.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
     #expect(!FileManager.default.fileExists(atPath: ran.path))
 }
 
@@ -451,8 +451,8 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = try store(#"{"configuration": {"widgets": []}, "activeApp": "com.apple.calculator", "draw": "bar"}"#, in: directory)
     defer { store.stop() }
-    #expect(store.activeApp?.localizedName == "Calculator")
-    #expect(store.activeApp?.icon != nil)
+    #expect(store.appWatcher.activeApp?.localizedName == "Calculator")
+    #expect(store.appWatcher.activeApp?.icon != nil)
 }
 
 @Test @MainActor func sceneStoreShowsAStablePath() throws {
@@ -463,8 +463,8 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     let first = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "one"), themes: themes)
     let second = try SceneRenderer.store(for: scene, at: sceneURL, in: directory.appending(path: "two"), themes: themes)
     defer { first.stop(); second.stop() }
-    #expect(first.configurationURL == second.configurationURL)
-    #expect(first.configurationURL.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
+    #expect(first.configurationStore.configurationURL == second.configurationStore.configurationURL)
+    #expect(first.configurationStore.configurationURL.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL)
 }
 
 @Test @MainActor func sceneStoreKeepsProfiles() throws {
@@ -492,7 +492,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
                                             in: directory.appending(path: appearance.rawValue), themes: themes, appearance: appearance)
         defer { store.stop() }
         return (store.configuration?.bar.height,
-                "context=\(store.context.appearance) active=\(store.activeProfiles) error=\(String(describing: store.configurationError)) whens=\(store.profiles.map { String(describing: $0.when) })")
+                "context=\(store.configurationStore.context.appearance) active=\(store.activeProfiles) error=\(String(describing: store.configurationError)) whens=\(store.profiles.map { String(describing: $0.when) })")
     }
     let light = try height(.light), dark = try height(.dark)
     #expect(light.0 == 30, "\(light.1)")

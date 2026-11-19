@@ -91,7 +91,7 @@ final class WidgetAddPopoverTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([
+        try store.configurationStore.setSessionEdits([
             .init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"), "text": .string("Temporary"), "position": .string("right")]),
             .init(action: .reorder, ids: ["temporary"])
         ])
@@ -340,7 +340,7 @@ final class WidgetAddPopoverTests: XCTestCase {
         XCTAssertNil(popover.displayID)
         XCTAssertTrue(store.barEditing.isActive)
         show()
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertNil(popover.displayID)
         XCTAssertFalse(store.barEditing.isActive)
         XCTAssertFalse(bar.isVisible)

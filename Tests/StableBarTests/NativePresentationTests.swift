@@ -269,9 +269,9 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     defer { store.stop() }
     var owner = MenuApplication(pid: 100, bundleID: "com.apple.finder")
     var ownerChanged: (@MainActor () -> Void)?
-    store.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
-    store.menuBarApp = { owner }
-    store.observeMenuBarApp = { changed in
+    store.appWatcher.activeApp = MenuApplication(pid: 200, bundleID: "com.logi.ghub.agent")
+    store.appWatcher.menuBarApp = { owner }
+    store.appWatcher.observeMenuBarApp = { changed in
         ownerChanged = changed
         return NSObject()
     }
@@ -289,7 +289,7 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     await store.appMenu.readTask?.value
     #expect(source.reads == [100, 300])
     #expect(store.appMenu.menuOwner?.processIdentifier == owner.processIdentifier)
-    #expect(store.appMenu.menuOwner?.processIdentifier != store.activeApp?.processIdentifier)
+    #expect(store.appMenu.menuOwner?.processIdentifier != store.appWatcher.activeApp?.processIdentifier)
 }
 
 @Test @MainActor func appleMenuKeepsItsIconWhenTheSourceAppChanges() throws {
@@ -305,6 +305,16 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     #expect(first.width == second.width)
     #expect(first.height == second.height)
     #expect(first.dataProvider?.data == second.dataProvider?.data)
+}
+
+@Test @MainActor func appleMenuDrawsItsWidgetsSymbol() throws {
+    let item = AppMenuItem(title: "Apple", element: AXUIElementCreateApplication(1))
+    func image(logo: String) throws -> CGImage {
+        let renderer = ImageRenderer(content: AppMenuView(appMenu: AppMenu(), items: [item], isAppleMenu: true, appleLogo: logo,
+            appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), padding: EdgeInsets(), open: { _, _ in }, requestAccess: {}))
+        return try #require(renderer.cgImage)
+    }
+    #expect(try image(logo: "leaf").dataProvider?.data != image(logo: "apple.logo").dataProvider?.data)
 }
 
 @Test @MainActor func appMenuReportsExpansionAndReturnsToItsCollapsedWidth() async throws {
@@ -630,7 +640,7 @@ func beforeMacOS27MenuBarItemsComeFromEachAppsOwnList(withMenuBarAgent: Bool) as
         if sharedStore == nil {
             store.configuration = configuration
             store.workspaceStore.workspaces = workspaces
-            store.preparePresentations()
+            store.barPresentation.preparePresentations()
         }
         let geometry = configuration.barGeometry(for: display)
         let top = (NSScreen.main?.frame.maxY ?? 900) - 40

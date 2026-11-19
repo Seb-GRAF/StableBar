@@ -57,7 +57,7 @@ private var presentationRepository: URL {
     let popup = WidgetPopup(present: { presentations.append(($0, $1)) }, mouseLocation: { mouse }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -85,12 +85,12 @@ private var presentationRepository: URL {
     #expect(tooltip.panel.frame.width <= 320)
     #expect(tooltip.panel.frame.height > (long ? 100 : 20))
     #expect(bar.panel.screen!.visibleFrame.contains(tooltip.panel.frame))
-    #expect(store.presentations[widget.id]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations[widget.id]?.popupAnchor == nil)
     popup.toggle(widget.popup!, widget: widget, defaults: configuration.defaults, store: store, anchor: anchor)
     #expect(presentations.count == 2)
     #expect(presentations.last?.onHover == false)
     try capturePopup(try #require(presentations.last?.panel), name: "hover-tooltip-click-popup-\(long)")
-    #expect(store.presentations[widget.id]?.popupAnchor == ObjectIdentifier(anchor))
+    #expect(store.barPresentation.presentations[widget.id]?.popupAnchor == ObjectIdentifier(anchor))
     hover(false)
     await letPass(.milliseconds(250), on: clock)
     #expect(popup.isOpen)
@@ -112,7 +112,7 @@ private var presentationRepository: URL {
     let popup = WidgetPopup(present: { _, _ in })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -121,7 +121,7 @@ private var presentationRepository: URL {
     store.barPanel = { _ in bar.panel }
     let anchor = try #require(bar.anchors("agenda-command").first)
     _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
-    #expect(store.presentations["agenda-command"]?.popupAnchor == ObjectIdentifier(anchor))
+    #expect(store.barPresentation.presentations["agenda-command"]?.popupAnchor == ObjectIdentifier(anchor))
     _ = try store.handle(RuntimeRequest(action: .popup, id: "agenda-command"))
     #expect(!popup.isOpen)
     #expect(throws: CommandFailure.self) { try store.handle(RuntimeRequest(action: .popup, id: "missing")) }
@@ -154,7 +154,7 @@ private var presentationRepository: URL {
     let popup = WidgetPopup(present: { _, _ in })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -198,13 +198,13 @@ private var presentationRepository: URL {
     #expect(bar.panel.focusesWidgets)
     await bar.settle()
     try await press(36, "\r")
-    for _ in 0..<100 where store.actionErrors["bolt"] == nil { try await Task.sleep(for: .milliseconds(20)) }
-    #expect(store.actionErrors["bolt"] != nil)
+    for _ in 0..<100 where store.widgetScripts.actionErrors["bolt"] == nil { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(store.widgetScripts.actionErrors["bolt"] != nil)
     let right = String(UnicodeScalar(NSRightArrowFunctionKey)!)
     try await press(124, right)
     try await press(124, right)
     try await press(49, " ")
-    #expect(store.presentations["agenda"]?.popupAnchor != nil)
+    #expect(store.barPresentation.presentations["agenda"]?.popupAnchor != nil)
     shown = try await elements()
     #expect(try #require(shown["agenda"] as? PopupButtonAccessibilityView).isAccessibilityExpanded())
 }
@@ -221,7 +221,7 @@ private var presentationRepository: URL {
     let popup = WidgetPopup(present: { presentations.append(($0, $1)) }, mouseLocation: { mouse }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -256,7 +256,7 @@ private var presentationRepository: URL {
     #expect(popup.isOpen)
     #expect(presentations.count == 1)
     #expect(presentations.first?.onHover == true)
-    #expect(store.presentations["first"]?.popupAnchor == ObjectIdentifier(anchors[0]))
+    #expect(store.barPresentation.presentations["first"]?.popupAnchor == ObjectIdentifier(anchors[0]))
     hover(false)
     #expect(popup.isOpen)
     popup.hoverPopup(true)
@@ -270,24 +270,24 @@ private var presentationRepository: URL {
     hover(false)
     try await advance(clock) { !popup.isOpen }
     #expect(!popup.isOpen)
-    #expect(store.presentations["first"]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations["first"]?.popupAnchor == nil)
 
     hover(true)
     try await advance(clock, by: .milliseconds(400)) { popup.isOpen }
     hover(false)
     hover(true, 1)
     popup.hoverPopup(false)
-    try await advance(clock) { store.presentations["second"]?.popupAnchor != nil }
+    try await advance(clock) { store.barPresentation.presentations["second"]?.popupAnchor != nil }
     #expect(popup.isOpen)
-    #expect(store.presentations["first"]?.popupAnchor == nil)
-    #expect(store.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
+    #expect(store.barPresentation.presentations["first"]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
     click(1)
     let count = presentations.count
     hover(false, 1)
     hover(true)
     await letPass(.milliseconds(500), on: clock)
     #expect(presentations.count == count)
-    #expect(store.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
+    #expect(store.barPresentation.presentations["second"]?.popupAnchor == ObjectIdentifier(anchors[1]))
     click(1)
     #expect(!popup.isOpen)
 
@@ -355,7 +355,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -419,7 +419,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -465,7 +465,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in }, mouseLocation: { .zero }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -496,7 +496,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -509,7 +509,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     await bar.settle()
     try await Task.sleep(for: .milliseconds(100))
     #expect(popup.isOpen)
-    #expect(store.presentations["first"]?.popupAnchor == ObjectIdentifier(anchor))
+    #expect(store.barPresentation.presentations["first"]?.popupAnchor == ObjectIdentifier(anchor))
 }
 
 /// A popup whose content is read when it opens, such as the Menu bar items row, opens once the read ends while the pointer
@@ -523,7 +523,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -559,7 +559,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -593,7 +593,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -623,7 +623,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { _, _ in presentations += 1 }, clock: clock)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -640,7 +640,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     await letPass(.milliseconds(500), on: clock)
     #expect(presentations == 0)
     #expect(!popup.isOpen)
-    #expect(store.presentations[widget.id]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations[widget.id]?.popupAnchor == nil)
 }
 
 /// A widget drawn in the tiles of the bar being edited in place has an anchor in no window.
@@ -691,7 +691,7 @@ func hoverTriangleProtectsDiagonalMovementUntilThePointerEntersStopsOrLeaves(rep
     let popup = WidgetPopup(present: { panel, _ in presented = panel })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -722,7 +722,7 @@ func tooltipsThatTakeThePointerLeaveClicksOnTheirWidgetToIt(kind: String) async 
     let popup = WidgetPopup(present: { panel, _ in presented = panel })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -772,7 +772,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     let popup = WidgetPopup(present: { panel, _ in presented = panel })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -793,7 +793,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     let initial = panel.frame
     #expect(initial == opened)
     for lines in [5, 100, 0] {
-        store.actionErrors[widget.id] = lines == 0 ? nil : Array(repeating: "Download progress", count: lines).joined(separator: "\n")
+        store.widgetScripts.actionErrors[widget.id] = lines == 0 ? nil : Array(repeating: "Download progress", count: lines).joined(separator: "\n")
         for _ in 0..<8 {
             panel.contentView!.layoutSubtreeIfNeeded()
             let host = panel.contentView!.subviews[0]
@@ -826,7 +826,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     let popup = WidgetPopup(present: { panel, _ in presented.append(panel) })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -861,12 +861,12 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     #expect(!popup.isOpen)
     #expect(panel.isMovableByWindowBackground)
     #expect(panel.resizeEdges?.resizable == .all)
-    #expect(store.presentations[ask.id]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations[ask.id]?.popupAnchor == nil)
 
     popup.close()
     try click(other)
     #expect(popup.isOpen)
-    store.actionErrors[ask.id] = Array(repeating: "A longer answer", count: 5).joined(separator: "\n")
+    store.widgetScripts.actionErrors[ask.id] = Array(repeating: "A longer answer", count: 5).joined(separator: "\n")
     try await layOut(panel)
     #expect(panel.frame.height > home.height)
     #expect(abs(panel.frame.maxY - home.maxY) < 0.5)
@@ -884,15 +884,15 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     edges.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: corner.x - 120, y: corner.y - 200)))
     #expect(panel.frame == dragged)
     #expect(popup.pins.resized == ["ask"])
-    store.actionErrors[ask.id] = nil
+    store.widgetScripts.actionErrors[ask.id] = nil
     try await layOut(panel)
     #expect(panel.frame == dragged)
     #expect(panel.contentView!.subviews[0].frame == panel.contentView!.bounds)
     popup.unpin(ask.id)
     #expect(popup.pins.ids.isEmpty)
     #expect(edges.resizable == [.leading, .trailing, .bottom])
-    #expect(store.presentations[ask.id]?.popupAnchor == ObjectIdentifier(anchor))
-    #expect(store.presentations[other.id]?.popupAnchor == nil)
+    #expect(store.barPresentation.presentations[ask.id]?.popupAnchor == ObjectIdentifier(anchor))
+    #expect(store.barPresentation.presentations[other.id]?.popupAnchor == nil)
     try await waitForPopup { panel.frame.maxY == home.maxY }
     #expect(panel.frame.size == dragged.size && panel.frame.maxY == home.maxY)
 
@@ -946,7 +946,7 @@ func popupResizesWithItsContentAndKeepsItsWidthAndTopEdge(fixedHeight: Bool, ani
     let popup = WidgetPopup(present: { panel, _ in presented.append(panel) })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -1008,7 +1008,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     let popup = WidgetPopup(present: { panel, _ in presented = panel })
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString), popup: popup)
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let bar = OffscreenBar(configuration: configuration,
                            display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil), width: 600, sharedStore: store)
@@ -1042,7 +1042,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     #expect(try alpha(of: shadow.contentView!, at: beside) > 0)
     #expect(try alpha(of: shadow.contentView!, at: NSPoint(x: panel.frame.width / 2, y: beside.y)) == 0)
     let opened = panel.frame
-    store.actionErrors[widget.id] = Array(repeating: "Pipeline failed", count: 5).joined(separator: "\n")
+    store.widgetScripts.actionErrors[widget.id] = Array(repeating: "Pipeline failed", count: 5).joined(separator: "\n")
     try await settle()
     #expect(panel.frame.height > opened.height)
     #expect(shadow.frame == panel.frame)
@@ -1112,18 +1112,18 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     try Data(script.utf8).write(to: executable)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
     store.workspaceStore.executablePath = { executable.path }
-    store.activeApp = nil
-    store.reloadConfiguration()
+    store.appWatcher.activeApp = nil
+    store.configurationStore.reloadConfiguration()
     defer { store.stop() }
     for _ in 0..<100 {
-        if store.scripts["music"]?.output.fields?["track"] != nil && store.workspaceStore.mode == "main" { break }
+        if store.widgetScripts.scripts["music"]?.output.fields?["track"] != nil && store.workspaceStore.mode == "main" { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(store.configurationError == nil)
     let configuration = try #require(store.configuration)
     #expect(configuration.widgets.count >= 15)
-    let shared = try #require(store.providers["sample"])
-    #expect(store.scripts["music"] === shared && store.scripts["cpu"] === shared && store.scripts["memory"] === shared)
+    let shared = try #require(store.widgetScripts.providers["sample"])
+    #expect(store.widgetScripts.scripts["music"] === shared && store.widgetScripts.scripts["cpu"] === shared && store.widgetScripts.scripts["memory"] === shared)
     let laptop = OffscreenBar(configuration: configuration, display: BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851),
                              width: 1512, sharedStore: store)
     let external = OffscreenBar(configuration: configuration, display: BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil),
@@ -1135,9 +1135,9 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     #expect(laptop.anchors("hidden-example").isEmpty && external.anchors("hidden-example").isEmpty)
     #expect(laptop.anchors("mode").isEmpty)
     #expect(laptop.anchors("time").count == 1 && external.anchors("time").count == 1)
-    #expect(store.presentations["time"]?.style.base.fontSize == 16)
-    #expect(store.presentations["time"]?.style.base.fontWeight == "light")
-    #expect(store.presentations["date"]?.style.base.fontSize == 12)
+    #expect(store.barPresentation.presentations["time"]?.style.base.fontSize == 16)
+    #expect(store.barPresentation.presentations["time"]?.style.base.fontWeight == "light")
+    #expect(store.barPresentation.presentations["date"]?.style.base.fontSize == 12)
     let frames = [laptop.panel.frame, external.panel.frame, laptop.panel.drawingFrame, external.panel.drawingFrame]
     _ = try laptop.bitmap(name: "tonhalle-dark-1512-main")
     _ = try external.bitmap(name: "tonhalle-dark-2560-main")
@@ -1150,19 +1150,19 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
         await external.settle()
         let panel = try #require(popupPanel)
         #expect(!panel.isVisible && popup.isOpen)
-        #expect(store.presentations[id]?.popupAnchor == ObjectIdentifier(anchor))
-        #expect(laptop.anchors(id).first.map(ObjectIdentifier.init) != store.presentations[id]?.popupAnchor)
+        #expect(store.barPresentation.presentations[id]?.popupAnchor == ObjectIdentifier(anchor))
+        #expect(laptop.anchors(id).first.map(ObjectIdentifier.init) != store.barPresentation.presentations[id]?.popupAnchor)
         try capturePopup(panel, name: "tonhalle-dark-\(popupName)-popup")
         store.workspaceStore.acceptMode("tailing")
         #expect(popup.isOpen)
-        #expect(store.barStyle.borderEdges == .all)
-        #expect(store.barStyle.borderColor == HexColor(light: 0x806323ff, dark: 0xc8a866ff))
+        #expect(store.barPresentation.barStyle.borderEdges == .all)
+        #expect(store.barPresentation.barStyle.borderColor == HexColor(light: 0x806323ff, dark: 0xc8a866ff))
         popup.close()
         store.workspaceStore.acceptMode("main")
     }
     store.workspaceStore.acceptMode("tailing")
     for _ in 0..<100 {
-        if store.presentations["mode"]?.hidden == false { break }
+        if store.barPresentation.presentations["mode"]?.hidden == false { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     await laptop.settle()
@@ -1175,10 +1175,10 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     popup.toggle(try #require(time.popupName.flatMap { configuration.popups[$0] }), widget: time,
         defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults), store: store, anchor: try #require(external.anchors("time").first))
     #expect(popup.isOpen)
-    try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
     #expect(!popup.isOpen)
     #expect(store.workspaceStore.mode == "tailing")
-    #expect(store.providers["sample"] === shared && source.starts == 1)
+    #expect(store.widgetScripts.providers["sample"] === shared && source.starts == 1)
     await laptop.settle()
     _ = try laptop.bitmap(name: "tonhalle-light-1512-command")
     _ = try external.bitmap(name: "tonhalle-light-2560-command")
@@ -1200,12 +1200,12 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     popup.toggle(try #require(light.popups["music"]), widget: music, defaults: light.popupDefaults.popupStyle(over: light.defaults),
                  store: store, anchor: try #require(external.anchors("music").first))
     #expect(popup.isOpen)
-    try store.applyEdits([ConfigurationEdit(action: .theme)], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .theme)], persist: false)
     #expect(!popup.isOpen)
     #expect(store.workspaceStore.mode == "tailing")
-    #expect(store.barStyle.borderEdges != .all)
-    #expect(store.presentations["time"]?.style.base.fontSize == store.configuration?.defaults.fontSize)
-    #expect(store.providers["sample"] === shared && source.starts == 1)
+    #expect(store.barPresentation.barStyle.borderEdges != .all)
+    #expect(store.barPresentation.presentations["time"]?.style.base.fontSize == store.configuration?.defaults.fontSize)
+    #expect(store.widgetScripts.providers["sample"] === shared && source.starts == 1)
     await laptop.settle()
     _ = try laptop.bitmap(name: "built-in-light-1512-command")
     _ = try external.bitmap(name: "built-in-light-2560-command")
@@ -1233,16 +1233,16 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     let config = try loader.load(directory.appending(path: "config.json"))
     let store = BarStore(configurationURL: directory.appending(path: "config.json"))
     store.configuration = config
-    store.activeApp = nil
+    store.appWatcher.activeApp = nil
     store.workspaceStore.workspaces = [Workspace(name: "1", isFocused: true, isVisible: true, monitor: 1),
                                         Workspace(name: "2", isFocused: false, isVisible: true, monitor: 2)]
     let shared = ScriptWidget()
     try shared.accept(ScriptOutput.read(Data(contentsOf: directory.appending(path: "sample.json"))))
     let mode = ScriptWidget()
     try mode.accept(ScriptOutput.read(Data(#"{"text":"","hidden":true}"#.utf8)))
-    for widget in config.widgets where widget.providerName == "sample" { store.scripts[widget.id] = shared }
-    store.scripts["mode"] = mode
-    store.preparePresentations()
+    for widget in config.widgets where widget.providerName == "sample" { store.widgetScripts.scripts[widget.id] = shared }
+    store.widgetScripts.scripts["mode"] = mode
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
     let laptopDisplay = BarDisplay(id: 1, isBuiltIn: true, isMain: true, notch: 661...851)
     let externalDisplay = BarDisplay(id: 2, isBuiltIn: false, isMain: false, notch: nil)
@@ -1255,16 +1255,16 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     let framesBefore = [laptop.panel.drawingFrame, external.panel.drawingFrame]
     let hostingBefore = laptop.host.layoutCalls + external.host.layoutCalls
     let start = ContinuousClock.now
-    for _ in 0..<100 { store.updatePresentations() }
+    for _ in 0..<100 { store.barPresentation.updatePresentations() }
     let elapsed = start.duration(to: .now).components
     let milliseconds = Double(elapsed.seconds) * 1_000 + Double(elapsed.attoseconds) / 1e15
     let changes = OSAllocatedUnfairLock(initialState: (layout: 0, widget: 0, bar: 0))
     let bar = BarView(store: store, display: laptopDisplay, nativeDecorations: true)
     for index in 0..<100 {
         withObservationTracking { _ = bar.body } onChange: { changes.withLock { $0.layout += 1 } }
-        withObservationTracking { for presentation in store.presentations.values { _ = presentation.style } }
+        withObservationTracking { for presentation in store.barPresentation.presentations.values { _ = presentation.style } }
             onChange: { changes.withLock { $0.widget += 1 } }
-        withObservationTracking { _ = store.barStyle } onChange: { changes.withLock { $0.bar += 1 } }
+        withObservationTracking { _ = store.barPresentation.barStyle } onChange: { changes.withLock { $0.bar += 1 } }
         store.workspaceStore.acceptMode(index.isMultiple(of: 2) ? "tailing" : "main")
     }
     let invalidations = changes.withLock { $0 }

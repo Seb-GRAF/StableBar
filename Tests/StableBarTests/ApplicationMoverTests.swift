@@ -551,10 +551,10 @@ func applicationMoveCapturesSessionEditsAfterCopying(setup: Bool) async throws {
     let fixture = try MoveFixture()
     let configuration = try ThemeGalleryFixture(#"{"widgets":[]}"#)
     let store = BarStore(configurationURL: configuration.url, themesDirectory: configuration.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); configuration.close(); fixture.close() }
     let baseline = ConfigurationEdit(action: .bar, properties: ["offset": .number(11)])
-    try store.setSessionEdits([baseline])
+    try store.configurationStore.setSessionEdits([baseline])
     var system = SetupSystem()
     system.defaults = try #require(UserDefaults(suiteName: fixture.resumeStore.domain))
     system.menuBarHides = { false }
@@ -592,7 +592,7 @@ func applicationMoveCapturesSessionEditsAfterCopying(setup: Bool) async throws {
             try await Task.sleep(for: .milliseconds(10))
         }
         try #require(copyStarted.withLock { $0 })
-        try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(38)])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(38)])], persist: false)
     } catch {
         releaseCopy.signal()
         await moving.value
@@ -1093,10 +1093,10 @@ func applicationMoveFilesystemErrorsHideStagingAndExplainRecovery(code: Int32) a
     let fixture = try MoveFixture()
     let configuration = try ThemeGalleryFixture(#"{"widgets":[]}"#)
     let store = BarStore(configurationURL: configuration.url, themesDirectory: configuration.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); configuration.close(); fixture.close() }
     let edit = ConfigurationEdit(action: .bar, properties: ["height": .number(38)])
-    try store.setSessionEdits([edit])
+    try store.configurationStore.setSessionEdits([edit])
     store.barEditing.setupIsOpen = true
     let move = ApplicationMoveController(isInApplications: false, mover: fixture.mover(), relaunch: { _, _ in
         Issue.record("Settings must leave setup in charge of the resume record")
@@ -1108,7 +1108,7 @@ func applicationMoveFilesystemErrorsHideStagingAndExplainRecovery(code: Int32) a
     #expect(move.error == nil)
     #expect(!fixture.exists(fixture.destination))
     #expect(fixture.exists(fixture.source))
-    #expect(store.sessionEdits.first?.properties == edit.properties)
+    #expect(store.configurationStore.sessionEdits.first?.properties == edit.properties)
     #expect(ApplicationMoveController.setupHint.contains("Finishing touches"))
     store.barEditing.setupIsOpen = false
     let resume = try #require(move.resumeFromSettings(store: store))

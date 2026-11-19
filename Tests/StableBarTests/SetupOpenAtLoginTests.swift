@@ -12,7 +12,7 @@ import Testing
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     var hides = false
     var logins: [Bool] = []
     var system = SetupSystem()

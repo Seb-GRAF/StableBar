@@ -56,6 +56,8 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 ## Architecture rules
 
+Sources are grouped by area, one folder each ([CONTRIBUTING.md](CONTRIBUTING.md#architecture) lists them); a new file goes in its area's folder. `BarStore` only wires one bar together: configuration files and edits live in `ConfigurationStore`, scripts and providers in `WidgetScripts`, resolved styles in `BarPresentation`.
+
 `ArchitectureRulesTests` checks the first four; its numbers may only go down.
 
 - Don't add stored properties to `BarStore`. New state goes into a type of its own, owned by `BarStore` or by the feature that needs it.

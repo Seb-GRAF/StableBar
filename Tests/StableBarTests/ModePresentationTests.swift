@@ -62,10 +62,10 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     """##)
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: UUID().uuidString))
     store.configuration = configuration
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     defer { store.stop() }
-    let plain = try #require(store.presentations["plain"])
-    let affected = try #require(store.presentations["mode"])
+    let plain = try #require(store.barPresentation.presentations["plain"])
+    let affected = try #require(store.barPresentation.presentations["mode"])
     let anchor = NSView()
     store.setPopupVisibleWidget("plain", anchor: anchor)
     let bar = BarView(store: store, display: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil))
@@ -73,17 +73,17 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
         withObservationTracking { _ = plain.style; _ = plain.popupAnchor; _ = bar.body } onChange: { changed() }
         store.workspaceStore.acceptMode("tailing")
     }
-    #expect(store.barStyle.borderEdges == .all)
-    #expect(store.barStyle.borderColor == HexColor(0xccaa88ff))
+    #expect(store.barPresentation.barStyle.borderEdges == .all)
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0xccaa88ff))
     #expect(affected.style.style(hovered: false).fontSize == 17)
     #expect(plain.popupAnchor == ObjectIdentifier(anchor))
     store.workspaceStore.acceptMode("main")
-    #expect(store.barStyle.borderEdges == nil)
-    #expect(store.barStyle.borderColor == HexColor(0x111111ff))
+    #expect(store.barPresentation.barStyle.borderEdges == nil)
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0x111111ff))
     store.workspaceStore.acceptMode("tailing")
     store.workspaceStore.source = .yabai
     #expect(store.workspaceStore.mode == nil)
-    #expect(store.barStyle.borderEdges == nil)
+    #expect(store.barPresentation.barStyle.borderEdges == nil)
     store.workspaceStore.acceptMode("tailing")
     #expect(store.workspaceStore.mode == nil)
 }
@@ -159,29 +159,29 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     let store = BarStore(configurationURL: root)
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<500 {
         if store.workspaceStore.mode == "tailing" { break }
         try await Task.sleep(for: .milliseconds(10))
     }
     #expect(store.configurationError == nil)
-    #expect(store.barStyle.borderColor == HexColor(0xaa8844ff))
-    let script = try #require(store.scripts["s"])
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0xaa8844ff))
+    let script = try #require(store.widgetScripts.scripts["s"])
     try script.accept(ScriptOutput.read(Data(##"{"text":"Ready","barStyle":{"borderColor":"#ffffff","borderEdges":"bottom"}}"##.utf8)))
-    #expect(store.barStyle.borderEdges == .all)
-    #expect(store.barStyle.borderColor == HexColor(0xaa8844ff))
-    try store.applyEdits([ConfigurationEdit(action: .theme, properties: ["id": .string("blue"), "version": .string("1.0.0")])], persist: false)
-    #expect(store.barStyle.borderColor == HexColor(0x4488aaff))
-    #expect(store.barStyle.borderEdges == .all)
-    #expect(store.scripts["s"] === script)
+    #expect(store.barPresentation.barStyle.borderEdges == .all)
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0xaa8844ff))
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .theme, properties: ["id": .string("blue"), "version": .string("1.0.0")])], persist: false)
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0x4488aaff))
+    #expect(store.barPresentation.barStyle.borderEdges == .all)
+    #expect(store.widgetScripts.scripts["s"] === script)
     #expect(store.workspaceStore.mode == "tailing")
     #expect(try String(contentsOf: calls, encoding: .utf8).split(separator: "\n").count == 1)
     store.workspaceStore.acceptMode("main")
-    #expect(store.barStyle.borderColor == HexColor(0xffffffff))
-    #expect(store.barStyle.borderEdges == .bottom)
+    #expect(store.barPresentation.barStyle.borderColor == HexColor(0xffffffff))
+    #expect(store.barPresentation.barStyle.borderEdges == .bottom)
     let before = store.configuration?.modeAliases
     #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .modeAliases, properties: ["tailing": .string("")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .modeAliases, properties: ["tailing": .string("")])], persist: false)
     }
     #expect(store.configuration?.modeAliases == before)
 }
@@ -199,8 +199,8 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
     let store = BarStore(configurationURL: root)
     store.workspaceStore.executablePath = { executable.path }
     defer { store.stop() }
-    store.reloadConfiguration()
-    let script = try #require(store.scripts["s"])
+    store.configurationStore.reloadConfiguration()
+    let script = try #require(store.widgetScripts.scripts["s"])
     for _ in 0..<100 {
         if script.output.text == "ready" { break }
         try await Task.sleep(for: .milliseconds(10))
@@ -211,19 +211,19 @@ private func modeConfiguration(_ json: String) throws -> Configuration {
         if store.workspaceStore.mode == "tailing" { break }
         try await Task.sleep(for: .milliseconds(10))
     }
-    #expect(store.barStyle.borderEdges == .all)
-    #expect(store.presentations["s"]?.style.base.fontSize == 15) // legacy self-targeted widgetStyles
-    try store.applyEdits([ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(14)])], persist: false)
+    #expect(store.barPresentation.barStyle.borderEdges == .all)
+    #expect(store.barPresentation.presentations["s"]?.style.base.fontSize == 15) // legacy self-targeted widgetStyles
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .defaults, properties: ["fontSize": .number(14)])], persist: false)
     #expect(store.workspaceStore.mode == "tailing")
-    #expect(store.scripts["s"] === script)
+    #expect(store.widgetScripts.scripts["s"] === script)
     #expect(try String(contentsOf: calls, encoding: .utf8).split(separator: "\n").count == 1)
     let switched = "{\"workspaceSource\":\"yabai\"," + json.dropFirst()
     try Data(switched.utf8).write(to: root)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.workspaceStore.mode == nil)
     #expect(!store.workspaceStore.isRunning)
-    #expect(store.barStyle.borderEdges == nil)
+    #expect(store.barPresentation.barStyle.borderEdges == nil)
 }
 
 @Test @MainActor func optionalModeConnectionFailureStaysInDiagnosticsAndStopDoesNotReenter() async throws {
