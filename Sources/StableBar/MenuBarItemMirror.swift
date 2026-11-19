@@ -17,9 +17,8 @@ final class MenuBarItemMirror {
     @ObservationIgnored private let readAttribute: @Sendable (String, AXUIElement) -> CFTypeRef?
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var refreshing = false
-    @ObservationIgnored private var windows: [SCWindow] = []
-    /// Listing the windows takes about half a second of the window server's time, so it waits between tries.
-    @ObservationIgnored private var nextWindowListing = Date.distantPast
+    @ObservationIgnored private var windows: [CGWindowID: SCWindow] = [:]
+    @ObservationIgnored private var listing = MenuBarWindowListing()
 
     init(readAttribute: @escaping @Sendable (String, AXUIElement) -> CFTypeRef?) {
         self.readAttribute = readAttribute
@@ -72,25 +71,32 @@ final class MenuBarItemMirror {
         let drawn = frames.filter { !collapsed.contains($0.key) }
         guard let frame = drawn.values.first else { return [:] }
         let point = CGPoint(x: frame.midX, y: frame.midY)
-        if !windows.contains(where: { $0.frame.contains(point) }) { await listWindows() }
-        // A display can have a second menu bar window that holds no items.
-        for window in windows where window.frame.contains(point) {
-            guard let images = await capture(drawn, in: window) else {
-                windows = []
-                break
+        let current = currentWindowFrames(listing.windows.map(\.id))
+        var effects = listing.handle(.refresh(point: point, current: current, at: Date()))
+        while !effects.isEmpty {
+            switch effects.removeFirst() {
+            case .list:
+                effects += listing.handle(.listed(await listWindows()))
+            case .capture(let ids):
+                for window in ids.compactMap({ windows[$0] }) {
+                    guard let images = await capture(drawn, in: window) else {
+                        effects += listing.handle(.captureFailed)
+                        break
+                    }
+                    if !images.isEmpty { return images }
+                }
             }
-            if !images.isEmpty { return images }
         }
         return [:]
     }
 
-    private func listWindows() async {
-        guard Date() >= nextWindowListing else { return }
-        nextWindowListing = Date().addingTimeInterval(10)
+    private func listWindows() async -> [MenuBarWindowListing.Window] {
         let level = Int(CGWindowLevelForKey(.mainMenuWindow))
-        windows = (try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false))?.windows.filter {
+        let found = (try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false))?.windows.filter {
             $0.owningApplication?.bundleIdentifier == menuBarAgentID && $0.windowLayer == level
         } ?? []
+        windows = Dictionary(found.map { ($0.windowID, $0) }, uniquingKeysWith: { first, _ in first })
+        return found.map { MenuBarWindowListing.Window(id: $0.windowID, frame: $0.frame) }
     }
 
     /// The items cut out of one capture of `window`, or nil when it can't be captured, as after MenuBarAgent restarts.
@@ -115,6 +121,22 @@ final class MenuBarItemMirror {
 private struct Target: @unchecked Sendable {
     let key: String
     let element: AXUIElement
+}
+
+/// The frames the window server gives `windows` now, by window ID, in the same coordinates as `SCWindow.frame`.
+private func currentWindowFrames(_ windows: [CGWindowID]) -> [CGWindowID: CGRect] {
+    // The array holds the IDs themselves rather than objects, so it can't be bridged from a Swift array.
+    var values = windows.map { UnsafeRawPointer(bitPattern: UInt($0)) }
+    guard !values.isEmpty, let ids = CFArrayCreate(nil, &values, values.count, nil) else { return [:] }
+    let descriptions = CGWindowListCreateDescriptionFromArray(ids) as? [[String: Any]] ?? []
+    var frames: [CGWindowID: CGRect] = [:]
+    for description in descriptions {
+        guard let id = description[kCGWindowNumber as String] as? CGWindowID,
+              let bounds = description[kCGWindowBounds as String] as? NSDictionary,
+              let frame = CGRect(dictionaryRepresentation: bounds) else { continue }
+        frames[id] = frame
+    }
+    return frames
 }
 
 /// The part of each menu bar where MenuBarAgent folds the items that don't fit: from the bar's left edge to the
