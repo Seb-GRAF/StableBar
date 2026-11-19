@@ -115,14 +115,21 @@ private struct LookSection<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        let edits = editor.themeEdits()
+        SettingsGroup(title, reset: editor.resetLook(under: paths, everyBar: everyBar)) {
+            content
+        }
+    }
+}
+
+extension ConfigurationEditor {
+    /// Removes the selected theme's edits under `paths`; nil when it has none there, or while a profile is being edited,
+    /// since every change then goes into that profile.
+    func resetLook(under paths: [String], everyBar: Bool) -> (() -> Void)? {
+        guard editingProfile == nil else { return nil }
+        let edits = themeEdits()
         let changes = edits.changes.filter { change in
             paths.contains { change.path.starts(with: $0.split(separator: ".").map(String.init)) }
         }
-        // While a profile is being edited, every change goes into that profile, so the theme's edits can't be removed.
-        let reset = editor.editingProfile == nil ? edits.removal(of: changes) : nil
-        SettingsGroup(title, reset: reset.map { edit in { editor.change(edit, everyBar: everyBar) } }) {
-            content
-        }
+        return edits.removal(of: changes).map { edit in { self.change(edit, everyBar: everyBar) } }
     }
 }

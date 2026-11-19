@@ -46,7 +46,7 @@ struct ThemeEditsTests {
         #expect(store.configuration?.defaults.fontSize == 14)
         #expect(store.configuration?.widgets.first?.style.foreground == HexColor(0x00ff00ff))
         editor.gallery.configurationChanged()
-        #expect(editor.gallery.edits.changes.map(\.title) == ["Height", "Font size", "Accent", "Text color"])
+        #expect(editor.gallery.edits.changes.map(\.title) == ["Height", "Text size", "Accent", "Text color"])
         #expect(editor.gallery.edits.changes.last?.section == "clock")
         #expect(editor.error == nil)
     }

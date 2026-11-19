@@ -159,9 +159,9 @@ private func lookValues(in document: [String: ConfigurationValue], tokens: (Stri
                 switch key {
                 case "defaults": add(path, leaf, section: "Widgets", title: styleTitle(Array(path.dropFirst())))
                 case "popupDefaults": add(path, leaf, section: "Popups", title: styleTitle(Array(path.dropFirst())))
-                case "groupDefaults": add(path, leaf, section: "Groups", title: "Every group: \(detailTitle(Array(path.dropFirst())))")
+                case "groupDefaults": add(path, leaf, section: "Groups", title: "Every group: \(detailTitle(spacing(Array(path.dropFirst()))))")
                 case "groups":
-                    add(path, leaf, section: "Groups", title: "\(friendly(name)) group: \(detailTitle(path.dropFirst(2).filter { $0 != "style" }))")
+                    add(path, leaf, section: "Groups", title: "\(friendly(name)) group: \(detailTitle(spacing(path.dropFirst(2).filter { $0 != "style" })))")
                 case "roles": add(path, leaf, section: "Roles", title: "\(friendly(name)): \(detailTitle(Array(path.dropFirst(2))))")
                 default: add(path, leaf, section: "Workspaces", title: styleTitle(Array(path.dropFirst())))
                 }
@@ -173,8 +173,10 @@ private func lookValues(in document: [String: ConfigurationValue], tokens: (Stri
             for (path, leaf) in lookLeaves(value, path: ["bar", name]) {
                 if name == "glass" {
                     add(path, leaf, section: "Liquid Glass", title: path.count > 2 ? styleTitle(Array(path.dropFirst(2))) : "Liquid Glass")
+                } else if name == "popupOffset" {
+                    add(path, leaf, section: "Popups", title: "Gap below the bar")
                 } else {
-                    add(path, leaf, section: "Bar", title: styleTitle(path.dropFirst().filter { $0 != "style" }))
+                    add(path, leaf, section: "Bar", title: styleTitle(spacing(path.dropFirst().filter { $0 != "style" })))
                 }
             }
         }
@@ -189,6 +191,11 @@ private func lookValues(in document: [String: ConfigurationValue], tokens: (Stri
         }
     }
     return found.sorted { $0.path.lexicographicallyPrecedes($1.path) }
+}
+
+/// The bar's and a group's `spacing` is the space between their widgets, as Settings names it.
+private func spacing(_ path: [String]) -> [String] {
+    path == ["spacing"] ? ["spaceBetweenWidgets"] : path
 }
 
 /// Each property under `value`, keeping a light/dark pair, a gradient and a null whole. Empty objects hold nothing.
@@ -217,7 +224,7 @@ func styleTitle(_ path: [String]) -> String {
     let title = path.filter { $0 != "states" && $0 != appearance }.map { key in
         ["foreground": "Text color", "background": "Background", "borderColor": "Border color",
          "shadowColor": "Shadow color", "hoverBackground": "Hover background", "hoverForeground": "Hover text color",
-         "fontName": "Font", "fontSize": "Font size", "fontWeight": "Font weight", "inset": "Side inset",
+         "fontName": "Font", "fontSize": "Text size", "fontWeight": "Weight", "inset": "Side inset",
          "paddingHorizontal": "Horizontal padding", "paddingVertical": "Vertical padding",
          "paddingLeading": "Leading padding", "paddingTrailing": "Trailing padding", "paddingTop": "Top padding",
          "paddingBottom": "Bottom padding", "offsetX": "Horizontal offset", "offsetY": "Vertical offset",

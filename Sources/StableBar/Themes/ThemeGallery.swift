@@ -123,6 +123,15 @@ final class ThemeGallery {
         }
     }
 
+    /// Lists the themes without drawing their previews, so their names are known before Theme opens.
+    func loadChoices() async {
+        guard choices.isEmpty else { return }
+        let catalog = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                   themesDirectory: store.configurationStore.themesDirectory, selectedKey: store.configurationStore.selectedThemeKey)
+        let loaded = await Task.detached { catalog.choices }.value
+        if choices.isEmpty { choices = loaded }
+    }
+
     func refresh() async {
         refreshTask?.cancel()
         generation += 1

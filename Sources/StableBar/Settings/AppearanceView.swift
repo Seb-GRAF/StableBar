@@ -41,20 +41,9 @@ struct AppearanceView: View {
                             .padding(.top, 28)
                         }
                         colors(appearance)
-                        HStack(alignment: .top, spacing: 20) {
-                            VStack(spacing: 22) {
-                                widgets
-                                groups
-                                animation
-                            }
-                            VStack(spacing: 22) {
-                                popups
-                                bar
-                            }
-                        }
-                        .padding(.top, 22)
-                        glass.padding(.top, 22)
-                        ThemeGroup(title: "Advanced") {
+                        lookSections
+                        glass
+                        SettingsGroup("Advanced") {
                             SettingRow(title: "Presentation roles", hint: "Shared styles for widgets with a role, such as time or status") {
                                 Button("Edit…") { advanced = .roles }.controlSize(.small)
                             }
@@ -65,7 +54,6 @@ struct AppearanceView: View {
                                 Button("Edit…") { advanced = .modeAliases }.controlSize(.small)
                             }
                         }
-                        .padding(.top, 22)
                         .id(SettingsSearchResult.roles.id)
                     }
                     .frame(maxWidth: 780)
@@ -98,7 +86,6 @@ struct AppearanceView: View {
         .onChange(of: store.pendingLinks.theme?.state) { _, _ in gallery.contextChanged() }
     }
 
-    /// The page's title, what it edits and the bar's appearance.
     private var header: some View {
         let bar = editor.fields(["bar"], on: screen, values: editor.values("bar", on: screen))
         let source = store.propertySources(path: bar.path, key: "appearance", defaultsPath: bar.defaultsPath, values: bar.values)
@@ -138,7 +125,6 @@ struct AppearanceView: View {
         return parts.joined(separator: ", ")
     }
 
-    /// Which screens, setups and profile the page edits.
     private var editingMenu: some View {
         Menu {
             if kinds.count > 1 {
@@ -178,7 +164,6 @@ struct AppearanceView: View {
         .fixedSize()
     }
 
-    /// Says in words when the page edits less than every screen and setup.
     @ViewBuilder private var scopeLine: some View {
         if let screen {
             ScopeLine(text: "Editing \(screen.phrase) only. Other screens keep their look.", action: "Edit All Screens") { self.screen = nil }
@@ -231,7 +216,6 @@ struct AppearanceView: View {
         .padding(.top, 8)
     }
 
-    /// The themes that come with StableBar, yours, and the Store's, each section shown when it has a theme.
     private var gallerySections: [(title: String, items: [ThemeItem])] {
         let installed = gallery.choices.onePerTheme(keeping: Set([gallery.selectedKey] + (screenTheme.map { [$0.key] } ?? [])))
             .filter { !$0.isBundled }
@@ -268,9 +252,15 @@ struct AppearanceView: View {
     private func colors(_ appearance: BarAppearance) -> some View {
         let tokens = editor.fields(["tokens"], on: screen, values: editor.values("tokens", on: screen))
         return VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Theme colors").font(.system(size: 13, weight: .semibold))
-                Text("Widgets, popups and packages that use a color follow it.").font(.system(size: 11.5)).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Theme colors").font(.system(size: 13, weight: .semibold))
+                    Text("Widgets, popups and packages that use a color follow it.").font(.system(size: 11.5)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let reset = editor.resetLook(under: [tokens.path], everyBar: editor.themeChangesEveryBar) {
+                    Button("Reset", action: reset).buttonStyle(.link).font(.system(size: 11.5)).accessibilityLabel("Reset theme colors")
+                }
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                 ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
@@ -291,7 +281,7 @@ struct AppearanceView: View {
         let glass = editor.fields(["bar", "glass"], on: screen,
                                   values: (try? editor.values("bar", on: screen)["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:])
         return VStack(alignment: .leading, spacing: 6) {
-            ThemeGroup(title: "Liquid Glass") {
+            SettingsGroup("Liquid Glass", reset: editor.resetLook(under: [glass.path], everyBar: editor.themeChangesEveryBar)) {
                 glass.toggle("Use Liquid Glass", "enabled", default: false)
                 if glass.values["enabled"] == .bool(true) {
                     glass.percentage("See-through", "transparency", default: 0.3)
@@ -302,99 +292,28 @@ struct AppearanceView: View {
             }
             Text("Experimental. Needs macOS 26 or later.").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.horizontal, 4)
         }
-        .frame(maxWidth: .infinity)
         .id(SettingsSearchResult.glass.id)
     }
 
-    private var widgets: some View {
-        let defaults = editor.fields(["defaults"], on: screen, values: editor.values("defaults", on: screen))
-        return ThemeGroup(title: "Widgets") {
-            defaults.color("Text", "foreground")
-            defaults.color("Background", "background")
-            defaults.color("Border", "borderColor")
-            defaults.color("Shadow", "shadowColor")
-            defaults.color("Accent", "accent")
-            defaults.color("Accent text", "accentText")
-            defaults.font(fontFamilies)
-            defaults.weight()
-            defaults.number("Text size", "fontSize", default: 13, in: 6...40)
-            defaults.number("Horizontal padding", "paddingHorizontal", default: 10, in: 0...40)
-            defaults.number("Vertical padding", "paddingVertical", default: 6, in: 0...40)
-            defaults.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var groups: some View {
-        let groups = editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen))
+    /// The same sections as the bar editor's, for the screens Editing names.
+    @ViewBuilder private var lookSections: some View {
+        let everyBar = editor.themeChangesEveryBar
         let look = screen.map { store.configuration?.onScreen($0) } ?? store.configuration
-        let flared = look?.groupDefaults.flare != nil
-        return ThemeGroup(title: "Groups") {
-            groups.color("Background", "background")
-            groups.color("Border", "borderColor").disabled(flared)
-            groups.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5).disabled(flared)
-            groups.number("Corner radius", "cornerRadius", default: 0, in: 0...40)
-            groups.number("Horizontal padding", "paddingHorizontal", default: 0, in: 0...30)
-            groups.number("Vertical padding", "paddingVertical", default: 0, in: 0...20)
-            groups.number("Spacing", "spacing", default: look?.bar.spacing ?? 8, in: 0...30)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var animation: some View {
-        let values = editor.values("bar", on: screen)
-        let bar = editor.fields(["bar"], on: screen, values: values)
-        let motion = (try? values["motion"]?.decoded(BarMotion.self)) ?? .smooth
-        return ThemeGroup(title: "Animation") {
-            bar.choice("Motion", "motion", choices: BarMotion.allCases.map(\.rawValue), default: BarMotion.smooth.rawValue)
-            bar.choice("Popups", "popupTransition", choices: PopupTransition.allCases.map(\.rawValue), default: motion.popupTransition.rawValue)
-            bar.toggle("Morph between popups", "morphPopups", default: true,
-                       hint: "Opening another widget's popup or tooltip moves the open one into it.")
-        }
-        .frame(maxWidth: .infinity)
-        .id(SettingsSearchResult.animation.id)
-    }
-
-    private var popups: some View {
-        let popups = editor.fields(["popupDefaults"], on: screen, defaultsPath: "defaults",
-                                   values: editor.values("defaults", on: screen).merging(editor.values("popupDefaults", on: screen)) { $1 })
-        // Popups don't take the bar widgets' padding and spacing from defaults.
-        let spacing = editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen))
-        let popupPadding = PopupConfiguration.defaultPadding
-        let bar = editor.fields(["bar"], on: screen, values: editor.values("bar", on: screen))
-        return ThemeGroup(title: "Popups") {
-            popups.color("Background", "background")
-            popups.color("Border", "borderColor")
-            popups.color("Shadow", "shadowColor")
-            popups.weight()
-            popups.number("Text size", "fontSize", default: 13, in: 6...40)
-            popups.number("Corner radius", "cornerRadius", default: 14, in: 0...40)
-            spacing.number("Horizontal padding", "paddingHorizontal", default: popupPadding.paddingHorizontal!, in: 0...40)
-            spacing.number("Vertical padding", "paddingVertical", default: popupPadding.paddingVertical!, in: 0...40)
-            spacing.number("Spacing", "spacing", default: PopupConfiguration.blockSpacing, in: 0...40,
-                           hint: "Unset, a popup's blocks sit 12 apart and the items of a row, column or list 6. A value sets both.")
-            bar.number("Gap below the bar", "popupOffset", default: BarSettings().popupOffset, in: 0...40,
-                       hint: "Also moves tooltips and hover controls. A popup's own offset wins.")
-        }
-        .frame(maxWidth: .infinity)
-        .id(SettingsSearchResult.popups.id)
-    }
-
-    private var bar: some View {
-        let values = editor.values("bar", on: screen)
-        let bar = editor.fields(["bar"], on: screen, values: values)
-        let style = editor.fields(["bar", "style"], on: screen, values: (try? values["style"]?.decoded([String: ConfigurationValue].self)) ?? [:])
-        return ThemeGroup(title: "Bar") {
-            style.color("Background", "background")
-            style.color("Border", "borderColor")
-            style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
-            style.choice("Border edges", "borderEdges", choices: BarBorderEdges.allCases.map(\.rawValue), default: BarBorderEdges.bottom.rawValue)
-            style.number("Corner radius", "cornerRadius", default: 0, in: 0...40)
-            bar.number("Height", "height", default: 40, in: 16...100)
-            bar.number("Side inset", "inset", default: 12, in: 0...100)
-            bar.number("Spacing", "spacing", default: 8, in: 0...50)
-        }
-        .frame(maxWidth: .infinity)
+        let bar = editor.values("bar", on: screen)
+        let barFields = editor.fields(["bar"], on: screen, values: bar)
+        WidgetsLookSection(editor: editor, style: editor.fields(["defaults"], on: screen, values: editor.values("defaults", on: screen)),
+                           fontFamilies: fontFamilies, everyBar: everyBar)
+        GroupsLookSection(editor: editor, style: editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen)),
+                          flared: look?.groupDefaults.flare != nil, spacing: look?.bar.spacing ?? 8, everyBar: everyBar)
+        PopupsLookSection(editor: editor,
+                          style: editor.fields(["popupDefaults"], on: screen, defaultsPath: "defaults",
+                                               values: editor.values("defaults", on: screen).merging(editor.values("popupDefaults", on: screen)) { $1 }),
+                          spacing: editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen)),
+                          bar: barFields, fontFamilies: fontFamilies, everyBar: everyBar)
+            .id(SettingsSearchResult.popups.id)
+        BarLookSection(editor: editor, bar: barFields,
+                       style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]),
+                       everyBar: everyBar)
     }
 
     private func reset(_ source: PropertyValueSource) {
@@ -437,36 +356,6 @@ private enum ThemeItem: Identifiable {
         case let .installed(choice): choice.title
         case let .store(entry): entry.name
         }
-    }
-}
-
-private struct ThemeGroup<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.secondary).padding(.horizontal, 4)
-            VStack(spacing: 0) { content }
-                .labeledContentStyle(ThemeGroupRow())
-                .padding(.top, -1)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(SettingsPalette.groupBorder))
-        }
-    }
-}
-
-private struct ThemeGroupRow: LabeledContentStyle {
-    func makeBody(configuration: LabeledContentStyleConfiguration) -> some View {
-        HStack(spacing: 10) {
-            configuration.label.frame(maxWidth: .infinity, alignment: .leading)
-            configuration.content
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .frame(minHeight: 46)
-        .overlay(alignment: .top) { SettingsPalette.separator.frame(height: 1) }
     }
 }
 

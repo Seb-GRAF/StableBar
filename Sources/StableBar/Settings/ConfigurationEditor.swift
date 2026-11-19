@@ -60,6 +60,7 @@ final class ConfigurationEditor {
         gallery = ThemeGallery(store: store)
         self.endEditing = endEditing
         selection = store.configuration?.widgets.first?.id
+        Task { [gallery] in await gallery.loadChoices() }
     }
 
     /// Commit field-editor text before changing its widget or replacing the document it edits.
