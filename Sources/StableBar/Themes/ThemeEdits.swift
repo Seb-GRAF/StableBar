@@ -63,6 +63,8 @@ struct ThemeEdits {
     let profile: String?
     let changes: [ThemeEdit]
     let everyTheme: [ThemeEdit]
+    /// How many style values each widget keeps under every theme, in its definition or the main file's overrides.
+    let widgetStyles: [String: Int]
     private let configuration: [String: ConfigurationValue]
 
     static let none = ThemeEdits(main: [:], themeID: "")
@@ -78,6 +80,16 @@ struct ThemeEdits {
         changes = lookValues(in: configuration, tokens: { _ in true }, widgets: names, theme: theme)
         everyTheme = lookValues(in: main, tokens: { name in themed[name] != nil || themeTokens.contains { $0.name == name } },
                                 widgets: nil, theme: theme)
+        let definitions = (try? main["widgets"]?.decoded([[String: ConfigurationValue]].self)) ?? []
+        let overrides = (try? main["widgetOverrides"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
+        var own: [String: [String: ConfigurationValue]] = [:]
+        for definition in definitions {
+            if case let .string(id)? = definition["id"] { own[id] = definition }
+        }
+        for (id, override) in overrides { own[id, default: [:]].merge(override) { $1 } }
+        widgetStyles = own.mapValues { widget in
+            widget.filter { widgetLookKeys.contains($0.key) }.reduce(0) { $0 + lookLeaves($1.value, path: [$1.key]).count }
+        }
     }
 
     /// The main file's profile whose only condition is `themeID`.
@@ -332,14 +344,7 @@ extension ConfigurationEditor {
 
     /// The widget's own style values: those it keeps under every theme, and its edits of the selected theme.
     func ownStyle(of widget: WidgetConfiguration) -> (everyTheme: Int, onTheme: Int) {
-        let main = (try? store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)) ?? [:]
-        let definitions = (try? main["widgets"]?.decoded([[String: ConfigurationValue]].self)) ?? []
-        let overrides = (try? main["widgetOverrides"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
-        let own = (definitions.first { $0["id"] == .string(widget.id) } ?? [:]).merging(overrides[widget.id] ?? [:]) { $1 }
-        let everyTheme = own.filter { widgetLookKeys.contains($0.key) }.reduce(0) { count, entry in
-            count + lookLeaves(entry.value, path: [entry.key]).count
-        }
-        return (everyTheme, ThemeEdits(main: main, themeID: selectedTheme.id).widgetChanges(widget.id).count)
+        (gallery.edits.widgetStyles[widget.id] ?? 0, gallery.edits.widgetChanges(widget.id).count)
     }
 
     /// Removes the widget's own style, under every theme and as an edit of the selected theme, in one change.

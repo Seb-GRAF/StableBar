@@ -5,9 +5,10 @@ struct WidgetsLookSection: View {
     let style: StyleFields
     let fontFamilies: [String]
     var everyBar = false
+    var expansion: Binding<Bool?>?
 
     var body: some View {
-        LookSection(title: "Widgets", editor: editor, paths: [style.path], everyBar: everyBar) {
+        LookSection(title: "Widgets", editor: editor, paths: [style.path], everyBar: everyBar, expansion: expansion) {
             style.color("Text color", "foreground")
             style.color("Background", "background")
             style.hoverBackground("Hover background")
@@ -32,9 +33,10 @@ struct GroupsLookSection: View {
     let spacing: Double
     var title = "Groups"
     var everyBar = false
+    var expansion: Binding<Bool?>?
 
     var body: some View {
-        LookSection(title: title, editor: editor, paths: [style.path], everyBar: everyBar) {
+        LookSection(title: title, editor: editor, paths: [style.path], everyBar: everyBar, expansion: expansion) {
             style.color("Background", "background")
             style.color("Border color", "borderColor").disabled(flared)
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5,
@@ -57,10 +59,12 @@ struct PopupsLookSection: View {
     let bar: StyleFields
     let fontFamilies: [String]
     var everyBar = false
+    var expansion: Binding<Bool?>?
 
     var body: some View {
         let padding = PopupConfiguration.defaultPadding
-        LookSection(title: "Popups", editor: editor, paths: [style.path, "\(bar.path).popupOffset"], everyBar: everyBar) {
+        LookSection(title: "Popups", editor: editor, paths: [style.path, "\(bar.path).popupOffset"], everyBar: everyBar,
+                    expansion: expansion) {
             style.color("Text color", "foreground")
             style.color("Background", "background")
             style.color("Border color", "borderColor")
@@ -85,10 +89,12 @@ struct BarLookSection: View {
     let bar: StyleFields
     let style: StyleFields
     var everyBar = false
+    var expansion: Binding<Bool?>?
 
     var body: some View {
         LookSection(title: "Bar", editor: editor,
-                    paths: [style.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" }, everyBar: everyBar) {
+                    paths: [style.path] + ["height", "inset", "spacing", "margin"].map { "\(bar.path).\($0)" }, everyBar: everyBar,
+                    expansion: expansion) {
             style.color("Background", "background")
             style.color("Border color", "borderColor")
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
@@ -105,31 +111,45 @@ struct BarLookSection: View {
     }
 }
 
-/// A section's rows, with Reset in the header while the selected theme has edits under `paths`, the `StyleFields`
-/// paths the rows edit.
+/// A section's rows, with its count of the selected theme's edits under `paths`, the `StyleFields` paths the rows edit,
+/// and Reset while there are some.
 private struct LookSection<Content: View>: View {
     let title: String
     let editor: ConfigurationEditor
     let paths: [String]
     let everyBar: Bool
+    /// Makes the section collapsible: open as chosen, else while it has edits.
+    let expansion: Binding<Bool?>?
     @ViewBuilder let content: Content
 
     var body: some View {
-        SettingsGroup(title, reset: editor.resetLook(under: paths, everyBar: everyBar)) {
+        let changes = editor.lookChanges(under: paths)
+        SettingsGroup(title, detail: changeCount(changes.count), reset: editor.reset(changes, everyBar: everyBar),
+                      isExpanded: expansion.map { chosen in
+                          Binding(get: { chosen.wrappedValue ?? !changes.isEmpty }, set: { chosen.wrappedValue = $0 })
+                      }) {
             content
         }
     }
 }
 
+/// "3 changes", or nil for none.
+func changeCount(_ count: Int) -> String? {
+    count == 0 ? nil : "\(count) \(count == 1 ? "change" : "changes")"
+}
+
 extension ConfigurationEditor {
-    /// Removes the selected theme's edits under `paths`; nil when it has none there, or while a profile is being edited,
-    /// since every change then goes into that profile.
-    func resetLook(under paths: [String], everyBar: Bool) -> (() -> Void)? {
-        guard editingProfile == nil else { return nil }
-        let edits = themeEdits()
-        let changes = edits.changes.filter { change in
+    /// The selected theme's edits under `paths`, as the gallery last read them.
+    func lookChanges(under paths: [String]) -> [ThemeEdit] {
+        gallery.edits.changes.filter { change in
             paths.contains { change.path.starts(with: $0.split(separator: ".").map(String.init)) }
         }
-        return edits.removal(of: changes).map { edit in { self.change(edit, everyBar: everyBar) } }
+    }
+
+    /// Removes `changes`; nil when there are none, or while a profile is being edited, since every change then goes into
+    /// that profile.
+    func reset(_ changes: [ThemeEdit], everyBar: Bool) -> (() -> Void)? {
+        guard editingProfile == nil, let edit = gallery.edits.removal(of: changes) else { return nil }
+        return { self.change(edit, everyBar: everyBar) }
     }
 }

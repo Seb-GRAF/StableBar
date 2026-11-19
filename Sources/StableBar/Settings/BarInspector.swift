@@ -130,7 +130,11 @@ struct BarInspector: View {
             .scrollPosition(id: Binding(get: { scrollPositions[key] }, set: { scrollPositions[key] = $0 }), anchor: .top)
             .id(key)
         }
-        .task { fontFamilies = NSFontManager.shared.availableFontFamilies }
+        .task {
+            fontFamilies = NSFontManager.shared.availableFontFamilies
+            editor.gallery.contextChanged()
+        }
+        .onChange(of: store.effectiveDocument) { _, _ in editor.gallery.contextChanged() }
         .onChange(of: editor.selectedID) {
             customClockFormat = false
             clickError = nil

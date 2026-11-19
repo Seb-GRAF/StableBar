@@ -435,25 +435,33 @@ struct StyleFields {
     let unset: ([String: ConfigurationValue]) -> Void
 
     func color(_ title: String, _ key: String) -> some View {
+        let property = property(key)
+        let value = fill(key, property)
+        let tokens = store.themeTokenColors
+        let source = store.propertySourceText(property)
         // The row chooses: a ViewThatFits inside it would be offered only part of the row's width.
-        ViewThatFits(in: .horizontal) {
+        return ViewThatFits(in: .horizontal) {
             ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
-                row(title, key) { _ in colorButton(title, key, axis: axis) }
+                SettingRow(title: title, property: property, source: source, reset: property.saved.map { saved in { reset(saved) } }) {
+                    fillButton(title, key, value: value, tokens: tokens, axis: axis)
+                }
             }
         }
     }
 
     func colorButton(_ title: String, _ key: String) -> some View {
-        colorButton(title, key, axis: .horizontal)
+        fillButton(title, key, value: fill(key, property(key)), tokens: store.themeTokenColors, axis: .horizontal)
     }
 
-    private func colorButton(_ title: String, _ key: String, axis: Axis) -> some View {
-        let property = property(key)
-        return FillButton(title: title, value: origin(key).flatMap(\.token).map { .string("@token.\($0)") } ?? property.editingFill,
-                   tokens: store.themeTokenColors, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key), allowsNone: key != "foreground",
-                   axis: axis) {
+    private func fillButton(_ title: String, _ key: String, value: ConfigurationValue?, tokens: [ThemeTokenColor], axis: Axis) -> some View {
+        FillButton(title: title, value: value, tokens: tokens, allowsGradient: ["background", "popupBackground", "tooltipBackground"].contains(key),
+                   allowsNone: key != "foreground", axis: axis) {
             set([key: $0])
         }
+    }
+
+    private func fill(_ key: String, _ property: PropertySources) -> ConfigurationValue? {
+        origin(key, property).flatMap(\.token).map { .string("@token.\($0)") } ?? property.editingFill
     }
 
     /// Shows the hover background the bar draws and where it comes from, and sets it so it wins.
@@ -464,12 +472,14 @@ struct StyleFields {
         let property = store.propertySources(path: path, key: "hoverBackground", defaultsPath: defaultsPath,
                                              widgetID: widgetID, values: values, hover: true)
         let origin = property.saved?.origin ?? drawn.flatMap { store.origins[$0.path] }
+        let value = origin?.token.map { .string("@token.\($0)") } ?? property.editingFill
+        let tokens = store.themeTokenColors
+        let source = store.propertySourceText(property)
         return ViewThatFits(in: .horizontal) {
             ForEach([Axis.horizontal, .vertical], id: \.self) { axis in
-                SettingRow(title: title, property: property, source: store.propertySourceText(property),
+                SettingRow(title: title, property: property, source: source,
                            reset: property.saved.map { source in { resetHoverBackground(source) } }) {
-                    FillButton(title: title, value: origin?.token.map { .string("@token.\($0)") } ?? property.editingFill,
-                               tokens: store.themeTokenColors, allowsGradient: true, allowsNone: true, axis: axis) {
+                    FillButton(title: title, value: value, tokens: tokens, allowsGradient: true, allowsNone: true, axis: axis) {
                         set(HoverBackgroundRow.properties($0))
                     }
                 }
@@ -591,12 +601,11 @@ struct StyleFields {
         let property = property(key)
         return SettingRow(title: title, property: property, source: store.propertySourceText(property),
                           reset: property.saved.map { saved in { reset(saved) } }, scrub: scrub, hint: hint) {
-            control(origin(key))
+            control(origin(key, property))
         }
     }
 
-    private func origin(_ key: String) -> ConfigurationOrigin? {
-        let property = property(key)
+    private func origin(_ key: String, _ property: PropertySources) -> ConfigurationOrigin? {
         if let widgetID, path == "widgets.\(widgetID)" { return property.saved?.origin ?? property.sources.last?.origin }
         let role = widgetID.flatMap { id in store.configuration?.widgets.first { $0.id == id }?.role }
         return property.saved?.origin ?? store.origins["\(path).\(key)"]

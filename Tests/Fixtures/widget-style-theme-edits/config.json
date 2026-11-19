@@ -1,0 +1,39 @@
+{
+  "theme": {
+    "id": "leman"
+  },
+  "widgets": [
+    {
+      "id": "apple",
+      "type": "appleMenu",
+      "position": "left"
+    },
+    {
+      "id": "clock",
+      "type": "clock",
+      "position": "right",
+      "format": "EEE d MMM  HH:mm",
+      "style": {
+        "paddingHorizontal": 12
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "name": "Léman edits",
+      "when": {
+        "theme": "leman"
+      },
+      "configuration": {
+        "widgetOverrides": {
+          "clock": {
+            "style": {
+              "foreground": "@token.accent",
+              "fontWeight": "semibold"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

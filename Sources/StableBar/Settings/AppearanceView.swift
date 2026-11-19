@@ -6,6 +6,8 @@ struct AppearanceView: View {
     @State private var advanced: AdvancedSheet?
     @State private var screen: ScreenKind?
     @State private var fontFamilies: [String] = []
+    /// Customize's sections opened or closed by hand; the others open while they have edits.
+    @State private var expanded: [String: Bool] = [:]
 
     private var store: BarStore { editor.store }
     private var gallery: ThemeGallery { editor.gallery }
@@ -40,10 +42,13 @@ struct AppearanceView: View {
                             }
                             .padding(.top, 28)
                         }
-                        colors(appearance)
+                        colors
                         lookSections
                         glass
-                        SettingsGroup("Advanced") {
+                        let advancedChanges = editor.lookChanges(under: ["roles", "workspaceDefaults"])
+                        SettingsGroup("Advanced", detail: changeCount(advancedChanges.count),
+                                      reset: editor.reset(advancedChanges, everyBar: editor.themeChangesEveryBar),
+                                      isExpanded: expansion("Advanced", opens: !advancedChanges.isEmpty)) {
                             SettingRow(title: "Presentation roles", hint: "Shared styles for widgets with a role, such as time or status") {
                                 Button("Edit…") { advanced = .roles }.controlSize(.small)
                             }
@@ -69,6 +74,9 @@ struct AppearanceView: View {
                 .task(id: editor.searchTarget) {
                     if let target = editor.searchTarget {
                         advanced = AdvancedSheet(rawValue: target)
+                        let sections = [SettingsSearchResult.colors.id: "Theme colors", SettingsSearchResult.popups.id: "Popups",
+                                        SettingsSearchResult.glass.id: "Liquid Glass"]
+                        if let section = advanced == nil ? sections[target] : "Advanced" { expanded[section] = true }
                         await Task.yield()
                         if Task.isCancelled { return }
                         scroll.scrollTo(advanced == nil ? target : SettingsSearchResult.roles.id, anchor: .top)
@@ -249,50 +257,41 @@ struct AppearanceView: View {
         }
     }
 
-    private func colors(_ appearance: BarAppearance) -> some View {
+    private var colors: some View {
         let tokens = editor.fields(["tokens"], on: screen, values: editor.values("tokens", on: screen))
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Theme colors").font(.system(size: 13, weight: .semibold))
-                    Text("Widgets, popups and packages that use a color follow it.").font(.system(size: 11.5)).foregroundStyle(.secondary)
-                }
-                Spacer()
-                if let reset = editor.resetLook(under: [tokens.path], everyBar: editor.themeChangesEveryBar) {
-                    Button("Reset", action: reset).buttonStyle(.link).font(.system(size: 11.5)).accessibilityLabel("Reset theme colors")
-                }
-            }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
-                    let property = store.propertySources(path: tokens.path, key: token.name, defaultsPath: tokens.defaultsPath, values: tokens.values)
-                    let color = (try? property.editingValue?.decoded(HexColor.self)) ?? token.color
-                    TokenColorButton(title: token.title, color: color, dark: appearance.colorScheme == .dark,
-                                     property: property, reset: property.saved.map { source in { reset(source) } }) {
-                        tokens.set([token.name: $0])
-                    }
+        let changes = editor.lookChanges(under: [tokens.path])
+        return SettingsGroup("Theme colors", detail: changeCount(changes.count), reset: editor.reset(changes, everyBar: editor.themeChangesEveryBar),
+                             isExpanded: expansion("Theme colors", opens: true)) {
+            ForEach(store.themeTokenColors(in: document).filter(\.isShared)) { token in
+                let property = store.propertySources(path: tokens.path, key: token.name, defaultsPath: tokens.defaultsPath, values: tokens.values)
+                let color = (try? property.editingValue?.decoded(HexColor.self)) ?? token.color
+                TokenColorButton(title: token.title, color: color, property: property, reset: property.saved.map { source in { reset(source) } }) {
+                    tokens.set([token.name: $0])
                 }
             }
         }
-        .padding(.top, 24)
         .id(SettingsSearchResult.colors.id)
     }
 
     private var glass: some View {
         let glass = editor.fields(["bar", "glass"], on: screen,
                                   values: (try? editor.values("bar", on: screen)["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:])
-        return VStack(alignment: .leading, spacing: 6) {
-            SettingsGroup("Liquid Glass", reset: editor.resetLook(under: [glass.path], everyBar: editor.themeChangesEveryBar)) {
-                glass.toggle("Use Liquid Glass", "enabled", default: false)
-                if glass.values["enabled"] == .bool(true) {
-                    glass.percentage("See-through", "transparency", default: 0.3)
-                    glass.toggle("Widgets", "widgets", default: true)
-                    glass.toggle("Popups", "popups", default: true)
-                    glass.toggle("Bar", "bar", default: true)
-                }
+        let changes = editor.lookChanges(under: [glass.path])
+        return SettingsGroup("Liquid Glass", detail: changeCount(changes.count), reset: editor.reset(changes, everyBar: editor.themeChangesEveryBar),
+                             isExpanded: expansion("Liquid Glass", opens: !changes.isEmpty)) {
+            glass.toggle("Use Liquid Glass", "enabled", default: false, hint: "Experimental. Needs macOS 26 or later.")
+            if glass.values["enabled"] == .bool(true) {
+                glass.percentage("See-through", "transparency", default: 0.3)
+                glass.toggle("Widgets", "widgets", default: true)
+                glass.toggle("Popups", "popups", default: true)
+                glass.toggle("Bar", "bar", default: true)
             }
-            Text("Experimental. Needs macOS 26 or later.").font(.system(size: 11.5)).foregroundStyle(.secondary).padding(.horizontal, 4)
         }
         .id(SettingsSearchResult.glass.id)
+    }
+
+    private func expansion(_ title: String, opens: Bool) -> Binding<Bool> {
+        Binding(get: { expanded[title] ?? opens }, set: { expanded[title] = $0 })
     }
 
     /// The same sections as the bar editor's, for the screens Editing names.
@@ -302,18 +301,19 @@ struct AppearanceView: View {
         let bar = editor.values("bar", on: screen)
         let barFields = editor.fields(["bar"], on: screen, values: bar)
         WidgetsLookSection(editor: editor, style: editor.fields(["defaults"], on: screen, values: editor.values("defaults", on: screen)),
-                           fontFamilies: fontFamilies, everyBar: everyBar)
+                           fontFamilies: fontFamilies, everyBar: everyBar, expansion: $expanded["Widgets"])
         GroupsLookSection(editor: editor, style: editor.fields(["groupDefaults"], on: screen, values: editor.values("groupDefaults", on: screen)),
-                          flared: look?.groupDefaults.flare != nil, spacing: look?.bar.spacing ?? 8, everyBar: everyBar)
+                          flared: look?.groupDefaults.flare != nil, spacing: look?.bar.spacing ?? 8, everyBar: everyBar,
+                          expansion: $expanded["Groups"])
         PopupsLookSection(editor: editor,
                           style: editor.fields(["popupDefaults"], on: screen, defaultsPath: "defaults",
                                                values: editor.values("defaults", on: screen).merging(editor.values("popupDefaults", on: screen)) { $1 }),
                           spacing: editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen)),
-                          bar: barFields, fontFamilies: fontFamilies, everyBar: everyBar)
+                          bar: barFields, fontFamilies: fontFamilies, everyBar: everyBar, expansion: $expanded["Popups"])
             .id(SettingsSearchResult.popups.id)
         BarLookSection(editor: editor, bar: barFields,
                        style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]),
-                       everyBar: everyBar)
+                       everyBar: everyBar, expansion: $expanded["Bar"])
     }
 
     private func reset(_ source: PropertyValueSource) {

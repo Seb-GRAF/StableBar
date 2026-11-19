@@ -47,33 +47,20 @@ struct FillButton: View {
 struct TokenColorButton: View {
     let title: String
     let color: HexColor
-    let dark: Bool
     let property: PropertySources
     let reset: (() -> Void)?
     let set: (ConfigurationValue) -> Void
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Spacer(minLength: 0)
-                RevertSettingButton(title: title, property: property, reset: reset)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 6) { sides }
-                VStack(alignment: .leading, spacing: 6) { sides }
-            }
+        SettingRow(title: title, property: property, reset: reset) {
+            HStack(spacing: 6) { sides }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 9).fill(colorScheme == .dark ? Color.white.opacity(0.05) : .white))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.08)))
     }
 
     private var sides: some View {
         ForEach([false, true], id: \.self) { isDark in
             SideButton(title: title, value: colorSide(dark: isDark, of: color.configurationValue), dark: isDark, tokens: [],
-                       themeColor: true, width: 110, arrowEdge: .bottom) {
+                       themeColor: true, width: 128, arrowEdge: .bottom) {
                 set(settingColorSide(dark: isDark, of: color.configurationValue, to: $0))
             }
         }

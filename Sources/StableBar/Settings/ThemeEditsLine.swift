@@ -93,7 +93,7 @@ struct ThemeEditsLine: View {
     }
 }
 
-/// Each edit, by section, with its value, the theme's own value, a revert arrow and `actions`.
+/// Each edit, by section, in columns: its value, the theme's own value, a revert arrow and `actions`.
 private struct ThemeEditList<Actions: View>: View {
     let store: BarStore
     let changes: [ThemeEdit]
@@ -103,40 +103,55 @@ private struct ThemeEditList<Actions: View>: View {
 
     var body: some View {
         let sections = changes.reduce(into: [String]()) { if !$0.contains($1.section) { $0.append($1.section) } }
-        VStack(alignment: .leading, spacing: 2) {
+        let tokens = store.themeTokenColors
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 5) {
+            GridRow {
+                Color.clear.frame(height: 1)
+                Text("Yours").frame(width: 130, alignment: .leading)
+                Text(theme).lineLimit(1).frame(width: 130, alignment: .leading)
+                Color.clear.frame(width: 46, height: 1)
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
             ForEach(sections, id: \.self) { section in
-                Text(section).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).padding(.top, 6)
+                Text(section)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 6)
+                    .gridCellColumns(4)
                 ForEach(changes.filter { $0.section == section }) { change in
-                    HStack(spacing: 8) {
-                        Text(change.title).frame(maxWidth: .infinity, alignment: .leading)
-                        ThemeEditValue(store: store, value: change.value).frame(width: 170, alignment: .leading)
+                    GridRow {
+                        Text(change.title).lineLimit(1).truncationMode(.middle).help(change.title)
+                        ThemeEditValue(value: change.value, tokens: tokens).frame(width: 130, alignment: .leading)
                         Group {
                             if let value = change.themeValue {
-                                HStack(spacing: 4) { Text("\(theme):"); ThemeEditValue(store: store, value: value) }
+                                ThemeEditValue(value: value, tokens: tokens)
+                            } else {
+                                Text("—").foregroundStyle(.tertiary)
                             }
                         }
-                        .foregroundStyle(.secondary)
-                        .frame(width: 150, alignment: .leading)
-                        Button {
-                            revert(change)
-                        } label: {
-                            Image(systemName: "arrow.uturn.backward").frame(width: 22, height: 22).contentShape(Rectangle())
+                        .frame(width: 130, alignment: .leading)
+                        HStack(spacing: 2) {
+                            Button {
+                                revert(change)
+                            } label: {
+                                Image(systemName: "arrow.uturn.backward").frame(width: 22, height: 22).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                            .help("Revert \(change.title.lowercased())")
+                            .accessibilityLabel("Revert \(change.title)")
+                            Menu {
+                                actions(change)
+                            } label: {
+                                Image(systemName: "ellipsis")
+                            }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .fixedSize()
+                            .accessibilityLabel("More for \(change.title)")
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .help("Revert \(change.title.lowercased())")
-                        .accessibilityLabel("Revert \(change.title)")
-                        Menu {
-                            actions(change)
-                        } label: {
-                            Image(systemName: "ellipsis")
-                        }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .accessibilityLabel("More for \(change.title)")
                     }
-                    .frame(minHeight: 24)
                 }
             }
         }
@@ -144,36 +159,55 @@ private struct ThemeEditList<Actions: View>: View {
     }
 }
 
-/// A value as the list shows it: a color as its light and dark swatches, a theme color by name, anything else as text.
+/// A value in one line: a color as its swatches, with a theme color's name or a single color's hex, anything else as
+/// short text. The whole value is in its help.
 private struct ThemeEditValue: View {
-    let store: BarStore
     let value: ConfigurationValue
+    let tokens: [ThemeTokenColor]
 
     var body: some View {
-        if case let .string(text) = value, text.hasPrefix("@token.") {
-            let token = store.themeTokenColors.first { $0.name == text.dropFirst(7) }
-            HStack(spacing: 4) {
-                if let color = token?.color { swatches(color) }
-                Text(token?.title ?? String(text.dropFirst(7))) + Text(" theme").font(.system(size: 10)).foregroundStyle(.tertiary)
+        HStack(spacing: 5) {
+            if let sides = colorSides(value) {
+                HStack(spacing: 2) {
+                    ForEach(Array(sides.enumerated()), id: \.offset) { _, rgba in
+                        RoundedRectangle(cornerRadius: 3).fill(HexColor(rgba).color).frame(width: 12, height: 12)
+                            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.primary.opacity(0.15)))
+                    }
+                }
+                .accessibilityHidden(true)
+                if case let .string(text) = value, text.hasPrefix("@token.") {
+                    Text(tokens.first { $0.name == text.dropFirst(7) }?.title ?? String(text.dropFirst(7)))
+                } else if sides.count == 1 {
+                    Text(String(format: "#%06X", sides[0] >> 8)).monospacedDigit()
+                }
+            } else {
+                Text(text)
             }
-        } else if let color = try? value.decoded(HexColor.self) {
-            HStack(spacing: 4) {
-                swatches(color)
-                Text(String(format: "#%06X", color.light >> 8) + (color.light == color.dark ? "" : " / " + String(format: "#%06X", color.dark >> 8)))
-            }
-        } else {
-            Text(value.sourceDescription).lineLimit(1)
         }
+        .lineLimit(1)
+        .help(value.sourceDescription)
     }
 
-    private func swatches(_ color: HexColor) -> some View {
-        HStack(spacing: 2) {
-            ForEach(color.light == color.dark ? [color.light] : [color.light, color.dark], id: \.self) { rgba in
-                RoundedRectangle(cornerRadius: 3).fill(HexColor(rgba).color).frame(width: 11, height: 11)
-                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(.primary.opacity(0.15)))
-            }
+    /// A color's light and dark sides, one when they match, with theme colors resolved.
+    private func colorSides(_ value: ConfigurationValue) -> [UInt32]? {
+        func color(_ side: ConfigurationValue) -> HexColor? {
+            if case let .string(text) = side, text.hasPrefix("@token.") { return tokens.first { $0.name == text.dropFirst(7) }?.color }
+            return try? side.decoded(HexColor.self)
         }
-        .accessibilityHidden(true)
+        if case let .object(pair) = value, Set(pair.keys) == ["light", "dark"],
+           let light = color(pair["light"]!)?.light, let dark = color(pair["dark"]!)?.dark {
+            return light == dark ? [light] : [light, dark]
+        }
+        return color(value).map { $0.light == $0.dark ? [$0.light] : [$0.light, $0.dark] }
+    }
+
+    private var text: String {
+        switch value {
+        case .null: "None"
+        case .object where value.isGradient: "Gradient"
+        case .object, .array: "Custom"
+        default: value.sourceDescription
+        }
     }
 }
 
