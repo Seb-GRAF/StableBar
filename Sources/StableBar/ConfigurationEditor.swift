@@ -122,7 +122,7 @@ final class ConfigurationEditor {
     }
 
     func definedInMainFile(_ widget: WidgetConfiguration) -> Bool {
-        store.origins["widgets.\(widget.id).id"]?.file == store.configurationURL.standardizedFileURL.path
+        store.origins["widgets.\(widget.id).id"]?.file == store.configurationStore.configurationURL.standardizedFileURL.path
     }
 
     func canRemove(_ widget: WidgetConfiguration) -> Bool {
@@ -166,11 +166,11 @@ final class ConfigurationEditor {
         finishEditing()
         do {
             try history.flush()
-            guard try store.customizationProfiles().contains(where: { $0.name == profile }) else {
+            guard try store.configurationStore.customizationProfiles().contains(where: { $0.name == profile }) else {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")
             }
             editingProfile = profile
-            store.previewProfile(profile)
+            store.configurationStore.previewProfile(profile)
             if section != .appearance { section = .widgets }
             keepSelection()
         } catch { self.error = errorMessage(error) }
@@ -179,9 +179,9 @@ final class ConfigurationEditor {
     func endProfileEditing() {
         guard editingProfile != nil else { return }
         finishEditing()
-        store.flushCustomization()
+        store.configurationStore.flushCustomization()
         editingProfile = nil
-        store.previewProfile(nil)
+        store.configurationStore.previewProfile(nil)
         keepSelection()
     }
 
@@ -305,7 +305,7 @@ final class ConfigurationEditor {
     func setProfile(_ profile: ConfigurationProfile) {
         do {
             let current = store.profiles.first { $0.name == profile.name }
-            if current != nil, try !store.customizationProfiles().contains(where: { $0.name == profile.name }) {
+            if current != nil, try !store.configurationStore.customizationProfiles().contains(where: { $0.name == profile.name }) {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")
             }
             let changes = try profileChanges(from: current, to: profile)
@@ -317,8 +317,8 @@ final class ConfigurationEditor {
     func setProfileConfiguration(name: String, configuration: [String: ConfigurationValue]) {
         do {
             error = nil
-            store.flushCustomization()
-            guard try store.customizationProfiles().contains(where: { $0.name == name }),
+            store.configurationStore.flushCustomization()
+            guard try store.configurationStore.customizationProfiles().contains(where: { $0.name == name }),
                   var profile = store.profiles.first(where: { $0.name == name }) else {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")
             }
@@ -336,16 +336,16 @@ final class ConfigurationEditor {
     /// stays with the values set there.
     func profileRemoval(_ name: String) -> ProfileRemoval {
         guard (try? mainFileDefinesProfile(name)) == true else { return .unavailable }
-        let main = store.configurationURL.standardizedFileURL.path
-        return store.profileFiles[name]?.contains { $0 != main } == true ? .removeChanges : .delete
+        let main = store.configurationStore.configurationURL.standardizedFileURL.path
+        return store.configurationStore.profileFiles[name]?.contains { $0 != main } == true ? .removeChanges : .delete
     }
 
     func deleteProfile(_ name: String) {
         endProfileEditing()
         do {
             error = nil
-            store.flushCustomization()
-            guard try store.customizationProfiles().contains(where: { $0.name == name }) else {
+            store.configurationStore.flushCustomization()
+            guard try store.configurationStore.customizationProfiles().contains(where: { $0.name == name }) else {
                 throw CommandFailure(message: "Save command-line changes before editing this profile.")
             }
             let removal = profileRemoval(name)
@@ -354,7 +354,7 @@ final class ConfigurationEditor {
             }
             var properties: [String: ConfigurationValue] = ["profiles": .object([name: .null])]
             // A pin that names a missing profile fails to load.
-            if removal == .delete, try store.editedMainDocument(replaying: store.customizationEdits)["profile"] == .string(name) {
+            if removal == .delete, try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)["profile"] == .string(name) {
                 properties["profile"] = .null
             }
             change(ConfigurationEdit(action: .unset, properties: properties))
@@ -363,7 +363,7 @@ final class ConfigurationEditor {
     }
 
     private func mainFileDefinesProfile(_ name: String) throws -> Bool {
-        try store.editedMainDocument(replaying: store.customizationEdits)["profiles"]?
+        try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)["profiles"]?
             .decoded([[String: ConfigurationValue]].self).contains { $0["name"] == .string(name) } == true
     }
 

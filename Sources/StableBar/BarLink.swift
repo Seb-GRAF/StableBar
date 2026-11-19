@@ -289,7 +289,7 @@ extension BarLink {
     /// The theme the screens of `kind` use, with the main file's look merged in as Save as Theme merges it, resolved
     /// for the active profiles.
     @MainActor private static func look(of store: BarStore, on kind: ScreenKind) throws -> ThemeLink {
-        var main = try store.editedMainDocument(replaying: store.customizationEdits)
+        var main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
         let screen = try main["screens"]?.decoded([String: [String: ConfigurationValue]].self)[kind.rawValue] ?? [:]
         for key in ["bar", "tokens", "defaults", "popupDefaults", "groupDefaults", "roles", "workspaceDefaults"] {
             if let value = screen[key] { main[key] = value.overriding(main[key] ?? .object([:])) }
@@ -298,7 +298,7 @@ extension BarLink {
         let selection = try (screens[kind.rawValue]?["theme"] ?? store.effectiveDocument["theme"])?.decoded(WidgetPackageSelection.self)
         let enabled = selection?.enabled == true ? selection : nil
         let key = enabled?.key ?? "built-in"
-        guard let current = ThemeCatalog(packages: store.packageStoreClient.packages.directory, themesDirectory: store.themesDirectory,
+        guard let current = ThemeCatalog(packages: store.packageStoreClient.packages.directory, themesDirectory: store.configurationStore.themesDirectory,
                                          selectedKey: key).choices.first(where: { $0.key == key }) else {
             throw CommandFailure(message: "The theme \(key) isn’t installed.")
         }

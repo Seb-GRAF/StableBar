@@ -88,9 +88,9 @@ final class ApplicationMoveLaunchResume {
     var pendingKind: ApplicationMoveResume.Kind? { record?.kind }
 
     func load(for store: BarStore, from resumeStore: ApplicationMoveResumeStore = ApplicationMoveResumeStore()) {
-        record = resumeStore.take(configuration: store.sharedConfigurationURL, barConfiguration: store.configurationURL)
+        record = resumeStore.take(configuration: store.configurationStore.sharedConfigurationURL, barConfiguration: store.configurationStore.configurationURL)
         wasResuming = record != nil
-        if let record { store.sessionEdits = record.edits.map(\.restored) }
+        if let record { store.configurationStore.sessionEdits = record.edits.map(\.restored) }
     }
 
     func take(for kind: ApplicationMoveResume.Kind) -> ApplicationMoveResume? {

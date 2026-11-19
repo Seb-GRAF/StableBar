@@ -87,7 +87,7 @@ final class WidgetPlacementTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(55)])])
+        try store.configurationStore.setSessionEdits([.init(action: .bar, properties: ["height": .number(55)])])
         let before = try Data(contentsOf: fixture.url)
         let setup = WidgetSetup(store: store)
         try setup.move("b", to: .right)
@@ -100,7 +100,7 @@ final class WidgetPlacementTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         try store.customizationHistory.redo()
         XCTAssertEqual(store.configuration?.widgets.map(\.id), ["c", "a", "b"])
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testIncludedTemplateAndProfileWidgetsMoveThroughOverridesAndWidgetOrder() throws {
@@ -187,7 +187,7 @@ final class WidgetPlacementTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("clock"), "position": .string("right")])])
+        try store.configurationStore.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("clock"), "position": .string("right")])])
         let before = try Data(contentsOf: fixture.url)
         XCTAssertThrowsError(try WidgetSetup(store: store).move("temporary", to: .right, before: "root"))
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)

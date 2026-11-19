@@ -148,7 +148,7 @@ struct SetupTourView: View {
         .task {
             guard let configuration = session.store.configuration else { return }
             let themes = session.themes.filter { $0.isBundled && ["phosphor", "leman", "catppuccin"].contains($0.manifest.id) && $0.key != session.currentThemeKey }
-            let directory = session.store.themesDirectory
+            let directory = session.store.configurationStore.themesDirectory
             let previews = await Task.detached {
                 themes.compactMap { theme in
                     (try? ThemePreview(choice: theme, themesDirectory: directory)).map { (name: theme.title, look: $0.dark) }
@@ -671,9 +671,9 @@ struct SetupTourView: View {
 
     private var themes: some View {
         let choices = session.themes
-        let selected = session.store.selectedThemeKey
+        let selected = session.store.configurationStore.selectedThemeKey
         let index = choices.firstIndex { $0.key == selected } ?? 0
-        let appearance = session.store.configuration?.bar.appearance ?? (session.store.context.appearance == "dark" ? .dark : .light)
+        let appearance = session.store.configuration?.bar.appearance ?? (session.store.configurationStore.context.appearance == "dark" ? .dark : .light)
         return HStack(spacing: 16) {
             roundButton("chevron.left", label: "Previous theme") {
                 choose(choices[(index + choices.count - 1) % choices.count])

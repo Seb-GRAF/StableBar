@@ -49,9 +49,9 @@ final class WidgetScripts {
             let provider = next.providers[name]!
             var environment = next.environment
             environment["NAME"] = name
-            environment["CONFIG_DIR"] = store.configurationURL.deletingLastPathComponent().path
+            environment["CONFIG_DIR"] = store.configurationStore.configurationURL.deletingLastPathComponent().path
             environment["STABLEBAR"] = Bundle.main.executablePath
-            environment["STABLEBAR_CONFIG"] = store.sharedConfigurationURL.path
+            environment["STABLEBAR_CONFIG"] = store.configurationStore.sharedConfigurationURL.path
             if let events = store.registry[provider.type]?.events, !events.isEmpty {
                 script.onOutputChange = { [weak self, weak script] previous, output in
                     for event in events {
@@ -183,9 +183,9 @@ final class WidgetScripts {
         guard let store else { return [:] }
         var environment = configuration.environment.merging(widget.environment) { _, widget in widget }
         environment["NAME"] = widget.id
-        environment["CONFIG_DIR"] = store.configurationURL.deletingLastPathComponent().path
+        environment["CONFIG_DIR"] = store.configurationStore.configurationURL.deletingLastPathComponent().path
         environment["STABLEBAR"] = Bundle.main.executablePath
-        environment["STABLEBAR_CONFIG"] = store.sharedConfigurationURL.path
+        environment["STABLEBAR_CONFIG"] = store.configurationStore.sharedConfigurationURL.path
         return environment
     }
 

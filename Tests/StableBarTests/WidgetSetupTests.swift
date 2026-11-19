@@ -8,7 +8,7 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let original = try fixture.document()["widgets"]
         let editor = ConfigurationEditor(store: store)
         editor.editBar(for: "work")
@@ -94,11 +94,11 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([
+        try store.configurationStore.setSessionEdits([
             .init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"), "text": .string("Temporary"), "position": .string("right")]),
             .init(action: .reorder, ids: ["temporary"])
         ])
-        try store.setCustomizationEdits([
+        try store.configurationStore.setCustomizationEdits([
             .init(action: .set, id: "pending", properties: ["position": .string("right")]),
             .init(action: .reorder, ids: ["pending", "first"])
         ])
@@ -110,7 +110,7 @@ final class WidgetSetupTests: XCTestCase {
         let id = try XCTUnwrap(result)
         XCTAssertEqual(store.configuration?.widgets.filter { $0.id != "temporary" }.map(\.id), [id, "pending", "first"])
         XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
-        XCTAssertEqual(store.sessionEdits.count, 2)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 2)
     }
 
     @MainActor func testAddingBeforeAMemberOfTheFirstUnitDoesNotSplitItsGroup() async throws {
@@ -158,7 +158,7 @@ final class WidgetSetupTests: XCTestCase {
         _ = try await index.add(id: "power", kind: "widgets", configuration: #"{"groups":{"power":{}},"widgets":[{"id":"battery","type":"battery","position":"left","group":"power"},{"id":"charge","type":"battery","position":"left","group":"power"}]}"#)
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        try store.configurationStore.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
         let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
         await setup.load()
         let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "power" })
@@ -196,7 +196,7 @@ final class WidgetSetupTests: XCTestCase {
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(FileManager.default.fileExists(atPath: installed.path))
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testEachPlusAddsAtItsOpenSideInOneUndoStepIncludingEmptyGroups() async throws {
@@ -225,7 +225,7 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+        try store.configurationStore.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
                                                                   "text": .string("Temporary"), "position": .string("left")])])
         let setup = WidgetSetup(store: store)
         let before = try Data(contentsOf: fixture.url)
@@ -233,12 +233,12 @@ final class WidgetSetupTests: XCTestCase {
         let id = try XCTUnwrap(result)
         XCTAssertEqual(store.configuration?.widgets.filter { $0.position == .right }.map(\.id), [id, "first"])
         XCTAssertTrue(store.configuration?.widgets.contains { $0.id == "temporary" } == true)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testCommandFreePackageAddsBeforeThePlusAnchorWithoutReview() async throws {
@@ -527,7 +527,7 @@ final class WidgetSetupTests: XCTestCase {
             let setup = WidgetSetup(store: store, client: client)
             _ = try setup.enable(installed, settings: ["message": .string("Saved")], position: .left)
             if temporary {
-                try store.setSessionEdits([.init(action: .package, properties: ["id": .string("note"), "version": .string("1"),
+                try store.configurationStore.setSessionEdits([.init(action: .package, properties: ["id": .string("note"), "version": .string("1"),
                     "settings": .object(["message": .string("Temporary")])])])
             }
             await setup.load()
@@ -540,7 +540,7 @@ final class WidgetSetupTests: XCTestCase {
             XCTAssertEqual(store.configuration?.widgets.first?.content, .text(temporary ? "Temporary" : "Saved"))
             XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
             XCTAssertTrue(store.customizationHistory.notice?.contains("already on the bar") == true)
-            XCTAssertEqual(store.sessionEdits.count, temporary ? 1 : 0)
+            XCTAssertEqual(store.configurationStore.sessionEdits.count, temporary ? 1 : 0)
         }
     }
 
@@ -573,7 +573,7 @@ final class WidgetSetupTests: XCTestCase {
     try fixture.write(#"{"widgets":[],"packages":[{"id":"on-bar","version":"1"}]}"#, to: fixture.url)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
     var system = SetupSystem()
     system.isTrusted = { true }

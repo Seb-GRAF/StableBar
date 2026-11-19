@@ -215,8 +215,8 @@ extension WidgetGrouping {
                   contributions: store.contributions,
                   defaults: configuration?.defaults ?? WidgetStyle(), groupDefaults: configuration?.groupDefaults ?? WidgetStyle(),
                   origins: store.origins,
-                  mainFile: store.configurationURL.standardizedFileURL.path,
+                  mainFile: store.configurationStore.configurationURL.standardizedFileURL.path,
                   editingProfile: store.customizationHistory.editingProfile,
-                  mainDocument: { [weak store] in try store?.editedMainDocument(replaying: store?.customizationEdits) ?? [:] })
+                  mainDocument: { [weak store] in try store?.configurationStore.editedMainDocument(replaying: store?.configurationStore.customizationEdits) ?? [:] })
     }
 }

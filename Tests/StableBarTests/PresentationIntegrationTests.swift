@@ -1098,7 +1098,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
     store.workspaceStore.executablePath = { executable.path }
     store.activeApp = nil
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop() }
     for _ in 0..<100 {
         if store.widgetScripts.scripts["music"]?.output.fields?["track"] != nil && store.workspaceStore.mode == "main" { break }
@@ -1160,7 +1160,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     popup.toggle(try #require(time.popupName.flatMap { configuration.popups[$0] }), widget: time,
         defaults: configuration.popupDefaults.popupStyle(over: configuration.defaults), store: store, anchor: try #require(external.anchors("time").first))
     #expect(popup.isOpen)
-    try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["appearance": .string("light")])], persist: false)
     #expect(!popup.isOpen)
     #expect(store.workspaceStore.mode == "tailing")
     #expect(store.widgetScripts.providers["sample"] === shared && source.starts == 1)
@@ -1185,7 +1185,7 @@ func popupDrawsItsOwnShadowInAWindowBehindIt(shadowColor: String?) async throws 
     popup.toggle(try #require(light.popups["music"]), widget: music, defaults: light.popupDefaults.popupStyle(over: light.defaults),
                  store: store, anchor: try #require(external.anchors("music").first))
     #expect(popup.isOpen)
-    try store.applyEdits([ConfigurationEdit(action: .theme)], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .theme)], persist: false)
     #expect(!popup.isOpen)
     #expect(store.workspaceStore.mode == "tailing")
     #expect(store.barPresentation.barStyle.borderEdges != .all)

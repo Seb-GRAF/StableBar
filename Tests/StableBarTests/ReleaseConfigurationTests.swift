@@ -29,7 +29,7 @@ func everyReleasedStarterConfigurationStillLoads(_ name: String) throws {
     try migrateEarlierColors(fixture.url)
     try migrateEarlierBelowMenuBarOffset(fixture.url, offsets: [22, 24])
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.configurationWarning == nil)
     #expect(store.configuration?.widgets.isEmpty == false)

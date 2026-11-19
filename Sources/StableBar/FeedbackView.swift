@@ -237,7 +237,7 @@ struct FeedbackView: View {
 
     private func investigate(_ agent: TriageAgent) {
         do {
-            let terminal = try Triage.openInTerminal(agent, configuration: store.configurationURL, notes: editor.feedback.markdown)
+            let terminal = try Triage.openInTerminal(agent, configuration: store.configurationStore.configurationURL, notes: editor.feedback.markdown)
             notice = "\(agent.label) is starting in \(terminal)."
         } catch {
             notice = "Couldn't open a terminal: \(error.localizedDescription)"

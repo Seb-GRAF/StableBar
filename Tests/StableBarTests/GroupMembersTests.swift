@@ -169,14 +169,14 @@ private func inPill(_ configuration: Configuration?) -> [String] {
     try fixture.write(#"{"theme":{"id":"test-theme","version":"1"},\#(clocks)}"#, to: fixture.url)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(inPill(store.configuration) == ["time", "date"])
 
-    try store.tryTheme(other)
+    try store.configurationStore.tryTheme(other)
     #expect(store.configurationError == nil)
     #expect(inPill(store.configuration) == [])
-    store.endThemeTrial()
+    store.configurationStore.endThemeTrial()
     #expect(inPill(store.configuration) == ["time", "date"])
 
     try fixture.write(#"{"theme":{"id":"test-theme","version":"1","enabled":false},\#(clocks)}"#, to: fixture.url)

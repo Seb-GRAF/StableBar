@@ -63,7 +63,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     """#.utf8).write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<100 {
         if store.widgetScripts.scripts["jobs"]?.output.text == "Busy" { break }
         try await Task.sleep(for: .milliseconds(20))

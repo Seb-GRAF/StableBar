@@ -296,7 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Read the small defaults record before the menu or runtime control can open either window.
-        store.prepareScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
+        store.configurationStore.prepareScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         applicationMoveResume.load(for: store)
         MenuBarAutoHide.forgetIfShown()
         endMenuBarReveals()
@@ -345,7 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 }
                 return try store.handle(request)
             }
-            try control.start(url: store.sharedConfigurationURL)
+            try control.start(url: store.configurationStore.sharedConfigurationURL)
             self.control = control
         } catch {
             FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))
@@ -375,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     if (try? await environment.value) != nil { store.loginShellEnvironmentLoaded() }
                 }
             }
-            systemContext = SystemContext { [store] in store.refreshContext() }
+            systemContext = SystemContext { [store] in store.configurationStore.refreshContext() }
             systemContext!.start()
             systemContext!.watch(store.profiles.filter(\.enabled))
             if let kind = applicationMoveResume.pendingKind {
@@ -414,8 +414,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         themeTrial.cancel()
         store.popup.close()
         store.widgetScripts.retainDisplays(Set(NSScreen.screens.map { BarDisplay(screen: $0).id }))
-        store.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
-        store.refreshContext()
+        store.configurationStore.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
+        store.configurationStore.refreshContext()
         updatePanels()
         store.workspaceStore.refreshForDisplayChange()
     }
@@ -441,7 +441,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func sessionBecameActive() { store.widgetScripts.setPaused(false, because: .sessionInactive) }
 
     func clearanceDisplay(frame: CGRect, visibleFrame: CGRect, display: BarDisplay, desktopTop: CGFloat) -> WindowClearanceDisplay? {
-        guard let configuration = store.clearanceConfiguration else { return nil }
+        guard let configuration = store.configurationStore.clearanceConfiguration else { return nil }
         return WindowClearanceDisplay(frame: frame, visibleFrame: visibleFrame, configuration: configuration,
                                       display: display, desktopTop: desktopTop)
     }
@@ -512,8 +512,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menuBarStrip.update(panels: panels)
         editingControls.update(store: store, bars: panels, visibleFrames: visibleFrames)
-        store.windowClearance.update(windows: !hidden && store.clearanceConfiguration?.bar.keepWindowsClear == true,
-                                     notifications: !hidden && store.clearanceConfiguration?.bar.keepNotificationsClear == true,
+        store.windowClearance.update(windows: !hidden && store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true,
+                                     notifications: !hidden && store.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == true,
                                      displays: clearanceDisplays)
         store.menuBarDelay.update(milliseconds: config.bar.menuBarRevealDelay, menuBars: screens.map {
             CGRect(x: $0.frame.minX, y: screens[0].frame.maxY - $0.frame.maxY, width: $0.frame.width,
@@ -644,7 +644,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         store.barEditing.end()
         themeTrial.cancel()
-        store.flushCustomization()
+        store.configurationStore.flushCustomization()
         return .terminateNow
     }
 

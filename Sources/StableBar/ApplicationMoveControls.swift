@@ -44,8 +44,8 @@ final class ApplicationMoveController {
 
     func resumeFromSettings(store: BarStore) -> ApplicationMoveResume? {
         guard canMoveFromSettings(setupIsOpen: store.barEditing.setupIsOpen) else { return nil }
-        return ApplicationMoveResume(kind: .settings, configuration: store.sharedConfigurationURL,
-            barConfiguration: store.configurationURL, edits: store.sessionEdits.map(ApplicationMoveResume.Edit.init))
+        return ApplicationMoveResume(kind: .settings, configuration: store.configurationStore.sharedConfigurationURL,
+            barConfiguration: store.configurationStore.configurationURL, edits: store.configurationStore.sessionEdits.map(ApplicationMoveResume.Edit.init))
     }
 
     static let setupHint = "Use Finishing touches in setup to move StableBar to Applications."

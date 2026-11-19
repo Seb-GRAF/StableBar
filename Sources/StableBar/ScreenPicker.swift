@@ -72,7 +72,7 @@ struct ScreenBand: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Editing the bar on").font(.system(size: 11)).foregroundStyle(.secondary)
                 Text(screen.screenTitle).font(.system(size: 15, weight: .semibold)).padding(.top, 1).padding(.bottom, 3)
-                if let setup = store.screenSetup {
+                if let setup = store.configurationStore.screenSetup {
                     HStack(spacing: 8) {
                         setupMenu(setup)
                         ProfilePicker(editor: editor)
@@ -104,12 +104,12 @@ struct ScreenBand: View {
     private func setupMenu(_ setup: ScreenSetup) -> some View {
         let displays = NSScreen.screens.map(BarDisplay.init)
         let connected = ScreenSetup(displays)
-        let ownBars = store.screenSetupsWithOwnBars
+        let ownBars = store.configurationStore.screenSetupsWithOwnBars
         let name = { (setup: ScreenSetup) in setup.title + (setup == connected ? " (connected)" : "") }
         return Menu {
-            ForEach(store.screenSetupsToEdit(connected: displays), id: \.fileName) { option in
+            ForEach(store.configurationStore.screenSetupsToEdit(connected: displays), id: \.fileName) { option in
                 Toggle("\(name(option)) · \(ownBars.contains(option) ? "own bar" : "shared bar")",
-                       isOn: Binding(get: { option == setup }, set: { _ in store.showScreenSetup(option) }))
+                       isOn: Binding(get: { option == setup }, set: { _ in store.configurationStore.showScreenSetup(option) }))
             }
             Divider()
             if ownBars.contains(setup) {
@@ -119,7 +119,7 @@ struct ScreenBand: View {
                 Menu("Copy bar from") {
                     Button("The shared bar") { giveOwnBar() }
                     ForEach(ownBars, id: \.fileName) { other in
-                        Button(other.title) { giveOwnBar(copying: store.ownBarURL(for: other)) }
+                        Button(other.title) { giveOwnBar(copying: store.configurationStore.ownBarURL(for: other)) }
                     }
                 }
             }
@@ -132,7 +132,7 @@ struct ScreenBand: View {
     }
 
     private func giveOwnBar(copying source: URL? = nil) {
-        do { try store.giveScreenSetupItsOwnBar(copying: source) }
+        do { try store.configurationStore.giveScreenSetupItsOwnBar(copying: source) }
         catch { editor.error = errorMessage(error) }
     }
 }
@@ -146,8 +146,8 @@ struct ScreenSetupPopover: View {
     private var store: BarStore { editor.store }
 
     var body: some View {
-        let ownsBar = store.configurationURL != store.sharedConfigurationURL
-        let others = store.screenSetupsWithOwnBars.filter { $0 != setup }
+        let ownsBar = store.configurationStore.configurationURL != store.configurationStore.sharedConfigurationURL
+        let others = store.configurationStore.screenSetupsWithOwnBars.filter { $0 != setup }
         VStack(alignment: .leading, spacing: 9) {
             Text(title).font(.system(size: 12.5, weight: .semibold))
             Text(ownsBar
@@ -160,7 +160,7 @@ struct ScreenSetupPopover: View {
                     Button("Use the shared bar again…") { useSharedBar(setup) }
                 } else {
                     Button("Give them their own bar") {
-                        do { try store.giveScreenSetupItsOwnBar() }
+                        do { try store.configurationStore.giveScreenSetupItsOwnBar() }
                         catch { editor.error = errorMessage(error) }
                         dismiss()
                     }
@@ -260,7 +260,7 @@ private struct ScreenThumbnail: View {
         Toggle("Own layout and size for this screen", isOn: Binding(get: { split }, set: { own in
             change { own ? try setup.splitScreen(kind) : try setup.joinScreen(kind) }
         }))
-        let others = ScreenKind.allCases.filter { $0 != kind && store.screenSetup?.kinds.contains($0) == true }
+        let others = ScreenKind.allCases.filter { $0 != kind && store.configurationStore.screenSetup?.kinds.contains($0) == true }
         if !others.isEmpty {
             Menu("Copy from") {
                 ForEach(others, id: \.self) { other in

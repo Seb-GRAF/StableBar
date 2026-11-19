@@ -87,7 +87,7 @@ final class PackageLibrary {
     init(store: BarStore, client: PackageStoreClient? = nil, reviewing: Bool = false, preferences: UserDefaults = .standard) {
         self.store = store
         self.client = client ?? store.packageStoreClient
-        self.packages = WidgetPackageStore(directory: store.configurationURL.deletingLastPathComponent().appending(path: "packages"))
+        self.packages = WidgetPackageStore(directory: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"))
         self.reviewing = reviewing
         self.preferences = preferences
         notifiesAboutUpdates = preferences.object(forKey: "notifyPackageUpdates") as? Bool ?? true
@@ -260,9 +260,9 @@ final class PackageLibrary {
             var edits = [selectionEdit]
             if manifest.kind != .theme && selection.enabled {
                 var loader = ConfigurationLoader()
-                loader.themesDirectory = store.themesDirectory
-                let root = try store.editedDocument([selectionEdit], replaying: [])
-                let configured = try loader.load(store.configurationURL, data: configurationData(root), context: store.context)
+                loader.themesDirectory = store.configurationStore.themesDirectory
+                let root = try store.configurationStore.editedDocument([selectionEdit], replaying: [])
+                let configured = try loader.load(store.configurationStore.configurationURL, data: configurationData(root), context: store.configurationStore.context)
                 let previous = store.configuration!.widgets
                 let ids = draft.inspection.widgets.map(\.id)
                 for widget in previous where ids.contains(widget.id) {
@@ -434,7 +434,7 @@ final class PackageLibrary {
 
     private func preview(_ inspection: WidgetPackageInspection) async throws -> PackagePreviewData {
         let screenshot = try await client.screenshotData(for: inspection)
-        let themesDirectory = store?.themesDirectory
+        let themesDirectory = store?.configurationStore.themesDirectory
         let theme = try await Task.detached { () throws -> ThemePreview? in
             if inspection.manifest.kind == .theme {
                 return try ThemePreview(choice: ThemeChoice(manifest: inspection.manifest, directory: inspection.directory, isBundled: false),
@@ -706,7 +706,7 @@ final class PackageLibrary {
     func uninstall(_ manifest: WidgetPackageManifest) async {
         guard let store else { return }
         do {
-            try store.uninstallPackage(id: manifest.id, version: manifest.version, fromCustomization: true)
+            try store.configurationStore.uninstallPackage(id: manifest.id, version: manifest.version, fromCustomization: true)
             drafts[manifest.versionKey] = nil
             await loadInstalled()
             if draft?.inspection.manifest.versionKey == manifest.versionKey {
@@ -738,7 +738,7 @@ extension PackageLibrary {
 
     /// Only sources the main configuration file defines can be edited; one from an include is read-only.
     func isEditable(_ source: PackageSource) -> Bool {
-        guard !source.isStore, let main = try? store?.editedMainDocument(),
+        guard !source.isStore, let main = try? store?.configurationStore.editedMainDocument(),
               let sources = try? main["packageSources"]?.decoded([[String: ConfigurationValue]].self) else { return false }
         return sources.contains { $0["id"] == .string(source.id) }
     }

@@ -308,10 +308,10 @@ final class SetupSession {
     init(store: BarStore, system: SetupSystem = SetupSystem(), resume: ApplicationMoveResume? = nil,
          applicationMove: ApplicationMoveController? = nil) {
         self.store = store
-        clearanceHold = ClearanceHold(configuration: store.clearanceConfiguration)
+        clearanceHold = ClearanceHold(configuration: store.configurationStore.clearanceConfiguration)
         self.system = system
         let check = system.checkWorkspaces
-        let configuration = store.configurationURL
+        let configuration = store.configurationStore.configurationURL
         workspaceConnection = SetupWorkspaceConnection { await check($0, configuration) }
         self.applicationMove = applicationMove ?? ApplicationMoveController(error: resume?.failure)
         let loginStatus = system.loginStatus()
@@ -325,18 +325,18 @@ final class SetupSession {
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
         hasNotchedDisplay = system.hasNotchedDisplay()
-        currentThemeKey = store.selectedThemeKey
-        themes = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                              themesDirectory: store.themesDirectory, selectedKey: currentThemeKey).choices
+        currentThemeKey = store.configurationStore.selectedThemeKey
+        themes = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                              themesDirectory: store.configurationStore.themesDirectory, selectedKey: currentThemeKey).choices
             .onePerTheme(keeping: [currentThemeKey])
         // Until a setup finishes, Spaces on the first launch's starter stands in for a manager it didn't find, so setup
         // looks again.
-        let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+        let document = try? JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationStore.configurationURL))
         let provisional = !system.defaults.bool(forKey: SetupProgress.completedKey) && document.map(SetupPreferences.isFirstLaunchSpacesStarter) == true
         workspaceSource = system.workspaceSource(provisional ? nil : store.namedWorkspaceSource)
         let bar = try? store.effectiveDocument["bar"]?.decoded([String: ConfigurationValue].self)
         recommendsWindowClearance = workspaceSource == .spaces && !system.windowManagerRuns() && bar?["keepWindowsClear"] == nil
-        sessionEdits = resume.map { $0.edits.map(\.restored) } ?? store.sessionEdits
+        sessionEdits = resume.map { $0.edits.map(\.restored) } ?? store.configurationStore.sessionEdits
         previewEditCount = sessionEdits.count
         // Restoring preferences can preview them immediately, so clearance must already be held.
         store.windowClearance.hold = clearanceHold
@@ -354,13 +354,13 @@ final class SetupSession {
 
     /// Moving is for Open at login, but registering it still waits for Finish setup, just like the switch.
     func resumeAfterMoving() -> ApplicationMoveResume {
-        ApplicationMoveResume(kind: .setup, configuration: store.sharedConfigurationURL.standardizedFileURL,
-            barConfiguration: store.configurationURL.standardizedFileURL,
+        ApplicationMoveResume(kind: .setup, configuration: store.configurationStore.sharedConfigurationURL.standardizedFileURL,
+            barConfiguration: store.configurationStore.configurationURL.standardizedFileURL,
             setup: .init(step: step, preferences: preferences, preset: preset, openAtLogin: true,
                          placementChoice: placementChoice, placementAwaitingAccess: placementAwaitingAccess,
                          menuBarHidAtStart: menuBarHidAtStart, stableBarHidMenuBarAtStart: stableBarHidMenuBarAtStart,
                          opensAtLoginAtStart: opensAtLoginAtStart),
-            edits: (sessionEdits + store.sessionEdits.dropFirst(previewEditCount)).map(ApplicationMoveResume.Edit.init))
+            edits: (sessionEdits + store.configurationStore.sessionEdits.dropFirst(previewEditCount)).map(ApplicationMoveResume.Edit.init))
     }
 
     /// Chooses `preset`, as its tile does, or the current bar again when it's the chosen one. On a Mac without an
@@ -576,10 +576,10 @@ final class SetupSession {
         if needsCalendarSetup { shown.deferMeetings = true }
         do {
             var loader = ConfigurationLoader()
-            let base = try loader.load(store.configurationURL, context: store.context)
-            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationURL))
+            let base = try loader.load(store.configurationStore.configurationURL, context: store.configurationStore.context)
+            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: store.configurationStore.configurationURL))
             let edits = try sessionEdits + shown.edits(in: base, document: document)
-            try store.setSessionEdits(edits)
+            try store.configurationStore.setSessionEdits(edits)
             previewEditCount = edits.count
             self.base = base
             error = nil
@@ -706,8 +706,8 @@ final class SetupSession {
         // the restore below waits for that change.
         _ = placing.handle(.skipped)
         system.defaults.set(true, forKey: SetupProgress.skippedKey)
-        store.sessionEdits = sessionEdits
-        store.reloadConfiguration()
+        store.configurationStore.sessionEdits = sessionEdits
+        store.configurationStore.reloadConfiguration()
         releaseClearanceConfiguration()
         // Setup has closed by the time the restore could fail, so nothing shows the error. Settings → General shows
         // the menu bar setting as it is and changes it.
@@ -724,10 +724,10 @@ final class SetupSession {
         var saved = false
         do {
             if needsCalendarSetup { preferences.deferMeetings = true }
-            try applied.save(to: store.configurationURL, context: store.context)
+            try applied.save(to: store.configurationStore.configurationURL, context: store.configurationStore.context)
             saved = true
-            store.sessionEdits = sessionEdits
-            store.reloadConfiguration()
+            store.configurationStore.sessionEdits = sessionEdits
+            store.configurationStore.reloadConfiguration()
             if let error = store.configurationError { throw CommandFailure(message: error) }
             // The file is saved and loads, so clearance follows it even if Open at login fails below.
             releaseClearanceConfiguration()

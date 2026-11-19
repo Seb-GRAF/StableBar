@@ -66,7 +66,7 @@ final class BarEditing {
         guard isAvailable, !isActive, let store else { return }
         store.onEndCustomizationEditing?()
         store.onWindowRequest?(.endThemeTrial)
-        store.endThemeTrial()
+        store.configurationStore.endThemeTrial()
         store.popup.close()
         error = nil
         errorDisplayID = nil

@@ -288,8 +288,8 @@ struct BarInspector: View {
                 }
                 bar.number("Margin", "margin", default: 0, in: 0...40, hint: "Floats the bar in from the screen edges")
             }
-            if let setup = store.screenSetup {
-                let ownsBar = store.configurationURL != store.sharedConfigurationURL
+            if let setup = store.configurationStore.screenSetup {
+                let ownsBar = store.configurationStore.configurationURL != store.configurationStore.sharedConfigurationURL
                 let screens = kinds.map(\.name).joined(separator: " + ")
                 SettingsGroup("These screens") {
                     SettingRow(title: ownsBar ? "\(screens) \(setup.kinds.count == 1 ? "has its" : "have their") own bar"

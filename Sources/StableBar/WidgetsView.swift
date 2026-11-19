@@ -52,7 +52,7 @@ struct WidgetsView: View {
 
     private var store: BarStore { editor.store }
     private var widgets: [WidgetConfiguration] { store.configuration?.onScreen(screen).widgets ?? [] }
-    private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.screenSetup?.kinds.contains($0) == true } }
+    private var kinds: [ScreenKind] { ScreenKind.allCases.filter { store.configurationStore.screenSetup?.kinds.contains($0) == true } }
     private var screen: ScreenKind { kinds.contains(editor.barScreen) ? editor.barScreen : kinds.first ?? editor.barScreen }
     private var selectedWidget: String? { editor.barItem == .widget ? editor.selectedID : nil }
     private var selectedGroup: String? { editor.barItem == .group ? editor.selectedGroup : nil }
@@ -86,7 +86,7 @@ struct WidgetsView: View {
         .confirmationDialog("Use the shared bar for \(sharing?.title.lowercased() ?? "")?", isPresented: Binding(
             get: { sharing != nil }, set: { if !$0 { sharing = nil } }), presenting: sharing) { setup in
             Button("Use Shared Bar") {
-                do { try store.useSharedBar(for: setup) }
+                do { try store.configurationStore.useSharedBar(for: setup) }
                 catch { editor.error = errorMessage(error) }
             }
         } message: { _ in

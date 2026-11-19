@@ -61,7 +61,7 @@ final class ThemeGallery {
         self.loadPreview = loadPreview
     }
 
-    var selectedKey: String { store.selectedThemeKey }
+    var selectedKey: String { store.configurationStore.selectedThemeKey }
 
     var linkedThemeIsActive: Bool {
         switch store.pendingLinks.theme?.state {
@@ -108,7 +108,7 @@ final class ThemeGallery {
     }
 
     var previewAppearance: BarAppearance {
-        store.configuration?.bar.appearance ?? (store.context.appearance == "dark" ? .dark : .light)
+        store.configuration?.bar.appearance ?? (store.configurationStore.context.appearance == "dark" ? .dark : .light)
     }
 
     func contextChanged() { updateOverrides() }
@@ -131,8 +131,8 @@ final class ThemeGallery {
     }
 
     private func buildPreviews(generation: Int) async {
-        let catalog = ThemeCatalog(packages: store.configurationURL.deletingLastPathComponent().appending(path: "packages"),
-                                   themesDirectory: store.themesDirectory, selectedKey: store.selectedThemeKey)
+        let catalog = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
+                                   themesDirectory: store.configurationStore.themesDirectory, selectedKey: store.configurationStore.selectedThemeKey)
         let choices = await Task.detached { catalog.choices }.value
         let records = (try? await client.records()) ?? records
         let sources = await client.sources
@@ -143,7 +143,7 @@ final class ThemeGallery {
         let uninstalled = downloaded.filter { _, choice in !choices.contains { $0.key == choice.key } }
         let missing = (choices.map { ($0.key, $0) } + uninstalled.map { ($0.key, $0.value) }).filter { previews[$0.0] == nil }
         let loadPreview = loadPreview
-        let themesDirectory = store.themesDirectory
+        let themesDirectory = store.configurationStore.themesDirectory
         let results = await Task.detached {
             missing.map { key, choice in
                 (key, Result { try loadPreview(choice, themesDirectory) })
@@ -168,7 +168,7 @@ final class ThemeGallery {
 
     private func previewResult(for choice: ThemeChoice) async -> Result<ThemePreview, Error> {
         let loadPreview = loadPreview
-        let themesDirectory = store.themesDirectory
+        let themesDirectory = store.configurationStore.themesDirectory
         return await Task.detached { Result { try loadPreview(choice, themesDirectory) } }.value
     }
 
@@ -202,9 +202,9 @@ final class ThemeGallery {
         overrides = ThemeOverrides(main: [:], theme: [:], widgets: [])
         guard let selected = overrideTheme else { return }
         do {
-            let theme = try selected.overrideLayer(settings: store.themeSettings(for: selected, in: store.effectiveDocument),
+            let theme = try selected.overrideLayer(settings: store.configurationStore.themeSettings(for: selected, in: store.effectiveDocument),
                                                    activeProfiles: store.activeProfiles)
-            var main = try store.editedMainDocument(replaying: store.customizationEdits)
+            var main = try store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)
             if let profile = store.customizationHistory.editingProfile {
                 main = try main["profiles"]?.decoded([ConfigurationProfile].self).first { $0.name == profile }?.configuration ?? [:]
             }
@@ -214,8 +214,8 @@ final class ThemeGallery {
     }
 
     func select(_ choice: ThemeChoice, on kind: ScreenKind? = nil, everyBar: Bool = false) {
-        store.endThemeTrial()
-        perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
+        store.configurationStore.endThemeTrial()
+        perform(on: choice.key) { try store.configurationStore.applyTheme(choice, on: kind, everyBar: everyBar) }
         configurationChanged()
     }
 
@@ -253,7 +253,7 @@ final class ThemeGallery {
             if !choices.contains(where: { $0.key == choice.key }) { choices.append(choice) }
             if previews[choice.key] == nil, let preview = previews[key] { previews[choice.key] = preview }
             progress[key] = "Applying…"
-            perform(on: choice.key) { try store.applyTheme(choice, on: kind, everyBar: everyBar) }
+            perform(on: choice.key) { try store.configurationStore.applyTheme(choice, on: kind, everyBar: everyBar) }
         } catch { errors[key] = errorMessage(error) }
     }
 
@@ -264,8 +264,8 @@ final class ThemeGallery {
         do {
             var loader = ConfigurationLoader()
             let theme = try loader.readPackage(at: current.directory, manifest: current.manifest,
-                                               settings: store.themeSettings(for: current)).values
-            let saved = try savingLook(of: store.editedMainDocument(replaying: store.customizationEdits), into: theme)
+                                               settings: store.configurationStore.themeSettings(for: current)).values
+            let saved = try savingLook(of: store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits), into: theme)
             let id = packageSlug(name)
             let versions = try await client.installed().filter { $0.id == id }.map(\.version)
             var patch = 0
@@ -282,7 +282,7 @@ final class ThemeGallery {
             let choice = ThemeChoice(manifest: installed.manifest, directory: installed.directory, isBundled: false)
             choices.append(choice)
             perform(on: key) {
-                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: saved.removal), store.themeEdit(for: choice)],
+                try store.customizationHistory.change([ConfigurationEdit(action: .unset, properties: saved.removal), store.configurationStore.themeEdit(for: choice)],
                                                       everyBar: everyBar)
             }
         } catch { errors[key] = errorMessage(error) }

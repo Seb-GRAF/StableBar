@@ -104,7 +104,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     """##.utf8).write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<100 {
         if store.barPresentation.barStyle.background == .color(HexColor(0x00ff00ff)) { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -171,7 +171,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     ]]]).write(to: url, options: .atomic)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let script = try #require(store.widgetScripts.scripts["status"])
     let presentation = try #require(store.barPresentation.presentations["status"])
     for _ in 0..<100 {
@@ -267,7 +267,7 @@ private func output(_ json: String) throws -> ScriptOutput {
     """#.utf8).write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<100 {
         if store.widgetScripts.scripts["power"]?.output.text == "Low" { break }
         try await Task.sleep(for: .milliseconds(20))

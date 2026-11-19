@@ -35,7 +35,7 @@ final class ConfigurationHistory {
         self.saveDelay = saveDelay
     }
 
-    var hasPendingChanges: Bool { store?.customizationEdits.isEmpty == false }
+    var hasPendingChanges: Bool { store?.configurationStore.customizationEdits.isEmpty == false }
     var canUndo: Bool {
         hasPendingChanges || (!undoSteps.isEmpty && (editingProfile == nil || undoSteps.last?.profile == editingProfile))
     }
@@ -70,8 +70,8 @@ final class ConfigurationHistory {
         try flush()
         checkForExternalChanges()
         let edits = try edits.map(inEditingProfile)
-        guard let store, let prepared = try await store.prepareWidgetMove(id, edits: edits) else { return }
-        try store.writeWidgetMove(prepared)
+        guard let store, let prepared = try await store.configurationStore.prepareWidgetMove(id, edits: edits) else { return }
+        try store.configurationStore.writeWidgetMove(prepared)
         record(Step(before: prepared.before, after: prepared.after, profile: editingProfile))
         redoSteps.removeAll()
     }
@@ -100,14 +100,14 @@ final class ConfigurationHistory {
     func setProfileCondition<Value: Equatable>(_ name: String, _ key: WritableKeyPath<ProfileConditions, Value?>,
                                                value: Value?, control: String) throws {
         guard let store else { return }
-        let profiles = try store.customizationProfiles()
+        let profiles = try store.configurationStore.customizationProfiles()
         guard let profile = profiles.first(where: { $0.name == name }) else {
             throw CommandFailure(message: "Save command-line changes before editing this profile.")
         }
         guard profile.when?[keyPath: key] != value else { return }
         try change(control: Control(action: .profiles, id: name, paths: [], name: control)) { [weak store] in
             guard let store else { return [] }
-            guard var profile = try store.customizationProfiles(includingPending: false).first(where: { $0.name == name }) else {
+            guard var profile = try store.configurationStore.customizationProfiles(includingPending: false).first(where: { $0.name == name }) else {
                 throw CommandFailure(message: "This profile is no longer in the configuration file.")
             }
             let current = profile
@@ -118,7 +118,7 @@ final class ConfigurationHistory {
             if changes.isEmpty { return [] }
             // A condition no other file sets is removed rather than set to null: a release that doesn't know its key
             // would count it as a condition it can't check, and the profile would never match there.
-            let main = store.configurationURL.standardizedFileURL.path
+            let main = store.configurationStore.configurationURL.standardizedFileURL.path
             var removals: [ConfigurationEdit] = []
             if case let .object(when) = changes["when"] {
                 let cleared = when.filter { key, value in
@@ -134,19 +134,19 @@ final class ConfigurationHistory {
     }
 
     func pendingEdits() throws -> [ConfigurationEdit] {
-        try pendingEdit.map { try $0() } ?? store?.customizationEdits ?? []
+        try pendingEdit.map { try $0() } ?? store?.configurationStore.customizationEdits ?? []
     }
 
     private func change(control: Control?, everyBar: Bool = false, edit: @escaping () throws -> [ConfigurationEdit]) throws {
         guard let store else { return }
         error = nil
         let everyBar = everyBar && editingProfile == nil
-        if hasPendingChanges && (control == nil || control != pendingControl || everyBar != pendingEveryBar) { store.flushCustomization() }
+        if hasPendingChanges && (control == nil || control != pendingControl || everyBar != pendingEveryBar) { store.configurationStore.flushCustomization() }
         checkForExternalChanges()
         if control == nil {
             try save(edit(), everyBar: everyBar)
         } else {
-            try store.setCustomizationEdits(edit())
+            try store.configurationStore.setCustomizationEdits(edit())
             pendingEdit = edit
             pendingControl = control
             pendingEveryBar = everyBar
@@ -181,11 +181,11 @@ final class ConfigurationHistory {
 
     private func save(_ edits: [ConfigurationEdit], everyBar: Bool) throws {
         guard let store else { return }
-        let before = try Data(contentsOf: store.configurationURL)
-        let after = try store.customizationData(edits, editing: before)
-        let otherBars = everyBar ? try store.otherBars(applying: edits) : []
+        let before = try Data(contentsOf: store.configurationStore.configurationURL)
+        let after = try store.configurationStore.customizationData(edits, editing: before)
+        let otherBars = everyBar ? try store.configurationStore.otherBars(applying: edits) : []
         for bar in otherBars { try requireWritable(bar.url) }
-        try store.writeCustomization(after, replacing: before)
+        try store.configurationStore.writeCustomization(after, replacing: before)
         for bar in otherBars { try writeConfiguration(bar.after, to: bar.url) }
         record(Step(before: before, after: after, profile: editingProfile, otherBars: otherBars))
     }
@@ -205,9 +205,9 @@ final class ConfigurationHistory {
         let changedOutside = checkForExternalChanges()
         if hasPendingChanges {
             let step: Step?
-            if !changedOutside, let store, let before = try? Data(contentsOf: store.configurationURL),
-               let after = try? store.customizationData(pendingEdits(), editing: before),
-               let otherBars = try? pendingEveryBar ? store.otherBars(applying: pendingEdits()) : [],
+            if !changedOutside, let store, let before = try? Data(contentsOf: store.configurationStore.configurationURL),
+               let after = try? store.configurationStore.customizationData(pendingEdits(), editing: before),
+               let otherBars = try? pendingEveryBar ? store.configurationStore.otherBars(applying: pendingEdits()) : [],
                before != after || !otherBars.isEmpty {
                 step = Step(before: before, after: after, profile: editingProfile, otherBars: otherBars)
             } else { step = nil }
@@ -236,9 +236,9 @@ final class ConfigurationHistory {
 
     func saveCommandLineChanges() throws {
         guard let store else { return }
-        store.flushCustomization()
-        try store.applyEdits([], persist: true)
-        let current = try Data(contentsOf: store.configurationURL)
+        store.configurationStore.flushCustomization()
+        try store.configurationStore.applyEdits([], persist: true)
+        let current = try Data(contentsOf: store.configurationStore.configurationURL)
         if current != lastFile {
             undoSteps.removeAll()
             redoSteps.removeAll()
@@ -250,15 +250,15 @@ final class ConfigurationHistory {
 
     func discardCommandLineChanges() throws {
         guard let store else { return }
-        store.flushCustomization()
-        try store.setSessionEdits([])
+        store.configurationStore.flushCustomization()
+        try store.configurationStore.setSessionEdits([])
         error = nil
     }
 
     @discardableResult
     func checkForExternalChanges() -> Bool {
         guard let store else { return false }
-        let current = try? Data(contentsOf: store.configurationURL)
+        let current = try? Data(contentsOf: store.configurationStore.configurationURL)
         defer { lastFile = current }
         guard let lastFile, current != lastFile else { return false }
         let hadHistory = hasPendingChanges || !undoSteps.isEmpty || !redoSteps.isEmpty
@@ -285,13 +285,13 @@ final class ConfigurationHistory {
         writeTask = nil
         pendingControl = nil
         pendingEdit = nil
-        store?.discardCustomizationEdits()
+        store?.configurationStore.discardCustomizationEdits()
     }
 
     func dropUnavailableHistory() {
         guard let store else { return }
         let states = undoSteps.flatMap { [$0.before, $0.after] } + redoSteps.flatMap { [$0.before, $0.after] }
-        if states.contains(where: { (try? store.validateCustomization($0)) == nil }) {
+        if states.contains(where: { (try? store.configurationStore.validateCustomization($0)) == nil }) {
             undoSteps.removeAll()
             redoSteps.removeAll()
             notice = "Undo history was cleared because an uninstalled package is no longer available."
@@ -300,7 +300,7 @@ final class ConfigurationHistory {
 
     private func restore(_ data: Data, otherBars: [(url: URL, current: Data, restored: Data)]) throws -> Bool {
         guard let store else { return false }
-        let current = try Data(contentsOf: store.configurationURL)
+        let current = try Data(contentsOf: store.configurationStore.configurationURL)
         guard current == lastFile else { checkForExternalChanges(); return false }
         guard otherBars.allSatisfy({ (try? Data(contentsOf: $0.url)) == $0.current }) else {
             undoSteps.removeAll()
@@ -309,7 +309,7 @@ final class ConfigurationHistory {
             return false
         }
         for bar in otherBars { try requireWritable(bar.url) }
-        try store.writeCustomization(data, replacing: current)
+        try store.configurationStore.writeCustomization(data, replacing: current)
         for bar in otherBars { try writeConfiguration(bar.restored, to: bar.url) }
         lastFile = data
         error = nil

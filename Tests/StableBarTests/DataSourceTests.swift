@@ -245,7 +245,7 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     guard case let .object(cpu) = try store.snapshot(id: "cpu") else {
         Issue.record("Expected an object snapshot")
         return
@@ -264,12 +264,12 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("cpu"), "type": .string("system"),
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("cpu"), "type": .string("system"),
                                                                         "position": .string("right")])], persist: false)
     #expect(store.configuration?.widgets.first?.content == .provider("system"))
     let error = #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("disk"), "type": .string("teleport"),
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("disk"), "type": .string("teleport"),
                                                                             "position": .string("right")])], persist: false)
     }
     #expect(error.map(errorMessage) == "widgets.disk: type: Unknown widget type.")
@@ -282,7 +282,7 @@ private func writeTemporaryConfiguration(_ json: String) throws -> URL {
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
     let store = BarStore(configurationURL: url, registry: DataSourceRegistry(types: [fake]))
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     try await awaitCondition { sources.made.first?.emit != nil }
     let source = try #require(sources.made.first)
     #expect(source.refreshes == ["startup"])
@@ -567,7 +567,7 @@ private extension DataSourceRegistry {
     let monitor = FakeMonitor(ScriptOutput(text: "80%", value: 0.8))
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let power = try #require(store.widgetScripts.scripts["power"])
     #expect(power.diagnostics.suspended)
     #expect(!monitor.listening)
@@ -587,7 +587,7 @@ private extension DataSourceRegistry {
     store.widgetScripts.setPaused(false, because: .systemAsleep)
     try await awaitCondition { monitor.listening }
     #expect(power.output.text == "79%")
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "power", properties: ["enabled": .bool(false)])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "power", properties: ["enabled": .bool(false)])], persist: false)
     #expect(!monitor.listening)
     #expect(store.widgetScripts.providers.isEmpty)
 }
@@ -606,7 +606,7 @@ private extension DataSourceRegistry {
         }
     })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let status = try #require(store.widgetScripts.scripts["status"])
     try await awaitCondition { status.output.fields?["saver.text"] == "Saved" }
     let presentation = try #require(store.barPresentation.presentations["status"])
@@ -653,7 +653,7 @@ private extension DataSourceRegistry {
             }
         })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(Set(store.widgetScripts.providers.keys) == ["power", "sound", "meetings", "status"])
     #expect(store.widgetScripts.scripts["volume"] === store.widgetScripts.providers["sound"])
     let status = try #require(store.widgetScripts.scripts["status"])
@@ -774,7 +774,7 @@ private func battery(_ state: String) -> ScriptOutput {
     let monitor = FakeMonitor(battery("charging"))
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let notice = try #require(store.widgetScripts.scripts["notice"])
     try await awaitCondition { notice.output.text == "none" && store.widgetScripts.providers["battery"]?.diagnostics.lastUpdated != nil }
     #expect(store.widgetScripts.scripts["battery"] == nil)
@@ -782,7 +782,7 @@ private func battery(_ state: String) -> ScriptOutput {
     try await awaitCondition { notice.output.text == "battery" }
     monitor.change(to: battery("charged"))
     try await awaitCondition { notice.output.text == "ac" }
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["events": .array([])])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["events": .array([])])], persist: false)
     #expect(!monitor.listening)
     #expect(store.widgetScripts.providers.isEmpty)
 }
@@ -798,7 +798,7 @@ private func battery(_ state: String) -> ScriptOutput {
     let sources = FakeSources()
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in sources.make() })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     let notice = try #require(store.widgetScripts.scripts["notice"])
     try await awaitCondition { notice.output.text == "none" && store.widgetScripts.scripts["helper"]?.output.text == "helper" }
@@ -818,10 +818,10 @@ private func battery(_ state: String) -> ScriptOutput {
     let monitor = FakeMonitor(battery("charging"))
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     try await awaitCondition { monitor.listening }
     #expect(store.widgetScripts.scripts["power"]?.diagnostics.suspended == false)
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["enabled": .bool(false)])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "notice", properties: ["enabled": .bool(false)])], persist: false)
     #expect(store.widgetScripts.scripts["power"]?.diagnostics.suspended == true)
     #expect(!monitor.listening)
 }
@@ -836,7 +836,7 @@ private func battery(_ state: String) -> ScriptOutput {
     let sources = FakeSources()
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in sources.make() })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let power = try #require(store.widgetScripts.scripts["power"])
     let notice = try #require(store.widgetScripts.scripts["notice"])
     try await awaitCondition { sources.made.first?.emit != nil && notice.output.text == "none" }
@@ -858,7 +858,7 @@ private func battery(_ state: String) -> ScriptOutput {
     let monitor = FakeMonitor(battery("charging"))
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("battery") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     try await awaitCondition { monitor.listening }
     store.stop()
     #expect(!monitor.listening)
@@ -1051,7 +1051,7 @@ private struct RelayProbe {
     let monitor = FakeMonitor(audio(0.5))
     let store = BarStore(configurationURL: url, registry: .builtIn.replacing("audio") { _, _ in PushSource(monitor: monitor) })
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let volume = try #require(store.widgetScripts.scripts["volume"])
     try await awaitCondition { volume.output.text == "start" && store.widgetScripts.providers["audio"]?.diagnostics.lastUpdated != nil }
     for level in 51...80 { monitor.change(to: audio(Double(level) / 100)) }

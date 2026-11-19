@@ -88,7 +88,7 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     var changes: [Bool] = []
     let defaults = UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!
     if completed { defaults.set(true, forKey: SetupProgress.completedKey) }
@@ -544,7 +544,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
 @Test func skippingSetupWhileTheMenuBarChangesPutsItBack() async throws {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); fixture.close() }
     let gate = HeldCall<Void>()
     var hides = false
@@ -555,7 +555,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
         hides = hidden
     }, menuBarHides: { hides }, isTrusted: { true }, calendarAccess: { .fullAccess },
        defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
-    let before = store.sessionEdits.count
+    let before = store.configurationStore.sessionEdits.count
     let session = SetupSession(store: store, system: system)
     let replace = Task { await session.place(.top) }
     for _ in 0..<100 where !gate.started { await Task.yield() }
@@ -566,7 +566,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     for _ in 0..<1000 where changes.count < 2 || hides { await Task.yield() }
     #expect(changes == [true, false])
     #expect(!hides)
-    #expect(store.sessionEdits.count == before)
+    #expect(store.configurationStore.sessionEdits.count == before)
 }
 
 /// Skip setup while setup checks again whether a placement waiting for Automation access may go ahead: access turning
@@ -599,7 +599,7 @@ private func setupSession(changing change: @escaping (Bool) async throws -> Void
     throws -> (SetupSession, ThemeGalleryFixture, BarStore) {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: change, menuBarHides: hides,
                              isTrusted: { true }, calendarAccess: { .fullAccess },
                              defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)

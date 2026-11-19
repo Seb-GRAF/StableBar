@@ -356,7 +356,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let shared = try #require(store.widgetScripts.scripts["first"])
     #expect(store.widgetScripts.scripts["second"] === shared)
     for _ in 0..<100 {
@@ -373,13 +373,13 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     widgets[0]["style"] = ["background": "#112233"]
     document["widgets"] = widgets
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.widgetScripts.scripts["first"] === shared)
     #expect(store.widgetScripts.scripts["second"] === shared)
     widgets[0] = ["id": "first", "type": "script", "position": "left", "command": "printf independent", "interval": NSNull()]
     document["widgets"] = widgets
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let independent = try #require(store.widgetScripts.scripts["first"])
     #expect(independent !== shared)
     #expect(store.widgetScripts.scripts["second"] === shared)
@@ -406,7 +406,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let shared = try #require(store.widgetScripts.scripts["first"])
     #expect(shared.diagnostics.suspended)
     store.widgetScripts.setInspectorOpen(true)
@@ -464,7 +464,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let shared = try #require(store.widgetScripts.scripts["first"])
     var previousPID: Int32 = 0
     for round in 0..<12 {
@@ -491,7 +491,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         }
         document["widgets"] = widgets
         try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(store.widgetScripts.scripts.count == widgets.count)
         #expect(store.widgetScripts.scripts.values.allSatisfy { $0 === shared })
@@ -502,7 +502,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(shared.diagnostics.failureCount == 0)
     document["widgets"] = [[String: Any]]()
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.widgetScripts.scripts.isEmpty)
     #expect(!shared.diagnostics.running)
     #expect(!shared.diagnostics.suspended)

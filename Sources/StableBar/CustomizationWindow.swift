@@ -71,8 +71,8 @@ final class CustomizationWindow: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         editor?.endProfileEditing()
         editor?.finishEditing()
-        store?.flushCustomization()
-        store?.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
+        store?.configurationStore.flushCustomization()
+        store?.configurationStore.showScreenSetup(ScreenSetup(NSScreen.screens.map(BarDisplay.init)))
         store?.customizationHistory.clearNotice()
         store?.widgetScripts.setInspectorOpen(false)
         if barShare.window == nil { NSApplication.shared.setActivationPolicy(.accessory) }
@@ -225,7 +225,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
             }
-            if !store.sessionEdits.isEmpty {
+            if !store.configurationStore.sessionEdits.isEmpty {
                 Divider()
                 commandLineNotice
             }
@@ -672,11 +672,11 @@ extension HexColor {
 extension BarStore {
     func sourceText(_ origin: ConfigurationOrigin) -> String {
         let file = origin.file
-        let packages = configurationURL.deletingLastPathComponent().appending(path: "packages").standardizedFileURL.path
+        let packages = configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages").standardizedFileURL.path
         let text: String
-        if file == configurationURL.standardizedFileURL.path {
+        if file == configurationStore.configurationURL.standardizedFileURL.path {
             text = "your configuration"
-        } else if let themes = themesDirectory?.standardizedFileURL.path, file.hasPrefix(themes + "/") {
+        } else if let themes = configurationStore.themesDirectory?.standardizedFileURL.path, file.hasPrefix(themes + "/") {
             let id = file.dropFirst(themes.count + 1).prefix { $0 != "/" }
             text = id == "built-in" ? "the Built-in theme" : "the \(id.capitalized) theme"
         } else if file.hasPrefix(packages + "/") {
@@ -688,6 +688,6 @@ extension BarStore {
     }
 
     func setsInMainFile(_ origin: ConfigurationOrigin) -> Bool {
-        origin.file == configurationURL.standardizedFileURL.path && (origin.detail.isEmpty || origin.detail == "(widget override)")
+        origin.file == configurationStore.configurationURL.standardizedFileURL.path && (origin.detail.isEmpty || origin.detail == "(widget override)")
     }
 }
