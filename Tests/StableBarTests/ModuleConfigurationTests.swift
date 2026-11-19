@@ -332,7 +332,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     defer { store.stop() }
     store.start()
     let previous = try #require(store.configuration)
-    let script = try #require(store.scripts["status"])
+    let script = try #require(store.widgetScripts.scripts["status"])
     for _ in 0..<100 {
         if script.output.text == "startup" { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -347,7 +347,7 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     #expect(store.configuration?.bar.height == previous.bar.height)
     #expect(store.configuration?.widgets.map(\.id) == previous.widgets.map(\.id))
     #expect(store.configuration?.widgets[0].content == previous.widgets[0].content)
-    #expect(store.scripts["status"] === script)
+    #expect(store.widgetScripts.scripts["status"] === script)
     #expect(script.output.text == "startup")
     try writeConfiguration(document.replacingOccurrences(of: "37", with: "49"), to: module)
     for _ in 0..<100 {
@@ -356,17 +356,17 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     }
     #expect(store.configuration?.bar.height == 49)
     #expect(store.configurationError == nil)
-    #expect(store.scripts["status"] === script)
+    #expect(store.widgetScripts.scripts["status"] === script)
     #expect(script.output.text == "startup")
     try writeConfiguration(#"""
     {"includes":["../shared/status.json"],"widgetOverrides":{"status":{"enabled":false}}}
     """#, to: root)
     for _ in 0..<100 {
-        if store.scripts["status"] == nil { break }
+        if store.widgetScripts.scripts["status"] == nil { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(store.configuration?.widgets[0].enabled == false)
-    #expect(store.scripts["status"] == nil)
+    #expect(store.widgetScripts.scripts["status"] == nil)
     script.refresh(ScriptEvent(sender: "disabled"))
     try await Task.sleep(for: .milliseconds(100))
     #expect(script.output.text == "startup")
@@ -374,12 +374,12 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
     {"includes":["../shared/status.json"],"widgetOverrides":{"status":{"enabled":true}}}
     """#, to: root)
     for _ in 0..<100 {
-        if store.scripts["status"]?.output.text == "startup" { break }
+        if store.widgetScripts.scripts["status"]?.output.text == "startup" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(store.configuration?.widgets[0].enabled == true)
-    #expect(store.scripts["status"]?.output.text == "startup")
-    #expect(store.scripts["status"] !== script)
+    #expect(store.widgetScripts.scripts["status"]?.output.text == "startup")
+    #expect(store.widgetScripts.scripts["status"] !== script)
     #expect(store.configurationError == nil)
 }
 
@@ -431,6 +431,10 @@ private func writeConfiguration(_ json: String, to url: URL) throws {
         (#"{"widgets":[}"#, "The given data was not valid JSON. Unexpected character '}' around line 1, column 13."),
         (#"{"providers":{"machine":{"type":"sytem"}},"widgets":[]}"#, "providers.machine.type: Unknown provider type."),
         (#"{"providers":{"feed":{"type":"stream"}},"widgets":[]}"#, "providers.feed: Missing property command."),
+        (#"{"providers":{"weather":{"type":"http","url":"https://api.open-meteo.com/v1/forecast"}},"widgets":[]}"#, "providers.weather: Missing property output."),
+        (#"{"providers":{"weather":{"type":"http","url":"http://api.open-meteo.com","output":{}}},"widgets":[]}"#, "providers.weather.url: A provider url must use https."),
+        (#"{"providers":{"weather":{"type":"http","url":"https://api.open-meteo.com","output":{"text":"current/temperature_2m"}}},"widgets":[]}"#,
+         "providers.weather.output: A JSON Pointer starts with /, unlike current/temperature_2m."),
         (#"{"widgets":[{"id":"disk","type":"teleport","position":"right"}]}"#, "widgets.disk: type: Unknown widget type."),
         (#"{"widgets":[{"id":"disk","type":"provider","provider":"teleport","position":"right"}]}"#, "Unknown provider: teleport."),
         (#"{"providers":{"status":{"type":"merge","providers":["battery"]}},"widgets":[{"id":"power","type":"battery","position":"right"}]}"#,
@@ -477,13 +481,28 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         "ruleCondition": RuleCondition.CodingKeys.allCases, "workspaceDefaults": WorkspaceDefaults.CodingKeys.allCases,
         "glass": GlassSettings.CodingKeys.allCases, "screen": ScreenConfiguration.CodingKeys.allCases,
         "packageSource": PackageSource.CodingKeys.allCases, "menuBarItem": MenuBarItemReference.CodingKeys.allCases,
-        "sliderEndStop": SliderEndStop.CodingKeys.allCases
+        "sliderEndStop": SliderEndStop.CodingKeys.allCases, "httpOutput": HTTPOutput.CodingKeys.allCases
     ]
     for (name, keys) in decoders {
         #expect(try schemaProperties(definitions[name]) == Set(keys.map(\.stringValue) + (name == "widget" ? ["template"] : [])), "\(name)")
     }
     #expect(try schemaProperties(.object(schema)) == Set(Configuration.CodingKeys.allCases.map(\.stringValue)
         + ["$schema", "tokens", "packages", "packageSources", "theme", "includes", "profiles", "profile", "widgetOrder"]))
+}
+
+@Test func schemaListsEveryPresentationRole() throws {
+    let url = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .appending(path: "stablebar.schema.json")
+    let text = try String(contentsOf: url, encoding: .utf8)
+    let roles = PresentationRole.allCases.map { "\"\($0.rawValue)\"" }.joined(separator: ", ")
+    let lists = text.components(separatedBy: "\"role\": {\"anyOf\": [{\"enum\": [").dropFirst()
+    #expect(lists.count == 3)
+    for list in lists { #expect(list.hasPrefix(roles + "]")) }
+    let schema = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(text.utf8))
+    let properties = try #require(schema["properties"]).decoded([String: ConfigurationValue].self)
+    let definitions = try #require(properties["roles"]).decoded([String: ConfigurationValue].self)
+    let roleMap = try #require(definitions["anyOf"]).decoded([ConfigurationValue].self).first
+    #expect(try schemaProperties(roleMap) == Set(PresentationRole.allCases.map(\.rawValue)))
 }
 
 @Test func packageSchemaListsTheSamePropertiesAsTheManifestDecoder() throws {
@@ -621,20 +640,25 @@ private func schemaProperties(_ definition: ConfigurationValue?) throws -> Set<S
         .calendars: (#"["Work"]"#, #""Work""#), .lookahead: ("12", #""12""#), .todayOnly: ("true", #""true""#), .soon: ("10", #""10""#), .now: ("2", #""2""#),
         .processes: ("5", #""5""#), .sortBy: (#""cpu""#, #""unknown""#), .units: (#""bits""#, #""unknown""#),
         .cpuWarning: ("0.8", #""high""#), .memoryWarning: ("0.8", #""high""#),
-        .diskWarning: ("0.5", #""high""#), .diskCritical: ("0.5", #""high""#)
+        .diskWarning: ("0.5", #""high""#), .diskCritical: ("0.5", #""high""#),
+        .headers: (#"{"Accept":"application/json"}"#, #""Accept""#), .token: (#""abc""#, "1")
     ]
+    // Each sample also sets what its type requires.
+    let required: [ProviderConfiguration.CodingKeys: String] = [.command: #""true""#, .providers: "[]", .url: #""https://example.com""#,
+                                                                .output: "{}"]
     #expect(Set(registry.types.flatMap(\.optionalSettings)) == Set(samples.keys))
     for type in registry.types {
         let decoded = try? JSONDecoder().decode(ProviderConfiguration.self, from: Data(#"{"type":"\#(type.name)"}"#.utf8))
         #expect((decoded != nil) == type.settings.isEmpty, "\(type.name)")
         if let decoded { #expect(decoded == ProviderConfiguration(type: type.name), "\(type.name)") }
+        let properties = [#""type":"\#(type.name)""#] + type.settings.map { #""\#($0.stringValue)":\#(required[$0]!)"# }
         for setting in type.optionalSettings {
             let values = try #require(samples[setting])
-            func provider(_ value: String) throws -> ProviderConfiguration {
-                try JSONDecoder().decode(ProviderConfiguration.self,
-                                         from: Data(#"{"type":"\#(type.name)","\#(setting.stringValue)":\#(value)}"#.utf8))
+            func provider(_ value: String?) throws -> ProviderConfiguration {
+                let set = value.map { [#""\#(setting.stringValue)":\#($0)"#] } ?? []
+                return try JSONDecoder().decode(ProviderConfiguration.self, from: Data("{\((properties + set).joined(separator: ","))}".utf8))
             }
-            #expect(try provider(values.valid) != ProviderConfiguration(type: type.name), "\(type.name).\(setting.stringValue)")
+            #expect(try provider(values.valid) != provider(nil), "\(type.name).\(setting.stringValue)")
             #expect(throws: (any Error).self, "\(type.name).\(setting.stringValue)") { try provider(values.invalid) }
         }
     }

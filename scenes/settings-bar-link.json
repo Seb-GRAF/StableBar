@@ -1,0 +1,1 @@
+{"$schema":"../scene.schema.json","configuration":{},"packages":["../examples/packages/weather","../Tests/Fixtures/linked-bar-uptime"],"draw":"settings","section":"theme","barLink":"../Tests/Fixtures/linked-bar.json","untickedWidgets":["battery"]}

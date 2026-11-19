@@ -548,7 +548,7 @@ test("slug matches the app", () => {
 test("reserved ids are the app's", () => {
   const folders = readdirSync(new URL("Resources/themes/", root), { withFileTypes: true })
     .filter(entry => entry.isDirectory()).map(entry => entry.name);
-  const catalog = read("Sources/StableBar/ThemeCatalog.swift").toString();
+  const catalog = read("Sources/StableBar/Themes/ThemeCatalog.swift").toString();
   const legacy = catalog.match(/let legacyThemeIDs: Set<String> = \[([^\]]+)\]/)[1];
   const legacyIDs = [...legacy.matchAll(/"([^"]+)"/g)].map(match => match[1]);
   assert.deepEqual(BASE_IDS, baseIDs);
@@ -1521,7 +1521,7 @@ test("links limit profiles in raw JSON and across nested profiles", () => {
 test("linked bar properties are restricted at the root and in every profile", () => {
   const bar = {
     height: 30, margin: 0, inset: 1, spacing: 6, background: "#123456", style: { cornerRadius: 5 },
-    notchWidth: 0, notchSpacing: 2, fillNotch: false, popupOffset: 3,
+    notchWidth: 0, notchSpacing: 2, fillNotch: false, popupOffset: 3, glass: { enabled: true, transparency: 0.4 },
   };
   assert.doesNotThrow(() => encodeLink({ manifestText: "{}", configText: JSON.stringify({ bar }) }));
   for (const value of [{ position: "bottom" }, { hideMenuBar: true }, "@token.bar", "@setting.bar", null, [], 30, true]) {

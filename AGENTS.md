@@ -56,11 +56,14 @@ Visible changes (the bar, popups, setup, Settings, the website) need before/afte
 
 ## Architecture rules
 
-`ArchitectureRulesTests` checks the first three; its numbers may only go down.
+Sources are grouped by area, one folder each ([CONTRIBUTING.md](CONTRIBUTING.md#architecture) lists them); a new file goes in its area's folder. `BarStore` only wires one bar together: configuration files and edits live in `ConfigurationStore`, scripts and providers in `WidgetScripts`, resolved styles in `BarPresentation`.
+
+`ArchitectureRulesTests` checks the first four; its numbers may only go down.
 
 - Don't add stored properties to `BarStore`. New state goes into a type of its own, owned by `BarStore` or by the feature that needs it.
 - A helper that points back at `BarStore`, or at another owner, holds it `weak`: a view or a task can keep the helper alive after its owner is gone. Don't add `unowned`.
 - Private macOS API lives in `PrivateAPI.swift`, looked up at runtime: on a macOS without one of its calls, the call is nil and its feature turns off instead of crashing. Never use `@_silgen_name`, which binds at launch, and never force-unwrap a lookup. A new call needs a maintainer's OK.
+- A decision about state, such as where setup puts the bar (`SetupPlacement`), lives in a `StateMachine`: one enum for its mode rather than separate `Bool`s, and `handle(event)` returning an effect. Its owner holds the windows, timers and tasks, sends it events and performs each effect after `handle` returns. The state machine's file imports no UI framework and starts no work, so a plain unit test covers every transition. New state starts this way; existing state moves over when a bug in it is fixed.
 - The configuration file is StableBar's public API: people's files, Store packages and themes depend on it. Keep changes additive. Renaming or removing a property, or changing what it means, needs a migration, a test that loads the old form and a maintainer's OK. An older build skips the properties of a file saved by a newer release, with a warning; keep that working.
 
 ## Decide or ask

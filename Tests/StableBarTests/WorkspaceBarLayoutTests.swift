@@ -12,7 +12,7 @@ private let terminal = WorkspaceApp(workspace: "1", name: "Terminal", bundleID: 
     {"widgets":[{"id":"spaces","type":"workspaces","position":"left","workspace":{"windows":true}},
                 {"id":"clock","type":"text","text":"12:00","position":"right"}]}
     """#.utf8))
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     return store
 }
 
@@ -96,7 +96,7 @@ private final class Count: @unchecked Sendable {
     store.configuration = try JSONDecoder().decode(Configuration.self, from: Data(#"""
     {"widgets":[{"id":"clock","type":"text","text":"12:00","position":"right","display":"active"}]}
     """#.utf8))
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     #expect(store.barEditing.widgets(on: external).map(\.id) == ["clock"])
     #expect(invalidations(of: store, on: external) { store.workspaceStore.workspaces = displays(focused: "1") } == 1)
     #expect(store.barEditing.widgets(on: external).isEmpty)

@@ -20,8 +20,8 @@ final class BarEditingTests: XCTestCase {
         defer { store.stop() }
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "", hidden: true)
-        store.scripts["output"] = script
-        store.updatePresentations()
+        store.widgetScripts.scripts["output"] = script
+        store.barPresentation.updatePresentations()
         let before = try Data(contentsOf: fixture.url)
         let document = store.effectiveDocument
         let editing = store.barEditing
@@ -43,11 +43,11 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
         XCTAssertFalse(script.diagnostics.running)
-        XCTAssertNil(store.scripts["off"])
+        XCTAssertNil(store.widgetScripts.scripts["off"])
         editing.end()
         XCTAssertEqual(editing.widgets(on: laptop).map(\.id), ["visible"])
         XCTAssertEqual(editing.widgets(on: external).map(\.id), ["screen", "visible"])
-        XCTAssertEqual(store.presentations["output"]?.hidden, true)
+        XCTAssertEqual(store.barPresentation.presentations["output"]?.hidden, true)
         XCTAssertEqual(store.configuration?.widgets[0].enabled, false)
     }
 
@@ -64,19 +64,19 @@ final class BarEditingTests: XCTestCase {
         let store = try fixture.store()
         defer { store.stop() }
         let empty = ScriptWidget()
-        store.scripts["empty"] = empty
-        store.updatePresentations()
+        store.widgetScripts.scripts["empty"] = empty
+        store.barPresentation.updatePresentations()
         XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == "empty" })
         empty.error = "Failed"
-        store.updatePresentations()
+        store.barPresentation.updatePresentations()
         XCTAssertTrue(store.barEditing.widgets(on: laptop).contains { $0.id == "empty" })
         store.barEditing.begin()
         XCTAssertTrue(store.barEditing.entries(on: laptop).allSatisfy(\.usesPlaceholder))
         XCTAssertEqual(store.barEditing.entries(on: laptop).prefix(2).map(\.name), ["Text 1", "Text 2"])
         let script = ScriptWidget()
         script.output = ScriptOutput(text: "Hello", display: .builtIn)
-        store.scripts["script"] = script
-        store.updatePresentations()
+        store.widgetScripts.scripts["script"] = script
+        store.barPresentation.updatePresentations()
         XCTAssertFalse(try XCTUnwrap(store.barEditing.entries(on: laptop).last).usesPlaceholder)
         XCTAssertTrue(try XCTUnwrap(store.barEditing.entries(on: external).last).visibility.isHidden)
         store.barEditing.end()
@@ -144,7 +144,7 @@ final class BarEditingTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        try store.configurationStore.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
         let before = try Data(contentsOf: fixture.url)
         let editing = store.barEditing
         editing.begin()
@@ -191,7 +191,7 @@ final class BarEditingTests: XCTestCase {
         try store.customizationHistory.undo()
         XCTAssertTrue(editing.isActive)
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         XCTAssertEqual(store.configuration?.bar.height, 50)
 
         let first = editing.dragSession.begin("b")
@@ -225,7 +225,7 @@ final class BarEditingTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        try store.configurationStore.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
         store.barEditing.begin()
         let before = try Data(contentsOf: fixture.url)
         let added = await WidgetSetup(store: store).add(try XCTUnwrap(WidgetAddCatalog.builtIns.first { $0.id == "text" }), to: .notchLeft)
@@ -241,7 +241,7 @@ final class BarEditingTests: XCTestCase {
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertNil(try fixture.document()["bar"])
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testRemovingAPackageWidgetTakesItsPackageOffTheBarAndAddingItBackRestoresIt() throws {
@@ -314,7 +314,7 @@ final class BarEditingTests: XCTestCase {
         let marker = fixture.directory.appending(path: "actions")
         let command = "printf x >> '\(marker.path)'"
         var selected: String?
-        store.onCustomizeWidget = { selected = $0 }
+        store.onWindowRequest = { if case let .customizeItem(.widget(id)) = $0 { selected = id } }
         store.barEditing.begin()
         store.barEditing.select("a")
         XCTAssertEqual(selected, "a")
@@ -325,7 +325,7 @@ final class BarEditingTests: XCTestCase {
         store.popup.toggle(try XCTUnwrap(widget.popup), widget: widget, defaults: WidgetStyle(), store: store, anchor: NSView())
         XCTAssertFalse(store.popup.isOpen)
         for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
-            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+            await store.widgetScripts.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         store.barEditing.end()
@@ -333,7 +333,7 @@ final class BarEditingTests: XCTestCase {
         store.barEditing.select("a")
         XCTAssertNil(selected)
         for sender in ["mouse.clicked", "mouse.scrolled", "mouse.entered", "mouse.exited", "control.changed"] {
-            await store.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
+            await store.widgetScripts.runAction(command, widget: widget, event: ScriptEvent(sender: sender)).value
         }
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "xxxxx")
         XCTAssertEqual(store.configuration?.widgets.first?.onClick, widget.onClick)
@@ -355,9 +355,9 @@ final class BarEditingTests: XCTestCase {
             switch exit {
             case "escape": XCTAssertTrue(store.barEditing.handleKey(53))
             case "done": store.barEditing.end()
-            case "reload": store.reloadConfiguration()
+            case "reload": store.configurationStore.reloadConfiguration()
             case "runtime reload": _ = try store.handle(RuntimeRequest(action: .reload))
-            case "invalid reload": try fixture.write("{", to: fixture.url); store.reloadConfiguration()
+            case "invalid reload": try fixture.write("{", to: fixture.url); store.configurationStore.reloadConfiguration()
             default: store.stop()
             }
             XCTAssertFalse(store.barEditing.isActive, exit)
@@ -380,12 +380,14 @@ final class BarEditingTests: XCTestCase {
         """#)
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         defer { store.stop() }
         let before = try Data(contentsOf: fixture.url)
         store.barEditing.begin()
         // Opening Settings activates StableBar and refreshes the frontmost-app context.
-        store.onCustomizeWidget = { [weak store] _ in store?.refreshContext(ConfigurationContext(app: "com.stablebar")) }
+        store.onWindowRequest = { [weak store] request in
+            if case .customizeItem = request { store?.configurationStore.refreshContext(ConfigurationContext(app: "com.stablebar")) }
+        }
         store.barEditing.select("clock")
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(store.activeProfiles, ["App"])
@@ -395,7 +397,7 @@ final class BarEditingTests: XCTestCase {
                                 (ConfigurationContext(onBattery: true), "battery"),
                                 (ConfigurationContext(displayCount: 2), "displays"),
                                 (ConfigurationContext(externalDisplay: true), "external")] {
-            store.refreshContext(context)
+            store.configurationStore.refreshContext(context)
             XCTAssertNil(store.configurationError)
             XCTAssertTrue(store.barEditing.isActive)
             XCTAssertEqual(store.configuration?.widgets.map(\.id), ["clock", name])
@@ -403,7 +405,7 @@ final class BarEditingTests: XCTestCase {
         }
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(store.customizationHistory.undoSteps.isEmpty)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertFalse(store.barEditing.isActive)
     }
 
@@ -435,14 +437,14 @@ final class BarEditingTests: XCTestCase {
         let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         defer { store.stop() }
         let before = try Data(contentsOf: fixture.url)
         let normal = store.effectiveDocument
         let trial = ThemeTrial(store: store)
         trial.previous()
         XCTAssertNotEqual(store.effectiveDocument, normal)
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         store.barEditing.begin()
         XCTAssertFalse(trial.isActive)
         XCTAssertEqual(store.effectiveDocument, normal)
@@ -468,7 +470,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar in Place" })
         store.barEditing.begin()
         XCTAssertFalse(store.barEditing.isActive)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         XCTAssertTrue(store.barEditing.isAvailable)
         AppDelegate(store: store).menuWillOpen(menu)
         XCTAssertFalse(menu.items.contains { $0.title == "Edit Bar in Place" })
@@ -488,7 +490,7 @@ final class BarEditingTests: XCTestCase {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
         let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         defer { store.stop() }
         XCTAssertNil(store.configurationError)
         let panel = BarPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -500,8 +502,10 @@ final class BarEditingTests: XCTestCase {
                 store.configurationError = error
                 delegate.menuWillOpen(menu)
                 var expected = ["StableBar", "separator"]
-                if hasBar { expected += ["Edit Bar in Place", "Try Themes…", "Get Widgets…", "separator"] }
-                expected += ["Getting Started…", "Help…", "Send Feedback…"]
+                if hasBar { expected += ["Edit Bar in Place", "Try Themes…", "Get Widgets…"] }
+                expected += ["Hide Bar", "separator", "Getting Started…", "Help…"]
+                if hasBar { expected += ["Share My Bar…"] }
+                expected += ["Send Feedback…"]
                 if let error { expected += ["separator", error] }
                 expected += ["separator", "Settings…", "Quit StableBar"]
                 XCTAssertEqual(menu.items.map { $0.isSeparatorItem ? "separator" : $0.title }, expected)
@@ -711,7 +715,7 @@ final class BarEditingTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+        try store.configurationStore.setSessionEdits([ConfigurationEdit(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
                                                                              "position": .string("right"), "text": .string("Temporary")])])
         let before = try Data(contentsOf: fixture.url)
         store.barEditing.begin()
@@ -721,7 +725,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.barEditing.errorDisplayID, 2)
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         try fixture.write(#"{"widgets":[{"id":"clock","type":"clock","position":"left","display":"external"}]}"#, to: fixture.url)
         for _ in 0..<100 {
             if !store.barEditing.isActive { break }
@@ -731,7 +735,7 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
         XCTAssertFalse(store.barEditing.widgets(on: laptop).contains { $0.id == "clock" })
         XCTAssertTrue(store.barEditing.allowsWidgetActions)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testTurnedOffCommandsStayOffTheEditBarAndMovingThemNeverStartsOrEnablesThem() async throws {
@@ -743,15 +747,15 @@ final class BarEditingTests: XCTestCase {
         """, to: fixture.url)
         let store = BarStore(configurationURL: fixture.url, themesDirectory: nil)
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         store.barEditing.begin()
         XCTAssertTrue(store.barEditing.entries(on: laptop).isEmpty)
-        store.setVisibleWidgets(ids: ["off"], displayID: 1)
+        store.widgetScripts.setVisibleWidgets(ids: ["off"], displayID: 1)
         store.barEditing.move("off", to: .left)
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertTrue(store.barEditing.isActive)
         XCTAssertEqual(store.configuration?.widgets.first?.enabled, false)
-        XCTAssertTrue(store.scripts.isEmpty)
+        XCTAssertTrue(store.widgetScripts.scripts.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
         store.barEditing.end()
         XCTAssertTrue(store.barEditing.widgets(on: laptop).isEmpty)
@@ -762,10 +766,10 @@ final class BarEditingTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([])
+        try store.configurationStore.setSessionEdits([])
         store.barEditing.begin()
-        store.scheduleReload()
-        let reload = try XCTUnwrap(store.reloadTask)
+        store.configurationStore.scheduleReload()
+        let reload = try XCTUnwrap(store.configurationStore.reloadTask)
         store.barEditing.move("clock", to: .left)
         await reload.value
         XCTAssertTrue(store.barEditing.isActive)

@@ -53,32 +53,42 @@ The script signs with the hardened runtime, submits the DMG to Apple, then stapl
 
 ## Architecture
 
-- [Configuration.swift](Sources/StableBar/Configuration.swift): config, widget definitions and style inheritance.
-- [StyleResolution.swift](Sources/StableBar/StyleResolution.swift): style layers and states resolved in one place for bar widgets, workspace cells, layout blocks and the bar, and the rules that set data states.
-- [WidgetLabel.swift](Sources/StableBar/WidgetLabel.swift): what each widget type shows and the default layout it draws.
-- [BarStore.swift](Sources/StableBar/BarStore.swift): live reload, shared provider lifetimes, visibility, sleep and each widget's resolved style.
-- [ConfigurationLoader.swift](Sources/StableBar/ConfigurationLoader.swift): includes, profiles, tokens and provenance.
-- [ConfigurationEdits.swift](Sources/StableBar/ConfigurationEdits.swift): file-preserving edits shared by CLI and editor.
-- [RuntimeControl.swift](Sources/StableBar/RuntimeControl.swift): local request/reply control endpoint.
-- [ConfigurationEditor.swift](Sources/StableBar/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
-- [NativeMetrics.swift](Sources/StableBar/NativeMetrics.swift): CPU, memory, network and calendar readings.
-- [AudioMonitor.swift](Sources/StableBar/AudioMonitor.swift): output-device readings and CoreAudio change listeners.
-- [PowerMonitor.swift](Sources/StableBar/PowerMonitor.swift): battery readings and power-change notifications.
-- [WidgetPackage.swift](Sources/StableBar/WidgetPackage.swift): package inspection, installation, store downloads and version selection.
-- [Workspaces.swift](Sources/StableBar/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
-- [Yabai.swift](Sources/StableBar/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
-- [ScriptWidget.swift](Sources/StableBar/ScriptWidget.swift): the runner that applies a data source's output, with diagnostics, retries and suspension.
-- [DataSource.swift](Sources/StableBar/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
-- [DataSourceRegistry.swift](Sources/StableBar/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
-- [BuiltInEvents.swift](Sources/StableBar/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
-- [BarView.swift](Sources/StableBar/BarView.swift): native rendering and selection animation.
-- [LayoutConfiguration.swift](Sources/StableBar/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
-- [PopupConfiguration.swift](Sources/StableBar/PopupConfiguration.swift): popup layout blocks.
-- [PopupView.swift](Sources/StableBar/PopupView.swift): shared popup rendering and script bindings.
-- [WidgetPopup.swift](Sources/StableBar/WidgetPopup.swift): anchored panel, dismissal and screen placement.
-- [StableBarApp.swift](Sources/StableBar/StableBarApp.swift): non-activating panels and application lifecycle.
+The sources are grouped by area in [Sources/StableBar](Sources/StableBar): `App` (launch, the command line, updates, moving and uninstalling the app, reports), `Bar`, `Editing` (editing the bar in place), `Popups`, `Configuration`, `DataSources` (scripts, providers and what they read), `Workspaces`, `MenuBar` (App menus, menu bar items and the menu bar's behavior), `Packages`, `Themes` (themes and bar links), `Settings`, `Setup`, `Rendering` (offscreen scenes and docs images) and `System`.
 
-There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
+- [Configuration.swift](Sources/StableBar/Configuration/Configuration.swift): config, widget definitions and style inheritance.
+- [StyleResolution.swift](Sources/StableBar/Configuration/StyleResolution.swift): style layers and states resolved in one place for bar widgets, workspace cells, layout blocks and the bar, and the rules that set data states.
+- [WidgetLabel.swift](Sources/StableBar/Bar/WidgetLabel.swift): what each widget type shows and the default layout it draws.
+- [BarStore.swift](Sources/StableBar/Bar/BarStore.swift): one bar's parts, and showing a configuration across them in order.
+- [ConfigurationStore.swift](Sources/StableBar/Configuration/ConfigurationStore.swift): the files that make up a bar, live reload, edits, migrations and writes, screen setups and theme trials.
+- [WidgetScripts.swift](Sources/StableBar/DataSources/WidgetScripts.swift): shared provider lifetimes, events, click actions, visibility and sleep.
+- [BarPresentation.swift](Sources/StableBar/Bar/BarPresentation.swift): each widget's resolved style and presence, and the bar's style.
+- [AppWatcher.swift](Sources/StableBar/Bar/AppWatcher.swift): the front app, the active display and the app that owns the menu bar.
+- [ConfigurationLoader.swift](Sources/StableBar/Configuration/ConfigurationLoader.swift): includes, profiles, tokens and provenance.
+- [ConfigurationEdits.swift](Sources/StableBar/Configuration/ConfigurationEdits.swift): file-preserving edits shared by CLI and editor.
+- [RuntimeControl.swift](Sources/StableBar/App/RuntimeControl.swift): local request/reply control endpoint.
+- [RuntimeCommands.swift](Sources/StableBar/App/RuntimeCommands.swift): what a running bar answers on that endpoint.
+- [ConfigurationEditor.swift](Sources/StableBar/Settings/ConfigurationEditor.swift): preview, undo/redo and validated persistence.
+- [NativeMetrics.swift](Sources/StableBar/DataSources/NativeMetrics.swift): CPU, memory, network and calendar readings.
+- [AudioMonitor.swift](Sources/StableBar/DataSources/AudioMonitor.swift): output-device readings and CoreAudio change listeners.
+- [PowerMonitor.swift](Sources/StableBar/DataSources/PowerMonitor.swift): battery readings and power-change notifications.
+- [WidgetPackage.swift](Sources/StableBar/Packages/WidgetPackage.swift): package inspection, installation, store downloads and version selection.
+- [Workspaces.swift](Sources/StableBar/Workspaces/Workspaces.swift): AeroSpace subscriptions, yabai refreshes and workspace actions.
+- [Yabai.swift](Sources/StableBar/Workspaces/Yabai.swift): yabai snapshots mapped to workspaces and screen numbers.
+- [ScriptWidget.swift](Sources/StableBar/DataSources/ScriptWidget.swift): the runner that applies a data source's output, with diagnostics, retries and suspension.
+- [DataSource.swift](Sources/StableBar/DataSources/DataSource.swift): the data source protocol, and the command, stream, polling, push and merge sources.
+- [DataSourceRegistry.swift](Sources/StableBar/DataSources/DataSourceRegistry.swift): each data source type, the settings it reads, how it runs and the access it needs.
+- [BuiltInEvents.swift](Sources/StableBar/DataSources/BuiltInEvents.swift): the events StableBar sends itself and what `INFO` holds.
+- [BarView.swift](Sources/StableBar/Bar/BarView.swift): the bar's layout: measuring widgets, planning space and overflow.
+- [WidgetView.swift](Sources/StableBar/Bar/WidgetView.swift): one widget on the bar, its clicks and its popup.
+- [WorkspaceView.swift](Sources/StableBar/Workspaces/WorkspaceView.swift): workspaces, their app icons and the selection animation.
+- [LayoutConfiguration.swift](Sources/StableBar/Configuration/LayoutConfiguration.swift): groups, priority overflow and notch-aware placement.
+- [PopupConfiguration.swift](Sources/StableBar/Configuration/PopupConfiguration.swift): popup layout blocks.
+- [PopupView.swift](Sources/StableBar/Popups/PopupView.swift): a popup's frame, background and pin controls.
+- [PopupBlockView.swift](Sources/StableBar/Popups/PopupBlockView.swift): the blocks a popup draws and their script bindings.
+- [WidgetPopup.swift](Sources/StableBar/Popups/WidgetPopup.swift): anchored panel, dismissal and screen placement.
+- [StableBarApp.swift](Sources/StableBar/App/StableBarApp.swift): non-activating panels and application lifecycle.
+
+There is no web view or custom drawing loop. Private macOS API, for hiding and revealing the macOS menu bar, reading Spaces and Lock Screen, is looked up at runtime in [PrivateAPI.swift](Sources/StableBar/System/PrivateAPI.swift), so a macOS without one of its calls only turns that feature off; [AGENTS.md](AGENTS.md#architecture-rules) says when another one is allowed. Styling and data updates are separate from window placement. Performance and long-term stability still need measurement with your actual widgets and displays.
 
 ## How we work
 
@@ -109,7 +119,7 @@ A pull request that changes `Sources`, `Resources`, `Package.swift`, `Package.re
 | An eligible app commit with `!` or a `BREAKING CHANGE:` footer | Major: 0.1.0 → 1.0.0 |
 | `build:`, `chore:`, `ci:`, `docs:`, `style:`, `test:` | None |
 
-Queued pushes skip builds when `main` has already moved on. `main` goes first: GitHub runs only a few macOS jobs at once for the account, so a run on `main` cancels the pull request runs waiting or running when it starts, and **Resume pull requests** restarts their cancelled jobs once its own macOS jobs are done. A pull request that got a newer commit or was closed in the meantime isn't restarted. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
+Queued pushes skip builds when `main` has already moved on. GitHub runs only a few macOS jobs at once for the account, and `main`'s runs wait for a free Mac like pull requests' do. Tests and release compilation run in parallel, with separate Swift build caches for debug and release. Pull requests restore `main`'s release cache but don't save their own. Packaging uses the compiled binary from the same workflow run only after both jobs pass; signing, notarization and publication still happen in the release job.
 
 Both release channels come from `main`:
 
@@ -151,7 +161,7 @@ Release jobs set `STABLEBAR_RELEASE_BUILD=1` when packaging to preserve their st
 
 ## Docs images
 
-`scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data, a fixed date (Thursday 22 October 2026, 09:41 UTC) and a local, empty Store index, and writes them as WebP. Two runs of one commit on one Mac draw the same pixels. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main` and on pull requests that change the app, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/DocsImages.swift).
+`scripts/render-docs-images.sh` draws the images in `docs/images` from the app's own bar, popup and Settings views, with sample data, a fixed date (Thursday 22 October 2026, 09:41 UTC) and a local, empty Store index, and writes them as WebP. Two runs of one commit on one Mac draw the same pixels. It needs `cwebp`: `brew install webp`. The **Docs images** CI job draws them on every push to `main` and on pull requests that change the app, and a stable release commits them, so a change to the bar, popups or Settings doesn't need new images. To show something new, add a scene to [DocsImages.swift](Sources/StableBar/Rendering/DocsImages.swift).
 
 ## Scenes
 
@@ -169,7 +179,7 @@ A change you can see extends the scene that shows its area, or adds one when non
 
 On a pull request, CI draws the screens twice, from the pull request and from its base, and a bot posts what changed.
 
-- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides. The base's side comes from **Draw main's screens**, which draws every push to `main` once, so the base draws only the scenes the pull request adds or edits. When `main`'s CI didn't draw the base, as for a push that a newer one replaced, a release commit, or a run that hasn't finished, the base draws everything.
+- **Draw screens** draws the [docs images](#docs-images) and the [scenes](#scenes) when the app, the scenes, the examples they read or the comparison scripts change. It waits for **Test**, so a push whose tests fail draws nothing, and Visual review says so; rerunning the failed jobs draws the screens too. Both sides draw the pull request's scene files, each beside its own resources and examples, so a new scene shows how `main` draws it too. When the app didn't change, the pull request's app draws both sides. The base's side comes from **Draw main's screens**, which draws every push to `main` once, so the base draws only the scenes the pull request adds or edits. While `main`'s run of the base is still going, **Wait for main's screens** waits for its screens on Linux, for up to 40 minutes. When `main`'s CI didn't draw the base, as for a push that a newer one replaced, a release commit, or a run that ended without them, the base draws everything. The base draws with `main`'s release build of it when that run kept one, and compiles it otherwise.
 - **Draw website screens** captures the five pages of `site` at desktop (1440×900) and phone (390×844) size, in light and dark mode, when the website changes. The capture answers requests from the folder and fetches nothing else, seeds `Math.random` and stops the page's clock at the scenes' date, so two captures of one commit match.
 
 CI's Macs draw the same pixels for one commit, so the two sides needn't come from one machine. A pixel counts as changed when a color channel moves by more than 1 and a pixel next to it changed too. A screen whose height changed, such as a website page that grew, is compared from the top: its crop starts at the first change and runs across the full width. A crop shows at most 1,600 rows of a change, and the comment says so when it stops short; the approval still covers the whole image.
@@ -187,7 +197,7 @@ These jobs run the pull request's code with a read-only token. The **Screens** w
 | Pending | Screens changed. A maintainer looks at them, then adds the `visual-ok` label. |
 | Success: "M changed screens approved." | `visual-ok` was added after the comment began showing these screens. |
 | Pending: "The base changed…" | The pull request's base changed since its screens were drawn. Push a commit to draw them again. |
-| Pending: "… was cancelled…" | CI was cancelled before it drew the screens, as when `main`'s run pauses it. The comment stays as it was until CI runs again. |
+| Pending: "… was cancelled…" | CI was cancelled before it drew the screens, as when a newer push replaced the run. The comment stays as it was until CI runs again. |
 | Failure | Drawing failed; the comment says what. A `visual-ok` added while it showed the failure still approves it. |
 
 `visual-ok` approves the screens the comment showed when the label was added, so reload the pull request first if a push just landed. Any maintainer can add it, the author too. A later run that shows the same screens against the same base keeps the approval. One that shows other screens, or other failures, takes the label off and the review goes back to pending: look again, and add it again. Removing the label also sends the review back to pending.
@@ -196,9 +206,8 @@ Pull requests from forks get the same comment and status: the drawing runs in th
 
 ## When CI fails
 
-- **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. Rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished, then fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A failure that comes back on reruns is a real one, even when the test looks slow. Each run's `test-results` artifact lists every Swift Testing test with its time and failures, kept 30 days, so the same test failing across runs is easy to spot.
+- **A test that passes when it runs again.** Hundreds of tests share the main actor on a 3-core runner, so a test that bounds main-actor work with wall-clock time can run out. When up to five Swift Testing tests fail, **Test** runs them once more on their own: if they pass, the job passes with a **Flaky test** warning naming each one, and its summary lists them. Fix the wait in a pull request of its own, as [Writing tests](AGENTS.md#writing-tests) says. A test that fails again, an XCTest failure or more failures fail the job; rerun the failed jobs with `gh run rerun <run> --failed` once the whole run has finished. A failure that comes back on reruns is a real one, even when the test looks slow. Each run's `test-results` artifact lists every Swift Testing test with its time and failures, kept 30 days, so the same test failing across runs is easy to spot.
 - **A crash that ends the test run** (`exited with unexpected signal code 6`). The log doesn't say where. After a local run, look for a `swiftpm-testing-helper` report in `~/Library/Logs/DiagnosticReports`: its crashing thread names the code. Then turn the crash into a test that fails every time.
-- **A run cancelled while `main` builds.** `main`'s run paused it and restarts its cancelled jobs when its macOS jobs are done, so wait for that rather than rerunning it. Visual review stays pending meanwhile.
 - **A job that never ran, or a check that stays in progress.** "The job was not acquired by Runner", or a required check still in progress after its steps finished, needs a rerun, not a fix.
 - **A failure only CI shows.** CI's Macs always show scroll bars: run the test with `-AppleShowScrollBars Always`. Locally, the popup tests that animate fail while the display sleeps or the screen is locked.
 - **Tests that don't match the branch.** `swift build` doesn't rebuild the tests: after switching branches, run `swift build --build-tests` before `swift test --skip-build`.

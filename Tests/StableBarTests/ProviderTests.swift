@@ -175,6 +175,52 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(providerRetryDelay(interval: 600, failures: 100) == 600)
 }
 
+@Test func httpOutputCopiesWhatItsJSONPointersFind() throws {
+    let response = try JSONDecoder().decode(ConfigurationValue.self, from: Data(#"""
+    {"current":{"temperature_2m":21.4,"weather_code":3,"is_day":true},"current_units":{"temperature_2m":"°C"},
+     "a/b":{"m~n":"escaped"},"price":"67000.12","missingPrice":"NaN","hugePrice":"1e400",
+     "items":[{"name":"stablebar","stars":12,"archived":false,"owner":{"login":"seb"}},"skipped",{"name":"empty","topics":[]}]}
+    """#.utf8))
+    let output = try JSONDecoder().decode(HTTPOutput.self, from: Data(#"""
+    {"text":"/current/temperature_2m",
+     "fields":{"code":"/current/weather_code","day":"/current/is_day","unit":"/current_units/temperature_2m","escaped":"/a~1b/m~0n",
+               "first":"/items/0/name","missing":"/current/wind","outside":"/items/9/name","object":"/current",
+               "minusZero":"/items/-0/name","leadingZero":"/items/00/name","plus":"/items/+0/name"},
+     "values":{"temperature":"/current/temperature_2m","price":"/price","unit":"/current_units/temperature_2m",
+               "missingPrice":"/missingPrice","hugePrice":"/hugePrice"},
+     "lists":{"repos":"/items","missing":"/repos","object":"/current"}}
+    """#.utf8)).output(from: response)
+    #expect(output == ScriptOutput(text: "21.4", fields: ["code": "3", "day": "true", "unit": "°C", "escaped": "escaped", "first": "stablebar"],
+                                   lists: ["repos": [["name": "stablebar", "stars": "12", "archived": "false"], ["name": "empty"]]],
+                                   values: ["temperature": 21.4, "price": 67000.12]))
+}
+
+@Test @MainActor func anHTTPProviderSendsItsHeadersAndTokenAndReportsAFailedStatus() async throws {
+    let registry = DataSourceRegistry(types: [.http(session: StubURLProtocol.session())])
+    let url = URL(string: "https://api.http-provider.example/weather")!
+    let body = Data(#"{"current":{"temperature_2m":21.4}}"#.utf8)
+    StubURLProtocol.serve(body, at: url)
+    let script = ScriptWidget()
+    defer { script.stop() }
+    script.start(provider: try JSONDecoder().decode(ProviderConfiguration.self, from: Data(#"""
+    {"type":"http","url":"https://api.http-provider.example/weather","headers":{"Accept":"application/json"},"token":"abc",
+     "output":{"text":"/current/temperature_2m"}}
+    """#.utf8)), registry: registry)
+    try await awaitCondition { script.output.text == "21.4" }
+    let request = try #require(StubURLProtocol.requests.last { $0.url == url })
+    #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
+    #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer abc")
+    #expect(script.diagnostics.lastStdout == String(decoding: body, as: UTF8.self))
+    // Configuration can't read a source's token, so this one is empty and no header is sent.
+    script.start(provider: try JSONDecoder().decode(ProviderConfiguration.self, from: Data(#"""
+    {"type":"http","url":"https://api.http-provider.example/missing","token":"@secret.source:acme","output":{}}
+    """#.utf8)), registry: registry)
+    try await awaitCondition { script.error != nil }
+    #expect(script.error == "The server answered with HTTP status 404.")
+    let missing = try #require(StubURLProtocol.requests.last { $0.url?.path() == "/missing" && $0.url?.host() == url.host() })
+    #expect(missing.value(forHTTPHeaderField: "Authorization") == nil)
+}
+
 @Test func nativeCountersMeasureDeltasAndDiscardResetNetworkCounters() {
     let before = NetworkCounters(received: 1_000, sent: 2_000)
     let rates = NetworkCounters(received: 3_000, sent: 8_000).rates(since: before, elapsed: 2)
@@ -310,15 +356,15 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
-    let shared = try #require(store.scripts["first"])
-    #expect(store.scripts["second"] === shared)
+    store.configurationStore.reloadConfiguration()
+    let shared = try #require(store.widgetScripts.scripts["first"])
+    #expect(store.widgetScripts.scripts["second"] === shared)
     for _ in 0..<100 {
         if shared.output.text == "startup" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     try #require(shared.output.text == "startup")
-    store.refreshScripts(for: "changed")
+    store.widgetScripts.refreshScripts(for: "changed")
     for _ in 0..<100 {
         if shared.output.text == "changed" { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -327,16 +373,16 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     widgets[0]["style"] = ["background": "#112233"]
     document["widgets"] = widgets
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
-    #expect(store.scripts["first"] === shared)
-    #expect(store.scripts["second"] === shared)
+    store.configurationStore.reloadConfiguration()
+    #expect(store.widgetScripts.scripts["first"] === shared)
+    #expect(store.widgetScripts.scripts["second"] === shared)
     widgets[0] = ["id": "first", "type": "script", "position": "left", "command": "printf independent", "interval": NSNull()]
     document["widgets"] = widgets
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
-    let independent = try #require(store.scripts["first"])
+    store.configurationStore.reloadConfiguration()
+    let independent = try #require(store.widgetScripts.scripts["first"])
     #expect(independent !== shared)
-    #expect(store.scripts["second"] === shared)
+    #expect(store.widgetScripts.scripts["second"] === shared)
     for _ in 0..<100 {
         if independent.output.text == "independent" { break }
         try await Task.sleep(for: .milliseconds(20))
@@ -360,40 +406,40 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
-    let shared = try #require(store.scripts["first"])
+    store.configurationStore.reloadConfiguration()
+    let shared = try #require(store.widgetScripts.scripts["first"])
     #expect(shared.diagnostics.suspended)
-    store.setInspectorOpen(true)
+    store.widgetScripts.setInspectorOpen(true)
     #expect(shared.diagnostics.suspended)
     let first = try #require(store.configuration?.widgets.first)
-    #expect(store.widgetStatus(for: first) == .paused)
+    #expect(store.widgetScripts.widgetStatus(for: first) == .paused)
     #expect(shared.diagnostics.suspended)
-    store.setInspectedWidget("first")
+    store.widgetScripts.setInspectedWidget("first")
     #expect(!shared.diagnostics.suspended)
-    store.setInspectedWidget(nil)
+    store.widgetScripts.setInspectedWidget(nil)
     #expect(shared.diagnostics.suspended)
-    store.setInspectedWidget("first")
-    store.setInspectorOpen(false)
+    store.widgetScripts.setInspectedWidget("first")
+    store.widgetScripts.setInspectorOpen(false)
     #expect(shared.diagnostics.suspended)
-    store.setInspectorOpen(true)
+    store.widgetScripts.setInspectorOpen(true)
     #expect(shared.diagnostics.suspended)
-    store.setVisibleWidgets(ids: ["second"], displayID: 1)
+    store.widgetScripts.setVisibleWidgets(ids: ["second"], displayID: 1)
     for _ in 0..<100 {
         if shared.output.text == "resume" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     #expect(shared.output.text == "resume")
     #expect(!shared.diagnostics.suspended)
-    store.setVisibleWidgets(ids: ["first"], displayID: 2)
-    store.setVisibleWidgets(ids: [], displayID: 1)
+    store.widgetScripts.setVisibleWidgets(ids: ["first"], displayID: 2)
+    store.widgetScripts.setVisibleWidgets(ids: [], displayID: 1)
     #expect(!shared.diagnostics.suspended)
-    store.setPaused(true, because: .systemAsleep)
-    store.setPaused(true, because: .screenLocked)
-    store.setPaused(false, because: .systemAsleep)
+    store.widgetScripts.setPaused(true, because: .systemAsleep)
+    store.widgetScripts.setPaused(true, because: .screenLocked)
+    store.widgetScripts.setPaused(false, because: .systemAsleep)
     #expect(shared.diagnostics.suspended)
-    store.setPaused(false, because: .screenLocked)
+    store.widgetScripts.setPaused(false, because: .screenLocked)
     #expect(!shared.diagnostics.suspended)
-    store.retainDisplays([1])
+    store.widgetScripts.retainDisplays([1])
     #expect(shared.diagnostics.suspended)
     #expect(shared.output.text == "resume")
 }
@@ -418,12 +464,12 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         store.stop()
         try? FileManager.default.removeItem(at: directory)
     }
-    store.reloadConfiguration()
-    let shared = try #require(store.scripts["first"])
+    store.configurationStore.reloadConfiguration()
+    let shared = try #require(store.widgetScripts.scripts["first"])
     var previousPID: Int32 = 0
     for round in 0..<12 {
-        store.setVisibleWidgets(ids: ["first"], displayID: 1)
-        store.setPaused(false, because: .systemAsleep)
+        store.widgetScripts.setVisibleWidgets(ids: ["first"], displayID: 1)
+        store.widgetScripts.setPaused(false, because: .systemAsleep)
         for _ in 0..<100 {
             if let pid = Int32(shared.output.text), pid != previousPID, shared.diagnostics.running { break }
             try await Task.sleep(for: .milliseconds(10))
@@ -432,7 +478,7 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         #expect(pid != previousPID)
         #expect(shared.diagnostics.running)
         previousPID = pid
-        store.setPaused(true, because: .systemAsleep)
+        store.widgetScripts.setPaused(true, because: .systemAsleep)
         for _ in 0..<100 {
             if kill(pid, 0) == -1 { break }
             try await Task.sleep(for: .milliseconds(5))
@@ -445,10 +491,10 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
         }
         document["widgets"] = widgets
         try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
-        #expect(store.scripts.count == widgets.count)
-        #expect(store.scripts.values.allSatisfy { $0 === shared })
+        #expect(store.widgetScripts.scripts.count == widgets.count)
+        #expect(store.widgetScripts.scripts.values.allSatisfy { $0 === shared })
         #expect(shared.diagnostics.suspended)
     }
     #expect(shared.samples.count == 12)
@@ -456,8 +502,8 @@ private func provider(_ command: String, type: String = "stream", interval: Doub
     #expect(shared.diagnostics.failureCount == 0)
     document["widgets"] = [[String: Any]]()
     try JSONSerialization.data(withJSONObject: document).write(to: url, options: .atomic)
-    store.reloadConfiguration()
-    #expect(store.scripts.isEmpty)
+    store.configurationStore.reloadConfiguration()
+    #expect(store.widgetScripts.scripts.isEmpty)
     #expect(!shared.diagnostics.running)
     #expect(!shared.diagnostics.suspended)
     let processes = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map { Int32($0)! }

@@ -327,7 +327,7 @@ final class BarEditViewTests: XCTestCase {
     #expect(member.minX >= 851 && member.maxX <= 1512, "At rest the side shows the group's last member: \(member)")
     #expect(abs(member.width - 40) < 0.01, "The crowded side scrolls instead of shrinking the group")
     var selected: String?
-    store.onCustomizeWidget = { selected = $0 }
+    store.onWindowRequest = { if case let .customizeItem(.widget(id)) = $0 { selected = id } }
     func click(_ point: CGPoint, until condition: () -> Bool) async throws -> Bool {
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try #require(NSEvent.mouseEvent(with: type, location: host.convert(point, to: nil), modifierFlags: [],

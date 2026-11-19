@@ -1,0 +1,9 @@
+{
+  "id": "weather",
+  "name": "Weather",
+  "version": "1.0.0",
+  "kind": "widgets",
+  "entry": "config.json",
+  "description": "The temperature in Zurich from Open-Meteo, read without a script.",
+  "hosts": ["api.open-meteo.com"]
+}

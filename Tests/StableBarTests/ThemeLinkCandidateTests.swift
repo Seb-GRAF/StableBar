@@ -21,7 +21,7 @@ struct ThemeLinkCandidateTests {
         #expect(exists(first.choice.directory))
         if tryFirst {
             first.tryOnBar()
-            #expect(store.themeTrialDirectory == first.choice.directory)
+            #expect(store.configurationStore.themeTrialDirectory == first.choice.directory)
         }
 
         #expect(store.receive([b.link]) == .appearance)
@@ -32,7 +32,7 @@ struct ThemeLinkCandidateTests {
         #expect(store.pendingLinks.themeError == nil)
         #expect(!exists(first.choice.directory))
         #expect(exists(second.choice.directory))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
     }
 
     @Test func aDamagedThemeLinkShowsWhyOnTheThemePage() throws {
@@ -51,13 +51,13 @@ struct ThemeLinkCandidateTests {
         let candidate = try #require(store.pendingLinks.theme)
         defer { candidate.discard() }
         candidate.tryOnBar()
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
 
         #expect(store.receive([damaged]) == .appearance)
         #expect(store.pendingLinks.theme == nil)
         #expect(store.pendingLinks.themeError == ThemeLinkError.damaged.errorDescription)
         #expect(!exists(candidate.choice.directory))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
     }
 
     @Test(arguments: [false, true])
@@ -72,12 +72,12 @@ struct ThemeLinkCandidateTests {
         #expect(exists(candidate.choice.directory))
         if tryFirst {
             candidate.tryOnBar()
-            #expect(store.themeTrialDirectory == candidate.choice.directory)
+            #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
         }
 
         store.stop()
         #expect(!exists(candidate.choice.directory))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.pendingLinks.theme == nil)
     }
 
@@ -119,7 +119,7 @@ struct ThemeLinkCandidateTests {
         #expect(current.state == .ready)
         #expect(exists(current.choice.directory))
         #expect(!exists(previous.choice.directory))
-        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -132,7 +132,7 @@ struct ThemeLinkCandidateTests {
         let candidate = try ThemeLinkCandidate(link: link, store: store)
         defer { candidate.discard() }
         let original = try Data(contentsOf: fixture.url)
-        let selection = store.selectedThemeKey
+        let selection = store.configurationStore.selectedThemeKey
         #expect(candidate.state == .ready)
         #expect(!candidate.choice.isBundled)
         #expect(candidate.choice.directory.lastPathComponent.hasPrefix("stablebar-theme-link-"))
@@ -141,8 +141,8 @@ struct ThemeLinkCandidateTests {
 
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
-        #expect(store.selectedThemeKey == selection)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configurationStore.selectedThemeKey == selection)
         #expect(store.configuration?.bar.height == 30)
         #expect(try Data(contentsOf: fixture.url) == original)
         #expect(store.customizationHistory.undoSteps.isEmpty)
@@ -150,9 +150,9 @@ struct ThemeLinkCandidateTests {
         candidate.discard()
         candidate.discard()
         #expect(!exists(candidate.choice.directory))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         candidate.tryOnBar()
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
     }
 
     @Test func cancellingATrialKeepsTheCandidateReadyToTryAgain() throws {
@@ -165,11 +165,11 @@ struct ThemeLinkCandidateTests {
         candidate.tryOnBar()
         candidate.cancelTrial()
         #expect(candidate.state == .ready)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(exists(candidate.choice.directory))
         candidate.tryOnBar()
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
     }
 
     @Test(arguments: [false, true])
@@ -185,7 +185,7 @@ struct ThemeLinkCandidateTests {
         first.tryOnBar()
         second.tryOnBar()
         if discard { first.discard() } else { first.cancelTrial() }
-        #expect(store.themeTrialDirectory == second.choice.directory)
+        #expect(store.configurationStore.themeTrialDirectory == second.choice.directory)
         #expect(store.configuration?.bar.height == 30)
         #expect(exists(second.choice.directory))
     }
@@ -199,16 +199,16 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         candidate.tryOnBar()
         try fixture.write(#"{"widgets":[],"bar":{"margin":17}}"#, to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
         #expect(store.configuration?.bar.height == 30)
         #expect(store.configuration?.bar.margin == 17)
         #expect(exists(candidate.choice.directory))
         candidate.cancelTrial()
         #expect(store.configuration?.bar.margin == 17)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
     }
 
     @Test func tryingALinkedThemeEndsEditingTheBar() throws {
@@ -232,13 +232,13 @@ struct ThemeLinkCandidateTests {
         defer { store.stop() }
         let trial = ThemeTrial(store: store)
         trial.next()
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         candidate.tryOnBar()
         #expect(!trial.isActive)
         #expect(candidate.state == .trying)
-        #expect(store.themeTrialDirectory == candidate.choice.directory)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.choice.directory)
     }
 
     @Test(arguments: [false, true])
@@ -251,11 +251,11 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         let trial = ThemeTrial(store: store)
         trial.next()
-        store.onEndThemeTrial = { trial.cancel() }
+        store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         if installationFails { try fixture.write("not a directory", to: fixture.packages.directory) }
         await candidate.use()
         #expect(!trial.isActive)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         if installationFails {
             guard case .failed = candidate.state else {
                 Issue.record("Expected installation to fail")
@@ -263,7 +263,7 @@ struct ThemeLinkCandidateTests {
             }
         } else {
             #expect(candidate.state == .used)
-            #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+            #expect(store.configurationStore.selectedThemeKey == "harbour-test/1.0.0")
         }
     }
 
@@ -276,8 +276,8 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         candidate.tryOnBar()
         #expect(candidate.state == .failed("Load a bar before trying themes."))
-        #expect(store.selectedThemeKey == "built-in")
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(exists(candidate.choice.directory))
     }
 
@@ -294,9 +294,9 @@ struct ThemeLinkCandidateTests {
         let installed = try fixture.packages.directory(id: "harbour-test", version: "1.0.0")
         #expect(try Data(contentsOf: installed.appending(path: "config.json")) == candidate.link.configuration)
         #expect(try Data(contentsOf: installed.appending(path: "package.json")) == candidate.link.manifest)
-        #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+        #expect(store.configurationStore.selectedThemeKey == "harbour-test/1.0.0")
         #expect(store.configurationError == nil)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(candidate.state == .used)
         #expect(!exists(candidate.choice.directory))
         #expect(store.customizationHistory.undoSteps.count == 1)
@@ -317,7 +317,7 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         await candidate.use()
         #expect(candidate.state == .used)
-        #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+        #expect(store.configurationStore.selectedThemeKey == "harbour-test/1.0.0")
         #expect(!exists(candidate.choice.directory))
         let attributes = try FileManager.default.attributesOfItem(atPath: installed.directory.path)
         #expect(attributes[.modificationDate] as? Date == originalDate)
@@ -337,14 +337,14 @@ struct ThemeLinkCandidateTests {
         _ = try fixture.packages.install(source)
         let store = try loadedStore(fixture)
         defer { store.stop() }
-        let selection = store.selectedThemeKey
+        let selection = store.configurationStore.selectedThemeKey
         let candidate = try ThemeLinkCandidate(link: linkedTheme(), store: store)
         defer { candidate.discard() }
         candidate.tryOnBar()
         await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
-        #expect(store.selectedThemeKey == selection)
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == selection)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -367,8 +367,8 @@ struct ThemeLinkCandidateTests {
 
         await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.idTaken("harbour-test").errorDescription!))
-        #expect(store.selectedThemeKey == "built-in")
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.isEmpty)
         #expect(exists(candidate.choice.directory))
         #expect(try Data(contentsOf: installed.directory.appending(path: "package.json")) == manifest)
@@ -391,8 +391,8 @@ struct ThemeLinkCandidateTests {
 
         await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
-        #expect(store.selectedThemeKey == "built-in")
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -430,8 +430,8 @@ struct ThemeLinkCandidateTests {
             Issue.record("Expected installation to fail")
             return
         }
-        #expect(store.themeTrialDirectory == nil)
-        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.themeTrialDirectory == nil)
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -452,7 +452,7 @@ struct ThemeLinkCandidateTests {
         let replacement = Task { @MainActor in
             #expect(candidate.state == (tryFirst ? .trying : .ready))
             if linkedTrial { newerCandidate.tryOnBar() } else { trial.next() }
-            store.onEndThemeTrial = { trial.cancel() }
+            store.onWindowRequest = { if case .endThemeTrial = $0 { trial.cancel() } }
         }
 
         await candidate.use()
@@ -463,10 +463,10 @@ struct ThemeLinkCandidateTests {
             return
         }
         let directory = linkedTrial ? newerCandidate.choice.directory : trial.choice?.directory
-        #expect(store.themeTrialDirectory == directory)
+        #expect(store.configurationStore.themeTrialDirectory == directory)
         #expect(trial.isActive)
         if linkedTrial { #expect(newerCandidate.state == .trying) }
-        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
         #expect(store.customizationHistory.undoSteps.isEmpty)
     }
 
@@ -486,9 +486,9 @@ struct ThemeLinkCandidateTests {
         gallery.select(selected)
 
         #expect(gallery.errors[selected.key] == nil)
-        #expect(store.selectedThemeKey == selected.key)
+        #expect(store.configurationStore.selectedThemeKey == selected.key)
         #expect(try fixture.document()["theme"] == .object(selected.selection))
-        #expect(store.themeTrialDirectory == nil)
+        #expect(store.configurationStore.themeTrialDirectory == nil)
         #expect(candidate.state == .ready)
         #expect(store.configuration?.bar.height == 42)
         #expect(store.customizationHistory.undoSteps.count == 1)
@@ -540,7 +540,7 @@ struct ThemeLinkCandidateTests {
 
         await candidate.use()
         #expect(candidate.state == .used)
-        #expect(store.selectedThemeKey == "harbour-test/1.0.0")
+        #expect(store.configurationStore.selectedThemeKey == "harbour-test/1.0.0")
         #expect(exists(staging))
         #expect(!exists(candidate.choice.directory))
     }
@@ -592,7 +592,7 @@ struct ThemeLinkCandidateTests {
         defer { candidate.discard() }
         await candidate.use()
         #expect(candidate.state == .failed(ThemeLinkError.versionTaken(id: "harbour-test", version: "1.0.0").errorDescription!))
-        #expect(store.selectedThemeKey == "built-in")
+        #expect(store.configurationStore.selectedThemeKey == "built-in")
         #expect(!exists(fixture.packages.directory))
 
         try FileManager.default.removeItem(at: version)
@@ -912,8 +912,8 @@ struct ThemeLinkCandidateTests {
         if install { await candidate.use() } else { candidate.tryOnBar() }
         #expect(candidate.validationOriginPathBytes == initial)
         #expect(candidate.state == (install ? .used : .trying))
-        #expect(store.selectedThemeKey == (install ? candidate.choice.key : "built-in"))
-        #expect(store.themeTrialDirectory == (install ? nil : candidate.choice.directory))
+        #expect(store.configurationStore.selectedThemeKey == (install ? candidate.choice.key : "built-in"))
+        #expect(store.configurationStore.themeTrialDirectory == (install ? nil : candidate.choice.directory))
         #expect(store.customizationHistory.undoSteps.count == (install ? 1 : 0))
         #expect(exists(try fixture.packages.directory(id: "harbour-test", version: "1.0.0")) == install)
     }
@@ -990,7 +990,8 @@ struct ThemeLinkCandidateTests {
         ("style.paddingLeading", 0, 1_000), ("style.paddingTrailing", 0, 1_000),
         ("style.paddingTop", 0, 1_000), ("style.paddingBottom", 0, 1_000),
         ("style.states.hover.height", 0, 1_000), ("style.states.height.spacing", 0, 1_000),
-        ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1)
+        ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1),
+        ("glass.transparency", 0, 1)
     ], [false, true])
     func barNumbersStayWithinTheirSettingsRanges(
         range: (String, Double, Double), inProfile: Bool
@@ -1342,6 +1343,303 @@ struct ThemeLinkCandidateTests {
         }
     }
 
+    @Test func sharingABarCarriesItsResolvedLookAndBuiltInAndStoreWidgetsOnly() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"theme":{"id":"catppuccin"},
+             "tokens":{"accent":"#ff0000","barTint":"#123456","myBlue":"#0000ff","apiKey":"secret"},
+             "bar":{"height":30,"background":"@token.barTint","position":"bottom"},
+             "profiles":[{"name":"Work","configuration":{"defaults":{"cornerRadius":4}}}],
+             "packages":[{"id":"weather","version":"1.0.0","settings":{"units":"imperial","interval":300,"city":"Bern"}},
+                         {"id":"notes","version":"1.0.0"},{"id":"team","version":"1.0.0"}],
+             "groups":{"status":{}},"widgetOverrides":{"weather":{"group":"status"}},
+             "providers":{"speakers":{"type":"audio"}},
+             "widgets":[
+               {"id":"clock","type":"clock","position":"right","onClick":"open -a Calendar","style":{"foreground":"@token.myBlue"}},
+               {"id":"note","type":"script","position":"left","command":"echo hi"},
+               {"id":"volume","type":"provider","provider":"speakers","position":"right"},
+               {"id":"laptop","type":"text","text":"x","position":"left","display":"builtIn"}
+             ]}
+            """#)
+        defer { fixture.close() }
+        let settings = #"""
+            {"units":{"type":"string","title":"Units","choices":["metric","imperial"],"default":"metric"},
+             "interval":{"type":"number","title":"Refresh every (seconds)","default":900},
+             "city":{"type":"string","title":"City","default":"Zurich"},"apiKey":{"type":"secret","title":"API key"}}
+            """#
+        for (id, record) in [("weather", PackageInstallRecord(.store)), ("notes", .local),
+                             ("team", PackageInstallRecord(source: "team", name: "Team", url: URL(string: "https://team.example/index.json")))] {
+            let source = fixture.directory.appending(path: "sources/\(id)")
+            try fixture.write(#"{"id":"\#(id)","name":"\#(id.capitalized)","version":"1.0.0","kind":"widgets","entry":"config.json","settings":\#(id == "weather" ? settings : "{}")}"#,
+                              to: source.appending(path: "package.json"))
+            try fixture.write(#"{"widgets":[{"id":"\#(id)","type":"text","text":"x","position":"right"}]}"#, to: source.appending(path: "config.json"))
+            _ = try fixture.packages.install(source, record: record)
+        }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let shared = try BarLink.sharing(store, on: BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil))
+        #expect(shared.look == "Catppuccin (shared)")
+        #expect(shared.widgets == [
+            BarLink.Sharing.Widget(name: "Weather", symbol: "textformat", store: true, settings: ["Units: imperial", "Refresh every (seconds): 300"],
+                                   settingsLeftOut: ["City: free text", "API key: secret"]),
+            BarLink.Sharing.Widget(name: "Notes", symbol: "textformat", leftOut: "Local folder"),
+            BarLink.Sharing.Widget(name: "Team", symbol: "textformat", leftOut: "Private source"),
+            BarLink.Sharing.Widget(name: "clock", symbol: "clock"),
+            BarLink.Sharing.Widget(name: "note", symbol: "terminal", leftOut: "Script widget"),
+            BarLink.Sharing.Widget(name: "volume", symbol: "gauge.with.dots.needle.33percent", leftOut: "Custom provider")
+        ])
+        let page = "https://stablebar.app/bar.html#"
+        #expect(shared.link.absoluteString.hasPrefix(page + "v=1&d="))
+        let link = try #require(try BarLink(url: URL(string: "stablebar://bar?" + shared.link.absoluteString.dropFirst(page.count))!))
+        #expect(link.widgets == [["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
+                                  "style": .object(["foreground": .string("#0000ff")])]])
+        #expect(link.packages == [BarLink.Package(id: "weather", version: "1.0.0", settings: ["units": .string("imperial"), "interval": .number(300)])])
+        #expect(link.widgetOverrides == ["weather": ["position": .string("right"), "group": .string("status")]])
+        #expect(link.widgetOrder == ["weather", "clock"])
+        let manifest = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.manifest)
+        #expect(manifest["name"] == .string("Catppuccin (shared)"))
+        #expect(try manifest["id"]?.decoded(String.self).hasPrefix("shared-") == true)
+        let look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        #expect(look["profiles"] == nil)
+        #expect(try look["defaults"]?.decoded([String: ConfigurationValue].self)["cornerRadius"] == .number(4))
+        let bar = try #require(try look["bar"]?.decoded([String: ConfigurationValue].self))
+        #expect(bar["height"] == .number(30))
+        #expect(bar["position"] == nil)
+        let tokens = try #require(try look["tokens"]?.decoded([String: ConfigurationValue].self))
+        #expect(tokens["accent"] == .string("#ff0000"))
+        #expect(tokens["barTint"] == .string("#123456"))
+        #expect(tokens["myBlue"] == nil)
+        #expect(tokens["apiKey"] == nil)
+    }
+
+    @Test func tryingABarLinkShowsItsWidgetsUntilCancelled() async throws {
+        let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"}]}"#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        let original = try Data(contentsOf: fixture.url)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configurationStore.themeTrialDirectory == candidate.look.choice.directory)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        #expect(try Data(contentsOf: fixture.url) == original)
+        candidate.cancelTrial()
+        #expect(candidate.state == .ready)
+        #expect(store.configuration?.widgets.map(\.id) == ["mine"])
+    }
+
+    @Test(arguments: [(false, "top"), (true, "top"), (true, "bottom")])
+    func usingABarLinkReplacesTheWidgetsAndLookInOneUndoStep(notched: Bool, position: String) async throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"defaults":{"cornerRadius":2},"bar":{"height":40,"position":"\#(position)"},
+             "screens":{"laptop":{"layout":{"left":["mine"]}}},
+             "profiles":[{"name":"Work","enabled":false,"configuration":{"widgetOverrides":{"mine":{"text":"Work"}}}}],
+             "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"},
+                        {"id":"clock","type":"clock","position":"right"}]}
+            """#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        let original = try Data(contentsOf: fixture.url)
+        var link = try linkedBar()
+        link.widgets[4]["position"] = .string("center")
+        link.widgets[3]["group"] = .string("status")
+        var look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        look["groups"] = .object(["status": .object(["style": .object(["cornerRadius": .number(8)])])])
+        link.theme = ThemeLink(manifest: link.theme.manifest, configuration: try configurationData(look))
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        candidate.hasNotchedDisplay = { notched }
+        await candidate.loadStore()
+        #expect(candidate.widgets.filter { $0.source == .unlisted }.map(\.id) == ["weather", "uptime"])
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.configurationError == nil)
+        #expect(store.configurationStore.selectedThemeKey == "shared-5c1e0b7a/1.0.0")
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        let document = try fixture.document()
+        #expect(document["defaults"] == nil)
+        #expect(document["bar"] == .object(["position": .string(position)]))
+        #expect(document["screens"] == (notched && position == "top" ? .object(["laptop": .object(["layout": .object([
+            "left": .array([.string("workspaces"), .string("app")]), "notchLeft": .array([.string("clock")]),
+            "notchRight": .array([]), "right": .array([.string("sound"), .string("battery")])
+        ])])]) : nil))
+        #expect(document["groups"] == .object(["status": .object([:])]))
+        let gallery = ThemeGallery(store: store)
+        await gallery.refresh()
+        gallery.select(try #require(gallery.choices.first { $0.key == "built-in" }))
+        #expect(gallery.errors["built-in"] == nil)
+        #expect(store.configurationError == nil)
+        #expect(store.configuration?.widgets.first { $0.id == "battery" }?.group == "status")
+        try store.customizationHistory.undo()
+        #expect(document["profiles"] == .array([.object(["name": .string("Work"), "enabled": .bool(false), "configuration": .object([:])])]))
+        #expect(store.customizationHistory.undoSteps.count == 1)
+        try store.customizationHistory.undo()
+        #expect(try Data(contentsOf: fixture.url) == original)
+    }
+
+    @Test func untickedWidgetsAndTheirStorePackagesAreLeftOutOfTryAndUse() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "weather", kind: "widgets", configuration: #"{"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"}]}"#,
+                                name: "Weather")
+        store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        let candidate = try BarLinkCandidate(link: linkedBar(), store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        #expect(candidate.widgets.first { $0.id == "weather" }
+            == BarLinkCandidate.Widget(id: "weather", name: "Weather", source: .store(summary: "Runs nothing, stays offline")))
+        // The Store doesn't list uptime, so it has nothing to preview.
+        #expect(candidate.previewWidgets.map(\.id) == ["workspaces", "app", "weather", "sound", "battery", "clock"])
+        #expect(candidate.previewWidgets[2].content == .text("Weather"))
+        #expect(candidate.previewWidgets[2].position == .right)
+        candidate.unticked = ["weather", "battery"]
+        #expect(candidate.previewWidgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        candidate.cancelTrial()
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "clock"])
+        #expect(try fixture.document()["packages"] == nil)
+        #expect(try !fixture.packages.list().contains { $0.id == "weather" })
+    }
+
+    @Test func storePackagesThatNeedAReviewShareOneReview() async throws {
+        let fixture = try ThemeGalleryFixture()
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        let index = LocalPackageIndex(fixture: fixture)
+        let entries = [
+            try await index.add(id: "weather", kind: "widgets", configuration: #"""
+                {"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"},{"id":"forecast","type":"text","text":"Sun","position":"right"}]}
+                """#, hosts: #"["api.open-meteo.com"]"#, name: "Weather"),
+            try await index.add(id: "uptime", kind: "widgets", configuration: #"{"widgets":[{"id":"uptime","type":"text","text":"3 days","position":"right"}]}"#,
+                                settings: #"{"interval":{"type":"number","default":60}}"#, hosts: #"["example.com"]"#, name: "Uptime"),
+            try await index.add(id: "moon", kind: "widgets", configuration: #"{"widgets":[{"id":"moon","type":"text","text":"Moon","position":"right"}]}"#,
+                                name: "Moon"),
+            try await index.add(id: "ticker", kind: nil, configuration: #"""
+                {"widgets":[{"id":"ticker","type":"script","command":"date","position":"right"},
+                            {"id":"tock","type":"script","command":"date +%s","position":"right"}]}
+                """#, permissions: #"["accessibility"]"#, name: "Ticker")
+        ]
+        try JSONEncoder().encode(ConfigurationValue.object(["packages": .array(entries.map { entry in
+            .object(["id": .string(entry.id), "name": .string(entry.name), "version": .string(entry.version),
+                     "kind": entry.kind.map { .string($0.rawValue) } ?? .null,
+                     "archive": .string(entry.archive), "sha256": .string(entry.sha256)])
+        })])).write(to: index.url)
+        store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        var link = try linkedBar()
+        link.packages += [BarLink.Package(id: "moon", version: "1", settings: [:]), BarLink.Package(id: "ticker", version: "1", settings: [:])]
+        for id in ["forecast", "moon", "ticker"] { link.widgetOverrides[id] = ["position": .string("right")] }
+        link.widgetOrder += ["forecast", "moon", "ticker"]
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        #expect(candidate.widgets.filter { $0.source != .builtIn }.map(\.source) == [
+            .store(summary: "Connects to api.open-meteo.com"), .store(summary: "Connects to example.com"),
+            .store(summary: "Connects to api.open-meteo.com"), .store(summary: "Runs nothing, stays offline"),
+            .store(summary: "Runs 2 commands · Needs Accessibility access")
+        ])
+        candidate.unticked = ["forecast", "ticker"]
+        await candidate.use()
+        #expect(candidate.state == .ready)
+        #expect(candidate.reviews.map(\.manifest.id) == ["weather", "uptime"])
+        #expect(try fixture.packages.list().map(\.id) == ["moon"])
+
+        // As the review's Add to bar does.
+        let library = PackageLibrary(store: store, reviewing: true)
+        await library.loadInstalled()
+        for inspection in candidate.reviews {
+            await library.select(inspection.directory, sourceID: PackageSource.storeID, settings: candidate.settings(for: inspection.manifest))
+            let draft = try #require(library.draft)
+            await library.add(draft, onEnable: { candidate.reviewed($0, settings: $1) })
+            #expect(draft.error == nil)
+        }
+        await candidate.resume()
+        #expect(candidate.state == .used)
+        #expect(candidate.reviews.isEmpty)
+        #expect(store.configuration?.widgets.filter(\.enabled).map(\.id) == ["workspaces", "app", "weather", "uptime", "sound", "battery", "clock", "moon"])
+        #expect(store.configuration?.widgets.first { $0.id == "forecast" }?.enabled == false)
+        let packages = try #require(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self))
+        #expect(packages.map(\.id) == ["weather", "uptime", "moon"])
+        #expect(packages[1].settings == ["interval": .number(300)])
+        #expect(store.customizationHistory.undoSteps.count == 1)
+    }
+
+    @Test(arguments: [true, false])
+    func aStoreVersionOnTheBarSkipsTheReviewAndTakesTheLinksSettingsAndGroup(onBar: Bool) async throws {
+        let fixture = try ThemeGalleryFixture(onBar ? #"{"packages":[{"id":"weather","version":"1","settings":{"units":"imperial","city":"Bern"}}]}"# : "{}")
+        defer { fixture.close() }
+        let index = LocalPackageIndex(fixture: fixture)
+        _ = try await index.add(id: "weather", kind: "widgets", configuration: #"{"widgets":[{"id":"weather","type":"text","text":"21°","position":"right"}]}"#,
+                                settings: #"{"units":{"type":"string","choices":["metric","imperial"],"default":"metric"},"city":{"type":"string","default":"Zurich"}}"#,
+                                hosts: #"["api.open-meteo.com"]"#, name: "Weather")
+        let client = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+        _ = try await client.install(id: "weather", from: PackageSource.storeID)
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        store.packageStoreClient = client
+        var link = try linkedBar()
+        var look = try JSONDecoder().decode([String: ConfigurationValue].self, from: link.theme.configuration)
+        look["groups"] = .object(["status": .object([:])])
+        link.theme = ThemeLink(manifest: link.theme.manifest, configuration: try configurationData(look))
+        link.widgetOverrides["weather"] = ["position": .string("right"), "group": .string("status")]
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        await candidate.use()
+        guard onBar else {
+            #expect(candidate.reviews.map(\.manifest.id) == ["weather"])
+            return
+        }
+        #expect(candidate.state == .used)
+        let packages = try #require(try fixture.document()["packages"]?.decoded([WidgetPackageSelection].self))
+        #expect(packages.map(\.settings) == [["units": .string("metric"), "city": .string("Bern")]])
+        #expect(store.configuration?.widgets.first { $0.id == "weather" }?.ownGroup == "status")
+    }
+
+    @Test func anUntickedLookKeepsTheBarsLookAndAppliesOnlyTheWidgets() async throws {
+        let fixture = try ThemeGalleryFixture(#"""
+            {"theme":{"id":"gruvbox"},"defaults":{"cornerRadius":2},"groups":{"mine":{}},
+             "widgets":[{"id":"mine","type":"text","text":"Mine","position":"left"}]}
+            """#)
+        defer { fixture.close() }
+        let store = try loadedStore(fixture)
+        defer { store.stop() }
+        try DocsImages.offline(store, in: fixture.directory)
+        var link = try linkedBar()
+        link.widgets[0]["group"] = .string("theirs")
+        link.widgets[1]["group"] = .string("mine")
+        let candidate = try BarLinkCandidate(link: link, store: store)
+        defer { candidate.discard() }
+        await candidate.loadStore()
+        candidate.appliesLook = false
+        await candidate.tryOnBar()
+        #expect(candidate.state == .trying)
+        #expect(store.configurationStore.themeTrialDirectory?.lastPathComponent == "gruvbox")
+        #expect(store.configuration?.defaults.cornerRadius == 2)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        candidate.cancelTrial()
+        #expect(store.configuration?.widgets.map(\.id) == ["mine"])
+        await candidate.use()
+        #expect(candidate.state == .used)
+        #expect(store.configurationStore.selectedThemeKey == "gruvbox")
+        #expect(store.configuration?.defaults.cornerRadius == 2)
+        #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "app", "sound", "battery", "clock"])
+        #expect(store.configuration?.widgets.map(\.ownGroup) == [nil, "mine", nil, nil, nil])
+        #expect(try fixture.document()["defaults"] == .object(["cornerRadius": .number(2)]))
+    }
+
     enum Rejection: CaseIterable, Sendable {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
         case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
@@ -1354,6 +1652,10 @@ struct ThemeLinkCandidateTests {
     private var linkedThemeDirectory: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .appending(path: "Fixtures/linked-theme")
+    }
+
+    private func linkedBar() throws -> BarLink {
+        try BarLink(payload: Data(contentsOf: linkedThemeDirectory.deletingLastPathComponent().appending(path: "linked-bar.json")))
     }
 
     private func linkedTheme() throws -> ThemeLink {
@@ -1414,7 +1716,7 @@ struct ThemeLinkCandidateTests {
 
     private func loadedStore(_ fixture: ThemeGalleryFixture) throws -> BarStore {
         let store = try fixture.store()
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
         _ = try #require(store.configuration)
         return store

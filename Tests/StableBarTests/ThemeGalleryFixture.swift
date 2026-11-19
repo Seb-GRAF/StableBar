@@ -26,9 +26,9 @@ struct ThemeGalleryFixture {
         try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
     }
 
-    func theme(_ configuration: String, id: String = "test-theme", install: Bool = true) throws -> ThemeChoice {
+    func theme(_ configuration: String, id: String = "test-theme", version: String = "1", install: Bool = true) throws -> ThemeChoice {
         let source = directory.appending(path: "sources/\(id)")
-        try write(#"{"id":"\#(id)","name":"Test theme","version":"1","kind":"theme","entry":"config.json"}"#,
+        try write(#"{"id":"\#(id)","name":"Test theme","version":"\#(version)","kind":"theme","entry":"config.json"}"#,
                   to: source.appending(path: "package.json"))
         try write(configuration, to: source.appending(path: "config.json"))
         if install {
@@ -47,7 +47,7 @@ struct ThemeGalleryFixture {
         store.origins = loader.origins
         store.widgetPackageNames = loader.widgetPackageNames
         store.activeProfiles = loader.activeProfiles
-        store.preparePresentations()
+        store.barPresentation.preparePresentations()
         return store
     }
 }

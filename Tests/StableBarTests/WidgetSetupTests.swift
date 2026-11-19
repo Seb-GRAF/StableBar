@@ -1,3 +1,4 @@
+import Testing
 import XCTest
 @testable import StableBar
 
@@ -7,7 +8,7 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let original = try fixture.document()["widgets"]
         let editor = ConfigurationEditor(store: store)
         editor.editBar(for: "work")
@@ -93,11 +94,11 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([
+        try store.configurationStore.setSessionEdits([
             .init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"), "text": .string("Temporary"), "position": .string("right")]),
             .init(action: .reorder, ids: ["temporary"])
         ])
-        try store.setCustomizationEdits([
+        try store.configurationStore.setCustomizationEdits([
             .init(action: .set, id: "pending", properties: ["position": .string("right")]),
             .init(action: .reorder, ids: ["pending", "first"])
         ])
@@ -109,7 +110,7 @@ final class WidgetSetupTests: XCTestCase {
         let id = try XCTUnwrap(result)
         XCTAssertEqual(store.configuration?.widgets.filter { $0.id != "temporary" }.map(\.id), [id, "pending", "first"])
         XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
-        XCTAssertEqual(store.sessionEdits.count, 2)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 2)
     }
 
     @MainActor func testAddingBeforeAMemberOfTheFirstUnitDoesNotSplitItsGroup() async throws {
@@ -157,7 +158,7 @@ final class WidgetSetupTests: XCTestCase {
         _ = try await index.add(id: "power", kind: "widgets", configuration: #"{"groups":{"power":{}},"widgets":[{"id":"battery","type":"battery","position":"left","group":"power"},{"id":"charge","type":"battery","position":"left","group":"power"}]}"#)
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
+        try store.configurationStore.setSessionEdits([.init(action: .bar, properties: ["height": .number(50)])])
         let setup = WidgetSetup(store: store, client: PackageStoreClient(packages: fixture.packages, indexURL: index.url))
         await setup.load()
         let choice = try XCTUnwrap(setup.choices.first { $0.package?.id == "power" })
@@ -195,7 +196,7 @@ final class WidgetSetupTests: XCTestCase {
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
         XCTAssertTrue(FileManager.default.fileExists(atPath: installed.path))
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testEachPlusAddsAtItsOpenSideInOneUndoStepIncludingEmptyGroups() async throws {
@@ -224,7 +225,7 @@ final class WidgetSetupTests: XCTestCase {
         defer { fixture.close() }
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
+        try store.configurationStore.setSessionEdits([.init(action: .add, properties: ["id": .string("temporary"), "type": .string("text"),
                                                                   "text": .string("Temporary"), "position": .string("left")])])
         let setup = WidgetSetup(store: store)
         let before = try Data(contentsOf: fixture.url)
@@ -232,12 +233,12 @@ final class WidgetSetupTests: XCTestCase {
         let id = try XCTUnwrap(result)
         XCTAssertEqual(store.configuration?.widgets.filter { $0.position == .right }.map(\.id), [id, "first"])
         XCTAssertTrue(store.configuration?.widgets.contains { $0.id == "temporary" } == true)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
         XCTAssertFalse(String(decoding: try Data(contentsOf: fixture.url), as: UTF8.self).contains("temporary"))
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), before)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     @MainActor func testCommandFreePackageAddsBeforeThePlusAnchorWithoutReview() async throws {
@@ -526,7 +527,7 @@ final class WidgetSetupTests: XCTestCase {
             let setup = WidgetSetup(store: store, client: client)
             _ = try setup.enable(installed, settings: ["message": .string("Saved")], position: .left)
             if temporary {
-                try store.setSessionEdits([.init(action: .package, properties: ["id": .string("note"), "version": .string("1"),
+                try store.configurationStore.setSessionEdits([.init(action: .package, properties: ["id": .string("note"), "version": .string("1"),
                     "settings": .object(["message": .string("Temporary")])])])
             }
             await setup.load()
@@ -539,7 +540,7 @@ final class WidgetSetupTests: XCTestCase {
             XCTAssertEqual(store.configuration?.widgets.first?.content, .text(temporary ? "Temporary" : "Saved"))
             XCTAssertEqual(store.configuration?.widgets.first?.position, .left)
             XCTAssertTrue(store.customizationHistory.notice?.contains("already on the bar") == true)
-            XCTAssertEqual(store.sessionEdits.count, temporary ? 1 : 0)
+            XCTAssertEqual(store.configurationStore.sessionEdits.count, temporary ? 1 : 0)
         }
     }
 
@@ -556,4 +557,57 @@ final class WidgetSetupTests: XCTestCase {
         return try setup.enable(inspection, settings: setup.savedSettings(for: inspection.manifest), position: position)
     }
 
+}
+
+/// Setup's Found on your Mac leaves out a package already on the bar. A suggestion goes on the bar only after its review,
+/// stays listed once added, comes off with a second click, and Finish setup saves it.
+@Test @MainActor func setupAddsSuggestedStorePackagesAfterTheirReview() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let index = LocalPackageIndex(fixture: fixture)
+    let onBar = try await LocalPackageIndex(fixture: fixture, folder: "earlier").add(id: "on-bar", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"on-bar","type":"text","text":"On","position":"right"}]}"#, name: "On bar")
+    let quota = try await index.add(id: "quota", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"quota","type":"text","text":"42%","position":"right"}]}"#, name: "Quota")
+    _ = try fixture.packages.install(fixture.directory.appending(path: "sources/on-bar"))
+    try fixture.write(#"{"widgets":[],"packages":[{"id":"on-bar","version":"1"}]}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    defer { store.stop() }
+    store.configurationStore.reloadConfiguration()
+    store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+    var system = SetupSystem()
+    system.isTrusted = { true }
+    system.calendarAccess = { .fullAccess }
+    system.menuBarHides = { true }
+    system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    system.workspaceSource = { $0 ?? .spaces }
+    system.isInApplications = { false }
+    system.loginStatus = { .notRegistered }
+    system.suggestedPackages = { _ in [onBar, quota] }
+    let session = SetupSession(store: store, system: system)
+
+    await session.loadSuggestions()
+    #expect(session.suggestions.map(\.id) == ["quota"])
+    await session.pick(quota)
+    let review = try #require(session.review)
+    #expect(review.sourceID == PackageSource.storeID)
+    #expect(session.preferences.packages.isEmpty)
+    #expect(try fixture.packages.list().map(\.id) == ["on-bar"])
+    // The review installs the package before it hands it to setup.
+    let installed = try fixture.packages.install(review.inspection.directory)
+    session.add(installed, settings: [:])
+    #expect(store.configuration?.widgets.map(\.id) == ["on-bar", "quota"])
+    await session.loadSuggestions()
+    #expect(session.suggestions.map(\.id) == ["quota"])
+
+    await session.pick(quota)
+    #expect(session.preferences.packages.isEmpty)
+    #expect(store.configuration?.widgets.map(\.id) == ["on-bar"])
+    session.add(installed, settings: [:])
+    session.finish()
+    #expect(session.error == nil)
+    #expect(try fixture.document()["packages"] == .array([
+        .object(["id": .string("on-bar"), "version": .string("1")]),
+        .object(["id": .string("quota"), "version": .string("1"), "enabled": .bool(true), "settings": .object([:])])
+    ]))
 }

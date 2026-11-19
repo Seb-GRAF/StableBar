@@ -1,0 +1,287 @@
+import Foundation
+
+enum WidgetClickControl: Equatable {
+    case hidden, choices, explanation(String), appleMenu(AppleMenuClick)
+}
+
+enum WidgetClickChoice: String, CaseIterable {
+    case nothing, application, webPage, advanced
+
+    var title: String {
+        switch self {
+        case .nothing: "Nothing"
+        case .application: "Open an app…"
+        case .webPage: "Open a web page…"
+        case .advanced: "Custom action"
+        }
+    }
+
+    static func explanation(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> String? {
+        if widget.content == .workspaces { return "Clicking a workspace switches to it." }
+        if case .appMenu = widget.content { return "Clicking a menu opens it." }
+        if widget.content == .controlCenter { return "Clicking it opens Control Center." }
+        if case .menuBarItems = widget.content { return "Clicking it lists the items in the macOS menu bar." }
+        var actions: [String] = []
+        if widget.onClick != nil || output?.onClick != nil { actions.append("runs a command") }
+        if widget.popup != nil || widget.popupName != nil { actions.append("opens a popup") }
+        if widget.menu != nil || output?.menu != nil { actions.append("opens a menu") }
+        if !actions.isEmpty { return "This widget \(actions.joined(separator: " and ")). Change it with Edit as JSON in the More menu." }
+        if widget.open == nil, widget.content == .provider(DataSourceType.inputSource.name) { return "Clicking it switches to the next input source." }
+        if let open = widget.open, case .url(let url) = OpenTarget(open), !["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+            return "This widget opens a link. Change it with Edit as JSON in the More menu."
+        }
+        if widget.content == .stableBar, widget.open == nil { return "Clicking it opens Settings." }
+        return nil
+    }
+
+    static func control(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> WidgetClickControl {
+        if widget.content == .spacer { return .hidden }
+        if let explanation = explanation(for: widget, output: output) { return .explanation(explanation) }
+        if case let .appleMenu(click) = widget.content {
+            return widget.open == nil ? .appleMenu(click) : .explanation("This widget opens an app or a web page instead. Change it with Edit as JSON in the More menu.")
+        }
+        return .choices
+    }
+
+    static func current(for widget: WidgetConfiguration, output: ScriptOutput? = nil) -> Self {
+        if control(for: widget, output: output) != .choices { return .advanced }
+        guard let open = widget.open, let target = OpenTarget(open) else { return .nothing }
+        switch target {
+        case .application: return .application
+        case .url: return .webPage
+        }
+    }
+
+    func properties(for widget: WidgetConfiguration, value: String? = nil, output: ScriptOutput? = nil) throws -> [String: ConfigurationValue] {
+        guard Self.control(for: widget, output: output) == .choices else {
+            throw CommandFailure(message: "Change this widget’s click action with Edit as JSON in the More menu.")
+        }
+        switch self {
+        case .nothing: return ["open": .null]
+        case .application:
+            guard let value, case .application = OpenTarget(value) else {
+                throw CommandFailure(message: "Choose an application with a bundle identifier.")
+            }
+            return ["open": .string(value)]
+        case .webPage:
+            guard let value, let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                  let host = url.host, !host.isEmpty else {
+                throw CommandFailure(message: "Enter a web address beginning with https:// or http://.")
+            }
+            return ["open": .string(value)]
+        case .advanced: throw CommandFailure(message: "Change this widget’s click action with Edit as JSON in the More menu.")
+        }
+    }
+}
+
+enum WidgetScreenChoice: String, CaseIterable {
+    case all, active, main, builtIn, external, monitor, vertical, notched, unnotched, several, specific
+
+    var title: String {
+        switch self {
+        case .all: "All screens"
+        case .active: "The active screen"
+        case .main: "The main screen"
+        case .builtIn: "The built-in screen"
+        case .external: "External screens"
+        case .monitor: "Landscape monitors"
+        case .vertical: "Vertical monitors"
+        case .notched: "Screens with a notch"
+        case .unnotched: "Screens without a notch"
+        case .several: "Several kinds of screens"
+        case .specific: "Specific screens"
+        }
+    }
+
+    init(_ selection: DisplaySelection) {
+        switch selection {
+        case .all: self = .all
+        case .active: self = .active
+        case .main: self = .main
+        case .builtIn: self = .builtIn
+        case .external: self = .external
+        case .monitor: self = .monitor
+        case .vertical: self = .vertical
+        case .notched: self = .notched
+        case .unnotched: self = .unnotched
+        case .any: self = .several
+        case .ids: self = .specific
+        }
+    }
+
+    var properties: [String: ConfigurationValue]? {
+        switch self {
+        case .specific: nil
+        case .several: ["display": .array(ScreenKind.allCases.map { .string($0.selection) })]
+        default: ["display": .string(rawValue)]
+        }
+    }
+}
+
+struct WidgetClockFormat {
+    let title: String
+    let value: String
+
+    static let common = [
+        Self(title: "24-hour time", value: "HH:mm"),
+        Self(title: "12-hour time", value: "h:mm a"),
+        Self(title: "Time with seconds", value: "HH:mm:ss"),
+        Self(title: "Day and time", value: "EEE HH:mm"),
+        Self(title: "Date and time", value: "EEE d MMM  HH:mm"),
+        Self(title: "Date", value: "EEE d MMM"),
+        Self(title: "Short date", value: "d MMM"),
+        Self(title: "Full date", value: "EEEE d MMMM"),
+        Self(title: "Date + 12-hour time", value: "EEE d MMM  h:mm a"),
+        Self(title: "Date + seconds", value: "EEE d MMM  HH:mm:ss")
+    ]
+
+    func sample(at date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = value
+        return formatter.string(from: date)
+    }
+}
+
+/// How a battery, sound, system or disk widget shows its values. `sources` names them: `percent` for
+/// battery, whose icon is its battery block, `volume` for sound, `cpu`, `memory` or both, in
+/// order, for system, and `disk` for disk.
+enum WidgetMetricDisplay: String, CaseIterable {
+    case standard, changes, icon, value, meter, labelValueMeter, graph, custom
+
+    var title: String {
+        switch self {
+        case .standard: "Icon and value"
+        case .changes: "Icon, value on change"
+        case .icon: "Icon only"
+        case .value: "Value only"
+        case .meter: "Meter and value"
+        case .labelValueMeter: "Label, value and meter"
+        case .graph: "Graph and value"
+        case .custom: "Custom layout"
+        }
+    }
+
+    /// The choices for `source`, its default first: battery's shows only its battery, with the
+    /// percentage in its tooltip, sound's shows the volume only after a change, so it adds that, and
+    /// system's draws a graph. Disk keeps no history to graph. The others keep icon and value as a
+    /// layout of their own.
+    static func choices(for source: String) -> [Self] {
+        switch source {
+        case "percent": [.icon] + allCases.filter { $0 != .changes && $0 != .icon }
+        case "volume": [.changes] + allCases.filter { $0 != .changes }
+        case "cpu", "memory": [.graph] + allCases.filter { $0 != .changes && $0 != .graph }
+        case "disk": allCases.filter { $0 != .changes && $0 != .graph }
+        default: allCases.filter { $0 != .changes }
+        }
+    }
+
+    /// The `layout` that shows this choice, `null` for the default layout, or nil for a custom one.
+    func layout(for sources: [String]) -> ConfigurationValue? {
+        switch self {
+        case .changes: return .null
+        case .graph where sources == ["cpu"]: return .null
+        case .icon where sources == ["percent"]: return .null
+        case .standard where sources == ["disk"]: return .null
+        case .custom: return nil
+        case .labelValueMeter:
+            // A plain row on top, like the other choices: editing merges a new layout into the old one, so a top-level
+            // style here would stay behind on the next choice.
+            let columns = sources.map(metricColumn)
+            let content = columns.count == 1 ? columns[0]
+                : .object(["type": .string("row"), "style": .object(["spacing": .number(14)]), "children": .array(columns)])
+            return .object(["type": .string("row"), "children": .array([content])])
+        default: return .object(["type": .string("row"), "children": .array(sources.flatMap(blocks))])
+        }
+    }
+
+    private func blocks(for source: String) -> [ConfigurationValue] {
+        let icon: ConfigurationValue = switch source {
+        case "percent": .object(["type": .string("battery")])
+        case "memory": .object(["type": .string("symbol"), "name": .string("memorychip")])
+        default: .object(["type": .string("symbol"), "source": .string("icon")])
+        }
+        let text = Self.valueBlock(for: source)
+        switch self {
+        case .icon: return [icon]
+        case .value: return [text]
+        case .meter:
+            return [.object(["type": .string("progress"), "source": .string(source), "height": .number(4),
+                             "style": .object(["width": .number(40)])]), icon, text]
+        case .graph:
+            var graph: [String: ConfigurationValue] = ["type": .string("graph"), "height": .number(16), "style": .object(["width": .number(40)])]
+            // A graph without a source draws the history of the provider's `value`, which is CPU for system.
+            if source == "memory" { graph["source"] = .string(source) }
+            return [.object(graph), icon, text]
+        default: return [icon, text]
+        }
+    }
+
+    private static func valueBlock(for source: String) -> ConfigurationValue {
+        source == "memory"
+            ? .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
+                .object(["type": .string("field"), "field": .string("memory")]), .object(["type": .string("text"), "text": .string("%")])
+            ])])
+            : .object(["type": .string("field"), "field": .string("text")])
+    }
+
+    /// A label and value over a meter. The widths are minimums: 100% fits 37 points in Built-in's and Fern's fonts, and a
+    /// theme with a larger or bolder font, such as Catppuccin's 13 pt medium, widens the column instead of cutting it.
+    private func metricColumn(for source: String) -> ConfigurationValue {
+        let label = ["percent": "BAT", "volume": "VOL", "cpu": "CPU", "memory": "MEM", "disk": "DISK"][source] ?? source.uppercased()
+        var value = Self.valueBlock(for: source)
+        if case var .object(properties) = value {
+            var style: [String: ConfigurationValue] = [:]
+            if case let .object(existing)? = properties["style"] { style = existing }
+            style["minWidth"] = .number(37)
+            properties["style"] = .object(style)
+            properties["alignment"] = .string("trailing")
+            value = .object(properties)
+        }
+        return .object(["type": .string("column"), "style": .object(["spacing": .number(1), "minWidth": .number(73)]), "children": .array([
+            .object(["type": .string("row"), "style": .object(["spacing": .number(0)]), "children": .array([
+                .object(["type": .string("text"), "text": .string(label), "role": .string("key"), "alignment": .string("leading"),
+                         "style": .object(["fontWeight": .string("medium"), "minWidth": .number(36)])]), value
+            ])]),
+            .object(["type": .string("column"), "style": .object(["paddingTop": .number(2)]), "children": .array([
+                .object(["type": .string("progress"), "source": .string(source), "height": .number(4), "role": .string("meter")])
+            ])])
+        ])])
+    }
+
+    static func current(_ layout: ConfigurationValue?, sources: [String]) -> Self {
+        if layout == nil || layout == .null { return choices(for: sources[0])[0] }
+        guard case let .object(properties) = layout, properties["type"] == .string("row") else { return .custom }
+        return choices(for: sources[0]).first {
+            guard case let .object(candidate)? = $0.layout(for: sources) else { return false }
+            return candidate["children"] == properties["children"]
+        } ?? .custom
+    }
+}
+
+/// What a System monitor widget shows, in order.
+enum WidgetSystemMetrics: CaseIterable {
+    case cpu, memory, cpuAndMemory, memoryAndCPU
+
+    var title: String {
+        switch self {
+        case .cpu: "CPU"
+        case .memory: "Memory"
+        case .cpuAndMemory: "CPU and memory"
+        case .memoryAndCPU: "Memory and CPU"
+        }
+    }
+
+    var sources: [String] {
+        switch self {
+        case .cpu: ["cpu"]
+        case .memory: ["memory"]
+        case .cpuAndMemory: ["cpu", "memory"]
+        case .memoryAndCPU: ["memory", "cpu"]
+        }
+    }
+
+    /// The metrics whose display choices include `layout`, CPU for a custom one.
+    static func current(_ layout: ConfigurationValue?) -> Self {
+        allCases.first { WidgetMetricDisplay.current(layout, sources: $0.sources) != .custom } ?? .cpu
+    }
+}

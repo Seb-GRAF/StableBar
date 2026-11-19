@@ -103,7 +103,7 @@ func settingsNotificationClearanceShowsTheSavedValueAndAvailability(major: Int, 
         #expect(toggle.isEnabled == (major >= 26))
         #expect((toggle.state == .on) == configured)
         #expect(store.configuration?.bar.keepNotificationsClear == configured)
-        #expect(store.sessionEdits.isEmpty)
+        #expect(store.configurationStore.sessionEdits.isEmpty)
         #expect(editor.undoSteps.isEmpty)
     }
 }

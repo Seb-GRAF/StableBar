@@ -102,15 +102,15 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
                       to: fixture.url)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.configuration?.bar.height == 40)
 
-    try store.tryTheme(choice)
+    try store.configurationStore.tryTheme(choice)
     #expect(store.configuration?.bar.height == 30)
     #expect(store.activeProfiles == ["tuned"])
 
-    store.endThemeTrial()
+    store.configurationStore.endThemeTrial()
     #expect(store.configuration?.bar.height == 40)
 }
 
@@ -142,16 +142,41 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     defer { fixture.close() }
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
 
     editor.setProfileCondition("Fern", \.theme, value: "fern", control: "theme")
     #expect(editor.error == nil)
     #expect(store.profiles.first?.when?.theme == "fern")
-    store.flushCustomization()
+    store.configurationStore.flushCustomization()
     let saved = try #require(fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self).first)
     #expect(saved["when"] == .object(["theme": .string("fern")]))
     #expect(editor.undoSteps.count == 1)
+}
+
+@MainActor @Test func settingsSavesAppsAndKeepsANullOnlyForAnInheritedCondition() throws {
+    let fixture = try ThemeGalleryFixture(#"""
+    {"includes":["shared.json"],"widgets":[],"profiles":[{"name":"Work","when":{"app":"com.test.Editor"},"configuration":{}}]}
+    """#)
+    defer { fixture.close() }
+    try fixture.write(#"{"profiles":[{"name":"Work","when":{"wifi":"Home"},"configuration":{}}]}"#,
+                      to: fixture.directory.appending(path: "shared.json"))
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
+    defer { store.stop() }
+    store.configurationStore.reloadConfiguration()
+    let editor = ConfigurationEditor(store: store)
+    func savedConditions() throws -> ConfigurationValue? {
+        store.configurationStore.flushCustomization()
+        return try #require(fixture.document()["profiles"]?.decoded([[String: ConfigurationValue]].self).first)["when"]
+    }
+
+    editor.setProfileCondition("Work", \.appList, value: ["com.test.Editor", "com.test.Mail"], control: "app")
+    #expect(editor.error == nil)
+    #expect(try savedConditions() == .object(["apps": .array([.string("com.test.Editor"), .string("com.test.Mail")])]))
+    editor.setProfileCondition("Work", \.appList, value: ["com.test.Mail"], control: "app")
+    #expect(try savedConditions() == .object(["app": .string("com.test.Mail")]))
+    editor.setProfileCondition("Work", \.wifi, value: nil, control: "wifi")
+    #expect(try savedConditions() == .object(["app": .string("com.test.Mail"), "wifi": .null]))
 }
 
 @MainActor @Test func tryingAnotherThemeTurnsOffAProfileForTheSelectedOne() throws {
@@ -165,14 +190,14 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     """#, to: fixture.url)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.bar.height == 30)
 
-    try store.tryTheme(other)
+    try store.configurationStore.tryTheme(other)
     #expect(store.configuration?.bar.height == 40)
     #expect(store.activeProfiles.isEmpty)
 
-    store.endThemeTrial()
+    store.configurationStore.endThemeTrial()
     #expect(store.configuration?.bar.height == 30)
     #expect(store.activeProfiles == ["tuned"])
 }
@@ -190,11 +215,11 @@ private func loaded(_ fixture: ThemeGalleryFixture) throws -> Configuration {
     try write(height: 30)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes, customizationSaveDelay: .zero)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.screenLooks["laptop"]?.bar.height == 30)
 
     try write(height: 26)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.bar.height == 40)
     #expect(store.configuration?.screenLooks["laptop"]?.bar.height == 26)
 }

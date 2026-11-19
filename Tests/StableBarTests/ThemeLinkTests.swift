@@ -284,6 +284,99 @@ struct ThemeLinkTests {
         #expect(error.errorDescription == message)
     }
 
+    @Test func barLinksRoundTripTheirPayload() throws {
+        let link = try BarLink(payload: Data(contentsOf: fixtures.appending(path: "linked-bar.json")))
+        #expect(link.widgets.count == 5)
+        #expect(link.packages == [BarLink.Package(id: "weather", version: "1.2.0", settings: ["units": .string("metric")]),
+                                  BarLink.Package(id: "uptime", version: "1.0.0", settings: ["interval": .number(300)])])
+        #expect(try JSONSerialization.jsonObject(with: link.theme.configuration) is [String: Any])
+        let url = try link.url()
+        #expect(url.absoluteString.hasPrefix("stablebar://bar?v=1&d="))
+        #expect(try BarLink(url: url) == link)
+        #expect(try BarLink(url: URL(string: "stablebar://theme?v=1")!) == nil)
+        var unlisted = link
+        unlisted.widgets.append(["id": .string("hidden"), "type": .string("clock"), "position": .string("left")])
+        #expect(try BarLink(url: unlisted.url()) == link)
+    }
+
+    @Test func barLinksKeepOnlyHowBuiltInWidgetsLookAndWhereTheySit() {
+        let button: ConfigurationValue = .object(["type": .string("button"), "title": .string("Go"), "onClick": .string("say hi")])
+        let clock: [String: ConfigurationValue] = [
+            "id": .string("clock"), "type": .string("clock"), "position": .string("right"), "format": .string("HH:mm"),
+            "onClick": .string("open -a Calendar"), "menu": .array([]), "events": .array([.string("tick")]),
+            "environment": .object(["TOKEN": .string("x")]), "display": .string("builtIn"), "popupName": .string("agenda"),
+            "popup": .object([
+                "style": .object([:]), "onOpen": .string("refresh"),
+                "layout": .object(["type": .string("column"), "children": .array([
+                    .object(["type": .string("text"), "text": .string("Today")]), button,
+                    .object(["type": .string("image"), "path": .string("~/Pictures/me.png")]),
+                    .object(["type": .string("list"), "source": .string("events"),
+                             "row": .object(["type": .string("text"), "text": .string("x"), "open": .string("https://example.com")])])
+                ])])
+            ])
+        ]
+        #expect(BarLink.carried(clock) == [
+            "id": .string("clock"), "type": .string("clock"), "position": .string("right"), "format": .string("HH:mm"),
+            "popup": .object(["style": .object([:]), "layout": .object(["type": .string("column"), "children": .array([
+                .object(["type": .string("text"), "text": .string("Today")])
+            ])])])
+        ])
+        var appleMenu = clock
+        appleMenu["type"] = .string("appleMenu")
+        appleMenu["click"] = .string("lockScreen")
+        appleMenu["popup"] = .object(["style": .object([:]), "layout": button])
+        #expect(BarLink.carried(appleMenu)?["click"] == nil)
+        #expect(BarLink.carried(appleMenu)?["popup"] == nil)
+        var views = clock
+        views["popup"] = .object(["views": .object([
+            "photo": .object(["type": .string("image"), "path": .string("~/Pictures/me.png")]),
+            "week": .object(["type": .string("text"), "text": .string("Week"), "view": .string("photo")])
+        ]), "layout": .object(["type": .string("row"), "children": .array([
+            .object(["type": .string("text"), "text": .string("Photo"), "view": .string("photo")]),
+            .object(["type": .string("text"), "text": .string("Week"), "view": .string("week")])
+        ])])])
+        #expect(BarLink.carried(views)?["popup"] == .object(["views": .object([
+            "week": .object(["type": .string("text"), "text": .string("Week")])
+        ]), "layout": .object(["type": .string("row"), "children": .array([
+            .object(["type": .string("text"), "text": .string("Photo")]),
+            .object(["type": .string("text"), "text": .string("Week"), "view": .string("week")])
+        ])])]))
+        for type in ["script", "provider", "unknown"] {
+            #expect(BarLink.carried(["id": .string("x"), "type": .string(type), "position": .string("left"), "command": .string("x")]) == nil)
+        }
+    }
+
+    @Test func barLinksBoundTheirLengthSizeNestingAndValues() throws {
+        let theme = try BarLink(payload: Data(contentsOf: fixtures.appending(path: "linked-bar.json"))).theme
+        func opened(_ change: (inout BarLink) -> Void) throws -> BarLink? {
+            var link = BarLink(theme: theme)
+            change(&link)
+            return try BarLink(url: link.url())
+        }
+        func nested(_ levels: Int) -> ConfigurationValue {
+            (0..<levels).reduce(ConfigurationValue.number(0)) { value, _ in .array([value]) }
+        }
+        // The root, `widgets` and the widget hold three of the 32 levels.
+        _ = try opened { $0.widgets = [["id": .string("x"), "type": .string("text"), "text": .string("x"), "position": .string("left"), "style": nested(29)]] }
+        #expect(throws: BarLinkError.tooDeep) { try opened { $0.widgets = [["id": .string("x"), "style": nested(30)]] } }
+        // The root and its six keys are seven values.
+        _ = try opened { $0.widgetOrder = Array(repeating: "x", count: BarLink.maximumValues - 7) }
+        #expect(throws: BarLinkError.tooLarge) { try opened { $0.widgetOrder = Array(repeating: "x", count: BarLink.maximumValues - 6) } }
+        #expect(throws: BarLinkError.tooLarge) {
+            try opened { $0.theme.configuration = Data(("{" + String(repeating: " ", count: BarLink.maximumBytes) + "}").utf8) }
+        }
+        let noise = (0..<BarLink.maximumLength).map { _ in String(UInt8.random(in: 0...255), radix: 16) }.joined()
+        #expect(throws: BarLinkError.tooLarge) { try opened { $0.widgetOrder = [noise] } }
+
+        let url = try BarLink(theme: theme).url().absoluteString
+        #expect(throws: BarLinkError.unsupportedVersion) { try BarLink(url: URL(string: url.replacingOccurrences(of: "v=1", with: "v=2"))!) }
+        for damaged in [url.replacingOccurrences(of: "v=1", with: "v=0"), url + "#x", url + "&d=x", "stablebar://bar?v=1&d=AAAA",
+                        "stablebar://bar/x?v=1&d=AAAA", "stablebar://bar?v=1"] {
+            #expect(throws: BarLinkError.damaged) { try BarLink(url: URL(string: damaged)!) }
+        }
+        #expect(throws: BarLinkError.damaged) { try BarLink(payload: Data(#"{"package":"{}","config":"{}"}"#.utf8)) }
+    }
+
     private func paddedObject(bytes: Int) -> Data {
         Data(("{" + String(repeating: " ", count: bytes - 2) + "}").utf8)
     }

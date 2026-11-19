@@ -1,0 +1,45 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": {"height": 40},
+    "defaults": {"height": 28, "paddingVertical": 4},
+    "roles": {"slider": {"height": 40, "cornerRadius": 20, "background": "@token.track"}},
+    "widgets": [
+      {
+        "id": "auto",
+        "type": "script",
+        "command": "true",
+        "position": "left",
+        "layout": {"type": "slider", "title": "Volume", "source": "volume", "onChange": "true", "style": {"width": 120}}
+      },
+      {
+        "id": "native",
+        "type": "script",
+        "command": "true",
+        "position": "left",
+        "layout": {"type": "slider", "title": "Volume", "source": "volume", "onChange": "true", "filled": false, "style": {"width": 120}}
+      },
+      {
+        "id": "explicit",
+        "type": "script",
+        "command": "true",
+        "position": "left",
+        "layout": {
+          "type": "slider",
+          "title": "Volume",
+          "source": "volume",
+          "onChange": "true",
+          "filled": true,
+          "style": {"width": 120, "height": 20, "cornerRadius": 10}
+        }
+      }
+    ]
+  },
+  "outputs": {
+    "auto": {"text": "", "values": {"volume": 0.62}},
+    "native": {"text": "", "values": {"volume": 0.62}},
+    "explicit": {"text": "", "values": {"volume": 0.62}}
+  },
+  "draw": "bar",
+  "width": 640
+}

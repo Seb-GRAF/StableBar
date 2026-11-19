@@ -100,19 +100,19 @@ private enum FrontmostApp {
     for item in cases {
         let widget = try decode(WidgetConfiguration.self, item.widget)
         let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
-        if case .thisProcess = item.app { store.activeApp = NSRunningApplication.current } else { store.activeApp = nil }
+        if case .thisProcess = item.app { store.appWatcher.activeApp = NSRunningApplication.current } else { store.appWatcher.activeApp = nil }
         let app: (name: String?, icon: NSImage?) = switch item.app {
         case .noApp: (nil, nil)
-        case .thisProcess: (store.activeApp?.localizedName, store.activeApp?.icon)
+        case .thisProcess: (store.appWatcher.activeApp?.localizedName, store.appWatcher.activeApp?.icon)
         case let .named(name): (name, icon)
         }
         if let json = item.output {
             let script = ScriptWidget()
             script.output = try ScriptOutput.read(Data(json.utf8))
             script.samples = [0.1, 0.6, 0.35, 0.8, 0.12]
-            store.scripts[widget.id] = script
+            store.widgetScripts.scripts[widget.id] = script
         }
-        let script = store.scripts[widget.id]
+        let script = store.widgetScripts.scripts[widget.id]
         for (index, style) in styles.enumerated() {
             let resolution = ResolvedWidgetStyle(base: resolveStyle([style, widget.style]))
             for (hovered, open) in [(false, false), (true, false), (false, true), (true, true)] {
@@ -432,14 +432,14 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
                 {"id":"named","type":"provider","provider":"speakers","position":"right"},
                 {"id":"icon","type":"text","text":"","icon":"speaker.wave.3","position":"right"}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     for id in ["sound", "named"] {
         let script = ScriptWidget()
         script.output = try ScriptOutput.read(Data(#"""
         {"text":"62%","icon":"speaker.wave.3","value":0.62,"values":{"volume":0.62},"fields":{"device":"Speakers","muted":"false"}}
         """#.utf8))
         script.samples = [0.1, 0.6, 0.35, 0.8, 0.62]
-        store.scripts[id] = script
+        store.widgetScripts.scripts[id] = script
     }
     let widgets = try #require(store.configuration?.widgets)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: false, hovered: false, open: false)
@@ -451,7 +451,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         let rest = try drawing(id)
         #expect(rest.width == iconOnly.width && rest.height == iconOnly.height, "\(id) draws no graph and no volume at rest")
         #expect(rest.difference(from: iconOnly) <= tolerance, "\(id)")
-        let presentation = try #require(store.presentations[id])
+        let presentation = try #require(store.barPresentation.presentations[id])
         presentation.show(TemporaryOutput(fields: ["changedVolume": "62%"], duration: 30), output: 1)
         let changed = try drawing(id)
         #expect(changed.width > rest.width && changed.height == rest.height, "\(id) shows the volume beside its icon after a change")
@@ -459,7 +459,7 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
         #expect(try drawing(id).difference(from: iconOnly) <= tolerance, "\(id) hides the volume when muted")
         var levels: [Drawing] = []
         for volume in [0, 0.2, 0.5, 0.9] {
-            store.scripts[id]?.output.icon = AudioMonitor.icon(volume: volume, muted: false)
+            store.widgetScripts.scripts[id]?.output.icon = AudioMonitor.icon(volume: volume, muted: false)
             levels.append(try drawing(id))
         }
         #expect(levels.allSatisfy { $0.width == rest.width && $0.height == rest.height }, "\(id) keeps its width at every level")
@@ -467,17 +467,18 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
     }
 }
 
-@Test @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn() throws {
+@Test(arguments: [false, true]) @MainActor func hoveringTheSoundWidgetOpensAVolumeSliderOnTheDisplayItIsOn(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
+    {"roles":\#(roles),"widgets":[{"id":"sound","type":"audio","position":"right"},{"id":"fixed","type":"audio","position":"left"}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     for (id, json) in [("sound", #"{"text":"62%","icon":"speaker.wave.2","value":0.62,"values":{"volume":0.62}}"#),
                        ("fixed", #"{"text":"HDMI","icon":"speaker.wave.2","fields":{"volumeAvailable":"false"}}"#)] {
         let script = ScriptWidget()
         script.output = try ScriptOutput.read(Data(json.utf8))
-        store.scripts[id] = script
+        store.widgetScripts.scripts[id] = script
     }
     let widgets = try #require(store.configuration?.widgets)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: false, hovered: false, open: false)
@@ -489,15 +490,15 @@ func listEntriesDrawInOrderWithTheirSpacing(direction: (property: String, type: 
             .environment(\.measuringBarWidths, true))
     }
     let rest = try drawing("sound", on: 1)
-    try #require(store.presentations["sound"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["sound"]).setExpanded(true, on: 1)
     let open = try drawing("sound", on: 1)
     #expect(open.width > rest.width + 2 * 72, "The slider and the volume open beside the icon")
     #expect(open.height == rest.height)
     #expect(try drawing("sound", on: 2).width == rest.width, "Other displays stay closed")
-    try #require(store.presentations["sound"]).setExpanded(false, on: 1)
+    try #require(store.barPresentation.presentations["sound"]).setExpanded(false, on: 1)
     #expect(try drawing("sound", on: 1).width == rest.width)
     let fixed = try drawing("fixed", on: 1)
-    try #require(store.presentations["fixed"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["fixed"]).setExpanded(true, on: 1)
     #expect(try drawing("fixed", on: 1).width == fixed.width, "A device without a volume control has no slider")
     #expect(SoundWidgetView.opensBeforeIcon(.right))
     #expect(WidgetPosition.allCases.filter(SoundWidgetView.opensBeforeIcon) == [.right], "Only the right of the bar grows to the left")
@@ -520,14 +521,15 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
     }
 }
 
-@Test @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay() throws {
+@Test(arguments: [false, true]) @MainActor func hoverLayoutsMeasureTheirExpandedWidthOnOnlyTheHoveredDisplay(themed: Bool) throws {
     let store = BarStore(configurationURL: FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).json"))
+    let roles = themed ? #"{"slider":{"cornerRadius":20,"height":40}}"# : "{}"
     store.configuration = try decode(Configuration.self, #"""
-    {"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
+    {"roles":\#(roles),"widgets":[{"id":"timer","type":"text","text":"60m","position":"right",
      "hoverLayout":{"type":"slider","title":"Minutes","source":"duration","min":15,"max":240,"step":15,
                     "onChange":"set-duration","style":{"width":100,"height":16}}}]}
     """#)
-    store.preparePresentations()
+    store.barPresentation.preparePresentations()
     let widget = try #require(store.configuration?.widgets.first)
     let layout = try #require(widget.hoverLayout)
     let style = ResolvedWidgetStyle(base: WidgetStyle()).layoutStyle(configured: true, hovered: false, open: false)
@@ -538,12 +540,12 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
         }.environment(\.measuringBarWidths, true))
     }
     let rest = try drawing(on: 1)
-    try #require(store.presentations["timer"]).setExpanded(true, on: 1)
+    try #require(store.barPresentation.presentations["timer"]).setExpanded(true, on: 1)
     let open = try drawing(on: 1)
     #expect(open.width > rest.width + 190)
     #expect(open.height == rest.height)
     #expect(try drawing(on: 2).width == rest.width)
-    try #require(store.presentations["timer"]).setExpanded(false, on: 1)
+    try #require(store.barPresentation.presentations["timer"]).setExpanded(false, on: 1)
     #expect(try drawing(on: 1).width == rest.width)
 }
 
@@ -556,7 +558,7 @@ func hoverExpansionKeepsControlsOutsideTheLabelThroughoutTheAnimation(controlsBe
         await confirmation("The text widget stays valid", expectedCount: 0) { invalidated in
             withObservationTracking { _ = WidgetBlocks(widget: app, store: store, style: style, runAction: { _, _ in }).body } onChange: { redrawn() }
             withObservationTracking { _ = WidgetBlocks(widget: note, store: store, style: style, runAction: { _, _ in }).body } onChange: { invalidated() }
-            store.activeApp = NSRunningApplication.current
+            store.appWatcher.activeApp = NSRunningApplication.current
         }
     }
 }

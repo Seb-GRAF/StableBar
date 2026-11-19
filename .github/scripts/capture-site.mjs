@@ -12,7 +12,7 @@ import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const origin = "http://stablebar.test";
-const pages = ["index", "privacy", "terms", "404", "create-theme"];
+const pages = ["index", "privacy", "terms", "404", "create-theme", "bar"];
 const schemes = { light: "", dark: "-dark" };
 const sizes = {
   desktop: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 },

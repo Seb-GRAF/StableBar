@@ -41,7 +41,7 @@ private func output(_ json: String) throws -> ScriptOutput {
         await confirmation("The text label stays valid", expectedCount: 0) { invalidated in
             withObservationTracking { _ = store.label(for: app) } onChange: { changed() }
             withObservationTracking { _ = store.label(for: note) } onChange: { invalidated() }
-            store.activeApp = NSRunningApplication.current
+            store.appWatcher.activeApp = NSRunningApplication.current
         }
     }
     _ = NSApplication.shared
@@ -63,9 +63,9 @@ private func output(_ json: String) throws -> ScriptOutput {
     """#.utf8).write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     for _ in 0..<100 {
-        if store.scripts["jobs"]?.output.text == "Busy" { break }
+        if store.widgetScripts.scripts["jobs"]?.output.text == "Busy" { break }
         try await Task.sleep(for: .milliseconds(20))
     }
     guard case let .object(note) = try store.snapshot(id: "note"), case let .object(time) = try store.snapshot(id: "time"),

@@ -11,7 +11,7 @@ final class ThemeOverridesTests: XCTestCase {
         _ = try fixture.theme(##"{"defaults":{"fontSize":12,"background":"#ffffff"}}"##)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let editor = ConfigurationEditor(store: store)
         editor.editBar(for: "work")
         let gallery = ThemeGallery(store: store)
@@ -41,7 +41,7 @@ final class ThemeOverridesTests: XCTestCase {
         """#)
         let store = try fixture.store()
         defer { store.stop() }
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
         XCTAssertTrue(store.activeProfiles.isEmpty)
@@ -53,19 +53,19 @@ final class ThemeOverridesTests: XCTestCase {
         {"theme":{"id":"test-theme","version":"1"},"bar":{"height":48,"spacing":17},"widgets":[],
          "includes":["profiles.json"],"profiles":[{"name":"disabled","enabled":true}]}
         """#, to: fixture.url)
-        store.reloadConfiguration()
+        store.configurationStore.reloadConfiguration()
         gallery.contextChanged()
         XCTAssertEqual(store.activeProfiles, ["disabled"])
         XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "spacing"]])
 
-        store.context.app = "com.example"
-        store.reloadConfiguration()
+        store.configurationStore.context.app = "com.example"
+        store.configurationStore.reloadConfiguration()
         gallery.contextChanged()
         XCTAssertEqual(store.activeProfiles, ["conditional", "disabled"])
         XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "height"], ["bar", "spacing"]])
 
-        store.context.app = "com.other"
-        try store.applyEdits([ConfigurationEdit(action: .profile, name: "conditional")], persist: false)
+        store.configurationStore.context.app = "com.other"
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .profile, name: "conditional")], persist: false)
         gallery.contextChanged()
         XCTAssertEqual(store.activeProfiles, ["conditional"])
         XCTAssertEqual(gallery.overrides.values.map(\.path), [["bar", "height"]])
@@ -158,6 +158,21 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertFalse(result.values.contains { $0.path.contains("templates") || $0.path.contains("appearance") })
     }
 
+    func testAGroupsOwnStyleReplacesTheThemesGroupDefaults() throws {
+        let main: [String: ConfigurationValue] = [
+            "groupDefaults": .object(["cornerRadius": .number(4)]),
+            "groups": .object(["mine": .object(["style": .object(["background": .string("#808080"), "spacing": .number(2)])])])
+        ]
+        let theme: [String: ConfigurationValue] = ["groupDefaults": .object(["background": .string("#112233"), "cornerRadius": .number(14)])]
+        let overrides = ThemeOverrides(main: main, theme: theme, widgets: [])
+        XCTAssertEqual(overrides.values.map(\.title), ["Every group: corner radius", "Mine group: background"])
+        var ids: [String] = []
+        let reset = try overrides.resetEdit.applying(to: main, widgetIDs: &ids)
+        XCTAssertNil(reset["groupDefaults"])
+        XCTAssertEqual(reset["groups"], .object(["mine": .object(["style": .object(["spacing": .number(2)])])]))
+        XCTAssertEqual(ThemeOverrides(main: ["groups": main["groups"]!], theme: ["groupDefaults": .null], widgets: []).values, [])
+    }
+
     func testColorsNullsAndNestedPresentationPropertiesAreNamedAndResetPrecisely() throws {
         let fixture = try ThemeGalleryFixture(##"""
         {"bar":{"appearance":"dark","style":{"cornerRadius":9}},"tokens":{"text":{"light":"#111111","dark":"#222222"},"custom":"#333333"},
@@ -213,7 +228,7 @@ final class ThemeOverridesTests: XCTestCase {
         let original = try Data(contentsOf: fixture.url)
         let store = try fixture.store()
         defer { store.stop() }
-        try store.setSessionEdits([ConfigurationEdit(action: .bar, properties: ["margin": .number(11)])])
+        try store.configurationStore.setSessionEdits([ConfigurationEdit(action: .bar, properties: ["margin": .number(11)])])
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
         XCTAssertEqual(gallery.overrides.values.count, 5)
@@ -229,7 +244,7 @@ final class ThemeOverridesTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: includedURL), included)
         try store.customizationHistory.undo()
         XCTAssertEqual(try Data(contentsOf: fixture.url), original)
-        XCTAssertEqual(store.sessionEdits.count, 1)
+        XCTAssertEqual(store.configurationStore.sessionEdits.count, 1)
     }
 
     func testThemeLayerUsesOnlyItsOwnPropertiesAndActiveProfilesWithoutRequiringBuiltInTokens() throws {

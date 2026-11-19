@@ -148,7 +148,7 @@ func releasesOrderAsSemanticVersions(earlier: String, later: String) {
     guard case let .object(state) = try store.snapshot() else { Issue.record("no state"); return }
     #expect(state["warning"] == .string(store.configurationWarning!))
 
-    try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(40)])], persist: true)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(40)])], persist: true)
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))
     #expect(saved["bar"] == .object(["height": .number(40), "futureMotion": .string("spring")]), "an older release keeps newer properties")
     #expect(saved["$schema"] == .string(schema("v0.10.0")), "an older release never lowers the stamp")
@@ -163,14 +163,14 @@ func releasesOrderAsSemanticVersions(earlier: String, later: String) {
     defer { store.stop() }
     store.start()
     let original = try Data(contentsOf: root)
-    let data = try store.customizationData([ConfigurationEdit(action: .bar, properties: ["height": .number(38)])], editing: original)
-    try store.writeCustomization(data, replacing: original)
+    let data = try store.configurationStore.customizationData([ConfigurationEdit(action: .bar, properties: ["height": .number(38)])], editing: original)
+    try store.configurationStore.writeCustomization(data, replacing: original)
     #expect(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))["$schema"]
         == .string(schema("v0.10.0")))
 
     try write(#"{"$schema":"\#(schema("main"))","bar":{"height":37},"widgets":[]}"#, to: root)
-    store.reloadConfiguration()
-    try store.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(40)])], persist: true)
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["height": .number(40)])], persist: true)
     #expect(try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))["$schema"]
         == .string(schema("v0.10.0")))
     #expect(store.configurationWarning == nil)

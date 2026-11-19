@@ -88,7 +88,7 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     throws -> (SetupSession, ThemeGalleryFixture, BarStore, () -> [Bool]) {
     let fixture = try ThemeGalleryFixture(configuration)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     var changes: [Bool] = []
     let defaults = UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!
     if completed { defaults.set(true, forKey: SetupProgress.completedKey) }
@@ -544,7 +544,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
 @Test func skippingSetupWhileTheMenuBarChangesPutsItBack() async throws {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     defer { store.stop(); fixture.close() }
     let gate = HeldCall<Void>()
     var hides = false
@@ -555,7 +555,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
         hides = hidden
     }, menuBarHides: { hides }, isTrusted: { true }, calendarAccess: { .fullAccess },
        defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
-    let before = store.sessionEdits.count
+    let before = store.configurationStore.sessionEdits.count
     let session = SetupSession(store: store, system: system)
     let replace = Task { await session.place(.top) }
     for _ in 0..<100 where !gate.started { await Task.yield() }
@@ -566,7 +566,30 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     for _ in 0..<1000 where changes.count < 2 || hides { await Task.yield() }
     #expect(changes == [true, false])
     #expect(!hides)
-    #expect(store.sessionEdits.count == before)
+    #expect(store.configurationStore.sessionEdits.count == before)
+}
+
+/// Skip setup while setup checks again whether a placement waiting for Automation access may go ahead: access turning
+/// out allowed after setup closed doesn't apply the discarded placement.
+@MainActor
+@Test func skippingSetupWhileAccessIsCheckedAgainLeavesTheMenuBarAlone() async throws {
+    let check = HeldCall<MenuBarAutoHide.Access>()
+    var checks = 0
+    let (session, fixture, store, changes) = try setupSession { _ in
+        checks += 1
+        return checks == 1 ? .denied : await check.wait()
+    }
+    defer { store.stop(); fixture.close() }
+    await session.place(.top)
+    try #require(session.placementAwaitingAccess == .top)
+    session.refreshAccess()
+    for _ in 0..<100 where !check.started { await Task.yield() }
+    try #require(check.started)
+    session.cancel()
+    check.answer(.allowed)
+    for _ in 0..<1000 where changes().isEmpty { await Task.yield() }
+    #expect(changes().isEmpty)
+    #expect(!session.menuBarHides)
 }
 
 /// A setup session whose menu bar changes go through `change`, which can hold or fail them, while macOS reports the
@@ -576,7 +599,7 @@ private func setupSession(changing change: @escaping (Bool) async throws -> Void
     throws -> (SetupSession, ThemeGalleryFixture, BarStore) {
     let fixture = try ThemeGalleryFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: change, menuBarHides: hides,
                              isTrusted: { true }, calendarAccess: { .fullAccess },
                              defaults: UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)")!)
@@ -622,4 +645,18 @@ private struct TimedOut: Error {}
     gate.answer(())
     await replace.value
     #expect(session.error == nil)
+}
+
+/// Continue waits on the first step while setup shows the menu bar change failing, even when the change took effect.
+@MainActor
+@Test func aFailedMenuBarChangeKeepsTheFirstStepWaiting() async throws {
+    var hides = true
+    let (session, fixture, store) = try setupSession(changing: { hidden in
+        hides = hidden
+        throw TimedOut()
+    }, hides: { hides })
+    defer { store.stop(); fixture.close() }
+    await session.place(.belowMenuBar)
+    #expect(session.error != nil)
+    #expect(session.blocksContinue(at: .placement))
 }

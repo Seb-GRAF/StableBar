@@ -183,18 +183,14 @@ private final class FakeMenuBarItem: @unchecked Sendable {
     let menuBar = FakeMenuBar(shown: true)
     let appMenu = AppMenu(checkAccess: { true }, readAttribute: fake.read, sleep: { _ in await Task.yield() },
                           menuBar: menuBar.visibility, mouse: menuBar.mouse)
-    appMenu.coverMenuBar = { menuBar.record($0 ? "covered" : "uncovered") }
     try await rightClickItem(of: fake, with: appMenu) { store in
         try await awaitCondition { menuBar.steps.contains("click") }
         #expect(menuBar.heldPollsAtClick == [-1], "The right-click goes out only once the right button is up")
         let display = try #require(store.appMenu.menuBarItems.first?.entry.menuBarDisplay)
-        #expect(menuBar.clicks == [FakeMenuBar.Click(point: CGPoint(x: fake.frame.midX, y: fake.frame.midY),
-                                                     context: MenuBarContext(agent: 77, number: 4242, menuBar: CGDisplayBounds(display)))],
+        #expect(menuBar.windowDisplays == [display], "The click goes to MenuBarAgent's window for the item's display")
+        #expect(menuBar.clicks == [FakeMenuBar.Click(point: CGPoint(x: fake.frame.midX, y: fake.frame.midY), window: FakeMenuBar.window)],
                 "The right-click goes to MenuBarAgent, for the middle of the item in the menu bar")
-        #expect(menuBar.steps == ["uncovered", "context", "click"], "A menu bar that shows gives its context as it is, over the bars")
-        #expect(menuBar.probes == [FakeMenuBar.Probe(agent: 77, row: CGRect(x: CGDisplayBounds(display).minX, y: fake.frame.minY,
-                                                                              width: CGDisplayBounds(display).width, height: fake.frame.height),
-                                                     item: fake.frame)])
+        #expect(menuBar.steps == ["click"], "A menu bar that shows is clicked as it is")
         #expect(!store.popup.isOpen, "The bar opens no menu of its own for the item")
     }
 }
@@ -214,116 +210,98 @@ private final class FakeMenuBarItem: @unchecked Sendable {
     }
 }
 
-/// A hidden menu bar is revealed transparent. macOS gives a mouse event on it to the window beneath, so the menu bar
-/// shows faintly while its context is read, which happens once.
-@Test @MainActor func aHiddenMenuBarShowsFaintlyOnlyWhileItsContextIsRead() async throws {
+/// A hidden menu bar is revealed transparent for the right-click, so that a menu the click opens shows under the item,
+/// and hides again afterwards.
+@Test @MainActor func aHiddenMenuBarIsRevealedTransparentForTheRightClick() async throws {
     let dock = try #require(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first)
     let fake = FakeMenuBarItem(owner: dock.processIdentifier, hasMenu: false)
     let menuBar = FakeMenuBar(shown: false)
     let appMenu = AppMenu(checkAccess: { true }, readAttribute: fake.read, sleep: { _ in await Task.yield() },
                           menuBar: menuBar.visibility, mouse: menuBar.mouse)
-    appMenu.coverMenuBar = { menuBar.record($0 ? "covered" : "uncovered") }
-    try await rightClickItem(of: fake, with: appMenu) { store in
+    try await rightClickItem(of: fake, with: appMenu) { _ in
         try await awaitCondition { menuBar.steps.last == "visible" }
-        #expect(menuBar.steps == ["transparent", "revealed", "sliding", "sliding", "covered", "opacity 0.06", "context", "opacity 0.0",
-                                  "uncovered", "click", "hidden", "visible"],
-                "The context is read once the menu bar has slid all the way down, with the bars over it for as long as it's faint")
-        menuBar.forget()
-        store.appMenu.rightClick(try #require(store.appMenu.menuBarItems.first).entry)
-        try await awaitCondition { menuBar.steps.last == "visible" }
-        #expect(menuBar.steps == ["transparent", "revealed", "click", "hidden", "visible"], "A second right-click knows the context")
+        #expect(menuBar.steps == ["transparent", "revealed", "click", "hidden", "visible"])
     }
 }
 
 @Test @MainActor func anItemGetsAPressWhereAClickCanNotBeSentToTheMenuBar() async throws {
     let dock = try #require(NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first)
     let fake = FakeMenuBarItem(owner: dock.processIdentifier, hasMenu: false)
-    let menuBar = FakeMenuBar(shown: true, agent: nil)
+    let menuBar = FakeMenuBar(shown: true, window: nil)
     let appMenu = AppMenu(checkAccess: { true }, readAttribute: fake.read, sleep: { _ in await Task.yield() },
                           menuBar: menuBar.visibility, mouse: menuBar.mouse)
     try await rightClickItem(of: fake, with: appMenu) { _ in
         try await awaitCondition { menuBar.heldPolls < 0 }
         for _ in 0..<20 { await Task.yield() }
-        #expect(menuBar.steps.isEmpty, "Without MenuBarAgent nothing is read from the menu bar and no click is sent")
+        #expect(menuBar.steps.isEmpty, "Without MenuBarAgent's window no click is sent")
     }
 }
 
-/// A bar drops this event, which was meant for a menu bar that didn't take it.
-@Test func theEventThatReadsAMenuBarsContextIsToldFromTheMouses() throws {
-    func event(_ type: CGEventType, marked: Bool) throws -> NSEvent {
-        let event = try #require(CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: .zero, mouseButton: .center))
-        event.setIntegerValueField(.mouseEventButtonNumber, value: menuBarProbeButton)
-        if marked { event.setIntegerValueField(.eventSourceUserData, value: menuBarProbeMark) }
-        return try #require(NSEvent(cgEvent: event))
-    }
-    #expect(try event(.otherMouseUp, marked: true).isMenuBarProbe)
-    #expect(try !event(.otherMouseUp, marked: false).isMenuBarProbe, "A release of the mouse's still reaches the bar")
-    #expect(try !event(.otherMouseDown, marked: true).isMenuBarProbe)
-}
-
-@Test func aMenuBarsContextIsReadWhereThePointerIsIfThatIsAmongItsItems() {
-    let row = CGRect(x: 0, y: 2, width: 3440, height: 24), item = CGRect(x: 100, y: 2, width: 60, height: 24)
-    #expect(menuBarProbePoint(row: row, item: item, pointer: CGPoint(x: 900, y: 20)) == CGPoint(x: 900, y: 20), "The pointer stays put")
-    #expect(menuBarProbePoint(row: row, item: item, pointer: CGPoint(x: 900, y: 40)) == CGPoint(x: 130, y: 14))
-}
-
-@Test func aRightClickForMenuBarAgentNamesItsContext() throws {
-    let field = try #require(PrivateAPI.eventContextField)
+@Test func aRightClickForMenuBarAgentNamesItsWindow() throws {
+    let field = try #require(PrivateAPI.eventWindowField)
     try #require(PrivateAPI.setEventWindowLocation != nil)
-    let context = MenuBarContext(agent: 77, number: 4242, menuBar: CGRect(x: 1000, y: 0, width: 800, height: 600))
-    let events = menuBarRightClick(at: CGPoint(x: 1300, y: 14), in: context)
+    let window = MenuBarWindow(agent: 77, number: 4242, frame: CGRect(x: 1000, y: 0, width: 800, height: 33))
+    let events = menuBarRightClick(at: CGPoint(x: 1300, y: 14), in: window)
     #expect(events.map(\.type) == [.rightMouseDown, .rightMouseUp])
     #expect(events.map { $0.getIntegerValueField(field) } == [4242, 4242])
     #expect(events.map(\.location) == [CGPoint(x: 1300, y: 14), CGPoint(x: 1300, y: 14)])
     #expect(events.map { $0.getIntegerValueField(.mouseEventClickState) } == [1, 1])
 }
 
-/// A menu bar that records what's done to it, with a right button that reads as held for three polls. One that starts
-/// hidden is still sliding down for the first two checks after it's revealed.
+/// The window list of a MacBook whose menu bar hides automatically, as macOS 27.2 describes it, beside an external display.
+@Test func aRightClickGoesToMenuBarAgentsOwnWindowAlongTheDisplaysTop() {
+    func window(_ owner: pid_t, _ layer: Int, _ number: Int, _ bounds: CGRect) -> [String: Any] {
+        [kCGWindowOwnerPID as String: NSNumber(value: owner), kCGWindowLayer as String: layer, kCGWindowNumber as String: number,
+         kCGWindowBounds as String: bounds.dictionaryRepresentation]
+    }
+    let laptop = CGRect(x: 0, y: 0, width: 1512, height: 982), external = CGRect(x: 1512, y: 0, width: 2560, height: 1440)
+    let agent: pid_t = 77
+    let windows = [
+        window(0, 24, 89554, CGRect(x: 0, y: -33, width: 1512, height: 33)),
+        window(agent, 25, 91168, CGRect(x: 0, y: 0, width: 1512, height: 33)),
+        window(agent, 24, 72310, CGRect(x: 1512, y: 0, width: 2560, height: 24)),
+        window(agent, 24, 72399, CGRect(x: 0, y: 0, width: 1512, height: 982)),
+        window(88, 24, 6543, CGRect(x: 0, y: 0, width: 1512, height: 33)),
+        window(agent, 24, 72305, CGRect(x: 0, y: 0, width: 1512, height: 33)),
+    ]
+    #expect(menuBarAgentWindow(agent: agent, display: laptop, windows: windows)
+                == MenuBarWindow(agent: agent, number: 72305, frame: CGRect(x: 0, y: 0, width: 1512, height: 33)),
+            "Not the window server's menu bar, the strip over it, another display's window, a full-screen one or another app's")
+    #expect(menuBarAgentWindow(agent: agent, display: external, windows: windows)?.number == 72310)
+    #expect(menuBarAgentWindow(agent: 99, display: laptop, windows: windows) == nil)
+}
+
+/// A menu bar that records what's done to it, with a right button that reads as held for three polls.
 private final class FakeMenuBar: @unchecked Sendable {
     struct Click: Equatable {
         let point: CGPoint
-        let context: MenuBarContext
+        let window: MenuBarWindow
     }
 
-    struct Probe: Equatable {
-        let agent: pid_t
-        let row: CGRect
-        let item: CGRect
-    }
+    static let window = MenuBarWindow(agent: 77, number: 4242, frame: CGRect(x: 0, y: 0, width: 1512, height: 33))
 
     private let lock = NSLock()
-    private let agent: pid_t?
+    private let window: MenuBarWindow?
     private var shown: Bool
     private var showsChecked = 0
     private var held = 3
-    private var slidingPolls: Int
     private var recorded: [String] = []
     private var clicked: [Click] = []
-    private var probed: [Probe] = []
+    private var looked: [CGDirectDisplayID] = []
     private var heldAtClick: [Int] = []
 
-    init(shown: Bool, agent: pid_t? = 77) {
+    init(shown: Bool, window: MenuBarWindow? = FakeMenuBar.window) {
         self.shown = shown
-        self.agent = agent
-        slidingPolls = shown ? 0 : 2
+        self.window = window
     }
 
     var steps: [String] { lock.withLock { recorded } }
     var clicks: [Click] { lock.withLock { clicked } }
-    var probes: [Probe] { lock.withLock { probed } }
+    var windowDisplays: [CGDirectDisplayID] { lock.withLock { looked } }
     var heldPolls: Int { lock.withLock { held } }
     /// Only a press asks whether the menu bar shows.
     var showsChecks: Int { lock.withLock { showsChecked } }
     var heldPollsAtClick: [Int] { lock.withLock { heldAtClick } }
-
-    func forget() {
-        lock.withLock { recorded = [] }
-    }
-
-    func record(_ step: String) {
-        lock.withLock { recorded.append(step) }
-    }
 
     var visibility: MenuBarVisibility {
         MenuBarVisibility(shows: { _ in
@@ -332,21 +310,13 @@ private final class FakeMenuBar: @unchecked Sendable {
                                   return self.shown
                               }
                           },
-                          isInPlace: { _ in
-                              self.lock.withLock {
-                                  self.slidingPolls -= 1
-                                  if self.slidingPolls >= 0 { self.recorded.append("sliding") }
-                                  return self.shown && self.slidingPolls < 0
-                              }
-                          },
                           setHidden: { hidden in self.lock.withLock { self.recorded.append(hidden ? "transparent" : "visible") } },
                           setShown: { shown, _ in
                               self.lock.withLock {
                                   self.shown = shown
                                   self.recorded.append(shown ? "revealed" : "hidden")
                               }
-                          },
-                          setOpacity: { opacity in self.lock.withLock { self.recorded.append("opacity \(opacity)") } })
+                          })
     }
 
     var mouse: MenuBarMouse {
@@ -355,16 +325,15 @@ private final class FakeMenuBar: @unchecked Sendable {
                 self.held -= 1
                 return self.held >= 0
             }
-        }, agent: { self.agent }, contextNumber: { agent, row, item, _ in
+        }, menuBarWindow: { display in
             self.lock.withLock {
-                self.recorded.append("context")
-                self.probed.append(Probe(agent: agent, row: row, item: item))
+                self.looked.append(display)
+                return self.window
             }
-            return 4242
-        }, rightClick: { point, context in
+        }, rightClick: { point, window in
             self.lock.withLock {
                 self.recorded.append("click")
-                self.clicked.append(Click(point: point, context: context))
+                self.clicked.append(Click(point: point, window: window))
                 self.heldAtClick.append(self.held)
             }
         })

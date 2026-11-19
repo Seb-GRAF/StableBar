@@ -126,6 +126,13 @@
                   "type": "null"
                 }
               ]
+            },
+            "slider": {
+              "anyOf": [
+                { "$ref": "#/definitions/style" },
+                { "$ref": "#/definitions/reference" },
+                { "type": "null" }
+              ]
             }
           }
         },
@@ -222,6 +229,20 @@
         }
       ],
       "description": "Styles every popup inherits. A popup's own style and its widget's style win; defaults fill the rest. Padding and spacing come only from here and the popup's own style, not from defaults or the widget's style, and tooltips and hover controls keep their own."
+    },
+    "groupDefaults": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/style"
+        },
+        {
+          "$ref": "#/definitions/reference"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Styles every group starts from, such as its background, border, corners, padding and spacing. A group's own style wins, property by property."
     },
     "widgets": {
       "type": "array",
@@ -971,7 +992,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "type": {
           "anyOf": [
             {
@@ -1189,11 +1210,11 @@
         },
         "filled": {
           "$ref": "#/definitions/boolean",
-          "description": "For sliders: draw a bar in the block's style instead of macOS's slider. The background is the track, the accent fills it, and clicking or dragging anywhere sets the value. An endStop sits past a notch at the end and fills the whole bar."
+          "description": "For sliders: true draws a filled bar in the block's own style; false keeps macOS's slider. Omit to follow a nonempty slider role, unless another role is assigned. The background is the track and accent is the fill. Automatically themed sliders fit the widget's content height inline; popups and tooltips default to 28 points. An endStop follows a notch and fills the whole bar."
         },
         "icon": {
           "$ref": "#/definitions/string",
-          "description": "For filled sliders: an SF Symbol drawn on the fill at its leading end, in accentText."
+          "description": "For sliders: an SF Symbol drawn on the fill at its leading end, in accentText. Allowed when filled is true or omitted; hidden when the slider draws natively."
         },
         "options": {
           "type": "array",
@@ -1542,7 +1563,7 @@
           "description": "Clock time zone identifier. Omit to follow the Mac.",
           "$ref": "#/definitions/string"
         },
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "id": {
           "$ref": "#/definitions/string",
           "description": "Stable, unique widget identifier."
@@ -1660,7 +1681,14 @@
         },
         "expandOnHover": {
           "$ref": "#/definitions/boolean",
-          "description": "Show only the app name until hovered in appMenu widgets. Off by default."
+          "description": "Show only the app title until hovered in appMenu widgets. Off by default."
+        },
+        "displayMode": {
+          "anyOf": [
+            { "enum": ["name", "icon"] },
+            { "type": "null" }
+          ],
+          "description": "Show the menu-owning app's name (default) or its macOS icon in appMenu widgets."
         },
         "click": {
           "anyOf": [
@@ -1936,6 +1964,7 @@
               "enum": [
                 "command",
                 "stream",
+                "http",
                 "system",
                 "network",
                 "wifi",
@@ -1967,10 +1996,49 @@
         },
         "interval": {
           "$ref": "#/definitions/number",
-          "description": "Seconds between updates for command, system, network and disk providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second. Disk providers default to 60 seconds, the others to 5."
+          "description": "Seconds between updates for command, http, system, network and disk providers, and for calendar until it has access; for stream, audio and battery, the first retry delay after a failure, which is at least 1 second. Http and disk providers default to 60 seconds, the others to 5."
         },
         "timeout": {
           "$ref": "#/definitions/number"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The https URL an http provider requests. In a package, its host must be in the package's hosts."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "HTTP headers an http provider sends with each request."
+        },
+        "token": {
+          "$ref": "#/definitions/string",
+          "description": "Sent by an http provider as Authorization: Bearer. A package can set it to a secret setting."
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/httpOutput"
+            },
+            {
+              "$ref": "#/definitions/reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "environment": {
           "$ref": "#/definitions/environment"
@@ -1998,6 +2066,37 @@
         },
         "processes": {
           "$ref": "#/definitions/number"
+        }
+      }
+    },
+    "httpOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The parts of an http provider's JSON response its output copies, each found by a JSON Pointer such as /current/temperature_2m.",
+      "properties": {
+        "text": {
+          "$ref": "#/definitions/string"
+        },
+        "fields": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Field names and the pointers to their values."
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Value names and the pointers to their numbers, or to strings that hold numbers."
+        },
+        "lists": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "List names and the pointers to their arrays. Each object in an array becomes a row of its string, number and boolean members."
         }
       }
     },
@@ -2085,7 +2184,7 @@
             }
           ]
         },
-        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
+        "role": {"anyOf": [{"enum": ["time", "primary", "secondary", "key", "value", "heading", "button", "meter", "separator", "slider"]}, {"$ref": "#/definitions/reference"}, {"type": "null"}]},
         "id": {
           "type": "string",
           "description": "A widget ID, such as one a package fixes."
@@ -2153,6 +2252,10 @@
         "hideMenuBar": {
           "$ref": "#/definitions/boolean",
           "description": "Keep the macOS menu bar invisible while StableBar runs, even at the top edge. Quitting StableBar shows it again. Disabled by default."
+        },
+        "hidden": {
+          "$ref": "#/definitions/boolean",
+          "description": "Hides the bar on every display, for example from a profile while an app is in front. StableBar --hide also hides it; the bar shows only when neither does. Disabled by default."
         },
         "hoverDelay": {
           "$ref": "#/definitions/number",
@@ -2296,9 +2399,36 @@
         "externalDisplay": {
           "$ref": "#/definitions/boolean"
         },
+        "display": {
+          "$ref": "#/definitions/string",
+          "description": "Name of a screen that must be connected, as System Settings → Displays shows it."
+        },
+        "wifi": {
+          "$ref": "#/definitions/string",
+          "description": "Name of the Wi-Fi network. StableBar reads it only with Location access, which the wifi provider asks for."
+        },
+        "camera": {
+          "$ref": "#/definitions/boolean",
+          "description": "Whether an app uses a camera."
+        },
+        "microphone": {
+          "$ref": "#/definitions/boolean",
+          "description": "Whether an app records from the microphone."
+        },
         "app": {
           "$ref": "#/definitions/string",
           "description": "Bundle identifier of the focused app."
+        },
+        "apps": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Bundle identifiers of apps, any of which focused matches. Use app for one app: releases before apps read it."
         },
         "theme": {
           "$ref": "#/definitions/string",
@@ -2459,6 +2589,10 @@
         "popupDefaults": {
           "$ref": "#/definitions/style",
           "description": "Popup styles for this kind of screen, merged over the shared popupDefaults."
+        },
+        "groupDefaults": {
+          "$ref": "#/definitions/style",
+          "description": "Group styles for this kind of screen, merged over the shared groupDefaults."
         },
         "roles": {
           "$ref": "#/properties/roles",

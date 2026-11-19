@@ -14,7 +14,7 @@ import Testing
     try original.write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     #expect(store.pinnedProfile == "dark")
     #expect(store.configuration?.bar.height == 48)
@@ -40,13 +40,13 @@ import Testing
     #expect(try Data(contentsOf: url) != original)
     try editor.history.flush()
     #expect(editor.error == nil)
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     #expect(try Data(contentsOf: module) == imported)
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: url))
     let savedProfiles = try saved["profiles"]!.decoded([[String: ConfigurationValue]].self)
     #expect(savedProfiles.map { $0["name"] } == [.string("light"), .string("work")])
     #expect(savedProfiles[0] == ["name": .string("light"), "when": .object(["onBattery": .bool(true)])])
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.pinnedProfile == "work")
     #expect(store.profiles[1].when?.onBattery == true)
     editor.change(ConfigurationEdit(action: .profile))
@@ -56,10 +56,10 @@ import Testing
     editor.change(ConfigurationEdit(action: .profiles, profiles: [["name": .string("dark")], ["name": .string("dark")]]))
     #expect(editor.error != nil)
     #expect(store.profiles.count == 3)
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
 
     try Data(String(decoding: imported, as: UTF8.self).replacingOccurrences(of: "32", with: "34").utf8).write(to: module)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     editor.change(ConfigurationEdit(action: .profile, name: "light"))
     #expect(store.configuration?.bar.height == 34)
     var light = store.profiles[1]
@@ -78,7 +78,7 @@ import Testing
     #expect(lightOverride == ["name": .string("light"), "enabled": .bool(false),
                               "when": .object(["appearance": .null, "onBattery": .bool(true)])])
     try Data(#"{"profiles":[]}"#.utf8).write(to: module)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.profiles.map(\.name) == ["light", "work"])
     #expect(store.configurationError == nil)
 }
@@ -97,21 +97,21 @@ import Testing
     let store = BarStore(configurationURL: shared)
     defer { store.stop() }
     store.start(on: docked)
-    #expect(store.configurationURL.lastPathComponent == "setup-laptop+monitor.json")
+    #expect(store.configurationStore.configurationURL.lastPathComponent == "setup-laptop+monitor.json")
     #expect(store.configuration?.bar.height == 30)
-    store.showScreenSetup(ScreenSetup([laptop]))
-    #expect(store.configurationURL == shared)
+    store.configurationStore.showScreenSetup(ScreenSetup([laptop]))
+    #expect(store.configurationStore.configurationURL == shared)
     #expect(store.configuration?.bar.height == 36)
 
-    try store.giveScreenSetupItsOwnBar()
-    #expect(store.configurationURL.lastPathComponent == "setup-laptop.json")
+    try store.configurationStore.giveScreenSetupItsOwnBar()
+    #expect(store.configurationStore.configurationURL.lastPathComponent == "setup-laptop.json")
     let editor = ConfigurationEditor(store: store)
     editor.change(ConfigurationEdit(action: .bar, properties: ["height": .number(28)]))
     try editor.history.flush()
     #expect(store.configuration?.bar.height == 28)
     #expect(try Data(contentsOf: shared) == sharedData)
-    #expect(store.screenSetupsWithOwnBars == [docked, ScreenSetup([laptop])])
-    store.showScreenSetup(docked)
+    #expect(store.configurationStore.screenSetupsWithOwnBars == [docked, ScreenSetup([laptop])])
+    store.configurationStore.showScreenSetup(docked)
     #expect(store.configuration?.bar.height == 30)
     #expect(store.configuration?.widgets[0].display == .monitor)
     #expect(!editor.history.canUndo)
@@ -141,8 +141,8 @@ import Testing
     #expect(try Data(contentsOf: shared) == sharedData)
     #expect(try Data(contentsOf: own) == ownData)
     try editor.history.redo()
-    store.showScreenSetup(ScreenSetup([displays[1]]))
-    #expect(store.configurationURL == shared)
+    store.configurationStore.showScreenSetup(ScreenSetup([displays[1]]))
+    #expect(store.configurationStore.configurationURL == shared)
     #expect(store.configuration?.defaults.fontSize == 15)
     #expect(store.configuration?.bar.height == 36)
 }
@@ -190,17 +190,17 @@ import Testing
     let store = BarStore(configurationURL: shared)
     defer { store.stop() }
     store.start(on: docked)
-    #expect(store.screenSetupsToEdit(connected: displays) == [docked, laptop, monitor])
+    #expect(store.configurationStore.screenSetupsToEdit(connected: displays) == [docked, laptop, monitor])
 
-    store.showScreenSetup(laptop)
+    store.configurationStore.showScreenSetup(laptop)
     #expect(store.configuration?.bar.height == 36)
-    try store.giveScreenSetupItsOwnBar(copying: store.ownBarURL(for: docked))
-    #expect(store.configurationURL == store.ownBarURL(for: laptop))
+    try store.configurationStore.giveScreenSetupItsOwnBar(copying: store.configurationStore.ownBarURL(for: docked))
+    #expect(store.configurationStore.configurationURL == store.configurationStore.ownBarURL(for: laptop))
     #expect(store.configuration?.bar.height == 30)
-    #expect(store.screenSetupsToEdit(connected: displays) == [docked, laptop, monitor])
+    #expect(store.configurationStore.screenSetupsToEdit(connected: displays) == [docked, laptop, monitor])
 
-    store.showScreenSetup(docked)
-    #expect(store.screenSetup == docked)
+    store.configurationStore.showScreenSetup(docked)
+    #expect(store.configurationStore.screenSetup == docked)
     #expect(store.configuration?.bar.height == 30)
 }
 
@@ -210,7 +210,7 @@ import Testing
     try Data(#"{"widgets":[]}"#.utf8).write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     let original = store.effectiveDocument
     editor.setProfile(ConfigurationProfile(name: "work", when: nil, configuration: [:]))
@@ -236,30 +236,30 @@ import Testing
     try rootData.write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Changed")]),
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Changed")]),
                               ConfigurationEdit(action: .set, id: "b", properties: ["position": .string("invalid")])], persist: true)
     }
     #expect(store.configuration?.widgets[0].content == .text("A"))
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     #expect(try Data(contentsOf: root) == rootData)
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Live")])], persist: false)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Live")])], persist: false)
     #expect(store.configuration?.widgets[0].content == .text("Live"))
     #expect(try Data(contentsOf: root) == rootData)
-    try store.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("c"), "type": .string("text"),
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .add, properties: ["id": .string("c"), "type": .string("text"),
         "position": .string("left"), "text": .string("C")]), ConfigurationEdit(action: .remove, id: "b"),
         ConfigurationEdit(action: .reorder, ids: ["c", "a"])], persist: true)
     #expect(store.configuration?.widgets.map(\.id) == ["c", "a", "b"])
     #expect(store.configuration?.widgets[2].enabled == false)
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     #expect(try Data(contentsOf: module) == moduleData)
     let saved = try JSONDecoder().decode([String: ConfigurationValue].self, from: Data(contentsOf: root))
     #expect(saved["includes"] == .array([.string("module.json")]))
     var loader = ConfigurationLoader()
     #expect(try loader.load(root).widgets[1].content == .text("Live"))
     #expect(saved["widgets"] == .array([.object(["id": .string("c"), "type": .string("text"), "position": .string("left"), "text": .string("C")])]))
-    try store.applyEdits([ConfigurationEdit(action: .remove, id: "c"),
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .remove, id: "c"),
                          ConfigurationEdit(action: .add, properties: ["id": .string("c"), "type": .string("clock"), "position": .string("right")])], persist: false)
     #expect(store.configuration?.widgets.first(where: { $0.id == "c" })?.content == .clock(format: "EEE d MMM  HH:mm"))
 }
@@ -273,17 +273,17 @@ import Testing
     try Data(original.utf8).write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Session")])], persist: false)
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Session")])], persist: false)
     try Data(original.replacingOccurrences(of: "40", with: "50").utf8).write(to: root)
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.configuration?.bar.height == 50)
     #expect(store.configuration?.widgets[0].content == .text("Session"))
     let editor = ConfigurationEditor(store: store)
     editor.set(["position": .string("right")])
     #expect(store.configuration?.widgets[0].position == .right)
-    #expect(store.sessionEdits.count == 1)
-    #expect(store.customizationEdits.count == 1)
+    #expect(store.configurationStore.sessionEdits.count == 1)
+    #expect(store.configurationStore.customizationEdits.count == 1)
     editor.undo()
     #expect(store.configuration?.widgets[0].position == .left)
     editor.redo()
@@ -296,8 +296,8 @@ import Testing
     editor.saveCommandLineChanges()
     #expect(store.configuration?.bar.height == 50)
     #expect(store.configuration?.widgets[0].position == .right)
-    #expect(store.sessionEdits.isEmpty)
-    try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Temporary")])], persist: false)
     _ = try store.handle(RuntimeRequest(action: .reset))
     #expect(store.configuration?.widgets[0].content == .text("Session"))
 }
@@ -311,6 +311,27 @@ import Testing
     #expect(request.edits?.count == 2)
     for flag in ["--inspect-package", "--install-package", "--add", "--set", "--enable-package", "--uninstall-package"] {
         #expect(throws: (any Error).self) { try LaunchCommand(arguments: [flag]) }
+    }
+}
+
+@Test @MainActor func liveCommandsTellAMissingBarFromAFailedCommand() {
+    let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)/config.json")
+    #expect(throws: BarNotRunning.self) { try RuntimeControl.send(RuntimeRequest(action: .status), url: url) }
+}
+
+@Test func popupCommandsOpenOrCloseAndRejectDurationsThatArentNumbers() throws {
+    func request(_ arguments: [String]) throws -> RuntimeRequest {
+        guard case let .control(_, request) = try LaunchCommand(arguments: arguments) else { throw CommandFailure(message: "Expected a control command") }
+        return request
+    }
+    let timed = try request(["--popup", "agenda", "--open", "--duration", "2.5"])
+    #expect((timed.action, timed.id, timed.duration) == (.openPopup, "agenda", 2.5))
+    let any = try request(["--popup", "--close"])
+    #expect((any.action, any.id) == (.closePopup, nil))
+    #expect(try request(["--popup", "agenda", "--close"]).action == .closePopup)
+    #expect(try request(["--popup", "agenda"]).action == .popup)
+    for duration in ["inf", "nan", "soon"] {
+        #expect(throws: CommandFailure.self) { try LaunchCommand(arguments: ["--popup", "agenda", "--open", "--duration", duration]) }
     }
 }
 
@@ -332,40 +353,40 @@ import Testing
     try original.write(to: url)
     let store = BarStore(configurationURL: url)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.applyEdits([
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([
         ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Session")]),
         ConfigurationEdit(action: .remove, id: "b"),
         ConfigurationEdit(action: .reorder, ids: ["c", "a"])
     ], persist: false)
     #expect(store.configuration?.widgets.map(\.id) == ["c", "a", "base"])
-    store.context.appearance = "dark"
-    store.reloadConfiguration()
+    store.configurationStore.context.appearance = "dark"
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.configuration?.widgets.map(\.id) == ["base"])
     #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Invalid")])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .set, id: "a", properties: ["text": .string("Invalid")])], persist: false)
     }
     #expect(throws: (any Error).self) {
-        try store.applyEdits([ConfigurationEdit(action: .reorder, ids: ["a"])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .reorder, ids: ["a"])], persist: false)
     }
-    #expect(store.sessionEdits.count == 3)
+    #expect(store.configurationStore.sessionEdits.count == 3)
     #expect(try Data(contentsOf: url) == original)
-    store.context.appearance = "light"
-    store.reloadConfiguration()
+    store.configurationStore.context.appearance = "light"
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.configuration?.widgets.map(\.id) == ["c", "a", "base"])
     #expect(store.configuration?.widgets[1].content == .text("Session"))
-    store.context.appearance = "dark"
-    store.reloadConfiguration()
+    store.configurationStore.context.appearance = "dark"
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     editor.set(["text": .string("Edited base")])
     #expect(editor.error == nil)
     try editor.history.flush()
     #expect(editor.error == nil)
-    #expect(store.sessionEdits.count == 3)
-    store.context.appearance = "light"
-    store.reloadConfiguration()
+    #expect(store.configurationStore.sessionEdits.count == 3)
+    store.configurationStore.context.appearance = "light"
+    store.configurationStore.reloadConfiguration()
     #expect(store.configurationError == nil)
     #expect(store.configuration?.widgets.map(\.id) == ["c", "a", "base"])
     #expect(store.configuration?.widgets[1].content == .text("Session"))
@@ -384,14 +405,14 @@ import Testing
     """#.utf8).write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     for _ in 0..<2 {
         editor.set(["style": .object(["fontSize": .number(12)])])
         editor.set(["style": .object(["paddingHorizontal": .number(10)])])
         editor.set(["style": .object(["cornerRadius": .number(14)])])
     }
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     #expect(editor.undoSteps.isEmpty)
     editor.set(["text": .string("Changed")])
     editor.undo()
@@ -405,10 +426,10 @@ import Testing
     editor.set(["style": .object(["minWidth": .number(80)])])
     #expect(editor.error == nil)
     editor.undo()
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     for size in [13.0, 14, 15] { editor.set(["style": .object(["fontSize": .number(size)])]) }
-    #expect(store.customizationEdits.count == 1)
-    #expect(store.sessionEdits.isEmpty)
+    #expect(store.configurationStore.customizationEdits.count == 1)
+    #expect(store.configurationStore.sessionEdits.isEmpty)
     #expect(store.configuration?.widgets[0].style.fontSize == 15)
     editor.set(["text": .string("Other")])
     editor.undo()
@@ -490,14 +511,14 @@ import Testing
     """##.utf8).write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     #expect(store.origins["defaults.foreground"]?.token == "text")
     #expect(store.sourceText(store.origins["widgets.imported.style.background"]!) == "your configuration (widget override)")
     #expect(store.setsInMainFile(store.origins["widgets.imported.style.background"]!))
-    try store.applyEdits([ConfigurationEdit(action: .tokens, properties: ["text": .object(["light": .string("#666666"), "dark": .string("#777777")])])],
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .tokens, properties: ["text": .object(["light": .string("#666666"), "dark": .string("#777777")])])],
                          persist: false)
     #expect(store.configuration?.defaults.foreground == HexColor(light: 0x666666ff, dark: 0x777777ff))
-    try store.applyEdits([ConfigurationEdit(action: .unset, id: "local", properties: ["style": .object(["foreground": .null])]),
+    try store.configurationStore.applyEdits([ConfigurationEdit(action: .unset, id: "local", properties: ["style": .object(["foreground": .null])]),
                           ConfigurationEdit(action: .unset, id: "imported", properties: ["style": .object(["background": .null])]),
                           ConfigurationEdit(action: .unset, properties: ["tokens": .object(["text": .null])])], persist: true)
     let widgets = try #require(store.configuration?.widgets)
@@ -512,7 +533,7 @@ import Testing
     #expect(saved["widgets"] == .array([.object(["id": .string("local"), "type": .string("text"), "position": .string("right"),
                                                  "text": .string("L"), "style": .object(["fontSize": .number(14)])])]))
     #expect(throws: CommandFailure.self) {
-        try store.applyEdits([ConfigurationEdit(action: .unset, id: "missing", properties: ["style": .object(["fontSize": .null])])], persist: false)
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .unset, id: "missing", properties: ["style": .object(["fontSize": .null])])], persist: false)
     }
     var ids: [String] = []
     let tokenDefaults: [String: ConfigurationValue] = ["defaults": .string("@token.card"), "widgets": .array([])]
@@ -531,8 +552,8 @@ import Testing
     """##.utf8).write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
-    try store.applyEdits([
+    store.configurationStore.reloadConfiguration()
+    try store.configurationStore.applyEdits([
         ConfigurationEdit(action: .defaults, properties: ["states": .object(["warning": .object(["background": .string("#333333")])])]),
         ConfigurationEdit(action: .set, id: "a", properties: ["style": .object(["states": .object(["hover": .object(["foreground": .string("#444444")])])])])
     ], persist: true)
@@ -564,7 +585,7 @@ import Testing
             try Data(#"{"includes":["theme.json"],"widgets":[]\#(active)}"#.utf8).write(to: root)
             let store = BarStore(configurationURL: root)
             defer { store.stop() }
-            store.reloadConfiguration()
+            store.configurationStore.reloadConfiguration()
             ConfigurationEditor(store: store).change(ConfigurationEdit(action: .defaults, properties: HoverBackgroundRow.properties(.string("#445566"))))
             let message = "include \(include), profile \(profile.defaults ?? "none")"
             #expect(store.configuration?.defaults.hoverBackground == .color(profile.hover), "\(message)")
@@ -589,7 +610,7 @@ import Testing
     try original.write(to: root)
     let store = BarStore(configurationURL: root)
     defer { store.stop() }
-    store.reloadConfiguration()
+    store.configurationStore.reloadConfiguration()
     let editor = ConfigurationEditor(store: store)
     func row(_ id: String? = nil) -> (path: String, source: String, color: HexColor?)? {
         HoverBackgroundRow.drawn(in: store.effectiveDocument, widget: id).map {

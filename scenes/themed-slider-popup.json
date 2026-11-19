@@ -1,0 +1,68 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "roles": {"slider": {"height": 40, "cornerRadius": 20, "background": "@token.surfaceRaised", "accent": "@token.accent"}},
+    "widgets": [
+      {
+        "id": "sliders",
+        "type": "script",
+        "command": "true",
+        "position": "right",
+        "popup": {
+          "style": {"width": 340},
+          "layout": {
+            "type": "column",
+            "children": [
+              {"type": "text", "text": "Theme slider role", "role": "heading"},
+              {"type": "slider", "title": "Volume", "source": "volume", "onChange": "true", "icon": "speaker.wave.2.fill"},
+              {"type": "text", "text": "Native opt-out", "role": "key"},
+              {"type": "slider", "title": "Volume", "source": "volume", "onChange": "true", "filled": false},
+              {"type": "text", "text": "Explicit filled style", "role": "key"},
+              {
+                "type": "slider",
+                "title": "Volume",
+                "source": "volume",
+                "onChange": "true",
+                "filled": true,
+                "style": {"height": 24, "cornerRadius": 4, "accent": "#5285ac"}
+              },
+              {"type": "text", "text": "End stop", "role": "key"},
+              {
+                "type": "slider",
+                "title": "Minutes",
+                "source": "minutes",
+                "min": 15,
+                "max": 240,
+                "step": 15,
+                "endStop": {"value": 0, "label": "∞"},
+                "onChange": "true"
+              },
+              {"type": "text", "text": "In a row with a height", "role": "key"},
+              {
+                "type": "row",
+                "style": {"height": 16, "spacing": 6},
+                "children": [
+                  {
+                    "type": "slider",
+                    "title": "Minutes",
+                    "source": "duration",
+                    "min": 15,
+                    "max": 240,
+                    "step": 15,
+                    "endStop": {"value": 0, "label": "∞"},
+                    "onChange": "true",
+                    "style": {"width": 104}
+                  },
+                  {"type": "text", "text": "195m", "style": {"width": 38}}
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "outputs": {"sliders": {"text": "Sliders", "values": {"volume": 0.62, "minutes": 0, "duration": 195}}},
+  "draw": "popup",
+  "widget": "sliders"
+}
