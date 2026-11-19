@@ -11,7 +11,7 @@ struct ThemeCard: View {
     var isStore = false
     var source: PackageOrigin? = .included
     /// The context menu of an installed theme that isn't bundled. Delete… asks first, and is off while the theme is
-    /// selected or `inUse` by every screen.
+    /// selected or `inUse` on any screen.
     var showInFinder: (() -> Void)?
     var delete: (() -> Void)?
     var inUse = false

@@ -17,6 +17,12 @@ struct AppearanceView: View {
         let screens = (try? store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
         return screen.flatMap { try? screens[$0.rawValue]?["theme"]?.decoded(WidgetPackageSelection.self) }
     }
+    /// The themes the bar uses: every screen's, and those a kind of screen chooses for itself.
+    private var themesInUse: Set<String> {
+        let screens = (try? store.effectiveDocument["screens"]?.decoded([String: [String: ConfigurationValue]].self)) ?? [:]
+        let own = screens.values.compactMap { try? $0["theme"]?.decoded(WidgetPackageSelection.self) }.filter(\.enabled)
+        return Set([gallery.selectedKey] + own.map(\.key))
+    }
 
     var body: some View {
         let appearance = gallery.previewAppearance
@@ -229,7 +235,7 @@ struct AppearanceView: View {
                              isEdited: gallery.editedThemes.contains(choice.manifest.id),
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
                              showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
-                             delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }, inUse: choice.key == gallery.selectedKey) {
+                             delete: choice.isBundled ? nil : { Task { await gallery.delete(choice) } }, inUse: themesInUse.contains(choice.key)) {
                 gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar)
             }
         case let .store(entry):
