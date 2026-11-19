@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Observation
 
 @MainActor @Observable
@@ -28,6 +28,8 @@ final class BarLinkCandidate {
     var unticked: Set<String> = []
     /// Whether Try on Bar and Use this bar apply the link's look; otherwise the bar keeps its own.
     var appliesLook = true
+    /// Tests replace it to stand for a Mac with or without a notched display.
+    var hasNotchedDisplay: () -> Bool = { NSScreen.screens.map(BarDisplay.init).contains { $0.notch != nil } }
     private(set) var working = false
     private var installed: [String: (inspection: WidgetPackageInspection, settings: [String: ConfigurationValue])] = [:]
     /// The packages of `installed` that were already on the bar, whose settings are read again each time.
@@ -256,6 +258,8 @@ final class BarLinkCandidate {
 
     /// With the look ticked and every screen, removes the bar's own look. With a widget ticked, removes the bar's
     /// widgets, packages and their places, then adds the link's ticked widgets. Widgets that included files add stay.
+    /// With a notched display under a top bar, the laptop screen's layout puts the centered widgets left of the notch: the
+    /// bar puts them right of it with the right ones, where a bar made on a wider screen doesn't fit.
     private func edits(in store: BarStore, on kind: ScreenKind?) throws -> [ConfigurationEdit] {
         let main = try store.editedMainDocument()
         var removal: [String: ConfigurationValue] = [:]
@@ -298,6 +302,16 @@ final class BarLinkCandidate {
             edits.append(ConfigurationEdit(action: .set, id: id, properties: unticked.contains(id) ? ["enabled": .bool(false)] : grouped(properties)))
         }
         edits.append(ConfigurationEdit(action: .reorder, ids: link.widgetOrder.filter { ids.contains($0) && !unticked.contains($0) }))
+        let widgets = previewWidgets
+        if hasNotchedDisplay(), store.configuration?.onScreen(.laptop).bar.position == .top,
+           widgets.contains(where: { $0.position == .center }) {
+            func ids(_ positions: [WidgetPosition]) -> ConfigurationValue {
+                .array(positions.flatMap { position in widgets.filter { $0.position == position } }.map { .string($0.id) })
+            }
+            edits.append(ConfigurationEdit(action: .screens, properties: [ScreenKind.laptop.rawValue: .object(["layout": .object([
+                "left": ids([.left]), "notchLeft": ids([.notchLeft, .center]), "notchRight": ids([.notchRight]), "right": ids([.right])
+            ])])]))
+        }
         return edits
     }
 
