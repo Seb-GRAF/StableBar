@@ -634,6 +634,8 @@ struct BarInspector: View {
                 SettingsGroup("Menu bar items") {
                     MenuBarItemsSettings(store: store, editor: editor, widget: widget, shown: widget.shownMenuBarItems, hidden: hidden)
                 }
+            case .appleMenu:
+                iconGroup(widget)
             default:
                 if widget.content.drawsOwnView {
                     SettingsCallout(systemImage: "sparkle",

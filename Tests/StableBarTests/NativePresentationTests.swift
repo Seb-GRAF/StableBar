@@ -307,6 +307,16 @@ private final class OverflowMenuReadFixture: @unchecked Sendable {
     #expect(first.dataProvider?.data == second.dataProvider?.data)
 }
 
+@Test @MainActor func appleMenuDrawsItsWidgetsSymbol() throws {
+    let item = AppMenuItem(title: "Apple", element: AXUIElementCreateApplication(1))
+    func image(logo: String) throws -> CGImage {
+        let renderer = ImageRenderer(content: AppMenuView(appMenu: AppMenu(), items: [item], isAppleMenu: true, appleLogo: logo,
+            appearance: WidgetAppearance(WidgetStyle(), defaults: WidgetStyle()), padding: EdgeInsets(), open: { _, _ in }, requestAccess: {}))
+        return try #require(renderer.cgImage)
+    }
+    #expect(try image(logo: "leaf").dataProvider?.data != image(logo: "apple.logo").dataProvider?.data)
+}
+
 @Test @MainActor func appMenuReportsExpansionAndReturnsToItsCollapsedWidth() async throws {
     let source = MenuReadFixture()
     let menu = AppMenu(checkAccess: { source.trusted }, readAttribute: source.read)
