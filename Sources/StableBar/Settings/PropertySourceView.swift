@@ -144,13 +144,13 @@ extension BarStore {
         let definition = widgetID.flatMap { origins["widgets.\($0).id"] }
         let mainDefinition = definition?.file == configurationStore.configurationURL.standardizedFileURL.path
         let theme = configurationStore.selectedThemeKey.prefix { $0 != "/" }
-        let themeEdits = profiles.first { $0.when?.onlyTheme == String(theme) && activeProfiles.contains($0.name) }?.name
+        let themeEdits = profiles.filter { $0.when?.onlyTheme == String(theme) && activeProfiles.contains($0.name) }.map(\.name)
         let saved = own.last { source in
             guard let origin = source.origin, origin.file == configurationStore.configurationURL.standardizedFileURL.path else { return false }
             if let profile = customizationHistory.editingProfile {
                 return origin.profile == profile && !origin.detail.contains("(template ")
             }
-            if let themeEdits, origin.profile == themeEdits { return !origin.detail.contains("(template ") }
+            if let profile = origin.profile, themeEdits.contains(profile) { return !origin.detail.contains("(template ") }
             if widgetID != nil, mainDefinition {
                 return origin.profile == definition?.profile && !origin.detail.contains("(template ") && !origin.detail.contains("(widget override)")
             }

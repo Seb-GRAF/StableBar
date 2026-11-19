@@ -22,7 +22,7 @@ struct ProfilesView: View {
     private var store: BarStore { editor.store }
     private var selected: ConfigurationProfile? {
         let groups = ProfileGroups(store: store)
-        let listed = groups.yours + groups.elsewhere.map(\.profile)
+        let listed = groups.yours + groups.themeEdits + groups.elsewhere.map(\.profile)
         return listed.first { $0.name == editor.selectedProfileName } ?? listed.first
     }
 
@@ -141,9 +141,8 @@ struct ProfilesView: View {
     }
 
     private func card(_ profile: ConfigurationProfile, from source: String? = nil) -> some View {
-        let isSelected = profile.name == selected?.name
         let count = changes(profile.configuration).count
-        return VStack(alignment: .leading, spacing: 3) {
+        return listCard(profile) {
             HStack(spacing: 6) {
                 Text(profile.name).fontWeight(.semibold).lineLimit(1)
                 if store.activeProfiles.contains(profile.name) { badge("Active", SettingsPalette.success) }
@@ -161,27 +160,33 @@ struct ProfilesView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(EdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 9))
-        .overlay {
-            RoundedRectangle(cornerRadius: 9).strokeBorder(isSelected ? SettingsPalette.profile
-                : hovered == profile.name ? Color.secondary.opacity(0.5) : SettingsPalette.groupBorder,
-                                                           lineWidth: isSelected ? 2 : 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 9))
-        .onHover { hovered = $0 ? profile.name : nil }
-        .onTapGesture { editor.selectedProfileName = profile.name }
-        .contextMenu { removalButton(profile) }
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
-        .accessibilityAction { editor.selectedProfileName = profile.name }
+    }
+
+    /// A profile's card in the list: a click selects it.
+    private func listCard(_ profile: ConfigurationProfile, @ViewBuilder content: () -> some View) -> some View {
+        let isSelected = profile.name == selected?.name
+        return VStack(alignment: .leading, spacing: 3, content: content)
+            .padding(EdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 9))
+            .overlay {
+                RoundedRectangle(cornerRadius: 9).strokeBorder(isSelected ? SettingsPalette.profile
+                    : hovered == profile.name ? Color.secondary.opacity(0.5) : SettingsPalette.groupBorder,
+                                                               lineWidth: isSelected ? 2 : 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 9))
+            .onHover { hovered = $0 ? profile.name : nil }
+            .onTapGesture { editor.selectedProfileName = profile.name }
+            .contextMenu { removalButton(profile) }
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { editor.selectedProfileName = profile.name }
     }
 
     private func themeEditsCard(_ profile: ConfigurationProfile) -> some View {
         let main = (try? store.configurationStore.editedMainDocument(replaying: store.configurationStore.customizationEdits)) ?? [:]
         let count = ThemeEdits(main: main, themeID: profile.when!.onlyTheme!).changes.count
-        return VStack(alignment: .leading, spacing: 3) {
+        return listCard(profile) {
             HStack(spacing: 6) {
                 Text(profile.name).fontWeight(.semibold).lineLimit(1)
                 Spacer(minLength: 0)
@@ -192,10 +197,6 @@ struct ProfilesView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
-        .padding(EdgeInsets(top: 9, leading: 10, bottom: 9, trailing: 10))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(SettingsPalette.groupBorder))
     }
 
     private func sourceName(_ file: String) -> String {
