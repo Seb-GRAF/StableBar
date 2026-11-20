@@ -233,13 +233,7 @@ enum SceneRenderer {
             } else {
                 AnyView(bar(store))
             }
-            let content = view.background {
-                if let wallpaper {
-                    Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
-                } else {
-                    OffscreenSnapshot.backdrop(dark: dark)
-                }
-            }
+            let content = view.background { backdrop(wallpaper, dark: dark) }
             try await OffscreenSnapshot.write(drawn(content, with: scene.accessibilityDisplay),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .editBar:
@@ -501,15 +495,18 @@ enum SceneRenderer {
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background {
-                if let wallpaper {
-                    Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
-                } else {
-                    OffscreenSnapshot.backdrop(dark: dark)
-                }
-            }
+            .background { backdrop(wallpaper, dark: dark) }
         try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
                                           dark: dark, settle: settle, to: url)
+    }
+
+    /// The scene's wallpaper, filling the drawing from its top edge, or the tour's backdrop without one.
+    @ViewBuilder private static func backdrop(_ wallpaper: NSImage?, dark: Bool) -> some View {
+        if let wallpaper {
+            Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
+        } else {
+            OffscreenSnapshot.backdrop(dark: dark)
+        }
     }
 
     /// `view` with the Accessibility display settings `settings` names on and the others off, since an offscreen drawing

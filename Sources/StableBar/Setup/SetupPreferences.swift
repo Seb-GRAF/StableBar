@@ -670,7 +670,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
                 }
             }
         }
-        let below = placement == .belowMenuBar || placement == .current && configuration.bar.belowMenuBar
         var order = kept.map(\.id)
         var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
         let presetIDs = widgetSets.flatMap(\.ids)
@@ -678,7 +677,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         func next(after id: String) -> Int? {
             presetIDs.drop { $0 != id }.dropFirst().first(where: order.contains).flatMap { order.firstIndex(of: $0) }
         }
-        for set in widgetSets where !(below && set == .menuBarItems) && set.state(in: target) != .conflict {
+        for set in widgetSets where set.state(in: target) != .conflict {
             if case let .store(id, _, position, _) = set {
                 guard set.state(in: target) == .available, (packages + storeWidgets).contains(where: { $0.id == id }) else { continue }
                 edits.append(ConfigurationEdit(action: .set, id: id, properties: ["position": .string(position.rawValue)]))

@@ -1069,7 +1069,7 @@ private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
     defer { store.stop() }
     var hides = false
     let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: { hides = $0 }, menuBarHides: { hides },
-                             isTrusted: { true }, calendarAccess: { .fullAccess },
+                             isTrusted: { true }, calendarAccess: { .fullAccess }, hasBattery: { true },
                              defaults: try #require(UserDefaults(suiteName: UUID().uuidString)), workspaceSource: { _ in .spaces })
     let session = SetupSession(store: store, system: system)
     await session.place(.belowMenuBar)

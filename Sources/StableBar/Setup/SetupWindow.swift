@@ -418,12 +418,12 @@ final class SetupSession {
         if let entries = await system.storePackages(store.packageStoreClient) { storeEntries = entries } else { storeUnreachable = true }
     }
 
-    /// Reviews the chosen preset's Store widgets one at a time, as Found on your Mac does. One already on the bar, or
-    /// picked under Found on your Mac, needs no review.
+    /// Reviews the chosen preset's Store widgets one at a time, as Found on your Mac does. One whose ID a widget on the
+    /// bar already has, from the Store or not, or picked under Found on your Mac, needs no review.
     func reviewStoreWidgets() async {
-        let onBar = Set(store.widgetPackageIDs.values)
         storeReviews = preferences.widgetSets.compactMap { set in
-            guard case let .store(id, _, _, settings) = set, !onBar.contains(id), !preferences.packages.contains(where: { $0.id == id }),
+            guard case let .store(id, _, _, settings) = set, store.configuration?.widgets.contains(where: { $0.id == id }) != true,
+                  !preferences.packages.contains(where: { $0.id == id }),
                   let entry = storeEntries?.first(where: { $0.id == id }) else { return nil }
             return (entry, settings)
         }
@@ -441,8 +441,9 @@ final class SetupSession {
             review = (inspection, entry.sourceID, settings.mapValues(ConfigurationValue.string).merging(saved) { $1 })
             error = nil
         } catch {
-            self.error = errorMessage(error)
+            // Leaving the preset previews the bar again, which clears the error.
             await endReview()
+            self.error = errorMessage(error)
         }
     }
 

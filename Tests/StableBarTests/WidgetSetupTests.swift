@@ -635,6 +635,7 @@ final class WidgetSetupTests: XCTestCase {
     system.workspaceSource = { $0 ?? .spaces }
     system.isInApplications = { false }
     system.loginStatus = { .notRegistered }
+    system.hasBattery = { true }
     system.storePackages = { _ in [nowPlaying, weather] }
     let session = SetupSession(store: store, system: system)
 
@@ -656,6 +657,31 @@ final class WidgetSetupTests: XCTestCase {
     #expect(try fixture.document()["packages"] == .array([
         .object(["id": .string("now-playing"), "version": .string("1"), "enabled": .bool(true), "settings": .object([:])])
     ]))
+}
+
+/// A preset's Store widget gets no review when a widget of your own has its ID: its package would put a second widget
+/// with that ID on the bar, which then wouldn't load.
+@Test @MainActor func setupLeavesOutAPresetsStoreWidgetWhoseIDTheBarAlreadyHas() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let index = LocalPackageIndex(fixture: fixture)
+    let weather = try await index.add(id: "weather", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"weather","type":"text","text":"11°","position":"right"}]}"#, name: "Weather")
+    try fixture.write(#"{"widgets":[{"id":"weather","type":"text","text":"Sunny","position":"right"}]}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    defer { store.stop() }
+    store.configurationStore.reloadConfiguration()
+    store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+    var system = SetupSystem()
+    system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    system.workspaceSource = { $0 ?? .spaces }
+    system.storePackages = { _ in [weather] }
+    let session = SetupSession(store: store, system: system)
+
+    await session.loadStoreWidgets()
+    session.toggle(.everyday)
+    await session.reviewStoreWidgets()
+    #expect(session.review == nil)
 }
 
 /// Without the Store, a preset adds only its built-in widgets and names the Store widgets it leaves out. A Store widget
