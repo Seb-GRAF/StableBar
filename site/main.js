@@ -165,6 +165,7 @@ const popButton = w => w.matches("button") ? w : w.querySelector(":scope > butto
 function open(id) {
   if (id !== openId && anchorFor(id).hidden) return;
   hideTour();
+  closeMenu();
   const from = openId;
   openId = openId === id ? null : id;
   pop.classList.toggle("morph", Boolean(from && openId));
