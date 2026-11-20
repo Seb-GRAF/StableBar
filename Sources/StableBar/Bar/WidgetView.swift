@@ -467,18 +467,9 @@ struct WidgetView: View {
     }
 
     private func hoverControls(_ style: WidgetStyle) -> some View {
-        Group {
-            if let layout = widget.hoverLayout {
-                WidgetBlocks(widget: widget, store: store,
-                             style: LayoutStyle(inherited: style, states: resolution.blockStates(open: false), tracksHover: true),
-                             block: layout, inline: false, motion: motion, runAction: blockAction)
-            } else {
-                VolumeSlider(widget: widget, store: store,
-                             style: LayoutStyle(inherited: style, states: resolution.blockStates(open: false), tracksHover: true), width: 120)
-            }
-        }
-        .controlSize(.small)
-        .labelsHidden()
+        HoverControls(widget: widget, store: store,
+                      style: LayoutStyle(inherited: style, states: resolution.blockStates(open: false), tracksHover: true),
+                      motion: motion, runAction: blockAction)
     }
 
     private func blocks(_ resolution: ResolvedWidgetStyle, open: Bool, date: Date) -> some View {
@@ -500,6 +491,28 @@ struct WidgetView: View {
     }
 }
 
+/// A widget's hover controls in their tooltip: its `hoverLayout`, or else Sound's volume slider.
+struct HoverControls: View {
+    let widget: WidgetConfiguration
+    let store: BarStore
+    /// The tooltip's style, with the widget's block states.
+    let style: LayoutStyle
+    var motion = BlockMotion()
+    let runAction: (BlockAction, [String: String]) -> Void
+
+    var body: some View {
+        Group {
+            if let layout = widget.hoverLayout {
+                WidgetBlocks(widget: widget, store: store, style: style, block: layout, inline: false, motion: motion, runAction: runAction)
+            } else {
+                VolumeSlider(widget: widget, store: store, style: style, width: 120)
+            }
+        }
+        .controlSize(.small)
+        .labelsHidden()
+    }
+}
+
 /// One of a widget's block trees drawn with its data: `block` when given, such as its overlay,
 /// otherwise its `layout`, otherwise the default layout of its type.
 struct WidgetBlocks: View {
@@ -507,6 +520,7 @@ struct WidgetBlocks: View {
     let store: BarStore
     let style: LayoutStyle
     var block: PopupBlock?
+    /// On the bar; otherwise in a hover tooltip under the widget.
     var inline = true
     var date = Date.now
     var fillsWidth = false
@@ -526,6 +540,7 @@ struct WidgetBlocks: View {
                                                  targets: script?.output.targets ?? [:], styles: script?.output.styles ?? [:],
                                                  series: script?.output.series ?? [:], roles: store.configuration?.look(on: screenKind).roles ?? [:],
                                                  inlineControlHeight: inline ? style.inherited.inlineControlHeight : nil,
+                                                 tooltipLineHeight: inline ? nil : style.inherited.lineHeight,
                                                  fillsWidth: fillsWidth, open: { if store.barEditing.allowsWidgetActions { $0.open() } },
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },

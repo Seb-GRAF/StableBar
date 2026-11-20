@@ -73,8 +73,8 @@ Sliders without `filled` follow a nonempty [`slider` presentation role](styling.
 unless they name another role. Set `filled` to false for the native control or true for an
 explicitly filled bar. An `icon` is allowed when `filled` is true or omitted, and is visible only
 when the slider draws filled. Automatically themed sliders fit the widget's content height
-inline; popup and tooltip sliders use their styled height, 28 points by default, up to the
-height of a row or column around them that sets one.
+inline, and a line of text in a hover tooltip; popup sliders use their styled height, 28 points
+by default, up to the height of a row or column around them that sets one.
 
 
 Every block accepts `style` and `alignment` (`leading`, `center`, `trailing`). Fonts, text color, accent and spacing inherit from the containing block. Width, padding, background, hover background and border apply only when set on that block. Set a width on numeric fields and their headings to align columns. Blocks without a width use the available space. `minWidth` and `maxWidth` limit a block that has no fixed `width`: in the bar it takes its content's width within them, and in a popup the available space up to `maxWidth`. Set `"fitWidth": true` to give a block in a popup its content's width too, up to `maxWidth`, placed by its `alignment`, as a chat bubble.

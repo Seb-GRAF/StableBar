@@ -1,0 +1,16 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "roles": {"slider": {"height": 40, "cornerRadius": 20, "background": "@token.surfaceRaised", "accent": "@token.accent"}},
+    "widgets": [
+      {"id": "sound", "type": "audio", "position": "center"}
+    ]
+  },
+  "outputs": {
+    "sound": {"text": "", "icon": "speaker.wave.2.fill", "values": {"volume": 0.55}}
+  },
+  "draw": "bar",
+  "widget": "sound",
+  "width": 480,
+  "height": 140
+}

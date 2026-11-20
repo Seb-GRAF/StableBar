@@ -19,6 +19,11 @@ extension WidgetStyle {
             let bottom = paddingBottom ?? paddingVertical ?? 6
             return max(height - top - bottom, 1)
         }
+        return lineHeight
+    }
+
+    /// A line of the style's text.
+    @MainActor var lineHeight: Double {
         let size = fontSize ?? 13
         let font = fontName.flatMap { NSFont(name: $0, size: size) } ?? NSFont.systemFont(ofSize: size)
         return ceil(NSLayoutManager().defaultLineHeight(for: font))

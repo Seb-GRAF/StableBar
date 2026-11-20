@@ -72,7 +72,7 @@ private func sliderBlock(_ properties: String = "") throws -> PopupBlock {
     #expect(!config.usesSliderModeStates(config.widgets[1]))
 }
 
-@Test @MainActor func automaticInlineSlidersFitTheirWholeBoxAndTooltipsKeepTheirHeight() throws {
+@Test @MainActor func automaticInlineSlidersFitTheirWholeBoxAndPopupsKeepTheirHeight() throws {
     let style = WidgetStyle(paddingVertical: 3, height: 30, paddingTop: 4, paddingBottom: 6)
     #expect(style.inlineControlHeight == 20)
     #expect(WidgetStyle().inlineControlHeight > 0)
