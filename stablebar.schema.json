@@ -792,6 +792,14 @@
           "$ref": "#/definitions/number",
           "description": "How far the shadow drops, in points; negative raises it. 1 by default."
         },
+        "shadowFrom": {
+          "anyOf": [
+            { "enum": ["content", "shape"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "What casts a widget's shadow: content, its text, symbols and background together, or shape, its background shape alone, as a group's does. content by default."
+        },
         "height": {
           "$ref": "#/definitions/number"
         },

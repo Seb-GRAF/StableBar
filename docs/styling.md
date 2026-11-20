@@ -12,6 +12,12 @@ Styles also accept `hoverForeground`, `height`, `paddingLeading`, `paddingTraili
 
 `shadowOffsetX` and `shadowOffsetY` move the `shadowColor` shadow right and down by that many points, or left and up when negative. Unset, a shadow drops 1 point. Widgets, [groups](layout.md#adaptive-layout-and-groups), popups and tooltips draw it.
 
+`shadowFrom` sets what casts a widget's shadow: `content`, the default, casts it from everything the widget draws, text and symbols included, and `shape` from its background alone, as groups, popups and tooltips do; a widget without a background then casts none. Use `shape` for a hard shadow, one with a `shadowRadius` of 0, which would otherwise double the widget's text:
+
+```json
+"defaults": { "background": "#ffffff", "shadowColor": "#000000", "shadowRadius": 0, "shadowOffsetX": 2, "shadowOffsetY": 2, "shadowFrom": "shape" }
+```
+
 `symbolVariant` draws SF Symbols in one of their variants, so `bell` with `fill` draws as `bell.fill`: `fill`, `slash`, `circle`, `square` or `rectangle`, or several joined by dots in the order SF Symbols names them (slash, then one shape, then fill), such as `circle.fill` or `slash.circle.fill`. A symbol without that variant keeps its own look. `none` draws symbols as named, undoing a variant set in a lower layer. Like `iconSize`, it reaches a layout's blocks. Set it in a state to change a symbol while the state is active, such as a leaf that fills while the Apple menu is open:
 
 ```json

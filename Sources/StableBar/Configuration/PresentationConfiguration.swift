@@ -120,7 +120,7 @@ extension WidgetStyle {
         }
         for (key, text) in [("fontName", fontName), ("fontWeight", fontWeight), ("borderEdges", borderEdges?.rawValue),
                             ("placement", placement?.rawValue), ("symbolVariant", symbolVariant?.rawValue), ("appIcons", appIcons?.rawValue),
-                            ("show", show?.rawValue)] {
+                            ("shadowFrom", shadowFrom?.rawValue), ("show", show?.rawValue)] {
             if let text { value[key] = .string(text) }
         }
         if let states { value["states"] = .object(states.mapValues(\.configurationValue)) }

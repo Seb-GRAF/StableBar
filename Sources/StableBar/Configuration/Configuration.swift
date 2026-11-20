@@ -152,6 +152,10 @@ enum AppIcons: String, Decodable, CaseIterable, Sendable {
     case color, tinted
 }
 
+enum ShadowSource: String, Decodable, CaseIterable, Sendable {
+    case content, shape
+}
+
 enum CellContent: String, Decodable, CaseIterable, Sendable {
     case both, label, apps, none
 }
@@ -207,6 +211,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var shadowColor: HexColor?
     var shadowOffsetX: Double?
     var shadowOffsetY: Double?
+    var shadowFrom: ShadowSource?
     var height: Double?
     var paddingLeading: Double?
     var paddingTrailing: Double?
@@ -225,7 +230,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     enum CodingKeys: String, CodingKey, CaseIterable {
         case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius, flare
         case fontName, fontSize, fontWeight, iconSize, symbolVariant, appIcons, paddingHorizontal, paddingVertical, spacing, width
-        case minWidth, maxWidth, shadowRadius, shadowColor, shadowOffsetX, shadowOffsetY, height, paddingLeading, paddingTrailing, paddingTop
+        case minWidth, maxWidth, shadowRadius, shadowColor, shadowOffsetX, shadowOffsetY, shadowFrom, height, paddingLeading, paddingTrailing, paddingTop
         case paddingBottom, offsetX, offsetY, opacity, placement, show, hoverForeground, states
     }
 
@@ -259,6 +264,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             shadowColor: shadowColor ?? defaults.shadowColor,
             shadowOffsetX: shadowOffsetX ?? defaults.shadowOffsetX,
             shadowOffsetY: shadowOffsetY ?? defaults.shadowOffsetY,
+            shadowFrom: shadowFrom ?? defaults.shadowFrom,
             height: height ?? defaults.height,
             paddingLeading: paddingLeading ?? defaults.paddingLeading,
             paddingTrailing: paddingTrailing ?? defaults.paddingTrailing,
@@ -315,6 +321,7 @@ extension WidgetStyle {
         shadowColor = try values.decodeIfPresent(HexColor.self, forKey: .shadowColor)
         shadowOffsetX = try values.decodeIfPresent(Double.self, forKey: .shadowOffsetX)
         shadowOffsetY = try values.decodeIfPresent(Double.self, forKey: .shadowOffsetY)
+        shadowFrom = try values.decodeIfPresent(ShadowSource.self, forKey: .shadowFrom)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         paddingLeading = try values.decodeIfPresent(Double.self, forKey: .paddingLeading)
         paddingTrailing = try values.decodeIfPresent(Double.self, forKey: .paddingTrailing)
@@ -382,19 +389,23 @@ extension View {
         transformEnvironment(\.symbolVariants) { if let variant { $0 = variant.variants } }
     }
 
-    func styledShadow(_ appearance: WidgetAppearance) -> some View {
+    func styledShadow(_ appearance: WidgetAppearance?) -> some View {
         modifier(StyledShadow(appearance: appearance))
     }
 }
 
 private struct StyledShadow: ViewModifier {
-    let appearance: WidgetAppearance
+    let appearance: WidgetAppearance?
     @Environment(\.offscreenSnapshot) private var offscreen
 
     func body(content: Content) -> some View {
-        // NSView.cacheDisplay, which draws offscreen snapshots, turns a shadow's vertical offset upside down.
-        content.shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, x: appearance.shadowOffsetX,
-                       y: offscreen ? -appearance.shadowOffsetY : appearance.shadowOffsetY)
+        if let appearance {
+            // NSView.cacheDisplay, which draws offscreen snapshots, turns a shadow's vertical offset upside down.
+            content.shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, x: appearance.shadowOffsetX,
+                           y: offscreen ? -appearance.shadowOffsetY : appearance.shadowOffsetY)
+        } else {
+            content
+        }
     }
 }
 
@@ -423,6 +434,7 @@ struct WidgetAppearance {
     let shadowColor: Color
     let shadowOffsetX: Double
     let shadowOffsetY: Double
+    let shadowFrom: ShadowSource
 
     init(_ style: WidgetStyle, defaults: WidgetStyle) {
         foreground = (style.foreground ?? defaults.foreground)?.color ?? .primary
@@ -443,6 +455,7 @@ struct WidgetAppearance {
         shadowColor = (style.shadowColor ?? defaults.shadowColor)?.color ?? .clear
         shadowOffsetX = style.shadowOffsetX ?? defaults.shadowOffsetX ?? 0
         shadowOffsetY = style.shadowOffsetY ?? defaults.shadowOffsetY ?? 1
+        shadowFrom = style.shadowFrom ?? defaults.shadowFrom ?? .content
         let size = style.fontSize ?? defaults.fontSize ?? 13
         let name = style.fontName ?? defaults.fontName ?? "system"
         let weight = fontWeights.first { $0.name == style.fontWeight ?? defaults.fontWeight }?.weight ?? .regular

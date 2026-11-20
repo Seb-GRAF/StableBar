@@ -251,7 +251,8 @@ struct WidgetView: View {
         .foregroundStyle(appearance.foreground)
         .styledSymbolVariant(style.symbolVariant)
         .modifier(GlassBackground(fill: style.background, glass: store.configuration?.bar(on: screenKind).glass ?? GlassSettings(), surface: \.widgets,
-                                  shape: RoundedRectangle(cornerRadius: appearance.cornerRadius)))
+                                  shape: RoundedRectangle(cornerRadius: appearance.cornerRadius),
+                                  shadow: appearance.shadowFrom == .shape ? appearance : nil))
         .overlay {
             if contrast == .increased && style.background != nil {
                 // SwiftUI draws a RoundedRectangle's border as a layer border, which drawing offscreen, as the scenes do, gives
@@ -269,7 +270,7 @@ struct WidgetView: View {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).font(.system(size: 8)).help(error)
             }
         }
-        .styledShadow(appearance)
+        .styledShadow(appearance.shadowFrom == .content ? appearance : nil)
         .overlay(alignment: .bottom) {
             if let overlay = widget.overlay {
                 timed { date in

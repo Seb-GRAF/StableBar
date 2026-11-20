@@ -14,6 +14,9 @@
       { "id": "focus", "type": "text", "text": "Focus", "icon": "moon.fill", "position": "left", "group": "island" },
       { "id": "glow", "type": "text", "text": "Lifted", "position": "center",
         "style": { "shadowColor": "#0a84ff99", "shadowRadius": 3, "shadowOffsetX": 2, "shadowOffsetY": 2 } },
+      { "id": "shape", "type": "text", "text": "Shape", "position": "center",
+        "style": { "background": { "light": "#ffffff", "dark": "#3a3a3c" }, "cornerRadius": 6, "shadowColor": "#000000",
+                   "shadowRadius": 0, "shadowOffsetX": 2, "shadowOffsetY": 2, "shadowFrom": "shape" } },
       { "id": "time", "type": "clock", "format": "HH:mm", "position": "right", "group": "sticker" }
     ]
   },

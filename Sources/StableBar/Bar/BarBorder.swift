@@ -32,6 +32,8 @@ struct GlassBackground<S: Shape>: ViewModifier {
     let glass: GlassSettings
     let surface: KeyPath<GlassSettings, Bool>
     let shape: S
+    /// Cast by the background alone, for a style whose `shadowFrom` is `shape`.
+    var shadow: WidgetAppearance? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -45,6 +47,7 @@ struct GlassBackground<S: Shape>: ViewModifier {
                     Color.clear.glassEffect(visible ? .clear : .identity, in: shape)
                     shape.fill((fill?.shapeStyle ?? AnyShapeStyle(Color.clear)).opacity(1 - glass.transparency))
                 }
+                .styledShadow(shadow)
             }
         } else {
             let empty = if surface != \GlassSettings.popups {
@@ -56,7 +59,11 @@ struct GlassBackground<S: Shape>: ViewModifier {
             }
             // Widgets keep their fill, tints included: they sit on the bar or a popup, which are opaque.
             let fill = reduceTransparency && surface != \GlassSettings.widgets ? self.fill?.opaque : self.fill
-            content.background(fill?.shapeStyle ?? empty, in: shape)
+            if let shadow {
+                content.background { shape.fill(fill?.shapeStyle ?? empty).styledShadow(shadow) }
+            } else {
+                content.background(fill?.shapeStyle ?? empty, in: shape)
+            }
         }
     }
 }

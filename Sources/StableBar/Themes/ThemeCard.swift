@@ -270,11 +270,14 @@ private struct ThemeSampleTile: ViewModifier {
             .padding(.trailing, style.paddingTrailing ?? appearance.paddingHorizontal)
             .padding(.top, verticalPadding ? style.paddingTop ?? appearance.paddingVertical : 0)
             .padding(.bottom, verticalPadding ? style.paddingBottom ?? appearance.paddingVertical : 0)
-            .background(appearance.background, in: RoundedRectangle(cornerRadius: appearance.cornerRadius))
+            .background {
+                RoundedRectangle(cornerRadius: appearance.cornerRadius).fill(appearance.background)
+                    .styledShadow(appearance.shadowFrom == .shape ? appearance : nil)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
                     .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
             }
-            .styledShadow(appearance)
+            .styledShadow(appearance.shadowFrom == .content ? appearance : nil)
     }
 }
