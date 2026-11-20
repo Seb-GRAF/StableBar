@@ -39,7 +39,7 @@ The menus follow the app that owns the macOS menu bar, so while Settings or anot
 
 ## Which permissions does StableBar ask for, and why?
 
-Setup asks for Accessibility with its first **Allow** and for Calendars in **Finishing touches**, and **Settings → General → Access** lists the ones your bar needs:
+Setup asks for each of them on **Allow what your bar needs**, with its own **Allow…**, and **Settings → General → Access** lists the ones your bar needs:
 
 - **Accessibility** (**Device Control and Data Access** from macOS 27), for the app menus, the Apple menu, Menu bar items, Workspaces and keeping windows clear of the bar.
 - **Automation**, to control System Events, which hides or shows the macOS menu bar.

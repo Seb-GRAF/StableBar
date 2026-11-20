@@ -53,7 +53,7 @@ struct HelpQuestion: Identifiable {
 
     ## How do I hide the macOS menu bar, or keep it?
 
-    To hide it, turn on **Settings → General → Native menu bar → Automatically hide the menu bar**; StableBar then sits on the top edge in its place. To keep it, turn that switch off and turn on **Below the menu bar** in **Settings → Bar → Bar → Placement**, so StableBar sits under it. Setup asks the same question with **Replace the menu bar** and **Keep the menu bar**.
+    To hide it, turn on **Settings → General → Native menu bar → Automatically hide the menu bar**; StableBar then sits on the top edge in its place. To keep it, turn that switch off and turn on **Below the menu bar** in **Settings → Bar → Bar → Placement**, so StableBar sits under it. Setup's **Allow** hides the menu bar for you; if you don't allow it, the bar sits below the menu bar.
 
     This changes the macOS setting itself, so it stays after StableBar quits. The first time, macOS asks to let StableBar control System Events; if you said no, turn on **System Events** under StableBar in **System Settings → Privacy & Security → Automation**.
 
@@ -73,7 +73,7 @@ struct HelpQuestion: Identifiable {
 
     ## Which permissions does StableBar ask for, and why?
 
-    Setup asks for these in its permissions step, and **Settings → General → Access** lists the ones your bar needs:
+    Setup asks for each of them on **Allow what your bar needs**, with its own **Allow…**, and **Settings → General → Access** lists the ones your bar needs:
 
     - **Accessibility** (**Device Control and Data Access** from macOS 27), for the app menus, the Apple menu, Menu bar items, Workspaces and keeping windows clear of the bar.
     - **Automation**, to control System Events, which hides or shows the macOS menu bar.
