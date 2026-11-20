@@ -47,6 +47,13 @@ final class WidgetAddCatalogTests: XCTestCase {
         XCTAssertTrue(choices.last!.isScript)
     }
 
+    func testEssentialsMatchTheStoreRepositoryUnderEitherOwner() throws {
+        for (repository, included) in [("https://github.com/Seb-GRAF/stablebar-packages", true), ("https://github.com/stablebox/stablebar-packages", true), ("https://github.com/someone/stablebar-packages", false)] {
+            let manifest = try JSONDecoder().decode(WidgetPackageManifest.self, from: Data(#"{"id":"date","name":"Date","version":"1","kind":"widgets","entry":"config.json","repository":"\#(repository)"}"#.utf8))
+            XCTAssertEqual(WidgetAddCatalog.includes(manifest, record: nil), included, repository)
+        }
+    }
+
     func testCatalogLoadsWithoutDownloadingArchivesAndSelectionReportsUnavailableArchive() async throws {
         let fixture = try ThemeGalleryFixture()
         defer { fixture.close() }
