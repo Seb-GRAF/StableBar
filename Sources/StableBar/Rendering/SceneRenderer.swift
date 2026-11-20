@@ -145,29 +145,29 @@ enum SceneRenderer {
         var failures = 0
     }
 
+    /// What `--render-scenes` draws: a single scene file in this process, and several each in a process of its own,
+    /// as many at a time as the Mac has cores, up to six.
+    static func render(_ inputs: [URL], to output: URL) async -> Report {
+        guard sceneFiles(in: inputs).count > 1, let executable = Bundle.main.executableURL else {
+            return await renderAll(inputs, to: output)
+        }
+        return await renderEach(inputs, to: output, processes: min(ProcessInfo.processInfo.activeProcessorCount, 6),
+                                draw: drawInProcess(executable))
+    }
+
     /// Draws every scene file in `inputs`, a folder standing for its `*.json` files at any depth, to
     /// `<name>-<appearance>.png` in `output`, and writes `scenes.json` there: each scene's images, or
-    /// the error that stopped it. A scene's name is its file name; a second scene with the same name
-    /// is an error. Times are drawn in UTC.
-    static func renderAll(_ inputs: [URL], to output: URL, settle: Duration = settle) async -> Report {
+    /// the error that stopped it. A scene's name is its file name; a second scene with the same name,
+    /// ignoring case, is an error. Times are drawn in UTC.
+    static func renderAll(_ inputs: [URL], to output: URL) async -> Report {
         DocsImages.useUTC()
-        var report = Report()
-        var entries: [String: ConfigurationValue] = [:]
         let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: work) }
-        do {
-            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        } catch {
-            FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
-            return Report(failures: 1)
-        }
-        for file in sceneFiles(in: inputs) {
-            let name = file.deletingPathExtension().lastPathComponent
-            if entries[name] != nil {
-                report.failures += 1
-                entries[file.path] = .object(["error": .string("Another scene is also named \(name).")])
-                continue
-            }
+        guard makeFolder(output) else { return Report(failures: 1) }
+        let (scenes, duplicates) = named(sceneFiles(in: inputs))
+        var report = Report(failures: duplicates.count)
+        var entries = duplicates
+        for (name, file) in scenes {
             do {
                 let scene = try SceneFile.read(file)
                 let wallpaper = try scene.wallpaper.map { path in
@@ -182,7 +182,7 @@ enum SceneRenderer {
                                           themes: bundledThemesDirectory, appearance: appearance)
                     defer { store.stop() }
                     let image = "\(name)-\(appearance.rawValue).png"
-                    try await draw(scene, store: store, appearance: appearance, wallpaper: wallpaper, to: output.appending(path: image), settle: settle)
+                    try await draw(scene, store: store, appearance: appearance, wallpaper: wallpaper, to: output.appending(path: image))
                     images.append(.string(image))
                 }
                 entries[name] = .object(["images": .array(images)])
@@ -191,15 +191,124 @@ enum SceneRenderer {
                 entries[name] = .object(["error": .string(errorMessage(error))])
             }
         }
+        if !writeReport(entries, to: output) { report.failures += 1 }
+        return report
+    }
+
+    /// Draws the scene files in `inputs` as `renderAll` does, each in a process of its own, `processes` at a time. What
+    /// a process has drawn can change what it draws later, such as which version of the app's icon an image gets, so
+    /// each scene's images depend on that scene alone. `draw` draws one scene file to a folder as `--render-scenes`
+    /// does, and returns its exit status.
+    static func renderEach(_ inputs: [URL], to output: URL, processes: Int,
+                           draw: @escaping @Sendable (_ scene: URL, _ folder: URL) async -> Int32) async -> Report {
+        let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: work) }
+        guard makeFolder(output) else { return Report(failures: 1) }
+        let (scenes, duplicates) = named(sceneFiles(in: inputs))
+        var report = Report(failures: duplicates.count)
+        var entries = duplicates
+        await withTaskGroup(of: (name: String, folder: URL, status: Int32).self) { group in
+            var next = 0, running = 0
+            while true {
+                while running < max(processes, 1), next < scenes.count {
+                    let (name, file) = scenes[next]
+                    let folder = work.appending(path: "\(next)")
+                    next += 1
+                    running += 1
+                    group.addTask { (name, folder, await draw(file, folder)) }
+                }
+                guard let drawn = await group.next() else { break }
+                running -= 1
+                let entry = collect(drawn.name, from: drawn.folder, status: drawn.status, to: output)
+                if case let .object(fields) = entry, fields["error"] != nil { report.failures += 1 }
+                entries[drawn.name] = entry
+            }
+        }
+        if !writeReport(entries, to: output) { report.failures += 1 }
+        return report
+    }
+
+    /// Runs `--render-scenes` for one scene file in another process of `executable`, and returns its exit status.
+    nonisolated private static func drawInProcess(_ executable: URL) -> @Sendable (URL, URL) async -> Int32 {
+        { scene, folder in
+            await withCheckedContinuation { continuation in
+                let process = Process()
+                process.executableURL = executable
+                process.arguments = ["--render-scenes", folder.path, scene.path]
+                process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+                do {
+                    try process.run()
+                } catch {
+                    process.terminationHandler = nil
+                    FileHandle.standardError.write(Data("\(scene.lastPathComponent): \(errorMessage(error))\n".utf8))
+                    continuation.resume(returning: -1)
+                }
+            }
+        }
+    }
+
+    /// The entry the process that drew `name` wrote to `folder`, with its images moved to `output`, or why it has none.
+    private static func collect(_ name: String, from folder: URL, status: Int32, to output: URL) -> ConfigurationValue {
+        guard let data = try? Data(contentsOf: folder.appending(path: "scenes.json")),
+              case let .object(scenes)? = try? JSONDecoder().decode([String: ConfigurationValue].self, from: data)["scenes"],
+              let entry = scenes[name] else {
+            return .object(["error": .string("Drawing \(name) stopped with status \(status) before it reported.")])
+        }
+        guard case let .object(fields) = entry, case let .array(images)? = fields["images"] else { return entry }
+        for case let .string(image) in images {
+            let target = output.appending(path: image)
+            do {
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: folder.appending(path: image), to: target)
+            } catch {
+                return .object(["error": .string("\(image): \(errorMessage(error))")])
+            }
+        }
+        return entry
+    }
+
+    /// `files` with their names, and an error entry for each file named like an earlier one, ignoring case: their images
+    /// would be one file on a disk that ignores case, as macOS's does by default.
+    private static func named(_ files: [URL]) -> (scenes: [(name: String, file: URL)], duplicates: [String: ConfigurationValue]) {
+        var scenes: [(name: String, file: URL)] = []
+        var duplicates: [String: ConfigurationValue] = [:]
+        var names: [String: String] = [:]
+        for file in files {
+            let name = file.deletingPathExtension().lastPathComponent
+            // Folded as APFS compares names, which lowercasing doesn't do for all of them: `Straße` and `STRASSE` are one.
+            let key = name.folding(options: .caseInsensitive, locale: nil)
+            if let other = names[key] {
+                let message = other == name ? "Another scene is also named \(name)." : "Another scene is named \(other), which differs only in case."
+                duplicates[file.path] = .object(["error": .string(message)])
+            } else {
+                names[key] = name
+                scenes.append((name, file))
+            }
+        }
+        return (scenes, duplicates)
+    }
+
+    private static func makeFolder(_ folder: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            return true
+        } catch {
+            FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
+            return false
+        }
+    }
+
+    /// Writes `entries` to `scenes.json` in `output`, and returns whether it could.
+    private static func writeReport(_ entries: [String: ConfigurationValue], to output: URL) -> Bool {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
             try encoder.encode(["scenes": ConfigurationValue.object(entries)]).write(to: output.appending(path: "scenes.json"))
+            return true
         } catch {
-            report.failures += 1
             FileHandle.standardError.write(Data("scenes.json: \(errorMessage(error))\n".utf8))
+            return false
         }
-        return report
     }
 
     /// The scene files `inputs` name, sorted: files as given, and the `*.json` files at any depth in folders.
@@ -213,14 +322,10 @@ enum SceneRenderer {
         }
     }
 
-    /// How long a scene's views settle before they're drawn.
-    static var settle: Duration = .seconds(2)
-
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
     /// Draws what `scene` asks for, from `store`, in one appearance, to the PNG file `url`.
-    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, wallpaper: NSImage? = nil, to url: URL,
-                     settle: Duration = settle) async throws {
+    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, wallpaper: NSImage? = nil, to url: URL) async throws {
         guard let configuration = store.configuration else { throw CommandFailure(message: "The scene has no configuration.") }
         let dark = appearance == .dark
         let width = CGFloat(scene.width ?? 1100)
@@ -235,12 +340,12 @@ enum SceneRenderer {
             }
             let content = view.background { backdrop(wallpaper, dark: dark) }
             try await OffscreenSnapshot.write(drawn(content, with: scene.accessibilityDisplay),
-                                              size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: width, height: height), dark: dark, to: url)
         case .editBar:
             store.barEditing.begin()
             let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
             try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: []),
-                                              size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: width, height: height), dark: dark, to: url)
         case .popup:
             let look = configuration.look(on: .monitor)
             let id = scene.widget ?? ""
@@ -256,12 +361,12 @@ enum SceneRenderer {
                 navigation.view = view
             }
             try await drawPopup(popup, of: widget, store: store, navigation: navigation, height: CGFloat(scene.height ?? 600), dark: dark,
-                                accessibilityDisplay: scene.accessibilityDisplay, wallpaper: wallpaper, settle: settle, to: url)
+                                accessibilityDisplay: scene.accessibilityDisplay, wallpaper: wallpaper, to: url)
         case .update:
             store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
-                                dark: dark, accessibilityDisplay: [], wallpaper: nil, settle: settle, to: url)
+                                dark: dark, accessibilityDisplay: [], wallpaper: nil, to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -306,6 +411,10 @@ enum SceneRenderer {
             let waitsForThemes = scene.widget == nil && scene.section == .theme
             let waitsForCrashes = scene.widget == nil && scene.section == .crashes
             let library = store.packageLibrary
+            // A package widget's Content tab loads the package's settings, which a busy Mac can take seconds to do.
+            let widgetPackage = scene.widget.flatMap { id in
+                (scene.tab ?? .content) == .content && !store.builtInWidgetIDs.contains(id) ? store.widgetPackageIDs[id] : nil
+            }
             let move = settingsApplicationMove(for: scene)
             store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
             let settings = SettingsView(store: store, editor: editor, applicationMove: move)
@@ -316,24 +425,27 @@ enum SceneRenderer {
                 .environment(\.sceneWallpaper, wallpaper)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
-                                              dark: dark, settle: settle, ready: {
+                                              dark: dark, ready: {
                 (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
                     && (store.pendingLinks.theme.map { editor.gallery.previews[$0.choice.linkedPreviewKey] != nil } ?? true)
                     && (store.pendingLinks.bar.map { $0.entries != nil } ?? true)
                     // Crashes marks what it shows as seen once it has read the reports.
                     && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
                     && (scene.package == nil || library.draft?.inspection.manifest.id == scene.package)
+                    && (widgetPackage.map { id in
+                        library.error != nil || library.draft.map { $0.inspection.manifest.id == id && library.isActive($0) } == true
+                    } ?? true)
             }, to: url)
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
-                                              size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, to: url)
         case .barLinkReview:
             let candidate = store.pendingLinks.bar!
             await candidate.loadStore()
             await candidate.use()
             guard !candidate.reviews.isEmpty else { throw CommandFailure(message: "barLink: No package the link needs asks for a review.") }
             try await OffscreenSnapshot.write(BarLinkReview(candidate: candidate, store: store).background(Color(nsColor: .windowBackgroundColor)),
-                                              size: NSSize(width: 540, height: CGFloat(scene.height ?? 540)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: 540, height: CGFloat(scene.height ?? 540)), dark: dark, to: url)
         case .accessibilityGuide:
             let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:)).flatMap { image in
                 var rect = NSRect(x: 0, y: 0, width: 256, height: 256)
@@ -342,7 +454,7 @@ enum SceneRenderer {
             }
             try await OffscreenSnapshot.write(AccessibilityGuideView(icon: icon ?? NSApp.applicationIconImage) {}
                 .padding(24).background(Color(nsColor: .windowBackgroundColor)),
-                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, to: url)
         case .share, .shareLink:
             let share = BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: setupMenuBarHeight,
                                  wallpaper: nil)
@@ -350,12 +462,12 @@ enum SceneRenderer {
             share.format.preset = scene.sharePreset
             try await OffscreenSnapshot.write(BarShareView(share: share, showsLink: scene.draw == .shareLink, showsDetails: scene.draw == .shareLink),
                                               size: NSSize(width: CGFloat(scene.width ?? 680), height: CGFloat(scene.height ?? 460)),
-                                              dark: dark, settle: settle, ready: { share.image != nil }, to: url)
+                                              dark: dark, ready: { share.image != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
                                 wallpaper: wallpaper,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
-                                dark: dark, settle: settle, to: url)
+                                dark: dark, to: url)
         }
     }
 
@@ -371,7 +483,7 @@ enum SceneRenderer {
     /// bar above it once it has left the stage. The scene's choices are made once the tour shows, as a person makes
     /// them, so the tour sees the menu bar hide or show: from Allow on, Automation's Allow has been clicked.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
-                                  macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
+                                  macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
@@ -412,7 +524,7 @@ enum SceneRenderer {
             await session.loadSuggestions()
             choices.made = true
         }
-        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: { choices.made && backdrop.images != nil }, to: url)
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, ready: { choices.made && backdrop.images != nil }, to: url)
     }
 
     /// Whether a setup scene's choices are made, which its drawing waits for.
@@ -492,7 +604,7 @@ enum SceneRenderer {
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
     private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore,
                                   navigation: PopupNavigation = PopupNavigation(), height: CGFloat, dark: Bool,
-                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], wallpaper: NSImage?, settle: Duration, to url: URL) async throws {
+                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], wallpaper: NSImage?, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
@@ -505,7 +617,7 @@ enum SceneRenderer {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { backdrop(wallpaper, dark: dark) }
         try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
-                                          dark: dark, settle: settle, to: url)
+                                          dark: dark, to: url)
     }
 
     /// The scene's wallpaper, filling the drawing from its top edge, or the tour's backdrop without one.

@@ -4,7 +4,8 @@ import Foundation
 /// One app's sound played back by StableBar: a process tap mutes the app's processes at the source, and a private
 /// aggregate device reads the tap and plays it on an output device at the app's gain. Owned on the main actor.
 final class AppAudioTap {
-    /// The UIDs of the aggregate devices start with this, so the mixer leaves them out of the outputs it offers.
+    /// The UIDs of the aggregate devices start with this. A private device is hidden from other apps but not from
+    /// StableBar, so its device lists leave these out.
     static let uidPrefix = "org.stablebar.mixer."
 
     private var tap = AudioObjectID(kAudioObjectUnknown)

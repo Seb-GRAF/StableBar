@@ -220,11 +220,11 @@ enum DocsImages {
     }
 
     /// Waits for the sample workspaces, every sample command's output and `ready`, adds the CPU
-    /// history they can't supply and lets the views settle, then draws the content at twice its size
+    /// history they can't supply, then draws the content at twice its size once it holds still,
     /// in an offscreen window below the desktop icons.
     private static func snapshot(_ content: some View, size: NSSize, dark: Bool, stores: [BarStore], ready: () -> Bool,
                                  to url: URL) async throws {
-        try await OffscreenSnapshot.write(content, size: size, dark: dark, settle: .seconds(3), ready: {
+        try await OffscreenSnapshot.write(content, size: size, dark: dark, ready: {
             ready() && !stores.contains { store in
                 (store.configuration!.widgets.contains { $0.content == .workspaces } && store.workspaceStore.workspaces.isEmpty)
                     || store.widgetScripts.scripts.values.contains { $0.outputNumber == 0 }
