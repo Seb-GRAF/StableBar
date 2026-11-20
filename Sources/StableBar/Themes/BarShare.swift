@@ -365,15 +365,7 @@ struct BarShareView: View {
             if share.hasNotch { Toggle("Notch", isOn: $share.format.notch) }
             Toggle("StableBar Badge", isOn: $share.badge)
         } label: {
-            HStack(spacing: 6) {
-                Text(share.format.screen.title)
-                Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold)).opacity(0.8)
-            }
-            .font(.system(size: 12.5, weight: .semibold))
-            .padding(.horizontal, 12)
-            .frame(height: 28)
-            .glass(Capsule(style: .circular))
-            .contentShape(Capsule())
+            GlassPill { Text(share.format.screen.title) }
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -382,19 +374,9 @@ struct BarShareView: View {
     }
 
     private var closeButton: some View {
-        Button {
+        GlassCloseButton(title: "Close") {
             if showsLink { showsLink = false } else { close() }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 11, weight: .bold))
-                .frame(width: 28, height: 28)
-                .glass(Circle())
-                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
-        .keyboardShortcut(.cancelAction)
-        .help("Close")
-        .accessibilityLabel("Close")
     }
 
     /// The image over a blur of itself, with the badge's spot.
@@ -473,7 +455,7 @@ struct BarShareView: View {
         HStack(spacing: 2) {
             ForEach(BarSharePreset.allCases) { preset in
                 Button(preset.label) { share.format.preset = preset }
-                    .buttonStyle(ShareToolStyle(selected: share.format.preset == preset))
+                    .buttonStyle(GlassButtonStyle(selected: share.format.preset == preset))
                     .accessibilityLabel(preset.title)
                     .accessibilityAddTraits(share.format.preset == preset ? .isSelected : [])
             }
@@ -484,7 +466,7 @@ struct BarShareView: View {
             Button(action: shareBar) {
                 Label("Share", systemImage: "square.and.arrow.up").labelStyle(.titleAndIcon)
             }
-            .buttonStyle(ShareToolStyle(selected: true))
+            .buttonStyle(GlassButtonStyle(selected: true))
             .keyboardShortcut(.defaultAction)
             .background(MenuAnchor(view: anchor))
             .disabled(share.image == nil)
@@ -499,7 +481,7 @@ struct BarShareView: View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 14, weight: .medium)).frame(width: 36)
         }
-        .buttonStyle(ShareToolStyle(selected: false, highlighted: selected, round: true))
+        .buttonStyle(GlassButtonStyle(selected: false, highlighted: selected, round: true))
         .help(title)
         .accessibilityLabel(title)
     }
@@ -519,7 +501,7 @@ struct BarShareView: View {
                     } label: {
                         Label(copied ? "Copied" : "Copy Link", systemImage: copied ? "checkmark" : "doc.on.doc").labelStyle(.titleAndIcon)
                     }
-                    .buttonStyle(ShareToolStyle(selected: true, compact: true))
+                    .buttonStyle(GlassButtonStyle(selected: true, size: .compact))
                     // While the image redraws, the link is still the last screen's.
                     .disabled(share.image == nil)
                 }
@@ -626,40 +608,6 @@ struct WindowDragArea: NSViewRepresentable {
 
     func makeNSView(context: Context) -> DragView { DragView() }
     func updateNSView(_ nsView: DragView, context: Context) {}
-}
-
-/// A translucent fill and edge over the blurred image, for the window's controls. Their capsules are circular: a
-/// continuous capsule's edge gets a stray straight line beside it in offscreen drawings.
-private extension View {
-    func glass(_ shape: some InsettableShape) -> some View {
-        background(.white.opacity(0.15), in: shape)
-            .overlay(shape.strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
-    }
-}
-
-/// A button in the toolbar: a shape, a tool or Share, which is `selected` like the current shape.
-private struct ShareToolStyle: ButtonStyle {
-    var selected: Bool
-    var highlighted = false
-    var round = false
-    var compact = false
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        configuration.label
-            .font(.system(size: compact ? 11.5 : 12, weight: .semibold))
-            .foregroundStyle(selected ? Color.black : Color.white)
-            .padding(.horizontal, round ? 0 : compact ? 10 : 12)
-            .frame(minWidth: compact ? 0 : 36, minHeight: compact ? 26 : 36)
-            .background(fill(pressed: configuration.isPressed), in: Capsule())
-            .opacity(isEnabled ? 1 : 0.4)
-            .contentShape(Capsule())
-    }
-
-    private func fill(pressed: Bool) -> Color {
-        if selected { return .white.opacity(pressed ? 0.75 : 0.92) }
-        return .white.opacity(pressed ? 0.28 : highlighted ? 0.22 : 0)
-    }
 }
 
 /// A row of "What it shares": the look, a widget the link carries, or what stays on this Mac.
