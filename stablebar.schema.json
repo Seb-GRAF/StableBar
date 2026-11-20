@@ -2511,7 +2511,7 @@
         },
         "theme": {
           "$ref": "#/definitions/string",
-          "description": "ID of the theme the bar is drawn with, at any version: built-in for Built-in or a theme turned off."
+          "description": "ID of the theme the bar is drawn with, at any version: built-in for a bar without a theme or with its theme turned off."
         }
       }
     },

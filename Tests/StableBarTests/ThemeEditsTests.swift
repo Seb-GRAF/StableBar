@@ -79,9 +79,9 @@ struct ThemeEditsTests {
         #expect(store.activeProfiles == ["work", "Test theme edits"])
         #expect(store.configuration?.defaults.fontSize == 14)
 
-        let builtIn = try #require(editor.gallery.choices.first { $0.key == "built-in" })
-        try store.configurationStore.applyTheme(builtIn)
-        #expect(store.configuration?.defaults.fontSize == nil)
+        let glass = try #require(editor.gallery.choices.first { $0.key == "glass" })
+        try store.configurationStore.applyTheme(glass)
+        #expect(store.configuration?.defaults.fontSize == 13)
         let theme = try #require(editor.gallery.choices.first { $0.manifest.id == "test-theme" })
         try store.configurationStore.applyTheme(theme)
         #expect(store.configuration?.defaults.fontSize == 14)

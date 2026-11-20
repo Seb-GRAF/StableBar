@@ -283,6 +283,9 @@ final class ThemeGallery {
             let saved = try savingLook(of: ThemeEdits.profile(for: current.manifest.id, in: main)?["configuration"]?
                 .decoded([String: ConfigurationValue].self) ?? [:], into: theme)
             let id = packageSlug(name)
+            if isReservedThemeID(id, themesDirectory: store.configurationStore.themesDirectory) {
+                throw CommandFailure(message: "\(name) belongs to a theme that comes with StableBar. Choose another name.")
+            }
             let versions = try await client.installed().filter { $0.id == id }.map(\.version)
             var patch = 0
             while versions.contains("1.0.\(patch)") { patch += 1 }

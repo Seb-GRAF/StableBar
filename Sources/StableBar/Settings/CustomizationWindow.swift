@@ -715,7 +715,7 @@ extension BarStore {
             text = "your configuration"
         } else if let themes = configurationStore.themesDirectory?.standardizedFileURL.path, file.hasPrefix(themes + "/") {
             let id = file.dropFirst(themes.count + 1).prefix { $0 != "/" }
-            text = id == "built-in" ? "the Built-in theme" : "the \(id.capitalized) theme"
+            text = id == "built-in" ? "the fallback" : "the \(id.capitalized) theme"
         } else if file.hasPrefix(packages + "/") {
             text = "the \(file.dropFirst(packages.count + 1).prefix { $0 != "/" }) package"
         } else {

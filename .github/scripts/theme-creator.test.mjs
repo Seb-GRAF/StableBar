@@ -552,7 +552,7 @@ test("reserved ids are the app's", () => {
   const legacy = catalog.match(/let legacyThemeIDs: Set<String> = \[([^\]]+)\]/)[1];
   const legacyIDs = [...legacy.matchAll(/"([^"]+)"/g)].map(match => match[1]);
   assert.deepEqual(BASE_IDS, baseIDs);
-  assert.deepEqual(RESERVED_IDS, new Set([...folders, ...legacyIDs]));
+  assert.deepEqual(RESERVED_IDS, new Set([...folders, ...legacyIDs, "classic"]));
 });
 
 test("site theme copies equal Resources", () => {

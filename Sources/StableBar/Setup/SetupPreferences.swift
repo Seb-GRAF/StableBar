@@ -14,7 +14,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
     }
 
     enum Theme: Hashable, Codable, Sendable {
-        case current, builtIn, package(id: String, version: String?)
+        case current, package(id: String, version: String?)
     }
 
     enum WidgetSet: Hashable, Codable, Sendable {
@@ -162,16 +162,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             }
         }
 
-        var detail: String {
-            switch self {
-            case .minimal: "Built-in theme"
-            case .developer: "Phosphor theme, dark"
-            case .workday: "Léman theme"
-            case .notch: "Notch theme"
-            case .everything: "Catppuccin theme"
-            }
-        }
-
         var symbol: String {
             switch self {
             case .minimal: "minus"
@@ -216,18 +206,16 @@ struct SetupPreferences: Equatable, Codable, Sendable {
                 names = ["Apple menu"] + workspaces.map(\.title) + ["App menus"] + additions.map(\.title)
                     + ["Clock"] + (widgetSets.contains(.menuBarItems) ? ["Menu bar items"] : [])
             }
-            return "\(title). \(detail). Widgets: \(names.joined(separator: ", "))."
+            return "\(title). Widgets: \(names.joined(separator: ", "))."
         }
 
         private func basePreferences(workspaces: WorkspaceSource, placement: Placement) -> SetupPreferences {
             switch self {
-            case .minimal: SetupPreferences(placement: placement, theme: .builtIn, widgetSets: [.sound, .menuBarItems])
-            case .developer: SetupPreferences(appearance: .dark, placement: placement, theme: .package(id: "phosphor", version: nil),
-                                              widgetSets: [.workspaces(workspaces), .system, .sound, .battery, .menuBarItems])
-            case .workday: SetupPreferences(placement: placement, theme: .package(id: "leman", version: nil),
-                                            widgetSets: [.meetings, .sound, .battery, .menuBarItems])
-            case .notch: SetupPreferences(placement: placement, theme: .package(id: "notch", version: nil), widgetSets: [.sound, .battery, .menuBarItems])
-            case .everything: SetupPreferences(placement: placement, theme: .package(id: "catppuccin", version: nil),
+            case .minimal: SetupPreferences(placement: placement, widgetSets: [.sound, .menuBarItems])
+            case .developer: SetupPreferences(placement: placement, widgetSets: [.workspaces(workspaces), .system, .sound, .battery, .menuBarItems])
+            case .workday: SetupPreferences(placement: placement, widgetSets: [.meetings, .sound, .battery, .menuBarItems])
+            case .notch: SetupPreferences(placement: placement, widgetSets: [.sound, .battery, .menuBarItems])
+            case .everything: SetupPreferences(placement: placement,
                                                widgetSets: [.workspaces(workspaces), .meetings, .system, .sound, .battery, .menuBarItems])
             }
         }
@@ -252,12 +240,10 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         let settings: [String: ConfigurationValue]
     }
 
-    /// Presets own appearance, theme and widget sets. Every other choice stays, even a clock or Meetings choice
-    /// this preset doesn't use: it applies again after another change.
+    /// Presets own widget sets. Every other choice stays, even a clock or Meetings choice this preset doesn't use: it
+    /// applies again after another change.
     func replacingPresetChoices(with preset: SetupPreferences) -> SetupPreferences {
         var merged = self
-        merged.appearance = preset.appearance
-        merged.theme = preset.theme
         merged.widgetSets = preset.widgetSets
         return merged
     }
@@ -488,7 +474,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         var edits: [ConfigurationEdit] = []
         switch theme {
         case .current: break
-        case .builtIn: edits.append(ConfigurationEdit(action: .theme))
         case let .package(id, version):
             var properties: [String: ConfigurationValue] = ["id": .string(id)]
             if let version { properties["version"] = .string(version) }

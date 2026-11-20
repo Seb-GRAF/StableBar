@@ -340,6 +340,71 @@ func migrateStarterAppleLogo(_ url: URL, savedBy release: String? = AppVersion.r
     try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)
 }
 
+/// Selects an installed package in place of a retired theme's frozen copy: the Store's package of a theme that moved to
+/// the Store, installed from its copy in `storeThemes`, or a copy of an older one's own files. A file this release or a
+/// newer one saved keeps its selections, since only a hand edit selects a frozen copy there.
+func migrateRetiredThemes(_ url: URL, themes: URL?, storeThemes: URL?, savedBy release: String? = AppVersion.release) throws {
+    let original = try Data(contentsOf: url)
+    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: original)
+    if let release, let pinned = ConfigurationSchema.release(document["$schema"]), compareReleases(pinned, release) != .orderedAscending {
+        return
+    }
+    let packages = WidgetPackageStore(directory: url.deletingLastPathComponent().appending(path: "packages"))
+    /// The files that replace `id`'s frozen copy; nil when it isn't retired, or another package has their ID and version.
+    func replacement(for id: String) throws -> (source: URL, manifest: WidgetPackageManifest, installed: Bool)? {
+        let directory = legacyThemeIDs.contains(id) ? themes : storeThemes
+        guard let source = directory?.appending(path: id == "built-in" ? "classic" : id),
+              FileManager.default.fileExists(atPath: source.path) else { return nil }
+        let manifest = try packages.manifest(at: source)
+        let destination = try packages.directory(id: manifest.id, version: manifest.version)
+        guard FileManager.default.fileExists(atPath: destination.path) else { return (source, manifest, false) }
+        return try packages.sameContents(source, destination) ? (source, manifest, true) : nil
+    }
+    func migrated(_ selection: ConfigurationValue) throws -> ConfigurationValue? {
+        guard case var .object(fields) = selection, fields["version"] == nil, case let .string(id)? = fields["id"],
+              let replacement = try replacement(for: id) else { return nil }
+        if !replacement.installed {
+            if legacyThemeIDs.contains(id) {
+                _ = try packages.install(replacement.source)
+            } else {
+                _ = try packages.install(replacement.source, record: PackageInstallRecord(.store), requestedName: PackageSource.store.name)
+            }
+        }
+        fields["id"] = .string(replacement.manifest.id)
+        fields["version"] = .string(replacement.manifest.version)
+        return .object(fields)
+    }
+    var root = document
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = themes
+    if let theme = root["theme"] {
+        root["theme"] = try migrated(theme) ?? theme
+    } else if try loader.compose(url)["theme"] == nil {
+        // No file of the configuration selects a theme, so it draws Built-in's look.
+        root["theme"] = try migrated(.object(["id": .string("built-in")]))
+    }
+    if case var .object(screens) = root["screens"] {
+        for case let (kind, .object(screen)) in screens {
+            guard let theme = screen["theme"], let next = try migrated(theme) else { continue }
+            screens[kind] = .object(screen.merging(["theme": next]) { $1 })
+        }
+        root["screens"] = .object(screens)
+    }
+    if case var .array(profiles) = root["profiles"], try replacement(for: "built-in") != nil {
+        for case (let index, .object(var profile)) in profiles.enumerated() {
+            guard case var .object(when) = profile["when"], when["theme"] == .string("built-in") else { continue }
+            when["theme"] = .string("classic")
+            profile["when"] = .object(when)
+            // The name Settings gave the profile that keeps Built-in's edits.
+            if profile["name"] == .string("Built-in edits") { profile["name"] = .string("Classic edits") }
+            profiles[index] = .object(profile)
+        }
+        root["profiles"] = .array(profiles)
+    }
+    guard root != document else { return }
+    try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)
+}
+
 /// Turns the offset an earlier setup wrote for Below menu bar into `belowMenuBar`, so the bar starts under each display's own
 /// menu bar. Earlier setups wrote the menu bar's height then, one of `offsets`, as the bar's own offset. A bar that already
 /// says whether it sits below the menu bar stays as it is.

@@ -8,19 +8,19 @@ import Testing
     @Test(arguments: SetupPreferences.Preset.allCases, [false, true])
     func presetLabelsNameWidgets(preset: SetupPreferences.Preset, hasBattery: Bool) {
         let expected: (heading: String, top: [String], below: [String]) = switch preset {
-        case .minimal: ("Minimal. Built-in theme.",
+        case .minimal: ("Minimal.",
                        ["Apple menu", "App menus", "Sound", "Clock", "Menu bar items"],
                        ["Workspaces", "System", "Sound"])
-        case .developer: ("Developer. Phosphor theme, dark.",
+        case .developer: ("Developer.",
                          ["Apple menu", "Workspaces", "App menus", "System", "Sound", "Battery", "Clock", "Menu bar items"],
                          ["Workspaces", "System", "Sound", "Battery"])
-        case .workday: ("Workday. Léman theme.",
+        case .workday: ("Workday.",
                        ["Apple menu", "App menus", "Meetings", "Sound", "Battery", "Clock", "Menu bar items"],
                        ["Workspaces", "System", "Meetings", "Sound", "Battery"])
-        case .notch: ("Notch. Notch theme.",
+        case .notch: ("Notch.",
                      ["Apple menu", "App menus", "Sound", "Battery", "Clock", "Menu bar items"],
                      ["Workspaces", "System", "Sound", "Battery"])
-        case .everything: ("Everything. Catppuccin theme.",
+        case .everything: ("Everything.",
                           ["Apple menu", "Workspaces", "App menus", "Meetings", "System", "Sound", "Battery", "Clock", "Menu bar items"],
                           ["Workspaces", "System", "Meetings", "Sound", "Battery"])
         }

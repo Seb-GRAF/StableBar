@@ -45,8 +45,7 @@ final class ThemeLinkCandidate {
             guard inspection.manifest.kind == .theme else { throw ThemeLinkError.notATheme }
             guard !inspection.requiresReview else { throw ThemeLinkError.needsReview }
             let id = inspection.manifest.id
-            let bundled = store.configurationStore.themesDirectory?.appending(path: id)
-            if legacyThemeIDs.contains(id) || bundled.map({ FileManager.default.fileExists(atPath: $0.path) }) == true {
+            if isReservedThemeID(id, themesDirectory: store.configurationStore.themesDirectory) {
                 throw ThemeLinkError.reservedID(id)
             }
             try Self.checkInstalledID(id, packages: packages)

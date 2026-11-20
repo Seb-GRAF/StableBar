@@ -838,11 +838,11 @@ private func calls(_ log: URL) -> [Substring] {
 }
 
 @Test(arguments: SetupPreferences.Preset.allCases)
-func setupPresetsLoadWithTheBundledThemes(preset: SetupPreferences.Preset) throws {
+func setupPresetsLoadAndKeepTheLook(preset: SetupPreferences.Preset) throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let url = repository.appending(path: "Resources/config.json")
     let preferences = preset.preferences(workspaces: .spaces, placement: .current)
-    if case .package(let id, _) = preferences.theme { #expect(!legacyThemeIDs.contains(id)) }
+    #expect(preferences.theme == .current && preferences.appearance == .current)
     let data = try preferences.applying(to: Data(contentsOf: url))
     var loader = ConfigurationLoader()
     loader.themesDirectory = repository.appending(path: "Resources/themes")
@@ -863,13 +863,13 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
                                    theme: .package(id: "slate", version: "1"), widgetSets: [.meetings], workspaces: .yabai,
                                    keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true,
                                    packages: [.init(id: "ai-usage", version: "1", settings: [:])])
-    let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour, theme: .builtIn,
-                                        widgetSets: [.system], workspaces: .spaces,
+    let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour,
+                                        theme: .package(id: "glass", version: nil), widgetSets: [.system], workspaces: .spaces,
                                         keepWindowsClear: false, keepNotificationsClear: false,
                                         packages: [.init(id: "weather", version: "1", settings: [:])])
-    let presetFields: Set<String> = ["appearance", "theme", "widgetSets"]
-    let otherFields: Set<String> = ["placement", "clock", "workspaces", "keepWindowsClear", "keepNotificationsClear", "deferMeetings",
-                                    "packages"]
+    let presetFields: Set<String> = ["widgetSets"]
+    let otherFields: Set<String> = ["appearance", "placement", "clock", "theme", "workspaces", "keepWindowsClear", "keepNotificationsClear",
+                                    "deferMeetings", "packages"]
     func fields(_ preferences: SetupPreferences) -> [String: String] {
         Dictionary(uniqueKeysWithValues: Mirror(reflecting: preferences).children.map { ($0.label!, String(describing: $0.value)) })
     }
@@ -883,7 +883,7 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
                 "A preset change handles \(field) wrongly; update replacingPresetChoices.")
     }
     #expect(choices.replacingPresetChoices(with: SetupPreferences()) == SetupPreferences(
-        placement: .belowMenuBar, clock: .twelveHour, workspaces: .yabai,
+        appearance: .dark, placement: .belowMenuBar, clock: .twelveHour, theme: .package(id: "slate", version: "1"), workspaces: .yabai,
         keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true, packages: choices.packages))
 }
 
@@ -911,6 +911,13 @@ private let bundledStarter: Data = {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     return try! Data(contentsOf: repository.appending(path: "Resources/config.json"))
 }()
+
+/// The bundled starter's document without its theme, which a loader can't read in tests: they have no bundled themes.
+private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
+    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    document["theme"] = nil
+    return document
+}
 
 private func widgetIDs(_ data: Data) throws -> [String] {
     try JSONDecoder().decode(Configuration.self, from: data).widgets.map(\.id)
@@ -1102,7 +1109,7 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     defer { try? FileManager.default.removeItem(at: directory) }
     let root = directory.appending(path: "config.json")
     try Data(#"{"widgetOverrides": {"clock": {"format": "HH:mm"}}}"#.utf8).write(to: directory.appending(path: "module.json"))
-    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    var document = try starterWithoutTheme()
     document["includes"] = .array([.string("module.json")])
     let data = try JSONEncoder().encode(document)
     try data.write(to: root)
@@ -1121,7 +1128,7 @@ private func applyingToStarter(profiles: ConfigurationValue, _ preferences: Setu
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let root = directory.appending(path: "config.json")
-    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    var document = try starterWithoutTheme()
     document["profiles"] = profiles
     let data = try JSONEncoder().encode(document)
     try data.write(to: root)
@@ -1159,7 +1166,7 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let root = directory.appending(path: "config.json")
-    var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
+    var document = try starterWithoutTheme()
     let overrides: ConfigurationValue = .object(["clock": .object(["format": .string("HH:mm")])])
     if inProfile {
         document["profiles"] = .array([.object(["name": .string("Quiet"), "configuration": .object(["widgetOverrides": overrides])])])

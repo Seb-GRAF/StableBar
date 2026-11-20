@@ -254,7 +254,7 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
     #expect(!session.hasChanges)
     session.step = 3
     #expect(!session.hasChanges)
-    session.preferences.theme = .builtIn
+    session.preferences.theme = .package(id: "glass", version: nil)
     #expect(session.hasChanges)
     session.preferences.theme = .current
     #expect(!session.hasChanges)
@@ -307,8 +307,11 @@ func setupShowsWhereTheBarSits(configuration: String, placement: SetupPreference
 @MainActor
 @Test func setupKeepingTheMenuBarShowsTheBelowMenuBarStarter() async throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let starter = try String(contentsOf: repository.appending(path: "Resources/config.json"), encoding: .utf8)
-    let (session, fixture, store, _) = try setupSession(configuration: starter) { _ in .allowed }
+    var starter = try JSONDecoder().decode([String: ConfigurationValue].self,
+                                           from: Data(contentsOf: repository.appending(path: "Resources/config.json")))
+    // Setup's preview reads with the app's bundled themes, which tests don't have.
+    starter["theme"] = nil
+    let (session, fixture, store, _) = try setupSession(configuration: String(decoding: configurationData(starter), as: UTF8.self)) { _ in .allowed }
     defer { store.stop(); fixture.close() }
     await session.place(.belowMenuBar)
     #expect(store.configuration?.widgets.map(\.id) == ["workspaces", "system-monitor", "sound"])

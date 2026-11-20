@@ -118,7 +118,7 @@ struct ConfigurationSummary: Sendable {
     init(url: URL) {
         guard FileManager.default.fileExists(atPath: url.path) else {
             text = "no file yet; StableBar creates it from the starter configuration at first launch"
-            theme = "Built-in"
+            theme = "none yet"
             return
         }
         func count(_ number: Int, _ noun: String) -> String { "\(number) \(noun)\(number == 1 ? "" : "s")" }
@@ -137,7 +137,7 @@ struct ConfigurationSummary: Sendable {
         }
         guard let document else { return }
         let selection = try? document["theme"]?.decoded(WidgetPackageSelection.self)
-        theme = selection.flatMap { $0.enabled ? $0 : nil }.map { "\($0.id) \($0.version ?? "(bundled)")" } ?? "Built-in"
+        theme = selection.flatMap { $0.enabled ? $0 : nil }.map { "\($0.id) \($0.version ?? "(bundled)")" } ?? "the fallback"
         packages = ((try? document["packages"]?.decoded([WidgetPackageSelection].self)) ?? [])
             .filter(\.enabled).map { [$0.id, $0.version].compactMap { $0 }.joined(separator: " ") }
     }

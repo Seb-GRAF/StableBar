@@ -147,7 +147,8 @@ struct SetupTourView: View {
         }
         .task {
             guard let configuration = session.store.configuration else { return }
-            let themes = session.themes.filter { $0.isBundled && ["phosphor", "leman", "catppuccin"].contains($0.manifest.id) && $0.key != session.currentThemeKey }
+            // Three wipes fit before the bar flies into place.
+            let themes = session.themes.filter { $0.isBundled && $0.key != session.currentThemeKey }.prefix(3)
             let directory = session.store.configurationStore.themesDirectory
             let previews = await Task.detached {
                 themes.compactMap { theme in
@@ -568,7 +569,6 @@ struct SetupTourView: View {
                         .frame(height: 20)
                         .accessibilityHidden(true)
                         Text(preset.title).font(.system(size: 15, weight: .semibold)).padding(.top, 10)
-                        Text(preset.detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).padding(.top, 2)
                         Spacer(minLength: 12)
                         HStack(spacing: 4) {
                             if session.presetPlacement == .belowMenuBar {
@@ -749,7 +749,7 @@ struct SetupTourView: View {
 
     private func choose(_ choice: ThemeChoice) {
         session.preferences.theme = choice.key == session.currentThemeKey ? .current
-            : choice.isBuiltIn ? .builtIn : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
+            : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
     }
 
     /// Where the bar sits. Replacing the menu bar is the larger choice, since StableBar works best in its place;

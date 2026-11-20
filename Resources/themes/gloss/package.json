@@ -1,0 +1,9 @@
+{
+  "id": "gloss",
+  "name": "Gloss",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Aqua gel capsules on a pinstriped white strip, with a blue gel for the focused workspace and the clock.",
+  "author": "StableBar"
+}

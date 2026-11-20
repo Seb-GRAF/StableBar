@@ -1,0 +1,9 @@
+{
+  "id": "dot",
+  "name": "Dot",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Black capsules in dark and paper-grey ones in light, with a red dot under the focused workspace and sepia app icons.",
+  "author": "StableBar"
+}

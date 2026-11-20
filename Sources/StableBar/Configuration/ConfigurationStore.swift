@@ -57,10 +57,12 @@ final class ConfigurationStore {
         try migrateEarlierColors(sharedConfigurationURL, savedBy: release)
         try migrateConfigurationFile(sharedConfigurationURL, savedBy: release)
         try migrateStarterAppleLogo(sharedConfigurationURL, savedBy: release)
+        try migrateRetiredThemes(sharedConfigurationURL, themes: themesDirectory, storeThemes: storeThemesDirectory, savedBy: release)
         for url in screenSetupsWithOwnBars.map(ownBarURL(for:)) {
             try? migrateEarlierColors(url, savedBy: release)
             try? migrateConfigurationFile(url, savedBy: release)
             try? migrateStarterAppleLogo(url, savedBy: release)
+            try? migrateRetiredThemes(url, themes: themesDirectory, storeThemes: storeThemesDirectory, savedBy: release)
         }
         // Earlier setups put a bar below the menu bar at the status bar's thickness or the main display's notch height.
         // Once, while the menu bar shows and covers part of such a bar, it moves under each display's own menu bar.

@@ -41,11 +41,11 @@ enum DocsImages {
                                    to: directory.appending(path: "\(name)-\(appearance).png"))
             }
 
-            let bar = try store("bar", theme: "catppuccin")
+            let bar = try store("bar", theme: "clear")
             try await save(hero(bar).background { backdrop(dark: dark) }, "hero", size: NSSize(width: 1100, height: 270), stores: [bar])
 
             let themes = try ThemeCatalog(packages: samples.appending(path: "packages")).choices.map { choice in
-                (choice.manifest.name, try store(choice.manifest.id, theme: choice.isBuiltIn ? nil : choice.manifest.id))
+                (choice.manifest.name, try store(choice.manifest.id, theme: choice.manifest.id))
             }
             try await save(gallery(themes, dark: dark).background { backdrop(dark: dark) }, "themes",
                            size: NSSize(width: 1100, height: 78 * CGFloat(themes.count) + 10), stores: themes.map(\.1))

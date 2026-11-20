@@ -1,0 +1,9 @@
+{
+  "id": "tonal",
+  "name": "Tonal",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "Apricot tonal pills in a floating capsule, with the focused workspace and the clock as filled apricot buttons.",
+  "author": "StableBar"
+}

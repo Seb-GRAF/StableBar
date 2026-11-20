@@ -6,6 +6,7 @@ export const RESERVED_IDS = new Set([
   ...BASE_IDS,
   "graphite", "island", "menu-bar", "minimal", "paper", "slate", "terminal",
   "blueprint", "broadsheet", "brutalist", "everforest", "handheld", "kanagawa", "platinum", "rose-pine", "synthwave",
+  "clear", "glass", "tonal", "slim", "dot", "gloss", "classic",
 ]);
 
 export function slug(name) {

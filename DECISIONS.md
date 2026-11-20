@@ -53,7 +53,8 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   numbers must be literal; colors may use tokens or settings with `choices`. Free-text string settings under
   `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
   from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
-  theme IDs are reserved, and a non-theme package's ID cannot be reused. An installed ID and
+  theme IDs are reserved, and so is `classic`, which an update installs from the app ([#873]);
+  Save as Theme refuses them too. A non-theme package's ID cannot be reused. An installed ID and
   version are reused only when both files match byte for byte; otherwise the author raises the
   version on the page. The app never renumbers a theme.
 - **Theme links bound bar values** (2026-11-16, [#676]). Every numeric value under `bar`, including

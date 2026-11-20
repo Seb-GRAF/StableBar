@@ -50,8 +50,6 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     session.toggle(preset)
     let presetChoices = preset.preferences(workspaces: session.workspaceSource, placement: .top, hasBattery: true)
     var expected = choices
-    expected.appearance = presetChoices.appearance
-    expected.theme = presetChoices.theme
     expected.widgetSets = presetChoices.widgetSets
     #expect(session.preset == preset)
     #expect(session.preferences == expected)
@@ -66,8 +64,6 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     #expect(logins().isEmpty)
 
     session.toggle(preset)
-    expected.appearance = .current
-    expected.theme = .current
     expected.widgetSets = []
     #expect(session.preset == nil)
     #expect(session.preferences == expected)

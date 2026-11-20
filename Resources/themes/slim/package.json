@@ -1,0 +1,9 @@
+{
+  "id": "slim",
+  "name": "Slim",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "A thin strip of sumi ink by night and Lotus paper by day, in Menlo, with an old-white square for the focused workspace.",
+  "author": "StableBar"
+}

@@ -630,6 +630,7 @@ struct ThemeLinkCandidateTests {
         case .missingKind: manifest["kind"] = nil
         case .bundledID: manifest["id"] = .string("nord")
         case .legacyID: manifest["id"] = .string("slate")
+        case .classicID: manifest["id"] = .string("classic")
         case .widgetID:
             let source = fixture.directory.appending(path: "widget")
             try fixture.write(#"{"id":"harbour-test","name":"Widget","version":"2","kind":"widgets","entry":"config.json"}"#,
@@ -736,6 +737,7 @@ struct ThemeLinkCandidateTests {
         case .widgets, .missingKind: #expect(error as? ThemeLinkError == .notATheme)
         case .bundledID: #expect(error as? ThemeLinkError == .reservedID("nord"))
         case .legacyID: #expect(error as? ThemeLinkError == .reservedID("slate"))
+        case .classicID: #expect(error as? ThemeLinkError == .reservedID("classic"))
         case .widgetID: #expect(error as? ThemeLinkError == .idTaken("harbour-test"))
         case .tooLarge: #expect(error as? ThemeLinkError == .tooLarge)
         case .tooDeep: #expect(error as? ThemeLinkError == .tooDeep)
@@ -1472,8 +1474,8 @@ struct ThemeLinkCandidateTests {
         #expect(document["groups"] == .object(["status": .object([:])]))
         let gallery = ThemeGallery(store: store)
         await gallery.refresh()
-        gallery.select(try #require(gallery.choices.first { $0.key == "built-in" }))
-        #expect(gallery.errors["built-in"] == nil)
+        gallery.select(try #require(gallery.choices.first { $0.key == "clear" }))
+        #expect(gallery.errors["clear"] == nil)
         #expect(store.configurationError == nil)
         #expect(store.configuration?.widgets.first { $0.id == "battery" }?.group == "status")
         try store.customizationHistory.undo()
@@ -1643,7 +1645,7 @@ struct ThemeLinkCandidateTests {
 
     enum Rejection: CaseIterable, Sendable {
         case bar, profileBar, hosts, permissions, tools, secrets, screenshot, includes, profileIncludes
-        case widgets, missingKind, bundledID, legacyID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
+        case widgets, missingKind, bundledID, legacyID, classicID, widgetID, doublingTokens, profileExpansion, nestedProfileExpansion
         case tokenBar, overriddenTokenBar, settingBar, referenceDepth, referenceOrigins, invalidEntry, unknownProperty
         case combinedProfileBar, settingChoiceBar, nestedProfileBar, nullBar, arrayBar
         case tooLarge, tooDeep, tooManyProfiles, tooManyNestedProfiles, notUTF8, notAnObject

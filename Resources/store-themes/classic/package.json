@@ -1,0 +1,10 @@
+{
+  "id": "classic",
+  "name": "Classic",
+  "version": "1.0.0",
+  "kind": "theme",
+  "entry": "config.json",
+  "description": "StableBar's original look, once called Built-in: each widget on its own floating tile over a clear bar, light or dark, with a blue accent.",
+  "author": "Seb-GRAF",
+  "repository": "https://github.com/stablebox/stablebar-packages"
+}

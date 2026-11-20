@@ -1,0 +1,170 @@
+{
+  "tokens": {
+    "surface": {
+      "light": "#ebebeff0",
+      "dark": "#1d1d1ff0"
+    },
+    "surfaceRaised": {
+      "light": "#ffffff",
+      "dark": "#3a3a3d"
+    },
+    "text": {
+      "light": "#000000e6",
+      "dark": "#ffffff"
+    },
+    "textMuted": {
+      "light": "#0000009e",
+      "dark": "#ffffffb3"
+    },
+    "accent": {
+      "light": "#0088ff",
+      "dark": "#0091ff"
+    },
+    "track": {
+      "light": "#0000001a",
+      "dark": "#ffffff26"
+    },
+    "hairline": {
+      "light": "#0000001a",
+      "dark": "#ffffff1f"
+    },
+    "warning": {
+      "light": "#c93400",
+      "dark": "#ffb340"
+    },
+    "critical": {
+      "light": "#d70015",
+      "dark": "#ff6961"
+    },
+    "halo": {
+      "light": "#ffffffb3",
+      "dark": "#00000080"
+    },
+    "capsule": {
+      "light": "#ffffffd9",
+      "dark": "#ffffffeb"
+    },
+    "onCapsule": {
+      "light": "#000000e6",
+      "dark": "#000000e6"
+    },
+    "capsuleHover": {
+      "light": "#ffffff66",
+      "dark": "#ffffff26"
+    },
+    "iconMuted": {
+      "light": "#00000059",
+      "dark": "#ffffff80"
+    }
+  },
+  "bar": {
+    "height": 37,
+    "inset": 14,
+    "spacing": 4
+  },
+  "defaults": {
+    "background": null,
+    "hoverBackground": null,
+    "borderColor": null,
+    "shadowColor": "@token.halo",
+    "shadowRadius": 3,
+    "cornerRadius": 13,
+    "fontSize": 13,
+    "fontWeight": "medium",
+    "iconSize": 14,
+    "paddingHorizontal": 8,
+    "paddingVertical": 5,
+    "spacing": 5,
+    "states": {
+      "hover": {
+        "background": "@token.capsuleHover"
+      },
+      "open": {
+        "background": "@token.capsule",
+        "foreground": "@token.onCapsule"
+      },
+      "warning": {
+        "foreground": "@token.warning"
+      },
+      "critical": {
+        "foreground": "@token.critical"
+      },
+      "muted": {
+        "opacity": 0.5
+      }
+    },
+    "appIcons": "tinted"
+  },
+  "popupDefaults": {
+    "background": "@token.surface",
+    "borderColor": "@token.hairline",
+    "borderWidth": 0.5,
+    "cornerRadius": 18,
+    "shadowColor": {
+      "light": "#00000029",
+      "dark": "#00000099"
+    },
+    "shadowRadius": 18
+  },
+  "roles": {
+    "heading": {
+      "fontWeight": "semibold"
+    },
+    "secondary": {
+      "foreground": "@token.textMuted",
+      "fontWeight": "regular"
+    },
+    "key": {
+      "foreground": "@token.textMuted",
+      "fontWeight": "regular"
+    },
+    "value": {
+      "fontWeight": "medium"
+    },
+    "button": {
+      "background": "@token.surfaceRaised",
+      "cornerRadius": 13,
+      "paddingHorizontal": 12,
+      "paddingVertical": 5,
+      "states": {
+        "hover": {
+          "background": "@token.accent",
+          "foreground": "#ffffff"
+        }
+      }
+    },
+    "meter": {
+      "background": "@token.track",
+      "cornerRadius": 1.5
+    }
+  },
+  "workspaceDefaults": {
+    "indicator": "background",
+    "style": {
+      "cornerRadius": 13,
+      "paddingHorizontal": 6.5,
+      "spacing": 3,
+      "foreground": "@token.textMuted",
+      "states": {
+        "focused": {
+          "background": "@token.capsule",
+          "foreground": "@token.onCapsule"
+        },
+        "visible": {
+          "borderColor": "@token.capsule",
+          "borderWidth": 1
+        }
+      }
+    },
+    "appStyle": {
+      "width": 13,
+      "height": 13,
+      "foreground": "@token.iconMuted",
+      "states": {
+        "focused": {
+          "foreground": "@token.onCapsule"
+        }
+      }
+    }
+  }
+}

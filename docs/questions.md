@@ -88,7 +88,7 @@ No. On a display with a notch, StableBar places widgets on either side of it, an
 
 When a side runs out of room, App menus put their last menus behind **»**, and other widgets move behind a **⋯** button on that side; click it to reach them. Give a widget a higher `priority` to keep it on the bar longer.
 
-The **Notch** theme draws a black bar that blends into the notch. See [Displays and notch placement](layout.md#displays-and-notch-placement).
+The **Notch** theme in the Store draws a black bar that blends into the notch. See [Displays and notch placement](layout.md#displays-and-notch-placement).
 
 ## How do I add a widget that runs my own script?
 
