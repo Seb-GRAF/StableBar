@@ -32,6 +32,20 @@ import Testing
     #expect(store.take(configuration: configuration) == nil)
 }
 
+/// Version 1 numbered setup's earlier steps: placement, look, touches, permissions and Try your bar.
+@Test(arguments: [(0, SetupSession.Step.choose), (2, .choose), (3, .allow), (4, .done)])
+func applicationMoveResumeReadsAnEarlierSetupsStep(step: Int, expected: SetupSession.Step) throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    let store = ApplicationMoveResumeStore(domain: "StableBarTests.MoveResume.\(directory.lastPathComponent)")
+    defer { UserDefaults.standard.removePersistentDomain(forName: store.domain) }
+    let configuration = directory.appending(path: "config.json")
+    var resume = ApplicationMoveResume(kind: .setup, configuration: configuration, setup: .init(step: step, preferences: SetupPreferences(),
+        menuBarHidAtStart: false, stableBarHidMenuBarAtStart: false, opensAtLoginAtStart: false))
+    resume.version = 1
+    try store.save(resume)
+    #expect(store.take(configuration: configuration, now: resume.timestamp)?.setup?.step == expected.rawValue)
+}
+
 @Test(arguments: ["expired", "boundary", "future", "corrupt", "wrongType", "version", "missingSetup", "step"])
 func applicationMoveResumeDiscardsUnusableRecords(reason: String) throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
@@ -45,7 +59,7 @@ func applicationMoveResumeDiscardsUnusableRecords(reason: String) throws {
     case "expired": resume.timestamp = now.addingTimeInterval(-901)
     case "boundary": resume.timestamp = now.addingTimeInterval(-900)
     case "future": resume.timestamp = now.addingTimeInterval(1)
-    case "version": resume.version = 2
+    case "version": resume.version = 3
     case "missingSetup": resume.kind = .setup
     case "step":
         resume.kind = .setup
