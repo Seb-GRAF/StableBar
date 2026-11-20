@@ -43,9 +43,9 @@ import Testing
 @Test func aChangeFinishingForAnEarlierChoiceLeavesTheLatestOne() {
     var placing = SetupPlacement()
     _ = placing.handle(.chose(.top, menuBarHides: true))
-    _ = placing.handle(.chose(.top, menuBarHides: true))
+    _ = placing.handle(.chose(.belowMenuBar, menuBarHides: false))
     #expect(placing.handle(.menuBarChanged(failure: nil, request: 1)).isEmpty)
-    #expect(placing.phase == .changingMenuBar(.top))
+    #expect(placing.phase == .changingMenuBar(.belowMenuBar))
 }
 
 @Test func skippingSetupDropsTheResultOfAChangeStillRunning() {
