@@ -571,7 +571,8 @@ enum SceneRenderer {
                     && store.widgetScripts.scripts[id]?.output.values?["volume"] != nil {
             let style = tooltipStyle(defaults: defaults, widget: widget.tooltipStyle)
             let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-            open = AnyView(HoverControls(widget: widget, store: store, style: LayoutStyle(inherited: style, states: StyleStates(), tracksHover: true),
+            let states = store.barPresentation.presentations[id]?.style(on: .monitor).blockStates(open: false) ?? StyleStates()
+            open = AnyView(HoverControls(widget: widget, store: store, style: LayoutStyle(inherited: style, states: states, tracksHover: true),
                                          runAction: { _, _ in })
                 .font(appearance.font)
                 .foregroundStyle(appearance.foreground)
