@@ -27,6 +27,17 @@ extension EnvironmentValues {
     }
 }
 
+/// The titles App menus show, the app's name first, while they have no menus of their own, as on setup's stage before
+/// Accessibility is allowed; none on the bar.
+private struct SampleAppMenusKey: EnvironmentKey { static let defaultValue: [String] = [] }
+
+extension EnvironmentValues {
+    var sampleAppMenus: [String] {
+        get { self[SampleAppMenusKey.self] }
+        set { self[SampleAppMenusKey.self] = newValue }
+    }
+}
+
 struct AppMenuView: View {
     let appMenu: AppMenu
     let items: [AppMenuItem]

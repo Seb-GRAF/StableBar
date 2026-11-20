@@ -325,6 +325,7 @@ struct SetupTourView: View {
                                                                   notch: notch.map { (pose.width - $0) / 2...(pose.width + $0) / 2 },
                                                                   isPortrait: display.isPortrait), preview: true)
                     .environment(\.colorScheme, macScheme)
+                    .environment(\.sampleAppMenus, session.frontmostApp.map { [$0, "File", "Edit", "View", "Window", "Help"] } ?? [])
                     .mask {
                         LinearGradient(colors: [.black, .clear], startPoint: UnitPoint(x: intro.widgets * 1.25 - 0.25, y: 0),
                                        endPoint: UnitPoint(x: intro.widgets * 1.25, y: 0))

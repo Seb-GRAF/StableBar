@@ -51,6 +51,20 @@ final class BarEditingTests: XCTestCase {
         XCTAssertEqual(store.configuration?.widgets[0].enabled, false)
     }
 
+    /// App menus without menus would draw an empty pill in a theme's group, so they leave the bar, unless they show
+    /// sample menus, as on setup's stage.
+    @MainActor func testAppMenusWithoutMenusLeaveTheBarUnlessTheyShowSamples() throws {
+        let fixture = try ThemeGalleryFixture(#"""
+        {"widgets":[{"id":"app-menu","type":"appMenu","position":"left"},{"id":"clock","type":"clock","position":"right"}]}
+        """#)
+        defer { fixture.close() }
+        let store = try fixture.store()
+        defer { store.stop() }
+        store.appMenu.hidesAccessWarning = true
+        XCTAssertEqual(store.barEditing.widgets(on: laptop).map(\.id), ["clock"])
+        XCTAssertEqual(store.barEditing.widgets(on: laptop, sampleAppMenus: true).map(\.id), ["app-menu", "clock"])
+    }
+
     @MainActor func testEmptyWidgetsHaveDistinctNamedPlaceholdersAndOutputDisplaySelectionWins() throws {
         let fixture = try ThemeGalleryFixture(#"""
         {"widgets":[{"id":"widget-00000001","type":"text","text":"","position":"left"},

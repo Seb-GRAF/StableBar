@@ -50,6 +50,7 @@ struct BarView: View {
     @State private var narrowestWidths: [String: CGFloat] = [:]
     @FocusState private var focusedWidget: String?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.sampleAppMenus) private var sampleAppMenus
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -60,7 +61,7 @@ struct BarView: View {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)
                 let notch = config.bar.layoutNotch(on: display)
-                let widgets = store.barEditing.widgets(on: display)
+                let widgets = store.barEditing.widgets(on: display, sampleAppMenus: !sampleAppMenus.isEmpty)
                 let units = BarUnit.make(widgets: widgets + [store.update?.widget, store.packageLibrary.updateWidget].compactMap { $0 }, groups: config.groups)
                 PlacedUnits(store: store, display: display, nativeDecorations: nativeDecorations, preview: preview, config: config,
                             units: units, scale: scale, notch: notch, measuredWidths: $measuredWidths, measuredUnits: $measuredUnits,

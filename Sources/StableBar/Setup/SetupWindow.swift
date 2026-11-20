@@ -196,6 +196,9 @@ final class SetupSession {
     let hasBattery: Bool
     let currentThemeKey: String
     let applicationMove: ApplicationMoveController
+    /// The app in front when setup opened, which the bar on the stage names, with sample menus, until it can read the
+    /// app's own.
+    let frontmostApp: String?
     var step = Step.intro
     private(set) var finished = false
     var preset: SetupPreferences.Preset?
@@ -271,6 +274,7 @@ final class SetupSession {
         stableBarHidMenuBarAtStart = resume?.setup?.stableBarHidMenuBarAtStart ?? MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
+        frontmostApp = store.appWatcher.activeApp?.localizedName
         currentThemeKey = store.configurationStore.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.configurationStore.themesDirectory, selectedKey: currentThemeKey).choices
