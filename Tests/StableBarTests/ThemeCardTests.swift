@@ -134,3 +134,21 @@ final class ThemeCardTests: XCTestCase {
         }
     }
 }
+
+/// Cards and setup show the Mac's wallpaper only from where macOS lets StableBar read it without asking.
+@Test func wallpaperIsReadOnlyFromApplesFoldersAndPictures() {
+    let home = URL(filePath: "/Users/someone")
+    for (path, readable) in [
+        ("/System/Library/Desktop Pictures/Sequoia.heic", true),
+        ("/Library/Desktop Pictures/Company.jpg", true),
+        ("/Users/someone/Pictures/Wallpapers/totoro.png", true),
+        ("/Users/someone/Pictures/../Desktop/photo.jpg", false),
+        ("/Users/someone/Pictures/Photos Library.photoslibrary/originals/A/1.heic", false),
+        ("/Users/someone/Desktop/photo.jpg", false),
+        ("/Users/someone/Library/Mobile Documents/com~apple~CloudDocs/photo.jpg", false),
+        ("/System/Volumes/Data/Users/someone/Desktop/photo.jpg", false),
+        ("/Volumes/Backup/photo.jpg", false),
+    ] {
+        #expect(wallpaperReadsWithoutPrompt(URL(filePath: path), home: home) == readable, "\(path)")
+    }
+}

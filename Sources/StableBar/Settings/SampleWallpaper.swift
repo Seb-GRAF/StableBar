@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// What previews of the bar show behind it: the Mac's wallpaper when it's one of Apple's, otherwise a drawn backdrop in
-/// the preview's appearance. Offscreen, it shows the scene's wallpaper or the backdrop, never the Mac's wallpaper.
+/// What previews of the bar show behind it: the Mac's wallpaper when StableBar can read it without a privacy prompt,
+/// otherwise a drawn backdrop in the preview's appearance. Offscreen, it shows the scene's wallpaper or the backdrop,
+/// never the Mac's wallpaper.
 struct SampleWallpaper: View {
     @Environment(\.offscreenSnapshot) private var offscreen
     @Environment(\.sceneWallpaper) private var sceneWallpaper
@@ -38,18 +39,13 @@ struct SampleWallpaper: View {
     }
 }
 
-/// The main screen's wallpaper, read once, off the main thread, at a size that many previews draw quickly. Only Apple's
-/// wallpapers, in /System or /Library, are read: a picture in the home folder, iCloud or another app's data can show a
-/// privacy prompt. /System/Volumes/Data holds the home folder too.
+/// The main screen's wallpaper, read once, off the main thread, at a size that many previews draw quickly.
 @MainActor @Observable private final class DesktopWallpaper {
     static let shared = DesktopWallpaper()
     private(set) var image: NSImage?
 
     private init() {
-        guard let screen = NSScreen.screens.first,
-              let url = NSWorkspace.shared.desktopImageURL(for: screen)?.resolvingSymlinksInPath().standardizedFileURL,
-              (url.path.hasPrefix("/System/") && !url.path.hasPrefix("/System/Volumes/Data/")) || url.path.hasPrefix("/Library/")
-        else { return }
+        guard let screen = NSScreen.screens.first, let url = NSWorkspace.shared.readableDesktopImageURL(for: screen) else { return }
         Task {
             let thumbnail = await Task.detached(priority: .utility) { () -> CGImage? in
                 guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
@@ -59,6 +55,24 @@ struct SampleWallpaper: View {
             image = thumbnail.map { NSImage(cgImage: $0, size: .zero) }
         }
     }
+}
+
+extension NSWorkspace {
+    /// `screen`'s wallpaper, when StableBar can read it without a privacy prompt.
+    func readableDesktopImageURL(for screen: NSScreen) -> URL? {
+        desktopImageURL(for: screen).flatMap { wallpaperReadsWithoutPrompt($0, home: FileManager.default.homeDirectoryForCurrentUser) ? $0 : nil }
+    }
+}
+
+/// Whether macOS lets StableBar read the picture at `url` without asking: Apple's wallpapers in /System or /Library, or
+/// one in ~/Pictures outside a Photos library. Desktop, Documents, Downloads, iCloud Drive, other apps' data and other
+/// volumes can show a privacy prompt. /System/Volumes/Data holds the home folder too.
+func wallpaperReadsWithoutPrompt(_ url: URL, home: URL) -> Bool {
+    let path = url.resolvingSymlinksInPath().standardizedFileURL.path
+    let pictures = home.appending(path: "Pictures").resolvingSymlinksInPath().standardizedFileURL.path + "/"
+    guard (path.hasPrefix("/System/") && !path.hasPrefix("/System/Volumes/Data/")) || path.hasPrefix("/Library/") || path.hasPrefix(pictures)
+    else { return false }
+    return !path.split(separator: "/").contains { $0.hasSuffix(".photoslibrary") }
 }
 
 extension EnvironmentValues {
