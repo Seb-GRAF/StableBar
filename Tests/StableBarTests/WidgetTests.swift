@@ -785,35 +785,29 @@ private func calls(_ log: URL) -> [Substring] {
       ]
     }
     """##.utf8)
-    let preferences = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour)
+    let preferences = SetupPreferences(placement: .belowMenuBar)
     let updated = try preferences.applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
     #expect(configuration.bar.offset == 0)
     #expect(configuration.bar.belowMenuBar)
     #expect(configuration.bar.height == 48)
     #expect(configuration.bar.notchSpacing == 20)
-    #expect(configuration.bar.appearance == .dark)
     #expect(configuration.defaults.foreground == nil)
     #expect(configuration.defaults.fontName == "Helvetica")
     #expect(configuration.defaults.accent == HexColor(0xff8800ff))
-    #expect(configuration.widgets[0].content == .clock(format: SetupPreferences.clockFormat(hours: .twelveHour)))
+    #expect(configuration.widgets[0].content == .clock(format: "HH.mm"))
     #expect(configuration.widgets[0].style.foreground == HexColor(0xabcdefff))
     let original = try JSONSerialization.jsonObject(with: data) as! [String: Any]
     let result = try JSONSerialization.jsonObject(with: updated) as! [String: Any]
     #expect((original["widgets"] as! [NSDictionary])[1] == (result["widgets"] as! [NSDictionary])[1])
-    let clockOnly = try SetupPreferences(clock: .twentyFourHour).applying(to: updated)
-    let clockResult = try JSONSerialization.jsonObject(with: clockOnly) as! [String: Any]
-    #expect(clockResult["defaults"] as! NSDictionary == result["defaults"] as! NSDictionary)
-    #expect(clockResult["bar"] as! NSDictionary == result["bar"] as! NSDictionary)
     let themed = try SetupPreferences(theme: .package(id: "slate", version: "1.0.0")).applying(to: updated)
     let themedResult = try JSONSerialization.jsonObject(with: themed) as! [String: Any]
     #expect(themedResult["defaults"] as! NSDictionary == original["defaults"] as! NSDictionary)
     #expect(themedResult["theme"] as! NSDictionary == ["id": "slate", "version": "1.0.0"])
-    let bundled = try SetupPreferences(appearance: .automatic, theme: .package(id: "paper", version: nil)).applying(to: updated)
+    let bundled = try SetupPreferences(theme: .package(id: "paper", version: nil)).applying(to: updated)
     let bundledResult = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundled)
     #expect(bundledResult["theme"] == .object(["id": .string("paper")]))
-    #expect(bundledResult["bar"] == .object(["height": .number(48), "offset": .number(0), "belowMenuBar": .bool(true), "notchSpacing": .number(20),
-                                             "appearance": .null]))
+    #expect(bundledResult["bar"] == .object(["height": .number(48), "offset": .number(0), "belowMenuBar": .bool(true), "notchSpacing": .number(20)]))
 }
 
 @Test func setupOnTheTopEdgeTurnsOffBelowTheMenuBar() throws {
@@ -827,14 +821,11 @@ private func calls(_ log: URL) -> [Substring] {
     #expect(document["bar"] == .object(["offset": .number(0)]))
 }
 
-@Test func setupMovesTheBarToTheBottomEdgeAndBack() throws {
-    let data = Data(#"{"bar": {"belowMenuBar": true, "offset": 6}, "widgets": []}"#.utf8)
-    let bottom = try SetupPreferences(placement: .bottom).applying(to: data)
-    let bar = try JSONDecoder().decode(Configuration.self, from: bottom).bar
-    #expect(bar.position == .bottom)
+@Test func setupMovesABarAtTheBottomToTheTopEdge() throws {
+    let bottom = Data(#"{"bar": {"position": "bottom", "offset": 6}, "widgets": []}"#.utf8)
+    let bar = try JSONDecoder().decode(Configuration.self, from: SetupPreferences(placement: .top).applying(to: bottom)).bar
+    #expect(bar.position == .top)
     #expect(bar.offset == 0)
-    #expect(!bar.belowMenuBar)
-    #expect(try JSONDecoder().decode(Configuration.self, from: SetupPreferences(placement: .top).applying(to: bottom)).bar.position == .top)
 }
 
 @Test(arguments: SetupPreferences.Preset.allCases)
@@ -842,7 +833,7 @@ func setupPresetsLoadAndKeepTheLook(preset: SetupPreferences.Preset) throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     let url = repository.appending(path: "Resources/config.json")
     let preferences = preset.preferences(workspaces: .spaces, placement: .current)
-    #expect(preferences.theme == .current && preferences.appearance == .current)
+    #expect(preferences.theme == .current)
     let data = try preferences.applying(to: Data(contentsOf: url))
     var loader = ConfigurationLoader()
     loader.themesDirectory = repository.appending(path: "Resources/themes")
@@ -859,19 +850,18 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
 /// Every stored preference must be classified when a preset replaces its part of setup. All fields in this fixture
 /// differ from their defaults so resetting any of the person's choices fails, including an optional Bool becoming nil.
 @Test func setupPresetReplacementClassifiesEveryPreference() {
-    let choices = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour,
+    let choices = SetupPreferences(placement: .belowMenuBar,
                                    theme: .package(id: "slate", version: "1"), widgetSets: [.meetings], workspaces: .yabai,
-                                   keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true,
+                                   keepWindowsClear: true, deferMeetings: true,
                                    packages: [.init(id: "ai-usage", version: "1", settings: [:])],
                                    storeWidgets: [.init(id: "dock-badges", version: "1", settings: [:])])
-    let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour,
+    let replacement = SetupPreferences(placement: .top,
                                         theme: .package(id: "glass", version: nil), widgetSets: [.system], workspaces: .spaces,
-                                        keepWindowsClear: false, keepNotificationsClear: false,
+                                        keepWindowsClear: false,
                                         packages: [.init(id: "weather", version: "1", settings: [:])],
                                         storeWidgets: [.init(id: "now-playing", version: "1", settings: [:])])
     let presetFields: Set<String> = ["widgetSets", "storeWidgets"]
-    let otherFields: Set<String> = ["appearance", "placement", "clock", "theme", "workspaces", "keepWindowsClear", "keepNotificationsClear",
-                                    "deferMeetings", "packages"]
+    let otherFields: Set<String> = ["placement", "theme", "workspaces", "keepWindowsClear", "deferMeetings", "packages"]
     func fields(_ preferences: SetupPreferences) -> [String: String] {
         Dictionary(uniqueKeysWithValues: Mirror(reflecting: preferences).children.map { ($0.label!, String(describing: $0.value)) })
     }
@@ -885,20 +875,18 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
                 "A preset change handles \(field) wrongly; update replacingPresetChoices.")
     }
     #expect(choices.replacingPresetChoices(with: SetupPreferences()) == SetupPreferences(
-        appearance: .dark, placement: .belowMenuBar, clock: .twelveHour, theme: .package(id: "slate", version: "1"), workspaces: .yabai,
-        keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true, packages: choices.packages))
+        placement: .belowMenuBar, theme: .package(id: "slate", version: "1"), workspaces: .yabai,
+        keepWindowsClear: true, deferMeetings: true, packages: choices.packages))
 }
 
-/// A clock choice and deferred Meetings survive a preset change but write nothing for widgets the new bar lacks.
+/// Deferred Meetings survives a preset change but writes nothing for widgets the new bar lacks.
 @Test(arguments: [false, true])
 func setupKeptChoicesIgnoreMissingWidgets(deselecting: Bool) throws {
     var choices = SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
-    choices.clock = .twelveHour
     choices.deferMeetings = true
     let replacement = deselecting ? SetupPreferences()
         : SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: .belowMenuBar)
     let preferences = choices.replacingPresetChoices(with: replacement)
-    #expect(preferences.clock == .twelveHour)
     #expect(preferences.deferMeetings)
     let updated = try preferences.applying(to: bundledStarter)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
@@ -986,15 +974,14 @@ private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
             == ["EEE MMM d  h:mm a", "EEE MMM d  HH:mm"])
 }
 
-/// A starter whose clock got setup's 24- or 12-hour choice is still the starter, so moving it below the menu bar
-/// still swaps it for the starter there instead of keeping a second clock beside the macOS one.
+/// A starter whose clock got an earlier setup's 24- or 12-hour choice is still the starter, so moving it below the menu
+/// bar still swaps it for the starter there instead of keeping a second clock beside the macOS one.
 @Test func aStarterWithSetupsHourChoiceMovesBelowTheMenuBar() throws {
     for hours in [SetupPreferences.Clock.twentyFourHour, .twelveHour] {
         // Without any format remembered from earlier regions, which launches in this test run may have stored.
         let starter = SetupPreferences.menuBarStarter(clockFormat: SetupPreferences.clockFormat(hours: hours))
         #expect(SetupPreferences.isMenuBarStarter(starter, remembered: []))
-        let chosen = try SetupPreferences(clock: hours).applying(to: SetupPreferences.withMacsClock(bundledStarter))
-        let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: chosen)
+        let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .yabai).applying(to: JSONEncoder().encode(["widgets": starter]))
         #expect(try widgetIDs(below) == ["workspaces", "system-monitor", "sound"])
     }
     #expect(!SetupPreferences.isMenuBarStarter(SetupPreferences.menuBarStarter(clockFormat: "HH:mm"), remembered: []))
@@ -1101,13 +1088,6 @@ func anUnchangedStarterBecomesThePresetsBar(preset: SetupPreferences.Preset) thr
         let preferences = preset.preferences(workspaces: .spaces, placement: .top)
         #expect(try widgetIDs(preferences.applying(to: below)) == widgetIDs(preferences.applying(to: bundledStarter)))
     }
-}
-
-@Test func setupBelowTheMenuBarLeavesNoClockToFormat() throws {
-    let updated = try SetupPreferences(placement: .belowMenuBar, clock: .twelveHour).applying(to: bundledStarter)
-    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
-    #expect(try !widgetIDs(updated).contains("clock"))
-    #expect(document["widgetOverrides"] == nil)
 }
 
 /// A bar whose file still lists the starter's widgets, but that gets more from a package, has changed: setup keeps
@@ -1267,19 +1247,6 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
             == ["apple", "workspaces", "app-menu", "mine", "system-monitor", "battery", "date", "clock", "menu-bar-items"])
 }
 
-/// Setup's 12- or 24-hour choice changes the hours of the time beside the date, and leaves the date alone.
-@Test func setupHourChoiceChangesOnlyTheTimeBesideTheDate() throws {
-    var preferences = SetupPreferences.Preset.everyday.preferences(workspaces: .spaces, placement: .top)
-    preferences.clock = .twelveHour
-    let twelve = try preferences.applying(to: bundledStarter)
-    let date = SetupPreferences.dateFormat("EEEdMMM", or: "EEE d MMM")
-    for (data, time) in [(twelve, "h:mm a"), (try SetupPreferences(clock: .twentyFourHour).applying(to: twelve), "HH:mm")] {
-        let widgets = try JSONDecoder().decode(Configuration.self, from: data).widgets
-        #expect(widgets.first { $0.id == "date" }?.content == .clock(format: date))
-        #expect(widgets.first { $0.id == "clock" }?.content == .clock(format: time))
-    }
-}
-
 @Test func setupReenablesMatchingWidgetsAndKeepsConflictingIDs() throws {
     let data = Data(#"""
     {
@@ -1358,37 +1325,9 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
 
 @Test func setupRejectsInvalidConfigurationBeforeEditing() {
     #expect(throws: CommandFailure.self) {
-        try SetupPreferences(appearance: .dark).applying(
+        try SetupPreferences(placement: .top).applying(
             to: Data(#"{"widgets":[{"id":"custom","type":"script","position":"left","command":"date","interval":0}]}"#.utf8))
     }
-}
-
-@Test func setupOverridesImportedAndTemplatedClocksWithoutChangingModules() throws {
-    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
-    let module = directory.appending(path: "clocks.json")
-    let moduleData = Data(#"{"widgets":[{"id":"imported","type":"clock","position":"right","format":"HH.mm"}]}"#.utf8)
-    try moduleData.write(to: module)
-    let root = directory.appending(path: "config.json")
-    let data = Data(#"""
-    {
-      "includes": ["clocks.json"],
-      "templates": {"clock": {"type":"clock", "position":"left"}},
-      "widgets": [{"id":"local", "template":"clock"}],
-      "widgetOverrides": {"imported": {"style": {"fontSize": 15}}}
-    }
-    """#.utf8)
-    let updated = try SetupPreferences(clock: .twelveHour).applying(to: data, configurationURL: root)
-    var loader = ConfigurationLoader()
-    let configuration = try loader.load(root, data: updated)
-    #expect(configuration.widgets.map(\.content) == [.clock(format: SetupPreferences.clockFormat(hours: .twelveHour)), .clock(format: SetupPreferences.clockFormat(hours: .twelveHour))])
-    #expect(configuration.widgets[0].style.fontSize == 15)
-    #expect(try Data(contentsOf: module) == moduleData)
-    let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
-    #expect(document["includes"] == .array([.string("clocks.json")]))
-    #expect(document["widgets"] == .array([.object(["id": .string("local"), "template": .string("clock"), "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
-    #expect(document["widgetOverrides"] == .object(["imported": .object(["style": .object(["fontSize": .number(15)]), "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
 }
 
 @Test func setupWritesRootSettingsThatActiveProfilesCanStillOverride() throws {
@@ -1405,15 +1344,12 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
       }}]
     }
     """##.utf8)
-    let updated = try SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour)
-        .applying(to: data, configurationURL: root)
+    let updated = try SetupPreferences(placement: .belowMenuBar).applying(to: data, configurationURL: root)
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: updated)
     let original = try JSONDecoder().decode([String: ConfigurationValue].self, from: data)
-    #expect(document["bar"] == .object(["height": .number(40), "offset": .number(0), "belowMenuBar": .bool(true),
-                                        "appearance": .string("dark")]))
+    #expect(document["bar"] == .object(["height": .number(40), "offset": .number(0), "belowMenuBar": .bool(true)]))
     #expect(document["defaults"] == original["defaults"])
-    #expect(document["widgets"] == .array([.object(["id": .string("clock"), "type": .string("clock"), "position": .string("right"),
-                                                    "format": .string(SetupPreferences.clockFormat(hours: .twelveHour))])]))
+    #expect(document["widgets"] == original["widgets"])
     #expect(document["profiles"] == original["profiles"])
     var loader = ConfigurationLoader()
     let configuration = try loader.load(root, data: updated)
@@ -1422,72 +1358,12 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
     #expect(configuration.widgets[0].content == .clock(format: "ss"))
 }
 
-@Test(arguments: [
-    (#"[{"name":"desk","configuration":{"bar":{"belowMenuBar":true}}}]"#, ["desk"]),
-    (#"[{"name":"desk","configuration":{"bar":{"offset":6,"belowMenuBar":true}}}]"#, ["desk"]),
-    (#"[{"name":"desk","configuration":{"bar":{"offset":6}}},{"name":"away","configuration":{"bar":{"belowMenuBar":false}}}]"#,
-     ["desk", "away"]),
-])
-func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [String]) throws {
-    let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-placement.json")
-    var loader = ConfigurationLoader()
-    let configuration = try loader.load(root, data: Data(#"{"bar":{"offset":0},"widgets":[],"profiles":\#(profiles)}"#.utf8))
-    let settings = ProfileControlledSetting.all(in: configuration, origins: loader.origins)
-    #expect(settings.map(\.title) == Array(repeating: "Placement", count: controlling.count))
-    #expect(settings.map(\.origin.profile) == controlling)
-    #expect(Set(settings.map(\.id)).count == settings.count)
-    #expect(ProfileControlledSetting.placement(origins: loader.origins).map(\.origin.profile) == controlling)
-}
-
-/// Setup's first step, which asks where the bar goes, names only the profiles that control placement.
-@Test func setupsFirstStepNamesOnlyProfilesThatControlPlacement() throws {
-    let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-appearance.json")
-    var loader = ConfigurationLoader()
-    let configuration = try loader.load(root, data: Data(#"""
-    {"bar":{"offset":0},"widgets":[],"profiles":[{"name":"night","configuration":{"bar":{"appearance":"dark"}}}]}
-    """#.utf8))
-    #expect(ProfileControlledSetting.all(in: configuration, origins: loader.origins).map(\.title) == ["Appearance"])
-    #expect(ProfileControlledSetting.placement(origins: loader.origins).isEmpty)
-}
-
-@Test func setupFindsClocksIntroducedByTheCurrentProfile() throws {
-    let root = FileManager.default.temporaryDirectory.appending(path: "setup-profile-clock.json")
-    let data = Data(#"""
-    {"widgets":[],"profiles":[
-      {"name":"portable","when":{"onBattery":true},"configuration":{
-        "widgets":[{"id":"portable-clock","type":"clock","position":"right","format":"ss"}]
-      }}
-    ]}
-    """#.utf8)
-    let context = ConfigurationContext(onBattery: true)
-    let updated = try SetupPreferences(clock: .twelveHour)
-        .applying(to: data, configurationURL: root, context: context)
-    var loader = ConfigurationLoader()
-    let configuration = try loader.load(root, data: updated, context: context)
-    #expect(configuration.widgets[0].content == .clock(format: SetupPreferences.clockFormat(hours: .twelveHour)))
-}
-
 @Test func layoutBlocksAreConcreteViews() {
     let body = String(reflecting: PopupBlockView.Body.self)
     let typeErased = body.contains("AnyView")
     let childrenAreBlockViews = body.contains("PopupBlockView")
     #expect(!typeErased)
     #expect(childrenAreBlockViews)
-}
-
-/// Setup's steps start a quarter of the way down, closer on a short screen, and never reach the buttons.
-@Test func setupKeepsItsStepsAboveItsButtons() {
-    let tall = SetupTourLayout(height: 982, dock: 0)
-    #expect(tall.contentTop == 982 * 0.24)
-    #expect(tall.contentTop + tall.contentHeight <= tall.footerTop)
-    let short = SetupTourLayout(height: 900, dock: 76)
-    #expect(short.contentTop >= SetupTourLayout.minimumContentTop)
-    #expect(short.contentTop < (900 - 76) * 0.24)
-    #expect(short.contentHeight >= 560)
-    #expect(short.contentTop + short.contentHeight <= short.footerTop)
-    #expect(short.footerTop < 900 - 76 - 89)
-    #expect(tall.controlsGap == 32)
-    #expect(short.controlsGap < tall.controlsGap)
 }
 
 /// A subscription whose output ends without a failure logs how it ended, through the store's log.

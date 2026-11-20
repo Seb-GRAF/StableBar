@@ -26,11 +26,6 @@ struct SetupMotionTests {
         let motion = SetupMotion(reduceMotion: reduceMotion)
         #expect(motion.movement(.smooth(duration: 0.3)) == (reduceMotion ? nil : .smooth(duration: 0.3)))
         #expect(motion.movement(.snappy) == (reduceMotion ? nil : .snappy))
-        for scale in [CGFloat(0.97), CGFloat(1.02)] {
-            #expect(motion.scale(true, to: scale) == (reduceMotion ? 1 : scale))
-            #expect(motion.scale(false, to: scale) == 1)
-        }
-        #expect(motion.cardAnimationBehavior == (reduceMotion ? .none : .alertPanel))
     }
 
     @Test(arguments: [false, true], [false, true])

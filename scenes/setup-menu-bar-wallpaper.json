@@ -24,11 +24,7 @@
   },
   "draw": "setup",
   "setup": {
-    "step": "tryIt",
-    "placement": "top",
-    "menuBarHides": true
+    "accessibility": false
   },
-  "appearances": [
-    "dark"
-  ]
+  "wallpaper": "../Resources/SetupDay.heic"
 }

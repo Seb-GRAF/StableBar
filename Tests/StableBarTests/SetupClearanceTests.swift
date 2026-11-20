@@ -11,7 +11,7 @@ struct SetupClearanceTests {
         let saved = try Data(contentsOf: fixture.files.url)
         #expect(fixture.store.configuration?.bar.keepWindowsClear == false)
         let session = SetupSession(store: fixture.store, system: fixture.system)
-        #expect(session.keepsWindowsClear == (source == .spaces))
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == (source == .spaces))
         #expect(session.preferences.keepWindowsClear == nil)
         #expect(!session.hasChanges)
         #expect(fixture.store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == false)
@@ -31,7 +31,7 @@ struct SetupClearanceTests {
         fixture.system.defaults.set(true, forKey: SetupProgress.completedKey)
         let session = SetupSession(store: fixture.store, system: fixture.system)
         #expect(session.workspaceSource == .spaces)
-        #expect(session.keepsWindowsClear == !windowManagerRuns)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == !windowManagerRuns)
         #expect(session.preferences.keepWindowsClear == nil)
         session.finish()
         #expect(session.finished)
@@ -57,7 +57,7 @@ struct SetupClearanceTests {
         }
         let session = SetupSession(store: fixture.store, system: system)
         #expect(session.workspaceSource == .spaces)
-        #expect(session.keepsWindowsClear == !windowManagerRuns)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == !windowManagerRuns)
         #expect(session.preferences.keepWindowsClear == nil)
         session.finish()
         #expect(session.finished)
@@ -72,7 +72,7 @@ struct SetupClearanceTests {
                                                 workspaceSource: source)
         defer { fixture.close() }
         let session = SetupSession(store: fixture.store, system: fixture.system)
-        #expect(session.keepsWindowsClear == enabled)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == enabled)
         #expect(session.preferences.keepWindowsClear == nil)
         #expect(!session.hasChanges)
         session.finish()
@@ -90,14 +90,15 @@ struct SetupClearanceTests {
                                                 included: profile ? nil : #"{"bar":{"keepWindowsClear":\#(enabled)}}"#)
         defer { fixture.close() }
         let session = SetupSession(store: fixture.store, system: fixture.system)
-        #expect(session.keepsWindowsClear == enabled)
+        #expect(fixture.store.configuration?.bar.keepWindowsClear == enabled)
         #expect(session.preferences.keepWindowsClear == nil)
         session.finish()
         #expect(session.finished)
         #expect(session.error == nil)
         #expect(fixture.store.configuration?.bar.keepWindowsClear == enabled)
         // Inherited choices stay in their own layer instead of being copied into the main file.
-        #expect(try fixture.files.document()["bar"] == nil)
+        let bar = try fixture.files.document()["bar"]?.decoded([String: ConfigurationValue].self)
+        #expect(bar?["keepWindowsClear"] == nil)
     }
 
     @Test func changingOrDeselectingPresetsKeepsTheWindowClearanceDefault() throws {
@@ -106,36 +107,9 @@ struct SetupClearanceTests {
         let session = SetupSession(store: fixture.store, system: fixture.system)
         for preset in SetupPreferences.Preset.allCases {
             session.toggle(preset)
-            #expect(session.keepsWindowsClear)
-            #expect(session.preferences.keepWindowsClear == nil)
+            #expect(fixture.store.configuration?.bar.keepWindowsClear == true)
             session.toggle(preset)
-            #expect(session.keepsWindowsClear)
-            #expect(session.preferences.keepWindowsClear == nil)
-        }
-    }
-
-    @Test(arguments: [Bool?.none, .some(false), .some(true)], [false, true])
-    func recommendedWindowClearanceOnlySavesWhenSetupFinishes(choice: Bool?, finish: Bool) throws {
-        let fixture = try ClearanceSetupFixture()
-        defer { fixture.close() }
-        let saved = try Data(contentsOf: fixture.files.url)
-        let session = SetupSession(store: fixture.store, system: fixture.system)
-        if let choice { session.preferences.keepWindowsClear = choice }
-        #expect(session.keepsWindowsClear == (choice ?? true))
-        #expect(session.hasChanges == (choice != nil))
-        #expect(fixture.store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == false)
-        #expect(try Data(contentsOf: fixture.files.url) == saved)
-        if finish {
-            session.finish()
-            #expect(session.finished)
-            #expect(session.error == nil)
-            let bar = try #require(fixture.files.document()["bar"]).decoded([String: ConfigurationValue].self)
-            #expect(bar["keepWindowsClear"] == .bool(choice ?? true))
-            #expect(fixture.store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == (choice ?? true))
-        } else {
-            session.cancel()
-            #expect(try Data(contentsOf: fixture.files.url) == saved)
-            #expect(fixture.store.configuration?.bar.keepWindowsClear == false)
+            #expect(fixture.store.configuration?.bar.keepWindowsClear == true)
         }
     }
 
@@ -145,9 +119,8 @@ struct SetupClearanceTests {
         defer { fixture.close() }
         let store = fixture.store
         let saved = try Data(contentsOf: fixture.files.url)
-        let preferences = SetupPreferences(placement: .belowMenuBar, keepWindowsClear: true,
-                                           keepNotificationsClear: true)
-        let snapshot = ApplicationMoveResume.Setup(step: SetupSession.Step.touches.rawValue,
+        let preferences = SetupPreferences(placement: .belowMenuBar, keepWindowsClear: true)
+        let snapshot = ApplicationMoveResume.Setup(step: SetupSession.Step.done.rawValue,
             preferences: preferences, openAtLogin: true, placementChoice: .belowMenuBar,
             menuBarHidAtStart: false, stableBarHidMenuBarAtStart: false, opensAtLoginAtStart: false)
         // A fresh store models the relaunched process, with no hold left over from the original session.
@@ -157,27 +130,25 @@ struct SetupClearanceTests {
         store.onConfigurationChange = { [weak store] in
             updates.append([store?.windowClearance.hold != nil,
                             store?.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true,
-                            store?.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == true,
                             store?.configurationStore.clearanceConfiguration?.bar.belowMenuBar == true])
         }
         let resume = ApplicationMoveResume(kind: .setup, configuration: fixture.files.url, setup: snapshot)
         var system = fixture.system
         system.menuBarHides = { false }
         let session = SetupSession(store: store, system: system, resume: resume)
-        #expect(session.step == SetupSession.Step.touches.rawValue)
+        #expect(session.step == .done)
         #expect(session.preferences == preferences)
         #expect(store.configuration?.bar.keepWindowsClear == true)
-        #expect(store.configuration?.bar.keepNotificationsClear == true)
         #expect(store.configuration?.bar.belowMenuBar == true)
         #expect(!updates.isEmpty)
-        #expect(updates.allSatisfy { $0 == [true, false, false, before.bar.belowMenuBar] })
+        #expect(updates.allSatisfy { $0 == [true, false, before.bar.belowMenuBar] })
         #expect(try Data(contentsOf: fixture.files.url) == saved)
 
         if finish {
             session.finish()
             #expect(session.finished)
             #expect(session.error == nil)
-            #expect(updates.last == [false, true, true, true])
+            #expect(updates.last == [false, true, true])
         } else {
             session.cancel()
             #expect(try Data(contentsOf: fixture.files.url) == saved)
@@ -185,27 +156,22 @@ struct SetupClearanceTests {
         }
         #expect(store.windowClearance.hold == nil)
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == finish)
-        #expect(store.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == finish)
     }
 
     @Test(arguments: [false, true])
-    func clearanceChoicesWaitUntilSetupFinishes(finish: Bool) throws {
+    func recommendedClearanceWaitsUntilSetupFinishes(finish: Bool) throws {
         let fixture = try ClearanceSetupFixture()
         defer { fixture.close() }
         let store = fixture.store
         let saved = try Data(contentsOf: fixture.files.url)
-        var updates: [[Bool]] = []
+        var updates: [Bool] = []
         store.onConfigurationChange = { [weak store] in
-            updates.append([store?.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true,
-                            store?.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == true])
+            updates.append(store?.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true)
         }
         let session = SetupSession(store: store, system: fixture.system)
-        session.preferences.keepWindowsClear = true
-        session.preferences.keepNotificationsClear = true
         #expect(store.configuration?.bar.keepWindowsClear == true)
-        #expect(store.configuration?.bar.keepNotificationsClear == true)
         #expect(!updates.isEmpty)
-        #expect(updates.allSatisfy { $0 == [false, false] })
+        #expect(updates.allSatisfy { !$0 })
         #expect(try Data(contentsOf: fixture.files.url) == saved)
 
         if finish {
@@ -213,52 +179,46 @@ struct SetupClearanceTests {
             #expect(session.finished)
             #expect(session.error == nil)
             // The preview already matches the saved result, so a no-op reload must still update clearance now.
-            #expect(updates.last == [true, true])
+            #expect(updates.last == true)
         } else {
             session.cancel()
-            #expect(updates.allSatisfy { $0 == [false, false] })
+            #expect(updates.allSatisfy { !$0 })
             #expect(try Data(contentsOf: fixture.files.url) == saved)
         }
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == finish)
-        #expect(store.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == finish)
 
         // Setup's snapshot is gone: later edits follow the normal configuration again.
-        try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: [
-            "keepWindowsClear": .bool(!finish), "keepNotificationsClear": .bool(!finish)
-        ])], persist: false)
-        #expect(updates.last == [!finish, !finish])
+        try store.configurationStore.applyEdits([ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(!finish)])],
+                                                persist: false)
+        #expect(updates.last == !finish)
     }
 
     @Test(arguments: [false, true])
     func existingClearanceKeepsWorkingDuringSetupAndAfterSkip(sessionEdits: Bool) throws {
         let fixture = try ClearanceSetupFixture(configuration: #"{"includes":["included.json"],"widgets":[]}"#,
-                                                included: #"{"bar":{"keepWindowsClear":\#(!sessionEdits),"keepNotificationsClear":\#(!sessionEdits)}}"#)
+                                                included: #"{"bar":{"keepWindowsClear":\#(!sessionEdits),"offset":4}}"#)
         defer { fixture.close() }
         let store = fixture.store
         if sessionEdits {
             try store.configurationStore.setSessionEdits([ConfigurationEdit(action: .bar, properties: [
-                "keepWindowsClear": .bool(true), "keepNotificationsClear": .bool(true), "offset": .number(17)
+                "keepWindowsClear": .bool(true), "offset": .number(17)
             ])])
         }
         let before = try #require(store.configurationStore.clearanceConfiguration)
         let session = SetupSession(store: store, system: fixture.system)
-        session.preferences.keepWindowsClear = false
-        session.preferences.keepNotificationsClear = false
-        #expect(store.configuration?.bar.keepWindowsClear == false)
-        #expect(store.configuration?.bar.keepNotificationsClear == false)
+        // Setup puts the bar on the top edge.
+        #expect(store.configuration?.bar.offset == 0)
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true)
-        #expect(store.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == true)
         #expect(store.configurationStore.clearanceConfiguration?.bar.offset == before.bar.offset)
         session.cancel()
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true)
-        #expect(store.configurationStore.clearanceConfiguration?.bar.keepNotificationsClear == true)
         #expect(store.configurationStore.clearanceConfiguration?.bar.offset == before.bar.offset)
     }
 
     @Test(arguments: [false, true])
     func placementPreviewKeepsClearanceAtTheOriginalBarUntilFinish(finish: Bool) async throws {
         let fixture = try ClearanceSetupFixture(configuration: #"""
-            {"bar":{"height":30,"keepWindowsClear":true,"displayScale":{"external":1.25}},
+            {"bar":{"height":30,"keepWindowsClear":true,"belowMenuBar":true,"displayScale":{"external":1.25}},
              "screens":{"monitor":{"bar":{"offset":8}}},"widgets":[]}
             """#)
         defer { fixture.close() }
@@ -279,9 +239,9 @@ struct SetupClearanceTests {
         var updates: [[WindowClearanceDisplay?]] = []
         store.onConfigurationChange = { updates.append(clearance()) }
         let session = SetupSession(store: store, system: fixture.system)
-        await session.place(.belowMenuBar)
+        await session.place(.top)
         #expect(session.error == nil)
-        #expect(store.configuration?.bar.belowMenuBar == true)
+        #expect(store.configuration?.bar.belowMenuBar == false)
         #expect(clearance() == before)
         #expect(updates.allSatisfy { $0 == before })
 
@@ -310,7 +270,6 @@ struct SetupClearanceTests {
         defer { fixture.close() }
         let store = fixture.store
         let session = SetupSession(store: store, system: fixture.system)
-        session.preferences.keepWindowsClear = true
         session.finish()
         #expect(!session.finished)
         #expect(session.error?.contains(session.system.macOSVersion.accessibilityName) == true)
@@ -330,7 +289,6 @@ struct SetupClearanceTests {
         var system = fixture.system
         system.isInApplications = { true }
         let session = SetupSession(store: store, system: system)
-        session.preferences.keepWindowsClear = true
         session.openAtLogin = true
         session.finish()
         #expect(!session.finished)

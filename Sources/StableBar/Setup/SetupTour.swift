@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 struct SetupTourView: View {
@@ -8,63 +9,53 @@ struct SetupTourView: View {
     let menuBarHeight: () -> Double
     /// The height the Dock takes at the bottom of the screen. The tour lays out above it.
     let dock: Double
-    let finish: () -> Void
-    let skip: () -> Void
+    /// Closes setup, once it's finished or to skip it.
+    let close: () -> Void
+    /// Puts the tour under the macOS menu bar but over the bar for the stage, under the bar once it's in place, or under
+    /// System Settings. The intro's dim covers the menu bar too, until the question shows.
+    let raise: () -> Void
     let reveal: () -> Void
     let lower: () -> Void
-    let showProfile: ((String) -> Void)?
-    /// Plays the intro again over this setup, keeping the choices made so far.
-    let watchIntro: () -> Void
-    @State private var start: Date
+    let editBar: (() -> Void)?
+    @State private var opened = Date.now
+    /// Whether the intro still covers the macOS menu bar, which would hide macOS's own prompts.
+    @State private var covering = true
+    /// Whether the intro still plays, and whether the bar has finished landing: the tour animates only then.
+    @State private var intro = true
+    @State private var landed = false
+    /// When the bar left the stage for its place.
     @State private var departure: Date?
-    @State private var phase: Phase
-    @State private var menuBarQuestion: Bool
-    @State private var looks: [(name: String, look: Configuration)] = []
     @State private var previews: [String: ThemePreview] = [:]
     @State private var confirmingSkip = false
     @State private var reviewIsWorking = false
-    /// The menu bar's height as last read, so the pointer to the bar follows the bar when the menu bar hides or shows.
+    @State private var showsSuggestions = false
+    /// The menu bar's height as last read, so the bar's place follows it when the menu bar hides or shows.
     @State private var currentMenuBarHeight: Double
-    @State private var managerGap: ManagerGap?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The date scenes draw at, which holds the pointer still so two drawings match.
+    /// The date scenes draw at, which shows every animation finished.
     @Environment(\.fixedDate) private var fixedDate
 
-    private enum Phase { case intro, wallpaper, tour }
     private var motion: SetupMotion { SetupMotion(reduceMotion: reduceMotion) }
+    private static let ink = Color(red: 0.949, green: 0.933, blue: 1)
+    private static let warm = Color(red: 1, green: 0.8, blue: 0.45)
+    private static let gold = Color(red: 0.847, green: 0.698, blue: 0.369)
+    private static let panel = Color(red: 0.11, green: 0.11, blue: 0.125).opacity(0.9)
+    private static let handwriting = Font(shantellSans("shantell-sans-hand", size: 19))
+    /// The steps the toolbar's dots count.
+    private static let choosing: [SetupSession.Step] = [.widgets, .look, .tune]
 
-    private var visibleWorkspaceCheckSource: WorkspaceSource? {
-        phase == .tour && session.step == SetupSession.Step.touches.rawValue ? session.workspaceCheckSource : nil
-    }
-
-    /// Each step's title and text, in the order of `SetupSession.Step`.
-    private static let pages = [
-        ("Make it your menu bar.", "StableBar works best in the menu bar's place: it takes the top edge, and the macOS menu bar hides until you point at it."),
-        ("Make it yours.", "Choose your widgets, then a theme. Your bar changes as you go."),
-        ("Finishing touches.", "Choose how StableBar keeps clear of your windows and whether it opens at login."),
-        ("Allow what your bar needs.", "macOS asks once for each permission. Continue when every one is allowed."),
-        ("Try your bar.", "It's live: click a widget to open it, or right-click the bar for more. Nothing is saved until you finish.")
-    ]
-
-
-    init(session: SetupSession, display: BarDisplay, menuBarHeight: @escaping () -> Double, dock: Double, intro: Bool, finish: @escaping () -> Void,
-         skip: @escaping () -> Void, reveal: @escaping () -> Void, lower: @escaping () -> Void, showProfile: ((String) -> Void)?,
-         watchIntro: @escaping () -> Void = {}) {
+    init(session: SetupSession, display: BarDisplay, menuBarHeight: @escaping () -> Double, dock: Double, close: @escaping () -> Void,
+         raise: @escaping () -> Void, reveal: @escaping () -> Void, lower: @escaping () -> Void, editBar: (() -> Void)?) {
         _session = Bindable(session)
         self.display = display
         self.menuBarHeight = menuBarHeight
         _currentMenuBarHeight = State(initialValue: menuBarHeight())
         self.dock = dock
-        self.finish = finish
-        self.skip = skip
+        self.close = close
+        self.raise = raise
         self.reveal = reveal
         self.lower = lower
-        self.showProfile = showProfile
-        self.watchIntro = watchIntro
-        _start = State(initialValue: intro ? .now : .distantPast)
-        _departure = State(initialValue: intro ? nil : .distantPast)
-        _phase = State(initialValue: intro ? .intro : .tour)
-        _menuBarQuestion = State(initialValue: intro && !session.menuBarHides)
+        self.editBar = editBar
     }
 
     /// Where the bar sits on a display of `size`, measured down from its top.
@@ -75,52 +66,77 @@ struct SetupTourView: View {
         return CGRect(x: 0, y: size.height - frame.maxY, width: size.width, height: frame.height)
     }
 
-    private var barAtBottom: Bool {
-        session.store.configuration?.onScreen(ScreenKind(display)).bar.position == .bottom
+    /// The bar in the middle of the screen, before it takes its place.
+    private func stageFrame(in size: CGSize, height: Double) -> CGRect {
+        let width = min(size.width - 240, 1100)
+        return CGRect(x: (size.width - width) / 2, y: size.height * 0.45 - height / 2, width: width, height: height)
+    }
+
+    /// The Mac's appearance, which the wallpaper follows, while the tour itself stays dark.
+    private var macScheme: ColorScheme {
+        session.store.configurationStore.context.appearance == "dark" ? .dark : .light
+    }
+
+    private var barAppearance: BarAppearance {
+        session.store.configuration?.bar.appearance ?? (macScheme == .dark ? .dark : .light)
     }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
             let bar = barFrame(in: size)
-            // A bar at the bottom, and the pointer above it, push the step's footer up.
-            let bottom = barAtBottom ? max(dock, size.height - bar.minY + 40) : dock
-            ZStack {
-                Color.black
-                SetupBackdrop(size: size)
-                    .opacity(phase == .intro ? 0.4 : 1)
-                RadialGradient(colors: [.black.opacity(0.3), .black.opacity(0.75)], center: .center,
-                               startRadius: size.height * 0.15, endRadius: size.width * 0.7)
-                TimelineView(.animation(paused: phase == .tour)) { context in
-                    intro(size: size, bar: bar, now: context.date)
-                }
-                if phase == .tour {
-                    pointer
-                        .position(x: size.width / 2, y: barAtBottom ? bar.minY - 30 : bar.maxY + 30)
-                        .transition(.opacity)
-                }
-                tour(size: size, bottom: bottom)
-                    .disabled(confirmingSkip || session.applicationMove.isBusy || session.review != nil)
+            TimelineView(.animation(paused: fixedDate != nil || !(intro || departure != nil && !landed))) { context in
+                // Scenes draw the intro finished.
+                let t = fixedDate == nil ? context.date.timeIntervalSince(opened) : 60
+                let flown = departure.map { context.date.timeIntervalSince($0) } ?? -1
+                let flight = session.step == .menuBar ? UnitCurve.easeInOut.value(at: progress(flown, 0, 0.9)) : 1
+                let stage = stageFrame(in: size, height: bar.height)
+                let window = reduceMotion && session.step == .menuBar ? stage : interpolate(stage, bar, flight)
                 ZStack {
-                    if phase == .tour {
-                        footer.transition(.opacity.animation(.easeOut(duration: 0.4).delay(0.5)))
+                    dim(size: size, t: t)
+                    background(size: size, window: window, corner: 14 * (1 - flight), t: t)
+                    if session.step == .menuBar {
+                        stageBar(window, corner: 14 * (1 - flight), t: t, flown: flown)
+                        ask(size: size, stage: stage, t: t)
+                            .opacity(1 - progress(flown, 0, 0.3))
                     }
-                }
-                .position(x: size.width / 2, y: size.height - bottom - 89)
-                .disabled(session.applicationMove.isBusy)
-                dots.position(x: size.width / 2, y: size.height - bottom - 44)
-                if let review = session.review {
-                    suggestionReview(review).transition(.opacity)
-                }
-                if confirmingSkip {
-                    skipConfirmation.transition(.opacity)
+                    glowLine(width: size.width, flight: flight, flown: flown)
+                        .position(x: size.width / 2, y: bar.maxY)
                 }
             }
-            .animation(.easeOut(duration: 0.2), value: confirmingSkip)
-            .animation(.easeOut(duration: 0.2), value: session.review == nil)
+            ZStack {
+                if [.widgets, .look].contains(session.step) {
+                    live.position(x: size.width / 2 - 20, y: bar.maxY + 30).transition(.opacity)
+                }
+                ZStack {
+                    step(size: size, bar: bar)
+                        // Suppress the controls' own animations inside the step, keeping its outer crossfade.
+                        .transaction { motion.suppressMovement(in: &$0) }
+                        .id(session.step)
+                        .transition(motion.stepTransition(delay: 0))
+                }
+                if Self.choosing.contains(session.step) {
+                    toolbar.position(x: size.width / 2, y: size.height - dock - 74).transition(.opacity)
+                }
+                GlassCloseButton(title: "Skip setup", action: skip)
+                    .background(.black.opacity(0.3), in: Circle())
+                    .position(x: size.width - 38, y: max(bar.maxY, currentMenuBarHeight) + 38)
+                    .opacity(covering && fixedDate == nil ? 0 : 1)
+                    .animation(.easeOut(duration: 0.4), value: covering)
+            }
+            .disabled(confirmingSkip || session.applicationMove.isBusy || session.review != nil)
+            if let review = session.review {
+                suggestionReview(review).transition(.opacity)
+            }
+            if confirmingSkip {
+                skipConfirmation.transition(.opacity)
+            }
         }
         .ignoresSafeArea()
         .environment(\.colorScheme, .dark)
+        .foregroundStyle(.white)
+        .animation(.easeOut(duration: 0.2), value: confirmingSkip)
+        .animation(.easeOut(duration: 0.2), value: session.review == nil)
         // The bar moves when macOS hides or shows its menu bar, which the screen's parameters announce a moment after
         // setup's own change lands.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
@@ -129,521 +145,647 @@ struct SetupTourView: View {
         .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
-            session.workspaceConnection.checkAgain()
+            // Back from System Settings, the stage covers the bar again.
+            if session.step == .menuBar && departure == nil { raise() }
         }
-        .onChange(of: visibleWorkspaceCheckSource, initial: true) {
-            session.workspaceConnection.show(visibleWorkspaceCheckSource)
+        .onChange(of: session.readyToLand) {
+            if session.readyToLand && session.step == .menuBar && departure == nil { land() }
         }
-        .onDisappear { session.workspaceConnection.hide() }
-        .task(id: phase == .tour) {
-            while phase == .tour && !Task.isCancelled {
+        .onChange(of: session.review == nil) { if session.review != nil { showsSuggestions = false } }
+        .task {
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0.8 : 1.9))
+            covering = false
+            if session.step == .menuBar && departure == nil { raise() }
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0.4 : 1.7))
+            intro = false
+        }
+        .task {
+            while !Task.isCancelled {
                 session.pollAccessibility()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        .onChange(of: session.menuBarHides) {
-            if menuBarQuestion && session.replacesMenuBar { land() }
+        .task {
+            await session.loadStoreWidgets()
+            await session.loadSuggestions()
         }
         .task {
-            guard let configuration = session.store.configuration else { return }
-            // Three wipes fit before the bar flies into place.
-            let themes = session.themes.filter { $0.isBundled && $0.key != session.currentThemeKey }.prefix(3)
-            let directory = session.store.configurationStore.themesDirectory
-            let previews = await Task.detached {
-                themes.compactMap { theme in
-                    (try? ThemePreview(choice: theme, themesDirectory: directory)).map { (name: theme.title, look: $0.dark) }
-                }
-            }.value
-            looks = [(session.currentTheme, configuration)] + previews
             let choices = session.themes
-            self.previews = await Task.detached {
+            let directory = session.store.configurationStore.themesDirectory
+            previews = await Task.detached {
                 Dictionary(uniqueKeysWithValues: choices.compactMap { choice in
                     (try? ThemePreview(choice: choice, themesDirectory: directory)).map { (choice.key, $0) }
                 })
             }.value
         }
-        .task(id: departure) {
-            guard let departure, phase == .intro, !menuBarQuestion else { return }
-            try? await Task.sleep(for: .seconds(SetupDemo.landing + departure.timeIntervalSinceNow))
-            guard !Task.isCancelled else { return }
-            reveal()
-            withAnimation(.easeInOut(duration: 0.9)) { phase = .wallpaper }
-            try? await Task.sleep(for: .seconds(0.9))
-            withAnimation(.smooth(duration: 0.5)) { phase = .tour }
-        }
     }
 
-    private func intro(size: CGSize, bar: CGRect, now: Date) -> some View {
-        let t = now.timeIntervalSince(start)
-        let elapsed = departure.map { now.timeIntervalSince($0) } ?? -1
-        let d = menuBarQuestion ? min(elapsed, SetupDemo.flight) : elapsed
-        let home = size.height * 0.42
-        let stageWidth = min(size.width - 200, 1080)
-        let stage = CGRect(x: (size.width - stageWidth) / 2, y: home - bar.height / 2, width: stageWidth, height: bar.height)
-        let morph = UnitCurve.easeInOut.value(at: progress(d, 0.1, 0.65))
-        let leaving = 1 - progress(d, 0, 0.25)
-        let ready = UnitCurve.easeOut.value(at: progress(t, 2.8, 0.45))
-        let spread = UnitCurve.easeOut.value(at: progress(d, SetupDemo.landing - 0.1, 0.6))
-        let warm = Color(red: 1, green: 0.8, blue: 0.45)
-        let glow = LinearGradient(colors: [.clear, .orange, warm, .orange, .clear], startPoint: .leading, endPoint: .trailing)
-        let openWidth = stage.width * 0.62
-        let lineWidth = openWidth * 1.2
-        let draw = UnitCurve.easeOut.value(at: progress(t, 0.2, 0.95))
-        let swell = t < 1 ? 0 : Spring(duration: 0.8, bounce: 0.25).value(target: 1.0, time: t - 1)
-        let glassWidth = lineWidth + (openWidth - lineWidth) * swell + (stage.width - openWidth) * morph
-        let glassHeight = max(2, 2 + (stage.height - 2) * swell)
-        let corner = min(16, glassHeight / 2)
-        let sweep = t > 1.7 ? progress((t - 1.7).truncatingRemainder(dividingBy: 4.5), 0, 1.6) : 0
-        let gleam = t > 3 ? progress((t - 3).truncatingRemainder(dividingBy: 5), 0, 1.5) : 0
-        let pen = FeltPen(time: t)
-        let glassShown = progress(t, 1, 0.05) * (1 - progress(d, SetupDemo.wipes, 0.6))
-        let word = HStack(spacing: 0) {
-            ForEach(Self.wordmark.indices, id: \.self) { index in
-                let shown = UnitCurve.easeOut.value(at: progress(t, 1.3 + Double(index) * 0.06, 0.9))
-                ZStack {
-                    Self.wordmark[index].outline.stroke(Color(white: 0.07), style: StrokeStyle(lineWidth: 3.4, lineJoin: .round))
-                    Self.wordmark[index].outline.fill(.white)
-                }
-                .frame(width: Self.wordmark[index].advance, height: CTFontGetAscent(Self.wordmarkFont) + CTFontGetDescent(Self.wordmarkFont))
-                .padding(.horizontal, 9.5 * (1 - shown))
-                .scaleEffect(0.96 + 0.04 * shown)
-                .offset(y: 40 * (1 - shown))
-                .blur(radius: 12 * (1 - shown))
-                .opacity(shown)
-            }
-        }
-        .rotationEffect(.degrees(-1.5))
-        return ZStack {
-            ForEach(Self.embers.indices, id: \.self) { index in
-                let ember = Self.embers[index]
-                let rise = t > ember.delay ? (t - ember.delay).truncatingRemainder(dividingBy: ember.duration) / ember.duration : 0
-                Circle()
-                    .fill(warm)
-                    .frame(width: 3, height: 3)
-                    .shadow(color: .orange, radius: 3)
-                    .opacity(0.9 * (rise < 0.15 ? rise / 0.15 : 1 - (rise - 0.15) / 0.85) * progress(t, 0.5, 1) * (1 - progress(d, 0, 1)))
-                    .position(x: size.width * ember.x + 30 * rise, y: size.height + 10 - size.height * 0.87 * rise)
-            }
-            pen.line(from: CGPoint(x: (size.width - lineWidth) / 2, y: home),
-                     to: CGPoint(x: (size.width - lineWidth) / 2 + lineWidth * draw, y: home), width: 3.2, seed: 1)
-                .fill(FeltPen.ink)
-                .opacity(1 - progress(t, 1.25, 0.5))
-            ZStack {
-                RoundedRectangle(cornerRadius: corner)
-                    .fill(LinearGradient(colors: [.white.opacity(0.14), .white.opacity(0.04)], startPoint: .top, endPoint: .bottom))
-                    .shadow(color: .black.opacity(0.45), radius: 30, y: 12)
-                LinearGradient(colors: [.clear, .white.opacity(0.35), .clear], startPoint: .leading, endPoint: .trailing)
-                    .frame(width: 120)
-                    .rotationEffect(.degrees(12))
-                    .offset(x: (glassWidth + 240) * sweep - glassWidth / 2 - 120)
-                    .opacity(sweep > 0 && sweep < 1 ? 1 - morph : 0)
-                HStack(spacing: 8) {
-                    ghost { Image(systemName: "apple.logo") }
-                    ghost { Text("Finder").fontWeight(.semibold) + Text("  File  Edit  View") }
-                    Spacer(minLength: 0)
-                    ghost { Image(systemName: "speaker.wave.2.fill") }
-                    ghost { Text(now, format: .dateTime.weekday().day().month()) + Text("  ") + Text(now, format: .dateTime.hour().minute()) }
-                    ghost { Image(systemName: "square.grid.2x2") }
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 10)
-                .opacity(progress(t, 1.6, 0.8) * (1 - progress(d, 0, 0.3)))
-            }
-            .frame(width: glassWidth, height: glassHeight)
-            .clipShape(RoundedRectangle(cornerRadius: corner))
-            .opacity(glassShown)
-            .position(x: size.width / 2 + 2.6, y: home + 1.9)
-            pen.loop(around: CGRect(x: (size.width - glassWidth) / 2, y: home - glassHeight / 2, width: glassWidth, height: glassHeight),
-                     cornerRadius: corner, width: 2.1, seed: 2)
-                .fill(FeltPen.ink)
-                .opacity(glassShown)
-            word
-                .overlay {
-                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: warm, location: 0.5), .init(color: .clear, location: 0.6)],
-                                   startPoint: UnitPoint(x: 2 * gleam - 1, y: 0), endPoint: UnitPoint(x: 2 * gleam, y: 0))
-                        .mask(word)
-                }
-                .foregroundStyle(.white)
-                .opacity(leaving)
-                .blur(radius: 6 * (1 - leaving))
-                .offset(y: -10 * (1 - leaving))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("StableBar")
-                .position(x: size.width / 2, y: home - 118)
-            Rectangle()
-                .fill(glow)
-                .frame(width: size.width * spread, height: 2)
-                .background(Rectangle().fill(glow).frame(height: 8).blur(radius: 12))
-                .opacity(spread * (1 - 0.4 * progress(d, SetupDemo.landing + 0.55, 0.8)))
-                .position(x: size.width / 2, y: bar.maxY)
-            if d >= 0 && d < SetupDemo.landing + 0.3 && !looks.isEmpty {
-                SetupDemo(store: session.store, display: display, looks: looks, elapsed: d, size: size, stage: stage, target: bar)
-            }
-            Text("A native, configurable bar for your Mac.")
-                .font(Self.handwriting)
-                .foregroundStyle(FeltPen.ink)
-                .offset(y: 8 * (1 - UnitCurve.easeOut.value(at: progress(t, 2.4, 0.5))))
-                .opacity(progress(t, 2.4, 0.5) * leaving)
-                .position(x: size.width / 2, y: home + 72)
-            if phase == .intro {
-                Button { departure = .now } label: { Text("Get Started").frame(width: 164, height: 48) }
-                    .buttonStyle(SetupButtonStyle())
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(departure != nil || t < 2.8)
-                    .opacity(ready * leaving)
-                    .offset(y: 12 * (1 - ready))
-                    .position(x: size.width / 2, y: size.height - dock - 89)
-                Button("Skip intro") { departure = .now.addingTimeInterval(-SetupDemo.flight) }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .keyboardShortcut(.cancelAction)
-                    .disabled(d < 0 || d >= SetupDemo.flight)
-                    .opacity(progress(d, 0.6, 0.4) * (1 - progress(d, SetupDemo.flight, 0.2)))
-                    .position(x: size.width / 2, y: size.height - dock - 89)
-            }
-            if menuBarQuestion && elapsed >= SetupDemo.flight {
-                let asked = UnitCurve.easeOut.value(at: progress(elapsed, SetupDemo.flight, 0.45))
-                VStack(spacing: 12) {
-                    Text("Make it your menu bar.").font(.system(size: 34, weight: .semibold)).tracking(-0.5)
-                    Text("StableBar takes the top edge, and the macOS menu bar hides until you point at it.")
-                        .font(.system(size: 16))
-                        .foregroundStyle(.white.opacity(0.6))
-                    menuBarAccessNotice
-                    if let error = session.error {
-                        Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 560)
-                .foregroundStyle(.white)
-                .opacity(asked)
-                .blur(radius: 8 * (1 - asked))
-                .offset(y: 14 * (1 - asked))
-                .position(x: size.width / 2, y: stage.minY - 110)
-                HStack(spacing: 24) {
-                    Button {
-                        Task {
-                            await session.place(.top)
-                            // The menu bar may already hide, so nothing changes visibly; the choice still took effect.
-                            if menuBarQuestion && session.replacesMenuBar { land() }
-                        }
-                    } label: {
-                        Text("Replace the menu bar").frame(height: 48)
-                    }
-                    .buttonStyle(SetupButtonStyle())
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(session.waitingForMenuBarAccess)
-                    Button("Keep the menu bar") {
-                        Task { await session.place(.belowMenuBar) }
-                        land()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .keyboardShortcut(.cancelAction)
-                }
-                .opacity(asked)
-                .position(x: size.width / 2, y: size.height - dock - 89)
-            }
-        }
+    private func interpolate(_ from: CGRect, _ to: CGRect, _ fraction: Double) -> CGRect {
+        CGRect(x: from.minX + (to.minX - from.minX) * fraction, y: from.minY + (to.minY - from.minY) * fraction,
+               width: from.width + (to.width - from.width) * fraction, height: from.height + (to.height - from.height) * fraction)
     }
 
-    private static let embers: [(x: Double, duration: Double, delay: Double)] = [
-        (0.31, 7.5, 5.9), (0.57, 6.8, 1.0), (0.49, 8.7, 2.7), (0.88, 6.3, 4.4), (0.45, 7.4, 1.8), (0.18, 7.3, 7.6),
-        (0.09, 10.1, 6.5), (0.92, 7.4, 1.7), (0.37, 9.1, 6.0), (0.46, 6.4, 5.0), (0.78, 7.9, 2.4), (0.33, 8.4, 1.2),
-        (0.93, 10.3, 4.6), (0.38, 6.0, 2.7), (0.81, 10.4, 6.9), (0.6, 7.0, 3.7), (0.37, 8.2, 1.7), (0.39, 7.3, 6.5)
-    ]
-
-    private static let wordmarkFont = shantellSans("shantell-sans-display", size: 76)
-    private static let wordmark: [(outline: Path, advance: Double)] = "StableBar".utf16.map { character in
-        var character = character, glyph = CGGlyph()
-        CTFontGetGlyphsForCharacters(wordmarkFont, &character, &glyph, 1)
-        var flip = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: CTFontGetAscent(wordmarkFont))
-        return (Path(CTFontCreatePathForGlyph(wordmarkFont, glyph, &flip)!), CTFontGetAdvancesForGlyphs(wordmarkFont, .horizontal, &glyph, nil, 1))
-    }
-    private static let handwriting = Font(shantellSans("shantell-sans-hand", size: 20))
-
-    private func ghost<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(.horizontal, 9)
-            .frame(height: 24)
-            .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
-    }
-
+    /// The bar flies from the stage to its place, where the bar itself takes over from its copy.
     private func land() {
-        menuBarQuestion = false
-        session.step = SetupSession.Step.look.rawValue
-        departure = .now.addingTimeInterval(-SetupDemo.flight)
-    }
-
-    /// Hiding or showing the menu bar waits for Automation access to System Events instead of failing.
-    @ViewBuilder private var menuBarAccessNotice: some View {
-        if session.waitingForMenuBarAccess {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("macOS asks to let StableBar control System Events. Choose Allow to change the menu bar.")
-            }
-            .font(.callout)
-            .foregroundStyle(.white.opacity(0.75))
-        } else if let placement = session.placementAwaitingAccess {
-            VStack(spacing: 10) {
-                Label("StableBar needs Automation access to \(placement == .top ? "hide" : "show") the macOS menu bar. \(MenuBarAutoHide.accessHint)",
-                      systemImage: "lock")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Open Automation Settings…") {
-                    lower()
-                    MenuBarAutoHide.openAutomationSettings()
-                }
-                .buttonStyle(SetupButtonStyle(prominent: false))
-            }
+        raise()
+        departure = .now
+        Task {
+            try? await Task.sleep(for: .seconds(reduceMotion ? 0.3 : 1))
+            reveal()
+            withAnimation(motion.stepAnimation) { session.step = .widgets }
+            try? await Task.sleep(for: .seconds(0.6))
+            landed = true
         }
     }
 
-    private var pointer: some View {
-        HStack(spacing: 6) {
-            Image(systemName: barAtBottom ? "arrow.down" : "arrow.up")
-            Text(session.step == Self.pages.count - 1 ? "Try it on your bar" : "Live on your bar")
-                .contentTransition(.opacity)
+    /// The person's desktop goes dark from its edges in, as the lights do in a cinema.
+    private func dim(size: CGSize, t: Double) -> some View {
+        let dark = reduceMotion ? progress(t, 0, 0.4) : UnitCurve.easeInOut.value(at: progress(t, 0, 0.8))
+        let reach = hypot(size.width, size.height) / 2
+        return ZStack {
+            if !reduceMotion {
+                RadialGradient(colors: [.clear, .black], center: .center, startRadius: reach * (1 - dark), endRadius: reach * (1.6 - dark))
+            }
+            Color.black.opacity(0.94 * (reduceMotion ? dark : UnitCurve.easeIn.value(at: progress(t, 0.25, 0.55))))
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.white.opacity(0.75))
-        .padding(.horizontal, 12)
-        .frame(height: 26)
-        .background(.white.opacity(0.08), in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.14)))
-        .phaseAnimator(reduceMotion || fixedDate != nil ? [0] : [0, -5]) { content, offset in
-            content.offset(y: offset)
-        } animation: { _ in .easeInOut(duration: 1) }
+        .accessibilityHidden(true)
     }
 
-    private func tour(size: CGSize, bottom: Double) -> some View {
-        let page = Self.pages[session.step]
-        let layout = SetupTourLayout(height: size.height, dock: bottom)
-        return VStack(spacing: 16) {
-            ScrollView(.vertical) {
-            VStack(spacing: 12) {
-            staged(0) {
-                VStack(spacing: 12) {
-                    Text("\(session.step + 1)  /  \(Self.pages.count)")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.4))
-                    Text(page.0).font(.system(size: 34, weight: .semibold)).tracking(-0.5)
+    /// A spark in the dark stretches into a glowing line, which opens on the wallpaper: blurred and shaded behind the
+    /// tour but sharp under the bar, and sharp everywhere once the bar is set.
+    private func background(size: CGSize, window: CGRect, corner: Double, t: Double) -> some View {
+        let open = reduceMotion ? 1 : UnitCurve.easeInOut.value(at: progress(t, 1.0, 1.1))
+        let line = UnitCurve.easeOut.value(at: progress(t, 0.7, 0.6))
+        let spark = progress(t, 0.6, 0.25) * (1 - progress(t, 1.2, 0.6))
+        let home = size.height * 0.45
+        let settled = [.tune, .done].contains(session.step)
+        let glow = LinearGradient(colors: [.clear, .orange, Self.warm, .orange, .clear], startPoint: .leading, endPoint: .trailing)
+        return ZStack {
+            ZStack {
+                SampleWallpaper()
+                ZStack {
+                    SampleWallpaper().blur(radius: 40, opaque: true)
+                    Color.black.opacity(0.35)
                 }
-            }
-            staged(0.08) {
-                Text(page.1)
-                    .font(.system(size: 16))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 560)
-            }
-            staged(0.16) {
-                switch SetupSession.Step(rawValue: session.step) {
-                case .placement: placement
-                case .look:
-                    VStack(spacing: 28) {
-                        section("Widgets") {
-                            Text("Presets add widgets and never remove yours.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                        } content: {
-                            presets
-                            if session.storeUnreachable {
-                                Text("The Store can't be reached, so presets add only their built-in widgets.")
-                                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                            }
-                            if !session.suggestions.isEmpty { suggestions }
+                .opacity(settled ? 0 : 1)
+                .mask {
+                    Rectangle()
+                        .overlay {
+                            RoundedRectangle(cornerRadius: corner)
+                                .frame(width: window.width, height: window.height)
+                                .position(x: window.midX, y: window.midY)
+                                .blendMode(.destinationOut)
                         }
-                        section("Theme") {
-                            HStack(spacing: 20) {
-                                if session.store.configuration?.widgets.contains(where: { if case .clock = $0.content { true } else { false } }) == true {
-                                    HStack(spacing: 10) {
-                                        Text("Clock").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                                        SettingsSegments(selection: $session.preferences.clock,
-                                                         options: SetupPreferences.Clock.allCases.map { ($0, $0.rawValue) }, stretches: false)
-                                    }
-                                }
-                                HStack(spacing: 10) {
-                                    Text("Appearance").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-                                    SettingsSegments(selection: $session.preferences.appearance,
-                                                     options: SetupPreferences.Appearance.allCases.map { ($0, $0.rawValue) }, stretches: false)
-                                }
-                            }
-                        } content: {
-                            themes
-                        }
-                    }
-                    .task {
-                        await session.loadStoreWidgets()
-                        await session.loadSuggestions()
-                    }
-                case .touches: access
-                case .permissions: permissions
-                default: hints
+                        .compositingGroup()
                 }
+                .animation(motion.movement(.smooth(duration: 0.7)) ?? .easeOut(duration: 0.3), value: settled)
             }
-            .padding(.top, layout.controlsGap)
-            if phase == .tour, let error = session.error {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                    .frame(maxWidth: 560)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
-            }
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 12)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            // A step taller than the room fades out at the bottom, so it reads as scrolling on.
+            .environment(\.colorScheme, macScheme)
+            .scaleEffect(1.12 - 0.12 * open)
             .mask {
-                VStack(spacing: 0) {
-                    Color.black
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 16)
+                Rectangle()
+                    .frame(height: size.height * 1.1 * open)
+                    .blur(radius: 30 * (1 - open))
+                    .position(x: size.width / 2, y: home)
+            }
+            .opacity(reduceMotion ? progress(t, 0.4, 0.5) : 1)
+            if !reduceMotion && open < 1 {
+                Ellipse()
+                    .fill(RadialGradient(colors: [Self.warm, .orange.opacity(0.45), .clear], center: .center, startRadius: 0, endRadius: 70))
+                    .frame(width: 140 + 500 * line, height: 140)
+                    .blur(radius: 12)
+                    .opacity(spark)
+                    .position(x: size.width / 2, y: home)
+                ForEach([-1.0, 1.0], id: \.self) { side in
+                    Rectangle()
+                        .fill(glow)
+                        .frame(width: size.width * line, height: 2)
+                        .background(Rectangle().fill(glow).frame(height: 8).blur(radius: 12))
+                        .opacity(1 - open)
+                        .position(x: size.width / 2, y: home + side * size.height * 0.55 * open)
                 }
             }
-            // After the permissions step, what is still missing sits above Finish setup, which waits for it, however
-            // long the step is.
-            if phase == .tour, session.step > SetupSession.Step.permissions.rawValue, !session.missingPermissions.isEmpty {
-                permissionReminder
-                    .transaction { motion.suppressMovement(in: &$0) }
-                    .transition(.opacity)
-            }
         }
-        .padding(.top, layout.contentTop)
-        .padding(.bottom, size.height - layout.footerTop)
-        .frame(width: size.width, height: size.height, alignment: .top)
+        .frame(width: size.width, height: size.height)
+        .clipped()
+        .accessibilityHidden(true)
     }
 
-    private var permissionReminder: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Allow these before you finish")
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-            ForEach(session.missingPermissions, id: \.self) { permissionRow($0, compact: true) }
-        }
-        .foregroundStyle(.white)
-        .padding(16)
-        .frame(width: 600, alignment: .leading)
-        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.orange.opacity(0.3)))
+    /// The bar as it is now, which swells out of the line, waits on the stage and flies to its place.
+    private func stageBar(_ frame: CGRect, corner: Double, t: Double, flown: Double) -> some View {
+        let swell = reduceMotion ? 1 : t < 1.8 ? 0.08 : Spring(duration: 0.7, bounce: 0.25).value(target: 1.0, time: t - 1.8)
+        let staged = 1 - UnitCurve.easeInOut.value(at: progress(flown, 0, 0.9))
+        let notch = display.notch.map { $0.upperBound - $0.lowerBound }
+        return BarView(store: session.store, display: BarDisplay(id: display.id, isBuiltIn: display.isBuiltIn, isMain: display.isMain,
+                                                                 notch: notch.map { (frame.width - $0) / 2...(frame.width + $0) / 2 },
+                                                                 isPortrait: display.isPortrait), preview: true)
+            .frame(width: frame.width, height: frame.height)
+            .environment(\.colorScheme, macScheme)
+            .clipShape(RoundedRectangle(cornerRadius: corner))
+            .overlay(RoundedRectangle(cornerRadius: corner).strokeBorder(.white.opacity(0.18 * staged), lineWidth: 1))
+            .shadow(color: .black.opacity(0.45 * staged), radius: 35, y: 15)
+            .scaleEffect(x: 1, y: swell)
+            .opacity(reduceMotion ? progress(t, 0.5, 0.5) * (1 - progress(flown, 0, 0.3)) : progress(t, 1.7, 0.1))
+            .position(x: frame.midX, y: frame.midY)
+            .accessibilityHidden(true)
     }
 
-    private func staged<Content: View>(_ delay: Double, @ViewBuilder content: () -> Content) -> some View {
-        ZStack(alignment: .top) {
-            if phase == .tour {
-                content()
-                    // Suppress the controls' own animations inside the step, keeping its outer crossfade.
-                    .transaction { motion.suppressMovement(in: &$0) }
-                    .id(session.step)
-                    .transition(motion.stepTransition(delay: delay))
-            }
-        }
-    }
-
-    private func section<Trailing: View, Content: View>(_ title: String, @ViewBuilder trailing: () -> Trailing,
-                                                        @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.system(size: 15, weight: .semibold))
-                Spacer()
-                trailing()
-            }
-            content()
-        }
-        .frame(width: 948)
-    }
-
-    private var presets: some View {
-        let preview = previews[session.store.configurationStore.selectedThemeKey]
-        return VStack(spacing: 6) {
-            ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
-                let selected = session.preset == preset
-                let leftOut = session.leftOut(preset)
-                SetupTile(selected: selected) {
-                    Task {
-                        await session.loadStoreWidgets()
-                        session.toggle(preset)
-                        await session.reviewStoreWidgets()
-                    }
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: preset.symbol).font(.system(size: 15)).frame(width: 20).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(preset.title).font(.system(size: 15, weight: .semibold))
-                            if !leftOut.isEmpty {
-                                Text("Without \(ListFormatter.localizedString(byJoining: leftOut))")
-                                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .frame(width: session.storeUnreachable ? 240 : 130, alignment: .leading)
-                        if let preview {
-                            SetupSampleBar(look: preview.configuration(for: barAppearance), widgets: session.sampleWidgets(preset, tokens: preview.tokens))
-                                .frame(height: 30)
-                                .background(SampleWallpaper())
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                                .environment(\.colorScheme, barAppearance.colorScheme)
-                                .accessibilityHidden(true)
-                        }
-                        Image(systemName: "checkmark.circle.fill").font(.system(size: 15)).opacity(selected ? 1 : 0).accessibilityHidden(true)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 5)
+    /// StableBar's name over the bar, and the one question under it.
+    private func ask(size: CGSize, stage: CGRect, t: Double) -> some View {
+        let named = reduceMotion ? progress(t, 0.5, 0.5) : UnitCurve.easeOut.value(at: progress(t, 1.9, 0.7))
+        let asked = reduceMotion ? progress(t, 0.7, 0.5) : UnitCurve.easeOut.value(at: progress(t, 2.3, 0.6))
+        let gleam = reduceMotion ? 1 : progress(t, 2.3, 1.2)
+        let wordmark = Text("StableBar").font(.system(size: 76, weight: .bold)).tracking(-2.2)
+        let name = session.system.macOSVersion.accessibilityName
+        let automation = !session.menuBarHides
+        let accessibility = !session.accessibilityAccess
+        let asksAgain = session.placementChoice != nil
+        return ZStack {
+            wordmark
+                .overlay {
+                    LinearGradient(stops: [.init(color: .clear, location: 0.4), .init(color: Self.warm, location: 0.5), .init(color: .clear, location: 0.6)],
+                                   startPoint: UnitPoint(x: 2 * gleam - 1, y: 0), endPoint: UnitPoint(x: 2 * gleam, y: 0))
+                        .mask(wordmark)
                 }
-                .disabled(session.downloading != nil)
-                .help(preset.pitch)
-                .accessibilityLabel(preset.accessibilityLabel(widgetSets: session.widgetSets(preset)))
+                .blur(radius: 8 * (1 - named))
+                .offset(y: reduceMotion ? 0 : -10 * (1 - named))
+                .opacity(named)
+                .position(x: size.width / 2, y: stage.minY - 120)
+            VStack(spacing: 12) {
+                Text("Make it your menu bar.").font(.system(size: 34, weight: .semibold)).tracking(-0.5)
+                Text("StableBar takes the top edge, and the macOS menu bar hides until you point at it.")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.white.opacity(0.62))
+                if session.waitingForMenuBarAccess {
+                    waiting("macOS is asking to let StableBar control System Events…")
+                } else if asksAgain && accessibility {
+                    waiting("Allow StableBar in System Settings → Privacy & Security → \(name).")
+                    Button("Open System Settings…") {
+                        lower()
+                        session.store.windowClearance.requestAccess()
+                    }
+                    .buttonStyle(GlassButtonStyle(selected: false, highlighted: true))
+                } else if !asksAgain {
+                    Button(action: allow) {
+                        Label(automation || accessibility ? "Allow" : "Continue", systemImage: "menubar.rectangle")
+                            .frame(minWidth: 132)
+                    }
+                    .buttonStyle(GlassButtonStyle(selected: true, size: .large))
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(covering && fixedDate == nil)
+                    .padding(.top, 14)
+                    if automation || accessibility {
+                        Text(automation && accessibility ? "macOS asks for Automation to hide its menu bar, then for \(name)."
+                             : automation ? "macOS asks for Automation to hide its menu bar."
+                             : "macOS asks for \(name), which opens menus and keeps windows clear.")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(.white.opacity(0.4))
+                    }
+                }
+                if session.placementAwaitingAccess != nil {
+                    belowMenuBarNotice
+                }
+                if let error = session.error {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: 560)
+            .blur(radius: 6 * (1 - asked))
+            .offset(y: reduceMotion ? 0 : 12 * (1 - asked))
+            .opacity(asked)
+            .frame(height: size.height - stage.maxY - 70, alignment: .top)
+            .position(x: size.width / 2, y: stage.maxY + 70 + (size.height - stage.maxY - 70) / 2)
         }
     }
 
-    /// Store packages for tools found on this Mac. They run commands, so picking one opens its review first.
-    private var suggestions: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Found on your Mac").font(.system(size: 13, weight: .semibold))
-                Text("Store widgets for tools you use. You review what each one runs before it's added.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
-            }
-            .padding(.top, 8)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
-                ForEach(session.suggestions, id: \.key) { entry in
-                    let added = session.preferences.packages.contains { $0.id == entry.id }
-                    SetupTile(selected: added) {
-                        Task { await session.pick(entry) }
+    /// Allow asks macOS for Automation, which hides the menu bar, then for Accessibility in System Settings.
+    private func allow() {
+        Task {
+            await session.place(.top)
+            guard !session.accessibilityAccess else { return }
+            lower()
+            session.store.windowClearance.requestAccess()
+        }
+    }
+
+    private func waiting(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(text)
+        }
+        .font(.system(size: 13))
+        .foregroundStyle(.white.opacity(0.75))
+        .padding(.top, 14)
+    }
+
+    private var belowMenuBarNotice: some View {
+        Text("StableBar sits below the menu bar, since macOS didn't allow Automation. Change it later in Settings.")
+            .font(.system(size: 12.5))
+            .foregroundStyle(.white.opacity(0.62))
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// A warm line that spreads under the bar as it lands, and stays while the bar changes with each choice.
+    private func glowLine(width: Double, flight: Double, flown: Double) -> some View {
+        let glow = LinearGradient(colors: [.clear, .orange, Self.warm, .orange, .clear], startPoint: .leading, endPoint: .trailing)
+        let spread = reduceMotion || session.step != .menuBar && departure == nil ? 1 : UnitCurve.easeOut.value(at: progress(flown, 0.7, 0.8))
+        let shown = [.widgets, .look].contains(session.step) || (session.step == .menuBar && flight > 0.7)
+        return Rectangle()
+            .fill(glow)
+            .frame(width: width * spread, height: 2)
+            .background(Rectangle().fill(glow).frame(height: 8).blur(radius: 12))
+            .opacity(shown ? 0.85 : 0)
+            .animation(.easeOut(duration: 0.4), value: shown)
+            .accessibilityHidden(true)
+    }
+
+    private var live: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "arrow.up.left").font(.system(size: 17, weight: .medium))
+            Text("Live on your bar").font(Self.handwriting)
+        }
+        .foregroundStyle(Self.ink)
+    }
+
+    @ViewBuilder private func step(size: CGSize, bar: CGRect) -> some View {
+        switch session.step {
+        case .menuBar: Color.clear
+        case .widgets: presets(top: bar.maxY + 80)
+        case .look: looks(size: size, top: bar.maxY + 80)
+        case .tune: tune.padding(.top, bar.maxY + 22).frame(maxHeight: .infinity, alignment: .top)
+        case .done: done.position(x: size.width / 2, y: size.height * 0.42)
+        }
+    }
+
+    private func title(_ text: String) -> some View {
+        Text(text).font(.system(size: 42, weight: .semibold)).tracking(-0.8)
+    }
+
+    private func presets(top: Double) -> some View {
+        VStack(spacing: 34) {
+            title("What's your bar for?")
+            VStack(spacing: 9) {
+                ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
+                    let store = session.widgetSets(preset).filter { if case .store = $0 { true } else { false } }.count
+                    SetupTile(selected: session.preset == preset) {
+                        Task {
+                            await session.loadStoreWidgets()
+                            session.toggle(preset)
+                        }
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: entry.symbol ?? "shippingbox")
-                                .font(.system(size: 15))
-                                .frame(width: 32, height: 32)
-                                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(entry.name).font(.system(size: 13, weight: .semibold))
-                                if let description = entry.description {
-                                    Text(description).font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).lineLimit(2)
+                        HStack(spacing: 18) {
+                            HStack(spacing: 8) {
+                                Text(preset.title).font(.system(size: 16, weight: .semibold))
+                                if store > 0 {
+                                    Text("\(store) Store")
+                                        .font(.system(size: 10.5, weight: .semibold))
+                                        .foregroundStyle(Self.warm)
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 2)
+                                        .background(Self.warm.opacity(0.14), in: Capsule())
                                 }
                             }
-                            Spacer(minLength: 0)
-                            if session.downloading == entry.key {
-                                ProgressView().controlSize(.small)
+                            .frame(width: 200, alignment: .leading)
+                            presetBar(preset)
+                        }
+                        .padding(EdgeInsets(top: 10, leading: 18, bottom: 10, trailing: 12))
+                    }
+                    .accessibilityLabel(preset.accessibilityLabel(widgetSets: session.widgetSets(preset)))
+                }
+            }
+            .frame(width: 840)
+        }
+        .padding(.top, top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// The right end of the bar `preset` gives, in the selected theme, at a size its widgets can be told apart.
+    private func presetBar(_ preset: SetupPreferences.Preset) -> some View {
+        GeometryReader { proxy in
+            if let preview = previews[session.store.configurationStore.selectedThemeKey] {
+                let look = preview.configuration(for: barAppearance)
+                ThemeSampleBar(look: look, widgets: session.sampleWidgets(preset, tokens: preview.tokens))
+                    .frame(width: proxy.size.width / 0.64, height: 76)
+                    .offset(y: -(76 - look.bar.height) / 2)
+                    .scaleEffect(0.64, anchor: .topTrailing)
+                    .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topTrailing)
+            }
+        }
+        .frame(height: 58)
+        .background(SampleWallpaper())
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .environment(\.colorScheme, barAppearance.colorScheme)
+        .accessibilityHidden(true)
+    }
+
+    private func looks(size: CGSize, top: Double) -> some View {
+        let choices = session.themes
+        let selected = choices.firstIndex { $0.key == session.store.configurationStore.selectedThemeKey } ?? 0
+        return VStack(spacing: 64) {
+            title("Pick a look.")
+            ZStack {
+                ForEach(choices.indices, id: \.self) { index in
+                    let offset = index - selected
+                    themeCard(choices[index], size: size, selected: offset == 0)
+                        .scaleEffect(offset == 0 ? 1 : 0.74)
+                        .offset(x: Double(offset) * 470)
+                        .opacity(abs(offset) > 2 ? 0 : offset == 0 ? 1 : 0.5)
+                        .zIndex(Double(10 - abs(offset)))
+                        .allowsHitTesting(abs(offset) <= 1)
+                        .accessibilityHidden(abs(offset) > 2)
+                }
+                HStack {
+                    arrow("chevron.left", label: "Previous theme", key: .leftArrow) { choose(choices[(selected + choices.count - 1) % choices.count]) }
+                    Spacer()
+                    arrow("chevron.right", label: "Next theme", key: .rightArrow) { choose(choices[(selected + 1) % choices.count]) }
+                }
+                .frame(width: size.width - 660)
+                .offset(y: -32)
+                .zIndex(20)
+            }
+            .frame(height: 300, alignment: .top)
+            .animation(motion.movement(.spring(duration: 0.6, bounce: 0.25)), value: selected)
+        }
+        .padding(.top, top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// A card with the top right corner of the screen: the wallpaper and the bar in `choice`'s look.
+    private func themeCard(_ choice: ThemeChoice, size: CGSize, selected: Bool) -> some View {
+        Button { choose(choice) } label: {
+            VStack(spacing: 16) {
+                ZStack(alignment: .topTrailing) {
+                    SampleWallpaper().frame(width: size.width, height: size.height)
+                    if let preview = previews[choice.key] {
+                        let look = preview.configuration(for: barAppearance)
+                        ThemeSampleBar(look: look, widgets: session.preset.map { session.sampleWidgets($0, tokens: preview.tokens) })
+                            .frame(width: size.width, height: 76)
+                            .offset(y: -(76 - look.bar.height) / 2)
+                    }
+                }
+                .frame(width: 600, height: 230, alignment: .topTrailing)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .environment(\.colorScheme, barAppearance.colorScheme)
+                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(.white.opacity(selected ? 1 : 0.24), lineWidth: selected ? 2.5 : 0.5))
+                .shadow(color: .black.opacity(0.45), radius: 30, y: 12)
+                HStack(spacing: 8) {
+                    Text(choice.title).font(.system(size: 22, weight: .semibold))
+                    if choice.key == session.currentThemeKey {
+                        Text("Current").font(.system(size: 13)).foregroundStyle(.white.opacity(0.5))
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .accessibilityLabel("\(choice.title) theme")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func arrow(_ symbol: String, label: String, key: KeyEquivalent, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).frame(width: 36)
+        }
+        .buttonStyle(GlassButtonStyle(selected: false, round: true))
+        .glass(Circle())
+        .keyboardShortcut(key, modifiers: [])
+        .help(label)
+        .accessibilityLabel(label)
+    }
+
+    private func choose(_ choice: ThemeChoice) {
+        session.preferences.theme = choice.key == session.currentThemeKey ? .current
+            : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
+    }
+
+    /// What's left for the bar the person chose, in a panel that hangs from it.
+    private var tune: some View {
+        let toAdd = session.storeWidgetsToAdd.map(\.entry.name)
+        let added = session.preferences.widgetSets.compactMap { set -> String? in
+            guard case let .store(id, name, _, _) = set, session.preferences.storeWidgets.contains(where: { $0.id == id }) else { return nil }
+            return name
+        }
+        let leftOut = session.preset.map(session.leftOut) ?? []
+        let calendars = session.needsCalendarAccess || session.preferences.widgetSets.contains(.meetings)
+        let shortcuts = session.showsSpacesGuidance
+        let empty = toAdd.isEmpty && added.isEmpty && leftOut.isEmpty && !calendars && !shortcuts && session.suggestions.isEmpty
+            && session.placementAwaitingAccess == nil
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Finishing touches.").font(.system(size: 19, weight: .semibold))
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 12) {
+                if !leftOut.isEmpty, let preset = session.preset {
+                    GridRow {
+                        label("Store")
+                        Text("The Store can't be reached, so \(preset.title) leaves out \(ListFormatter.localizedString(byJoining: leftOut)).")
+                            .font(.system(size: 13)).foregroundStyle(.white.opacity(0.62))
+                    }
+                } else if !toAdd.isEmpty || !added.isEmpty {
+                    GridRow {
+                        label("Store")
+                        HStack(spacing: 10) {
+                            if toAdd.isEmpty {
+                                Label("\(ListFormatter.localizedString(byJoining: added)) added.", systemImage: "checkmark")
+                                    .foregroundStyle(Self.allowed)
                             } else {
-                                Image(systemName: added ? "checkmark.circle.fill" : "plus.circle")
-                                    .font(.system(size: 15))
-                                    .accessibilityHidden(true)
+                                Text("\(ListFormatter.localizedString(byJoining: toAdd)) \(toAdd.count == 1 ? "runs" : "run") commands from the Store.")
+                                    .foregroundStyle(.white.opacity(0.62))
+                                if session.downloading != nil && session.review == nil {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Button { Task { await session.reviewStoreWidgets() } } label: { Label("Add", systemImage: "plus") }
+                                        .buttonStyle(GlassButtonStyle(selected: true, size: .compact))
+                                        .accessibilityLabel("Add \(ListFormatter.localizedString(byJoining: toAdd))")
+                                }
                             }
                         }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+                        .font(.system(size: 13))
                     }
-                    .disabled(session.downloading != nil)
+                }
+                if calendars || shortcuts {
+                    GridRow {
+                        label("Needs")
+                        HStack(spacing: 8) {
+                            if calendars { calendarChip }
+                            if shortcuts { shortcutsChip }
+                        }
+                    }
+                }
+            }
+            if session.placementAwaitingAccess != nil { belowMenuBarNotice }
+            if let error = session.error {
+                Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if empty {
+                Text("Your bar has everything it needs.").font(.system(size: 13)).foregroundStyle(.white.opacity(0.62))
+            }
+            if !session.suggestions.isEmpty {
+                Rectangle().fill(.white.opacity(0.12)).frame(height: 0.5)
+                suggestionsPill
+            }
+        }
+        .padding(EdgeInsets(top: 18, leading: 20, bottom: 16, trailing: 20))
+        .frame(width: 820, alignment: .leading)
+        .background(Self.panel, in: RoundedRectangle(cornerRadius: 24))
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
+        .overlay(alignment: .top) {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 8))
+                path.addLine(to: CGPoint(x: 8, y: 0))
+                path.addLine(to: CGPoint(x: 16, y: 8))
+            }
+            .fill(Self.panel)
+            .frame(width: 16, height: 8)
+            .offset(y: -8)
+        }
+        .shadow(color: .black.opacity(0.4), radius: 35, y: 15)
+        .onAppear { session.store.workspaceStore.refreshDesktopShortcuts() }
+    }
+
+    private static let allowed = Color(red: 0.557, green: 0.941, blue: 0.659)
+
+    private func label(_ text: String) -> some View {
+        Text(text).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.62)).frame(width: 66, alignment: .leading)
+    }
+
+    private func chip<Content: View>(done: Bool, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 8) { content() }
+            .font(.system(size: 12.5, weight: .semibold))
+            .padding(.leading, 12)
+            .padding(.trailing, done ? 12 : 4)
+            .frame(height: 34)
+            .background(done ? Color(red: 0.204, green: 0.78, blue: 0.349).opacity(0.18) : .white.opacity(0.1), in: Capsule(style: .circular))
+            .overlay(Capsule(style: .circular).strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
+    }
+
+    /// Calendars for Meetings, which can wait: Later saves Meetings turned off.
+    @ViewBuilder private var calendarChip: some View {
+        let title = SetupPermission.calendars.title(on: session.system.macOSVersion)
+        if session.calendarAccess == .fullAccess {
+            chip(done: true) { Label(title, systemImage: "checkmark").foregroundStyle(Self.allowed) }
+        } else if session.preferences.deferMeetings {
+            chip(done: false) {
+                Text(title)
+                Text("later").fontWeight(.regular).foregroundStyle(.white.opacity(0.4))
+                linkButton("Undo") { session.preferences.deferMeetings = false }.padding(.trailing, 8)
+            }
+        } else {
+            chip(done: false) {
+                Label(title, systemImage: "calendar")
+                if session.needsCalendarSetup {
+                    linkButton("Later") { session.preferences.deferMeetings = true }
+                        .accessibilityLabel("Set up Meetings later")
+                }
+                if session.calendarAccess == .notDetermined {
+                    permissionButton(.allow, for: .calendars) { Task { await session.requestCalendarAccess() } }
+                } else {
+                    permissionButton(.openSettings, for: .calendars) {
+                        lower()
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
+                    }
                 }
             }
         }
+    }
+
+    /// The Switch to Desktop shortcuts Workspaces uses on macOS Spaces. Setup finishes without them.
+    @ViewBuilder private var shortcutsChip: some View {
+        let status = session.store.workspaceStore.desktopShortcutStatus
+        if status.allEnabled {
+            chip(done: true) { Label(DesktopShortcuts.title, systemImage: "checkmark").foregroundStyle(Self.allowed) }
+        } else {
+            chip(done: false) {
+                Label(DesktopShortcuts.title, systemImage: "keyboard")
+                Text("Optional").fontWeight(.regular).foregroundStyle(.white.opacity(0.4))
+                Button(DesktopShortcuts.actionTitle) {
+                    lower()
+                    do { try DesktopShortcuts.openSettings() }
+                    catch { session.error = errorMessage(error) }
+                }
+                .buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
+            }
+            .help(status.detail)
+            .accessibilityHint(status.detail)
+        }
+    }
+
+    private func permissionButton(_ kind: SetupPermission.Action, for permission: SetupPermission, action: @escaping () -> Void) -> some View {
+        let label = kind.accessibilityLabel(for: permission, on: session.system.macOSVersion)
+        return Button(kind.title, action: action)
+            .buttonStyle(GlassButtonStyle(selected: true, size: .compact))
+            .accessibilityLabel(label)
+            .accessibilityInputLabels([Text(kind.title), Text(label)])
+    }
+
+    private func linkButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .buttonStyle(.plain)
+            .font(.system(size: 12))
+            .underline()
+            .foregroundStyle(.white.opacity(0.62))
+    }
+
+    /// Store packages for tools found on this Mac. They run commands, so adding one opens its review first.
+    private var suggestionsPill: some View {
+        Button { showsSuggestions.toggle() } label: {
+            GlassPill {
+                HStack(spacing: 7) {
+                    Text("Found on your Mac")
+                    Text("\(session.suggestions.count)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 1)
+                        .background(.white.opacity(0.22), in: Capsule())
+                }
+            }
+            .overlay(Capsule(style: .circular).strokeBorder(Self.gold.opacity(0.55), lineWidth: 2).padding(-2))
+            .shadow(color: Self.gold.opacity(0.35), radius: 7)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showsSuggestions, arrowEdge: .bottom) { suggestionList }
+    }
+
+    private var suggestionList: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Store widgets for tools on this Mac. Nothing downloads until you add one.")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .padding(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+            ForEach(session.suggestions, id: \.key) { entry in
+                let added = session.preferences.packages.contains { $0.id == entry.id }
+                HStack(spacing: 10) {
+                    Image(systemName: entry.symbol ?? "shippingbox")
+                        .font(.system(size: 14))
+                        .frame(width: 30, height: 30)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.name).font(.system(size: 13.5, weight: .semibold))
+                        if let description = entry.description {
+                            Text(description).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    if session.downloading == entry.key {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button { Task { await session.pick(entry) } } label: {
+                            Label(added ? "Added" : "Add", systemImage: added ? "checkmark" : "plus")
+                        }
+                        .buttonStyle(GlassButtonStyle(selected: !added, highlighted: added, size: .compact))
+                        .accessibilityLabel(added ? "Remove \(entry.name)" : "Add \(entry.name)")
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+            }
+        }
+        .padding(8)
+        .frame(width: 400)
+        .disabled(session.downloading != nil)
+        .environment(\.colorScheme, .dark)
     }
 
     /// The review Add here shows, for a suggestion picked under Found on your Mac or a preset's Store widget.
@@ -658,596 +800,185 @@ struct SetupTourView: View {
                     // A preset's next Store widget opens a review of its own.
                     .id(review.inspection.manifest.versionKey)
                 Button("Back") { Task { await session.endReview() } }
+                    .buttonStyle(GlassButtonStyle(selected: false, highlighted: true))
                     .keyboardShortcut(.cancelAction)
                     .disabled(reviewIsWorking)
             }
             .padding(14)
             .frame(width: 540, height: 540)
-            .background(Color(white: 0.11).opacity(0.96), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12)))
+            .background(Self.panel, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
         }
     }
 
-    private var barAppearance: BarAppearance {
-        session.store.configuration?.bar.appearance ?? (session.store.configurationStore.context.appearance == "dark" ? .dark : .light)
-    }
-
-    private var themes: some View {
-        let choices = session.themes
-        let selected = session.store.configurationStore.selectedThemeKey
-        let index = choices.firstIndex { $0.key == selected } ?? 0
-        let appearance = barAppearance
-        return HStack(spacing: 16) {
-            roundButton("chevron.left", label: "Previous theme") {
-                choose(choices[(index + choices.count - 1) % choices.count])
-            }
-            .keyboardShortcut(.leftArrow, modifiers: [])
-            ScrollViewReader { scroll in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(choices, id: \.key) { choice in
-                            themeTile(choice, appearance: appearance, selected: choice.key == selected) { focused in
-                                if focused {
-                                    withAnimation(motion.movement(.smooth(duration: 0.3))) {
-                                        scroll.scrollTo(choice.key, anchor: .center)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+    private var done: some View {
+        VStack(spacing: 0) {
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 84, height: 84)
+                .overlay(alignment: .bottomTrailing) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .frame(width: 30, height: 30)
+                        .background(SettingsPalette.success, in: Circle())
+                        .overlay(Circle().strokeBorder(Color(white: 0.16), lineWidth: 3))
+                        .offset(x: 6, y: 6)
                 }
-                .onAppear { scroll.scrollTo(selected, anchor: .center) }
-                .onChange(of: selected) {
-                    withAnimation(motion.movement(.smooth(duration: 0.3))) { scroll.scrollTo(selected, anchor: .center) }
+                .accessibilityHidden(true)
+                .padding(.bottom, 14)
+            Text("You're all set.").font(.system(size: 28, weight: .semibold)).padding(.bottom, 6)
+            Text("Click a widget to open it. Right-click the bar to edit it in place, try themes or open Settings.")
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.62))
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 16)
+            VStack(spacing: 10) {
+                if session.preferences.widgetSets.contains(.meetings) && session.preferences.deferMeetings {
+                    Label("Meetings stays off. Turn it on in Settings → Bar when you're ready to allow Calendar access.", systemImage: "calendar")
+                        .font(.system(size: 12.5)).foregroundStyle(.white.opacity(0.62))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                login
+                if session.finished && session.loginStatus == .requiresApproval {
+                    Text("Open at login still needs your approval in macOS.").font(.system(size: 12.5))
+                    Button("Allow StableBar in Login Items…") { SMAppService.openSystemSettingsLoginItems() }
+                        .buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
+                }
+                if let error = session.error {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.callout).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .frame(width: 836)
-            .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.05),
-                                         .init(color: .black, location: 0.95), .init(color: .clear, location: 1)],
-                                 startPoint: .leading, endPoint: .trailing))
-            roundButton("chevron.right", label: "Next theme") {
-                choose(choices[(index + 1) % choices.count])
-            }
-            .keyboardShortcut(.rightArrow, modifiers: [])
-        }
-    }
-
-    private func themeTile(_ choice: ThemeChoice, appearance: BarAppearance, selected: Bool,
-                           focusChanged: @escaping (Bool) -> Void) -> some View {
-        SetupTile(selected: selected, focusChanged: focusChanged) {
-            choose(choice)
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                Group {
-                    if let preview = previews[choice.key] {
-                        let look = preview.configuration(for: appearance)
-                        if let preset = session.preset {
-                            SetupSampleBar(look: look, widgets: session.sampleWidgets(preset, tokens: preview.tokens))
-                        } else {
-                            GeometryReader { proxy in
-                                ThemeSampleBar(look: look)
-                                    .frame(width: proxy.size.width * 2)
-                                    .scaleEffect(0.5)
-                                    .frame(width: proxy.size.width, height: proxy.size.height)
-                            }
-                        }
+            .padding(.bottom, 16)
+            HStack(spacing: 8) {
+                if let editBar {
+                    Button("Edit Bar in Place") { finish(then: editBar) }
+                        .buttonStyle(GlassButtonStyle(selected: false, highlighted: true))
+                }
+                Button { finish() } label: {
+                    HStack(spacing: 7) {
+                        Text("Done")
+                        Image(systemName: "checkmark")
                     }
                 }
-                .frame(height: 46)
-                .background(SampleWallpaper())
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .environment(\.colorScheme, appearance.colorScheme)
-                HStack(spacing: 6) {
-                    Text(choice.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                    Spacer(minLength: 0)
-                    if choice.key == session.currentThemeKey {
-                        Text("Current").font(.system(size: 11)).foregroundStyle(.white.opacity(0.5))
-                    }
-                }
-                .padding(.horizontal, 2)
+                .buttonStyle(GlassButtonStyle(selected: true))
+                .keyboardShortcut(.defaultAction)
             }
-            .padding(8)
-            .frame(width: 168)
+            .disabled(session.applicationMove.isBusy)
         }
-        .id(choice.key)
-        .accessibilityLabel("\(choice.title) theme")
+        .padding(EdgeInsets(top: 30, leading: 30, bottom: 22, trailing: 30))
+        .frame(width: 480)
+        .background(Self.panel, in: RoundedRectangle(cornerRadius: 26))
+        .overlay(RoundedRectangle(cornerRadius: 26).strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.45), radius: 40, y: 15)
     }
 
-    private func choose(_ choice: ThemeChoice) {
-        session.preferences.theme = choice.key == session.currentThemeKey ? .current
-            : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
-    }
-
-    /// Where the bar sits. Replacing the menu bar is the larger choice, since StableBar works best in its place;
-    /// keeping it is one click away underneath.
-    private var placement: some View {
-        VStack(spacing: 22) {
-            VStack(spacing: 12) {
-                SetupTile(selected: session.placementChoice == .top) {
-                    Task { await session.place(.top) }
-                } label: {
-                    VStack(alignment: .leading, spacing: 10) {
-                        placementPicture(.top, width: 488, height: 150)
-                        HStack(spacing: 8) {
-                            Text("Replace the menu bar").font(.system(size: 15, weight: .semibold))
-                            Text("Recommended")
-                                .font(.system(size: 11, weight: .semibold))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 2)
-                                .background(.white.opacity(0.14), in: Capsule())
-                        }
-                        Text("StableBar takes the top edge. The macOS menu bar hides until you point at it.")
-                            .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(width: 488, alignment: .leading)
-                    .padding(14)
-                }
-                SetupTile(selected: session.placementChoice == .belowMenuBar) {
-                    Task { await session.place(.belowMenuBar) }
-                } label: {
-                    HStack(spacing: 14) {
-                        placementPicture(.belowMenuBar, width: 84, height: 46)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Keep the menu bar").font(.system(size: 13, weight: .semibold))
-                            Text("StableBar sits below it, and macOS menus stay visible.")
-                                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(10)
-                    .frame(width: 488)
-                }
-                SetupTile(selected: session.placementChoice == .bottom) {
-                    Task { await session.place(.bottom) }
-                } label: {
-                    HStack(spacing: 14) {
-                        placementPicture(.bottom, width: 84, height: 46)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Put it at the bottom").font(.system(size: 13, weight: .semibold))
-                            Text("StableBar sits on the bottom edge, and the menu bar stays at the top.")
-                                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                        }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(10)
-                    .frame(width: 488)
-                }
-            }
-            menuBarAccessNotice
-            // A profile that places the bar keeps it where it is, whichever choice this step saves.
-            profileNotice(ProfileControlledSetting.placement(origins: session.store.origins))
-            Button {
-                watchIntro()
-            } label: {
-                Label("Watch the intro", systemImage: "play.circle")
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.5))
-        }
-    }
-
-    /// A small screen with the bar on the top edge, under a menu bar, or on the bottom edge under one.
-    private func placementPicture(_ placement: SetupPreferences.Placement, width: Double, height: Double) -> some View {
-        VStack(spacing: 3) {
-            if placement != .top {
-                Rectangle().fill(.white.opacity(0.4)).frame(height: 6)
-            }
-            if placement == .bottom { Spacer() }
-            RoundedRectangle(cornerRadius: 3).fill(.black.opacity(0.8)).frame(height: 10)
-                .padding(.horizontal, 4)
-            if placement != .bottom { Spacer() }
-        }
-        .padding(.bottom, placement == .bottom ? 3 : 0)
-        .frame(width: width, height: height)
-        .background { Wallpaper() }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var hints: some View {
-        VStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 20) {
-                hint("cursorarrow.click", "Click a widget", "Opens its details and actions.")
-                hint("contextualmenu.and.cursorarrow", "Right-click the bar", "Edit Bar in Place, Try Themes, Get Widgets and Settings.")
-                hint("menubar.rectangle", "Use the menu-bar icon", "Opens Settings and this guide again.")
-            }
-            .padding(24)
-            .frame(width: 440, alignment: .leading)
-            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
-            if let managerGap {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label(managerGap.warning, systemImage: "exclamationmark.triangle").font(.system(size: 13, weight: .semibold))
-                    Text(managerGap.setting)
-                    HStack(spacing: 16) {
-                        if let file = managerGap.configuration {
-                            Button("Open \(file.lastPathComponent)") { openInTextEditor(file) }
-                        }
-                        Button("Check Again") { Task { await checkManagerGap() } }
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.8))
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(.white.opacity(0.6))
-                .frame(width: 440, alignment: .leading)
-            }
-            profileNotice(ProfileControlledSetting.all(in: session.store.configuration, origins: session.store.origins))
-        }
-        .task { await checkManagerGap() }
-    }
-
-    private func checkManagerGap() async {
-        guard let configuration = session.store.configuration else { return }
-        managerGap = await session.store.windowClearance.checkManagerGap(configuration)
-    }
-
-    @ViewBuilder private func profileNotice(_ profileSettings: [ProfileControlledSetting]) -> some View {
-        if !profileSettings.isEmpty {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Active profiles control some settings", systemImage: "info.circle").font(.system(size: 13, weight: .semibold))
-                ForEach(profileSettings) { setting in
-                    Text("\(setting.title): \(session.store.sourceText(setting.origin)).")
-                    if let showProfile, let profile = setting.origin.profile {
-                        Button("Edit \(profile) profile…") {
-                            lower()
-                            showProfile(profile)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.white.opacity(0.8))
-                    }
-                }
-                Text("Setup saves your defaults. These profiles still take priority, so a saved change may not change the bar now. Review the controlling settings in Profiles.")
-                if let configuration = session.store.configuration {
-                    Text("Effective placement: \(configuration.bar.placementDescription).")
-                }
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.6))
-            .frame(width: 440, alignment: .leading)
-        }
-    }
-
-    var clearanceStartNotice: String {
-        session.system.macOSVersion.supportsNotificationClearance
-            ? "Window and notification clearance start when you finish setup."
-            : "Window clearance starts when you finish setup."
-    }
-
-    private var access: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if session.preferences.widgetSets.contains(.meetings) && session.preferences.deferMeetings {
-                HStack {
-                    Text("Meetings will stay turned off. Turn it on in Settings → Bar when you are ready to allow Calendar access.")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 12)
-                    Button("Set up Calendar access now") { session.preferences.deferMeetings = false }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-            }
-            hint("macwindow", "Keep windows clear of StableBar", "Moves and resizes ordinary windows. Fullscreen windows stay unchanged.") {
-                Toggle("Keep windows clear of StableBar", isOn: Binding(
-                    get: { session.keepsWindowsClear },
-                    set: { session.preferences.keepWindowsClear = $0 }))
-                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
-            }
-            if session.system.macOSVersion.supportsNotificationClearance {
-                hint("bell", "Keep notifications clear of StableBar", "Moves banners below the bar.") {
-                    Toggle("Keep notifications clear of StableBar", isOn: Binding(
-                        get: { session.preferences.keepNotificationsClear ?? (session.base?.bar.keepNotificationsClear == true) },
-                        set: { session.preferences.keepNotificationsClear = $0 }))
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
-                }
-            }
-            hint("power", "Open at login", session.system.isInApplications()
-                 ? "Starts StableBar when you log in." : "Move StableBar to Applications to start it at login.") {
-                if session.system.isInApplications() {
-                    Toggle("Open at login", isOn: Binding(get: { session.opensAtLogin }, set: { session.openAtLogin = $0 }))
-                        .labelsHidden().toggleStyle(.switch).controlSize(.small)
-                } else {
-                    ApplicationMoveControls(controller: session.applicationMove, resume: session.resumeAfterMoving,
-                                            reveal: lower, setup: true)
-                }
-            }
-            Text(clearanceStartNotice)
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-            let source = session.adviceSource
-            if source != .spaces {
-                Text("\(source.title) detected. Leave window clearance off if it already manages your gaps. \(source == .yabai ? "Use yabai’s external_bar setting to leave room for the bar." : "Set gaps.outer.\(barAtBottom ? "bottom" : "top") in \(source.title) to leave room for the bar.")")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-            }
-            if let source = session.workspaceCheckSource {
-                workspaceConnection(source)
-            }
-        }
-        .padding(24)
-        .frame(width: 600, alignment: .leading)
-        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
-    }
-
-    private func workspaceConnection(_ source: WorkspaceSource) -> some View {
-        @Bindable var connection = session.workspaceConnection
-        let result = connection.result
-        let (title, detail): (String, String) = switch result {
-        case .checking: ("Workspaces · \(source.title)", "Checking the connection…")
-        case .connected: ("Workspaces · \(source.title)", "Connected and ready to refresh.")
-        case let .signalsMissing(configuration):
-            ("Let yabai refresh Workspaces", "Add refresh signals to \(configuration), then run yabai --restart-service.")
-        case let .reloadYabai(configuration):
-            ("Load yabai’s refresh signals", "The signals are in \(configuration). Run yabai --restart-service, then check again.")
-        case .ipcOff: ("Connect Workspaces to OmniWM", "Turn on Enable IPC in OmniWM’s menu, then check again.")
-        case let .couldntCheck(reason): ("Workspaces · \(source.title)", reason)
-        }
-        return VStack(alignment: .leading, spacing: 12) {
-            Divider().overlay(.white.opacity(0.1))
-            hint("square.grid.2x2", title, detail) {
-                if connection.isChecking || result == .checking {
-                    ProgressView().controlSize(.small).accessibilityLabel("Checking \(source.title)")
-                } else if result == .connected {
-                    Label("Connected", systemImage: "checkmark")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.65))
-                }
-            }
-            if case .signalsMissing = result {
-                DisclosureGroup("Show signals to add", isExpanded: $connection.showsSignals) {
-                    ScrollView(.horizontal) {
-                        Text(session.yabaiSignalScript)
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .textSelection(.enabled)
-                            .fixedSize()
-                            .padding(10)
-                    }
-                    .background(.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 8))
-                }
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
-            }
-            if result != .checking {
-                HStack(spacing: 16) {
-                    Button("Check Again", action: connection.checkAgain)
-                        .disabled(connection.isChecking)
-                    if case .signalsMissing = result {
-                        Button("Copy signals") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(session.yabaiSignalScript, forType: .string)
-                        }
-                    }
-                    Button("\(source.title) guide ↗") {
-                        lower()
-                        NSWorkspace.shared.open(URL(string: "https://github.com/stablebox/StableBar/blob/main/docs/widgets.md#\(source == .yabai ? "yabai" : "omniwm")-workspaces")!)
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.8))
-            }
-            if result != .connected {
-                Text("You can finish setup now. Workspaces may stay stale until this is ready.")
-                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var permissions: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            ForEach(session.neededPermissions, id: \.self) { permissionRow($0) }
-            if session.showsSpacesGuidance {
-                let status = session.store.workspaceStore.desktopShortcutStatus
-                hint("keyboard", DesktopShortcuts.title, status.detail) {
-                    if status.allEnabled {
-                        Label("Ready", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
-                    } else {
-                        permissionButton(DesktopShortcuts.actionTitle) {
-                            lower()
-                            do { try DesktopShortcuts.openSettings() }
-                            catch { session.error = errorMessage(error) }
-                        }
-                        .fixedSize()
-                    }
-                }
-                if !status.allEnabled {
-                    Text("You can continue setup and turn these on later. Only switching desktops from the bar needs them.")
-                        .font(.system(size: 12)).foregroundStyle(.white.opacity(0.55))
-                }
-            }
-        }
-        .padding(24)
-        .frame(width: 600, alignment: .leading)
-        .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.1)))
-        .onAppear { session.store.workspaceStore.refreshDesktopShortcuts() }
-    }
-
-    /// A permission with its state and action. `compact` drops the explanation and keeps the row on one line, for the
-    /// reminder on the last step; the permissions step explains each one.
-    private func permissionRow(_ permission: SetupPermission, compact: Bool = false) -> some View {
-        let hides = (session.placementAwaitingAccess ?? session.placement) == .top
-        let (symbol, title, detail) = switch permission {
-        case .accessibility:
-            ("accessibility", session.system.macOSVersion.accessibilityName,
-             "App menus, the Apple menu and Menu bar items open macOS menus. Window clearance and switching desktops use it too.")
-        case .automation:
-            ("menubar.rectangle", "Automation", "Lets StableBar control System Events to \(hides ? "hide" : "show") the macOS menu bar.")
-        case .calendars:
-            ("calendar", "Calendars", "Meetings shows your next meeting and today's agenda.")
-        }
-        return hint(symbol, title, compact ? "" : detail) {
-            if session.isAllowed(permission) {
-                allowedLabel
-            } else if permission == .automation && session.waitingForMenuBarAccess {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("macOS is asking…").font(.system(size: 13)).foregroundStyle(.white.opacity(0.7))
-                }
-            } else if compact {
-                HStack(spacing: 14) {
-                    permissionEscape(permission, hides: hides)
-                    permissionAction(permission)
-                }
-            } else {
-                VStack(alignment: .trailing, spacing: 6) {
-                    permissionAction(permission)
-                    permissionEscape(permission, hides: hides)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder private func permissionAction(_ permission: SetupPermission) -> some View {
-        switch permission {
-        case .accessibility:
-            permissionButton(.allow, for: permission) {
-                lower()
-                session.store.windowClearance.requestAccess()
-            }
-        case .automation:
-            if session.automationAccess == .denied {
-                permissionButton(.openSettings, for: permission) {
-                    lower()
-                    MenuBarAutoHide.openAutomationSettings()
-                }
-            } else {
-                permissionButton(.allow, for: permission) { Task { await session.allowAutomation() } }
-            }
-        case .calendars:
-            if session.calendarAccess == .notDetermined {
-                permissionButton(.allow, for: permission) { Task { await session.requestCalendarAccess() } }
-            } else {
-                permissionButton(.openSettings, for: permission) {
-                    lower()
-                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")!)
-                }
-            }
-        }
-    }
-
-    /// The choice that drops the need: keeping the menu bar, or setting up Meetings later.
-    @ViewBuilder private func permissionEscape(_ permission: SetupPermission, hides: Bool) -> some View {
-        if permission == .automation && hides {
-            escapeButton("Keep the menu bar instead") { Task { await session.place(.belowMenuBar) } }
-        } else if permission == .calendars && session.needsCalendarSetup {
-            escapeButton("Set up Meetings later") { session.preferences.deferMeetings = true }
-        }
-    }
-
-    private var allowedLabel: some View {
-        Label("Allowed", systemImage: "checkmark").font(.system(size: 13)).foregroundStyle(SettingsPalette.success)
-    }
-
-    private func permissionButton(_ kind: SetupPermission.Action, for permission: SetupPermission,
-                                  action: @escaping () -> Void) -> some View {
-        permissionButton(kind.title, accessibilityLabel: kind.accessibilityLabel(for: permission, on: session.system.macOSVersion), action: action)
-    }
-
-    private func permissionButton(_ title: String, accessibilityLabel: String? = nil,
-                                  action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(SetupButtonStyle(prominent: false))
-            .accessibilityLabel(accessibilityLabel ?? title)
-            .accessibilityInputLabels([Text(title), Text(accessibilityLabel ?? title)])
-    }
-
-    private func escapeButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
-            .buttonStyle(.plain)
-            .font(.system(size: 12))
-            .foregroundStyle(.white.opacity(0.6))
-    }
-
-    private func hint<Control: View>(_ symbol: String, _ title: String, _ detail: String,
-                                     @ViewBuilder control: () -> Control = { EmptyView() }) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: symbol)
-                .font(.system(size: 17))
-                .frame(width: 36, height: 36)
-                .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 14, weight: .semibold))
-                if !detail.isEmpty {
-                    Text(detail).font(.system(size: 12)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
-                }
+    /// Open at login, which only works from an Applications folder; elsewhere, the move there.
+    private var login: some View {
+        let inApplications = session.system.isInApplications()
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Open at login").font(.system(size: 13.5, weight: .semibold))
+                Text(inApplications ? "Starts StableBar when you log in." : "Move StableBar to Applications to start it at login.")
+                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.62))
             }
             Spacer(minLength: 12)
-            control()
-        }
-    }
-
-    private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 40, height: 40)
-                .background(.white.opacity(0.08), in: Circle())
-                .overlay(Circle().strokeBorder(.white.opacity(0.14)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    private var footer: some View {
-        HStack(spacing: 24) {
-            Button("Back") { withAnimation(motion.stepAnimation) { session.step -= 1 } }
-                .opacity(session.step > 0 ? 1 : 0)
-                .disabled(session.step == 0)
-                .frame(width: 96, alignment: .trailing)
-            Button {
-                if session.step == Self.pages.count - 1 {
-                    session.finish()
-                    if session.finished { finish() }
-                } else {
-                    withAnimation(motion.stepAnimation) { session.step += 1 }
-                }
-            } label: {
-                Text(session.step == Self.pages.count - 1 ? "Finish setup" : "Continue").frame(width: 164, height: 48)
+            if inApplications {
+                Toggle("Open at login", isOn: Binding(get: { session.opensAtLogin }, set: { session.openAtLogin = $0 }))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .disabled(session.finished)
+            } else {
+                ApplicationMoveControls(controller: session.applicationMove, resume: session.resumeAfterMoving, reveal: lower, setup: true)
             }
-            .buttonStyle(SetupButtonStyle())
-            .keyboardShortcut(.defaultAction)
-            .disabled(SetupSession.Step(rawValue: session.step).map(session.blocksContinue) ?? false)
-            Button("Skip setup") { if session.hasChanges { confirmingSkip = true } else { skip() } }
-                .keyboardShortcut(.cancelAction)
-                .frame(width: 96, alignment: .leading)
         }
-        .disabled(confirmingSkip || session.review != nil)
-        .buttonStyle(.plain)
-        .font(.system(size: 13))
-        .foregroundStyle(.white.opacity(0.45))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    /// Saves the bar and closes setup, or keeps it open while Open at login waits for approval in macOS.
+    private func finish(then next: (() -> Void)? = nil) {
+        if !session.finished {
+            session.finish()
+            guard session.finished, session.loginStatus != .requiresApproval else { return }
+        }
+        close()
+        next?()
+    }
+
+    private var toolbar: some View {
+        let index = Self.choosing.firstIndex(of: session.step) ?? 0
+        return HStack(spacing: 2) {
+            // The bar has already taken its place, so the first choice has nothing to go back to.
+            if index > 0 {
+                Button {
+                    withAnimation(motion.stepAnimation) { session.step = Self.choosing[index - 1] }
+                } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 36)
+                }
+                .buttonStyle(GlassButtonStyle(selected: false, round: true))
+                .accessibilityLabel("Back")
+            }
+            HStack(spacing: 6) {
+                ForEach(Self.choosing.indices, id: \.self) { dot in
+                    Capsule().fill(.white.opacity(dot == index ? 1 : 0.35)).frame(width: dot == index ? 18 : 6, height: 6)
+                }
+            }
+            .padding(.horizontal, 8)
+            .animation(motion.movement(.spring(duration: 0.4, bounce: 0.3)), value: index)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(index + 1) of \(Self.choosing.count)")
+            Button {
+                withAnimation(motion.stepAnimation) { session.step = index + 1 < Self.choosing.count ? Self.choosing[index + 1] : .done }
+            } label: {
+                HStack(spacing: 7) {
+                    Text("Continue")
+                    Image(systemName: "arrow.right")
+                }
+            }
+            .buttonStyle(GlassButtonStyle(selected: true))
+            .keyboardShortcut(.defaultAction)
+            .disabled(session.step == .tune && !session.missingPermissions.isEmpty)
+        }
+        .padding(4)
+        .background(.black.opacity(0.3), in: Capsule())
+        .glass(Capsule(style: .circular))
+        .fixedSize()
+    }
+
+    private func skip() {
+        if session.finished || !session.hasChanges { close() } else { confirmingSkip = true }
     }
 
     /// Asks before Skip setup, or Esc, throws away the choices made so far.
     private var skipConfirmation: some View {
         ZStack {
-            Color.black.opacity(0.55)
+            Color.black.opacity(0.4)
                 .contentShape(Rectangle())
                 .onTapGesture { confirmingSkip = false }
-            VStack(spacing: 12) {
-                Text("Skip setup?").font(.system(size: 26, weight: .semibold))
+            VStack(spacing: 6) {
+                Text("Skip setup?").font(.system(size: 20, weight: .semibold))
                 Text("""
-                    Nothing you chose is saved\(session.changedMenuBar ? ", and the macOS menu bar goes back to how it was" : ""). \
-                    Open it again any time with Getting Started… in the menu-bar icon's menu, or in Settings → General.
+                    Your bar goes back to how it was\(session.changedMenuBar ? ", and so does the macOS menu bar" : ""), and nothing is saved. \
+                    Open setup again with Getting Started… in the menu-bar icon's menu.
                     """)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(.white.opacity(0.62))
                     .multilineTextAlignment(.center)
-                    .frame(maxWidth: 440)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 12) {
+                    .padding(.bottom, 10)
+                HStack(spacing: 8) {
                     Button("Skip Setup") {
                         confirmingSkip = false
-                        skip()
+                        close()
                     }
-                    .buttonStyle(SetupButtonStyle(prominent: false))
+                    .buttonStyle(GlassButtonStyle(selected: false, highlighted: true))
                     Button("Keep Setting Up") { confirmingSkip = false }
-                        .buttonStyle(SetupButtonStyle())
+                        .buttonStyle(GlassButtonStyle(selected: true))
                         .keyboardShortcut(.defaultAction)
                 }
-                .padding(.top, 10)
                 // Esc keeps setting up while the question shows.
                 Button("") { confirmingSkip = false }
                     .keyboardShortcut(.cancelAction)
@@ -1255,30 +986,12 @@ struct SetupTourView: View {
                     .opacity(0)
                     .accessibilityHidden(true)
             }
-            .foregroundStyle(.white)
-            .padding(32)
-            .background(Color(white: 0.11).opacity(0.96), in: RoundedRectangle(cornerRadius: 20))
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.12)))
+            .font(.system(size: 13))
+            .padding(22)
+            .frame(width: 360)
+            .background(Self.panel, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.24), lineWidth: 0.5))
         }
-    }
-
-    private var dots: some View {
-        let active = phase == .tour ? session.step + 1 : 0
-        return HStack(spacing: 7) {
-            ForEach(0...Self.pages.count, id: \.self) { index in
-                Capsule()
-                    .fill(index == active ? Color.orange : .white.opacity(0.3))
-                    .frame(width: index == active ? 20 : 6, height: 6)
-            }
-        }
-        .animation(motion.movement(.snappy), value: active)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.progressLabel(step: phase == .tour ? session.step : nil, count: Self.pages.count))
-    }
-
-    /// The intro has its own dot, before the five numbered steps.
-    static func progressLabel(step: Int?, count: Int) -> String {
-        step.map { "Step \($0 + 1) of \(count)" } ?? "Introduction"
     }
 }
 
@@ -1287,61 +1000,13 @@ func progress(_ time: Double, _ start: Double, _ duration: Double) -> Double {
     min(max((time - start) / duration, 0), 1)
 }
 
-/// Setup's day and dusk backgrounds, in the landing page's colors, drifting and fading into each other.
-private struct SetupBackdrop: View {
-    let size: CGSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The date scenes draw at: the backdrop stops there, so two drawings match.
-    @Environment(\.fixedDate) private var fixedDate
-
-    /// Missing outside the app bundle, as in tests, where the backdrop stays black.
-    private static let light = Wallpaper.image
-    private static let dark = Bundle.main.url(forResource: "SetupDusk", withExtension: "heic").flatMap(NSImage.init(contentsOf:))
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || fixedDate != nil)) { context in
-            let t = (fixedDate ?? context.date).timeIntervalSinceReferenceDate
-            ZStack {
-                layer(Self.light, t: t, phase: 0)
-                layer(Self.dark, t: t, phase: 2).opacity(0.5 + 0.5 * sin(t / 4))
-            }
-        }
-        .frame(width: size.width, height: size.height)
-        .clipped()
+/// Shantell Sans from the app's resources, or the system font outside the app bundle, as when tests draw setup.
+func shantellSans(_ file: String, size: Double) -> CTFont {
+    guard let url = Bundle.main.url(forResource: file, withExtension: "woff2"),
+          let descriptor = (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor])?.first else {
+        return CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
     }
-
-    private func layer(_ image: NSImage?, t: Double, phase: Double) -> some View {
-        Image(nsImage: image ?? NSImage())
-            .resizable()
-            .scaledToFill()
-            .frame(width: size.width, height: size.height)
-            .scaleEffect(1.4 + 0.08 * sin(t / 7 + phase))
-            .rotationEffect(.degrees(12 * sin(t / 11 + phase)))
-            .offset(x: size.width * 0.06 * sin(t / 9 + phase), y: size.height * 0.06 * cos(t / 8 + phase))
-    }
-}
-
-/// A sample bar of `widgets` in `look`, scaled down to fit.
-private struct SetupSampleBar: View {
-    let look: Configuration
-    let widgets: [WidgetConfiguration]
-    @State private var barWidth: CGFloat = 0
-
-    var body: some View {
-        GeometryReader { geometry in
-            let scale = min(0.7, geometry.size.width / barWidth)
-            ThemeSampleBar(look: look, widgets: widgets)
-                .frame(width: geometry.size.width / scale)
-                .scaleEffect(scale)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .background {
-                    ThemeSampleBar(look: look, widgets: widgets)
-                        .fixedSize()
-                        .hidden()
-                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
-                }
-        }
-    }
+    return CTFontCreateWithFontDescriptor(descriptor, size, nil)
 }
 
 struct SetupTile<Label: View>: View {
@@ -1364,16 +1029,15 @@ struct SetupTile<Label: View>: View {
             action()
         } label: {
             label
-                .background(.white.opacity(selected ? 0.12 : hovering ? 0.09 : 0.05), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(selected ? 0.75 : 0.1), lineWidth: selected ? 1.5 : 1))
-                .shadow(color: .white.opacity(selected ? 0.18 : 0), radius: 16)
-                .scaleEffect(motion.scale(hovering && !selected, to: 1.02))
-                .contentShape(RoundedRectangle(cornerRadius: 14))
+                .background(.white.opacity(selected ? 0.16 : hovering ? 0.13 : 0.08), in: RoundedRectangle(cornerRadius: 16))
+                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(selected ? 1 : 0.24), lineWidth: selected ? 2.5 : 0.5))
+                .shadow(color: .black.opacity(selected ? 0.3 : 0), radius: 15, y: 10)
+                .contentShape(RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
         .focusable(false)
-        .contentShape(RoundedRectangle(cornerRadius: 14))
-        .contentShape(.focusEffect, RoundedRectangle(cornerRadius: 14))
+        .contentShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(.focusEffect, RoundedRectangle(cornerRadius: 16))
         // Unrestricted focus includes Tab without macOS's Keyboard navigation setting, from macOS 14 on.
         .focusable(isEnabled)
         .focused($focused)
@@ -1401,25 +1065,6 @@ struct SetupTile<Label: View>: View {
     }
 }
 
-struct SetupButtonStyle: ButtonStyle {
-    var prominent = true
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        let motion = SetupMotion(reduceMotion: reduceMotion)
-        return configuration.label
-            .font(.system(size: 14, weight: .medium, design: .monospaced))
-            .foregroundStyle(prominent ? Color.black : Color.white)
-            .padding(.horizontal, 28)
-            .frame(minHeight: 40)
-            .background(prominent ? Color.white : Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
-            .opacity(isEnabled ? configuration.isPressed ? 0.8 : 1 : 0.35)
-            .scaleEffect(motion.scale(configuration.isPressed, to: 0.97))
-            .animation(motion.movement(.snappy(duration: 0.15)), value: configuration.isPressed)
-    }
-}
-
 private struct Blur: ViewModifier {
     let radius: CGFloat
 
@@ -1432,22 +1077,4 @@ extension AnyTransition {
     static var blurFade: AnyTransition {
         .modifier(active: Blur(radius: 10), identity: Blur(radius: 0)).combined(with: .opacity)
     }
-}
-
-/// Where setup's steps sit on a screen `height` points tall whose Dock takes `dock` points at the bottom. A step starts
-/// a quarter of the way down, closer on a short screen, and scrolls before it reaches Back, Continue and Skip setup.
-struct SetupTourLayout {
-    /// Below the bar and the "Live on your bar" pointer.
-    static let minimumContentTop = 120.0
-    /// The room the tallest step takes: Make it yours with a permission reminder.
-    static let roomyContent = 600.0
-    let height: Double
-    let dock: Double
-
-    /// The top of the footer's buttons, which are centered 89 points above the Dock, with a margin.
-    var footerTop: Double { height - dock - 89 - 24 - 20 }
-    var contentTop: Double { max(Self.minimumContentTop, min((height - dock) * 0.24, footerTop - Self.roomyContent)) }
-    var contentHeight: Double { max(0, footerTop - contentTop) }
-    /// The space between a step's text and its controls, tighter on a short screen.
-    var controlsGap: Double { contentTop < (height - dock) * 0.24 ? 20 : 32 }
 }

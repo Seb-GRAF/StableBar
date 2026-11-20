@@ -9,9 +9,9 @@ import Testing
     let store = ApplicationMoveResumeStore(domain: "StableBarTests.MoveResume.\(directory.lastPathComponent)")
     defer { UserDefaults.standard.removePersistentDomain(forName: store.domain) }
     let configuration = directory.appending(path: "config.json")
-    let preferences = SetupPreferences(appearance: .dark, placement: .top, clock: .twelveHour,
+    let preferences = SetupPreferences(placement: .top,
         theme: .package(id: "phosphor", version: "1.0.0"), widgetSets: [.workspaces(.spaces), .meetings, .sound],
-        workspaces: .spaces, keepWindowsClear: true, keepNotificationsClear: false, deferMeetings: true)
+        workspaces: .spaces, keepWindowsClear: true, deferMeetings: true)
     let snapshot = ApplicationMoveResume.Setup(step: 2, preferences: preferences, preset: .developer, openAtLogin: true,
         placementChoice: .top, placementAwaitingAccess: .belowMenuBar, menuBarHidAtStart: false,
         stableBarHidMenuBarAtStart: false, opensAtLoginAtStart: false)
@@ -135,9 +135,8 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
         try FileManager.default.copyItem(at: fixture.url, to: store.configurationStore.ownBarURL(for: screenSetup))
     }
     store.configurationStore.prepareScreenSetup(screenSetup)
-    let preferences = SetupPreferences(appearance: .dark, clock: .twelveHour, workspaces: .spaces,
-                                       keepWindowsClear: true, keepNotificationsClear: false, deferMeetings: true)
-    let snapshot = ApplicationMoveResume.Setup(step: SetupSession.Step.touches.rawValue,
+    let preferences = SetupPreferences(placement: .top, workspaces: .spaces, keepWindowsClear: true, deferMeetings: true)
+    let snapshot = ApplicationMoveResume.Setup(step: SetupSession.Step.done.rawValue,
         preferences: preferences, preset: .developer, openAtLogin: true,
         menuBarHidAtStart: false, stableBarHidMenuBarAtStart: false, opensAtLoginAtStart: false)
     let edit = ConfigurationEdit(action: .bar, properties: ["height": .number(38)])
@@ -165,16 +164,16 @@ func applicationMoveManualSetupOpenBeforeAutomaticResumeUsesSavedChoices(ownBar:
     system.workspaceSource = { _ in .spaces }
     // Exercise the first-open path without displaying a window or changing this Mac's settings.
     let session = window.prepareSession(store: store, system: system)
-    #expect(session.step == snapshot.step)
+    #expect(session.step.rawValue == snapshot.step)
     #expect(session.preferences == preferences)
     #expect(session.preset == .developer)
     #expect(session.openAtLogin == true)
     #expect(session.applicationMove.error == record.failure)
     #expect(launchResume.pendingKind == nil)
     #expect(launchResume.wasResuming) // The automatic launch must not fall back to a second setup.
-    session.preferences.clock = .twentyFourHour
+    session.preferences.deferMeetings = false
     #expect(window.prepareSession(store: store, system: system) === session)
-    #expect(session.preferences.clock == .twentyFourHour)
+    #expect(!session.preferences.deferMeetings)
     #expect(launchResume.take(for: .setup) == nil)
     session.cancel()
     #expect(store.configurationStore.sessionEdits.first?.properties == edit.properties)
@@ -225,23 +224,21 @@ func applicationMoveResumesSetupChoicesWithoutSavingThem(step: Int) async throws
     system.calendarAccess = { .fullAccess }
     system.isInApplications = { true }
     system.loginStatus = { .notRegistered }
-    system.setOpenAtLogin = { _ in Issue.record("Register only at Finish setup") }
+    system.setOpenAtLogin = { _ in Issue.record("Register only at Done") }
     system.workspaceSource = { _ in .spaces }
     let before = SetupSession(store: store, system: system)
     await before.place(.top)
-    before.step = step
+    before.step = SetupSession.Step(rawValue: step)!
     before.toggle(.developer)
-    before.preferences.clock = .twelveHour
     before.preferences.keepWindowsClear = true
-    before.preferences.keepNotificationsClear = false
     before.preferences.deferMeetings = true
     let record = before.resumeAfterMoving()
     let resumed = SetupSession(store: store, system: system, resume: record)
-    #expect(resumed.step == step)
+    #expect(resumed.step.rawValue == step)
     #expect(resumed.preferences == before.preferences)
     #expect(resumed.preset == .developer)
     #expect(resumed.placementChoice == .top)
-    #expect(resumed.placementTookEffect)
+    #expect(resumed.readyToLand)
     #expect(resumed.opensAtLogin)
     #expect(resumed.openAtLogin == true)
     #expect(resumed.changedMenuBar)
@@ -252,9 +249,7 @@ func applicationMoveResumesSetupChoicesWithoutSavingThem(step: Int) async throws
         resumed.toggle(preset)
         #expect(resumed.preferences.placement == .top)
         #expect(resumed.preferences.workspaces == .spaces)
-        #expect(resumed.preferences.clock == .twelveHour)
         #expect(resumed.preferences.keepWindowsClear == true)
-        #expect(resumed.preferences.keepNotificationsClear == false)
         #expect(resumed.preferences.deferMeetings)
         #expect(resumed.openAtLogin == true)
         #expect(try Data(contentsOf: fixture.url) == original)
@@ -296,7 +291,7 @@ func applicationMoveRestoresOpenAtLoginOnlyInApplications(inApplications: Bool) 
     let session = SetupSession(store: store, system: system, resume: resume)
     #expect(session.openAtLogin == (inApplications ? true : nil))
     #expect(session.opensAtLogin == inApplications)
-    // Also guard Finish setup against a stale choice from a hidden switch outside Applications.
+    // Also guard Done against a stale choice from a hidden switch outside Applications.
     session.openAtLogin = true
     session.finish()
     #expect(session.finished)

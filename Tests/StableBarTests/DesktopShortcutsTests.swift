@@ -190,7 +190,7 @@ private func desktop(_ number: Int) -> Workspace {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         var system = SetupSystem()
-        system.automationAccess = { _ in .allowed }
+        system.automationAccess = { _ in .denied }
         system.setMenuBarHidden = { _ in Issue.record("Setup must not change the Mac's settings.") }
         system.menuBarHides = { false }
         system.isTrusted = { true }
@@ -201,7 +201,7 @@ private func desktop(_ number: Int) -> Workspace {
         system.defaults = defaults
         system.previewsOnTheBar = false
         let session = SetupSession(store: store, system: system)
-        await session.place(.belowMenuBar)
+        await session.place(.top)
         #expect(session.showsSpacesGuidance)
         let status = store.workspaceStore.desktopShortcutStatus
         #expect(status.allEnabled == allSupportedEnabled)
@@ -209,8 +209,6 @@ private func desktop(_ number: Int) -> Workspace {
         #expect(status.unsupported == [17, 18])
         #expect(status.detail.contains("macOS has no shortcut for desktops 17, 18"))
         #expect(session.missingPermissions.isEmpty)
-        #expect(!session.blocksContinue(at: .permissions))
-        #expect(!session.blocksContinue(at: .tryIt))
         session.finish()
         #expect(session.finished)
         #expect(session.error == nil)

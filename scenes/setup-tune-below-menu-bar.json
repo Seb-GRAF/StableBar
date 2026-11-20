@@ -1,12 +1,25 @@
 {
   "$schema": "../scene.schema.json",
   "configuration": {
-    "includes": [
-      "../Resources/config.json"
-    ],
+    "theme": {
+      "id": "clear"
+    },
     "bar": {
       "belowMenuBar": true
-    }
+    },
+    "workspaceSource": "spaces",
+    "widgets": [
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left"
+      },
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right"
+      }
+    ]
   },
   "outputs": {
     "audio": {
@@ -29,11 +42,31 @@
       }
     }
   },
+  "workspaces": [
+    {
+      "workspace": "1",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "2",
+      "workspace-is-focused": true,
+      "workspace-is-visible": true,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "3",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    }
+  ],
   "draw": "setup",
   "setup": {
-    "step": "look",
-    "placement": "belowMenuBar",
-    "menuBarHides": true,
+    "step": "tune",
+    "preset": "everyday",
+    "automation": false,
     "storeWidgets": [
       {
         "id": "now-playing",
@@ -76,8 +109,5 @@
         "sha256": "487fb81704f7390fcf68d8acf9f8dfa929c5dcb289924f6fefcd9bd3b56cb37f"
       }
     ]
-  },
-  "appearances": [
-    "dark"
-  ]
+  }
 }

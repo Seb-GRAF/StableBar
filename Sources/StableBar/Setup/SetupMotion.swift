@@ -40,10 +40,6 @@ struct SetupMotion {
         reduceMotion ? nil : animation
     }
 
-    func scale(_ active: Bool, to scale: CGFloat) -> CGFloat {
-        active && !reduceMotion ? scale : 1
-    }
-
     /// A step's controls can start their own animations (including matched geometry in segmented controls).
     /// Keep those and permission-row layout changes still, inside the step's outer fade transition.
     func suppressMovement(in transaction: inout Transaction) {
@@ -51,6 +47,4 @@ struct SetupMotion {
         transaction.animation = nil
         transaction.disablesAnimations = true
     }
-
-    var cardAnimationBehavior: NSWindow.AnimationBehavior { reduceMotion ? .none : .alertPanel }
 }

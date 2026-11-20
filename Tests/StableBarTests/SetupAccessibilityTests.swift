@@ -36,15 +36,8 @@ import Testing
         }
     }
 
-    @Test func progressLabelsDistinguishTheIntroduction() {
-        #expect(SetupTourView.progressLabel(step: nil, count: 5) == "Introduction")
-        for step in 0..<5 {
-            #expect(SetupTourView.progressLabel(step: step, count: 5) == "Step \(step + 1) of 5")
-        }
-    }
-
     @Test func permissionActionsNameTheirPermission() {
-        for (permission, name) in [(SetupPermission.accessibility, "Accessibility"), (.automation, "Automation"), (.calendars, "Calendars")] {
+        for (permission, name) in [(SetupPermission.accessibility, "Accessibility"), (.calendars, "Calendars")] {
             #expect(SetupPermission.Action.allow.accessibilityLabel(for: permission, on: MacOSVersion(major: 26)) == "Allow \(name)")
             #expect(SetupPermission.Action.openSettings.accessibilityLabel(for: permission, on: MacOSVersion(major: 26)) == "Open \(name) Settings")
         }

@@ -1,16 +1,13 @@
 import Foundation
 
 struct SetupPreferences: Equatable, Codable, Sendable {
-    enum Appearance: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", automatic = "Automatic", light = "Light", dark = "Dark"
-    }
-
     enum Placement: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar", bottom = "Bottom edge"
+        case current = "Keep current", top = "Top edge", belowMenuBar = "Below menu bar"
     }
 
-    enum Clock: String, CaseIterable, Codable, Sendable {
-        case current = "Keep current", twentyFourHour = "24-hour", twelveHour = "12-hour"
+    /// The region's hour cycle, or the 24- or 12-hour one earlier setups offered, which a starter's clock can still have.
+    enum Clock {
+        case current, twentyFourHour, twelveHour
     }
 
     enum Theme: Hashable, Codable, Sendable {
@@ -291,26 +288,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             }
         }
 
-        var pitch: String {
-            switch self {
-            case .everyday: "The menu bar you know, plus your music, the weather and the date."
-            case .minimal: "Only the app you're in, your battery and the time."
-            case .developer: "Workspaces, CPU and memory, local servers and your AI limits."
-            case .workday: "Your next meeting with a Join button, your mic and camera, and what's unread."
-            case .dashboard: "Your Mac at a glance: rings for CPU, memory and battery, with music and weather."
-            }
-        }
-
-        var symbol: String {
-            switch self {
-            case .everyday: "sun.max"
-            case .minimal: "minus"
-            case .developer: "chevron.left.forwardslash.chevron.right"
-            case .workday: "calendar"
-            case .dashboard: "gauge.with.dots.needle.33percent"
-            }
-        }
-
         /// The preset's bar where it sits. Below the macOS menu bar, it leaves out what the menu bar right above it
         /// shows: the Apple menu, the app's menus, the date and time, and Menu bar items. On a Mac without an internal
         /// battery, Battery would only show a plug and "AC", so the preset leaves it out.
@@ -349,16 +326,13 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         }
     }
 
-    var appearance = Appearance.current
     var placement = Placement.current
-    var clock = Clock.current
     var theme = Theme.current
     /// The preset's widgets in bar order. They add to a bar you changed, and replace an unchanged starter.
     var widgetSets: [WidgetSet] = []
     /// The source of a starter bar's Workspaces, as setup detects it; nil leaves the configuration's source.
     var workspaces: WorkspaceSource?
     var keepWindowsClear: Bool?
-    var keepNotificationsClear: Bool?
     var deferMeetings = false
     /// The Store packages picked under Found on your Mac, with the settings their review chose.
     var packages: [Package] = []
@@ -371,8 +345,8 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         let settings: [String: ConfigurationValue]
     }
 
-    /// Presets own widget sets and the Store widgets their review added. Every other choice stays, even a clock or
-    /// Meetings choice this preset doesn't use: it applies again after another change.
+    /// Presets own widget sets and the Store widgets their review added. Every other choice stays, even a Meetings
+    /// choice this preset doesn't use: it applies again after another change.
     func replacingPresetChoices(with preset: SetupPreferences) -> SetupPreferences {
         var merged = self
         merged.widgetSets = preset.widgetSets
@@ -626,14 +600,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             if let version { properties["version"] = .string(version) }
             edits.append(ConfigurationEdit(action: .theme, properties: properties))
         }
-        if appearance != .current {
-            let value: ConfigurationValue = switch appearance {
-            case .light: .string("light")
-            case .dark: .string("dark")
-            default: .null
-            }
-            edits.append(ConfigurationEdit(action: .bar, properties: ["appearance": value]))
-        }
         if placement != .current {
             var properties: [String: ConfigurationValue] = ["offset": .number(0)]
             if placement == .belowMenuBar {
@@ -641,9 +607,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             } else if configuration.bar.belowMenuBar {
                 properties["belowMenuBar"] = .bool(false)
             }
-            if placement == .bottom {
-                properties["position"] = .string("bottom")
-            } else if configuration.bar.position == .bottom {
+            if configuration.bar.position == .bottom {
                 properties["position"] = .string("top")
             }
             edits.append(ConfigurationEdit(action: .bar, properties: properties))
@@ -651,25 +615,12 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         if let keepWindowsClear {
             edits.append(ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(keepWindowsClear)]))
         }
-        if let keepNotificationsClear {
-            edits.append(ConfigurationEdit(action: .bar, properties: ["keepNotificationsClear": .bool(keepNotificationsClear)]))
-        }
         let starter = starterChange(in: configuration, document: document)
         for id in starter.removed { edits.append(ConfigurationEdit(action: .remove, id: id)) }
         for widget in starter.added { edits.append(ConfigurationEdit(action: .add, properties: widget)) }
         let target = starter.configuration
         // A starter that becomes the preset's bar can trade a widget for another with the same ID.
         let kept = target.widgets.filter { widget in !starter.removed.contains(widget.id) || starter.added.contains { Self.id($0) == widget.id } }
-        if clock != .current {
-            // A date beside the time has no hours to change.
-            for widget in kept where widget.role != .secondary {
-                if case .clock = widget.content {
-                    edits.append(ConfigurationEdit(action: .set, id: widget.id, properties: [
-                        "format": .string(widget.role == .time ? Self.timeFormat(hours: clock) : Self.clockFormat(hours: clock))
-                    ]))
-                }
-            }
-        }
         var order = kept.map(\.id)
         var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
         let presetIDs = widgetSets.flatMap(\.ids)
@@ -732,50 +683,12 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         return edits
     }
 
-    /// `set`'s widgets as setup adds them: Meetings turned off while it waits for Calendars, and the time in the chosen
-    /// hour cycle.
+    /// `set`'s widgets as setup adds them: Meetings turned off while it waits for Calendars.
     private func added(_ set: WidgetSet) -> [[String: ConfigurationValue]] {
         set.widgets.map { widget in
             var widget = widget
             if set == .meetings && deferMeetings { widget["enabled"] = .bool(false) }
-            if clock != .current && widget["role"] == .string("time") { widget["format"] = .string(Self.timeFormat(hours: clock)) }
             return widget
-        }
-    }
-}
-
-/// A setting setup saves that an active profile controls, for setup's profile notice.
-struct ProfileControlledSetting: Identifiable {
-    let title: String
-    let origin: ConfigurationOrigin
-
-    var id: String { "\(title)\n\(origin.profile ?? "")" }
-
-    /// Placement counts both the offset and `belowMenuBar`, so a profile that sets either one is named.
-    private static let placementPaths = ["bar.position", "bar.offset", "bar.belowMenuBar"]
-
-    /// The settings setup saves that active profiles control, once for each profile.
-    static func all(in configuration: Configuration?, origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        let settings = [("Appearance", ["bar.appearance"]), ("Placement", placementPaths),
-                        ("Window clearance", ["bar.keepWindowsClear"]), ("Notification clearance", ["bar.keepNotificationsClear"])]
-            + (configuration?.widgets.flatMap { widget -> [(String, [String])] in
-                var settings = [(widget.id, ["widgets.\(widget.id).enabled"])]
-                if case .clock = widget.content { settings.append(("Clock \(widget.id)", ["widgets.\(widget.id).format"])) }
-                return settings
-            } ?? [])
-        return settings.flatMap { controlled(title: $0, paths: $1, origins: origins) }
-    }
-
-    /// The active profiles that control where the bar sits, which setup names on the step that asks.
-    static func placement(origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        controlled(title: "Placement", paths: placementPaths, origins: origins)
-    }
-
-    private static func controlled(title: String, paths: [String], origins: [String: ConfigurationOrigin]) -> [ProfileControlledSetting] {
-        var profiles = Set<String>()
-        return paths.compactMap { path in
-            guard let origin = origins[path], let profile = origin.profile, profiles.insert(profile).inserted else { return nil }
-            return ProfileControlledSetting(title: title, origin: origin)
         }
     }
 }

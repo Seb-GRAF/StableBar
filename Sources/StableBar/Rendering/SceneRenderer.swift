@@ -368,8 +368,8 @@ enum SceneRenderer {
     private static let setupMenuBarHeight = 30.0
 
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
-    /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
-    /// bar hide or show.
+    /// bar above it once it has left the stage. The scene's choices are made once the tour shows, as a person makes
+    /// them, so the tour sees the menu bar hide or show.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
                                   macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
@@ -389,36 +389,28 @@ enum SceneRenderer {
         system.hasBattery = { setup.battery }
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
-        system.checkWorkspaces = { source, _ in
-            setup.workspaceCheck?.result ?? (source == .yabai ? .signalsMissing(configuration: "~/.yabairc") : .ipcOff)
-        }
-        system.yabaiSignalScript = YabaiSetupSignals.script()
         system.suggestedPackages = { _ in setup.suggested }
         system.storePackages = { _ in setup.storeWidgets }
         let session = SetupSession(store: store, system: system,
                                    applicationMove: .sample(move, inApplications: setup.inApplications))
-        defer { session.workspaceConnection.hide() }
-        session.step = setup.step.rawValue
+        session.step = setup.step
         store.appMenu.hidesAccessWarning = true
         store.barEditing.setupIsOpen = true
         let choices = SetupChoices()
         let view = ZStack(alignment: .top) {
             SetupTourView(session: session, display: display, menuBarHeight: { hides ? 0 : setupMenuBarHeight }, dock: 0,
-                          intro: false, finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
+                          close: {}, raise: {}, reveal: {}, lower: {}, editBar: {})
             SetupChrome(session: session, store: store)
         }
         .environment(\.sceneWallpaper, wallpaper)
         .task {
-            if let placement = setup.placement { await session.place(placement) }
+            if setup.step != .menuBar { await session.place(.top) }
             await session.loadStoreWidgets()
             if let preset = setup.preset { session.toggle(preset) }
             await session.loadSuggestions()
             choices.made = true
         }
-        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: {
-            choices.made && (setup.step != .touches || session.workspaceCheckSource == nil
-                            || session.workspaceConnection.result != .checking)
-        }, to: url)
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: { choices.made }, to: url)
     }
 
     /// Whether a setup scene's choices are made, which its drawing waits for.
@@ -427,8 +419,8 @@ enum SceneRenderer {
     }
 
     /// The bar above setup's tour where its configuration puts it, since setup's choices show in the tour, not on the
-    /// bar, and the macOS menu bar over the top of the screen while it shows. The tour points at the bar from the same
-    /// configuration and the same menu bar, so the two agree.
+    /// bar, and the macOS menu bar over the top of the screen while it shows. On the stage the tour covers the bar and
+    /// draws its own copy. The tour places the bar from the same configuration and the same menu bar, so the two agree.
     private struct SetupChrome: View {
         let session: SetupSession
         let store: BarStore
@@ -437,7 +429,9 @@ enum SceneRenderer {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
             let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                if let settings, settings.position == .bottom {
+                if session.step == .menuBar {
+                    Color.clear
+                } else if let settings, settings.position == .bottom {
                     bar(store).padding(.bottom, settings.offset)
                 } else {
                     bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)

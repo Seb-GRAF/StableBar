@@ -24,12 +24,7 @@
   },
   "draw": "setup",
   "setup": {
-    "step": "permissions",
-    "placement": "top",
     "accessibility": false
   },
-  "appearances": [
-    "dark"
-  ],
   "macOSMajorVersion": 27
 }

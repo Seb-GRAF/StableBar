@@ -129,7 +129,7 @@ struct ApplicationMoveControls: View {
                 }
             } else {
                 if setup {
-                    moveButton.buttonStyle(SetupButtonStyle(prominent: false))
+                    moveButton.buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
                         .fixedSize(horizontal: true, vertical: false)
                     if controller.offer != nil { Button("Cancel", action: controller.cancel).buttonStyle(.plain) }
                 } else {
@@ -140,7 +140,7 @@ struct ApplicationMoveControls: View {
                 }
                 if controller.error != nil {
                     if setup {
-                        finderButton.buttonStyle(SetupButtonStyle(prominent: false))
+                        finderButton.buttonStyle(GlassButtonStyle(selected: false, highlighted: true, size: .compact))
                     } else {
                         finderButton
                     }

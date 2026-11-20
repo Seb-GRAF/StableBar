@@ -641,6 +641,8 @@ final class WidgetSetupTests: XCTestCase {
 
     await session.loadStoreWidgets()
     session.toggle(.everyday)
+    // Finishing touches lists them with Add, which reviews them.
+    #expect(session.storeWidgetsToAdd.map(\.entry.id) == ["now-playing", "weather"])
     await session.reviewStoreWidgets()
     let review = try #require(session.review)
     #expect(review.inspection.manifest.id == "now-playing")
@@ -650,6 +652,7 @@ final class WidgetSetupTests: XCTestCase {
     #expect(session.review?.inspection.manifest.id == "weather")
     await session.endReview()
     #expect(session.review?.inspection.manifest.id == nil)
+    #expect(session.storeWidgetsToAdd.isEmpty)
     #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "now-playing", "sound", "battery", "date", "clock", "menu-bar-items"])
     #expect(store.configuration?.widgets.first { $0.id == "now-playing" }?.position == .center)
     session.finish()
@@ -680,6 +683,7 @@ final class WidgetSetupTests: XCTestCase {
 
     await session.loadStoreWidgets()
     session.toggle(.everyday)
+    #expect(session.storeWidgetsToAdd.isEmpty)
     await session.reviewStoreWidgets()
     #expect(session.review == nil)
 }

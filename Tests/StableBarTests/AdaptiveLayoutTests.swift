@@ -169,6 +169,19 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(managerConfiguration(.aerospace, home: home, xdg: nil) == home.appending(path: ".aerospace.toml"))
 }
 
+@Test func managerConfigurationFollowsYabaisOwnPrecedence() throws {
+    let home = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: home) }
+    let xdg = home.appending(path: "xdg")
+    #expect(managerConfiguration(.yabai, home: home, xdg: xdg.path) == nil)
+    for path in [".yabairc", ".config/yabai/yabairc", "xdg/yabai/yabairc"] {
+        try FileManager.default.createDirectory(at: home.appending(path: path).deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: home.appending(path: path))
+        #expect(managerConfiguration(.yabai, home: home, xdg: xdg.path) == home.appending(path: path))
+    }
+    #expect(managerConfiguration(.yabai, home: home, xdg: "") == home.appending(path: ".config/yabai/yabairc"))
+}
+
 @Test func notificationClearanceMovesBannerWindowsBelowTheBarOnce() {
     let display = WindowClearanceDisplay(frame: CGRect(x: 0, y: 0, width: 1800, height: 1169),
         visibleFrame: CGRect(x: 0, y: 0, width: 1800, height: 1131),

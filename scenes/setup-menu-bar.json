@@ -1,13 +1,6 @@
 {
   "$schema": "../scene.schema.json",
-  "configuration": {
-    "includes": [
-      "../Resources/config.json"
-    ],
-    "bar": {
-      "keepNotificationsClear": true
-    }
-  },
+  "configuration": "../Resources/config.json",
   "outputs": {
     "audio": {
       "text": "45%",
@@ -31,12 +24,6 @@
   },
   "draw": "setup",
   "setup": {
-    "step": "touches",
-    "placement": "top",
-    "menuBarHides": true
-  },
-  "appearances": [
-    "dark"
-  ],
-  "macOSMajorVersion": 15
+    "accessibility": false
+  }
 }
