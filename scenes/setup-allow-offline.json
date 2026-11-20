@@ -94,7 +94,7 @@
   "activeApp": "com.apple.Safari",
   "draw": "setup",
   "setup": {
-    "step": "tune",
+    "step": "allow",
     "preset": "everyday",
     "menuBarHides": true
   }

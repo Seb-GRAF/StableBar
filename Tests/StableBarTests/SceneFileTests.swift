@@ -188,16 +188,16 @@ func sceneNamesWhatItDraws(json: String, key: String) throws {
     {
       "configuration": { "widgets": [] },
       "draw": "setup",
-      "setup": { "step": "tune", "preset": "developer", "menuBarHides": true,
+      "setup": { "step": "allow", "preset": "developer", "menuBarHides": true,
                  "accessibility": false, "automation": false, "calendars": false, "battery": false }
     }
     """#)
     #expect(decoded.draw == .setup)
-    #expect(decoded.setup == SceneFile.Setup(step: .tune, preset: .developer, menuBarHides: true,
+    #expect(decoded.setup == SceneFile.Setup(step: .allow, preset: .developer, menuBarHides: true,
                                              accessibility: false, automation: false, calendars: false, battery: false))
     let plain = try scene(#"{"configuration": {"widgets": []}, "draw": "setup", "setup": {}}"#)
     #expect(plain.setup == SceneFile.Setup())
-    #expect(SceneFile.Setup() == SceneFile.Setup(step: .menuBar, preset: nil, menuBarHides: false,
+    #expect(SceneFile.Setup() == SceneFile.Setup(step: .intro, preset: nil, menuBarHides: false,
                                                  accessibility: true, automation: true, calendars: true, battery: true, storeWidgets: nil))
     #expect(try scene(#"{"configuration": {"widgets": []}, "draw": "setup"}"#).setup == nil)
 }
@@ -223,10 +223,10 @@ func sceneDecodesApplicationMoveRows(state: SceneFile.ApplicationMove) throws {
 
 @Test(arguments: [
     #""draw": "setup", "setup": {"stage": "look"}"#,
-    #""draw": "setup", "setup": {"step": "intro"}"#,
+    #""draw": "setup", "setup": {"step": "tune"}"#,
     #""draw": "setup", "setup": {"step": "tryIt"}"#,
     #""draw": "setup", "setup": {"preset": "gaming"}"#,
-    #""draw": "bar", "setup": {"step": "look"}"#,
+    #""draw": "bar", "setup": {"step": "choose"}"#,
 ])
 func sceneRejectsASetupItCannotDraw(json: String) {
     #expect(throws: (any Error).self) { try scene(#"{"configuration": {"widgets": []}, \#(json)}"#) }

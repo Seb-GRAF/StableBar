@@ -612,9 +612,9 @@ final class WidgetSetupTests: XCTestCase {
     ]))
 }
 
-/// A preset's Store widgets open the same review as Found on your Mac, one at a time. Add puts a widget where the
-/// preset has it on its bar; Back leaves the widget out, and the preset keeps its built-in widgets.
-@Test @MainActor func setupReviewsAPresetsStoreWidgetsOneAtATime() async throws {
+/// Each of a preset's Store widgets opens the same review as Found on your Mac from its own Add. Add puts the widget
+/// where the preset has it on its bar; Back leaves it out, still to add, and the preset keeps its built-in widgets.
+@Test @MainActor func setupReviewsEachOfAPresetsStoreWidgets() async throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
     let index = LocalPackageIndex(fixture: fixture)
@@ -641,18 +641,20 @@ final class WidgetSetupTests: XCTestCase {
 
     await session.loadStoreWidgets()
     session.toggle(.everyday)
-    // Finishing touches lists them with Add, which reviews them.
+    // Allow lists them, each with Add, which reviews it.
     #expect(session.storeWidgetsToAdd.map(\.entry.id) == ["now-playing", "weather"])
-    await session.reviewStoreWidgets()
+    await session.review(session.storeWidgetsToAdd[0])
     let review = try #require(session.review)
     #expect(review.inspection.manifest.id == "now-playing")
     // The review installs the package before it hands it to setup.
     session.add(try fixture.packages.install(review.inspection.directory), settings: [:])
-    await session.endReview()
+    session.endReview()
+    #expect(session.storeWidgetsToAdd.map(\.entry.id) == ["weather"])
+    await session.review(session.storeWidgetsToAdd[0])
     #expect(session.review?.inspection.manifest.id == "weather")
-    await session.endReview()
-    #expect(session.review?.inspection.manifest.id == nil)
-    #expect(session.storeWidgetsToAdd.isEmpty)
+    session.endReview()
+    #expect(session.review == nil)
+    #expect(session.storeWidgetsToAdd.map(\.entry.id) == ["weather"])
     #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "now-playing", "sound", "battery", "date", "clock", "menu-bar-items"])
     #expect(store.configuration?.widgets.first { $0.id == "now-playing" }?.position == .center)
     session.finish()
@@ -684,8 +686,6 @@ final class WidgetSetupTests: XCTestCase {
     await session.loadStoreWidgets()
     session.toggle(.everyday)
     #expect(session.storeWidgetsToAdd.isEmpty)
-    await session.reviewStoreWidgets()
-    #expect(session.review == nil)
 }
 
 /// Without the Store, a preset adds only its built-in widgets and names the Store widgets it leaves out. A Store widget

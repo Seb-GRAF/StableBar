@@ -288,6 +288,27 @@ struct SetupPreferences: Equatable, Codable, Sendable {
             }
         }
 
+        /// What the preset is for, in a line its card fits.
+        var summary: String {
+            switch self {
+            case .everyday: "Music, weather and the date."
+            case .minimal: "The app, battery and time."
+            case .developer: "Code, servers and AI limits."
+            case .workday: "Meetings, mic and camera."
+            case .dashboard: "Your Mac at a glance."
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .everyday: "sun.max"
+            case .minimal: "minus"
+            case .developer: "chevron.left.forwardslash.chevron.right"
+            case .workday: "calendar"
+            case .dashboard: "gauge.with.dots.needle.67percent"
+            }
+        }
+
         /// The preset's bar where it sits. Below the macOS menu bar, it leaves out what the menu bar right above it
         /// shows: the Apple menu, the app's menus, the date and time, and Menu bar items. On a Mac without an internal
         /// battery, Battery would only show a plug and "AC", so the preset leaves it out.

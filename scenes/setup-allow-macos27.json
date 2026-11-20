@@ -24,6 +24,7 @@
   },
   "draw": "setup",
   "setup": {
+    "step": "allow",
     "accessibility": false
   },
   "macOSMajorVersion": 27

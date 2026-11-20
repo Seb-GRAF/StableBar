@@ -1109,7 +1109,7 @@ func applicationMoveFilesystemErrorsHideStagingAndExplainRecovery(code: Int32) a
     #expect(!fixture.exists(fixture.destination))
     #expect(fixture.exists(fixture.source))
     #expect(store.configurationStore.sessionEdits.first?.properties == edit.properties)
-    #expect(ApplicationMoveController.setupHint.contains("Finishing touches"))
+    #expect(ApplicationMoveController.setupHint.contains("last step of setup"))
     store.barEditing.setupIsOpen = false
     let resume = try #require(move.resumeFromSettings(store: store))
     #expect(resume.kind == .settings)

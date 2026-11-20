@@ -120,9 +120,9 @@ struct SceneFile: Decodable {
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
     /// doesn't depend on the Mac that draws it.
     struct Setup: Equatable {
-        /// After the first step, Allow has made the bar the menu bar: below it when `automation` is false.
-        var step = SetupSession.Step.menuBar
-        /// The preset picked on the widgets step.
+        /// From Allow on, Automation's Allow has made the bar the menu bar: below it when `automation` is false.
+        var step = SetupSession.Step.intro
+        /// The preset picked on Make it yours.
         var preset: SetupPreferences.Preset?
         /// Whether macOS hides its menu bar automatically.
         var menuBarHides = false
@@ -134,7 +134,7 @@ struct SceneFile: Decodable {
         var battery = true
         /// Whether StableBar runs from an Applications folder, which Open at login needs.
         var inApplications = true
-        /// Store entries Tune shows under Found on your Mac, as if the Mac had their tools.
+        /// Store entries Make it yours shows under Found on your Mac, as if the Mac had their tools.
         var suggested: [PackageIndex.Entry] = []
         /// The Store's widgets presets can add, as if the Store listed them; without them, the Store can't be reached.
         var storeWidgets: [PackageIndex.Entry]?
@@ -360,7 +360,7 @@ extension SceneFile.Setup: Decodable {
             }
             return value
         }
-        step = try named(.step, among: SetupSession.Step.allCases) ?? .menuBar
+        step = try named(.step, among: SetupSession.Step.allCases) ?? .intro
         preset = try named(.preset, among: SetupPreferences.Preset.allCases)
         menuBarHides = try values.decodeIfPresent(Bool.self, forKey: .menuBarHides) ?? false
         accessibility = try values.decodeIfPresent(Bool.self, forKey: .accessibility) ?? true

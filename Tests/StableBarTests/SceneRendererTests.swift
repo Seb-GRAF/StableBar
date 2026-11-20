@@ -115,7 +115,7 @@ private func scene(_ json: String) throws -> SceneFile {
         { "workspace": "1", "workspace-is-focused": true, "workspace-is-visible": true, "monitor-appkit-nsscreen-screens-id": 1 },
         { "workspace": "2", "workspace-is-focused": false, "workspace-is-visible": false, "monitor-appkit-nsscreen-screens-id": 1 }
       ],
-      "desktopShortcuts": [1], "draw": "setup", "setup": { "step": "tune" }
+      "desktopShortcuts": [1], "draw": "setup", "setup": { "step": "allow" }
     }
     """#, in: directory)
     defer { store.stop() }
@@ -260,7 +260,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     defer { try? FileManager.default.removeItem(at: directory) }
     let json = #"""
     {"configuration": "config.json", "draw": "setup",
-     "setup": {"step": "menuBar", "preset": "developer"}, "width": 1200, "height": 1000}
+     "setup": {"step": "intro", "preset": "developer"}, "width": 1200, "height": 1000}
     """#
     var images: [NSBitmapImageRep] = []
     for (name, settle) in [("early", Duration.seconds(1)), ("late", .milliseconds(2200))] {

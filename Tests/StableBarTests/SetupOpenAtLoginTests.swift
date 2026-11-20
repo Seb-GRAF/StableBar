@@ -42,7 +42,7 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     session.preferences.theme = .package(id: "slate", version: nil)
     session.openAtLogin = opensAtLogin
     let choices = session.preferences
-    session.step = .look
+    session.step = .choose
 
     session.toggle(preset)
     let presetChoices = preset.preferences(workspaces: session.workspaceSource, placement: .top, hasBattery: true)
@@ -57,7 +57,7 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     #expect(session.placementChoice == .top)
     #expect(session.readyToLand)
     #expect(session.menuBarHides)
-    #expect(session.step == .look)
+    #expect(session.step == .choose)
     #expect(logins().isEmpty)
 
     session.toggle(preset)
@@ -70,7 +70,7 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     #expect(session.placementChoice == .top)
     #expect(session.readyToLand)
     #expect(session.menuBarHides)
-    #expect(session.step == .look)
+    #expect(session.step == .choose)
 
     session.finish()
     #expect(session.finished)

@@ -22,8 +22,5 @@
       }
     }
   },
-  "draw": "setup",
-  "setup": {
-    "accessibility": false
-  }
+  "draw": "setup"
 }

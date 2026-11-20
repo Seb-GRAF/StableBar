@@ -10,8 +10,8 @@ final class SetupWindow {
     private var tour: SetupTourPanel?
     private var editBar: (() -> Void)?
 
-    /// The intro dims the whole screen, the macOS menu bar included. On the stage the tour covers the bar, which waits
-    /// at the top for its copy to fly there; afterwards the bar shows over the tour.
+    /// The intro covers the whole screen, the macOS menu bar included. Then the tour covers the bar, which waits at the
+    /// top for its copy on the stage to fly there; afterwards the bar shows over the tour.
     private static let introLevel = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
     private static let stageLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
     private static let tourLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
@@ -60,7 +60,7 @@ final class SetupWindow {
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.level = session!.step == .menuBar ? Self.introLevel : Self.tourLevel
+        panel.level = session!.step == .intro ? Self.introLevel : Self.tourLevel
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
         let display = BarDisplay(screen: screen)
         // The screen as it is now, found by its display number rather than its place among the screens, which can
@@ -69,6 +69,7 @@ final class SetupWindow {
         let number = screen.deviceDescription[key] as? NSNumber
         let menuBarHeight = { (NSScreen.screens.first { $0.deviceDescription[key] as? NSNumber == number } ?? screen).menuBarHeight }
         let host = NSHostingView(rootView: SetupTourView(session: session!, display: display, menuBarHeight: menuBarHeight, dock: dock,
+                                                         backdrop: SetupBackdrop(), wallpaper: NSWorkspace.shared.readableDesktopImageURL(for: screen),
                                                          close: { [weak self] in self?.closeTour() },
                                                          raise: { [weak panel] in panel?.level = Self.stageLevel },
                                                          reveal: { [weak panel] in panel?.level = Self.tourLevel },
@@ -195,7 +196,7 @@ final class SetupSession {
     let hasBattery: Bool
     let currentThemeKey: String
     let applicationMove: ApplicationMoveController
-    var step = Step.menuBar
+    var step = Step.intro
     private(set) var finished = false
     var preset: SetupPreferences.Preset?
     var preferences = SetupPreferences() { didSet { preview() } }
@@ -211,8 +212,8 @@ final class SetupSession {
     private(set) var storeEntries: [PackageIndex.Entry]?
     /// The Store couldn't be reached, so presets add only their built-in widgets.
     private(set) var storeUnreachable = false
-    /// The chosen preset's Store widgets still to review, the one on screen first, with the settings it starts from.
-    private var storeReviews: [(entry: PackageIndex.Entry, settings: [String: String])] = []
+    /// The ID of the chosen preset's Store widget under review; nil for a suggestion from Found on your Mac.
+    private var reviewedStoreWidget: String?
     /// The person's Open at login choice; nil until they make one.
     var openAtLogin: Bool?
     var loginStatus: SMAppService.Status
@@ -358,8 +359,8 @@ final class SetupSession {
         if let entries = await system.storePackages(store.packageStoreClient) { storeEntries = entries } else { storeUnreachable = true }
     }
 
-    /// The chosen preset's Store widgets that Add reviews, with the settings each starts from. One whose ID a widget on
-    /// the bar already has, from the Store or not, or picked under Found on your Mac, needs no review.
+    /// The chosen preset's Store widgets that Add still reviews, with the settings each starts from. One whose ID a widget
+    /// on the bar already has, from the Store or not, or picked under Found on your Mac, needs no review.
     var storeWidgetsToAdd: [(entry: PackageIndex.Entry, settings: [String: String])] {
         preferences.widgetSets.compactMap { set in
             guard case let .store(id, _, _, settings) = set, store.configuration?.widgets.contains(where: { $0.id == id }) != true,
@@ -369,39 +370,26 @@ final class SetupSession {
         }
     }
 
-    /// Reviews the chosen preset's Store widgets one at a time, as Found on your Mac does.
-    func reviewStoreWidgets() async {
-        storeReviews = storeWidgetsToAdd
-        await reviewNextStoreWidget()
-    }
-
-    private func reviewNextStoreWidget() async {
-        guard let (entry, settings) = storeReviews.first else { return }
-        downloading = entry.key
+    /// Shows the review of one of the chosen preset's Store widgets, as Found on your Mac does.
+    func review(_ widget: (entry: PackageIndex.Entry, settings: [String: String])) async {
+        downloading = widget.entry.key
         defer { downloading = nil }
         do {
-            let inspection = try await store.packageStoreClient.packageForAdding(entry)
+            let inspection = try await store.packageStoreClient.packageForAdding(widget.entry)
             // Settings saved for the package earlier win over the preset's.
             let saved = try WidgetSetup(store: store).savedSettings(for: inspection.manifest)
-            review = (inspection, entry.sourceID, settings.mapValues(ConfigurationValue.string).merging(saved) { $1 })
+            reviewedStoreWidget = widget.entry.id
+            review = (inspection, widget.entry.sourceID, widget.settings.mapValues(ConfigurationValue.string).merging(saved) { $1 })
             error = nil
         } catch {
-            // Leaving the preset previews the bar again, which clears the error.
-            await endReview()
             self.error = errorMessage(error)
         }
     }
 
-    /// Closes the review, once Add has added its package or with Back. A preset's Store widget that wasn't added leaves
-    /// the preset, whose built-in widgets stay, and its next Store widget comes up.
-    func endReview() async {
+    /// Closes the review, once Add has added its package or with Back, which leaves the widget off the bar.
+    func endReview() {
         review = nil
-        guard let entry = storeReviews.first?.entry else { return }
-        storeReviews.removeFirst()
-        if !preferences.storeWidgets.contains(where: { $0.id == entry.id }) {
-            preferences.widgetSets.removeAll { if case let .store(id, _, _, _) = $0 { id == entry.id } else { false } }
-        }
-        await reviewNextStoreWidget()
+        reviewedStoreWidget = nil
     }
 
     func loadSuggestions() async {
@@ -430,7 +418,7 @@ final class SetupSession {
     /// Done saves it.
     func add(_ inspection: WidgetPackageInspection, settings: [String: ConfigurationValue]) {
         let package = SetupPreferences.Package(id: inspection.manifest.id, version: inspection.manifest.version, settings: settings)
-        if storeReviews.first?.entry.id == package.id { preferences.storeWidgets.append(package) } else { preferences.packages.append(package) }
+        if reviewedStoreWidget == package.id { preferences.storeWidgets.append(package) } else { preferences.packages.append(package) }
     }
 
     /// Whether the bar setup builds shows macOS Spaces in Workspaces, whose desktops switch through the Switch to
@@ -452,9 +440,12 @@ final class SetupSession {
         store.registry.permissions(for: store.configuration).contains(.calendars) || needsCalendarSetup && !preferences.deferMeetings
     }
 
-    /// Setup's steps in order: the bar takes the menu bar's place, then gets its widgets and its look, then what's left,
-    /// and the end.
-    enum Step: Int, CaseIterable { case menuBar, widgets, look, tune, done }
+    /// Setup's steps in order: the intro, the bar's widgets and look, what macOS must allow, and the end, where the bar
+    /// takes its place.
+    enum Step: Int, CaseIterable { case intro, choose, allow, done }
+
+    /// How the bar's move to the menu bar's place stands, which Automation's row shows.
+    var placementPhase: SetupPlacement.Phase { placing.phase }
 
     /// Whether the bar can leave the stage for its place: macOS answered for Automation, or the menu bar didn't need to
     /// change, and Accessibility is allowed.

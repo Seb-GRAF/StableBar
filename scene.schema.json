@@ -158,11 +158,11 @@
       "additionalProperties": false,
       "properties": {
         "step": {
-          "description": "The step of the tour: the bar on the stage asking to become the menu bar, What's your bar for?, Pick a look, Finishing touches, or You're all set. After the first, Allow has made the bar the menu bar, or put it below the menu bar when automation is false. menuBar by default.",
-          "enum": ["menuBar", "widgets", "look", "tune", "done"]
+          "description": "The step of the tour: the intro once it has settled, Make it yours, Allow what your bar needs, or You're all set. From allow on, Automation's Allow has made the bar the menu bar, or put it below the menu bar when automation is false. intro by default.",
+          "enum": ["intro", "choose", "allow", "done"]
         },
         "preset": {
-          "description": "The preset picked on the widgets step.",
+          "description": "The preset picked on Make it yours.",
           "enum": ["everyday", "minimal", "developer", "workday", "dashboard"]
         },
         "menuBarHides": {
@@ -190,7 +190,7 @@
           "type": "boolean"
         },
         "suggested": {
-          "description": "Store index entries Finishing touches shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
+          "description": "Store index entries Make it yours shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
           "type": "array",
           "items": {
             "type": "object",

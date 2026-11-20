@@ -185,7 +185,7 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     let (session, fixture, store, _) = try setupSession { _ in .allowed }
     defer { store.stop(); fixture.close() }
     #expect(!session.hasChanges)
-    session.step = .tune
+    session.step = .allow
     #expect(!session.hasChanges)
     session.preferences.theme = .package(id: "glass", version: nil)
     #expect(session.hasChanges)
@@ -287,7 +287,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(saved["workspaceSource"] == .string(expected.rawValue))
 }
 
-/// Finishing touches checks the Switch to Desktop shortcuts whenever the bar setup builds shows macOS Spaces in
+/// Allow checks the Switch to Desktop shortcuts whenever the bar setup builds shows macOS Spaces in
 /// Workspaces, including the starter below the menu bar, which has Workspaces without any preset.
 @MainActor
 @Test func setupExplainsTheDesktopShortcutsForEveryBarWithSpaces() async throws {
@@ -307,7 +307,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     #expect(plain.showsSpacesGuidance)
 }
 
-/// Allow on the stage hides the macOS menu bar live, with the starter for the menu bar's place, and the bar flies
+/// Automation's Allow hides the macOS menu bar live, with the starter for the menu bar's place, and the bar can fly
 /// there once macOS has answered.
 @MainActor
 @Test func setupsStageReplacesTheMenuBarLive() async throws {
@@ -316,7 +316,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
     let (session, fixture, store, changes) = try setupSession(configuration: json) { _ in .allowed }
     defer { store.stop(); fixture.close() }
-    #expect(session.step == .menuBar)
+    #expect(session.step == .intro)
     #expect(!session.readyToLand)
     #expect(changes().isEmpty)
     await session.place(.top)

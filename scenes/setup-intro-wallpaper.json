@@ -23,8 +23,5 @@
     }
   },
   "draw": "setup",
-  "setup": {
-    "accessibility": false
-  },
   "wallpaper": "../Resources/SetupDay.heic"
 }

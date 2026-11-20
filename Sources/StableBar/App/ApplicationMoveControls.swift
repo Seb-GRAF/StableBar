@@ -48,7 +48,7 @@ final class ApplicationMoveController {
             barConfiguration: store.configurationStore.configurationURL, edits: store.configurationStore.sessionEdits.map(ApplicationMoveResume.Edit.init))
     }
 
-    static let setupHint = "Use Finishing touches in setup to move StableBar to Applications."
+    static let setupHint = "Use the last step of setup to move StableBar to Applications."
 
     func cancel() { offer = nil; error = nil }
 
