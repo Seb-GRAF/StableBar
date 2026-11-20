@@ -11,6 +11,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 - **An issue for every `fix`, `feat` or `perf`** (2026-10-31, [#390]). The issue holds the problem and the decision; the `Linked issue` check enforces it. Other types can skip it.
 - **Updates carry an EdDSA signature as well as the Developer ID** (2026-11-10, [#335]). Sparkle checks both, so the signing team or the key can change in a release while the other still matches. This replaces [#100]'s choice of the Developer ID alone. The feed isn't published without the `SPARKLE_ED_PRIVATE_KEY` secret, and [CONTRIBUTING](CONTRIBUTING.md#commits-and-releases) says how to back up and change the key.
 - **Release secrets live in the `release` environment** (2026-11-19). Only `main` can use it, so a workflow pushed on another branch can't read the signing, notarization and update keys. Anyone with write access can push such a branch, and a repository secret reaches it. The variables stay repository-wide.
+- **The old `Seb-GRAF` repository names stay free** (2026-11-20, [#854]). StableBar, `stablebar-packages` and `homebrew-tap` moved to `stablebox`, and installed copies still reach them through GitHub's redirects from `Seb-GRAF`: the update feed, the release list, the Store index, the schema link that tells older builds which release wrote a file, and existing Homebrew taps. Creating a repository or fork with one of those names under `Seb-GRAF` deletes its redirect for good, so never do it.
 
 ## Reviews and checks
 
@@ -135,3 +136,4 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
 [#773]: https://github.com/stablebox/StableBar/pull/773
 [#807]: https://github.com/stablebox/StableBar/issues/807
 [#853]: https://github.com/stablebox/StableBar/issues/853
+[#854]: https://github.com/stablebox/StableBar/issues/854
