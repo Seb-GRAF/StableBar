@@ -1,0 +1,18 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "widgets": [
+      { "id": "apple", "type": "appleMenu", "position": "left" },
+      {
+        "id": "items", "type": "menuBarItems", "position": "right",
+        "shown": ["symbol", { "app": "com.apple.controlcenter", "item": "com.apple.menuextra.wifi", "icon": "wifi" }],
+        "style": { "spacing": 6 }
+      },
+      { "id": "clock", "type": "clock", "position": "right" }
+    ]
+  },
+  "draw": "settings",
+  "widget": "items",
+  "tab": "style",
+  "height": 1320
+}

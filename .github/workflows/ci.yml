@@ -284,7 +284,8 @@ jobs:
 
   # Draw screens takes the base's side from main's run of the base. When that run is still going,
   # this waits for its screens on Linux, so a Mac doesn't draw the base all over again. It gives up
-  # once the run ends without them, and after 40 minutes.
+  # once the run ends without them, and after 40 minutes. A release commit skips CI and changes
+  # nothing the screens draw, so its parent's run stands in for it.
   main-screens-wait:
     name: Wait for main's screens
     needs: current
@@ -297,13 +298,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: false
       - name: Wait for main's screens of the base
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           base=$(git rev-parse HEAD^)
+          if [[ "$(git log -1 --format=%s "$base")" == "chore(release): "* ]]; then
+            base=$(git rev-parse "$base^")
+          fi
           for _ in {1..80}; do
             read -r run status <<< "$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
               --jq '.workflow_runs[0] // empty | "\(.id) \(.status)"')"
@@ -429,7 +433,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -458,7 +462,8 @@ jobs:
       # main's images of the scene files the pull request changes go, and the base draws those it
       # adds or edits. Without main's screens of the base, the base draws everything. The screens
       # and the base's release build come only from CI's run of the push to main: a pull request's
-      # run can upload artifacts of the same names.
+      # run can upload artifacts of the same names. A release commit has no such run, so they come
+      # from its parent's, as Wait for main's screens explains.
       - name: Download main's screens of the base
         id: main
         env:
@@ -466,6 +471,9 @@ jobs:
           APP: ${{ needs.current.outputs.app }}
         run: |
           base=$(git rev-parse HEAD)
+          if [[ "$(git log -1 --format=%s)" == "chore(release): "* ]]; then
+            base=$(git rev-parse HEAD^)
+          fi
           run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=push&branch=main&head_sha=$base" \
             --jq '.workflow_runs[0].id // empty')
           draw=true

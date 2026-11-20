@@ -8,7 +8,7 @@ let widgetLookKeys: Set<String> = ["style", "background", "popupBackground", "to
 /// The style properties a widget's Style tab shows.
 let widgetStyleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "fontName", "fontWeight", "fontSize",
                        "paddingHorizontal", "paddingVertical", "paddingLeading", "paddingTrailing", "paddingTop", "paddingBottom",
-                       "cornerRadius", "borderWidth", "borderColor"]
+                       "cornerRadius", "borderWidth", "borderColor", "spacing"]
 
 extension ProfileConditions {
     /// The theme a profile holds edits for: its only condition is the theme.

@@ -224,6 +224,8 @@ The grid symbol moves the same way: drag it to either end of **On the bar** or b
 
 On the bar itself, right-click an icon in the row for **Show on Bar** or **Hide**, and right-click the grid symbol for the same commands as in Settings, followed by **Edit Widget…** and the bar's menu.
 
+Icons on the bar sit 14 points apart. To fit more of them, such as beside the notch, set **Space between icons** in the widget's **Style** inspector, or the widget's own `style.spacing`, for example `"style": { "spacing": 6 }`. A `spacing` in `defaults` doesn't change it.
+
 An item on the bar shows its app's icon. To see what the item itself shows, such as MeetingBar's next meeting, select it in **Content** and choose **As in the menu bar** under **Show**. The bar then draws a copy of the item as macOS draws it, updated every two seconds; an item drawn in one color takes your bar's text color. This needs macOS 27 or later and Screen Recording access, which StableBar asks for when you choose it. Until then, and while macOS folds the item behind **«** in its menu bar, the item shows its icon.
 
 Items on the bar open as they do in the row: a click opens the item's menu or panel, and while one of their menus is open, moving the pointer to another item switches to its menu. A right-click opens an item too, as a click does. Rest the pointer on an item to see its name. An item disappears from the bar while its app isn't running, and comes back when the app launches. The grid symbol lists the items that are neither on the bar nor hidden.

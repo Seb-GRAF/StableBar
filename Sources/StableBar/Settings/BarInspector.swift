@@ -375,6 +375,12 @@ struct BarInspector: View {
             style.number("Corner radius", "cornerRadius", default: 14, in: 0...40, slider: true)
             style.number("Border width", "borderWidth", default: 0, in: 0...6, step: 0.5)
         }
+        if widget.drawsMenuBarItems {
+            SettingsGroup("Menu bar items") {
+                StyleFields(store: store, path: style.path, widgetID: widget.id, values: style.values, set: style.set, unset: style.unset)
+                    .number("Space between icons", "spacing", default: 14, in: 0...30, slider: true)
+            }
+        }
         if widget.content == .workspaces {
             SettingsGroup("Workspaces") {
                 WorkspacePresentationFields(store: store, path: "widgets.\(widget.id).workspace", defaultsPath: "workspaceDefaults", widgetID: widget.id,
