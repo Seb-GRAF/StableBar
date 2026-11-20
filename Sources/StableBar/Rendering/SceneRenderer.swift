@@ -170,13 +170,19 @@ enum SceneRenderer {
             }
             do {
                 let scene = try SceneFile.read(file)
+                let wallpaper = try scene.wallpaper.map { path in
+                    guard let image = NSImage(contentsOf: URL(filePath: path, relativeTo: file.deletingLastPathComponent()).standardizedFileURL) else {
+                        throw CommandFailure(message: "wallpaper: Couldn't read the image \(path).")
+                    }
+                    return image
+                }
                 var images: [ConfigurationValue] = []
                 for appearance in scene.appearances {
                     let store = try store(for: scene, at: file, in: work.appending(path: "\(name)-\(appearance.rawValue)"),
                                           themes: bundledThemesDirectory, appearance: appearance)
                     defer { store.stop() }
                     let image = "\(name)-\(appearance.rawValue).png"
-                    try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image), settle: settle)
+                    try await draw(scene, store: store, appearance: appearance, wallpaper: wallpaper, to: output.appending(path: image), settle: settle)
                     images.append(.string(image))
                 }
                 entries[name] = .object(["images": .array(images)])
@@ -213,7 +219,7 @@ enum SceneRenderer {
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
     /// Draws what `scene` asks for, from `store`, in one appearance, to the PNG file `url`.
-    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, to url: URL,
+    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, wallpaper: NSImage? = nil, to url: URL,
                      settle: Duration = settle) async throws {
         guard let configuration = store.configuration else { throw CommandFailure(message: "The scene has no configuration.") }
         let dark = appearance == .dark
@@ -227,7 +233,14 @@ enum SceneRenderer {
             } else {
                 AnyView(bar(store))
             }
-            try await OffscreenSnapshot.write(drawn(view.background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
+            let content = view.background {
+                if let wallpaper {
+                    Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
+                } else {
+                    OffscreenSnapshot.backdrop(dark: dark)
+                }
+            }
+            try await OffscreenSnapshot.write(drawn(content, with: scene.accessibilityDisplay),
                                               size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
         case .editBar:
             store.barEditing.begin()
@@ -249,12 +262,12 @@ enum SceneRenderer {
                 navigation.view = view
             }
             try await drawPopup(popup, of: widget, store: store, navigation: navigation, height: CGFloat(scene.height ?? 600), dark: dark,
-                                accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
+                                accessibilityDisplay: scene.accessibilityDisplay, wallpaper: wallpaper, settle: settle, to: url)
         case .update:
             store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
-                                dark: dark, accessibilityDisplay: [], settle: settle, to: url)
+                                dark: dark, accessibilityDisplay: [], wallpaper: nil, settle: settle, to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -473,7 +486,7 @@ enum SceneRenderer {
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
     private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore,
                                   navigation: PopupNavigation = PopupNavigation(), height: CGFloat, dark: Bool,
-                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
+                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], wallpaper: NSImage?, settle: Duration, to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
@@ -484,7 +497,13 @@ enum SceneRenderer {
             .shadow(color: .black.opacity(0.28), radius: 18, y: 8)
             .padding(24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background { OffscreenSnapshot.backdrop(dark: dark) }
+            .background {
+                if let wallpaper {
+                    Color.clear.overlay(alignment: .top) { Image(nsImage: wallpaper).resizable().scaledToFill() }
+                } else {
+                    OffscreenSnapshot.backdrop(dark: dark)
+                }
+            }
         try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
                                           dark: dark, settle: settle, to: url)
     }

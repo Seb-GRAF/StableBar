@@ -105,13 +105,15 @@ struct SceneFile: Decodable {
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
+    /// An image, relative to the scene file, drawn behind the bar or popup in place of the setup tour's wallpaper.
+    var wallpaper: String?
     var width: Double?
     var height: Double?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case configuration, packages, packageOrigins, outputs, history, workspaces, windows, yabaiSpaces, yabaiWindows, yabaiApps, focusedWindow, dockBadges, desktopShortcuts, activeApp, menu, mixer, draw, widget, group, view, section, tab, package, uninstall,
              themeLink, barLink, untickedWidgets, starRequest, setup, applicationMove, windowsUnderBar, shareScreen, sharePreset, macOSMajorVersion, appearances,
-             accessibilityDisplay, width, height
+             accessibilityDisplay, wallpaper, width, height
     }
 
     /// A step of setup's tour, the choices made before it, and what setup reads from the Mac, pinned so a drawing
@@ -282,6 +284,7 @@ struct SceneFile: Decodable {
                                                    debugDescription: "Appearances name dark, light or both, each once.")
         }
         accessibilityDisplay = try values.decodeIfPresent([AccessibilityDisplay].self, forKey: .accessibilityDisplay) ?? []
+        wallpaper = try values.decodeIfPresent(String.self, forKey: .wallpaper)
         width = try values.decodeIfPresent(Double.self, forKey: .width)
         height = try values.decodeIfPresent(Double.self, forKey: .height)
         if let width, !(100...4000).contains(width) {
@@ -337,6 +340,9 @@ struct SceneFile: Decodable {
         if !accessibilityDisplay.isEmpty, draw != .bar, draw != .popup {
             throw DecodingError.dataCorruptedError(forKey: .accessibilityDisplay, in: values,
                                                    debugDescription: "accessibilityDisplay belongs to a bar or popup scene.")
+        }
+        if wallpaper != nil, draw != .bar, draw != .popup {
+            throw DecodingError.dataCorruptedError(forKey: .wallpaper, in: values, debugDescription: "wallpaper belongs to a bar or popup scene.")
         }
         if let tab, tab.isBarTab, widget != nil || section != .bar {
             throw DecodingError.dataCorruptedError(forKey: .tab, in: values,
