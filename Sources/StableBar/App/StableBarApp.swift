@@ -80,7 +80,7 @@ struct StableBarApp {
                 NSApplication.shared.setActivationPolicy(.accessory)
                 OffscreenSnapshot.showScrollBars()
                 Task {
-                    let report = await SceneRenderer.renderAll(scenes, to: output)
+                    let report = await SceneRenderer.render(scenes, to: output)
                     if report.failures > 0 {
                         FileHandle.standardError.write(Data("\(report.failures) scene(s) failed; see \(output.appending(path: "scenes.json").path)\n".utf8))
                     }

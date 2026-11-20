@@ -351,7 +351,7 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
     #expect(FileManager.default.fileExists(atPath: output.appending(path: "good-dark.png").path))
 }
 
-@Test @MainActor func renderAllRejectsDuplicateNames() async throws {
+@Test(arguments: [false, true]) @MainActor func renderAllRejectsDuplicateNames(eachInAProcess: Bool) async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
@@ -359,7 +359,8 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
         try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
         try Data(darkBar.utf8).write(to: scenes.appending(path: "\(folder)/clock.json"))
     }
-    let summary = await SceneRenderer.renderAll([scenes], to: output)
+    let summary = eachInAProcess ? await SceneRenderer.renderEach([scenes], to: output, processes: 2, draw: drawHere)
+        : await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let errors = try report(in: output).values.compactMap { entry -> String? in
         if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
@@ -507,6 +508,73 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     let store = try store(#"{"configuration": {"includes": ["included.json"]}, "draw": "bar"}"#, in: directory)
     defer { store.stop() }
     #expect(store.configuration?.widgets.map(\.id) == ["included"])
+}
+
+/// Draws `scene` to `folder` in this process, as the process `renderEach` starts for it would.
+private let drawHere: @Sendable (URL, URL) async -> Int32 = { scene, folder in
+    await SceneRenderer.renderAll([scene], to: folder).failures > 0 ? 1 : 0
+}
+
+/// How many drawings run at once, and the most that did.
+private actor Running {
+    private(set) var count = 0
+    private(set) var most = 0
+
+    func start() {
+        count += 1
+        most = max(most, count)
+    }
+
+    func finish() { count -= 1 }
+}
+
+@Test @MainActor func renderEachDrawsEachSceneInAProcessOfItsOwnAFewAtATime() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    let names = (0..<5).map { "scene-\($0)" }
+    for name in names {
+        let scene = name == "scene-3" ? #"{"configuration": {}, "draw": "bar", "colour": 1}"# : darkBar
+        try Data(scene.utf8).write(to: scenes.appending(path: "\(name).json"))
+    }
+    let running = Running()
+    let summary = await SceneRenderer.renderEach([scenes], to: output, processes: 2) { scene, folder in
+        await running.start()
+        let status = await drawHere(scene, folder)
+        await running.finish()
+        return status
+    }
+    #expect(summary.failures == 1)
+    #expect(await running.most <= 2)
+    let entries = try report(in: output)
+    #expect(Set(entries.keys) == Set(names))
+    for name in names where name != "scene-3" {
+        #expect(entries[name] == .object(["images": .array([.string("\(name)-dark.png")])]))
+        #expect(FileManager.default.fileExists(atPath: output.appending(path: "\(name)-dark.png").path))
+    }
+    guard case let .object(bad)? = entries["scene-3"], case .string? = bad["error"] else {
+        Issue.record("Expected an error for scene-3")
+        return
+    }
+}
+
+@Test @MainActor func renderEachReportsAProcessThatStoppedBeforeItsReport() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    for name in ["crashes", "draws"] {
+        try Data(darkBar.utf8).write(to: scenes.appending(path: "\(name).json"))
+    }
+    let summary = await SceneRenderer.renderEach([scenes], to: output, processes: 2) { scene, folder in
+        scene.lastPathComponent == "crashes.json" ? 9 : await drawHere(scene, folder)
+    }
+    #expect(summary.failures == 1)
+    let entries = try report(in: output)
+    #expect(entries["crashes"] == .object(["error": .string("Drawing crashes stopped with status 9 before it reported.")]))
+    #expect(entries["draws"] == .object(["images": .array([.string("draws-dark.png")])]))
+    #expect(FileManager.default.fileExists(atPath: output.appending(path: "draws-dark.png").path))
 }
 
 @Test @MainActor func renderAllFailsWhenItCannotWriteItsReport() async throws {

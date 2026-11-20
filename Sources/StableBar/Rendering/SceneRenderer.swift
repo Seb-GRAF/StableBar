@@ -145,29 +145,29 @@ enum SceneRenderer {
         var failures = 0
     }
 
+    /// What `--render-scenes` draws: a single scene file in this process, and several each in a process of its own,
+    /// as many at a time as the Mac has cores, up to six.
+    static func render(_ inputs: [URL], to output: URL) async -> Report {
+        guard sceneFiles(in: inputs).count > 1, let executable = Bundle.main.executableURL else {
+            return await renderAll(inputs, to: output)
+        }
+        return await renderEach(inputs, to: output, processes: min(ProcessInfo.processInfo.activeProcessorCount, 6),
+                                draw: drawInProcess(executable))
+    }
+
     /// Draws every scene file in `inputs`, a folder standing for its `*.json` files at any depth, to
     /// `<name>-<appearance>.png` in `output`, and writes `scenes.json` there: each scene's images, or
     /// the error that stopped it. A scene's name is its file name; a second scene with the same name
     /// is an error. Times are drawn in UTC.
     static func renderAll(_ inputs: [URL], to output: URL) async -> Report {
         DocsImages.useUTC()
-        var report = Report()
-        var entries: [String: ConfigurationValue] = [:]
         let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: work) }
-        do {
-            try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
-        } catch {
-            FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
-            return Report(failures: 1)
-        }
-        for file in sceneFiles(in: inputs) {
-            let name = file.deletingPathExtension().lastPathComponent
-            if entries[name] != nil {
-                report.failures += 1
-                entries[file.path] = .object(["error": .string("Another scene is also named \(name).")])
-                continue
-            }
+        guard makeFolder(output) else { return Report(failures: 1) }
+        let (scenes, duplicates) = named(sceneFiles(in: inputs))
+        var report = Report(failures: duplicates.count)
+        var entries = duplicates
+        for (name, file) in scenes {
             do {
                 let scene = try SceneFile.read(file)
                 var images: [ConfigurationValue] = []
@@ -185,15 +185,119 @@ enum SceneRenderer {
                 entries[name] = .object(["error": .string(errorMessage(error))])
             }
         }
+        if !writeReport(entries, to: output) { report.failures += 1 }
+        return report
+    }
+
+    /// Draws the scene files in `inputs` as `renderAll` does, each in a process of its own, `processes` at a time. What
+    /// a process has drawn can change what it draws later, such as which version of the app's icon an image gets, so
+    /// each scene's images depend on that scene alone. `draw` draws one scene file to a folder as `--render-scenes`
+    /// does, and returns its exit status.
+    static func renderEach(_ inputs: [URL], to output: URL, processes: Int,
+                           draw: @escaping @Sendable (_ scene: URL, _ folder: URL) async -> Int32) async -> Report {
+        let work = FileManager.default.temporaryDirectory.appending(path: "stablebar-scenes-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: work) }
+        guard makeFolder(output) else { return Report(failures: 1) }
+        let (scenes, duplicates) = named(sceneFiles(in: inputs))
+        var report = Report(failures: duplicates.count)
+        var entries = duplicates
+        await withTaskGroup(of: (name: String, folder: URL, status: Int32).self) { group in
+            var next = 0, running = 0
+            while true {
+                while running < max(processes, 1), next < scenes.count {
+                    let (name, file) = scenes[next]
+                    let folder = work.appending(path: name)
+                    next += 1
+                    running += 1
+                    group.addTask { (name, folder, await draw(file, folder)) }
+                }
+                guard let drawn = await group.next() else { break }
+                running -= 1
+                let entry = collect(drawn.name, from: drawn.folder, status: drawn.status, to: output)
+                if case let .object(fields) = entry, fields["error"] != nil { report.failures += 1 }
+                entries[drawn.name] = entry
+            }
+        }
+        if !writeReport(entries, to: output) { report.failures += 1 }
+        return report
+    }
+
+    /// Runs `--render-scenes` for one scene file in another process of `executable`, and returns its exit status.
+    nonisolated private static func drawInProcess(_ executable: URL) -> @Sendable (URL, URL) async -> Int32 {
+        { scene, folder in
+            await withCheckedContinuation { continuation in
+                let process = Process()
+                process.executableURL = executable
+                process.arguments = ["--render-scenes", folder.path, scene.path]
+                process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+                do {
+                    try process.run()
+                } catch {
+                    process.terminationHandler = nil
+                    FileHandle.standardError.write(Data("\(scene.lastPathComponent): \(errorMessage(error))\n".utf8))
+                    continuation.resume(returning: -1)
+                }
+            }
+        }
+    }
+
+    /// The entry the process that drew `name` wrote to `folder`, with its images moved to `output`, or why it has none.
+    private static func collect(_ name: String, from folder: URL, status: Int32, to output: URL) -> ConfigurationValue {
+        guard let data = try? Data(contentsOf: folder.appending(path: "scenes.json")),
+              case let .object(scenes)? = try? JSONDecoder().decode([String: ConfigurationValue].self, from: data)["scenes"],
+              let entry = scenes[name] else {
+            return .object(["error": .string("Drawing \(name) stopped with status \(status) before it reported.")])
+        }
+        guard case let .object(fields) = entry, case let .array(images)? = fields["images"] else { return entry }
+        for case let .string(image) in images {
+            let target = output.appending(path: image)
+            do {
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: folder.appending(path: image), to: target)
+            } catch {
+                return .object(["error": .string("\(image): \(errorMessage(error))")])
+            }
+        }
+        return entry
+    }
+
+    /// `files` with their names, and an error entry for each file named like an earlier one.
+    private static func named(_ files: [URL]) -> (scenes: [(name: String, file: URL)], duplicates: [String: ConfigurationValue]) {
+        var scenes: [(name: String, file: URL)] = []
+        var duplicates: [String: ConfigurationValue] = [:]
+        var names = Set<String>()
+        for file in files {
+            let name = file.deletingPathExtension().lastPathComponent
+            if names.insert(name).inserted {
+                scenes.append((name, file))
+            } else {
+                duplicates[file.path] = .object(["error": .string("Another scene is also named \(name).")])
+            }
+        }
+        return (scenes, duplicates)
+    }
+
+    private static func makeFolder(_ folder: URL) -> Bool {
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            return true
+        } catch {
+            FileHandle.standardError.write(Data("\(errorMessage(error))\n".utf8))
+            return false
+        }
+    }
+
+    /// Writes `entries` to `scenes.json` in `output`, and returns whether it could.
+    private static func writeReport(_ entries: [String: ConfigurationValue], to output: URL) -> Bool {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
             try encoder.encode(["scenes": ConfigurationValue.object(entries)]).write(to: output.appending(path: "scenes.json"))
+            return true
         } catch {
-            report.failures += 1
             FileHandle.standardError.write(Data("scenes.json: \(errorMessage(error))\n".utf8))
+            return false
         }
-        return report
     }
 
     /// The scene files `inputs` name, sorted: files as given, and the `*.json` files at any depth in folders.
