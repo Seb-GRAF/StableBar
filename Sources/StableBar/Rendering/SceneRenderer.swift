@@ -269,11 +269,13 @@ enum SceneRenderer {
         var names: [String: String] = [:]
         for file in files {
             let name = file.deletingPathExtension().lastPathComponent
-            if let other = names[name.lowercased()] {
+            // Folded as APFS compares names, which lowercasing doesn't do for all of them: `Straße` and `STRASSE` are one.
+            let key = name.folding(options: .caseInsensitive, locale: nil)
+            if let other = names[key] {
                 let message = other == name ? "Another scene is also named \(name)." : "Another scene is named \(other), which differs only in case."
                 duplicates[file.path] = .object(["error": .string(message)])
             } else {
-                names[name.lowercased()] = name
+                names[key] = name
                 scenes.append((name, file))
             }
         }

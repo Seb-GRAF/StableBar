@@ -579,24 +579,25 @@ private actor Running {
 
 /// Two scenes whose names differ only in case would write one image on a disk that ignores case, as macOS's does by
 /// default, so the second is an error, drawn either way.
-@Test(arguments: [false, true]) @MainActor func scenesNamedAlikeButForCaseAreRejected(eachInAProcess: Bool) async throws {
+@Test(arguments: [false, true], [["Clock", "clock"], ["Straße", "STRASSE"]]) @MainActor
+func scenesNamedAlikeButForCaseAreRejected(eachInAProcess: Bool, names: [String]) async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
     for folder in ["a", "b"] {
         try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
     }
-    try Data(darkBar.utf8).write(to: scenes.appending(path: "a/Clock.json"))
-    try Data(darkBar.utf8).write(to: scenes.appending(path: "b/clock.json"))
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "a/\(names[0]).json"))
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "b/\(names[1]).json"))
     let summary = eachInAProcess ? await SceneRenderer.renderEach([scenes], to: output, processes: 2, draw: drawHere)
         : await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let entries = try report(in: output)
-    #expect(entries["Clock"] == .object(["images": .array([.string("Clock-dark.png")])]))
+    #expect(entries[names[0]] == .object(["images": .array([.string("\(names[0])-dark.png")])]))
     let errors = entries.values.compactMap { entry -> String? in
         if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
     }
-    #expect(errors == ["Another scene is named Clock, which differs only in case."])
+    #expect(errors == ["Another scene is named \(names[0]), which differs only in case."])
     #expect(entries.count == 2)
 }
 
