@@ -55,14 +55,14 @@ struct WidgetGrouping {
         return .object(["style": .object(style)])
     }
 
-    /// The choices for `id` among `listed`, the widgets one screen shows in their order: the units on either side of
-    /// it in its position, except spacers.
-    func choices(for id: String, among listed: [WidgetConfiguration]) -> [Choice] {
+    /// The choices for `id` among `listed`, the widgets one screen shows in their order, and `listedGroups`, that screen's
+    /// groups: the units on either side of it in its position, except spacers and groups only the screen's own theme has.
+    func choices(for id: String, among listed: [WidgetConfiguration], groups listedGroups: [String: WidgetGroupConfiguration]) -> [Choice] {
         guard let widget = listed.first(where: { $0.id == id }), widget.group == nil, widget.content != .spacer else { return [] }
-        let units = BarUnit.make(widgets: listed.filter { $0.position == widget.position }, groups: groups)
+        let units = BarUnit.make(widgets: listed.filter { $0.position == widget.position }, groups: listedGroups)
         guard let index = units.firstIndex(where: { $0.id == "widget:\(id)" }) else { return [] }
         return [index - 1, index + 1].filter(units.indices.contains).map { units[$0] }.compactMap { unit in
-            if let group = unit.widgets[0].group { return .join(group) }
+            if let group = unit.widgets[0].group { return groups[group] == nil ? nil : .join(group) }
             return unit.isSpacer ? nil : .groupWith(unit.widgets[0].id)
         }
     }
@@ -112,7 +112,8 @@ struct WidgetGrouping {
 
     /// Why Ungroup can't take every widget out of `group`, if it can't.
     func ungroupBlocker(_ group: String) -> String? {
-        widgets.first { $0.ownGroup == group && profileElsewhere(setting: $0.id) != nil }.flatMap { leaveBlocker($0.id) }
+        guard groups[group] != nil else { return "Only this screen's own theme has this group, so it can't be ungrouped here." }
+        return widgets.first { $0.ownGroup == group && profileElsewhere(setting: $0.id) != nil }.flatMap { leaveBlocker($0.id) }
     }
 
     /// The origin of `id`'s group when an active profile of another file sets it: the profile merges after anything

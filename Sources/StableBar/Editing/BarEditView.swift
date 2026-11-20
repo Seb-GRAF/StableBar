@@ -467,7 +467,7 @@ struct BarEditTile: View {
             Button("Leave Group") { editing.leaveGroup(entry.id, on: display) }
                 .disabled(!grouping.canLeave(entry.id))
         } else {
-            let choices = grouping.choices(for: entry.id, among: editing.widgets(on: screen))
+            let choices = grouping.choices(for: entry.id, among: editing.widgets(on: screen), groups: store.configuration?.onScreen(kind).groups ?? [:])
             if !choices.isEmpty { Divider() }
             ForEach(choices, id: \.self) { choice in
                 Button(choice.title(names: editing.names)) { editing.group(entry.id, choice, on: display) }
