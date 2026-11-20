@@ -322,6 +322,14 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         return AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr && value != 0
     }
 
+    static func string(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> String? {
+        var address = address
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(object, &address, 0, nil, &size, &value) == noErr, let value else { return nil }
+        return value.takeRetainedValue() as String
+    }
+
     /// The objects that `object` lists at `address`, none when it can't tell.
     static func objects(of object: AudioObjectID, at address: AudioObjectPropertyAddress) -> [AudioObjectID] {
         var address = address
@@ -351,7 +359,10 @@ final class AudioMonitor: ChangeMonitor, @unchecked Sendable {
         var devices = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
         let readStatus = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &devices)
         guard readStatus == noErr else { throw CommandFailure(message: "Could not read audio devices (\(readStatus)).") }
-        return deviceRows(devices.filter { hasStreams($0, scope: scope) }, selected: selected, name: name(of:))
+        let uid = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceUID,
+                                             mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        let shown = devices.filter { hasStreams($0, scope: scope) && string(of: $0, at: uid)?.hasPrefix(AppAudioTap.uidPrefix) != true }
+        return deviceRows(shown, selected: selected, name: name(of:))
     }
 
     /// A row for each of `devices` whose name can be read, `selected` for the default device. A device
