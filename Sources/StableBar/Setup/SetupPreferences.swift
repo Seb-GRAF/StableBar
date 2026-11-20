@@ -349,7 +349,7 @@ struct SetupPreferences: Equatable, Codable, Sendable {
 
     var placement = Placement.current
     var theme = Theme.current
-    /// The preset's widgets in bar order. They add to a bar you changed, and replace an unchanged starter.
+    /// The preset's widgets in bar order, which replace the bar's.
     var widgetSets: [WidgetSet] = []
     /// The source of a starter bar's Workspaces, as setup detects it; nil leaves the configuration's source.
     var workspaces: WorkspaceSource?
@@ -636,7 +636,12 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         if let keepWindowsClear {
             edits.append(ConfigurationEdit(action: .bar, properties: ["keepWindowsClear": .bool(keepWindowsClear)]))
         }
-        let starter = starterChange(in: configuration, document: document)
+        var starter = starterChange(in: configuration, document: document)
+        let presetIDs = widgetSets.flatMap(\.ids)
+        // The preset's bar replaces a changed bar's widgets. Removing one that another file defines turns it off.
+        if !widgetSets.isEmpty {
+            starter.removed += configuration.widgets.map(\.id).filter { !presetIDs.contains($0) && !starter.removed.contains($0) }
+        }
         for id in starter.removed { edits.append(ConfigurationEdit(action: .remove, id: id)) }
         for widget in starter.added { edits.append(ConfigurationEdit(action: .add, properties: widget)) }
         let target = starter.configuration
@@ -644,7 +649,6 @@ struct SetupPreferences: Equatable, Codable, Sendable {
         let kept = target.widgets.filter { widget in !starter.removed.contains(widget.id) || starter.added.contains { Self.id($0) == widget.id } }
         var order = kept.map(\.id)
         var appended = configuration.widgets.map(\.id).filter { !starter.removed.contains($0) } + starter.added.map(Self.id)
-        let presetIDs = widgetSets.flatMap(\.ids)
         /// Before the widget that follows `id` on the preset's bar, once that one is on the bar.
         func next(after id: String) -> Int? {
             presetIDs.drop { $0 != id }.dropFirst().first(where: order.contains).flatMap { order.firstIndex(of: $0) }

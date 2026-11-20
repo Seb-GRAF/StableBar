@@ -1205,26 +1205,27 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
 @Test func setupPlacesChosenWidgetSetsBesideTheAppAndClockAndKeepsWidgetsWithTheSameID() throws {
     let data = Data(#"""
     { "widgets": [
-      {"id":"app","type":"activeApp","position":"left"},
-      {"id":"time","type":"clock","position":"right"},
+      {"id":"app-menu","type":"appMenu","position":"left"},
+      {"id":"clock","type":"clock","position":"right"},
       {"id":"meeting","type":"text","position":"right","text":"Mine"}
     ] }
     """#.utf8)
-    let updated = try SetupPreferences(widgetSets: [.meetings, .system, .workspaces(.yabai)]).applying(to: data)
+    let updated = try SetupPreferences(widgetSets: [.appMenu(expandsOnHover: false), .dateAndTime, .meetings, .system, .workspaces(.yabai)])
+        .applying(to: data)
     let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
-    #expect(configuration.widgets.map(\.id) == ["workspaces", "app", "system-monitor", "time", "meeting"])
+    #expect(configuration.widgets.map(\.id) == ["workspaces", "app-menu", "system-monitor", "clock", "meeting"])
     #expect(configuration.widgets[4].content == .text("Mine"))
     #expect(configuration.workspaceSource == .yabai)
-    let appended = try SetupPreferences(widgetSets: [.workspaces(.aerospace)])
-        .applying(to: Data(#"{"widgets":[{"id":"time","type":"clock","position":"right"}]}"#.utf8))
+    let appended = try SetupPreferences(widgetSets: [.dateAndTime, .workspaces(.aerospace)])
+        .applying(to: Data(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#.utf8))
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: appended)
-    #expect(try document["widgets"]!.decoded([[String: ConfigurationValue]].self).map { $0["id"] } == [.string("time"), .string("workspaces")])
+    #expect(try document["widgets"]!.decoded([[String: ConfigurationValue]].self).map { $0["id"] } == [.string("clock"), .string("workspaces")])
     #expect(document["workspaceSource"] == nil)
 }
 
-/// On a bar you changed, a preset adds its widgets beside yours and removes none. A clock of your own keeps out the
-/// preset's date and time, so the bar doesn't show the date twice; beside the preset's own time, the date joins it.
-@Test func setupPresetsAddToAChangedBarWithoutRemovingAnything() throws {
+/// On a bar you changed, a preset's widgets replace yours: those it doesn't have leave. A clock of your own keeps out
+/// the preset's date and time, so the bar doesn't show the date twice; beside the preset's own time, the date joins it.
+@Test func setupPresetsReplaceTheWidgetsOfAChangedBar() throws {
     func bar(clock: String) -> Data {
         Data(#"""
         { "widgets": [
@@ -1238,13 +1239,12 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
     let developer = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
     let mine = try developer.applying(to: bar(clock: #"{"id":"clock","type":"clock","position":"right","format":"EEE d MMM  HH:mm"}"#))
     let configuration = try JSONDecoder().decode(Configuration.self, from: mine)
-    #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "mine", "system-monitor", "battery", "clock",
-                                                "menu-bar-items"])
+    #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "system-monitor", "battery", "clock", "menu-bar-items"])
     #expect(configuration.widgets.first { $0.id == "clock" }?.content == .clock(format: "EEE d MMM  HH:mm"))
     #expect(configuration.workspaceSource == .spaces)
     let time = #"{"id":"clock","type":"clock","position":"right","format":"\#(SetupPreferences.timeFormat())","role":"time","details":true}"#
     #expect(try widgetIDs(developer.applying(to: bar(clock: time)))
-            == ["apple", "workspaces", "app-menu", "mine", "system-monitor", "battery", "date", "clock", "menu-bar-items"])
+            == ["apple", "workspaces", "app-menu", "system-monitor", "battery", "date", "clock", "menu-bar-items"])
 }
 
 @Test func setupReenablesMatchingWidgetsAndKeepsConflictingIDs() throws {
