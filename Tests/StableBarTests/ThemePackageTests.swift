@@ -2183,7 +2183,7 @@ private let bundledThemes = URL(filePath: #filePath).deletingLastPathComponent()
 @Test(arguments: ["", #""theme":{"id":"built-in"},"#])
 func builtInBecomesClassicWithItsProfiles(theme: String) throws {
     let fixture = try ThemeGalleryFixture(#"""
-    {\#(theme)"widgets":[],"profiles":[
+    {\#(theme)"widgets":[],"profile":"Built-in edits","profiles":[
       {"name":"Built-in edits","when":{"theme":"built-in"},"configuration":{"defaults":{"fontSize":15}}},
       {"name":"Night","when":{"appearance":"dark","theme":"built-in"},"configuration":{"bar":{"height":30}}}]}
     """#)
@@ -2191,6 +2191,7 @@ func builtInBecomesClassicWithItsProfiles(theme: String) throws {
     try migrateRetiredThemes(fixture.url, pinned: nil, themes: fixture.themes, storeThemes: fixture.storeThemes)
     let document = try fixture.document()
     #expect(document["theme"] == .object(["id": .string("classic"), "version": .string("1.0.0")]))
+    #expect(document["profile"] == .string("Classic edits"))
     #expect(try document["profiles"]?.decoded([ConfigurationProfile].self).map(\.when?.theme) == ["classic", "classic"])
     #expect(try document["profiles"]?.decoded([ConfigurationProfile].self).map(\.name) == ["Classic edits", "Night"])
     #expect(try fixture.packages.record(id: "classic") == PackageInstallRecord(.store))

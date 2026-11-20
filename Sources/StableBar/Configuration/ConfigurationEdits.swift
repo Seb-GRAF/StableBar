@@ -411,7 +411,10 @@ func migrateRetiredThemes(_ url: URL, pinned: String?, themes: URL?, storeThemes
             if profile["name"] == .string("Built-in edits") && !classicEditsTaken { profile["name"] = .string("Classic edits") }
             profiles[index] = .object(profile)
         }
-        if root["profiles"] != .array(profiles), try !drawsTheFallback(root) { root["profiles"] = .array(profiles) }
+        if root["profiles"] != .array(profiles), try !drawsTheFallback(root) {
+            root["profiles"] = .array(profiles)
+            if root["profile"] == .string("Built-in edits") && !classicEditsTaken { root["profile"] = .string("Classic edits") }
+        }
     }
     guard root != document else { return }
     try writeConfiguration(configurationData(root, editing: original, savedBy: release), to: url)
