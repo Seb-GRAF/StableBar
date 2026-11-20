@@ -33,7 +33,7 @@ enum DocsImages {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for appearance in ["dark", "light"] {
             let dark = appearance == "dark"
-            func store(_ name: String, theme: String?, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
+            func store(_ name: String, theme: String, widgets: [[String: ConfigurationValue]] = barWidgets) throws -> BarStore {
                 try sampleStore(in: samples.appending(path: "\(name)-\(appearance)"), theme: theme, dark: dark, widgets: widgets)
             }
             func save(_ content: some View, _ name: String, size: NSSize, stores: [BarStore], ready: () -> Bool = { true }) async throws {
@@ -51,7 +51,7 @@ enum DocsImages {
                            size: NSSize(width: 1100, height: 78 * CGFloat(themes.count) + 10), stores: themes.map(\.1))
             themes.forEach { $0.1.stop() }
 
-            let controls = try store("controls", theme: "catppuccin", widgets: barWidgets + [controlsWidget])
+            let controls = try store("controls", theme: "clear", widgets: barWidgets + [controlsWidget])
             let popups = HStack(alignment: .top, spacing: 24) {
                 popup(controls, "system-monitor")
                 popup(controls, "meeting")
@@ -61,7 +61,7 @@ enum DocsImages {
             try await save(popups.background { backdrop(dark: dark) }, "popups", size: NSSize(width: 1100, height: 330), stores: [controls])
             controls.stop()
 
-            let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: nil, dark: dark,
+            let essentials = try sampleStore(in: samples.appending(path: "essentials-\(appearance)"), theme: "clear", dark: dark,
                                              widgets: ["clock", "battery", "system", "network", "calendar", "disk"].map { type in
                 WidgetAddCatalog.builtIns.first { $0.id == type }!.add(position: .right, id: type)!.properties!
             }, native: true)
@@ -175,7 +175,7 @@ enum DocsImages {
     /// A bar whose data comes from sample files, with Finder as the active app. Its workspaces come
     /// from a stand-in for AeroSpace, so the bar never reaches the AeroSpace running on this Mac, and
     /// its battery from a stand-in for the Mac's, so it draws as a battery provider does.
-    private static func sampleStore(in directory: URL, theme: String?, dark: Bool,
+    private static func sampleStore(in directory: URL, theme: String, dark: Bool,
                                     widgets: [[String: ConfigurationValue]], native: Bool = false) throws -> BarStore {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for (name, json) in sampleOutput { try Data(json.utf8).write(to: directory.appending(path: "\(name).json")) }
@@ -195,10 +195,10 @@ enum DocsImages {
                 (name, .object(["type": .string("command"), "command": .string("/bin/cat \"$CONFIG_DIR/\(name).json\""),
                                 "interval": .number(3600)]))
             })),
-            "widgets": .array(widgets.map(ConfigurationValue.object))
+            "widgets": .array(widgets.map(ConfigurationValue.object)),
+            "theme": .object(["id": .string(theme)])
         ]
         if native { configuration["providers"] = nil }
-        if let theme { configuration["theme"] = .object(["id": .string(theme)]) }
         let url = directory.appending(path: "config.json")
         try JSONEncoder().encode(configuration).write(to: url)
         let battery = try ScriptOutput.read(Data(sampleOutput["battery"]!.utf8))
