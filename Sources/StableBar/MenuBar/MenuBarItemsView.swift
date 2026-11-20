@@ -19,7 +19,7 @@ struct MenuBarItemsView: View {
             ForEach(Array(shown.enumerated()), id: \.offset) { position, entry in
                 switch entry {
                 case .symbol:
-                    MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
+                    MenuBarItemCell(appearance: appearance, padding: cellPadding, openAnchor: openAnchor, click: toggleRow) { anchor, inside in
                         if inside, switches(to: anchor) { toggleRow(anchor) }
                         hoverRow(inside, anchor)
                     } label: {
@@ -39,8 +39,15 @@ struct MenuBarItemsView: View {
         .onHover { if $0 { Task { await store.appMenu.readMenuBarItems(requestingAccess: false) } } }
     }
 
+    /// Half the widget's own `spacing` on each side of an icon, 14 between icons without it. Not `defaults.spacing`,
+    /// which sets the gaps inside other widgets.
+    private var cellPadding: EdgeInsets {
+        let side = (widget.style.spacing ?? 14) / 2
+        return EdgeInsets(top: padding.top, leading: side, bottom: padding.bottom, trailing: side)
+    }
+
     private func itemCell(_ item: MenuBarItem, icon: String?, live: MenuBarItemImage?, openAnchor: ObjectIdentifier?) -> some View {
-        MenuBarItemCell(appearance: appearance, padding: padding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu,
+        MenuBarItemCell(appearance: appearance, padding: cellPadding, openAnchor: openAnchor, actsOnMouseDown: !item.entry.hasSubmenu,
                         rightClick: { anchor in rightClick(item, anchor: anchor) }) { anchor in
             open(item, anchor: anchor)
         } hover: { anchor, inside in
@@ -137,7 +144,6 @@ private struct MenuBarItemCell<Label: View>: View {
                 Text(" ").hidden()
                 label()
             }
-            .padding(.horizontal, 7)
             .padding(padding)
             .background {
                 if highlighted { RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)).fill(appearance.hoverBackground) }
