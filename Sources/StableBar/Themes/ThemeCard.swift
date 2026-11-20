@@ -3,6 +3,7 @@ import SwiftUI
 struct ThemeCard: View {
     let title: String
     let look: Configuration?
+    var description: String?
     var appearance: BarAppearance = .light
     var isSelected = false
     var isEdited = false
@@ -90,9 +91,17 @@ struct ThemeCard: View {
             }
             .frame(height: 20)
             .padding(.horizontal, 2)
+            if let description {
+                Text(description)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2, reservesSpace: true)
+                    .padding(.horizontal, 2)
+                    .padding(.top, -5)
+            }
         }
         .padding(EdgeInsets(top: 6, leading: 6, bottom: 8, trailing: 6))
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(SettingsPalette.group, in: RoundedRectangle(cornerRadius: 11))
         .overlay {
             RoundedRectangle(cornerRadius: 11)

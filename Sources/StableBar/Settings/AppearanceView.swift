@@ -227,7 +227,8 @@ struct AppearanceView: View {
         switch item {
         case let .installed(choice):
             let selected = screenTheme.map { $0.enabled ? $0.key : "built-in" } ?? gallery.selectedKey
-            return ThemeCard(title: choice.title, look: look, appearance: appearance, isSelected: selected == choice.key,
+            return ThemeCard(title: choice.title, look: look, description: choice.manifest.description, appearance: appearance,
+                             isSelected: selected == choice.key,
                              isEdited: gallery.editedThemes.contains(choice.manifest.id),
                              progress: gallery.progress[item.id], error: gallery.error(for: item.id), source: gallery.source(of: choice),
                              showInFinder: choice.isBundled ? nil : { NSWorkspace.shared.activateFileViewerSelecting([choice.directory]) },
@@ -235,7 +236,8 @@ struct AppearanceView: View {
                 gallery.select(choice, on: screen, everyBar: editor.themeChangesEveryBar)
             }
         case let .store(entry):
-            return ThemeCard(title: entry.name, look: look, appearance: appearance, progress: gallery.progress[item.id],
+            return ThemeCard(title: entry.name, look: look, description: entry.description, appearance: appearance,
+                             progress: gallery.progress[item.id],
                              error: gallery.error(for: item.id), isStore: true,
                              source: entry.sourceID == PackageSource.storeID ? nil : .privateSource(gallery.sourceName(entry.sourceID))) {
                 Task { await gallery.get(entry, on: screen, everyBar: editor.themeChangesEveryBar) }
