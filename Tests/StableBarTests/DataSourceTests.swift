@@ -765,6 +765,24 @@ private func battery(_ state: String) -> ScriptOutput {
     #expect(own.activeProviders.isEmpty)
 }
 
+@Test func soundDetailsRunTheMicrophoneAndNowPlayingProviders() throws {
+    func configuration(_ json: String) throws -> Configuration {
+        var loader = ConfigurationLoader()
+        return try loader.load(FileManager.default.temporaryDirectory.appending(path: "sound.json"), data: Data(json.utf8))
+    }
+    let details = try configuration(#"{"widgets":[{"id":"sound","type":"audio","position":"right","details":true}]}"#)
+    #expect(details.activeProviders == ["audio", "microphone", "nowPlaying"])
+    #expect(details.providers["microphone"] == ProviderConfiguration(type: "microphone"))
+    let plain = try configuration(#"{"widgets":[{"id":"sound","type":"audio","position":"right"}]}"#)
+    #expect(plain.activeProviders == ["audio"])
+    let own = try configuration(#"""
+    {"providers":{"microphone":{"type":"command","command":"true"}},
+     "widgets":[{"id":"sound","type":"audio","position":"right","details":true}]}
+    """#)
+    #expect(own.providers["microphone"]?.type == "command")
+    #expect(own.activeProviders == ["audio", "nowPlaying"])
+}
+
 @Test @MainActor func subscribingToASourceEventRunsThatSource() async throws {
     let url = try writeTemporaryConfiguration(#"""
     {"widgets":[{"id":"notice","type":"script","position":"left","interval":null,"events":["powerSourceChange"],

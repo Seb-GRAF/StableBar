@@ -41,6 +41,22 @@ enum PrivateAPI {
         return symbol("SACLockScreenImmediate", in: login, as: (@convention(c) () -> Int32).self)
     }()
 
+    // System Audio Recording, which the Sound details' mixer needs, has no public call that checks it or asks for it.
+    // TCC keeps Privacy & Security's permissions; like the login framework, it stays open for good.
+    /// Whether StableBar may use a service such as `kTCCServiceAudioCapture`: 0 when allowed, 1 when refused, anything
+    /// else before the person answers.
+    static let accessPreflight: (@convention(c) (CFString, CFDictionary?) -> Int)? = {
+        guard let tcc = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_LAZY) else { return nil }
+        return symbol("TCCAccessPreflight", in: tcc, as: (@convention(c) (CFString, CFDictionary?) -> Int).self)
+    }()
+    /// Asks for a service with macOS's own prompt, unless the person already answered, and calls back with whether it's
+    /// allowed.
+    static let accessRequest: (@convention(c) (CFString, CFDictionary?, @escaping @convention(block) (Bool) -> Void) -> Void)? = {
+        guard let tcc = dlopen("/System/Library/PrivateFrameworks/TCC.framework/Versions/A/TCC", RTLD_LAZY) else { return nil }
+        return symbol("TCCAccessRequest", in: tcc,
+                      as: (@convention(c) (CFString, CFDictionary?, @escaping @convention(block) (Bool) -> Void) -> Void).self)
+    }()
+
     /// A symbol macOS keeps for its own menus, such as the Apple menu's App Store one, from the bundle AppKit loads it from.
     static func privateSymbol(_ name: String) -> NSImage? {
         Bundle(path: "/System/Library/CoreServices/CoreGlyphsPrivate.bundle").flatMap { NSImage(symbolName: name, bundle: $0, variableValue: 1) }

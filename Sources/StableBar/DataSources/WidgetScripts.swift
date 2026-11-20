@@ -6,7 +6,7 @@ final class WidgetScripts {
     private weak var store: BarStore?
     var actionErrors: [String: String] = [:]
     var scripts: [String: ScriptWidget] = [:]
-    private(set) var providers: [String: ScriptWidget] = [:]
+    var providers: [String: ScriptWidget] = [:]
     private var visibleWidgets: [Int: Set<String>] = [:]
     private var pauses: Set<PauseReason> = []
     var popupWidgetID: String?
@@ -291,10 +291,10 @@ final class WidgetScripts {
         }
     }
 
-    /// Makes the audio device with `id` the default output, for a click on `widget`.
-    func selectOutputDevice(_ id: String, widget: WidgetConfiguration) {
+    /// Makes the audio device with `id` the default output, or with `input` the default input, for a click on `widget`.
+    func selectAudioDevice(_ id: String, input: Bool, widget: WidgetConfiguration) {
         do {
-            try AudioMonitor.setOutputDevice(id)
+            try AudioMonitor.setDefaultDevice(id, input: input)
             if actionErrors[widget.id] != nil { actionErrors[widget.id] = nil }
         } catch {
             actionErrors[widget.id] = errorMessage(error)

@@ -116,7 +116,7 @@ struct DataSourceRegistry: Sendable {
     }
 
     static let builtIn = DataSourceRegistry(types: [.command, .stream, .http, .battery, .bluetooth, .system, .network, .wifi, .disk, .audio,
-                                                    .inputSource, .microphone, .privacy, .calendar, .merge])
+                                                    .inputSource, .microphone, .nowPlaying, .privacy, .calendar, .merge])
 }
 
 extension DataSourceType {
@@ -128,6 +128,10 @@ extension DataSourceType {
     static let stream = DataSourceType(name: "stream", isNative: false, symbol: "terminal", settings: [.command],
                                        continuous: true) { provider, environment in
         StreamSource(command: provider.command!, environment: environment)
+    }
+
+    static let nowPlaying = DataSourceType(name: "nowPlaying", isNative: true, symbol: "music.note", settings: [], continuous: true) { _, _ in
+        StreamSource(command: NowPlaying.watchCommand, environment: [:])
     }
 
     static let http = http()

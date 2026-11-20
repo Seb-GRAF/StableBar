@@ -302,6 +302,8 @@ struct WidgetView: View {
         .accessibilityHint(tooltip ?? "")
         .accessibilityIdentifier(widget.id)
         .contextMenu { WidgetContextMenu(widget: widget, store: store, display: monitor) }
+        // The Sound details list the apps as soon as they open.
+        .onAppear { if isSound, widget.details { AudioMixer.shared.start() } }
     }
 
     private func showMenuRow(appearance: WidgetAppearance, padding: EdgeInsets) {
@@ -528,7 +530,7 @@ struct WidgetBlocks: View {
                                                  quit: { if store.barEditing.allowsWidgetActions { confirmQuit($0) } },
                                                  pressMenuBarItem: { if store.barEditing.allowsWidgetActions { store.appMenu.press($0) } },
                                                  selectInputSource: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectInputSource($0, widget: widget) } },
-                                                 selectOutputDevice: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectOutputDevice($0, widget: widget) } },
+                                                 selectAudioDevice: { if store.barEditing.allowsWidgetActions { store.widgetScripts.selectAudioDevice($0, input: $1, widget: widget) } },
                                                  states: style.states, tracksHover: style.tracksHover, appIcon: appIcon, motion: motion,
                                                  runAction: runAction))
         }

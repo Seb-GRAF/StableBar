@@ -918,6 +918,13 @@ struct Configuration: Decodable, Sendable {
             providers[type.name] = providers[type.name] ?? ProviderConfiguration(type: type.name)
             active.insert(type.name)
         }
+        // The Sound details show the input device and what plays now too, which these providers read.
+        if widgets.contains(where: { $0.enabled && $0.details && $0.providerName.flatMap { providers[$0]?.type } == DataSourceType.audio.name }) {
+            for name in [DataSourceType.microphone.name, DataSourceType.nowPlaying.name] where (providers[name]?.type ?? name) == name {
+                providers[name] = providers[name] ?? ProviderConfiguration(type: name)
+                active.insert(name)
+            }
+        }
         self.providers = providers
         subscribedEvents = subscribed
         activeProviders = active

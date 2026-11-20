@@ -22,7 +22,7 @@
       "additionalProperties": { "enum": ["saved", "themeLink", "barLink"] }
     },
     "outputs": {
-      "description": "Script outputs by widget id or provider name: an object as a script prints it, or plain text.",
+      "description": "Script outputs by widget id or provider name: an object as a script prints it, or plain text. A provider no widget shows, such as the microphone or nowPlaying behind the Sound details, takes the output under its name.",
       "type": "object",
       "additionalProperties": { "type": ["object", "string"] }
     },
@@ -30,6 +30,41 @@
       "description": "Graph samples by widget id or provider name.",
       "type": "object",
       "additionalProperties": { "type": "array", "items": { "type": "number" } }
+    },
+    "mixer": {
+      "description": "The Sound details' mixer, as on a Mac where these regular apps talk to CoreAudio, with System Audio Recording allowed.",
+      "type": "object",
+      "required": ["apps", "outputs"],
+      "additionalProperties": false,
+      "properties": {
+        "apps": {
+          "description": "The apps, each with its own volume, mute and output device UID when it has one, and whether it plays now.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "volume": { "type": "number", "minimum": 0, "maximum": 1 },
+              "muted": { "type": "boolean" },
+              "output": { "type": "string" },
+              "playing": { "type": "boolean" }
+            }
+          }
+        },
+        "outputs": {
+          "description": "The output devices, the first being the default.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uid", "name"],
+            "additionalProperties": false,
+            "properties": { "uid": { "type": "string" }, "name": { "type": "string" } }
+          }
+        }
+      }
     },
     "workspaces": {
       "description": "AeroSpace's list-workspaces --json objects.",

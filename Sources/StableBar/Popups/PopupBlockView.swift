@@ -32,8 +32,11 @@ struct BlockContext {
     var pressMenuBarItem: (MenuBarItemReference) -> Void = { _ in }
     /// Selects a `selectInputSourceField` block's keyboard input source.
     var selectInputSource: (String) -> Void = { _ in }
-    /// Makes a `selectOutputDeviceField` block's audio device the default output.
-    var selectOutputDevice: (String) -> Void = { _ in }
+    /// Makes a `selectOutputDeviceField` block's audio device the default output, or with `true` a
+    /// `selectInputDeviceField` block's the default input.
+    var selectAudioDevice: (String, Bool) -> Void = { _, _ in }
+    /// The latest output of another running provider, by its name, such as the microphone's for the Sound details.
+    var providerOutput: (String) -> ScriptOutput? = { _ in nil }
     /// Opens the submenu of an app menu block's item beside the item's row, or without an item, closes the one open
     /// beside the block.
     var openSubmenu: (AXUIElement?, NSView) -> Void = { _, _ in }
@@ -213,7 +216,13 @@ struct PopupBlockView: View {
                     .buttonStyle(.plain)
                     .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let id = block.selectOutputDeviceField.flatMap({ fields[$0] }) {
-                Button { context.selectOutputDevice(id) } label: {
+                Button { context.selectAudioDevice(id, false) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
+            } else if let id = block.selectInputDeviceField.flatMap({ fields[$0] }) {
+                Button { context.selectAudioDevice(id, true) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
                 }
                     .buttonStyle(.plain)
@@ -520,7 +529,7 @@ struct PopupBlockView: View {
             MenuBarItemsRow(items: items, appearance: appearance, openAnchor: context.menuBarItemAnchor, open: context.openMenuBarItem,
                             hover: context.hoverMenuBarItem, press: context.pressMenuItem, place: context.placeMenuBarItem)
         case let .essentials(kind, timeZone):
-            EssentialsDetails(kind: kind, timeZone: timeZone, fields: fields, context: context, appearance: appearance)
+            EssentialsDetails(kind: kind, timeZone: timeZone, style: inheritedStyle, fields: fields, context: context, appearance: appearance)
         }
     }
 }

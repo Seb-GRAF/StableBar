@@ -61,6 +61,11 @@ enum SceneRenderer {
                 break
             }
         }
+        AudioMixer.shared = AudioMixer(sample: scene.mixer?.state ?? MixerState())
+        // A provider no widget shows, such as the microphone behind the Sound details, takes its sample by name.
+        for name in scene.outputs.keys where providers[name] == nil && !configuration.widgets.contains(where: { $0.id == name }) {
+            store.widgetScripts.providers[name] = try sample(scene, keys: [name])
+        }
         store.workspaceStore.source = configuration.workspaceSource
         store.workspaceStore.desktopShortcuts = DesktopShortcuts(read: {
             Dictionary(uniqueKeysWithValues: scene.desktopShortcuts.map { number in

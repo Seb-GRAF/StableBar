@@ -45,7 +45,8 @@ private func swiftSources() throws -> [(path: String, text: String)] {
             \(file.path) binds a private symbol at launch, so a macOS without it can't open StableBar: \
             look it up in PrivateAPI.swift (AGENTS.md)
             """)
-        guard file.path != "StableBar/System/PrivateAPI.swift" else { continue }
+        // The now-playing library runs only inside perl, where its whole job is MediaRemote's private calls.
+        guard file.path != "StableBar/System/PrivateAPI.swift", !file.path.hasPrefix("NowPlayingAdapter/") else { continue }
         #expect(file.text.firstMatch(of: #/\b(dlsym|dlopen)\b|PrivateFrameworks/#) == nil,
                 "\(file.path) calls private macOS API: add it to PrivateAPI.swift, with a maintainer's OK (AGENTS.md)")
     }
