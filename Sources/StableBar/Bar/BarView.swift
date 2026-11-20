@@ -57,6 +57,8 @@ struct BarView: View {
             // The edit bar starts from the widths this bar measured, so switching draws every widget where it was.
             if store.barEditing.isActive && !preview {
                 BarEditStart(store: store, display: display, widths: $restingWidths)
+            } else if store.barEditing.setupCoversDisplay == display.id && !preview {
+                EmptyView()
             } else if let config = store.configuration?.onScreen(ScreenKind(display)) {
                 let scale = CGFloat(config.bar.scale(for: display))
                 let barGeometry = config.barGeometry(for: display)

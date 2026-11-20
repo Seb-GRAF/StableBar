@@ -55,6 +55,10 @@ final class BarEditing {
         didSet { if setupIsOpen { end() } }
     }
 
+    /// The display whose bar setup's tour covers while its copy of the bar waits on the stage. That bar draws nothing
+    /// meanwhile, so each choice redraws only the copy.
+    var setupCoversDisplay: Int?
+
     var menuTitle: String { isActive ? "Finish Editing Bar" : "Edit Bar in Place" }
     var menuIcon: MenuIcon { isActive ? .finishEditing : .editBar }
     var isAvailable: Bool { store?.configuration != nil && !setupIsOpen }
