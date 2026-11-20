@@ -14,8 +14,9 @@ struct SetupTourView: View {
     let wallpaper: URL?
     /// Closes setup, once it's finished or to skip it.
     let close: () -> Void
-    /// Puts the tour under the macOS menu bar but over the bar, under the bar once it's in place, or under System
-    /// Settings. The intro covers the menu bar too.
+    /// Puts the tour over the macOS menu bar, as the intro and Make it yours do, under the menu bar but over the bar,
+    /// under the bar once it's in place, or under System Settings.
+    let cover: () -> Void
     let raise: () -> Void
     let reveal: () -> Void
     let lower: () -> Void
@@ -26,7 +27,7 @@ struct SetupTourView: View {
     @State private var settled: Bool
     /// Whether the tour still covers the macOS menu bar, which would hide macOS's own prompts.
     @State private var covering: Bool
-    /// Whether the bar has flown to its place, after Finish setup.
+    /// Whether the bar has flown to its place, after Continue.
     @State private var landed: Bool
     @State private var previews: [String: ThemePreview] = [:]
     @State private var confirmingSkip = false
@@ -55,8 +56,8 @@ struct SetupTourView: View {
     private static let glow = LinearGradient(colors: [.clear, .orange, warm, .orange, .clear], startPoint: .leading, endPoint: .trailing)
 
     init(session: SetupSession, display: BarDisplay, menuBarHeight: @escaping () -> Double, dock: Double, backdrop: SetupBackdrop,
-         wallpaper: URL?, close: @escaping () -> Void, raise: @escaping () -> Void, reveal: @escaping () -> Void,
-         lower: @escaping () -> Void, editBar: (() -> Void)?) {
+         wallpaper: URL?, close: @escaping () -> Void, cover: @escaping () -> Void, raise: @escaping () -> Void,
+         reveal: @escaping () -> Void, lower: @escaping () -> Void, editBar: (() -> Void)?) {
         _session = Bindable(session)
         self.display = display
         self.menuBarHeight = menuBarHeight
@@ -65,13 +66,14 @@ struct SetupTourView: View {
         self.backdrop = backdrop
         self.wallpaper = wallpaper
         self.close = close
+        self.cover = cover
         self.raise = raise
         self.reveal = reveal
         self.lower = lower
         self.editBar = editBar
         _settled = State(initialValue: session.step != .intro)
-        _covering = State(initialValue: session.step == .intro)
-        _landed = State(initialValue: session.step == .done)
+        _covering = State(initialValue: [.intro, .choose].contains(session.step))
+        _landed = State(initialValue: [.allow, .done].contains(session.step))
     }
 
     /// Where the bar sits on a display of `size`, measured down from its top.
@@ -85,8 +87,13 @@ struct SetupTourView: View {
     /// The width the bar is laid out at on the stage.
     private func stageWidth(_ size: CGSize) -> Double { min(size.width - 112, 1400) }
 
-    /// What the tour leaves free at the top: the macOS menu bar, once the intro stops covering it.
+    /// What the tour leaves free at the top: the macOS menu bar, once Make it yours stops covering it.
     private var top: Double { covering ? 0 : currentMenuBarHeight }
+
+    /// The height Make it yours keeps for the bar: the tallest theme's, so choosing a theme doesn't move the page.
+    private func stageHeight(_ bar: CGRect) -> Double {
+        previews.values.map { $0.configuration(for: barAppearance).bar.height }.reduce(bar.height, max)
+    }
 
     /// The top of a group `height` high, a little above the middle of the space between the menu bar and the toolbar.
     private func groupTop(_ size: CGSize, height: Double) -> Double {
@@ -101,19 +108,18 @@ struct SetupTourView: View {
         return (title, title + 126 + bar / 2, presets, presets + 98 + 30)
     }
 
-    /// The tops of Allow's title and card, and the middle of the bar between them, smaller than on Make it yours.
-    private func allowLayout(_ size: CGSize, bar: Double) -> (title: Double, bar: Double, card: Double) {
-        let title = groupTop(size, height: 84 + bar * 0.68 + 36 + allowCardHeight)
-        return (title, title + 84 + bar * 0.68 / 2, title + 84 + bar * 0.68 + 36)
+    /// The tops of Allow's title and card.
+    private func allowLayout(_ size: CGSize) -> (title: Double, card: Double) {
+        let title = groupTop(size, height: 84 + allowCardHeight)
+        return (title, title + 84)
     }
 
     /// Where the bar sits on each step: its middle, the width it's laid out at, and its scale.
     private func pose(in size: CGSize, bar: CGRect) -> (center: CGPoint, width: Double, scale: Double) {
         switch session.step {
         case .intro: (CGPoint(x: size.width / 2, y: size.height * 0.5), stageWidth(size), 0.72)
-        case .choose: (CGPoint(x: size.width / 2, y: chooseLayout(size, bar: bar.height).bar), stageWidth(size), 1)
-        case .allow: (CGPoint(x: size.width / 2, y: allowLayout(size, bar: bar.height).bar), stageWidth(size), 0.68)
-        case .done: (CGPoint(x: bar.midX, y: bar.midY), size.width, 1)
+        case .choose: (CGPoint(x: size.width / 2, y: chooseLayout(size, bar: stageHeight(bar)).bar), stageWidth(size), 1)
+        case .allow, .done: (CGPoint(x: bar.midX, y: bar.midY), size.width, 1)
         }
     }
 
@@ -157,7 +163,7 @@ struct SetupTourView: View {
                     choose(size: size, bar: bar)
                 }
                 if session.step == .allow {
-                    allow(size: size, bar: bar)
+                    allow(size: size)
                 }
                 if session.step == .done && landed {
                     done
@@ -169,7 +175,7 @@ struct SetupTourView: View {
                 }
                 GlassCloseButton(title: "Skip setup", action: skip)
                     .background(.black.opacity(0.3), in: Circle())
-                    .position(x: size.width - 38, y: max(top, session.step == .done ? bar.maxY : 0) + 38)
+                    .position(x: size.width - 38, y: max(top, landed ? bar.maxY : 0) + 38)
                     .opacity(session.step == .intro && !settled && fixedDate == nil ? 0 : 1)
                     .animation(.easeOut(duration: 0.4), value: settled)
             }
@@ -205,8 +211,14 @@ struct SetupTourView: View {
         .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             session.refreshAccess()
-            // Back from System Settings, the tour covers the bar again.
-            if [.choose, .allow].contains(session.step) { raise() }
+            // Back from System Settings, the tour goes under the bar again.
+            if session.step == .allow && landed { reveal() }
+        }
+        // macOS asks for Automation in a dialog the tour would cover.
+        .onChange(of: session.waitingForMenuBarAccess) {
+            guard session.waitingForMenuBarAccess, session.step == .choose else { return }
+            covering = false
+            raise()
         }
         .onChange(of: session.review == nil) { if session.review != nil { showsSuggestions = false } }
         .task {
@@ -292,19 +304,16 @@ struct SetupTourView: View {
         withAnimation(.easeOut(duration: 0.35)) { settled = true }
     }
 
-    /// Leaves the intro: the bar rises to the stage, and macOS's menu bar shows above the tour, as it will until the bar
-    /// takes its place.
+    /// Leaves the intro: the bar rises to the stage.
     private func start() {
-        covering = false
-        raise()
         withAnimation(motion.stageAnimation) { session.step = .choose }
     }
 
     /// The bar as it is now: it opens out of a glowing line in the intro, waits on the stage over the top of the
-    /// wallpaper, and flies to its place at the end.
+    /// wallpaper, and flies to its place after Make it yours.
     private func stageBar(size: CGSize, bar: CGRect, intro: SetupIntro) -> some View {
         let pose = pose(in: size, bar: bar)
-        let staged = session.step != .done
+        let staged = [.intro, .choose].contains(session.step)
         let notch = display.notch.map { $0.upperBound - $0.lowerBound }
         return ZStack {
             if session.step == .intro {
@@ -363,7 +372,7 @@ struct SetupTourView: View {
 
     /// Make it yours: a preset for the bar's widgets and a theme for its look, with the bar between the title and them.
     @ViewBuilder private func choose(size: CGSize, bar: CGRect) -> some View {
-        let layout = chooseLayout(size, bar: bar.height)
+        let layout = chooseLayout(size, bar: stageHeight(bar))
         VStack(spacing: 10) {
             title("Make it yours.")
             Text("Pick your widgets and a look. Your bar changes as you choose.")
@@ -396,7 +405,6 @@ struct SetupTourView: View {
         HStack(spacing: 12) {
             ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
                 let selected = session.preset == preset
-                let store = session.widgetSets(preset).contains { if case .store = $0 { true } else { false } }
                 SetupTile(selected: selected) {
                     Task {
                         await session.loadStoreWidgets()
@@ -410,17 +418,7 @@ struct SetupTourView: View {
                             .frame(width: 38, height: 38)
                             .background(.white.opacity(selected ? 0.92 : 0.1), in: RoundedRectangle(cornerRadius: 10))
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text(preset.title).font(.system(size: 15, weight: .semibold))
-                                if store {
-                                    Text("Store")
-                                        .font(.system(size: 10.5, weight: .semibold))
-                                        .foregroundStyle(Self.warm)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 1.5)
-                                        .background(Self.warm.opacity(0.14), in: Capsule())
-                                }
-                            }
+                            Text(preset.title).font(.system(size: 15, weight: .semibold))
                             Text(preset.summary).font(.system(size: 12)).foregroundStyle(.white.opacity(0.62)).lineLimit(1)
                         }
                         Spacer(minLength: 0)
@@ -488,10 +486,10 @@ struct SetupTourView: View {
             : .package(id: choice.manifest.id, version: choice.isBundled ? nil : choice.manifest.version)
     }
 
-    /// Allow what your bar needs: one row for each thing macOS must allow, each with its own button, then the preset's
-    /// Store widgets, each with its review.
-    @ViewBuilder private func allow(size: CGSize, bar: CGRect) -> some View {
-        let layout = allowLayout(size, bar: bar.height)
+    /// Allow what your bar needs: one row for each thing macOS must still allow, each with its own button, then the
+    /// preset's Store widgets, each with its review.
+    @ViewBuilder private func allow(size: CGSize) -> some View {
+        let layout = allowLayout(size)
         title("Allow what your bar needs.", size: 36)
             .padding(.top, layout.title)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -512,10 +510,13 @@ struct SetupTourView: View {
             return (entry, settings)
         }
         let leftOut = session.preset.map(session.leftOut) ?? []
+        let placed = if case .placed = session.placementPhase { true } else { false }
         return VStack(alignment: .leading, spacing: 0) {
             section("macOS asks once for each").padding(EdgeInsets(top: 14, leading: 18, bottom: 2, trailing: 18))
-            automationRow
-            divider
+            if !placed {
+                automationRow
+                divider
+            }
             accessibilityRow
             if calendars {
                 divider
@@ -558,11 +559,7 @@ struct SetupTourView: View {
         .padding(.bottom, 8)
         .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 18))
         .glass(RoundedRectangle(cornerRadius: 18))
-        .task {
-            session.store.workspaceStore.refreshDesktopShortcuts()
-            // A menu bar that already hides needs no Automation, so the bar can take its place at once.
-            if session.menuBarHides && session.placementChoice == nil { await session.place(.top) }
-        }
+        .task { session.store.workspaceStore.refreshDesktopShortcuts() }
     }
 
     private var divider: some View {
@@ -905,21 +902,28 @@ struct SetupTourView: View {
         next?()
     }
 
-    /// Continue, or Back and Finish setup, which waits for what the bar needs from macOS.
+    /// Continue, which waits for macOS to answer for Automation, or Back and Finish setup, which waits for what the bar
+    /// needs from macOS.
     private var toolbar: some View {
         let allowing = session.step == .allow
+        let asking = switch session.placementPhase {
+        case .checkingAccess, .changingMenuBar: true
+        default: false
+        }
         return HStack(spacing: 2) {
             if allowing {
-                Button {
-                    withAnimation(motion.stageAnimation) { session.step = .choose }
-                } label: {
+                Button(action: back) {
                     Image(systemName: "chevron.left").font(.system(size: 14, weight: .semibold)).frame(width: 36)
                 }
                 .buttonStyle(GlassButtonStyle(selected: false, round: true))
                 .accessibilityLabel("Back")
             }
             Button {
-                if allowing { land() } else { withAnimation(motion.stageAnimation) { session.step = .allow } }
+                if allowing {
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.3) : .spring(duration: 0.7, bounce: 0.22)) { session.step = .done }
+                } else {
+                    takePlace()
+                }
             } label: {
                 HStack(spacing: 7) {
                     Text(allowing ? "Finish setup" : "Continue")
@@ -928,7 +932,7 @@ struct SetupTourView: View {
             }
             .buttonStyle(GlassButtonStyle(selected: true))
             .keyboardShortcut(.defaultAction)
-            .disabled(allowing && !(session.readyToLand && session.missingPermissions.isEmpty))
+            .disabled(allowing ? !(session.readyToLand && session.missingPermissions.isEmpty) : asking)
         }
         .padding(4)
         .background(.black.opacity(0.3), in: Capsule())
@@ -936,15 +940,27 @@ struct SetupTourView: View {
         .fixedSize()
     }
 
-    /// The bar flies from the stage to its place as the backdrop fades, where the bar itself takes over from its copy;
-    /// then a warm line spreads under it and the last card drops in.
-    private func land() {
-        raise()
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .smooth(duration: 0.9)) { session.step = .done }
+    /// Once macOS has answered for Automation, the bar flies from the stage to its place, in the menu bar's or below it,
+    /// where the bar itself takes over from its copy.
+    private func takePlace() {
         Task {
+            if session.placementChoice == nil { await session.place(.top) }
+            covering = false
+            raise()
+            withAnimation(reduceMotion ? .easeInOut(duration: 0.35) : .smooth(duration: 0.9)) { session.step = .allow }
             try? await Task.sleep(for: .seconds(reduceMotion ? 0.35 : 0.9))
             reveal()
-            withAnimation(reduceMotion ? .easeOut(duration: 0.3) : .spring(duration: 0.7, bounce: 0.22)) { landed = true }
+            landed = true
+        }
+    }
+
+    /// The bar's copy takes the bar's place again, then flies back to the stage over the menu bar.
+    private func back() {
+        landed = false
+        Task {
+            cover()
+            covering = true
+            withAnimation(motion.stageAnimation) { session.step = .choose }
         }
     }
 

@@ -10,8 +10,9 @@ final class SetupWindow {
     private var tour: SetupTourPanel?
     private var editBar: (() -> Void)?
 
-    /// The intro covers the whole screen, the macOS menu bar included. Then the tour covers the bar, which waits at the
-    /// top for its copy on the stage to fly there; afterwards the bar shows over the tour.
+    /// The intro and Make it yours cover the whole screen, the macOS menu bar included. While macOS asks for Automation
+    /// and the bar's copy on the stage flies to its place, the tour stays under the menu bar but over the bar; afterwards
+    /// the bar shows over the tour.
     private static let introLevel = NSWindow.Level(rawValue: NSWindow.Level.mainMenu.rawValue + 1)
     private static let stageLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
     private static let tourLevel = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue - 1)
@@ -60,7 +61,7 @@ final class SetupWindow {
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.level = session!.step == .intro ? Self.introLevel : Self.tourLevel
+        panel.level = [.intro, .choose].contains(session!.step) ? Self.introLevel : Self.tourLevel
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenNone]
         let display = BarDisplay(screen: screen)
         // The screen as it is now, found by its display number rather than its place among the screens, which can
@@ -71,6 +72,7 @@ final class SetupWindow {
         let host = NSHostingView(rootView: SetupTourView(session: session!, display: display, menuBarHeight: menuBarHeight, dock: dock,
                                                          backdrop: SetupBackdrop(), wallpaper: NSWorkspace.shared.readableDesktopImageURL(for: screen),
                                                          close: { [weak self] in self?.closeTour() },
+                                                         cover: { [weak panel] in panel?.level = Self.introLevel },
                                                          raise: { [weak panel] in panel?.level = Self.stageLevel },
                                                          reveal: { [weak panel] in panel?.level = Self.tourLevel },
                                                          lower: { [weak panel] in panel?.level = .normal },
@@ -444,15 +446,15 @@ final class SetupSession {
         store.registry.permissions(for: store.configuration).contains(.calendars) || needsCalendarSetup && !preferences.deferMeetings
     }
 
-    /// Setup's steps in order: the intro, the bar's widgets and look, what macOS must allow, and the end, where the bar
-    /// takes its place.
+    /// Setup's steps in order: the intro, the bar's widgets and look, after which the bar takes its place, what macOS
+    /// must still allow, and the end.
     enum Step: Int, CaseIterable { case intro, choose, allow, done }
 
     /// How the bar's move to the menu bar's place stands, which Automation's row shows.
     var placementPhase: SetupPlacement.Phase { placing.phase }
 
-    /// Whether the bar can leave the stage for its place: macOS answered for Automation, or the menu bar didn't need to
-    /// change, and Accessibility is allowed.
+    /// Whether setup can finish: macOS answered for Automation, or the menu bar didn't need to change, and Accessibility
+    /// is allowed.
     var readyToLand: Bool {
         guard accessibilityAccess else { return false }
         return switch placing.phase {

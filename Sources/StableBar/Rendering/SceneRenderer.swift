@@ -513,7 +513,7 @@ enum SceneRenderer {
         let view = ZStack(alignment: .top) {
             SetupDesktop(backdrop: backdrop)
             SetupTourView(session: session, display: display, menuBarHeight: { hides ? 0 : setupMenuBarHeight }, dock: 0,
-                          backdrop: backdrop, wallpaper: nil, close: {}, raise: {}, reveal: {}, lower: {}, editBar: {})
+                          backdrop: backdrop, wallpaper: nil, close: {}, cover: {}, raise: {}, reveal: {}, lower: {}, editBar: {})
             SetupChrome(session: session, store: store)
         }
         .environment(\.sceneWallpaper, wallpaper)
@@ -544,9 +544,9 @@ enum SceneRenderer {
     }
 
     /// The bar above setup's tour where its configuration puts it, since setup's choices show in the tour, not on the
-    /// bar, and the macOS menu bar over the top of the screen while it shows, except under the intro. Until Done, the
-    /// tour covers the bar and draws its own copy. The tour places the bar from the same configuration and the same menu
-    /// bar, so the two agree.
+    /// bar, and the macOS menu bar over the top of the screen while it shows, except under the intro and Make it yours.
+    /// Until Allow, the tour covers the bar and draws its own copy. The tour places the bar from the same configuration
+    /// and the same menu bar, so the two agree.
     private struct SetupChrome: View {
         let session: SetupSession
         let store: BarStore
@@ -555,14 +555,14 @@ enum SceneRenderer {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
             let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                if session.step != .done {
+                if [.intro, .choose].contains(session.step) {
                     Color.clear
                 } else if let settings, settings.position == .bottom {
                     bar(store).padding(.bottom, settings.offset)
                 } else {
                     bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)
                 }
-                if !session.menuBarHides && session.step != .intro {
+                if !session.menuBarHides && ![.intro, .choose].contains(session.step) {
                     Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
                 }
             }

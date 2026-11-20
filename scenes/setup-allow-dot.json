@@ -1,0 +1,102 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": {
+      "id": "dot"
+    },
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "app-menu",
+        "type": "appMenu",
+        "position": "left"
+      },
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right"
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "details": true,
+        "layout": {
+          "type": "row",
+          "children": [
+            {
+              "type": "battery"
+            },
+            {
+              "type": "field",
+              "field": "text"
+            }
+          ]
+        }
+      },
+      {
+        "id": "date",
+        "type": "clock",
+        "position": "right",
+        "format": "EEE d MMM",
+        "role": "secondary",
+        "details": true
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "format": "HH:mm",
+        "role": "time",
+        "details": true
+      },
+      {
+        "id": "menu-bar-items",
+        "type": "menuBarItems",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2.fill",
+      "value": 0.45,
+      "fields": {
+        "volumeAvailable": "true",
+        "muted": "false",
+        "volume": "45",
+        "device": "MacBook Pro Speakers"
+      },
+      "values": {
+        "volume": 0.45
+      }
+    },
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    }
+  },
+  "activeApp": "com.apple.Safari",
+  "draw": "setup",
+  "setup": {
+    "step": "allow",
+    "preset": "minimal",
+    "menuBarHides": true,
+    "accessibility": false
+  }
+}
