@@ -65,11 +65,15 @@ struct SoundDetails: View {
                     }
                 }
             }
-            if let volume {
+            if volume != nil || fields["muted"] != nil {
                 HStack(spacing: 8) {
-                    level(volume, title: input ? "Input volume" : "Volume",
-                          symbol: input ? "mic.fill" : AudioMonitor.icon(volume: volume, muted: false) + ".fill") {
-                        context.runAction(.set(input ? .inputVolume : .volume), ["VALUE": String($0)])
+                    if let volume {
+                        level(volume, title: input ? "Input volume" : "Volume",
+                              symbol: input ? "mic.fill" : AudioMonitor.icon(volume: volume, muted: false) + ".fill") {
+                            context.runAction(.set(input ? .inputVolume : .volume), ["VALUE": String($0)])
+                        }
+                    } else {
+                        Spacer()
                     }
                     if fields["muted"] != nil {
                         RoundButton(symbol: input ? "mic.slash.fill" : "speaker.slash.fill", active: muted,

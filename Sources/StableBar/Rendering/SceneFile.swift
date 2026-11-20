@@ -156,8 +156,8 @@ struct SceneFile: Decodable {
 
     /// Regular apps that talk to CoreAudio, each with its own choice and whether it plays, and the output devices, the
     /// first being the default.
-    struct Mixer: Decodable, Equatable {
-        struct App: Decodable, Equatable {
+    struct Mixer: Equatable {
+        struct App: Equatable {
             var id: String
             var name: String
             var volume: Double?
@@ -166,7 +166,7 @@ struct SceneFile: Decodable {
             var playing: Bool?
         }
 
-        struct Output: Decodable, Equatable {
+        struct Output: Equatable {
             var uid: String
             var name: String
         }
@@ -382,6 +382,46 @@ extension SceneFile.Setup: Decodable {
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
         workspaceCheck = try values.decodeIfPresent(WorkspaceCheck.self, forKey: .workspaceCheck)
         suggested = try values.decodeIfPresent([PackageIndex.Entry].self, forKey: .suggested) ?? []
+    }
+}
+
+extension SceneFile.Mixer: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case apps, outputs }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        apps = try values.decode([App].self, forKey: .apps)
+        outputs = try values.decode([Output].self, forKey: .outputs)
+        if Set(apps.map(\.id)).count != apps.count {
+            throw DecodingError.dataCorruptedError(forKey: .apps, in: values, debugDescription: "The mixer names each app once.")
+        }
+    }
+}
+
+extension SceneFile.Mixer.App: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case id, name, volume, muted, output, playing }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        name = try values.decode(String.self, forKey: .name)
+        volume = try values.decodeIfPresent(Double.self, forKey: .volume)
+        muted = try values.decodeIfPresent(Bool.self, forKey: .muted)
+        output = try values.decodeIfPresent(String.self, forKey: .output)
+        playing = try values.decodeIfPresent(Bool.self, forKey: .playing)
+    }
+}
+
+extension SceneFile.Mixer.Output: Decodable {
+    enum CodingKeys: String, CodingKey, CaseIterable { case uid, name }
+
+    init(from decoder: Decoder) throws {
+        try decoder.rejectUnknownKeys(CodingKeys.self)
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        uid = try values.decode(String.self, forKey: .uid)
+        name = try values.decode(String.self, forKey: .name)
     }
 }
 

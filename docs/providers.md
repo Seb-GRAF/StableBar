@@ -39,7 +39,7 @@ A stream writes one complete JSON object per line, including `text`, and flushes
 
 Set `whenVisible` to `true` to suspend a provider when none of its consumers is visible on any display, including widgets moved to overflow. Removing or disabling the last consuming widget stops the provider. Even when none of its consumers is visible, a provider whose events a widget subscribes to stays running; see [Script events](create-a-widget.md#script-events). Scripts and providers pause while the Mac or its displays sleep, while the screen is locked and while another user has the Mac through fast user switching, and run again once none of these holds: a Mac that wakes on the lock screen keeps them paused until you unlock it, and a script subscribed to `wake` then gets `resume` instead. Resuming preserves the last output and graph history, and starts a fresh update with `SENDER=resume`. A suspended or stopped `wifi`, `audio`, `inputSource`, `microphone`, `privacy` or `battery` provider removes its macOS listeners.
 
-Native providers use public macOS APIs and launch no shell commands. The exception is `bluetooth`, which runs `system_profiler` itself, not through a shell:
+Native providers use public macOS APIs and launch no shell commands. The exceptions are `bluetooth`, which runs `system_profiler` itself, not through a shell, and `nowPlaying`, which reads the private MediaRemote framework through StableBar's own library in `/usr/bin/perl`:
 
 | Type | Output contract |
 | --- | --- |

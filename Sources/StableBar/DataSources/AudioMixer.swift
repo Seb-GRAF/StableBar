@@ -122,29 +122,31 @@ final class AudioMixer {
                 } else {
                     defaults.set(try? JSONEncoder().encode(settings), forKey: Self.settingsKey)
                 }
-            case let .stopTap(id): onTaps(id) { $0.byApp.removeValue(forKey: id)?.stop() }
+            case let .stopTap(id): onTaps { $0.byApp.removeValue(forKey: id)?.stop() }
             case let .startTap(id, tap):
-                onTaps(id) { taps in
+                onTaps(failing: (id, tap)) { taps in
                     guard #available(macOS 14.2, *) else { return }
                     taps.byApp[id] = try AppAudioTap(tap)
                 }
-            case let .setGain(id, gain): onTaps(id) { $0.byApp[id]?.setGain(gain) }
-            case let .setPlaying(id, playing): onTaps(id) { try $0.byApp[id]?.setPlaying(playing) }
+            case let .setGain(id, gain): onTaps { $0.byApp[id]?.setGain(gain) }
+            case let .setPlaying(id, playing):
+                onTaps(failing: state.taps[id].map { (id, $0) }) { try $0.byApp[id]?.setPlaying(playing) }
             }
         }
     }
 
     /// Runs `work` on the taps after the work before it, off the main actor, since starting and stopping a tap waits for
-    /// CoreAudio. When it fails, the app's tap ends and the app plays as macOS does.
-    private func onTaps(_ id: String, _ work: @escaping @Sendable (Taps) throws -> Void) {
+    /// CoreAudio. When it fails, the app's tap ends and the app plays as macOS does; `failing` names the plan it was for.
+    private func onTaps(failing plan: (id: String, tap: MixerState.Tap)? = nil, _ work: @escaping @Sendable (Taps) throws -> Void) {
         let previous = tapsTail
         tapsTail = Task { [taps] in
             await previous?.value
             do {
                 try await BlockingWork.run { try work(taps) }
             } catch {
-                _ = try? await BlockingWork.run { taps.byApp.removeValue(forKey: id)?.stop() }
-                perform(state.handle(.tapFailed(id)))
+                guard let plan else { return }
+                _ = try? await BlockingWork.run { taps.byApp.removeValue(forKey: plan.id)?.stop() }
+                perform(state.handle(.tapFailed(plan.id, plan.tap)))
             }
         }
     }

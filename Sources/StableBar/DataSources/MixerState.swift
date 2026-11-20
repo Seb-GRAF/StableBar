@@ -61,8 +61,9 @@ struct MixerState: StateMachine, Equatable {
         case setMuted(String, Bool)
         /// An output device's UID, or nil for the default output.
         case setOutput(String, String?)
-        /// The app's tap couldn't start: it plays as macOS does until its processes or its output change.
-        case tapFailed(String)
+        /// The app's tap couldn't start or play as `Tap` planned: it plays as macOS does until its processes or its
+        /// output change. A failure of a plan since replaced changes nothing.
+        case tapFailed(String, Tap)
     }
 
     enum Effect: Equatable {
@@ -111,7 +112,9 @@ struct MixerState: StateMachine, Equatable {
         case let .setVolume(id, volume): effects = change(id) { $0.volume = min(max(volume, 0), 1) }
         case let .setMuted(id, muted): effects = change(id) { $0.muted = muted }
         case let .setOutput(id, output): effects = change(id) { $0.output = output }
-        case let .tapFailed(id): failed[id] = taps.removeValue(forKey: id)
+        case let .tapFailed(id, tap):
+            guard taps[id] == tap else { break }
+            failed[id] = taps.removeValue(forKey: id)
         }
         return effects + tapEffects()
     }

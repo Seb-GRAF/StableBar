@@ -46,7 +46,7 @@ final class AppWatcher: NSObject {
             behindPrompt = activeApp
             return
         }
-        let returning = front == behindPrompt
+        let returning = behindPrompt != nil && front == behindPrompt
         behindPrompt = nil
         guard !returning else { return }
         activeApp = front

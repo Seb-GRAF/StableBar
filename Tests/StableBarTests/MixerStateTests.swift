@@ -96,7 +96,7 @@ private func mixer(settings: [String: MixerState.Setting] = [:], permission: Mix
 
 @Test func aTapThatFailedIsTriedAgainOnlyWhenItWouldDiffer() {
     var state = mixer(settings: ["com.apple.Music": .init(volume: 0.5)])
-    #expect(state.handle(.tapFailed("com.apple.Music")).isEmpty)
+    #expect(state.handle(.tapFailed("com.apple.Music", state.taps["com.apple.Music"]!)).isEmpty)
     #expect(state.handle(.processesChanged([music], apps: ["com.apple.Music": "Music"])).isEmpty)
     #expect(state.handle(.setOutput("com.apple.Music", "headphones")).last
             == .startTap("com.apple.Music", .init(processes: [10], output: "headphones", gain: 0.25, playing: true)))
@@ -109,4 +109,13 @@ private func mixer(settings: [String: MixerState.Setting] = [:], permission: Mix
     var state = MixerState(settings: ["com.tinyspeck.slackmacgap": .init(muted: true)])
     _ = state.handle(.processesChanged([music, finder, agent, slack], apps: ["com.apple.finder": "Finder"]))
     #expect(state.shown.map(\.id) == ["com.apple.finder", "com.apple.Music", "com.tinyspeck.slackmacgap"])
+}
+
+@Test func theFailureOfAReplacedPlanLeavesTheNewOneRunning() {
+    var state = mixer(settings: ["com.apple.Music": .init(volume: 0.5)])
+    let replaced = state.taps["com.apple.Music"]!
+    _ = state.handle(.setOutput("com.apple.Music", "headphones"))
+    let current = state.taps["com.apple.Music"]
+    #expect(state.handle(.tapFailed("com.apple.Music", replaced)).isEmpty)
+    #expect(state.taps["com.apple.Music"] == current)
 }
