@@ -197,12 +197,24 @@ struct ThemeSampleBar: View {
         let cell = workspace?.cellStyle(focused ? .focused : .empty) ?? WorkspaceCellStyle()
         let style = cell.resting
         let underline = cell.underline
-        let label = Text("\(number)")
+        let show = style.show ?? .both
+        let label = HStack {
+            if show == .both || show == .label { Text("\(number)") }
+        }
             .font(WidgetAppearance(style, defaults: look.defaults).font)
             .foregroundStyle(style.foreground?.color ?? (focused ? appearance.accentText : appearance.foreground))
             .padding(.leading, style.paddingLeading ?? style.paddingHorizontal ?? 7)
             .padding(.trailing, style.paddingTrailing ?? style.paddingHorizontal ?? 7)
             .frame(width: style.width.map { CGFloat($0) }, height: style.height.map { CGFloat($0) })
+            .background {
+                if workspace?.indicator == .cells {
+                    let shape = RoundedRectangle(cornerRadius: style.cornerRadius ?? max(appearance.cornerRadius - 4, 0))
+                    shape.fill(style.background?.shapeStyle ?? AnyShapeStyle(Color.clear))
+                        .overlay {
+                            if let border = style.borderColor { shape.strokeBorder(border.color, lineWidth: style.borderWidth ?? 1) }
+                        }
+                }
+            }
             .overlay(alignment: .bottom) {
                 if focused && workspace?.indicator == .underline && underline.placement != .belowBar {
                     RoundedRectangle(cornerRadius: underline.cornerRadius ?? 0)
@@ -263,6 +275,6 @@ private struct ThemeSampleTile: ViewModifier {
                 RoundedRectangle(cornerRadius: appearance.cornerRadius)
                     .strokeBorder(appearance.borderColor, lineWidth: appearance.borderWidth)
             }
-            .shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, y: 1)
+            .styledShadow(appearance)
     }
 }

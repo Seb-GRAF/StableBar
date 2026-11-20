@@ -144,8 +144,8 @@ struct OrderedStyleOverrides {
 }
 
 func widgetStyleLayers(_ widget: WidgetConfiguration, defaults: WidgetStyle, overrides: OrderedStyleOverrides,
-                       own: ScriptOutput?, role: WidgetStyle = WidgetStyle()) -> [WidgetStyle] {
-    [defaults, role, widget.barStyle, overrides.widgets[widget.id] ?? WidgetStyle(), own?.style ?? WidgetStyle(),
+                       own: ScriptOutput?, role: WidgetStyle = WidgetStyle(), group: WidgetStyle = WidgetStyle()) -> [WidgetStyle] {
+    [defaults, role, group, widget.barStyle, overrides.widgets[widget.id] ?? WidgetStyle(), own?.style ?? WidgetStyle(),
      WidgetStyle(foreground: own?.color)]
 }
 

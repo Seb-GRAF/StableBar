@@ -1,0 +1,24 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "bar": {
+      "height": 28, "spacing": 12,
+      "style": { "background": { "light": "#f2f2f2", "dark": "#1c1c1e" } },
+      "divider": { "background": { "light": "#0000002e", "dark": "#ffffff38" }, "height": 14 }
+    },
+    "defaults": { "background": null, "borderColor": null, "shadowColor": null, "paddingHorizontal": 4, "paddingVertical": 0 },
+    "groups": { "status": { "style": { "background": "#8e8e9333", "cornerRadius": 6, "spacing": 6 } } },
+    "widgets": [
+      { "id": "apple", "type": "text", "text": "", "icon": "apple.logo", "position": "left" },
+      { "id": "project", "type": "text", "text": "StableBar", "position": "left" },
+      { "id": "branch", "type": "text", "text": "main", "icon": "arrow.triangle.branch", "position": "left" },
+      { "id": "focus", "type": "text", "text": "Focus", "icon": "moon.fill", "position": "center" },
+      { "id": "time", "type": "clock", "format": "HH:mm", "position": "center" },
+      { "id": "wifi", "type": "text", "text": "", "icon": "wifi", "position": "right", "group": "status" },
+      { "id": "battery", "type": "text", "text": "82%", "icon": "battery.75percent", "position": "right", "group": "status" },
+      { "id": "date", "type": "clock", "format": "EEE d MMM", "position": "right" }
+    ]
+  },
+  "draw": "bar",
+  "width": 700
+}

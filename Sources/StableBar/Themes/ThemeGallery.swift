@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 let savedThemeBarProperties: Set<String> = [
-    "height", "margin", "inset", "spacing", "background", "style", "notchWidth", "notchSpacing", "fillNotch",
+    "height", "margin", "inset", "spacing", "background", "style", "divider", "notchWidth", "notchSpacing", "fillNotch",
     "popupOffset", "glass"
 ]
 

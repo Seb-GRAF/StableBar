@@ -282,7 +282,8 @@ struct AppearanceView: View {
                                        spacing: editor.fields(["popupDefaults"], on: screen, values: editor.values("popupDefaults", on: screen)),
                                        bar: barFields, fontFamilies: fontFamilies)
         let barLook = BarLookSection(editor: editor, bar: barFields,
-                                     style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]))
+                                     style: editor.fields(["bar", "style"], on: screen, values: (try? bar["style"]?.decoded([String: ConfigurationValue].self)) ?? [:]),
+                                     divider: editor.fields(["bar", "divider"], on: screen, values: (try? bar["divider"]?.decoded([String: ConfigurationValue].self)) ?? [:]))
         let workspaces = editor.fields(["workspaceDefaults"], on: screen, values: editor.values("workspaceDefaults", on: screen))
         let glass = editor.fields(["bar", "glass"], on: screen, values: (try? bar["glass"]?.decoded([String: ConfigurationValue].self)) ?? [:])
         let roles = editor.fields(["roles"], on: screen, values: [:])

@@ -216,7 +216,7 @@ final class ConfigurationEditor {
     func style(for id: String) -> [String: ConfigurationValue] {
         guard let configuration = store.configuration,
               let widget = configuration.widgets.first(where: { $0.id == id }) else { return [:] }
-        let style = resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), widget.style])
+        let style = resolveStyle([configuration.defaults, configuration.roleStyle(widget.role), configuration.groupStyle(of: widget), widget.style])
         if case let .object(properties) = style.configurationValue { return properties }
         return [:]
     }

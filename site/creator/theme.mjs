@@ -311,7 +311,7 @@ export const CONTROLS = [
   control("widgets.shadowRadius", "Shadow radius", "number", ["defaults.shadowRadius"],
     "Set the shadow or glow radius in points.", "styling.md#widget-styles", undefined, { range: [0, 1000] }),
   select("workspaces.indicator", "Indicator", ["workspaceDefaults.indicator"],
-    "Choose background, underline or none.", "widgets.md#workspace-appearance", ["background", "underline", "none"]),
+    "Choose background, underline, cells or none.", "widgets.md#workspace-appearance", ["background", "underline", "cells", "none"]),
   control("workspaces.appIconSize", "App icon size", "number",
     ["workspaceDefaults.appStyle.width", "workspaceDefaults.appStyle.height"],
     "Set native app icons' width and height in points.", "widgets.md#workspace-appearance", undefined,

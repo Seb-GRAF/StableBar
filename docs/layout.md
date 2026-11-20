@@ -10,6 +10,12 @@ Each widget accepts `display`: `"all"` (default), `"active"`, `"main"`, `"builtI
 
 `bar.style` accepts `background`, `cornerRadius`, `borderColor`, `borderWidth` and `borderEdges`. The border defaults to `"bottom"`; `"all"` draws all four edges just inside the visible strip, following its corners. The outline does not change panel size, window clearance or clicks. A notch or the system menu bar can obscure part of the top edge. `bar.margin` (0 by default) insets the bar's background and widgets from every edge of the bar, so a rounded `bar.style` floats below the top of the screen and in from its sides. The bar keeps its height, so the visible strip is `height` minus twice the margin. Scripts can return `barStyle` to change those properties; later widgets override earlier widgets when they set the same property.
 
+`bar.divider` draws a line in the middle of the gap between two widgets or groups that sit side by side: among the left ones, the centered ones or the right ones, never before the first or after the last. Its `background` sets its color and turns it on; `width` (1 by default), `height` (16 by default), `cornerRadius` and `opacity` shape it, and `bar.spacing` sets the gap. Dividers don't show while you edit the bar in place.
+
+```json
+"bar": { "spacing": 12, "divider": { "background": "#8080804d", "height": 14 } }
+```
+
 ## Screen setups
 
 A screen setup is a combination of connected screens: the laptop only, a monitor only, the laptop with a monitor, the laptop with a monitor and a vertical monitor, and so on. A vertical monitor is a screen taller than it is wide. Each setup can have its own bar, with its own widgets on each screen, size, theme and placement. StableBar switches bars when you connect or disconnect a screen.
@@ -35,7 +41,7 @@ Each kind of screen can also have its own layout, bar size and look. While anoth
 }
 ```
 
-`theme` replaces the shared theme on that kind of screen, and `tokens`, `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `workspaceDefaults` and `modeAliases` merge over the shared ones; active profiles still apply on top. `bar` accepts `height`, `offset`, `belowMenuBar`, `margin`, `inset`, `spacing`, `background`, `notchWidth`, `notchSpacing`, `fillNotch`, `style`, `glass`, `appearance` and `popupOffset`, merged over the shared `bar`. Each `layout` list names widget IDs, in order, for that position: `left`, `notchLeft`, `center`, `notchRight` or `right`. Widgets the layout doesn't list keep their own position after the listed ones, and IDs that are not present are skipped. Once a kind of screen has a layout, moves on it keep changing that layout, even when it is the only screen connected. A widget's own settings and content stay shared.
+`theme` replaces the shared theme on that kind of screen, and `tokens`, `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `workspaceDefaults` and `modeAliases` merge over the shared ones; active profiles still apply on top. `bar` accepts `height`, `offset`, `belowMenuBar`, `margin`, `inset`, `spacing`, `background`, `notchWidth`, `notchSpacing`, `fillNotch`, `style`, `divider`, `glass`, `appearance` and `popupOffset`, merged over the shared `bar`. Each `layout` list names widget IDs, in order, for that position: `left`, `notchLeft`, `center`, `notchRight` or `right`. Widgets the layout doesn't list keep their own position after the listed ones, and IDs that are not present are skipped. Once a kind of screen has a layout, moves on it keep changing that layout, even when it is the only screen connected. A widget's own settings and content stay shared.
 
 Right-click a screen thumbnail, or use its **⋯** button, to split or copy that screen's bar. **Own layout and size for this screen** saves the order it shows now as its layout; turning it off removes its `screens` entry so it follows the shared bar again. **Copy from** gives the screen another screen's widgets, order and bar size in one Undo step.
 
@@ -101,6 +107,18 @@ Set `flare` in a group's style to square its top corners and curve them outward 
 
 ```json
 "groups": { "notch": { "style": { "background": "#000000", "cornerRadius": 10, "flare": 8 } } }
+```
+
+A group's `foreground` is the text color of its widgets, such as a clock pill's or a tag's. It wins over `defaults` and the widgets' roles; a widget's own `style`, its states and its data states win over it:
+
+```json
+"groups": { "clock": { "style": { "background": "@token.accent", "foreground": "@token.onAccent" }, "members": [{ "type": "clock" }] } }
+```
+
+A group's `shadowColor` draws a shadow behind its shape, as a widget's does, with `shadowRadius` (2 by default) and the [shadow offsets](styling.md#widget-styles). A hard shadow 3 points down and right:
+
+```json
+"groups": { "status": { "style": { "background": "#ffffff", "shadowColor": "#000000", "shadowRadius": 0, "shadowOffsetX": 3, "shadowOffsetY": 3 } } }
 ```
 
 A `spacer` uses the remaining width. Place it between widgets to separate them without choosing a fixed gap. Widget styles accept `minWidth` and `maxWidth` in addition to a fixed `width`.

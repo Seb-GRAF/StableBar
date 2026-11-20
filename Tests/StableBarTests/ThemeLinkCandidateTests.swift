@@ -991,7 +991,8 @@ struct ThemeLinkCandidateTests {
         ("style.paddingTop", 0, 1_000), ("style.paddingBottom", 0, 1_000),
         ("style.states.hover.height", 0, 1_000), ("style.states.height.spacing", 0, 1_000),
         ("style.states.hover.states.active.fontSize", 6, 40), ("style.opacity", 0, 1),
-        ("glass.transparency", 0, 1)
+        ("glass.transparency", 0, 1), ("divider.width", 0, 6), ("divider.height", 0, 100),
+        ("divider.cornerRadius", 0, 40), ("divider.opacity", 0, 1)
     ], [false, true])
     func barNumbersStayWithinTheirSettingsRanges(
         range: (String, Double, Double), inProfile: Bool

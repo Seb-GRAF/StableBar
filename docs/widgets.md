@@ -160,9 +160,9 @@ macOS has no public API that lists Spaces or their windows, so this source uses 
 
 A `workspaces` widget (also accepted as `aerospace`) accepts `workspace` with:
 
-- `indicator`: `background` (default), `underline` or `none`.
+- `indicator`: `background` (default), `underline`, `cells` or `none`. `cells` draws a shape behind every cell from the style of its state: its `background`, `borderColor` and `borderWidth`, and `cornerRadius`, at the size of the cell without the widget's vertical padding. A state without a background or border draws none.
 - `indicatorStyle`: underline `height`, `width`, `background`, `cornerRadius`, `offsetX`, `offsetY` and `placement`. `"cell"` (default) preserves the cell-relative underline; `"belowBar"` puts its top at the visible bar background's bottom plus `offsetY`, independently of the cell height; on a bar at the bottom of the display it sits on the bar's top side instead, `offsetY` above it. Negative `offsetY` moves the underline upward, or, for a `belowBar` underline on a bar at the bottom, downward toward the bar; the **Bar → Style → Workspaces** and **Theme → Workspaces** controls in Settings accept negative offsets too. Its `states.focused` and `states.visible` style the underline under the focused workspace and under a workspace shown on a display without focus; mode states apply after those.
-- `style`: cell typography, foreground, width, height, horizontal/side padding and spacing. Its `states` style each cell by workspace state: `focused` (the focused workspace), else `visible` (shown on a display without focus), else `empty` (no windows), so a cell has at most one. `focusedStyle`, `visibleStyle` and `emptyStyle` are shorthand for those states. The background indicator uses the state's background or border color. `hover` changes the label and app glyphs; the indicators follow the workspace state. `defaults.states` don't apply to cells.
+- `style`: cell typography, foreground, width, height, horizontal/side padding and spacing. Its `states` style each cell by workspace state: `focused` (the focused workspace), else `visible` (shown on a display without focus), else `empty` (no windows), so a cell has at most one. `focusedStyle`, `visibleStyle` and `emptyStyle` are shorthand for those states. The background indicator uses the state's background or border color. `show` sets what a cell shows: its label and app icons (`both`, the default), only its `label` or its `apps`, or `none`; `showApps: false` still hides the apps. `hover` changes the label and app glyphs; the indicators follow the workspace state. `defaults.states` don't apply to cells.
 - `showEmpty` and `showApps`: control empty workspaces and app icons.
 - `hideApps`: app bundle IDs or app names the widget leaves out, matched like `appGlyphs` keys, so `Adobe Photoshop*` hides every Photoshop version. Hidden apps leave the per-app and `windows` views, and a workspace whose only apps are hidden counts as empty, so `showEmpty: false` hides it unless it's visible on a display. For example, `"workspace": { "hideApps": ["com.1password.1password", "Raycast"] }`.
 - `hideWorkspaces`: workspace names the widget leaves out, unless that workspace is focused, such as `["S", "scratch"]`. In **Settings → Bar**, select the workspace widget and list both in **Hide apps** and **Hide workspaces**, separated by commas.
@@ -178,6 +178,20 @@ A `workspaces` widget (also accepted as `aerospace`) accepts `workspace` with:
 Cells fit their labels and app icons by default, with the same widget padding as other widgets. Vertical widget padding extends the selection background so it fills the widget's height. Set `workspace.style.height` for a fixed cell content height before that padding.
 
 Adjust only the workspace widget's padding in **Settings → Bar → Style → Padding and corners**, or set its `style.paddingVertical`, for example `"style": { "paddingVertical": 4 }`. `style.paddingTop` and `style.paddingBottom` override it individually.
+
+For a pill among dots, set `indicator` to `cells`, give the cells a dot's look and the focused state a pill's. A cell that shows nothing is as wide as its padding, so give the dots `paddingHorizontal` rather than a `width`, which a state can't unset:
+
+```json
+"workspaceDefaults": {
+  "indicator": "cells",
+  "style": {
+    "show": "none", "height": 6, "paddingHorizontal": 3, "cornerRadius": 3, "background": "#8e8e9380",
+    "states": {
+      "focused": { "show": "both", "height": 22, "paddingHorizontal": 9, "cornerRadius": 11, "background": "#0a84ff", "foreground": "#ffffff" }
+    }
+  }
+}
+```
 
 For a sliding underline, set `workspace.indicator` to `underline`, `workspace.style.height` to the bar's height, and `workspace.indicatorStyle` to `{ "height": 2, "background": "#f1efe8", "states": { "visible": { "background": "#f1efe866" } } }`, which dims the underline on displays without focus. The widget's `animation` controls its motion.
 

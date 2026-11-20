@@ -56,13 +56,14 @@ struct BarUnitSurface<Content: View>: View {
             .padding(.top, style.paddingTop ?? style.paddingVertical ?? 0)
             .padding(.bottom, style.paddingBottom ?? style.paddingVertical ?? 0)
         let fill = style.background?.shapeStyle ?? AnyShapeStyle(Color.clear)
+        let shadow = WidgetAppearance(style, defaults: WidgetStyle())
         if let flare = style.flare {
-            surface.background(fill, in: FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare))
+            surface.background { FlaredRectangle(cornerRadius: style.cornerRadius ?? 0, flare: flare).fill(fill).styledShadow(shadow) }
         } else {
             let outlined = contrast == .increased && style.background != nil
             let appearance = WidgetAppearance(WidgetStyle(), defaults: defaults)
             surface
-                .background(fill, in: RoundedRectangle(cornerRadius: style.cornerRadius ?? 0))
+                .background { RoundedRectangle(cornerRadius: style.cornerRadius ?? 0).fill(fill).styledShadow(shadow) }
                 .overlay {
                     if outlined {
                         // As in WidgetView, a RoundedRectangle's border would get stray marks at the ends of a pill offscreen.

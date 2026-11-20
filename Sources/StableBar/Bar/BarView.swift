@@ -144,6 +144,18 @@ struct PlacedUnits: View {
             let visible = Set(units.filter { plan.placements[$0.id] != nil }.flatMap { $0.widgets.map(\.id) })
             ZStack(alignment: .topLeading) {
                 Color.clear.allowsHitTesting(false)
+                if let divider = config.bar.divider, let fill = divider.background {
+                    let width = divider.width ?? 1
+                    ForEach(plan.dividers.keys.sorted(), id: \.self) { id in
+                        RoundedRectangle(cornerRadius: divider.cornerRadius ?? 0)
+                            .fill(fill.shapeStyle)
+                            .frame(width: width, height: divider.height ?? 16)
+                            .opacity(divider.opacity ?? 1)
+                            .frame(height: geometry.size.height / scale)
+                            .offset(x: plan.dividers[id]! - width / 2)
+                            .allowsHitTesting(false)
+                    }
+                }
                 ForEach(units) { unit in
                     if let placement = plan.placements[unit.id] {
                         let alignment: Alignment = switch unit.position {
@@ -370,4 +382,6 @@ extension EnvironmentValues {
     @Entry var fixedDate: Date?
     /// Draws without the network, as a render does: remote images stay empty.
     @Entry var offline = false
+    /// Drawn by `OffscreenSnapshot`, for an image rather than the screen.
+    @Entry var offscreenSnapshot = false
 }

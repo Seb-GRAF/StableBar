@@ -276,6 +276,19 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
     #expect(plan.overflow == [BarOverflow(x: 326, atEnd: true, ids: ["music"]), BarOverflow(x: 694, atEnd: false, ids: ["weather"])])
     #expect(plan.placements["menus"] == BarPlacement(x: 168, width: 150))
     #expect(plan.placements["cpu"] == BarPlacement(x: 732, width: 150))
+    #expect(plan.dividers == ["apple": 164, "cpu": 886])
+}
+
+@Test func dividersSitBetweenNeighboursTheBarDrawsSideBySide() {
+    let plan = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 16, notch: nil).plan(width: 500, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 50),
+        BarLayoutItem(id: "spaces", position: .left, width: 50),
+        BarLayoutItem(id: "music", position: .notchLeft, width: 40),
+        BarLayoutItem(id: "clock", position: .center, width: 60),
+        BarLayoutItem(id: "weather", position: .notchRight, width: 40),
+        BarLayoutItem(id: "battery", position: .right, width: 50)
+    ])
+    #expect(plan.dividers == ["apple": 64, "music": 216, "clock": 284])
 }
 
 @Test func widgetsAtTheNotchStayAgainstItAndTheButtonGoesOnTheirFarSide() {

@@ -345,6 +345,7 @@
               "enum": [
                 "background",
                 "underline",
+                "cells",
                 "none"
               ]
             },
@@ -696,6 +697,14 @@
           ],
           "description": "Workspace indicatorStyle only: cell preserves cell-relative drawing; belowBar starts at the visible bar bottom plus offsetY."
         },
+        "show": {
+          "anyOf": [
+            { "enum": ["both", "label", "apps", "none"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "Workspace cell style only: what the cell shows, its label and app icons (both, the default), one of them, or none."
+        },
         "borderEdges": {
           "anyOf": [
             { "enum": ["bottom", "all"] },
@@ -774,6 +783,14 @@
         },
         "shadowRadius": {
           "$ref": "#/definitions/number"
+        },
+        "shadowOffsetX": {
+          "$ref": "#/definitions/number",
+          "description": "How far the shadow moves right, in points; negative moves it left. 0 by default."
+        },
+        "shadowOffsetY": {
+          "$ref": "#/definitions/number",
+          "description": "How far the shadow drops, in points; negative raises it. 1 by default."
         },
         "height": {
           "$ref": "#/definitions/number"
@@ -1398,6 +1415,7 @@
               "enum": [
                 "background",
                 "underline",
+                "cells",
                 "none"
               ]
             },
@@ -2391,6 +2409,14 @@
             }
           ]
         },
+        "divider": {
+          "anyOf": [
+            { "$ref": "#/definitions/style" },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "A line the bar draws between two widgets or groups side by side. It shows while it has a background, which sets its color; its width is 1 and its height 16 unless set, and cornerRadius and opacity apply too."
+        },
         "appearance": {
           "anyOf": [
             {
@@ -2573,6 +2599,9 @@
             },
             "style": {
               "$ref": "#/definitions/bar/properties/style"
+            },
+            "divider": {
+              "$ref": "#/definitions/bar/properties/divider"
             },
             "glass": {
               "$ref": "#/definitions/bar/properties/glass"

@@ -267,10 +267,13 @@ private func workspace(_ json: String) throws -> WorkspaceConfiguration {
 
 @Test func workspaceAndUnderlineStatesComeFromTheStatesMap() throws {
     let configuration = try workspace(##"""
-    {"style":{"states":{"focused":{"foreground":"#111111"}}},"focusedStyle":{"foreground":"#222222","background":"#333333"},
+    {"style":{"show":"none","states":{"focused":{"foreground":"#111111","show":"both"}}},"focusedStyle":{"foreground":"#222222","background":"#333333"},
      "indicator":"underline","indicatorStyle":{"height":2,"background":"#444444","states":{"visible":{"background":"#555555"}}}}
     """##)
     #expect(configuration.cellStyle(.focused).resting.foreground == HexColor(0x111111ff))
+    #expect(configuration.cellStyle(.focused).resting.show == .both)
+    #expect(configuration.cellStyle(.visible).resting.show == CellContent.none)
+    #expect(configuration.cellStyle(nil).label(hovered: true).show == CellContent.none)
     #expect(configuration.cellStyle(.focused).resting.background == .color(HexColor(0x333333ff)))
     #expect(configuration.cellStyle(.focused).underline.background == .color(HexColor(0x444444ff)))
     #expect(configuration.cellStyle(.visible).underline.background == .color(HexColor(0x555555ff)))

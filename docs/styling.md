@@ -10,6 +10,8 @@ Each widget can override any of these styles:
 
 Styles also accept `hoverForeground`, `height`, `paddingLeading`, `paddingTrailing`, `paddingTop`, `paddingBottom`, `offsetX`, `offsetY` and `opacity`. Side-specific padding overrides horizontal/vertical padding. `ultralight`, `thin` and `light` font weights are available too. Offsets move the drawing without moving its neighbours.
 
+`shadowOffsetX` and `shadowOffsetY` move the `shadowColor` shadow right and down by that many points, or left and up when negative. Unset, a shadow drops 1 point. Widgets, [groups](layout.md#adaptive-layout-and-groups), popups and tooltips draw it.
+
 `symbolVariant` draws SF Symbols in one of their variants, so `bell` with `fill` draws as `bell.fill`: `fill`, `slash`, `circle`, `square` or `rectangle`, or several joined by dots in the order SF Symbols names them (slash, then one shape, then fill), such as `circle.fill` or `slash.circle.fill`. A symbol without that variant keeps its own look. `none` draws symbols as named, undoing a variant set in a lower layer. Like `iconSize`, it reaches a layout's blocks. Set it in a state to change a symbol while the state is active, such as a leaf that fills while the Apple menu is open:
 
 ```json
@@ -113,7 +115,7 @@ Layers apply from lowest to highest:
 
 | Element | Base layers |
 | --- | --- |
-| Bar widget | `defaults` → `roles[role]` → widget `style` → output `widgetStyles` in configuration order → own output `style`/`color` |
+| Bar widget | `defaults` → `roles[role]` → its group's `foreground` → widget `style` → output `widgetStyles` in configuration order → own output `style`/`color` |
 | Layout/popup block | inherited text style → `roles[role]` → block `style` → named output style selected by `styleSource`/`styleField` |
 | Popup panel | `defaults` → `popupDefaults` → widget's explicit `style` → popup `style`; the bar widget's role is excluded. Padding and spacing skip `defaults` and the widget's `style`, starting from 16 points of padding, 12 between the blocks of the popup's top-level column and 6 in any other row, column or list |
 | Group | `groupDefaults` → group `style` |

@@ -49,7 +49,7 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   keys are refused, including legacy `customization` and `removedWidgets`; an empty `widgets` list
   is ignored. Screenshots, includes and extra files are refused. At the root and in every profile,
   `bar` must be a literal object with only `height`, `margin`, `inset`, `spacing`, `background`,
-  `style`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and `glass`. Inside `bar`,
+  `style`, `divider`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and `glass`. Inside `bar`,
   numbers must be literal; colors may use tokens or settings with `choices`. Free-text string settings under
   `bar` are refused, and references cannot supply the `bar` object or its keys. This keeps links
   from changing the bar's edge, its offset or the menu bar's auto-hide. Current and legacy bundled
@@ -63,7 +63,9 @@ Add an entry when a pull request sets a rule, a policy or a choice not to do som
   0…50, `bar.margin` 0…40 and `bar.popupOffset` 0…40 (its pending control in [#664]). Within
   `bar.style` and its states, border width uses 0…6, corner radius 0…40, font size 6…40,
   horizontal/vertical padding 0…40 and opacity 0…1. `bar.glass.transparency` uses 0…1.
-  Gradients in `bar.background` and style backgrounds use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
+  `bar.divider` uses 0…6 for its width and 0…100 for its height, and, as in `bar.style`, 0…40 for its
+  corner radius and 0…1 for its opacity. Gradients in `bar.background`, style backgrounds and
+  `bar.divider.background` use locations 0…1 and angle 0…360. These bounds follow Settings controls. With no
   Settings controls, `bar.notchWidth` uses 0…1,000, `bar.notchSpacing` 0…100 and style offsets
   −1,000…1,000. All remaining numeric values use 0…1,000, including style height, spacing and edge
   padding. These refusals apply to links; folder themes keep the ordinary configuration rules.

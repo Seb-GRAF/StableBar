@@ -307,7 +307,7 @@ final class WidgetPopup {
         let style = tooltipStyle(defaults: defaults, widget: widgetStyle, states: StyleStates(mode: store.barPresentation.modePresentation(on: kind)),
                                  sidePadding: sidePadding)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-        let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
+        let shadowInset = CGFloat(appearance.shadowRadius * 2 + 1 + max(abs(appearance.shadowOffsetX), abs(appearance.shadowOffsetY)))
         let panel = PopupPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         let host = NSHostingView(rootView: TooltipWidth(maxWidth: maxWidth - shadowInset * 2) {
                 content(style)
@@ -383,7 +383,7 @@ final class WidgetPopup {
         let upward = bar.position == .bottom
         let style = popup.baseStyle(widget: widget, defaults: defaults)
         let appearance = WidgetAppearance(style, defaults: WidgetStyle())
-        let shadowInset = CGFloat(appearance.shadowRadius * 2 + 2)
+        let shadowInset = CGFloat(appearance.shadowRadius * 2 + 1 + max(abs(appearance.shadowOffsetX), abs(appearance.shadowOffsetY)))
         let width = min(sizes[widget.id]?.width ?? CGFloat(popup.style.width ?? 360), screen.visibleFrame.width - shadowInset * 2 - 16)
         let gap = CGFloat(popup.gap(below: bar, inPopup: parentPopup != nil))
         let maximumHeight = (upward ? screen.visibleFrame.maxY - edge : edge - screen.visibleFrame.minY) - shadowInset * 2 - 8 - gap
@@ -839,7 +839,8 @@ final class WidgetPopup {
         window.appearance = panel.appearance
         window.alphaValue = 0
         let host = NSHostingView(rootView: PopupCanvas(size: panel.size, inset: inset, upward: panel.opensUpward) {
-            PopupShadowView(cornerRadius: appearance.cornerRadius, color: appearance.shadowColor, radius: appearance.shadowRadius, inset: inset)
+            PopupShadowView(cornerRadius: appearance.cornerRadius, color: appearance.shadowColor, radius: appearance.shadowRadius,
+                            x: appearance.shadowOffsetX, y: appearance.shadowOffsetY, inset: inset)
         })
         window.contentView = PopupRevealView(content: host, size: panel.frame.size)
         return window

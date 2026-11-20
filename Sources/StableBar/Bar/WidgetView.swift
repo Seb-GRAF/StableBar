@@ -269,7 +269,7 @@ struct WidgetView: View {
                 Image(systemName: "exclamationmark.circle.fill").foregroundStyle(.red).font(.system(size: 8)).help(error)
             }
         }
-        .shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, y: 1)
+        .styledShadow(appearance)
         .overlay(alignment: .bottom) {
             if let overlay = widget.overlay {
                 timed { date in

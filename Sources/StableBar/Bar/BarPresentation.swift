@@ -46,7 +46,7 @@ final class BarPresentation {
         for widget in configuration.widgets {
             let script = store.widgetScripts.scripts[widget.id]
             let base = resolveStyle(widgetStyleLayers(widget, defaults: configuration.defaults, overrides: overrides, own: script?.output,
-                                                      role: configuration.roleStyle(widget.role)))
+                                                      role: configuration.roleStyle(widget.role), group: configuration.groupStyle(of: widget)))
             let usesMode = base.usesModeStates || configuration.usesSliderModeStates(widget) || widget.layout?.usesModeStates(roles: configuration.roles) == true
                 || widget.hoverLayout?.usesModeStates(roles: configuration.roles) == true
                 || widget.overlay?.usesModeStates(roles: configuration.roles) == true
@@ -62,7 +62,7 @@ final class BarPresentation {
             for (kind, look) in configuration.screenLooks {
                 guard let own = screenWidgets[kind]![widget.id] else { continue }
                 let base = resolveStyle(widgetStyleLayers(own, defaults: look.defaults, overrides: screenOverrides[kind]!, own: script?.output,
-                                                          role: look.roleStyle(own.role)))
+                                                          role: look.roleStyle(own.role), group: look.groupStyle(of: own)))
                 let screenStates = widgetDataStates(script?.output, widget: own, providers: configuration.providers)
                 let screenUsesMode = usesMode || base.usesModeStates || look.usesSliderModeStates(own)
                     || own.layout?.usesModeStates(roles: look.roles) == true

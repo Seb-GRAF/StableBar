@@ -172,7 +172,7 @@ extension WidgetAnimation {
 
 struct WorkspaceConfiguration: Decodable, Sendable {
     enum Indicator: String, Decodable, Sendable {
-        case background, underline, none
+        case background, underline, cells, none
     }
 
     var indicator: Indicator?

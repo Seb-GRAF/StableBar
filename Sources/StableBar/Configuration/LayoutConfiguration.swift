@@ -174,6 +174,8 @@ struct AdaptiveBarPlan {
     var overflow: [BarOverflow] = []
     var cramped: Set<String> = []
     var segments: [BarSegment] = []
+    /// The middle of the gap after each placed item that another one follows side by side, by the first one's ID.
+    var dividers: [String: CGFloat] = [:]
 }
 
 struct AdaptiveBarPlanner {
@@ -201,6 +203,16 @@ struct AdaptiveBarPlanner {
         } else {
             segment(items, start: inset, end: width - inset, buttonAtEnd: true, atNotch: nil,
                     positions: [.left, .notchLeft, .center, .notchRight, .right], result: &result)
+        }
+        // The positions the bar draws side by side: beside a notch, `center` runs into `right`.
+        let runs: [[WidgetPosition]] = notch == nil ? [[.left], [.notchLeft, .center, .notchRight], [.right]]
+            : [[.left], [.notchLeft], [.notchRight], [.center, .right]]
+        for run in runs {
+            let placed = run.flatMap { position in items.filter { $0.position == position && result.placements[$0.id] != nil } }
+            for (item, next) in zip(placed, placed.dropFirst()) {
+                let placement = result.placements[item.id]!
+                result.dividers[item.id] = (placement.x + placement.width + result.placements[next.id]!.x) / 2
+            }
         }
         return result
     }

@@ -76,6 +76,9 @@ extension BarStore {
         let widget = widgetID.flatMap { id in configuration?.widgets.first { $0.id == id } }
         var paths = defaultsPath.map { [$0] } ?? []
         if let widget, path == "widgets.\(widget.id).style", let role = widget.role { paths.append("roles.\(role.rawValue)") }
+        if let widget, path == "widgets.\(widget.id).style", key == "foreground", let group = widget.group {
+            paths += ["groupDefaults", "groups.\(group).style"]
+        }
         paths.append(path)
         let tokens = (try? effectiveDocument["tokens"]?.decoded([String: ConfigurationValue].self)) ?? [:]
         let displayedKey = hover && key == "hoverBackground" ? "background" : key
@@ -162,7 +165,7 @@ extension BarStore {
         var layers: [WidgetStyle] = []
         var states = StyleStates()
         if let configuration, let widget, path == "widgets.\(widget.id).style" {
-            layers = [configuration.defaults, configuration.roleStyle(widget.role), widget.barStyle]
+            layers = [configuration.defaults, configuration.roleStyle(widget.role), configuration.groupStyle(of: widget), widget.barStyle]
             for source in configuration.widgets {
                 if let style = widgetScripts.scripts[source.id]?.output.widgetStyles?[widget.id] {
                     runtime.append(("Output from \(source.id): widgetStyles", style))

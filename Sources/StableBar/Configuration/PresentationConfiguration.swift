@@ -93,6 +93,11 @@ extension Configuration {
     func roleStyle(_ role: PresentationRole?) -> WidgetStyle {
         role.flatMap { roles[$0.rawValue] } ?? WidgetStyle()
     }
+
+    /// What `widget` takes from its group: the group's text color.
+    func groupStyle(of widget: WidgetConfiguration) -> WidgetStyle {
+        WidgetStyle(foreground: widget.group.flatMap { groups[$0]!.style.foreground })
+    }
 }
 
 extension WidgetStyle {
@@ -107,13 +112,15 @@ extension WidgetStyle {
         for (key, number) in [("borderWidth", borderWidth), ("cornerRadius", cornerRadius), ("flare", flare), ("fontSize", fontSize),
                               ("iconSize", iconSize), ("paddingHorizontal", paddingHorizontal), ("paddingVertical", paddingVertical),
                               ("spacing", spacing), ("width", width), ("minWidth", minWidth), ("maxWidth", maxWidth),
-                              ("height", height), ("shadowRadius", shadowRadius), ("paddingLeading", paddingLeading),
+                              ("height", height), ("shadowRadius", shadowRadius), ("shadowOffsetX", shadowOffsetX),
+                              ("shadowOffsetY", shadowOffsetY), ("paddingLeading", paddingLeading),
                               ("paddingTrailing", paddingTrailing), ("paddingTop", paddingTop), ("paddingBottom", paddingBottom),
                               ("offsetX", offsetX), ("offsetY", offsetY), ("opacity", opacity)] {
             if let number { value[key] = .number(number) }
         }
         for (key, text) in [("fontName", fontName), ("fontWeight", fontWeight), ("borderEdges", borderEdges?.rawValue),
-                            ("placement", placement?.rawValue), ("symbolVariant", symbolVariant?.rawValue), ("appIcons", appIcons?.rawValue)] {
+                            ("placement", placement?.rawValue), ("symbolVariant", symbolVariant?.rawValue), ("appIcons", appIcons?.rawValue),
+                            ("show", show?.rawValue)] {
             if let text { value[key] = .string(text) }
         }
         if let states { value["states"] = .object(states.mapValues(\.configurationValue)) }

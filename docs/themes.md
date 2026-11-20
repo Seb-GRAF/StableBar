@@ -58,8 +58,8 @@ Links accept `tokens`, `defaults`, `popupDefaults`, `groupDefaults`, `roles`, `w
 `groups` and `profiles`. Other keys are refused, including legacy `customization` and `removedWidgets`; an
 empty `widgets` list is ignored. Includes, screenshots and extra files are refused. At the root and
 in every profile, `bar` must be an object written out with only `height`, `margin`, `inset`,
-`spacing`, `background`, `style`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset` and
-`glass`, whose `transparency` uses 0…1.
+`spacing`, `background`, `style`, `divider`, `notchWidth`, `notchSpacing`, `fillNotch`, `popupOffset`
+and `glass`, whose `transparency` uses 0…1.
 Colors inside it may use tokens or settings with `choices`; free-text string settings under `bar`
 are refused. Every numeric value under `bar`, including nested styles, states and gradients, must
 be a finite JSON number literal within its permitted range; references that can supply numbers are

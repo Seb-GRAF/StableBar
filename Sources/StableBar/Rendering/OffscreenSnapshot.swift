@@ -36,7 +36,7 @@ enum OffscreenSnapshot {
     /// views settle for `settle` before drawing. Errors start with `name`.
     static func png(_ content: some View, size: NSSize, pixels: NSSize, dark: Bool, settle: Duration, ready: () -> Bool = { true },
                     prepare: () -> Void = {}, name: String) async throws -> Data {
-        let view = NSHostingView(rootView: content)
+        let view = NSHostingView(rootView: content.environment(\.offscreenSnapshot, true))
         view.frame = NSRect(origin: .zero, size: size)
         let window = NSWindow(contentRect: NSRect(x: -9000, y: -6000, width: size.width, height: size.height),
                               styleMask: [.borderless], backing: .buffered, defer: false)
