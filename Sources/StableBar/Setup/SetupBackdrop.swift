@@ -20,10 +20,13 @@ import CoreImage
     /// Makes the images for a screen `pixels` large, with the drawn backdrop in dark or light when `wallpaper` is nil or
     /// can't be read.
     func load(_ wallpaper: Wallpaper?, pixels: CGSize, dark: Bool) async {
-        images = await Task.detached(priority: .userInitiated) {
+        let images = await Task.detached(priority: .userInitiated) {
             let sharp = wallpaper.flatMap { Self.filling(pixels, with: $0) } ?? Self.drawn(CGSize(width: pixels.width / 2, height: pixels.height / 2), dark: dark)
             return Images(sharp: sharp, soft: Self.blurred(sharp) ?? sharp)
         }.value
+        // A load for the Mac's earlier appearance, cancelled by a newer one, leaves the newer one's images.
+        guard !Task.isCancelled else { return }
+        self.images = images
     }
 
     /// The middle of `wallpaper`, cut to the screen's shape and read no larger than it fills the screen, as macOS's Fill
@@ -39,7 +42,7 @@ import CoreImage
                   let width = properties[kCGImagePropertyPixelWidth] as? Double, let height = properties[kCGImagePropertyPixelHeight] as? Double,
                   let read = CGImageSourceCreateThumbnailAtIndex(source, 0, [
                       kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-                      kCGImageSourceThumbnailMaxPixelSize: max(width, height) * min(1, max(pixels.width / width, pixels.height / height)).rounded(.up)
+                      kCGImageSourceThumbnailMaxPixelSize: (max(width, height) * min(1, max(pixels.width / width, pixels.height / height))).rounded(.up)
                   ] as CFDictionary)
             else { return nil }
             image = read
