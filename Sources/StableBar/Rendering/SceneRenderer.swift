@@ -206,7 +206,8 @@ enum SceneRenderer {
             while true {
                 while running < max(processes, 1), next < scenes.count {
                     let (name, file) = scenes[next]
-                    let folder = work.appending(path: name)
+                    // Numbered, as names that differ only in case would share a folder on a disk that ignores case.
+                    let folder = work.appending(path: "\(next)")
                     next += 1
                     running += 1
                     group.addTask { (name, folder, await draw(file, folder)) }
