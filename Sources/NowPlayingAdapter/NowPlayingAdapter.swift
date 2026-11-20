@@ -1,3 +1,4 @@
+import CoreServices
 import CryptoKit
 import Foundation
 
@@ -18,10 +19,14 @@ private func constant(_ name: String) -> String {
     return symbol.assumingMemoryBound(to: CFString.self).pointee as String
 }
 
-/// Prints StableBar's output for what plays now, then again each time it changes, until perl is stopped. The output
-/// has the track's `title`, `artist` and `album`, the playing app's bundle ID in `app`, `playing` ("1" while it plays),
-/// `canNext` and `canPrevious` ("1" when the app takes those commands, empty when it doesn't, absent when it doesn't
-/// say) and `artwork`, a file in the temporary folder.
+typealias InfoCall = @convention(c) (DispatchQueue, @escaping @convention(block) (NSDictionary?) -> Void) -> Void
+
+/// Prints StableBar's output for what plays now, then again each time it changes and each second while it plays, until
+/// perl is stopped. The output has the track's `title`, `artist` and `album`, and `line` with both; the playing app's
+/// bundle ID in `app`, its name in `source` and its path in `appIcon`; `playing` ("1" while it plays) and `control`,
+/// the symbol of the button that plays or pauses it; `elapsed` and `duration` as text and `values.progress`; `canNext`,
+/// `canPrevious` and `canSeek` ("1" when the app takes those commands, empty when it doesn't, absent when it doesn't
+/// say); and `artwork`, a file in the temporary folder.
 @_cdecl("stablebar_now_playing_watch")
 public func watch() {
     let queue = DispatchQueue(label: "StableBar.NowPlaying")
@@ -33,29 +38,59 @@ public func watch() {
     }
     try? FileManager.default.removeItem(at: Artwork.folder)
     queue.async { read(on: queue) }
+    // The position moves on its own while something plays, and MediaRemote doesn't announce that.
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.schedule(deadline: .now() + 1, repeating: 1)
+    timer.setEventHandler { Latest.tick() }
+    timer.resume()
     dispatchMain()
 }
 
-/// Sends the command whose number ends perl's arguments, such as 2 to play or pause, to the app that plays now.
+/// Sends the command named last in perl's arguments to the app that plays now: `togglePlayPause`, `nextTrack`,
+/// `previousTrack`, or `skipBackward` and `skipForward`, which move the position by 15 seconds.
 @_cdecl("stablebar_now_playing_send")
 public func send() {
     let send = function("MRMediaRemoteSendCommand", as: (@convention(c) (Int32, CFDictionary?) -> Bool).self)
-    guard let command = CommandLine.arguments.last.flatMap(Int32.init), send(command, nil) else { exit(1) }
-    // The command travels to the app on MediaRemote's queue: give it a moment before perl exits.
-    Thread.sleep(forTimeInterval: 0.2)
-    exit(0)
+    let finish = { (sent: Bool) -> Never in
+        // The command travels to the app on MediaRemote's queue: give it a moment before perl exits.
+        Thread.sleep(forTimeInterval: 0.2)
+        exit(sent ? 0 : 1)
+    }
+    switch CommandLine.arguments.last {
+    case "togglePlayPause": finish(send(2, nil))
+    case "nextTrack": finish(send(4, nil))
+    case "previousTrack": finish(send(5, nil))
+    case let skip where skip == "skipBackward" || skip == "skipForward":
+        let queue = DispatchQueue(label: "StableBar.NowPlaying")
+        function("MRMediaRemoteGetNowPlayingInfo", as: InfoCall.self)(queue) { info in
+            let info = info as? [String: Any] ?? [:]
+            let target = max(0, (position(info) ?? 0) + (skip == "skipForward" ? 15 : -15))
+            finish(send(24, [constant("kMRMediaRemoteOptionPlaybackPosition"): target] as CFDictionary))
+        }
+        dispatchMain()
+    default: exit(1)
+    }
+}
+
+/// Where the track is now: the elapsed time MediaRemote last gave, moved on by the time since at the playback rate.
+private func position(_ info: [String: Any]) -> Double? {
+    guard let elapsed = (info[constant("kMRMediaRemoteNowPlayingInfoElapsedTime")] as? NSNumber)?.doubleValue else { return nil }
+    let rate = (info[constant("kMRMediaRemoteNowPlayingInfoPlaybackRate")] as? NSNumber)?.doubleValue ?? 0
+    let since = (info[constant("kMRMediaRemoteNowPlayingInfoTimestamp")] as? Date).map { Date().timeIntervalSince($0) } ?? 0
+    let duration = (info[constant("kMRMediaRemoteNowPlayingInfoDuration")] as? NSNumber)?.doubleValue ?? .infinity
+    return min(max(elapsed + since * rate, 0), duration)
 }
 
 private func read(on queue: DispatchQueue) {
-    typealias Info = @convention(c) (DispatchQueue, @escaping @convention(block) (NSDictionary?) -> Void) -> Void
     typealias Playing = @convention(c) (DispatchQueue, @escaping @convention(block) (Bool) -> Void) -> Void
     typealias App = @convention(c) (DispatchQueue, @escaping @convention(block) (NSString?) -> Void) -> Void
     typealias Commands = @convention(c) (DispatchQueue, @escaping @convention(block) (NSArray?) -> Void) -> Void
-    function("MRMediaRemoteGetNowPlayingInfo", as: Info.self)(queue) { info in
+    function("MRMediaRemoteGetNowPlayingInfo", as: InfoCall.self)(queue) { info in
         function("MRMediaRemoteGetNowPlayingApplicationIsPlaying", as: Playing.self)(queue) { playing in
             function("MRMediaRemoteGetNowPlayingApplicationDisplayID", as: App.self)(queue) { app in
                 function("MRMediaRemoteCopySupportedCommands", as: Commands.self)(queue) { commands in
-                    emit(info as? [String: Any] ?? [:], playing: playing, app: app as String?, commands: commands)
+                    Latest.state = (info as? [String: Any] ?? [:], playing, app as String?, commands)
+                    Latest.emit()
                 }
             }
         }
@@ -69,21 +104,65 @@ private func takes(_ number: Int32, _ commands: NSArray) -> Bool {
     return commands.contains(where: { command($0 as AnyObject) == number && enabled($0 as AnyObject) })
 }
 
-private func emit(_ info: [String: Any], playing: Bool, app: String?, commands: NSArray?) {
-    let title = info[constant("kMRMediaRemoteNowPlayingInfoTitle")] as? String ?? ""
-    var fields = ["title": title, "playing": playing ? "1" : "", "app": app ?? ""]
-    fields["artist"] = info[constant("kMRMediaRemoteNowPlayingInfoArtist")] as? String
-    fields["album"] = info[constant("kMRMediaRemoteNowPlayingInfoAlbum")] as? String
-    if let commands {
-        fields["canNext"] = takes(4, commands) ? "1" : ""
-        fields["canPrevious"] = takes(5, commands) ? "1" : ""
+/// What MediaRemote said last, on the watch's queue, which the output each second moves on from.
+private enum Latest {
+    nonisolated(unsafe) static var state: (info: [String: Any], playing: Bool, app: String?, commands: NSArray?)?
+
+    static func tick() {
+        if state?.playing == true, state?.info[constant("kMRMediaRemoteNowPlayingInfoDuration")] != nil { emit() }
     }
-    let track = [app, title, fields["artist"], fields["album"]].map { $0 ?? "" }
-    fields["artwork"] = Artwork.file(info[constant("kMRMediaRemoteNowPlayingInfoArtworkData")] as? Data, track: track)
-    let output: [String: Any] = ["text": title, "icon": playing ? "music.note" : "pause.circle", "fields": fields]
-    var line = try! JSONSerialization.data(withJSONObject: output)
-    line.append(0x0A)
-    FileHandle.standardOutput.write(line)
+
+    static func emit() {
+        guard let (info, playing, app, commands) = state else { return }
+        let title = info[constant("kMRMediaRemoteNowPlayingInfoTitle")] as? String ?? ""
+        let artist = info[constant("kMRMediaRemoteNowPlayingInfoArtist")] as? String ?? ""
+        var fields = ["title": title, "artist": artist, "line": artist.isEmpty ? title : "\(title) — \(artist)",
+                      "playing": playing ? "1" : "", "control": playing ? "pause.fill" : "play.fill", "app": app ?? ""]
+        fields["album"] = info[constant("kMRMediaRemoteNowPlayingInfoAlbum")] as? String
+        if let app, let bundle = Apps.bundle(app) {
+            fields["source"] = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") ?? bundle.object(forInfoDictionaryKey: "CFBundleName")) as? String
+            fields["appIcon"] = bundle.bundlePath
+        }
+        var values: [String: Double] = [:]
+        if let duration = (info[constant("kMRMediaRemoteNowPlayingInfoDuration")] as? NSNumber)?.doubleValue, duration > 0,
+           let position = position(info) {
+            fields["elapsed"] = clock(position)
+            fields["duration"] = clock(duration)
+            values["progress"] = position / duration
+        }
+        if let commands {
+            fields["canNext"] = takes(4, commands) ? "1" : ""
+            fields["canPrevious"] = takes(5, commands) ? "1" : ""
+            fields["canSeek"] = takes(24, commands) ? "1" : ""
+        }
+        let track = [app ?? "", title, artist, fields["album"] ?? ""]
+        fields["artwork"] = Artwork.file(info[constant("kMRMediaRemoteNowPlayingInfoArtworkData")] as? Data, track: track)
+        let output: [String: Any] = ["text": title, "icon": playing ? "music.note" : "pause.circle", "fields": fields, "values": values,
+                                     "hidden": title.isEmpty]
+        var line = try! JSONSerialization.data(withJSONObject: output)
+        line.append(0x0A)
+        FileHandle.standardOutput.write(line)
+    }
+
+    /// `seconds` as `m:ss`, or `h:mm:ss` from an hour.
+    private static func clock(_ seconds: Double) -> String {
+        let whole = Int(seconds)
+        let minutes = String(format: "%02d", whole / 60 % 60), rest = String(format: "%02d", whole % 60)
+        return whole >= 3600 ? "\(whole / 3600):\(minutes):\(rest)" : "\(whole / 60):\(rest)"
+    }
+}
+
+/// The apps that play, by bundle ID, found once each.
+private enum Apps {
+    nonisolated(unsafe) private static var found: [String: Bundle?] = [:]
+
+    static func bundle(_ id: String) -> Bundle? {
+        if let bundle = found[id] { return bundle }
+        let url = (LSCopyApplicationURLsForBundleIdentifier(id as CFString, nil)?.takeRetainedValue() as? [URL])?.first
+        let bundle = url.flatMap(Bundle.init(url:))
+        found[id] = bundle
+        return bundle
+    }
 }
 
 /// The current track's artwork, kept in a file named after its data, so StableBar loads a new image only when it changes.

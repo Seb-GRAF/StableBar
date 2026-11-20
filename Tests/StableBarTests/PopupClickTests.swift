@@ -49,7 +49,7 @@ import Testing
 
 /// A popup block's click reaches its action anywhere inside the box its style gives it, not only on
 /// its glyph: a 42-point play button around a 17-point symbol.
-@Test(arguments: [#""onClick":"play""#, #""open":"com.apple.Music""#, #""view":"player""#]) @MainActor
+@Test(arguments: [#""onClick":"play""#, #""open":"com.apple.Music""#, #""view":"player""#, #""nowPlayingCommand":"togglePlayPause""#]) @MainActor
 func popupBlockActionsFireAcrossTheirStyledBox(action: String) throws {
     let block = try JSONDecoder().decode(PopupBlock.self, from: Data(#"""
         {"type":"symbol","name":"play.fill","alignment":"center",\#(action),

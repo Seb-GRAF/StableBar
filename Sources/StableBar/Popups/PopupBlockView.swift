@@ -227,6 +227,12 @@ struct PopupBlockView: View {
                 }
                     .buttonStyle(.plain)
                     .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
+            } else if let command = block.nowPlayingCommand {
+                Button { context.runAction(.nowPlaying(command), [:]) } label: {
+                    boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)
+                }
+                    .buttonStyle(.plain)
+                    .modifier(FocusRing(cornerRadius: appearance.cornerRadius))
             } else if let view = block.view {
                 Button { context.openView(view) } label: {
                     boxed(content(drawn, appearance: appearance), box: box, alignment: alignment)

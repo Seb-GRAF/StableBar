@@ -163,6 +163,7 @@ struct PopupBlock: Decodable, Sendable {
     let selectInputSourceField: String?
     let selectOutputDeviceField: String?
     let selectInputDeviceField: String?
+    let nowPlayingCommand: NowPlaying.Command?
     /// The name of one of its popup's `views`, which a click shows in place of the popup's layout.
     let view: String?
     let hideWhenEmpty: String?
@@ -199,7 +200,7 @@ struct PopupBlock: Decodable, Sendable {
         case type, role, style, alignment, children, text, field, height, source, row, orientation, title, onClick
         case path, fit, tinted, name, animation, styleSource, styleField, onClickField, lineWidth
         case hideWhenEmpty, showWhen, hideWhen, scrollSpeed, min, max, step, onChange, options, searchFields, open, openField, quitField
-        case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, selectInputDeviceField, view, transition
+        case openMenuBarItem, selectInputSourceField, selectOutputDeviceField, selectInputDeviceField, nowPlayingCommand, view, transition
         case placeholder, onSubmit, autofocus, wrap, maxHeight, markdown, shimmer, groupsSource, optionsSource, levelsSource, endStop
         case fitWidth, sendButton, busy, onStop, starsSource, onStar, filled, icon, gap, segments, set
     }
@@ -222,6 +223,7 @@ struct PopupBlock: Decodable, Sendable {
         selectInputSourceField = nil
         selectOutputDeviceField = nil
         selectInputDeviceField = nil
+        nowPlayingCommand = nil
         view = nil
         self.hideWhenEmpty = hideWhenEmpty
         showWhen = nil
@@ -279,10 +281,15 @@ struct PopupBlock: Decodable, Sendable {
             || selectInputSourceField != nil || selectOutputDeviceField != nil {
             throw DecodingError.dataCorruptedError(forKey: .selectInputDeviceField, in: values, debugDescription: "A block cannot combine selectInputDeviceField with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField or selectOutputDeviceField.")
         }
+        nowPlayingCommand = try values.decodeIfPresent(NowPlaying.Command.self, forKey: .nowPlayingCommand)
+        if nowPlayingCommand != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
+            || selectInputSourceField != nil || selectOutputDeviceField != nil || selectInputDeviceField != nil {
+            throw DecodingError.dataCorruptedError(forKey: .nowPlayingCommand, in: values, debugDescription: "A block cannot combine nowPlayingCommand with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField or selectInputDeviceField.")
+        }
         view = try values.decodeIfPresent(String.self, forKey: .view)
         if view != nil, onClick != nil || onClickField != nil || open != nil || openField != nil || quitField != nil || openMenuBarItem != nil
-            || selectInputSourceField != nil || selectOutputDeviceField != nil || selectInputDeviceField != nil {
-            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField or selectInputDeviceField.")
+            || selectInputSourceField != nil || selectOutputDeviceField != nil || selectInputDeviceField != nil || nowPlayingCommand != nil {
+            throw DecodingError.dataCorruptedError(forKey: .view, in: values, debugDescription: "A block cannot combine view with onClick, onClickField, open, openField, quitField, openMenuBarItem, selectInputSourceField, selectOutputDeviceField, selectInputDeviceField or nowPlayingCommand.")
         }
         hideWhenEmpty = try values.decodeIfPresent(String.self, forKey: .hideWhenEmpty)
         showWhen = try Self.conditions(in: values, forKey: .showWhen)
@@ -506,6 +513,7 @@ enum PopupAlignment: String, Decodable, Sendable {
 enum BlockAction: Sendable {
     case command(String)
     case set(NativeSetting)
+    case nowPlaying(NowPlaying.Command)
 }
 
 struct PopupControlOption: Decodable, Sendable {

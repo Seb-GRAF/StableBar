@@ -254,6 +254,8 @@ final class WidgetScripts {
                 case let .set(setting):
                     let value = event.environment["VALUE"]!
                     try await BlockingWork.run { try setting.set(value) }
+                case let .nowPlaying(command):
+                    try await NowPlaying.send(command)
                 }
                 if let script, scripts[widget.id] === script {
                     refresh(widget, event: ScriptEvent(sender: "action", environment: event.environment))
