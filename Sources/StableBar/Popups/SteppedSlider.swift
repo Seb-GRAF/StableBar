@@ -12,7 +12,7 @@ struct SliderSteps: Equatable {
     /// slider `width` points wide.
     func ticksFit(width: Double) -> Bool {
         let gaps = ((range.upperBound - range.lowerBound) / step + 1e-9).rounded(.down)
-        guard gaps > 1 else { return true }
+        guard gaps >= 1 else { return true }
         return (width - Self.knobWidth) / gaps >= EndStopSliderTrack.minimumTickSpacing
     }
 
@@ -21,11 +21,16 @@ struct SliderSteps: Equatable {
         let clamped = min(max(value, range.lowerBound), range.upperBound)
         return min(range.lowerBound + ((clamped - range.lowerBound) / step).rounded() * step, range.upperBound)
     }
+
+    /// The step after or before `value`, for the arrow keys and VoiceOver.
+    func step(from value: Double, forward: Bool) -> Double {
+        stepped(value + (forward ? step : -step))
+    }
 }
 
 /// A native slider that moves in steps of `step`. macOS 26 and later draw a tick under every step of a native slider,
-/// so when the ticks would run together into a dotted line, the slider is given no step and its binding rounds to
-/// the nearest step instead. Its arrow keys then move it by a twentieth of its range rather than one step.
+/// so where the ticks would run together into a dotted line, the slider there is given no step: its binding rounds to
+/// the nearest step, and the arrow keys and VoiceOver still move it one step at a time.
 struct SteppedSlider<Label: View>: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -46,15 +51,33 @@ struct SteppedSlider<Label: View>: View {
 
     private var steps: SliderSteps { SliderSteps(range: range, step: step) }
 
+    private var plain: Bool {
+        guard #available(macOS 26, *) else { return false }
+        // Until it's measured, assume the ticks don't fit, as they don't for most of its steps.
+        guard let width else { return true }
+        return !steps.ticksFit(width: width - labelWidth)
+    }
+
     var body: some View {
         Group {
-            // Until it's measured, assume the ticks don't fit, as they don't for most of its steps.
-            if let width, steps.ticksFit(width: width - labelWidth) {
-                Slider(value: $value, in: range, step: step) { measuredLabel } onEditingChanged: { onEditingChanged($0) }
-            } else {
+            if plain {
                 Slider(value: Binding(get: { value }, set: { value = steps.stepped($0) }), in: range) {
                     measuredLabel
                 } onEditingChanged: { onEditingChanged($0) }
+                // Without a step, both would move it a twentieth of its range.
+                .onKeyPress(keys: [.leftArrow, .rightArrow, .upArrow, .downArrow]) { press in
+                    move(forward: press.key == .rightArrow || press.key == .upArrow)
+                    return .handled
+                }
+                .accessibilityAdjustableAction { direction in
+                    switch direction {
+                    case .increment: move(forward: true)
+                    case .decrement: move(forward: false)
+                    @unknown default: break
+                    }
+                }
+            } else {
+                Slider(value: $value, in: range, step: step) { measuredLabel } onEditingChanged: { onEditingChanged($0) }
             }
         }
         .onGeometryChange(for: Double.self) { $0.size.width } action: { width = $0 }
@@ -63,6 +86,15 @@ struct SteppedSlider<Label: View>: View {
     /// The label beside the track, which takes its width from the track. Hidden labels aren't laid out.
     private var measuredLabel: some View {
         label.onGeometryChange(for: Double.self) { $0.size.width } action: { labelWidth = $0 }
+    }
+
+    /// One step, sent as an edit of its own, as a drag is.
+    private func move(forward: Bool) {
+        let next = steps.step(from: value, forward: forward)
+        guard next != value else { return }
+        onEditingChanged(true)
+        value = next
+        onEditingChanged(false)
     }
 }
 
