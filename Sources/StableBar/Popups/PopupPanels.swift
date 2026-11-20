@@ -170,6 +170,8 @@ struct PopupShadowView: View {
 @MainActor @Observable
 final class PopupSize {
     var height: CGFloat?
+    /// The popup is as tall as its content, which then has nothing to scroll.
+    var followsContent = false
 }
 
 /// The view a popup shows in place of its layout, opened from a block's `view`; nil shows the layout.
