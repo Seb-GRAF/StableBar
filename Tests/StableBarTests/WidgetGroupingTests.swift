@@ -196,7 +196,7 @@ private let row = #"""
     #expect(bar.store.configuration?.groups["group"]?.style.cornerRadius == 20)
 }
 
-@MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheMainFile() throws {
+@MainActor @Test func ungroupingAThemesGroupEmptiesItsMembersInTheThemesEdits() throws {
     let bar = try GroupingFixture(#"{"widgets":[{"id":"clock","type":"clock","position":"right"}]}"#)
     defer { bar.close() }
     _ = try bar.fixture.theme(##"{"groups":{"time":{"style":{"background":"#000000"},"members":[{"type":"clock"}]}}}"##)
@@ -206,7 +206,38 @@ private let row = #"""
     #expect(bar.groups() == ["clock": "time"])
     try bar.apply(try bar.grouping.dissolving("time"))
     #expect(bar.groups() == ["clock": "-"])
-    #expect(try bar.fixture.document()["groups"] == .object(["time": .object(["members": .array([])])]))
+    let document = try bar.fixture.document()
+    #expect(document["groups"] == nil)
+    #expect(document["profiles"] == .array([.object([
+        "name": .string("Test theme edits"), "when": .object(["theme": .string("test-theme")]),
+        "configuration": .object(["groups": .object(["time": .object(["members": .array([])])])])
+    ])]))
+}
+
+@MainActor @Test func joiningAndLeavingAThemesGroupAreEditsOfThatTheme() throws {
+    let bar = try GroupingFixture(#"""
+    {"theme":{"id":"glass"},"widgets":[
+      {"id":"time","type":"clock","position":"right"},
+      {"id":"note","type":"text","text":"Note","position":"right"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.choices(for: "note", among: bar.widgets) == [.join("time")])
+    try bar.apply(bar.grouping.edits(.join("time"), for: "note"))
+    #expect(bar.groups() == ["time": "time", "note": "time"])
+    #expect(try bar.fixture.document()["profiles"] == .array([.object([
+        "name": .string("Glass edits"), "when": .object(["theme": .string("glass")]),
+        "configuration": .object(["widgetOverrides": .object(["note": .object(["group": .string("time")])])])
+    ])]))
+
+    try bar.apply([ConfigurationEdit(action: .theme, properties: ["id": .string("clear")])])
+    #expect(bar.groups() == ["time": "-", "note": "-"])
+    try bar.apply([ConfigurationEdit(action: .theme, properties: ["id": .string("glass")])])
+    #expect(bar.groups() == ["time": "time", "note": "time"])
+
+    try bar.apply(try bar.grouping.leaving("note"))
+    #expect(bar.groups()["note"] == "-")
+    #expect(try bar.fixture.document()["profiles"] == nil)
 }
 
 @Test func theGroupsEditMergesIntoTheGroupsOfTheFile() throws {

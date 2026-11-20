@@ -94,7 +94,8 @@ final class ConfigurationEditor {
     func group(_ id: String, _ choice: WidgetGrouping.Choice) {
         let grouping = WidgetGrouping(store: store)
         let group = grouping.group(of: choice)
-        change(grouping.edits(choice, for: id))
+        do { change(try grouping.edits(choice, for: id)) }
+        catch { self.error = errorMessage(error) }
         if error == nil, case .groupWith = choice { showGroup(group) }
     }
 

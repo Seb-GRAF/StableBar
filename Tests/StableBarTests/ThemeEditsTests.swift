@@ -179,6 +179,25 @@ struct ThemeEditsTests {
         #expect(store.customizationHistory.undoSteps.count == 1)
     }
 
+    @Test func aWidgetJoiningTheThemesGroupIsAnEditButNotAStyleAndEveryThemeGetsTheGroup() async throws {
+        let (fixture, store, editor) = try await editor(#"""
+        {"theme":{"id":"test-theme","version":"1"},"widgets":[{"id":"clock","type":"clock","position":"right"}],
+         "profiles":[{"name":"Test theme edits","when":{"theme":"test-theme"},
+                      "configuration":{"widgetOverrides":{"clock":{"group":"pill"}}}}]}
+        """#, theme: #"{"groups":{"pill":{}}}"#)
+        defer { fixture.close(); store.stop() }
+        let edits = editor.gallery.edits
+        #expect(edits.changes.map(\.title) == ["Group"])
+        #expect(editor.ownStyle(of: try #require(store.configuration?.widgets.first)) == (everyTheme: 0, onTheme: 0))
+
+        editor.change(edits.applyingToEveryTheme(try #require(edits.changes.first)))
+        #expect(try profiles(fixture).isEmpty)
+        #expect(try fixture.document()["groups"] == .object(["pill": .object([:])]))
+        try store.configurationStore.applyTheme(try #require(editor.gallery.choices.first { $0.key == "glass" }))
+        #expect(store.configurationError == nil)
+        #expect(store.configuration?.widgets.first?.group == "pill")
+    }
+
     @Test func savingAThemeUnderItsOwnNameKeepsItsWidgetEdits() async throws {
         let (fixture, store, editor) = try await editor(#"""
         {"theme":{"id":"test-theme","version":"1"},"widgets":[{"id":"clock","type":"clock","position":"right"}],
