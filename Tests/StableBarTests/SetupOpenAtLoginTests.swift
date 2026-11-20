@@ -47,8 +47,8 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     session.toggle(preset)
     let presetChoices = preset.preferences(workspaces: session.workspaceSource, placement: .top, hasBattery: true)
     var expected = choices
-    // Without an answer from the Store, a preset has only its built-in widgets.
-    expected.widgetSets = presetChoices.widgetSets.filter { if case .store = $0 { false } else { true } }
+    // Until the Store answers, a preset keeps its Store widgets, which wait for their review.
+    expected.widgetSets = presetChoices.widgetSets
     #expect(session.preset == preset)
     #expect(session.preferences == expected)
     #expect(session.error == nil)

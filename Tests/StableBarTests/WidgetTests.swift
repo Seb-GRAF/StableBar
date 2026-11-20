@@ -1061,9 +1061,13 @@ private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
     let session = SetupSession(store: store, system: system)
     await session.place(.belowMenuBar)
     session.toggle(.everyday)
-    #expect(session.preferences.widgetSets == [.sound, .batteryLevel])
+    // Until the Store answers, the preset keeps its Store widgets, which wait for their review.
+    let nowPlaying = SetupPreferences.WidgetSet.store(id: "now-playing", name: "Now playing", position: .center)
+    let weather = SetupPreferences.WidgetSet.store(id: "weather", name: "Weather", position: .right)
+    #expect(session.preferences.widgetSets == [nowPlaying, weather, .sound, .batteryLevel])
     await session.place(.top)
-    #expect(session.preferences.widgetSets == [.appleMenu, .appMenu(expandsOnHover: false), .sound, .batteryLevel, .dateAndTime, .menuBarItems])
+    #expect(session.preferences.widgetSets == [.appleMenu, .appMenu(expandsOnHover: false), nowPlaying, weather, .sound, .batteryLevel,
+                                               .dateAndTime, .menuBarItems])
     #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "battery", "date", "clock", "menu-bar-items"])
 }
 

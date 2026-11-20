@@ -158,7 +158,7 @@
       "additionalProperties": false,
       "properties": {
         "step": {
-          "description": "The step of the tour: the intro once it has settled, Make it yours, Allow what your bar needs, or You're all set. From allow on, Automation's Allow has made the bar the menu bar, or put it below the menu bar when automation is false. intro by default.",
+          "description": "The step of the tour: the intro once it has settled, Make it yours, Allow what your bar needs, or You're all set. From allow on, Automation's Allow has made the bar the menu bar, or put it below the menu bar when automation is false, unless automationAsked is false. intro by default.",
           "enum": ["intro", "choose", "allow", "done"]
         },
         "preset": {
@@ -175,6 +175,10 @@
         },
         "automation": {
           "description": "Whether macOS lets StableBar control System Events, which hiding or showing the menu bar needs. true by default.",
+          "type": "boolean"
+        },
+        "automationAsked": {
+          "description": "Whether Automation's Allow has been clicked on Allow what your bar needs. With false and a menu bar that shows, the bar waits on the stage above the card. true by default.",
           "type": "boolean"
         },
         "calendars": {

@@ -480,8 +480,9 @@ enum SceneRenderer {
     private static let setupMenuBarHeight = 30.0
 
     /// Draws setup's tour at `setup`'s step, over a stand-in for the Mac that reads and changes nothing on it, with the
-    /// bar above it once it has left the stage. The scene's choices are made once the tour shows, as a person makes
-    /// them, so the tour sees the menu bar hide or show: from Allow on, Automation's Allow has been clicked.
+    /// bar above it once it has taken over from its copy. The scene's choices are made once the tour shows, as a person
+    /// makes them, so the tour sees the menu bar hide or show: from Allow on, Automation's Allow has been clicked unless
+    /// the scene says otherwise.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
                                   macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
@@ -513,18 +514,21 @@ enum SceneRenderer {
         let view = ZStack(alignment: .top) {
             SetupDesktop(backdrop: backdrop)
             SetupTourView(session: session, display: display, menuBarHeight: { hides ? 0 : setupMenuBarHeight }, dock: 0,
-                          backdrop: backdrop, wallpaper: nil, close: {}, cover: {}, raise: {}, reveal: {}, lower: {}, editBar: {})
+                          backdrop: backdrop, wallpaper: nil, close: {}, cover: {}, reveal: {}, lower: {}, editBar: {})
             SetupChrome(session: session, store: store)
         }
         .environment(\.sceneWallpaper, wallpaper)
         .task {
-            if [.allow, .done].contains(setup.step) { await session.place(.top) }
+            if [.allow, .done].contains(setup.step) && setup.automationAsked { await session.place(.top) }
             await session.loadStoreWidgets()
-            if let preset = setup.preset { session.toggle(preset) }
+            // A new configuration starts with Everyday chosen already.
+            if let preset = setup.preset, session.preset != preset { session.toggle(preset) }
             await session.loadSuggestions()
             choices.made = true
         }
-        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, ready: { choices.made && backdrop.images != nil }, to: url)
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, ready: {
+            choices.made && backdrop.images != nil && !session.themePreviews.isEmpty
+        }, to: url)
     }
 
     /// Whether a setup scene's choices are made, which its drawing waits for.
@@ -543,10 +547,10 @@ enum SceneRenderer {
         }
     }
 
-    /// The bar above setup's tour where its configuration puts it, since setup's choices show in the tour, not on the
-    /// bar, and the macOS menu bar over the top of the screen while it shows, except under the intro and Make it yours.
-    /// Until Allow, the tour covers the bar and draws its own copy. The tour places the bar from the same configuration
-    /// and the same menu bar, so the two agree.
+    /// The bar above setup's tour where its configuration puts it, once it has taken the menu bar's place or setup has
+    /// reached its end, and the macOS menu bar over the top of the screen at the end while it shows. Until then, the
+    /// tour covers both and draws its own copy of the bar. The tour places the bar from the same configuration and the
+    /// same menu bar, so the two agree.
     private struct SetupChrome: View {
         let session: SetupSession
         let store: BarStore
@@ -555,14 +559,14 @@ enum SceneRenderer {
             let menuBar = session.menuBarHides ? 0 : setupMenuBarHeight
             let settings = store.configuration?.onScreen(ScreenKind(display)).bar
             ZStack(alignment: .top) {
-                if [.intro, .choose].contains(session.step) {
+                if session.step != .done && session.placementPhase != .placed(.top) {
                     Color.clear
                 } else if let settings, settings.position == .bottom {
                     bar(store).padding(.bottom, settings.offset)
                 } else {
                     bar(store).padding(.top, settings?.top(menuBar: menuBar) ?? 0)
                 }
-                if !session.menuBarHides && ![.intro, .choose].contains(session.step) {
+                if !session.menuBarHides && session.step == .done {
                     Rectangle().fill(.black.opacity(0.5)).frame(height: setupMenuBarHeight)
                 }
             }

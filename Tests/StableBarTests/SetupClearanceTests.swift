@@ -291,7 +291,7 @@ struct SetupClearanceTests {
         let session = SetupSession(store: store, system: system)
         session.openAtLogin = true
         session.finish()
-        #expect(!session.finished)
+        #expect(session.finished)
         #expect(session.error?.hasPrefix("Your bar settings were saved.") == true)
         #expect(store.configurationStore.clearanceConfiguration?.bar.keepWindowsClear == true)
     }

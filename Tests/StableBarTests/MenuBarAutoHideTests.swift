@@ -232,8 +232,8 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     #expect(!SetupProgress.offersToFinish(skipped: true, completed: true))
 }
 
-/// The stage shows the starter for the menu bar's place from the start, and without Automation access the starter for
-/// below the menu bar, which leaves out what the menu bar shows.
+/// A new configuration starts with Everyday. Without it, the stage shows the starter for the menu bar's place, and
+/// without Automation access the starter for below the menu bar, which leaves out what the menu bar shows.
 @MainActor
 @Test func setupShowsTheStarterForWhereTheBarLands() async throws {
     let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -246,6 +246,9 @@ private func setupSession(configuration: String = #"{"widgets":[{"id":"clock","t
     for document in [starter, below] {
         let (session, fixture, store, changes) = try setupSession(configuration: String(decoding: configurationData(document), as: UTF8.self)) { _ in .denied }
         defer { store.stop(); fixture.close() }
+        #expect(session.preset == .everyday)
+        #expect(!session.hasChanges)
+        session.toggle(.everyday)
         #expect(store.configuration?.bar.belowMenuBar == false)
         #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "clock", "menu-bar-items"])
         await session.place(.top)
@@ -276,6 +279,8 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     // Without Automation the bar stays below the menu bar, where the starter keeps its Workspaces.
     let (session, fixture, store, _) = try setupSession(configuration: json, completed: completed, workspaces: { $0 ?? .yabai }) { _ in .denied }
     defer { store.stop(); fixture.close() }
+    // Keep the starter rather than Everyday, which a new configuration starts with.
+    if session.preset == .everyday { session.toggle(.everyday) }
     await session.place(.top)
     #expect(session.workspaceSource == expected)
     #expect(store.configuration?.workspaceSource == expected)
@@ -296,11 +301,13 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
     let (session, fixture, store, _) = try setupSession(configuration: json, workspaces: { _ in .spaces }) { _ in .denied }
     defer { store.stop(); fixture.close() }
+    session.toggle(.everyday)
     await session.place(.top)
     #expect(session.showsSpacesGuidance)
     // A bar without Workspaces has no desktops to switch.
     let (plain, plainFixture, plainStore, _) = try setupSession(workspaces: { _ in .spaces }) { _ in .allowed }
     defer { plainStore.stop(); plainFixture.close() }
+    #expect(plain.preset == nil)
     #expect(!plain.showsSpacesGuidance)
     // A preset that adds Workspaces brings the desktops, and the guidance, with it.
     plain.preferences = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .top)
@@ -316,6 +323,7 @@ func setupLooksAgainForAManagerTheFirstLaunchMissed(completed: Bool, change: Str
     let json = try #require(String(bytes: JSONEncoder().encode(starter), encoding: .utf8))
     let (session, fixture, store, changes) = try setupSession(configuration: json) { _ in .allowed }
     defer { store.stop(); fixture.close() }
+    session.toggle(.everyday)
     #expect(session.step == .intro)
     #expect(!session.readyToLand)
     #expect(changes().isEmpty)
