@@ -97,9 +97,15 @@ A group can also list its `members`, so widgets join it without a `group` of the
 
 Each selector names a widget `type` (`aerospace` counts as `workspaces`), a `role`, an `id`, or several of them, and a widget matches when it has every one. Use `id` for a package's widgets, whose IDs the package sets, such as `now-playing`; an `id` that matches no widget isn't an error, since the package may not be installed.
 
+`{ "others": true }` takes the widgets no selector names, such as a Store widget, a script or one of your own, so a theme drawn as pills can put them in a pill too. Spacers stay out. Unlike other groups, a group that takes others draws one pill in each position, with the widgets it takes there, and moving a widget moves only its pill.
+
+```json
+"groups": { "more": { "style": { "background": "@token.surfaceRaised" }, "members": [{ "others": true }] } }
+```
+
 - A widget's own `group` always wins, and the widgets that set one decide where their groups sit.
-- Each enabled widget without a `group` then joins the group that matches it best, in list order. If that group's widgets are in another position, it stays out. On a kind of screen with its own [layout](#screen-setups), the positions there decide.
-- A selector naming `id` beats one that doesn't, then the selector naming more keys wins. On a tie, the group whose ID sorts first wins.
+- Each enabled widget without a `group` then joins the group that matches it best, in list order. If that group's widgets are in another position, it stays out, unless the group takes others. On a kind of screen with its own [layout](#screen-setups), the positions there decide.
+- A selector naming `id` beats one that doesn't, then the selector naming more keys wins, and `others` comes last: it never takes a widget another selector names, even one that stays out of that selector's group. On a tie, the group whose ID sorts first wins.
 
 Members gather where the first one appears, as in any group. Moving one moves the whole group, and StableBar saves only positions and order, never the membership. To keep widgets out of a theme's group, set its `members` in your main file or in a [profile](configuration.md#theme-tokens-and-automatic-profiles) with `"when": { "theme": "<id>" }`: your list replaces the theme's. Narrow it, as with `[{ "type": "clock", "role": "time" }]`, or empty it with `[]` or `null`.
 

@@ -418,7 +418,7 @@ struct WidgetsView: View {
     private func dropKey(_ position: WidgetPosition, before anchor: String? = nil) -> String {
         let target = widgets.first { $0.id == anchor }
         let first = target.flatMap { target in
-            widgets.first { $0.id == target.id || (target.group != nil && $0.group == target.group) }?.id
+            widgets.first(where: target.movesWith)?.id
         }
         return position.rawValue + "/" + (first ?? "")
     }

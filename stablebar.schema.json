@@ -2207,9 +2207,10 @@
       "anyOf": [
         { "required": ["type"], "properties": { "type": { "not": { "type": "null" } } } },
         { "required": ["role"], "properties": { "role": { "not": { "type": "null" } } } },
-        { "required": ["id"] }
+        { "required": ["id"] },
+        { "required": ["others"], "properties": { "others": { "const": true } } }
       ],
-      "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID.",
+      "description": "Matches a widget that has every key listed. A selector naming id beats one that doesn't, then the one naming more keys, then the group with the lower ID. others comes last.",
       "properties": {
         "type": {
           "anyOf": [
@@ -2254,6 +2255,10 @@
         "id": {
           "type": "string",
           "description": "A widget ID, such as one a package fixes."
+        },
+        "others": {
+          "$ref": "#/definitions/boolean",
+          "description": "true takes every widget that no other selector names, such as a Store widget, a script or one of your own, but not spacers, in a pill in each position."
         }
       }
     },

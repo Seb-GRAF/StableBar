@@ -106,6 +106,36 @@ private func groupsByWidget(_ json: String) throws -> [String: String] {
     """#) == ["date": "d", "time": "c", "other": "a"])
 }
 
+@Test func othersTakesOnlyWidgetsWithoutAGroupThatNoOtherSelectorNames() throws {
+    #expect(try groupsByWidget(#"""
+    {"groups":{"more":{"members":[{"others":true}]},"rest":{"members":[{"others":true}]},
+               "status":{"members":[{"type":"battery"}]},"mine":{}},
+     "widgets":[
+      {"id":"note","type":"text","text":"Note","position":"left"},
+      {"id":"battery","type":"battery","position":"right"},
+      {"id":"spare","type":"battery","position":"left"},
+      {"id":"pinned","type":"text","text":"Pinned","position":"left","group":"mine"},
+      {"id":"gap","type":"spacer","position":"left"},
+      {"id":"far","type":"text","text":"Far","position":"right"}
+    ]}
+    """#) == ["note": "more", "battery": "status", "spare": "-", "pinned": "mine", "gap": "-", "far": "more"])
+}
+
+@Test func othersMakesOnePillInEachPositionAroundItsSpacers() throws {
+    let config = try configuration(#"""
+    {"groups":{"more":{"members":[{"others":true}]}},"widgets":[
+      {"id":"note","type":"text","text":"Note","position":"left"},
+      {"id":"gap","type":"spacer","position":"left"},
+      {"id":"task","type":"text","text":"Task","position":"left"},
+      {"id":"song","type":"text","text":"Song","position":"center"},
+      {"id":"far","type":"text","text":"Far","position":"right"}
+    ]}
+    """#)
+    let units = BarUnit.make(widgets: config.widgets, groups: config.groups)
+    #expect(units.map(\.id) == ["group:more:left", "widget:gap", "group:more:center", "group:more:right"])
+    #expect(units.map { $0.widgets.map(\.id) } == [["note", "task"], ["gap"], ["song"], ["far"]])
+}
+
 @Test func aScreensOwnLayoutDecidesWhichWidgetsJoin() throws {
     let config = try configuration(#"""
     {"groups":{"pill":{"members":[{"type":"clock"}]}},
@@ -213,6 +243,19 @@ func aThemeProfileNarrowsOrClearsTheThemesMembers(members: String, joined: [Stri
     let edits = try WidgetPlacement.move("time", to: .left, widgets: try loaded(fixture).widgets)
     #expect(edits.filter { $0.action == .set }.compactMap(\.id) == ["time", "date"])
     #expect(edits.allSatisfy { $0.properties?["group"] == nil })
+}
+
+@Test func movingAnOthersPillLeavesThoseOfOtherPositions() throws {
+    let widgets = try configuration(#"""
+    {"groups":{"more":{"members":[{"others":true}]},"clock":{"members":[{"type":"clock"}]}},"widgets":[
+      {"id":"song","type":"text","text":"Song","position":"center"},
+      {"id":"note","type":"text","text":"Note","position":"right"},
+      {"id":"far","type":"text","text":"Far","position":"right"},
+      {"id":"time","type":"clock","position":"right"}
+    ]}
+    """#).widgets
+    #expect(try WidgetPlacement.move("note", to: .left, widgets: widgets).filter { $0.action == .set }.compactMap(\.id) == ["note", "far"])
+    #expect(try WidgetPlacement.move("note", by: 1, widgets: widgets).map(\.action) == [.reorder])
 }
 
 @Test func aMembersListInTheMainFileIsOneValueThatAppliesToEveryTheme() throws {

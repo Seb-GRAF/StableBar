@@ -554,6 +554,9 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     }
 
     var group: String? { ownGroup ?? joinedGroup }
+    func movesWith(_ other: WidgetConfiguration) -> Bool {
+        other.id == id || (group != nil && other.group == group && other.position == position)
+    }
     var appMenuDisplayMode: AppMenuDisplayMode {
         guard case let .appMenu(_, displayMode) = content else { return .name }
         return displayMode
@@ -1012,7 +1015,7 @@ struct Configuration: Decodable, Sendable {
             }
             if let group = widget.group {
                 guard groups[group] != nil else { throw CommandFailure(message: "Unknown group: \(group).") }
-                if let position = groupPositions[group], position != widget.position {
+                if let position = groupPositions[group], position != widget.position, !groups[group]!.takesOthers {
                     throw CommandFailure(message: "Widgets in group \(group) must share a position.")
                 }
                 groupPositions[group] = widget.position

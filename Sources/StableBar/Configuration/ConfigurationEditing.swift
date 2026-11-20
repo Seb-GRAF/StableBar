@@ -80,7 +80,7 @@ struct ConfigurationEditing: Sendable {
         loader.themesDirectory = configurationLoader.themesDirectory
         let saved = try loader.load(configurationURL, context: context)
         let savedIDs = Set(saved.widgets.map(\.id))
-        let moving = widgets.filter { $0.id == id || (widget.group != nil && $0.group == widget.group) }
+        let moving = widgets.filter(widget.movesWith)
         guard moving.allSatisfy({ savedIDs.contains($0.id) }) else {
             throw CommandFailure(message: "Save or discard command-line changes before editing this widget.")
         }

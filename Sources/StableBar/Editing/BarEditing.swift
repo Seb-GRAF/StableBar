@@ -178,7 +178,7 @@ final class BarEditing {
         guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store?.configuration?.widgets,
               let moving = widgets.first(where: { $0.id == movingID }),
               let widget = widgets.first(where: { $0.id == id }) else { return false }
-        return widget.id == moving.id || (moving.group != nil && moving.group == widget.group)
+        return moving.movesWith(widget)
     }
 
     func opacity(for id: String) -> Double { (dragSession.active != nil || slidingIn) && isMoving(id) ? 0 : 1 }
