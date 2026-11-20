@@ -93,6 +93,22 @@ private let row = #"""
     #expect(bar.widgets.first { $0.id == "e" }?.position == .right)
 }
 
+@MainActor @Test func aWidgetJoinsTheOthersPillBesideItWhereItIs() throws {
+    let bar = try GroupingFixture(#"""
+    {"groups":{"more":{"members":[{"others":true}]},"status":{"members":[{"type":"battery"}]}},"widgets":[
+      {"id":"note","type":"text","text":"Note","position":"right"},
+      {"id":"bat","type":"battery","position":"right"},
+      {"id":"task","type":"text","text":"Task","position":"left"},
+      {"id":"spare","type":"battery","position":"left"}
+    ]}
+    """#)
+    defer { bar.close() }
+    #expect(bar.grouping.choices(for: "spare", among: bar.widgets) == [.join("more")])
+    try bar.apply(bar.grouping.edits(.join("more"), for: "spare"))
+    #expect(bar.groups()["spare"] == "more")
+    #expect(bar.widgets.first { $0.id == "spare" }?.position == .left)
+}
+
 @MainActor @Test func leavingUnsetsAGroupTheMainFileSetsAndOverridesOneFromElsewhere() throws {
     let bar = try GroupingFixture(#"""
     {"includes":["included.json"],"groups":{"status":{}},"widgets":[
@@ -212,6 +228,21 @@ private let row = #"""
         "name": .string("Test theme edits"), "when": .object(["theme": .string("test-theme")]),
         "configuration": .object(["groups": .object(["time": .object(["members": .array([])])])])
     ])]))
+}
+
+@MainActor @Test func ungroupingRemovesTheThemesEditsOnceNothingElseIsLeftInThem() throws {
+    let widgets = #"[{"id":"time","type":"clock","position":"right"},{"id":"date","type":"clock","position":"right"}]"#
+    let bar = try GroupingFixture(#"{"widgets":\#(widgets)}"#)
+    defer { bar.close() }
+    _ = try bar.fixture.theme(#"{"groups":{"pill":{}}}"#)
+    try bar.fixture.write(#"{"theme":{"id":"test-theme","version":"1"},"widgets":\#(widgets)}"#, to: bar.fixture.url)
+    bar.store.configurationStore.reloadConfiguration()
+    try bar.apply(bar.grouping.edits(.join("pill"), for: "time"))
+    try bar.apply(bar.grouping.edits(.join("pill"), for: "date"))
+    #expect(bar.groups() == ["time": "pill", "date": "pill"])
+    try bar.apply(try bar.grouping.dissolving("pill"))
+    #expect(bar.groups() == ["time": "-", "date": "-"])
+    #expect(try bar.fixture.document()["profiles"] == nil)
 }
 
 @MainActor @Test func joiningAndLeavingAThemesGroupAreEditsOfThatTheme() throws {

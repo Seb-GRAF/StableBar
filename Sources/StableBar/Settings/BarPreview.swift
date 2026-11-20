@@ -38,10 +38,13 @@ struct BarPreview: View {
                                         ForEach(configuration.widgets.filter { frames[$0.id] != nil }) { widget in
                                             outline(widget, frame: frames[widget.id]!)
                                         }
-                                        if let selectedGroup, let style = configuration.groups[selectedGroup]?.style,
-                                           let frame = configuration.widgets.filter({ $0.group == selectedGroup })
-                                               .compactMap({ frames[$0.id] }).reduce(nil, { $0?.union($1) ?? $1 }) {
-                                            groupOutline(style, around: frame)
+                                        if let selectedGroup, let style = configuration.groups[selectedGroup]?.style {
+                                            ForEach(BarUnit.make(widgets: configuration.widgets.filter { $0.group == selectedGroup },
+                                                                 groups: configuration.groups)) { unit in
+                                                if let frame = unit.widgets.compactMap({ frames[$0.id] }).reduce(nil, { $0?.union($1) ?? $1 }) {
+                                                    groupOutline(style, around: frame)
+                                                }
+                                            }
                                         }
                                         if session.active != nil {
                                             ForEach(layout.positions, id: \.self) { position in

@@ -215,7 +215,7 @@ struct AdaptiveBarPlanner {
             : [[.left], [.notchLeft], [.notchRight], [.center, .right]]
         for run in runs {
             let placed = run.flatMap { position in items.filter { $0.position == position && result.placements[$0.id] != nil } }
-            for (item, next) in zip(placed, placed.dropFirst()) {
+            for (item, next) in zip(placed, placed.dropFirst()) where !item.isSpacer && !next.isSpacer {
                 let placement = result.placements[item.id]!
                 result.dividers[item.id] = (placement.x + placement.width + result.placements[next.id]!.x) / 2
             }

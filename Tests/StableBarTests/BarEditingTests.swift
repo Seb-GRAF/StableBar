@@ -93,10 +93,10 @@ final class BarEditingTests: XCTestCase {
         editing.begin()
         let payload = editing.dragSession.begin("a")
         editing.insertion = editing.dropTarget("a", on: 2, position: .right, x: 100, frames: [:])
-        XCTAssertEqual(editing.opacity(for: "a"), 0)
-        XCTAssertEqual(editing.opacity(for: "b"), 0)
+        XCTAssertEqual(editing.opacity(for: "a", on: 2), 0)
+        XCTAssertEqual(editing.opacity(for: "b", on: 2), 0)
         editing.dragSession.end(payload)
-        XCTAssertEqual(editing.opacity(for: "b"), 1)
+        XCTAssertEqual(editing.opacity(for: "b", on: 2), 1)
     }
 
     @MainActor func testDropIndexUsesFrameMidpointsAndNeverSplitsOrTargetsTheMovingGroup() throws {
@@ -163,27 +163,27 @@ final class BarEditingTests: XCTestCase {
         XCTAssertFalse(editing.drop(payload, at: target))
         XCTAssertEqual(editing.insertion, target)
         XCTAssertNil(editing.dragSession.active)
-        XCTAssertEqual(editing.opacity(for: "a"), 0)
+        XCTAssertEqual(editing.opacity(for: "a", on: 2), 0)
         XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"])
         XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.left, .left])
         var applications = 0
         store.onConfigurationChange = {
             applications += 1
             XCTAssertEqual(editing.insertion, target)
-            XCTAssertTrue(editing.isMoving("a"))
-            XCTAssertEqual(editing.opacity(for: "a"), 1)
+            XCTAssertTrue(editing.isMoving("a", on: 2))
+            XCTAssertEqual(editing.opacity(for: "a", on: 2), 1)
             XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.notchRight, .notchRight])
         }
         editing.finishDrop()
         editing.finishDrop()
-        XCTAssertEqual(editing.opacity(for: "a"), 1)
+        XCTAssertEqual(editing.opacity(for: "a", on: 2), 1)
         XCTAssertEqual(editing.arranged(entries, on: 2, position: .notchRight).map(\.id), ["a", "b"])
         XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.left, .left])
         await editing.editTask?.value
         store.onConfigurationChange = nil
         XCTAssertEqual(applications, 1)
         XCTAssertNil(editing.insertion)
-        XCTAssertFalse(editing.isMoving("a"))
+        XCTAssertFalse(editing.isMoving("a", on: 2))
         XCTAssertEqual(store.configuration?.widgets.filter { $0.group == "pair" }.map(\.position), [.notchRight, .notchRight])
         XCTAssertEqual(store.customizationHistory.undoSteps.count, 1)
         try await Task.sleep(for: .milliseconds(350))

@@ -126,14 +126,10 @@ struct WidgetGrouping {
     /// sets: an included file, a package or a template.
     func leaving(_ id: String) throws -> [ConfigurationEdit] {
         guard widgets.first(where: { $0.id == id })?.ownGroup != nil, profileElsewhere(setting: id) == nil else { return [] }
-        let origin = origins["widgets.\(id).group"]
-        let layer = editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
         var document = try mainDocument()
         let themeEdits = ThemeEdits(main: document, themeID: theme.id)
-        if let layer, layer == themeEdits.profile,
-           let removal = themeEdits.removal(of: themeEdits.changes.filter { $0.path == ["widgetOverrides", id, "group"] }) {
-            return [removal]
-        }
+        if let change = themeChange(id, in: themeEdits) { return [themeEdits.removal(of: [change])!] }
+        let layer = self.layer(setting: id)
         if let layer {
             let profiles = try document["profiles"]?.decoded([[String: ConfigurationValue]].self) ?? []
             document = try profiles.first { $0["name"] == .string(layer) }?["configuration"]?.decoded([String: ConfigurationValue].self) ?? [:]
@@ -164,7 +160,11 @@ struct WidgetGrouping {
     /// there names it.
     func dissolving(_ group: String) throws -> [ConfigurationEdit] {
         let own = widgets.filter { $0.ownGroup == group }
-        var edits = try own.flatMap { try leaving($0.id) }
+        let themeEdits = ThemeEdits(main: try mainDocument(), themeID: theme.id)
+        // One removal for every member, so that it deletes the theme's profile once nothing else is left in it.
+        let themed = Dictionary(uniqueKeysWithValues: own.compactMap { member in themeChange(member.id, in: themeEdits).map { (member.id, $0) } })
+        var edits = try own.filter { themed[$0.id] == nil }.flatMap { try leaving($0.id) }
+        edits += [themeEdits.removal(of: Array(themed.values))].compactMap { $0 }
         let definition = origins.filter { $0.key == "groups.\(group)" || $0.key.hasPrefix("groups.\(group).") }.values
         let namedElsewhere = contributions.contains { path, entries in
             path.hasSuffix(".group") && entries.contains { $0.origin.file != mainFile && $0.value == .string(group) }
@@ -190,6 +190,18 @@ struct WidgetGrouping {
         return edits
     }
 
+    /// The main file's layer that sets `id`'s group: the profile being edited, else the main file or one of its profiles.
+    private func layer(setting id: String) -> String? {
+        let origin = origins["widgets.\(id).group"]
+        return editingProfile ?? (origin?.file == mainFile ? origin?.profile : nil)
+    }
+
+    /// The edit of the selected theme that puts `id` in its group, when the group comes from that edit.
+    private func themeChange(_ id: String, in themeEdits: ThemeEdits) -> ThemeEdit? {
+        guard let layer = self.layer(setting: id), layer == themeEdits.profile else { return nil }
+        return themeEdits.changes.first { $0.path == ["widgetOverrides", id, "group"] }
+    }
+
     /// `edit` as an edit of the selected theme, in the main file's profile of its edits, created on the first one.
     private func themeEdit(_ edit: ConfigurationEdit) throws -> ConfigurationEdit {
         var edit = edit
@@ -208,9 +220,11 @@ struct WidgetGrouping {
         widgets.first { $0.id == id }?.position
     }
 
-    /// Where the group's own members sit in the shared configuration, which the members it gains must share.
+    /// Where the group's own members sit in the shared configuration, which the members it gains must share. A group
+    /// that takes others has a pill in each position, so a widget joins the one beside it.
     private func position(ofGroup group: String) -> WidgetPosition? {
-        widgets.first { $0.ownGroup == group }?.position ?? widgets.first { $0.group == group }?.position
+        guard !groups[group]!.takesOthers else { return nil }
+        return widgets.first { $0.ownGroup == group }?.position ?? widgets.first { $0.group == group }?.position
     }
 
     private func newGroupID() -> String {

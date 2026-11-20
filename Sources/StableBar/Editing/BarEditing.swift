@@ -174,14 +174,15 @@ final class BarEditing {
                                                       menu: output?.menu ?? widget.menu ?? []) } == true
     }
 
-    func isMoving(_ id: String) -> Bool {
-        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let widgets = store?.configuration?.widgets,
-              let moving = widgets.first(where: { $0.id == movingID }),
+    func isMoving(_ id: String, on displayID: Int) -> Bool {
+        guard let movingID = dragSession.active?.widgetID ?? dropped?.id, let shared = store?.configuration else { return false }
+        let widgets = (screenKind(displayID).map(shared.onScreen) ?? shared).widgets
+        guard let moving = widgets.first(where: { $0.id == movingID }),
               let widget = widgets.first(where: { $0.id == id }) else { return false }
         return moving.movesWith(widget)
     }
 
-    func opacity(for id: String) -> Double { (dragSession.active != nil || slidingIn) && isMoving(id) ? 0 : 1 }
+    func opacity(for id: String, on displayID: Int) -> Double { (dragSession.active != nil || slidingIn) && isMoving(id, on: displayID) ? 0 : 1 }
 
     private var previewInsertion: BarEditInsertion? {
         insertion ?? (dragSession.active == nil ? dropped?.target : nil)
@@ -197,9 +198,9 @@ final class BarEditing {
             }
         }
         guard let insertion = previewInsertion else { return tray }
-        var arranged = tray.filter { !isMoving($0.id) }
+        var arranged = tray.filter { !isMoving($0.id, on: displayID) }
         if insertion.displayID == displayID, insertion.position == position {
-            arranged.insert(contentsOf: entries.filter { isMoving($0.id) },
+            arranged.insert(contentsOf: entries.filter { isMoving($0.id, on: displayID) },
                             at: arranged.firstIndex { $0.id == insertion.before } ?? arranged.endIndex)
         }
         return arranged
@@ -227,7 +228,7 @@ final class BarEditing {
     func finishDrop() {
         guard let dropped, slidingIn, let store else { return }
         slidingIn = false
-        pendingDrops.append((store.configuration!.widgets.filter { isMoving($0.id) }.map(\.id), dropped.target, dropped.token))
+        pendingDrops.append((store.configuration!.widgets.filter { isMoving($0.id, on: dropped.target.displayID) }.map(\.id), dropped.target, dropped.token))
         enqueue(on: dropped.target.displayID) {
             defer {
                 var transaction = Transaction()

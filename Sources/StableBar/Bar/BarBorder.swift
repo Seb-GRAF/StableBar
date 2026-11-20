@@ -59,11 +59,7 @@ struct GlassBackground<S: Shape>: ViewModifier {
             }
             // Widgets keep their fill, tints included: they sit on the bar or a popup, which are opaque.
             let fill = reduceTransparency && surface != \GlassSettings.widgets ? self.fill?.opaque : self.fill
-            if let shadow {
-                content.background { shape.fill(fill?.shapeStyle ?? empty).styledShadow(shadow) }
-            } else {
-                content.background(fill?.shapeStyle ?? empty, in: shape)
-            }
+            content.background { shape.fill(fill?.shapeStyle ?? empty).styledShadow(shadow) }
         }
     }
 }

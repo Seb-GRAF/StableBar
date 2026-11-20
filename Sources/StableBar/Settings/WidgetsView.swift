@@ -138,7 +138,7 @@ struct WidgetsView: View {
                             }
                             ForEach(BarUnit.make(widgets: section, groups: store.configuration?.groups ?? [:])) { unit in
                                 if let group = unit.widgets[0].group {
-                                    groupRow(group, members: unit.widgets, position: position, listed: shown, grouping: grouping)
+                                    groupRow(group, id: unit.id, members: unit.widgets, position: position, listed: shown, grouping: grouping)
                                     if !collapsedGroups.contains(group) {
                                         ForEach(unit.widgets) { widget in
                                             widgetRow(widget, name: names[widget.id] ?? widget.id, position: position, listed: shown,
@@ -197,7 +197,10 @@ struct WidgetsView: View {
                     }
                 }
                 .onChange(of: selectedGroup, initial: true) {
-                    if let selectedGroup { proxy.scrollTo("group:\(selectedGroup)") }
+                    if let selectedGroup, let unit = BarUnit.make(widgets: shown, groups: store.configuration?.groups ?? [:])
+                        .first(where: { $0.widgets[0].group == selectedGroup }) {
+                        proxy.scrollTo(unit.id)
+                    }
                 }
             }
             Divider()
@@ -231,7 +234,7 @@ struct WidgetsView: View {
             .padding(.bottom, 4)
     }
 
-    private func groupRow(_ group: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
+    private func groupRow(_ group: String, id: String, members: [WidgetConfiguration], position: WidgetPosition, listed: [WidgetConfiguration],
                           grouping: WidgetGrouping) -> some View {
         let selected = selectedGroup == group
         let first = members[0]
@@ -267,7 +270,7 @@ struct WidgetsView: View {
             .accessibilityHidden(true)
         }
         .overlay(alignment: .top) { insertionLine(position.rawValue + "/" + first.id) }
-        .id("group:\(group)")
+        .id(id)
         .contextMenu {
             Button("Move up") { moveBy(-1, id: first.id, listed: listed) }
             Button("Move down") { moveBy(1, id: first.id, listed: listed) }

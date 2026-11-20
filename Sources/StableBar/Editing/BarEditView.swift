@@ -71,7 +71,7 @@ struct BarEditView: View {
                         }
                         ForEach(units) { unit in
                             let frame = layout.frames[unit.id]!
-                            let lifted = editing.opacity(for: unit.widgets[0].id) == 0
+                            let lifted = editing.opacity(for: unit.widgets[0].id, on: display.id) == 0
                             let shape = RoundedRectangle(cornerRadius: 6)
                             ZStack {
                                 // Where the dragged widget lands.

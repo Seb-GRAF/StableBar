@@ -171,7 +171,7 @@ final class BarEditDropTargetView: WidgetHostingView {
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard let payload = acceptedPayload(sender), let target = target(sender, payload: payload) else { return false }
-        let gap = frames.filter { editing?.isMoving($0.key) == true }.values.reduce(CGRect.null) { $0.union($1) }
+        let gap = frames.filter { editing?.isMoving($0.key, on: displayID) == true }.values.reduce(CGRect.null) { $0.union($1) }
         if !gap.isNull {
             let image = (sender.draggingSource as! BarEditDragSourceView).liftedImage
             sender.enumerateDraggingItems(for: self, classes: [NSPasteboardItem.self]) { item, _, _ in

@@ -399,13 +399,11 @@ private struct StyledShadow: ViewModifier {
     @Environment(\.offscreenSnapshot) private var offscreen
 
     func body(content: Content) -> some View {
-        if let appearance {
-            // NSView.cacheDisplay, which draws offscreen snapshots, turns a shadow's vertical offset upside down.
-            content.shadow(color: appearance.shadowColor, radius: appearance.shadowRadius, x: appearance.shadowOffsetX,
-                           y: offscreen ? -appearance.shadowOffsetY : appearance.shadowOffsetY)
-        } else {
-            content
-        }
+        // Without an appearance, a clear shadow keeps the view structure: switching branches would rebuild the content.
+        // NSView.cacheDisplay, which draws offscreen snapshots, turns a shadow's vertical offset upside down.
+        let y = appearance?.shadowOffsetY ?? 0
+        content.shadow(color: appearance?.shadowColor ?? .clear, radius: appearance?.shadowRadius ?? 0,
+                       x: appearance?.shadowOffsetX ?? 0, y: offscreen ? -y : y)
     }
 }
 

@@ -289,6 +289,14 @@ func menuBarDelayReleasesAStationaryPointerAfterTheFullWait(milliseconds: Double
         BarLayoutItem(id: "battery", position: .right, width: 50)
     ])
     #expect(plan.dividers == ["apple": 64, "music": 216, "clock": 284])
+    let spaced = AdaptiveBarPlanner(inset: 10, spacing: 8, notchSpacing: 16, notch: nil).plan(width: 500, items: [
+        BarLayoutItem(id: "apple", position: .left, width: 50),
+        BarLayoutItem(id: "gap", position: .left, width: 0, isSpacer: true),
+        BarLayoutItem(id: "spaces", position: .left, width: 50),
+        BarLayoutItem(id: "menus", position: .left, width: 50),
+        BarLayoutItem(id: "end", position: .left, width: 0, isSpacer: true)
+    ])
+    #expect(spaced.dividers == ["spaces": 279])
 }
 
 @Test func widgetsAtTheNotchStayAgainstItAndTheButtonGoesOnTheirFarSide() {
