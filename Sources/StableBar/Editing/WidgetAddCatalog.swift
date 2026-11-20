@@ -99,7 +99,9 @@ enum WidgetAddCatalog {
             guard record.source == PackageSource.storeID || record.isLocal else { return false }
         }
         if record == nil || record?.isLocal(version: manifest.version) == true {
-            guard manifest.repository?.absoluteString == "https://github.com/Seb-GRAF/stablebar-packages" else { return false }
+            // Store packages published before the move to stablebox still name the old owner.
+            guard let repository = manifest.repository?.absoluteString,
+                  ["https://github.com/Seb-GRAF/stablebar-packages", "https://github.com/stablebox/stablebar-packages"].contains(repository) else { return false }
         }
         return builtIns.contains { $0.replacesPackage == manifest.id }
     }
