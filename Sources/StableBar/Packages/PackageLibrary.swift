@@ -695,7 +695,8 @@ final class PackageLibrary {
     func deactivate(_ draft: PackageDraft) {
         guard let store else { return }
         do {
-            try store.customizationHistory.change(edit(draft, enabled: false))
+            try store.customizationHistory.change(draft.inspection.manifest.kind == .theme
+                ? store.configurationStore.firstIncludedThemeEdit() : edit(draft, enabled: false))
             draft.error = nil
             configurationChanged()
         } catch {

@@ -391,7 +391,7 @@ final class ConfigurationStore {
         if let theme = document["theme"] { selections.append(try theme.decoded(WidgetPackageSelection.self)) }
         var edits: [ConfigurationEdit] = []
         if let selection = selections.first(where: { $0.key == key }) {
-            edits.append(ConfigurationEdit(action: manifest.kind == .theme ? .theme : .package, properties: [
+            edits.append(manifest.kind == .theme ? try firstIncludedThemeEdit() : ConfigurationEdit(action: .package, properties: [
                 "id": .string(manifest.id), "version": .string(manifest.version), "enabled": .bool(false), "settings": .object(selection.settings)
             ]))
         }
@@ -473,6 +473,13 @@ final class ConfigurationStore {
         let document = try previewDocument ?? editedMainDocument(replaying: customizationEdits)
         let selection = try document["theme"]?.decoded(WidgetPackageSelection.self)
         return selection.flatMap { $0.key == choice.key ? $0.settings : nil } ?? [:]
+    }
+
+    func firstIncludedThemeEdit() throws -> ConfigurationEdit {
+        guard let themesDirectory else { throw WidgetPackageError.unknownTheme(includedThemeIDs[0]) }
+        let directory = themesDirectory.appending(path: includedThemeIDs[0])
+        let manifest = try WidgetPackageStore(directory: themesDirectory).manifest(at: directory)
+        return try themeEdit(for: ThemeChoice(manifest: manifest, directory: directory, isBundled: true))
     }
 
     func themeEdit(for choice: ThemeChoice) throws -> ConfigurationEdit {

@@ -1060,7 +1060,8 @@ final class ConfigurationHistoryTests: XCTestCase {
 
     @MainActor func testCustomizeUninstallKeepsCommandLineEditsAndIncludedSelectionUnsaved() throws {
         for kind in ["widgets", "theme"] {
-            let fixture = try Fixture()
+            let fixture = try Fixture(themesDirectory: URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().appending(path: "Resources/themes"))
             defer { fixture.close() }
             try fixture.installPackage(kind: kind, version: "1")
             try fixture.installPackage(kind: kind, version: "2")
@@ -1107,12 +1108,13 @@ private final class Fixture {
     let url: URL
     let store: BarStore
 
-    init(configuration: String = #"{"bar":{"height":40},"widgets":[{"id":"a","type":"text","position":"left","text":"A"}]}"#) throws {
+    init(configuration: String = #"{"bar":{"height":40},"widgets":[{"id":"a","type":"text","position":"left","text":"A"}]}"#,
+         themesDirectory: URL? = nil) throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         url = directory.appending(path: "config.json")
         try Data(configuration.utf8).write(to: url)
-        store = BarStore(configurationURL: url, themesDirectory: nil, customizationSaveDelay: .zero)
+        store = BarStore(configurationURL: url, themesDirectory: themesDirectory, customizationSaveDelay: .zero)
         store.configurationStore.reloadConfiguration()
         XCTAssertNil(store.configurationError)
     }

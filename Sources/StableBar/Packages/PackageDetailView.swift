@@ -53,10 +53,10 @@ struct PackageDetailView: View {
         } message: {
             Text("This version adds:\n\(additions.joined(separator: "\n"))")
         }
-        .confirmationDialog(manifest.kind == .theme ? "Use the built-in theme?" : "Remove \(manifest.name) from the bar?", isPresented: $confirmingRemoval) {
-            Button(manifest.kind == .theme ? "Use Built-in" : "Remove from bar") { library.deactivate(draft) }
+        .confirmationDialog(manifest.kind == .theme ? "Use Clear instead?" : "Remove \(manifest.name) from the bar?", isPresented: $confirmingRemoval) {
+            Button(manifest.kind == .theme ? "Use Clear" : "Remove from bar") { library.deactivate(draft) }
         } message: {
-            Text(manifest.kind == .theme ? "The built-in theme will replace this theme. Its files and settings stay available." : "All widgets from this package will be removed from the bar. Its files, settings and saved credentials stay available.")
+            Text(manifest.kind == .theme ? "Clear, the first included theme, will replace this theme. Its files and settings stay available." : "All widgets from this package will be removed from the bar. Its files, settings and saved credentials stay available.")
         }
         .confirmationDialog(uninstalling.map { "Uninstall \($0.name) \($0.version)?" } ?? "",
                             isPresented: Binding(get: { uninstalling != nil }, set: { if !$0 { uninstalling = nil } }),
@@ -128,7 +128,7 @@ struct PackageDetailView: View {
                 if manifest.kind != .theme && library.shownWidgets(draft) == 0 {
                     Button("Show widgets") { requestAdd(draft) }.buttonStyle(.borderedProminent)
                 }
-                Button(manifest.kind == .theme ? "Use Built-in" : "Remove from bar…") { confirmingRemoval = true }
+                Button(manifest.kind == .theme ? "Use Clear" : "Remove from bar…") { confirmingRemoval = true }
             } else if update == nil {
                 Button(manifest.kind == .theme ? "Use theme" : "Add to bar") { requestAdd(draft) }.buttonStyle(.borderedProminent)
             } else {

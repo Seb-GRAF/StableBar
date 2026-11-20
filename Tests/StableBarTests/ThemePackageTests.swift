@@ -1202,7 +1202,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
     }
 }
 
-@Test @MainActor func uninstallDisablesInheritedSelectionsAndKeepsOtherVersionsAndSettings() throws {
+@Test @MainActor func uninstallDisablesInheritedSelectionsOrSelectsClearAndKeepsOtherVersionsAndSettings() throws {
     for kind in ["widgets", "theme"] {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1222,7 +1222,7 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         try writePackageFile(imported, to: module)
         let url = directory.appending(path: "config.json")
         try writePackageFile(#"{"includes":["module.json"],"widgets":[]}"#, to: url)
-        let store = BarStore(configurationURL: url)
+        let store = BarStore(configurationURL: url, themesDirectory: bundledThemes)
         defer { store.stop() }
         store.configurationStore.reloadConfiguration()
         #expect(store.configuration?.bar.height == 48)
@@ -1241,11 +1241,13 @@ func aSharedReferenceBudgetRetainsThePerCallLimitAndCountsFailedCalls(prefix: St
         store.configurationStore.reloadConfiguration()
         #expect(store.configurationError == nil)
         #expect(store.configuration?.bar.height == 52)
-        let saved = try kind == "theme"
-            ? #require(store.effectiveDocument["theme"]).decoded(WidgetPackageSelection.self)
-            : #require(store.effectiveDocument["packages"]).decoded([WidgetPackageSelection].self)[0]
-        #expect(!saved.enabled)
-        #expect(saved.settings == ["size": .number(48)])
+        if kind == "theme" {
+            #expect(store.configurationStore.selectedThemeKey == "clear")
+        } else {
+            let saved = try #require(store.effectiveDocument["packages"]).decoded([WidgetPackageSelection].self)[0]
+            #expect(!saved.enabled)
+            #expect(saved.settings == ["size": .number(48)])
+        }
     }
 }
 
