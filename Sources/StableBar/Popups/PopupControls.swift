@@ -22,8 +22,8 @@ struct PopupSlider: View {
     private var shown: Double { localValue ?? min(max(value, minimum), maximum) }
 
     var body: some View {
-        Slider(value: Binding(get: { shown }, set: { localValue = $0 }),
-               in: minimum...maximum, step: step) {
+        SteppedSlider(value: Binding(get: { shown }, set: { localValue = $0 }),
+                      in: minimum...maximum, step: step) {
             Text(title).onGeometryChange(for: Double.self) { $0.size.width } action: { labelWidth = $0 }
         } onEditingChanged: { editing in
             self.editing = editing

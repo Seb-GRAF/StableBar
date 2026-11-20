@@ -205,7 +205,7 @@ struct NumberField: View {
     var body: some View {
         HStack(spacing: 8) {
             if slider {
-                Slider(value: $value, in: range, step: step).labelsHidden().controlSize(.small).frame(width: 110)
+                SteppedSlider(value: $value, in: range, step: step).labelsHidden().controlSize(.small).frame(width: 110)
                     .accessibilityLabel(title)
             }
             HStack(spacing: 0) {
