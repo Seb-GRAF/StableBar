@@ -185,7 +185,7 @@ for (const b of menu.querySelectorAll("[data-open]")) b.addEventListener("click"
 document.addEventListener("click", e => { if (openId && !e.target.closest(".pop, .win, .tag, .w")) open(openId); });
 /* Escape closes the popup and returns focus to its widget */
 document.addEventListener("keydown", e => {
-  if (e.key !== "Escape" || !openId) return;
+  if (e.key !== "Escape" || !openId || !ctx.hidden) return;
   const from = pop.contains(document.activeElement) && anchorFor(openId);
   open(openId);
   if (from) (popButton(from) || from).focus();
@@ -243,15 +243,18 @@ for (const d of soundPane.querySelectorAll(".devs button")) d.addEventListener("
   for (const o of d.parentElement.children) o.setAttribute("aria-pressed", o === d);
   d.closest(".card").querySelector(".dn").textContent = d.textContent;
 });
-/* The app's output button opens a menu of devices; here each click picks the next one */
-const OUTPUTS = ["", "AirPods Pro", "Studio Display"];
-for (const b of soundPane.querySelectorAll(".rb.to")) b.addEventListener("click", () => {
-  const app = b.closest(".app");
-  const out = OUTPUTS[(OUTPUTS.indexOf(app.dataset.out || "") + 1) % OUTPUTS.length];
-  app.dataset.out = out;
-  app.querySelector(".out").textContent = out;
-  b.classList.toggle("on", Boolean(out));
-  b.ariaLabel = `Output for ${app.dataset.app}: ${out || "Default Output"}`;
+/* Each app's output button opens a menu of the outputs, with Default Output first */
+const OUTPUTS = ["", "MacBook Pro Speakers", "AirPods Pro", "Studio Display"];
+for (const b of soundPane.querySelectorAll(".rb.to")) b.addEventListener("click", e => {
+  e.stopPropagation();
+  if (!ctx.hidden && menuFrom === b) return closeMenu();
+  const app = b.closest(".app"), r = b.getBoundingClientRect();
+  showMenu(r.left, r.bottom, OUTPUTS.map(out => [out || "Default Output", () => {
+    app.dataset.out = out;
+    app.querySelector(".out").textContent = out;
+    b.classList.toggle("on", Boolean(out));
+    b.ariaLabel = `Output for ${app.dataset.app}: ${out || "Default Output"}`;
+  }, out === (app.dataset.out || "")]), b);
 });
 /* The app's menus change its width, and a new theme the bar's height: the ball game measures the bar again once they settle */
 bar.addEventListener("transitionend", e => { if ((e.propertyName === "grid-template-columns" || e.target === bar && e.propertyName === "height") && !editing) sendBar(); });
@@ -778,19 +781,31 @@ document.querySelector(".pkgs").addEventListener("click", e => {
 });
 pkgReview.addEventListener("click", e => e.stopPropagation());
 
-/* Right-click the bar, as in the app: Edit Bar in Place, or a widget's moves while editing */
-function showMenu(x, y, items) {
+/* Right-click the bar, as in the app: Edit Bar in Place, or a widget's moves while editing.
+   An item with a third value is a choice, checked when it's true; `from` gets focus back when the menu closes. */
+let menuFrom = null;
+function showMenu(x, y, items, from = null) {
   closeAdd();
-  ctx.innerHTML = items.map(item => item ? `<button role="menuitem">${item[0]}</button>` : "<hr>").join("");
+  closeMenu();
+  const choices = items.some(item => item?.length > 2);
+  ctx.classList.toggle("choices", choices);
+  ctx.innerHTML = items.map(item => !item ? "<hr>" : choices ? `<button role="menuitemradio" aria-checked="${Boolean(item[2])}">${item[0]}</button>` : `<button role="menuitem">${item[0]}</button>`).join("");
   const actions = items.filter(Boolean).map(item => item[1]);
   ctx.querySelectorAll("button").forEach((b, k) => b.addEventListener("click", e => { e.stopPropagation(); closeMenu(); actions[k](); }));
   ctx.hidden = false;
+  menuFrom = from;
+  from?.setAttribute("aria-expanded", "true");
   const dr = dock.getBoundingClientRect();
   ctx.style.left = `${clamp(x - dr.left, 4, dr.width - ctx.offsetWidth - 4)}px`;
   ctx.style.top = `${y - dr.top + 2}px`;
-  ctx.querySelector("button").focus({ preventScroll: true });
+  (ctx.querySelector('[aria-checked="true"]') || ctx.querySelector("button")).focus({ preventScroll: true });
 }
-function closeMenu() { ctx.hidden = true; }
+function closeMenu() {
+  if (menuFrom && !ctx.hidden && ctx.contains(document.activeElement)) menuFrom.focus({ preventScroll: true });
+  menuFrom?.setAttribute("aria-expanded", "false");
+  menuFrom = null;
+  ctx.hidden = true;
+}
 bar.addEventListener("contextmenu", e => {
   if (innerWidth < 720 || e.target.closest(".menus a")) return;
   e.preventDefault();

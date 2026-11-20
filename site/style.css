@@ -432,6 +432,9 @@ main { position: relative; z-index: 1; overflow-x: clip; }
 }
 .ctx button { display: block; width: 100%; padding: 5px 10px; border-radius: 5px; text-align: left; }
 .ctx button:hover, .ctx button:focus-visible { background: var(--blue-fill); color: #fff; outline: none; }
+.ctx.choices button { padding-left: 24px; }
+.ctx [aria-checked="true"] { position: relative; }
+.ctx [aria-checked="true"]::before { content: "✓"; position: absolute; left: 9px; font-weight: 600; }
 .ctx hr { height: 1px; margin: 5px 10px; border: 0; background: color-mix(in srgb, var(--win-fg) 14%, transparent); }
 
 /* Popups and the More widgets menu */
