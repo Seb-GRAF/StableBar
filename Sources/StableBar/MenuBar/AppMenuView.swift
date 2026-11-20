@@ -190,6 +190,7 @@ private struct AppMenuTitle: View {
                     Image(systemName: appleLogo).accessibilityLabel(item.title)
                 } else if let appIcon {
                     Image(nsImage: appIcon).resizable().scaledToFit().frame(width: appearance.iconSize, height: appearance.iconSize)
+                        .styledAppIcon(appearance.appIcons, color: appearance.foreground)
                         .accessibilityLabel(item.title)
                 } else {
                     Text(item.title).fontWeight(index == 0 ? .bold : nil)

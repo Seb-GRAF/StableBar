@@ -148,6 +148,10 @@ enum IndicatorPlacement: String, Decodable, CaseIterable, Sendable {
     case cell, belowBar
 }
 
+enum AppIcons: String, Decodable, CaseIterable, Sendable {
+    case color, tinted
+}
+
 struct GlassSettings: Decodable, Sendable {
     var enabled = false
     var transparency = 0.3
@@ -188,6 +192,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
     var fontWeight: String?
     var iconSize: Double?
     var symbolVariant: SymbolVariant?
+    var appIcons: AppIcons?
     var paddingHorizontal: Double?
     var paddingVertical: Double?
     var spacing: Double?
@@ -211,7 +216,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey, CaseIterable {
         case foreground, background, hoverBackground, borderColor, accent, accentText, borderWidth, borderEdges, cornerRadius, flare
-        case fontName, fontSize, fontWeight, iconSize, symbolVariant, paddingHorizontal, paddingVertical, spacing, width
+        case fontName, fontSize, fontWeight, iconSize, symbolVariant, appIcons, paddingHorizontal, paddingVertical, spacing, width
         case minWidth, maxWidth, shadowRadius, shadowColor, height, paddingLeading, paddingTrailing, paddingTop
         case paddingBottom, offsetX, offsetY, opacity, placement, hoverForeground, states
     }
@@ -235,6 +240,7 @@ struct WidgetStyle: Decodable, Equatable, Sendable {
             fontWeight: fontWeight ?? defaults.fontWeight,
             iconSize: iconSize ?? defaults.iconSize,
             symbolVariant: symbolVariant ?? defaults.symbolVariant,
+            appIcons: appIcons ?? defaults.appIcons,
             paddingHorizontal: paddingHorizontal ?? defaults.paddingHorizontal,
             paddingVertical: paddingVertical ?? defaults.paddingVertical,
             spacing: spacing ?? defaults.spacing,
@@ -287,6 +293,7 @@ extension WidgetStyle {
         fontWeight = try values.decodeIfPresent(String.self, forKey: .fontWeight)
         iconSize = try values.decodeIfPresent(Double.self, forKey: .iconSize)
         symbolVariant = try values.decodeIfPresent(SymbolVariant.self, forKey: .symbolVariant)
+        appIcons = try values.decodeIfPresent(AppIcons.self, forKey: .appIcons)
         paddingHorizontal = try values.decodeIfPresent(Double.self, forKey: .paddingHorizontal)
         paddingVertical = try values.decodeIfPresent(Double.self, forKey: .paddingVertical)
         spacing = try values.decodeIfPresent(Double.self, forKey: .spacing)
@@ -378,6 +385,7 @@ struct WidgetAppearance {
     let cornerRadius: Double
     let font: Font
     let iconSize: Double
+    let appIcons: AppIcons
     let paddingHorizontal: Double
     let paddingVertical: Double
     let spacing: Double
@@ -395,6 +403,7 @@ struct WidgetAppearance {
         borderWidth = style.borderWidth ?? defaults.borderWidth ?? 1
         cornerRadius = style.cornerRadius ?? defaults.cornerRadius ?? 14
         iconSize = style.iconSize ?? defaults.iconSize ?? 13
+        appIcons = style.appIcons ?? defaults.appIcons ?? .color
         paddingHorizontal = style.paddingHorizontal ?? defaults.paddingHorizontal ?? 10
         paddingVertical = style.paddingVertical ?? defaults.paddingVertical ?? 6
         spacing = style.spacing ?? defaults.spacing ?? 6

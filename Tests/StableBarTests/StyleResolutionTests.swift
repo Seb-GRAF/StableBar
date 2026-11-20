@@ -501,3 +501,14 @@ private func rules(_ json: String) throws -> [StyleRule] {
         #expect(matches == (SymbolVariant(rawValue: name) != nil), "\(name)")
     }
 }
+
+@MainActor @Test func tintedAppIconsReadTheTextColorOnTheSurfaceItSitsOn() {
+    // Swiss's muted grays sit on its bar, and Tonal's text in the focused workspace on its accent's fill.
+    let muted = HexColor(light: 0x8c8c8cff, dark: 0x808080ff)
+    let onAccent = HexColor(light: 0xffffffff, dark: 0x5d180aff)
+    for (color, scheme, light) in [(muted, ColorScheme.light, false), (muted, .dark, true), (onAccent, .light, true), (onAccent, .dark, false)] {
+        var environment = EnvironmentValues()
+        environment.colorScheme = scheme
+        #expect(readsLight(color.color.resolve(in: environment), in: scheme) == light)
+    }
+}

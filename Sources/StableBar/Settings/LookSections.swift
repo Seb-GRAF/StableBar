@@ -20,6 +20,7 @@ struct WidgetsLookSection: View {
         style.color("Shadow color", "shadowColor")
         style.color("Accent", "accent")
         style.color("Accent text color", "accentText")
+        style.choice("App icons", "appIcons", choices: AppIcons.allCases.map(\.rawValue), default: AppIcons.color.rawValue)
         style.font(fontFamilies)
         style.weight()
         style.number("Text size", "fontSize", default: 13, in: 6...40, slider: true)

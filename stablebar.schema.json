@@ -746,6 +746,14 @@
           ],
           "description": "The SF Symbols variant to draw symbols in, such as fill, slash or circle.fill: slash, then at most one shape, then fill, as SF Symbols names them. A symbol without it keeps its own look; none draws symbols as named."
         },
+        "appIcons": {
+          "anyOf": [
+            { "enum": ["color", "tinted"] },
+            { "$ref": "#/definitions/reference" },
+            { "type": "null" }
+          ],
+          "description": "How app icons are drawn: color, in their own colors, or tinted, in the text color with their own light and dark parts. color by default."
+        },
         "paddingHorizontal": {
           "$ref": "#/definitions/number"
         },

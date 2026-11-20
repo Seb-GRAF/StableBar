@@ -364,6 +364,7 @@ struct BarInspector: View {
             style.hoverBackground("Hover background")
             style.color("Border color", "borderColor")
             style.color("Accent", "accent")
+            style.choice("App icons", "appIcons", choices: AppIcons.allCases.map(\.rawValue), default: AppIcons.color.rawValue)
         }
         SettingsGroup("Text") {
             style.font(fontFamilies)

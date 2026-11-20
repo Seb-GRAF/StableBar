@@ -19,6 +19,17 @@ Styles also accept `hoverForeground`, `height`, `paddingLeading`, `paddingTraili
 }
 ```
 
+`appIcons` sets how app icons draw: `color`, the default, keeps their own colors, and `tinted` draws them in the text color, keeping enough of their light and dark parts to recognize them on a light or a dark background. It covers the app icons of the workspaces, active app, App menus and Menu bar items widgets and the apps in the System and Sound popups. Like `iconSize`, it reaches a layout's blocks and the widget's popup. A theme sets it in `defaults`; a widget's `style` brings back the colors on that widget, and the workspace `appStyle`, with its states, sets it for workspace icons alone:
+
+```json
+{
+  "defaults": { "appIcons": "tinted" },
+  "widgets": [
+    { "id": "app", "type": "activeApp", "position": "left", "style": { "appIcons": "color" } }
+  ]
+}
+```
+
 ## States
 
 Any style can have `states`: styles that apply over it while a state is active. A state needs only the properties that change:

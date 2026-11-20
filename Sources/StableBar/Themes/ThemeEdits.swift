@@ -6,7 +6,7 @@ let themeLookKeys = ["defaults", "popupDefaults", "groupDefaults", "roles", "wor
 /// What a widget's Style tab sets, also saved as an edit of the selected theme.
 let widgetLookKeys: Set<String> = ["style", "background", "popupBackground", "tooltipBackground"]
 /// The style properties a widget's Style tab shows.
-let widgetStyleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "fontName", "fontWeight", "fontSize",
+let widgetStyleKeys = ["foreground", "background", "accent", "accentText", "shadowColor", "appIcons", "fontName", "fontWeight", "fontSize",
                        "paddingHorizontal", "paddingVertical", "paddingLeading", "paddingTrailing", "paddingTop", "paddingBottom",
                        "cornerRadius", "borderWidth", "borderColor"]
 

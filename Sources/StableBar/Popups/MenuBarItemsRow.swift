@@ -42,6 +42,7 @@ private struct MenuBarItemButton: View {
     var body: some View {
         Button { click(anchor) } label: {
             Image(nsImage: entry.icon!).resizable().scaledToFit().frame(width: 18, height: 18)
+                .styledAppIcon(entry.icon!.isTemplate ? .color : appearance.appIcons, color: appearance.foreground)
                 .padding(5)
                 .background(hovered || openAnchor == ObjectIdentifier(anchor) ? appearance.hoverBackground : AnyShapeStyle(Color.clear),
                             in: RoundedRectangle(cornerRadius: max(appearance.cornerRadius - 4, 0)))
