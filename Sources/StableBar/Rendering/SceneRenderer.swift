@@ -399,6 +399,10 @@ enum SceneRenderer {
             let waitsForThemes = scene.widget == nil && scene.section == .theme
             let waitsForCrashes = scene.widget == nil && scene.section == .crashes
             let library = store.packageLibrary
+            // A package widget's Content tab loads the package's settings, which a busy Mac can take seconds to do.
+            let widgetPackage = scene.widget.flatMap { id in
+                (scene.tab ?? .content) == .content && !store.builtInWidgetIDs.contains(id) ? store.widgetPackageIDs[id] : nil
+            }
             let move = settingsApplicationMove(for: scene)
             store.barEditing.setupIsOpen = scene.applicationMove == .setupOpen
             let settings = SettingsView(store: store, editor: editor, applicationMove: move)
@@ -415,6 +419,9 @@ enum SceneRenderer {
                     // Crashes marks what it shows as seen once it has read the reports.
                     && (!waitsForCrashes || (!store.crashReports.reports.isEmpty && store.crashReports.unseen.isEmpty))
                     && (scene.package == nil || library.draft?.inspection.manifest.id == scene.package)
+                    && (widgetPackage.map { id in
+                        library.error != nil || library.draft.map { $0.inspection.manifest.id == id && library.isActive($0) } == true
+                    } ?? true)
             }, to: url)
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
