@@ -65,6 +65,7 @@ struct StableBarApp {
                 dispatchMain()
             case let .renderDocsImages(directory):
                 NSApplication.shared.setActivationPolicy(.accessory)
+                OffscreenSnapshot.showScrollBars()
                 Task {
                     do {
                         try await DocsImages.render(to: directory)
@@ -77,6 +78,7 @@ struct StableBarApp {
                 NSApplication.shared.run()
             case let .renderScenes(output, scenes):
                 NSApplication.shared.setActivationPolicy(.accessory)
+                OffscreenSnapshot.showScrollBars()
                 Task {
                     let report = await SceneRenderer.renderAll(scenes, to: output)
                     if report.failures > 0 {

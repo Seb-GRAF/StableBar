@@ -149,7 +149,7 @@ enum SceneRenderer {
     /// `<name>-<appearance>.png` in `output`, and writes `scenes.json` there: each scene's images, or
     /// the error that stopped it. A scene's name is its file name; a second scene with the same name
     /// is an error. Times are drawn in UTC.
-    static func renderAll(_ inputs: [URL], to output: URL, settle: Duration = settle) async -> Report {
+    static func renderAll(_ inputs: [URL], to output: URL) async -> Report {
         DocsImages.useUTC()
         var report = Report()
         var entries: [String: ConfigurationValue] = [:]
@@ -176,7 +176,7 @@ enum SceneRenderer {
                                           themes: bundledThemesDirectory, appearance: appearance)
                     defer { store.stop() }
                     let image = "\(name)-\(appearance.rawValue).png"
-                    try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image), settle: settle)
+                    try await draw(scene, store: store, appearance: appearance, to: output.appending(path: image))
                     images.append(.string(image))
                 }
                 entries[name] = .object(["images": .array(images)])
@@ -207,14 +207,10 @@ enum SceneRenderer {
         }
     }
 
-    /// How long a scene's views settle before they're drawn.
-    static var settle: Duration = .seconds(2)
-
     private static let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
     /// Draws what `scene` asks for, from `store`, in one appearance, to the PNG file `url`.
-    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, to url: URL,
-                     settle: Duration = settle) async throws {
+    static func draw(_ scene: SceneFile, store: BarStore, appearance: SceneFile.Appearance, to url: URL) async throws {
         guard let configuration = store.configuration else { throw CommandFailure(message: "The scene has no configuration.") }
         let dark = appearance == .dark
         let width = CGFloat(scene.width ?? 1100)
@@ -228,12 +224,12 @@ enum SceneRenderer {
                 AnyView(bar(store))
             }
             try await OffscreenSnapshot.write(drawn(view.background { OffscreenSnapshot.backdrop(dark: dark) }, with: scene.accessibilityDisplay),
-                                              size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: width, height: height), dark: dark, to: url)
         case .editBar:
             store.barEditing.begin()
             let height = CGFloat(scene.height ?? configuration.barGeometry(for: display).panelHeight)
             try await OffscreenSnapshot.write(drawn(bar(store).background { OffscreenSnapshot.backdrop(dark: dark) }, with: []),
-                                              size: NSSize(width: width, height: height), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: width, height: height), dark: dark, to: url)
         case .popup:
             let look = configuration.look(on: .monitor)
             let id = scene.widget ?? ""
@@ -249,12 +245,12 @@ enum SceneRenderer {
                 navigation.view = view
             }
             try await drawPopup(popup, of: widget, store: store, navigation: navigation, height: CGFloat(scene.height ?? 600), dark: dark,
-                                accessibilityDisplay: scene.accessibilityDisplay, settle: settle, to: url)
+                                accessibilityDisplay: scene.accessibilityDisplay, to: url)
         case .update:
             store.update = AppUpdate.sample(star: (scene.starRequest ?? .repository).state)
             let popup = AppUpdate.popup
             try await drawPopup(popup, of: AppUpdate.tile(.available), store: store, height: CGFloat(scene.height ?? (popup.height ?? 420) + 48),
-                                dark: dark, accessibilityDisplay: [], settle: settle, to: url)
+                                dark: dark, accessibilityDisplay: [], to: url)
         case .settings:
             let editor = ConfigurationEditor(store: store)
             if let id = scene.widget {
@@ -308,7 +304,7 @@ enum SceneRenderer {
                 .environment(\.calendarsSample, calendarsSample)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
-                                              dark: dark, settle: settle, ready: {
+                                              dark: dark, ready: {
                 (!waitsForThemes || (!editor.gallery.choices.isEmpty && editor.gallery.choices.allSatisfy { editor.gallery.previews[$0.key] != nil }))
                     && (store.pendingLinks.theme.map { editor.gallery.previews[$0.choice.linkedPreviewKey] != nil } ?? true)
                     && (store.pendingLinks.bar.map { $0.entries != nil } ?? true)
@@ -318,14 +314,14 @@ enum SceneRenderer {
             }, to: url)
         case .uninstall:
             try await OffscreenSnapshot.write(uninstallSheet(scene, store: store),
-                                              size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: 520, height: CGFloat(scene.height ?? 460)), dark: dark, to: url)
         case .barLinkReview:
             let candidate = store.pendingLinks.bar!
             await candidate.loadStore()
             await candidate.use()
             guard !candidate.reviews.isEmpty else { throw CommandFailure(message: "barLink: No package the link needs asks for a review.") }
             try await OffscreenSnapshot.write(BarLinkReview(candidate: candidate, store: store).background(Color(nsColor: .windowBackgroundColor)),
-                                              size: NSSize(width: 540, height: CGFloat(scene.height ?? 540)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: 540, height: CGFloat(scene.height ?? 540)), dark: dark, to: url)
         case .accessibilityGuide:
             let icon = Bundle.main.url(forResource: "AppIcon", withExtension: "icns").flatMap(NSImage.init(contentsOf:)).flatMap { image in
                 var rect = NSRect(x: 0, y: 0, width: 256, height: 256)
@@ -334,7 +330,7 @@ enum SceneRenderer {
             }
             try await OffscreenSnapshot.write(AccessibilityGuideView(icon: icon ?? NSApp.applicationIconImage) {}
                 .padding(24).background(Color(nsColor: .windowBackgroundColor)),
-                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, settle: settle, to: url)
+                                              size: NSSize(width: CGFloat(scene.width ?? 408), height: CGFloat(scene.height ?? 181)), dark: dark, to: url)
         case .share, .shareLink:
             let share = BarShare(store: store, display: display, screen: CGSize(width: 1512, height: 982), menuBar: setupMenuBarHeight,
                                  wallpaper: nil)
@@ -342,11 +338,11 @@ enum SceneRenderer {
             share.format.preset = scene.sharePreset
             try await OffscreenSnapshot.write(BarShareView(share: share, showsLink: scene.draw == .shareLink, showsDetails: scene.draw == .shareLink),
                                               size: NSSize(width: CGFloat(scene.width ?? 680), height: CGFloat(scene.height ?? 460)),
-                                              dark: dark, settle: settle, ready: { share.image != nil }, to: url)
+                                              dark: dark, ready: { share.image != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
-                                dark: dark, settle: settle, to: url)
+                                dark: dark, to: url)
         }
     }
 
@@ -362,7 +358,7 @@ enum SceneRenderer {
     /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
     /// bar hide or show.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
-                                  macOSVersion: MacOSVersion, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
+                                  macOSVersion: MacOSVersion, size: NSSize, dark: Bool, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
@@ -404,7 +400,7 @@ enum SceneRenderer {
             await session.loadSuggestions()
             choices.made = true
         }
-        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, settle: settle, ready: {
+        try await OffscreenSnapshot.write(drawn(view, with: []), size: size, dark: dark, ready: {
             choices.made && (setup.step != .touches || session.workspaceCheckSource == nil
                             || session.workspaceConnection.result != .checking)
         }, to: url)
@@ -473,7 +469,7 @@ enum SceneRenderer {
     /// `widget`'s popup over the backdrop, with its shadow, as the bar opens it.
     private static func drawPopup(_ popup: PopupConfiguration, of widget: WidgetConfiguration, store: BarStore,
                                   navigation: PopupNavigation = PopupNavigation(), height: CGFloat, dark: Bool,
-                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], settle: Duration, to url: URL) async throws {
+                                  accessibilityDisplay: [SceneFile.AccessibilityDisplay], to url: URL) async throws {
         guard let look = store.configuration?.look(on: .monitor) else { throw CommandFailure(message: "The scene has no configuration.") }
         let popupWidth = CGFloat(popup.style.width ?? 360)
         let content = PopupView(popup: popup, style: popup.baseStyle(widget: widget, defaults: look.popupDefaults.popupStyle(over: look.defaults)),
@@ -486,7 +482,7 @@ enum SceneRenderer {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background { OffscreenSnapshot.backdrop(dark: dark) }
         try await OffscreenSnapshot.write(drawn(content, with: accessibilityDisplay), size: NSSize(width: popupWidth + 48, height: height),
-                                          dark: dark, settle: settle, to: url)
+                                          dark: dark, to: url)
     }
 
     /// `view` with the Accessibility display settings `settings` names on and the others off, since an offscreen drawing

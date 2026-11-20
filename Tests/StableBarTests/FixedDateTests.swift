@@ -78,8 +78,7 @@ private struct FixedVersionProbe: View {
     var drawn: AppVersion?
     let url = FileManager.default.temporaryDirectory.appending(path: "fixed-version-\(UUID().uuidString).png")
     defer { try? FileManager.default.removeItem(at: url) }
-    try await OffscreenSnapshot.write(FixedVersionProbe { drawn = $0 }, size: NSSize(width: 40, height: 40), dark: false,
-                                      settle: .zero, to: url)
+    try await OffscreenSnapshot.write(FixedVersionProbe { drawn = $0 }, size: NSSize(width: 40, height: 40), dark: false, to: url)
     let version = try #require(drawn)
     #expect(version.version == "0.0.0-dev")
     #expect(version.build == nil)

@@ -224,7 +224,8 @@ final class BarShare {
             .frame(width: size.width, height: size.height, alignment: bottom ? .bottom : .top)
             .clipped()
             .environment(\.fixedDate, fixedDate)
-        let png = try? await OffscreenSnapshot.png(desktop, size: size, pixels: pixels, dark: dark, settle: .seconds(1), name: "Share My Bar")
+        let png = try? await OffscreenSnapshot.png(desktop, size: size, pixels: pixels, dark: dark, settle: .after(.seconds(1)),
+                                                   name: "Share My Bar")
         guard !Task.isCancelled else { return }
         drawn = png.flatMap { NSBitmapImageRep(data: $0)?.cgImage }.map { Drawing(image: $0, size: size, bottom: bottom) }
         backdrop = drawn.flatMap { Self.blurred($0.image) }

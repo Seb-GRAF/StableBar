@@ -137,13 +137,13 @@ private func scene(_ json: String) throws -> SceneFile {
 
 private let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
-/// Draws `json` in the dark appearance, with a short settle, and returns its image and the store that drew it.
+/// Draws `json` in the dark appearance and returns its image and the store that drew it.
 @MainActor private func drawn(_ json: String, in directory: URL) async throws -> (image: NSBitmapImageRep, store: BarStore) {
     let scene = try scene(json)
     let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
                                         themes: themes)
     let url = directory.appending(path: "out.png")
-    try await SceneRenderer.draw(scene, store: store, appearance: .dark, to: url, settle: .milliseconds(300))
+    try await SceneRenderer.draw(scene, store: store, appearance: .dark, to: url)
     return (try #require(NSBitmapImageRep(data: Data(contentsOf: url))), store)
 }
 
@@ -250,12 +250,12 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }
 }
 
-/// A setup scene draws the step it names with nothing moving, so two drawings match however long each settles. The
+/// A setup scene draws the step it names once nothing moves, so two drawings of it match. The
 /// first step loads nothing as it opens, unlike the theme cards of the second, and fits without scrolling, and the bar
 /// shows no clock, whose time zone other tests change, so only motion could tell the drawings apart.
 /// Like every scene it runs nothing: setup's choices show in the tour, not on the bar, where the widgets a preset adds
 /// would start their commands.
-@Test @MainActor func setupSceneDrawsTheSameStepHoweverLongItSettles() async throws {
+@Test @MainActor func setupSceneDrawsTheSameStepEachTime() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let json = #"""
@@ -263,7 +263,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
      "setup": {"step": "placement", "placement": "top", "preset": "developer"}, "width": 1200, "height": 1000}
     """#
     var images: [NSBitmapImageRep] = []
-    for (name, settle) in [("early", Duration.seconds(1)), ("late", .milliseconds(2200))] {
+    for name in ["first", "second"] {
         let folder = directory.appending(path: name)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(#"{"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}"#.utf8)
@@ -271,7 +271,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
         let store = try store(json, in: folder)
         defer { store.stop() }
         let url = directory.appending(path: "\(name).png")
-        try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url, settle: settle)
+        try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url)
         images.append(try #require(NSBitmapImageRep(data: Data(contentsOf: url))))
         #expect(store.configurationStore.sessionEdits.isEmpty)
         #expect(store.widgetScripts.scripts.isEmpty)
@@ -280,7 +280,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(images[0].pixelsHigh == 2000)
     #expect(colors(images[0]) > 10)
     if pixels(images[0]) != pixels(images[1]) {
-        for name in ["early", "late"] {
+        for name in ["first", "second"] {
             try? FileManager.default.copyItem(at: directory.appending(path: "\(name).png"), to: URL(filePath: "test-results/setup-scene-\(name).png"))
         }
     }
@@ -339,7 +339,7 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
     try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
     try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
     try Data(#"{"configuration": {}, "draw": "bar", "colour": 1}"#.utf8).write(to: scenes.appending(path: "bad.json"))
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let entries = try report(in: output)
     #expect(entries["good"] == .object(["images": .array([.string("good-dark.png")])]))
@@ -359,7 +359,7 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
         try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
         try Data(darkBar.utf8).write(to: scenes.appending(path: "\(folder)/clock.json"))
     }
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let errors = try report(in: output).values.compactMap { entry -> String? in
         if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
@@ -397,7 +397,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
                                         themes: themes)
     defer { store.stop() }
-    try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"), settle: .milliseconds(300))
+    try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"))
     try await Task.sleep(for: .seconds(1))
     #expect(store.configuration?.widgets.map(\.id) == ["hello"])
     #expect(store.widgetScripts.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
@@ -516,6 +516,6 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: output.appending(path: "scenes.json"), withIntermediateDirectories: true)
     try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures >= 1)
 }
