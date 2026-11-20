@@ -137,13 +137,13 @@ private func scene(_ json: String) throws -> SceneFile {
 
 private let display = BarDisplay(id: 1, isBuiltIn: false, isMain: true, notch: nil)
 
-/// Draws `json` in the dark appearance, with a short settle, and returns its image and the store that drew it.
+/// Draws `json` in the dark appearance and returns its image and the store that drew it.
 @MainActor private func drawn(_ json: String, in directory: URL) async throws -> (image: NSBitmapImageRep, store: BarStore) {
     let scene = try scene(json)
     let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
                                         themes: themes)
     let url = directory.appending(path: "out.png")
-    try await SceneRenderer.draw(scene, store: store, appearance: .dark, to: url, settle: .milliseconds(300))
+    try await SceneRenderer.draw(scene, store: store, appearance: .dark, to: url)
     return (try #require(NSBitmapImageRep(data: Data(contentsOf: url))), store)
 }
 
@@ -250,12 +250,12 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     image.bitmapData.map { Data(bytes: $0, count: image.bytesPerRow * image.pixelsHigh) }
 }
 
-/// A setup scene draws the step it names with nothing moving, so two drawings match however long each settles. The
+/// A setup scene draws the step it names once nothing moves, so two drawings of it match. The
 /// first step loads nothing as it opens, unlike the theme cards of the second, and fits without scrolling, and the bar
 /// shows no clock, whose time zone other tests change, so only motion could tell the drawings apart.
 /// Like every scene it runs nothing: setup's choices show in the tour, not on the bar, where the widgets a preset adds
 /// would start their commands.
-@Test @MainActor func setupSceneDrawsTheSameStepHoweverLongItSettles() async throws {
+@Test @MainActor func setupSceneDrawsTheSameStepEachTime() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let json = #"""
@@ -263,7 +263,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
      "setup": {"step": "placement", "placement": "top", "preset": "developer"}, "width": 1200, "height": 1000}
     """#
     var images: [NSBitmapImageRep] = []
-    for (name, settle) in [("early", Duration.seconds(1)), ("late", .milliseconds(2200))] {
+    for name in ["first", "second"] {
         let folder = directory.appending(path: name)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data(#"{"widgets": [{"id": "hello", "type": "text", "position": "left", "text": "Hello"}]}"#.utf8)
@@ -271,7 +271,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
         let store = try store(json, in: folder)
         defer { store.stop() }
         let url = directory.appending(path: "\(name).png")
-        try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url, settle: settle)
+        try await SceneRenderer.draw(scene(json), store: store, appearance: .dark, to: url)
         images.append(try #require(NSBitmapImageRep(data: Data(contentsOf: url))))
         #expect(store.configurationStore.sessionEdits.isEmpty)
         #expect(store.widgetScripts.scripts.isEmpty)
@@ -280,7 +280,7 @@ private func pixels(_ image: NSBitmapImageRep) -> Data? {
     #expect(images[0].pixelsHigh == 2000)
     #expect(colors(images[0]) > 10)
     if pixels(images[0]) != pixels(images[1]) {
-        for name in ["early", "late"] {
+        for name in ["first", "second"] {
             try? FileManager.default.copyItem(at: directory.appending(path: "\(name).png"), to: URL(filePath: "test-results/setup-scene-\(name).png"))
         }
     }
@@ -339,7 +339,7 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
     try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
     try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
     try Data(#"{"configuration": {}, "draw": "bar", "colour": 1}"#.utf8).write(to: scenes.appending(path: "bad.json"))
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let entries = try report(in: output)
     #expect(entries["good"] == .object(["images": .array([.string("good-dark.png")])]))
@@ -351,7 +351,7 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
     #expect(FileManager.default.fileExists(atPath: output.appending(path: "good-dark.png").path))
 }
 
-@Test @MainActor func renderAllRejectsDuplicateNames() async throws {
+@Test(arguments: [false, true]) @MainActor func renderAllRejectsDuplicateNames(eachInAProcess: Bool) async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
     let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
@@ -359,7 +359,8 @@ private let darkBar = #"{"configuration": {"widgets": [{"id": "hello", "type": "
         try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
         try Data(darkBar.utf8).write(to: scenes.appending(path: "\(folder)/clock.json"))
     }
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = eachInAProcess ? await SceneRenderer.renderEach([scenes], to: output, processes: 2, draw: drawHere)
+        : await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures == 1)
     let errors = try report(in: output).values.compactMap { entry -> String? in
         if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
@@ -397,7 +398,7 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     let store = try SceneRenderer.store(for: scene, at: directory.appending(path: "scene.json"), in: directory.appending(path: "work"),
                                         themes: themes)
     defer { store.stop() }
-    try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"), settle: .milliseconds(300))
+    try await SceneRenderer.draw(scene, store: store, appearance: .light, to: directory.appending(path: "out.png"))
     try await Task.sleep(for: .seconds(1))
     #expect(store.configuration?.widgets.map(\.id) == ["hello"])
     #expect(store.widgetScripts.scripts.values.allSatisfy { $0.diagnostics.lastStarted == nil })
@@ -509,6 +510,97 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     #expect(store.configuration?.widgets.map(\.id) == ["included"])
 }
 
+/// Draws `scene` to `folder` in this process, as the process `renderEach` starts for it would.
+private let drawHere: @Sendable (URL, URL) async -> Int32 = { scene, folder in
+    await SceneRenderer.renderAll([scene], to: folder).failures > 0 ? 1 : 0
+}
+
+/// How many drawings run at once, and the most that did.
+private actor Running {
+    private(set) var count = 0
+    private(set) var most = 0
+
+    func start() {
+        count += 1
+        most = max(most, count)
+    }
+
+    func finish() { count -= 1 }
+}
+
+@Test @MainActor func renderEachDrawsEachSceneInAProcessOfItsOwnAFewAtATime() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    let names = (0..<5).map { "scene-\($0)" }
+    for name in names {
+        let scene = name == "scene-3" ? #"{"configuration": {}, "draw": "bar", "colour": 1}"# : darkBar
+        try Data(scene.utf8).write(to: scenes.appending(path: "\(name).json"))
+    }
+    let running = Running()
+    let summary = await SceneRenderer.renderEach([scenes], to: output, processes: 2) { scene, folder in
+        await running.start()
+        let status = await drawHere(scene, folder)
+        await running.finish()
+        return status
+    }
+    #expect(summary.failures == 1)
+    #expect(await running.most <= 2)
+    let entries = try report(in: output)
+    #expect(Set(entries.keys) == Set(names))
+    for name in names where name != "scene-3" {
+        #expect(entries[name] == .object(["images": .array([.string("\(name)-dark.png")])]))
+        #expect(FileManager.default.fileExists(atPath: output.appending(path: "\(name)-dark.png").path))
+    }
+    guard case let .object(bad)? = entries["scene-3"], case .string? = bad["error"] else {
+        Issue.record("Expected an error for scene-3")
+        return
+    }
+}
+
+@Test @MainActor func renderEachReportsAProcessThatStoppedBeforeItsReport() async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
+    for name in ["crashes", "draws"] {
+        try Data(darkBar.utf8).write(to: scenes.appending(path: "\(name).json"))
+    }
+    let summary = await SceneRenderer.renderEach([scenes], to: output, processes: 2) { scene, folder in
+        scene.lastPathComponent == "crashes.json" ? 9 : await drawHere(scene, folder)
+    }
+    #expect(summary.failures == 1)
+    let entries = try report(in: output)
+    #expect(entries["crashes"] == .object(["error": .string("Drawing crashes stopped with status 9 before it reported.")]))
+    #expect(entries["draws"] == .object(["images": .array([.string("draws-dark.png")])]))
+    #expect(FileManager.default.fileExists(atPath: output.appending(path: "draws-dark.png").path))
+}
+
+/// Two scenes whose names differ only in case would write one image on a disk that ignores case, as macOS's does by
+/// default, so the second is an error, drawn either way.
+@Test(arguments: [false, true], [["Clock", "clock"], ["Straße", "STRASSE"]]) @MainActor
+func scenesNamedAlikeButForCaseAreRejected(eachInAProcess: Bool, names: [String]) async throws {
+    let directory = try scratch()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let scenes = directory.appending(path: "scenes"), output = directory.appending(path: "out")
+    for folder in ["a", "b"] {
+        try FileManager.default.createDirectory(at: scenes.appending(path: folder), withIntermediateDirectories: true)
+    }
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "a/\(names[0]).json"))
+    try Data(darkBar.utf8).write(to: scenes.appending(path: "b/\(names[1]).json"))
+    let summary = eachInAProcess ? await SceneRenderer.renderEach([scenes], to: output, processes: 2, draw: drawHere)
+        : await SceneRenderer.renderAll([scenes], to: output)
+    #expect(summary.failures == 1)
+    let entries = try report(in: output)
+    #expect(entries[names[0]] == .object(["images": .array([.string("\(names[0])-dark.png")])]))
+    let errors = entries.values.compactMap { entry -> String? in
+        if case let .object(fields) = entry, case let .string(message)? = fields["error"] { message } else { nil }
+    }
+    #expect(errors == ["Another scene is named \(names[0]), which differs only in case."])
+    #expect(entries.count == 2)
+}
+
 @Test @MainActor func renderAllFailsWhenItCannotWriteItsReport() async throws {
     let directory = try scratch()
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -516,6 +608,6 @@ private final class RecordingURLProtocol: URLProtocol, @unchecked Sendable {
     try FileManager.default.createDirectory(at: scenes, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: output.appending(path: "scenes.json"), withIntermediateDirectories: true)
     try Data(darkBar.utf8).write(to: scenes.appending(path: "good.json"))
-    let summary = await SceneRenderer.renderAll([scenes], to: output, settle: .milliseconds(300))
+    let summary = await SceneRenderer.renderAll([scenes], to: output)
     #expect(summary.failures >= 1)
 }
