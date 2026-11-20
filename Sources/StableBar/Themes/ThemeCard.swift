@@ -192,7 +192,8 @@ struct ThemeCard: View {
 
 struct ThemeSampleBar: View {
     let look: Configuration
-    /// The widgets to draw with sample data, in their places, instead of `sampleWidgets`.
+    /// The widgets to draw with sample data, in their places, instead of `sampleWidgets`. They join the look's groups by
+    /// its members, and leave their own, which the look may not have.
     let widgets: [WidgetConfiguration]?
     /// Built-in widgets that need no permission, which join a theme's groups as on the bar.
     static let sampleWidgets = try! JSONDecoder().decode([WidgetConfiguration].self, from: Data(#"""
@@ -226,19 +227,18 @@ struct ThemeSampleBar: View {
     }
 
     var body: some View {
+        let ungrouped = (widgets ?? Self.sampleWidgets).map { widget in
+            var widget = widget
+            widget.ownGroup = nil
+            return widget
+        }
+        let units = BarUnit.make(widgets: WidgetGroupConfiguration.joining(ungrouped, groups: look.groups), groups: look.groups)
         HStack(spacing: look.bar.spacing) {
-            if let widgets {
-                ForEach(widgets.filter { $0.position == .left }) { sample($0) }
-                Spacer(minLength: 0)
-                ForEach(widgets.filter { [.notchLeft, .center, .notchRight].contains($0.position) }) { sample($0) }
-                Spacer(minLength: 0)
-                ForEach(widgets.filter { $0.position == .right }) { sample($0) }
-            } else {
-                let units = BarUnit.make(widgets: WidgetGroupConfiguration.joining(Self.sampleWidgets, groups: look.groups), groups: look.groups)
-                ForEach(units.filter { $0.position == .left }, content: unit)
-                Spacer(minLength: 0)
-                ForEach(units.filter { $0.position == .right }, content: unit)
-            }
+            ForEach(units.filter { $0.position == .left }, content: unit)
+            Spacer(minLength: 0)
+            ForEach(units.filter { [.notchLeft, .center, .notchRight].contains($0.position) }, content: unit)
+            Spacer(minLength: 0)
+            ForEach(units.filter { $0.position == .right }, content: unit)
         }
         .lineLimit(1)
         .padding(.horizontal, look.bar.inset)

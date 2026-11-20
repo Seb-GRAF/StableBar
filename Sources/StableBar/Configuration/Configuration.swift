@@ -537,7 +537,7 @@ struct WidgetConfiguration: Decodable, Identifiable, Sendable {
     let timeout: Double
     let actions: WidgetActions?
     let enabled: Bool
-    let ownGroup: String?
+    var ownGroup: String?
     /// The group whose `members` the widget joined. A screen's own layout settles it again.
     var joinedGroup: String?
     let priority: Int

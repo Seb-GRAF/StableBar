@@ -103,27 +103,34 @@ final class ThemeCardTests: XCTestCase {
 @MainActor @Test func sampleBarDrawsTheThemeGroupsAroundTheirMembers() throws {
     let fixture = try ThemeGalleryFixture()
     defer { fixture.close() }
+    // Setup's previews give their own widgets, which can name a group the look doesn't have.
+    let given = try JSONDecoder().decode([StableBar.WidgetConfiguration].self, from: Data(#"""
+        [{ "id": "app", "type": "activeApp", "position": "left" },
+         { "id": "clock", "type": "clock", "position": "right", "group": "pills" }]
+        """#.utf8))
     // Only the group is magenta, so magenta pixels can only come from sample widgets joining it.
     for members in [#"[{"type":"clock"}]"#, #"[{"others":true}]"#, #"[{"type":"audio"}]"#] {
         let choice = try fixture.theme(##"""
         {"groups":{"time":{"style":{"background":"#ff00ff","paddingHorizontal":6},"members":\##(members)}}}
         """##, install: false)
         let look = try ThemePreview(choice: choice, themesDirectory: fixture.themes).configuration(for: .dark)
-        let renderer = ImageRenderer(content: ThemeSampleBar(look: look).frame(width: 700))
-        let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
-        var groupPixels = 0
-        for y in 0..<bitmap.pixelsHigh {
-            for x in 0..<bitmap.pixelsWide {
-                if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.8,
-                   color.redComponent > 0.8 && color.blueComponent > 0.8 && color.greenComponent < 0.2 {
-                    groupPixels += 1
+        for widgets in [nil, given] {
+            let renderer = ImageRenderer(content: ThemeSampleBar(look: look, widgets: widgets).frame(width: 700))
+            let bitmap = NSBitmapImageRep(cgImage: try #require(renderer.cgImage))
+            var groupPixels = 0
+            for y in 0..<bitmap.pixelsHigh {
+                for x in 0..<bitmap.pixelsWide {
+                    if let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.8,
+                       color.redComponent > 0.8 && color.blueComponent > 0.8 && color.greenComponent < 0.2 {
+                        groupPixels += 1
+                    }
                 }
             }
-        }
-        if members.contains("audio") {
-            #expect(groupPixels == 0, "No sample widget joins a group of Sound widgets")
-        } else {
-            #expect(groupPixels > 100, "The sample widgets join a group whose members are \(members)")
+            if members.contains("audio") {
+                #expect(groupPixels == 0, "No sample widget joins a group of Sound widgets")
+            } else {
+                #expect(groupPixels > 100, "The sample widgets join a group whose members are \(members)")
+            }
         }
     }
 }
