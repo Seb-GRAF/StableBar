@@ -105,7 +105,8 @@ struct SceneFile: Decodable {
     var appearances: [Appearance] = Appearance.allCases
     /// The Accessibility display settings a bar or popup scene draws with, all off by default, whatever the Mac that draws has.
     var accessibilityDisplay: [AccessibilityDisplay] = []
-    /// An image, relative to the scene file, drawn behind the bar or popup in place of the setup tour's wallpaper.
+    /// An image, relative to the scene file, drawn behind the bar or popup in place of the setup tour's wallpaper, or
+    /// behind the previews of the bar in Settings and setup as the Mac's wallpaper.
     var wallpaper: String?
     var width: Double?
     var height: Double?
@@ -341,8 +342,9 @@ struct SceneFile: Decodable {
             throw DecodingError.dataCorruptedError(forKey: .accessibilityDisplay, in: values,
                                                    debugDescription: "accessibilityDisplay belongs to a bar or popup scene.")
         }
-        if wallpaper != nil, draw != .bar, draw != .popup {
-            throw DecodingError.dataCorruptedError(forKey: .wallpaper, in: values, debugDescription: "wallpaper belongs to a bar or popup scene.")
+        if wallpaper != nil, ![.bar, .popup, .settings, .setup].contains(draw) {
+            throw DecodingError.dataCorruptedError(forKey: .wallpaper, in: values,
+                                                   debugDescription: "wallpaper belongs to a bar, popup, settings or setup scene.")
         }
         if let tab, tab.isBarTab, widget != nil || section != .bar {
             throw DecodingError.dataCorruptedError(forKey: .tab, in: values,

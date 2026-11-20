@@ -319,6 +319,7 @@ enum SceneRenderer {
                 .environment(\.feedbackSample, feedbackSample)
                 .environment(\.starRequestSample, (scene.starRequest ?? .repository).state)
                 .environment(\.calendarsSample, calendarsSample)
+                .environment(\.sceneWallpaper, wallpaper)
             try await OffscreenSnapshot.write(drawn(settings, with: []),
                                               size: NSSize(width: CGFloat(scene.width ?? 1080), height: CGFloat(scene.height ?? 760)),
                                               dark: dark, settle: settle, ready: {
@@ -358,6 +359,7 @@ enum SceneRenderer {
                                               dark: dark, settle: settle, ready: { share.image != nil }, to: url)
         case .setup:
             try await drawSetup(scene.setup ?? SceneFile.Setup(), move: scene.applicationMove, store: store, macOSVersion: macOSVersion,
+                                wallpaper: wallpaper,
                                 size: NSSize(width: CGFloat(scene.width ?? 1512), height: CGFloat(scene.height ?? 982)),
                                 dark: dark, settle: settle, to: url)
         }
@@ -375,7 +377,7 @@ enum SceneRenderer {
     /// bar above it. The scene's choices are made once the tour shows, as a person makes them, so the tour sees the menu
     /// bar hide or show.
     private static func drawSetup(_ setup: SceneFile.Setup, move: SceneFile.ApplicationMove?, store: BarStore,
-                                  macOSVersion: MacOSVersion, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
+                                  macOSVersion: MacOSVersion, wallpaper: NSImage?, size: NSSize, dark: Bool, settle: Duration, to url: URL) async throws {
         guard let defaults = SceneDefaults(suiteName: "org.stablebar.scene") else {
             throw CommandFailure(message: "setup: No defaults to draw with.")
         }
@@ -411,6 +413,7 @@ enum SceneRenderer {
                           intro: false, finish: {}, skip: {}, reveal: {}, lower: {}, showProfile: nil)
             SetupChrome(session: session, store: store)
         }
+        .environment(\.sceneWallpaper, wallpaper)
         .task {
             if let placement = setup.placement { await session.place(placement) }
             await session.loadStoreWidgets()

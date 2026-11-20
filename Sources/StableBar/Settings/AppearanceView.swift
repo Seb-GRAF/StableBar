@@ -338,10 +338,6 @@ struct AppearanceView: View {
     }
 }
 
-struct SampleWallpaper: View {
-    var body: some View { Wallpaper() }
-}
-
 /// One of Customize's sections, with the selected theme's edits in it.
 private struct CustomizeSection {
     let title: String
