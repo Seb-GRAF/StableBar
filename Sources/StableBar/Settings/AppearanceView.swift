@@ -32,10 +32,6 @@ struct AppearanceView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         header
                         scopeLine
-                        if let configuration = store.configuration {
-                            ThemePreviewStrip(look: screen.map(configuration.onScreen) ?? configuration, appearance: appearance)
-                                .padding(.top, 12).padding(.bottom, 4)
-                        }
                         themes(appearance)
                         if screen == nil, editor.editingProfile == nil, !gallery.linkedThemeIsActive, let theme = gallery.selectedChoice {
                             ThemeEditsLine(editor: editor, theme: theme).padding(.top, 12)
@@ -339,20 +335,6 @@ struct AppearanceView: View {
     private func reset(_ source: PropertyValueSource) {
         do { try store.removePropertySource(source, everyBar: editor.themeChangesEveryBar) }
         catch { store.customizationHistory.error = errorMessage(error) }
-    }
-}
-
-struct ThemePreviewStrip: View {
-    let look: Configuration
-    let appearance: BarAppearance
-
-    var body: some View {
-        ThemeSampleBar(look: look)
-            .background(SampleWallpaper())
-            .clipShape(RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(SettingsPalette.groupBorder))
-            .environment(\.colorScheme, appearance.colorScheme)
-            .accessibilityHidden(true)
     }
 }
 
