@@ -351,6 +351,8 @@ struct SetupTourView: View {
             .id(reduceMotion ? "\(session.step)" : "stage")
         }
         .position(pose.center)
+        // Clipping leaves the wallpaper behind the bar hit-testable below it, over the intro's Get Started.
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
