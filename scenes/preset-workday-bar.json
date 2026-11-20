@@ -1,0 +1,278 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": {
+      "id": "clear"
+    },
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "app-menu",
+        "type": "appMenu",
+        "position": "left"
+      },
+      {
+        "id": "meeting",
+        "type": "calendar",
+        "position": "center",
+        "priority": 1,
+        "details": true,
+        "layout": {
+          "type": "row",
+          "hideWhen": {
+            "field": "phase",
+            "equals": "none"
+          },
+          "style": {
+            "spacing": 6
+          },
+          "children": [
+            {
+              "type": "symbol",
+              "name": "calendar",
+              "hideWhen": {
+                "field": "phase",
+                "equals": "live"
+              }
+            },
+            {
+              "type": "symbol",
+              "name": "circle.fill",
+              "showWhen": {
+                "field": "phase",
+                "equals": "live"
+              },
+              "style": {
+                "iconSize": 7,
+                "foreground": {
+                  "light": "#28a745",
+                  "dark": "#30d158"
+                }
+              }
+            },
+            {
+              "type": "field",
+              "field": "title",
+              "style": {
+                "maxWidth": 170
+              }
+            },
+            {
+              "type": "field",
+              "field": "start",
+              "role": "secondary",
+              "showWhen": {
+                "field": "phase",
+                "equals": "later"
+              }
+            },
+            {
+              "type": "row",
+              "showWhen": [
+                {
+                  "field": "phase",
+                  "equals": "soon"
+                },
+                {
+                  "field": "phase",
+                  "equals": "now"
+                }
+              ],
+              "style": {
+                "spacing": 3,
+                "foreground": "@token.warning"
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "in"
+                },
+                {
+                  "type": "field",
+                  "field": "minutes"
+                },
+                {
+                  "type": "text",
+                  "text": "min"
+                }
+              ]
+            },
+            {
+              "type": "row",
+              "showWhen": {
+                "field": "phase",
+                "equals": "live"
+              },
+              "role": "secondary",
+              "style": {
+                "spacing": 3
+              },
+              "children": [
+                {
+                  "type": "field",
+                  "field": "minutes"
+                },
+                {
+                  "type": "text",
+                  "text": "min left"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "Join",
+              "hideWhenEmpty": "joinCommand",
+              "hideWhen": {
+                "field": "phase",
+                "equals": "later"
+              },
+              "onClickField": "joinCommand",
+              "style": {
+                "background": {
+                  "light": "#34c75938",
+                  "dark": "#30d15847"
+                },
+                "cornerRadius": 8,
+                "paddingHorizontal": 8,
+                "paddingVertical": 2,
+                "fontWeight": "semibold"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "privacy",
+        "type": "privacy",
+        "position": "right"
+      },
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right"
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "details": true
+      },
+      {
+        "id": "date",
+        "type": "clock",
+        "position": "right",
+        "format": "EEE d MMM",
+        "role": "secondary",
+        "details": true
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "format": "HH:mm",
+        "role": "time",
+        "details": true
+      },
+      {
+        "id": "menu-bar-items",
+        "type": "menuBarItems",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2.fill",
+      "value": 0.45,
+      "fields": {
+        "volumeAvailable": "true",
+        "muted": "false",
+        "volume": "45",
+        "device": "MacBook Pro Speakers"
+      },
+      "values": {
+        "volume": 0.45
+      }
+    },
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    },
+    "calendar": {
+      "text": "Design review",
+      "icon": "calendar",
+      "fields": {
+        "access": "granted",
+        "phase": "soon",
+        "title": "Design review",
+        "start": "09:50",
+        "end": "10:30",
+        "minutes": "9",
+        "link": "https://meet.google.com/kfr-xbqe-tnm",
+        "joinCommand": "open 'https://meet.google.com/kfr-xbqe-tnm'",
+        "service": "Google Meet",
+        "date": "Thu 22 Oct"
+      },
+      "values": {
+        "remaining": 0.6
+      },
+      "lists": {
+        "today": [
+          {
+            "title": "Stand-up",
+            "start": "09:15",
+            "end": "09:30",
+            "phase": "past"
+          },
+          {
+            "title": "Design review",
+            "start": "09:50",
+            "end": "10:30",
+            "phase": "soon",
+            "current": "true",
+            "link": "https://meet.google.com/kfr-xbqe-tnm",
+            "service": "Google Meet"
+          },
+          {
+            "title": "Lunch with Ana",
+            "start": "12:30",
+            "end": "13:30",
+            "phase": "later"
+          },
+          {
+            "title": "1:1 with Sam",
+            "start": "15:00",
+            "end": "15:30",
+            "phase": "later"
+          }
+        ]
+      }
+    },
+    "privacy": {
+      "text": "",
+      "tooltip": "Microphone and camera not in use",
+      "fields": {
+        "microphone": "false",
+        "camera": "false",
+        "muted": "false"
+      }
+    }
+  },
+  "activeApp": "com.apple.mail",
+  "draw": "bar"
+}

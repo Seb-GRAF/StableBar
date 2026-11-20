@@ -611,3 +611,86 @@ final class WidgetSetupTests: XCTestCase {
         .object(["id": .string("quota"), "version": .string("1"), "enabled": .bool(true), "settings": .object([:])])
     ]))
 }
+
+/// A preset's Store widgets open the same review as Found on your Mac, one at a time. Add puts a widget where the
+/// preset has it on its bar; Back leaves the widget out, and the preset keeps its built-in widgets.
+@Test @MainActor func setupReviewsAPresetsStoreWidgetsOneAtATime() async throws {
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    let index = LocalPackageIndex(fixture: fixture)
+    let nowPlaying = try await index.add(id: "now-playing", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"now-playing","type":"text","text":"Song","position":"left"}]}"#, name: "Now playing")
+    let weather = try await index.add(id: "weather", kind: "widgets",
+        configuration: #"{"widgets":[{"id":"weather","type":"text","text":"11°","position":"right"}]}"#, name: "Weather")
+    try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    defer { store.stop() }
+    store.configurationStore.reloadConfiguration()
+    store.packageStoreClient = PackageStoreClient(packages: fixture.packages, indexURL: index.url)
+    var system = SetupSystem()
+    system.isTrusted = { true }
+    system.calendarAccess = { .fullAccess }
+    system.menuBarHides = { true }
+    system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+    system.workspaceSource = { $0 ?? .spaces }
+    system.isInApplications = { false }
+    system.loginStatus = { .notRegistered }
+    system.storePackages = { _ in [nowPlaying, weather] }
+    let session = SetupSession(store: store, system: system)
+
+    await session.loadStoreWidgets()
+    session.toggle(.everyday)
+    await session.reviewStoreWidgets()
+    let review = try #require(session.review)
+    #expect(review.inspection.manifest.id == "now-playing")
+    // The review installs the package before it hands it to setup.
+    session.add(try fixture.packages.install(review.inspection.directory), settings: [:])
+    await session.endReview()
+    #expect(session.review?.inspection.manifest.id == "weather")
+    await session.endReview()
+    #expect(session.review?.inspection.manifest.id == nil)
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "now-playing", "sound", "battery", "date", "clock", "menu-bar-items"])
+    #expect(store.configuration?.widgets.first { $0.id == "now-playing" }?.position == .center)
+    session.finish()
+    #expect(session.error == nil)
+    #expect(try fixture.document()["packages"] == .array([
+        .object(["id": .string("now-playing"), "version": .string("1"), "enabled": .bool(true), "settings": .object([:])])
+    ]))
+}
+
+/// Without the Store, a preset adds only its built-in widgets and names the Store widgets it leaves out. A Store widget
+/// that the Store suggests for some tools, such as AI usage for claude or codex, comes only when one of them is on PATH.
+@Test @MainActor func setupPresetsAddOnlyTheStoreWidgetsThisMacCanUse() async throws {
+    let index = try JSONDecoder().decode(PackageIndex.self, from: Data(#"""
+    {"packages":[{"id":"ai-usage","name":"AI usage","version":"1","archive":"a.tar.gz","sha256":""},
+                 {"id":"dev-servers","name":"Development servers","version":"1","archive":"d.tar.gz","sha256":""}],
+     "suggestions":[{"when":{"tools":["claude","codex"]},"packages":["ai-usage"]}]}
+    """#.utf8))
+    let catalog = PackageCatalog(entries: index.packages, suggestions: index.suggestions)
+    #expect(catalog.storeWidgets(suggested: []).map(\.id) == ["dev-servers"])
+    #expect(catalog.storeWidgets(suggested: ["ai-usage"]).map(\.id) == ["ai-usage", "dev-servers"])
+
+    let fixture = try ThemeGalleryFixture()
+    defer { fixture.close() }
+    try fixture.write(#"{"widgets":[]}"#, to: fixture.url)
+    let store = BarStore(configurationURL: fixture.url, themesDirectory: fixture.themes)
+    defer { store.stop() }
+    store.configurationStore.reloadConfiguration()
+    func storeWidgets(_ session: SetupSession) -> [String] {
+        session.preferences.widgetSets.compactMap { if case let .store(id, _, _, _) = $0 { id } else { nil } }
+    }
+    for (listed, developer, leftOut) in [(catalog.storeWidgets(suggested: []) as [PackageIndex.Entry]?, ["dev-servers"], [String]()),
+                                         (nil, [], ["Now playing", "Weather"])] {
+        var system = SetupSystem()
+        system.defaults = try #require(UserDefaults(suiteName: "StableBarTests.\(UUID().uuidString)"))
+        system.workspaceSource = { $0 ?? .spaces }
+        system.storePackages = { _ in listed }
+        let session = SetupSession(store: store, system: system)
+        await session.loadStoreWidgets()
+        session.toggle(.developer)
+        #expect(storeWidgets(session) == developer)
+        #expect(session.leftOut(.everyday) == leftOut)
+        #expect(session.leftOut(.minimal).isEmpty)
+        session.toggle(.developer)
+    }
+}

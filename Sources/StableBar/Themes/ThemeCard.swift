@@ -242,6 +242,7 @@ struct ThemeSampleBar: View {
             let style = resolveStyle([look.defaults, look.roleStyle(widget.role), widget.barStyle])
             WidgetSampleContent(widget: widget, inheritedStyle: style.inheritedByBlocks)
                 .modifier(ThemeSampleTile(style: style))
+                .layoutPriority(1)
         }
     }
 

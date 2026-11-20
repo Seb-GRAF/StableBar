@@ -26,8 +26,7 @@
   "setup": {
     "step": "look",
     "placement": "top",
-    "menuBarHides": true,
-    "notch": false
+    "menuBarHides": true
   },
   "appearances": [
     "dark"

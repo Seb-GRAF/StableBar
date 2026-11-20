@@ -391,7 +391,6 @@ enum SceneRenderer {
         system.workspaceSource = { $0 ?? .spaces }
         system.windowManagerRuns = { false }
         system.hasBattery = { setup.battery }
-        system.hasNotchedDisplay = { setup.notch }
         system.isInApplications = { setup.inApplications }
         system.previewsOnTheBar = false
         system.checkWorkspaces = { source, _ in
@@ -399,6 +398,7 @@ enum SceneRenderer {
         }
         system.yabaiSignalScript = YabaiSetupSignals.script()
         system.suggestedPackages = { _ in setup.suggested }
+        system.storePackages = { _ in setup.storeWidgets }
         let session = SetupSession(store: store, system: system,
                                    applicationMove: .sample(move, inApplications: setup.inApplications))
         defer { session.workspaceConnection.hide() }
@@ -413,6 +413,7 @@ enum SceneRenderer {
         }
         .task {
             if let placement = setup.placement { await session.place(placement) }
+            await session.loadStoreWidgets()
             if let preset = setup.preset { session.toggle(preset) }
             await session.loadSuggestions()
             choices.made = true

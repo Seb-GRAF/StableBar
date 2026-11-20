@@ -50,7 +50,8 @@ func changingOrDeselectingASetupPresetKeepsLaterChoices(preset: SetupPreferences
     session.toggle(preset)
     let presetChoices = preset.preferences(workspaces: session.workspaceSource, placement: .top, hasBattery: true)
     var expected = choices
-    expected.widgetSets = presetChoices.widgetSets
+    // Without an answer from the Store, a preset has only its built-in widgets.
+    expected.widgetSets = presetChoices.widgetSets.filter { if case .store = $0 { false } else { true } }
     #expect(session.preset == preset)
     #expect(session.preferences == expected)
     #expect(session.error == nil)
@@ -111,13 +112,13 @@ func setupFinishesWithKeptChoicesForMissingWidgets(preset: SetupPreferences.Pres
     session.finish()
     #expect(session.finished)
     #expect(session.error == nil)
-    let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))
-    #expect(!saved.widgets.contains { if case .clock = $0.content { true } else { false } })
+    // Workday's meeting names the theme's tokens, which only the loader resolves.
+    let saved = try #require(fixture.document()["widgets"]).decoded([[String: ConfigurationValue]].self)
+    #expect(!saved.contains { $0["type"] == .string("clock") })
     if preset == .workday {
-        #expect(saved.widgets.first { $0.id == "meeting" }?.enabled == false)
+        #expect(saved.first { $0["id"] == .string("meeting") }?["enabled"] == .bool(false))
     } else {
-        #expect(!saved.widgets.contains { $0.id == "meeting" })
-        #expect(!saved.providers.values.contains { $0.type == "calendar" })
+        #expect(!saved.contains { $0["type"] == .string("calendar") })
     }
     #expect(try fixture.document()["widgetOverrides"] == nil)
     #expect(logins().isEmpty)

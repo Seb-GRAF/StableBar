@@ -166,8 +166,6 @@ struct SetupSystem {
     var isTrusted: () -> Bool = { AXIsProcessTrusted() }
     var calendarAccess: () -> EKAuthorizationStatus = { EKEventStore.authorizationStatus(for: .event) }
     var hasBattery: () -> Bool = { PowerMonitor.hasInternalBattery() }
-    /// A notch as the bar sees one, so setup offers Notch exactly where the bar leaves a notch gap.
-    var hasNotchedDisplay: () -> Bool = { NSScreen.screens.map(BarDisplay.init).contains { $0.notch != nil } }
     /// Whether StableBar runs from an Applications folder, the only place it can open at login from.
     var isInApplications: () -> Bool = { appIsInApplications() }
     var loginStatus: () -> SMAppService.Status = { SMAppService.mainApp.status }
@@ -195,6 +193,12 @@ struct SetupSystem {
         let catalog = await client.catalog()
         let ids = catalog.suggestedIDs
         return catalog.widgets.filter { ids.contains($0.id) }
+    }
+    /// The Store's widgets presets can add on this Mac, or nil when the Store can't be reached. Scenes replace it so
+    /// drawing setup never downloads the Store's index.
+    var storePackages: @Sendable (PackageStoreClient) async -> [PackageIndex.Entry]? = { client in
+        let catalog = await client.catalog()
+        return catalog.errors[PackageSource.storeID] == nil ? catalog.storeWidgets(suggested: catalog.suggestedIDs) : nil
     }
 }
 
@@ -244,8 +248,6 @@ final class SetupSession {
     let workspaceConnection: SetupWorkspaceConnection
     /// Whether this Mac has an internal battery, which presets add Battery for.
     let hasBattery: Bool
-    /// Whether a connected display has a notch, refreshed when the screens change while setup shows.
-    private(set) var hasNotchedDisplay: Bool
     let currentThemeKey: String
     let applicationMove: ApplicationMoveController
     var step = 0
@@ -257,8 +259,15 @@ final class SetupSession {
     private(set) var suggestions: [PackageIndex.Entry] = []
     /// The key of the suggestion downloading for review.
     private(set) var downloading: String?
-    /// A picked suggestion's download, which setup shows for review before adding it, as Add here does.
-    var review: (inspection: WidgetPackageInspection, sourceID: String)?
+    /// A picked suggestion's download, or a preset's Store widget's, which setup shows for review before adding it, as
+    /// Add here does.
+    private(set) var review: (inspection: WidgetPackageInspection, sourceID: String, settings: [String: ConfigurationValue]?)?
+    /// The Store widgets presets can add on this Mac; nil until the Store answers, and when it can't be reached.
+    private(set) var storeEntries: [PackageIndex.Entry]?
+    /// The Store couldn't be reached, so presets add only their built-in widgets.
+    private(set) var storeUnreachable = false
+    /// The chosen preset's Store widgets still to review, the one on screen first, with the settings it starts from.
+    private var storeReviews: [(entry: PackageIndex.Entry, settings: [String: String])] = []
     /// The person's Open at login choice; nil until they make one.
     var openAtLogin: Bool?
     var loginStatus: SMAppService.Status
@@ -324,7 +333,6 @@ final class SetupSession {
         stableBarHidMenuBarAtStart = resume?.setup?.stableBarHidMenuBarAtStart ?? MenuBarAutoHide.turnedOnByStableBar(in: system.defaults)
         accessibilityAccess = system.isTrusted()
         hasBattery = system.hasBattery()
-        hasNotchedDisplay = system.hasNotchedDisplay()
         currentThemeKey = store.configurationStore.selectedThemeKey
         themes = ThemeCatalog(packages: store.configurationStore.configurationURL.deletingLastPathComponent().appending(path: "packages"),
                               themesDirectory: store.configurationStore.themesDirectory, selectedKey: currentThemeKey).choices
@@ -363,28 +371,91 @@ final class SetupSession {
             edits: (sessionEdits + store.configurationStore.sessionEdits.dropFirst(previewEditCount)).map(ApplicationMoveResume.Edit.init))
     }
 
-    /// Chooses `preset`, as its tile does, or the current bar again when it's the chosen one. On a Mac without an
-    /// internal battery, the preset leaves Battery out.
+    /// Chooses `preset`, as its tile does, or the current bar again when it's the chosen one. It has the Store widgets
+    /// the Store listed by then, which wait for `reviewStoreWidgets()`.
     func toggle(_ preset: SetupPreferences.Preset) {
         let selected = self.preset == preset
         self.preset = selected ? nil : preset
-        let choices = selected ? SetupPreferences()
-            : preset.preferences(workspaces: workspaceSource, placement: preferences.placement, hasBattery: hasBattery)
-        preferences = preferences.replacingPresetChoices(with: choices)
+        preferences = preferences.replacingPresetChoices(with: selected ? SetupPreferences() : choices(for: preset, placement: presetPlacement))
     }
 
-    /// The widget sets `preset`'s tile shows, for where the bar sits and for this Mac.
-    func shownWidgetSets(_ preset: SetupPreferences.Preset) -> [SetupPreferences.WidgetSet] {
-        preset.shownWidgetSets(workspaces: workspaceSource, placement: presetPlacement, hasBattery: hasBattery)
+    /// What `preset` adds where the bar sits on this Mac: without Battery on a Mac without one, and with only the Store
+    /// widgets the Store lists for it.
+    private func choices(for preset: SetupPreferences.Preset, placement: SetupPreferences.Placement) -> SetupPreferences {
+        var choices = preset.preferences(workspaces: workspaceSource, placement: placement, hasBattery: hasBattery)
+        choices.widgetSets.removeAll { set in
+            guard case let .store(id, _, _, _) = set else { return false }
+            return storeEntries?.contains { $0.id == id } != true
+        }
+        return choices
     }
 
-    var offeredPresets: [SetupPreferences.Preset] {
-        SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: preset)
+    /// The widget sets `preset` gives the bar, as its card draws them: the chosen preset's without those its review left out.
+    func widgetSets(_ preset: SetupPreferences.Preset) -> [SetupPreferences.WidgetSet] {
+        self.preset == preset ? preferences.widgetSets : choices(for: preset, placement: presetPlacement).widgetSets
     }
 
-    /// A display change updates the tiles without clearing a chosen preset, which stays available to deselect.
-    func refreshDisplays() {
-        hasNotchedDisplay = system.hasNotchedDisplay()
+    /// `preset`'s widgets for a card to draw with a theme's `tokens`, a Store widget as its symbol in the Store.
+    func sampleWidgets(_ preset: SetupPreferences.Preset, tokens: [String: ConfigurationValue]) -> [WidgetConfiguration] {
+        widgetSets(preset).flatMap { set -> [[String: ConfigurationValue]] in
+            guard case let .store(id, _, position, _) = set else { return set.widgets }
+            return [["id": .string(id), "type": .string("text"), "text": .string(""), "position": .string(position.rawValue),
+                     "icon": .string(storeEntries?.first { $0.id == id }?.symbol ?? "shippingbox")]]
+        }.map { try! substituteConfigurationReferences(.object($0), prefix: "@token.", values: tokens).decoded(WidgetConfiguration.self) }
+    }
+
+    /// The Store widgets `preset` leaves out because the Store can't be reached.
+    func leftOut(_ preset: SetupPreferences.Preset) -> [String] {
+        guard storeUnreachable else { return [] }
+        return preset.preferences(workspaces: workspaceSource, placement: presetPlacement).widgetSets.compactMap { set in
+            if case let .store(_, name, _, _) = set { name } else { nil }
+        }
+    }
+
+    /// Asks the Store once which widgets presets can add here.
+    func loadStoreWidgets() async {
+        guard storeEntries == nil, !storeUnreachable else { return }
+        if let entries = await system.storePackages(store.packageStoreClient) { storeEntries = entries } else { storeUnreachable = true }
+    }
+
+    /// Reviews the chosen preset's Store widgets one at a time, as Found on your Mac does. One already on the bar, or
+    /// picked under Found on your Mac, needs no review.
+    func reviewStoreWidgets() async {
+        let onBar = Set(store.widgetPackageIDs.values)
+        storeReviews = preferences.widgetSets.compactMap { set in
+            guard case let .store(id, _, _, settings) = set, !onBar.contains(id), !preferences.packages.contains(where: { $0.id == id }),
+                  let entry = storeEntries?.first(where: { $0.id == id }) else { return nil }
+            return (entry, settings)
+        }
+        await reviewNextStoreWidget()
+    }
+
+    private func reviewNextStoreWidget() async {
+        guard let (entry, settings) = storeReviews.first else { return }
+        downloading = entry.key
+        defer { downloading = nil }
+        do {
+            let inspection = try await store.packageStoreClient.packageForAdding(entry)
+            // Settings saved for the package earlier win over the preset's.
+            let saved = try WidgetSetup(store: store).savedSettings(for: inspection.manifest)
+            review = (inspection, entry.sourceID, settings.mapValues(ConfigurationValue.string).merging(saved) { $1 })
+            error = nil
+        } catch {
+            self.error = errorMessage(error)
+            await endReview()
+        }
+    }
+
+    /// Closes the review, once Add has added its package or with Back. A preset's Store widget that wasn't added leaves
+    /// the preset, whose built-in widgets stay, and its next Store widget comes up.
+    func endReview() async {
+        review = nil
+        guard let entry = storeReviews.first?.entry else { return }
+        storeReviews.removeFirst()
+        if !preferences.storeWidgets.contains(where: { $0.id == entry.id }) {
+            preferences.widgetSets.removeAll { if case let .store(id, _, _, _) = $0 { id == entry.id } else { false } }
+        }
+        await reviewNextStoreWidget()
     }
 
     func loadSuggestions() async {
@@ -402,16 +473,18 @@ final class SetupSession {
         downloading = entry.key
         defer { downloading = nil }
         do {
-            review = (try await store.packageStoreClient.packageForAdding(entry), entry.sourceID)
+            review = (try await store.packageStoreClient.packageForAdding(entry), entry.sourceID, nil)
             error = nil
         } catch {
             self.error = errorMessage(error)
         }
     }
 
-    /// Adds a suggestion its review installed, with the settings the review chose. Finish setup saves it.
+    /// Adds a suggestion, or the preset's Store widget, that its review installed, with the settings the review chose.
+    /// Finish setup saves it.
     func add(_ inspection: WidgetPackageInspection, settings: [String: ConfigurationValue]) {
-        preferences.packages.append(.init(id: inspection.manifest.id, version: inspection.manifest.version, settings: settings))
+        let package = SetupPreferences.Package(id: inspection.manifest.id, version: inspection.manifest.version, settings: settings)
+        if storeReviews.first?.entry.id == package.id { preferences.storeWidgets.append(package) } else { preferences.packages.append(package) }
     }
 
     /// The source the previewed bar's Workspaces uses; nil while it shows no Workspaces. The preview has the
@@ -475,12 +548,10 @@ final class SetupSession {
         return placement == .belowMenuBar || base?.bar.belowMenuBar == true ? .belowMenuBar : .current
     }
 
-    /// What setup previews and saves: the choices, without Menu bar items while presets apply below the menu bar, which
-    /// the edits can't tell from an earlier setup's offset. The choices themselves keep them for a move to the top edge.
+    /// What setup previews and saves: the choices, with window clearance when setup recommends it.
     private var applied: SetupPreferences {
         var applied = preferences
         if applied.keepWindowsClear == nil && recommendsWindowClearance { applied.keepWindowsClear = true }
-        if presetPlacement == .belowMenuBar { applied.widgetSets.removeAll { $0 == .menuBarItems } }
         return applied
     }
 
@@ -605,7 +676,15 @@ final class SetupSession {
         for effect in effects {
             switch effect {
             case .move(let placement):
-                preferences.placement = placement
+                var moved = preferences
+                moved.placement = placement
+                if let preset {
+                    // The preset's bar for the new placement, still without the Store widgets its review left out.
+                    moved.widgetSets = choices(for: preset, placement: placement).widgetSets.filter { set in
+                        if case .store = set { preferences.widgetSets.contains(set) } else { true }
+                    }
+                }
+                preferences = moved
             case .showError(let message):
                 error = message
             case .checkAccess(let request):

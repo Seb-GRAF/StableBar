@@ -335,7 +335,7 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
 
 /// A bar at the offset earlier setups wrote for Below menu bar shows as below the menu bar in setup, even when its
 /// file says `belowMenuBar: false`, so a preset there leaves out Menu bar items, in its tile and on the bar alike,
-/// without changing the stored placement or the preset's own widgets.
+/// without changing the stored placement.
 @MainActor
 @Test func setupPresetsLeaveOutMenuBarItemsAtTheEarlierBelowMenuBarOffset() throws {
     let offset = max(NSStatusBar.system.thickness, NSScreen.main?.safeAreaInsets.top ?? 0)
@@ -344,10 +344,9 @@ func setupsPresetTilesFollowWhatThePresetAdds(configuration: String, placement: 
     defer { store.stop(); fixture.close() }
     #expect(session.placement == .belowMenuBar)
     #expect(session.presetPlacement == .belowMenuBar)
-    session.preset = .minimal
-    session.preferences = SetupPreferences.Preset.minimal.preferences(workspaces: .spaces, placement: session.preferences.placement)
+    session.toggle(.minimal)
     #expect(session.preferences.placement == .current)
-    #expect(session.preferences.widgetSets.contains(.menuBarItems))
+    #expect(!session.preferences.widgetSets.contains(.menuBarItems))
     #expect(store.configuration?.widgets.map(\.id).contains("menu-bar-items") == false)
     session.finish()
     let saved = try JSONDecoder().decode(Configuration.self, from: Data(contentsOf: fixture.url))

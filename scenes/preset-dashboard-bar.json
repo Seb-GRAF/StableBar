@@ -1,0 +1,293 @@
+{
+  "$schema": "../scene.schema.json",
+  "configuration": {
+    "theme": {
+      "id": "clear"
+    },
+    "workspaceSource": "aerospace",
+    "widgets": [
+      {
+        "id": "apple",
+        "type": "appleMenu",
+        "position": "left"
+      },
+      {
+        "id": "workspaces",
+        "type": "workspaces",
+        "position": "left"
+      },
+      {
+        "id": "app-menu",
+        "type": "appMenu",
+        "position": "left",
+        "expandOnHover": true
+      },
+      {
+        "id": "system-monitor",
+        "type": "system",
+        "position": "right",
+        "details": true,
+        "layout": {
+          "type": "row",
+          "style": {
+            "spacing": 10
+          },
+          "children": [
+            {
+              "type": "row",
+              "style": {
+                "spacing": 5
+              },
+              "children": [
+                {
+                  "type": "ring",
+                  "source": "cpu",
+                  "lineWidth": 2,
+                  "style": {
+                    "iconSize": 18,
+                    "background": "@token.track"
+                  },
+                  "children": [
+                    {
+                      "type": "symbol",
+                      "name": "cpu",
+                      "style": {
+                        "iconSize": 8.5
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "field",
+                  "field": "text"
+                }
+              ]
+            },
+            {
+              "type": "row",
+              "style": {
+                "spacing": 5
+              },
+              "children": [
+                {
+                  "type": "ring",
+                  "source": "memory",
+                  "lineWidth": 2,
+                  "style": {
+                    "iconSize": 18,
+                    "background": "@token.track"
+                  },
+                  "children": [
+                    {
+                      "type": "symbol",
+                      "name": "memorychip",
+                      "style": {
+                        "iconSize": 8.5
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "style": {
+                    "spacing": 0
+                  },
+                  "children": [
+                    {
+                      "type": "field",
+                      "field": "memory"
+                    },
+                    {
+                      "type": "text",
+                      "text": "%"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "battery",
+        "type": "battery",
+        "position": "right",
+        "details": true,
+        "layout": {
+          "type": "row",
+          "style": {
+            "spacing": 5
+          },
+          "children": [
+            {
+              "type": "ring",
+              "source": "percent",
+              "lineWidth": 2,
+              "style": {
+                "iconSize": 18,
+                "background": "@token.track"
+              },
+              "children": [
+                {
+                  "type": "symbol",
+                  "source": "icon",
+                  "style": {
+                    "iconSize": 8.5
+                  }
+                }
+              ]
+            },
+            {
+              "type": "field",
+              "field": "text"
+            }
+          ]
+        }
+      },
+      {
+        "id": "sound",
+        "type": "audio",
+        "position": "right"
+      },
+      {
+        "id": "date",
+        "type": "clock",
+        "position": "right",
+        "format": "EEE d MMM",
+        "role": "secondary",
+        "details": true
+      },
+      {
+        "id": "clock",
+        "type": "clock",
+        "position": "right",
+        "format": "HH:mm",
+        "role": "time",
+        "details": true
+      },
+      {
+        "id": "menu-bar-items",
+        "type": "menuBarItems",
+        "position": "right"
+      }
+    ]
+  },
+  "outputs": {
+    "audio": {
+      "text": "45%",
+      "icon": "speaker.wave.2.fill",
+      "value": 0.45,
+      "fields": {
+        "volumeAvailable": "true",
+        "muted": "false",
+        "volume": "45",
+        "device": "MacBook Pro Speakers"
+      },
+      "values": {
+        "volume": 0.45
+      }
+    },
+    "battery": {
+      "text": "82%",
+      "icon": "battery.75percent",
+      "values": {
+        "percent": 0.82
+      },
+      "fields": {
+        "percent": "82",
+        "state": "battery",
+        "present": "true",
+        "health": "normal",
+        "timeRemaining": "285"
+      }
+    },
+    "system": {
+      "text": "18%",
+      "icon": "cpu",
+      "value": 0.18,
+      "fields": {
+        "cpu": "18",
+        "memory": "54",
+        "pressure": "normal",
+        "thermal": "nominal"
+      },
+      "values": {
+        "cpu": 0.18,
+        "memory": 0.54
+      }
+    }
+  },
+  "workspaces": [
+    {
+      "workspace": "1",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "2",
+      "workspace-is-focused": true,
+      "workspace-is-visible": true,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "3",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    },
+    {
+      "workspace": "4",
+      "workspace-is-focused": false,
+      "workspace-is-visible": false,
+      "monitor-appkit-nsscreen-screens-id": 1
+    }
+  ],
+  "windows": [
+    {
+      "workspace": "1",
+      "app-name": "Safari",
+      "app-bundle-id": "com.apple.Safari",
+      "window-id": 1,
+      "window-title": "Start Page"
+    },
+    {
+      "workspace": "2",
+      "app-name": "Notes",
+      "app-bundle-id": "com.apple.Notes",
+      "window-id": 2,
+      "window-title": "Trip to Lisbon"
+    },
+    {
+      "workspace": "2",
+      "app-name": "Music",
+      "app-bundle-id": "com.apple.Music",
+      "window-id": 3,
+      "window-title": "Music"
+    },
+    {
+      "workspace": "3",
+      "app-name": "Mail",
+      "app-bundle-id": "com.apple.mail",
+      "window-id": 4,
+      "window-title": "Inbox"
+    },
+    {
+      "workspace": "3",
+      "app-name": "Calendar",
+      "app-bundle-id": "com.apple.iCal",
+      "window-id": 5,
+      "window-title": "Calendar"
+    },
+    {
+      "workspace": "4",
+      "app-name": "Messages",
+      "app-bundle-id": "com.apple.MobileSMS",
+      "window-id": 6,
+      "window-title": "Messages"
+    }
+  ],
+  "focusedWindow": 2,
+  "activeApp": "com.apple.Notes",
+  "draw": "bar"
+}

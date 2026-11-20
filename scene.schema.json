@@ -171,7 +171,7 @@
         },
         "preset": {
           "description": "The preset picked on the second step.",
-          "enum": ["minimal", "developer", "workday", "notch", "everything"]
+          "enum": ["everyday", "minimal", "developer", "workday", "dashboard"]
         },
         "menuBarHides": {
           "description": "Whether macOS hides its menu bar automatically. false by default.",
@@ -193,16 +193,29 @@
           "description": "Whether the Mac has an internal battery, which presets add Battery for. true by default.",
           "type": "boolean"
         },
-        "notch": {
-          "description": "Whether any connected display has a notch, which the Notch preset needs. true by default.",
-          "type": "boolean"
-        },
         "inApplications": {
           "description": "Whether StableBar runs from an Applications folder, which Open at login needs. true by default.",
           "type": "boolean"
         },
         "suggested": {
           "description": "Store index entries the look step shows under Found on your Mac, as if the Mac had their tools. None by default; the Store's index is never downloaded.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "version", "archive", "sha256"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "version": { "type": "string" },
+              "description": { "type": "string" },
+              "symbol": { "type": "string" },
+              "archive": { "type": "string" },
+              "sha256": { "type": "string" }
+            }
+          }
+        },
+        "storeWidgets": {
+          "description": "Store index entries for the widgets presets can add, as if the Store listed them for this Mac; presets draw them with their symbol. Without it, the Store can't be reached and presets leave out their Store widgets. The Store's index is never downloaded.",
           "type": "array",
           "items": {
             "type": "object",

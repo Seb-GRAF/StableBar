@@ -132,14 +132,14 @@ struct SceneFile: Decodable {
         var calendars = true
         /// Whether the Mac has an internal battery, which presets add Battery for.
         var battery = true
-        /// Whether any connected display has a notch, which the Notch preset needs.
-        var notch = true
         /// Whether StableBar runs from an Applications folder, which Open at login needs.
         var inApplications = true
         /// A canned connection result; drawing setup never queries a window manager or reads its config.
         var workspaceCheck: WorkspaceCheck?
         /// Store entries the look step shows under Found on your Mac, as if the Mac had their tools.
         var suggested: [PackageIndex.Entry] = []
+        /// The Store's widgets presets can add, as if the Store listed them; without them, the Store can't be reached.
+        var storeWidgets: [PackageIndex.Entry]?
 
         enum WorkspaceCheck: String, Decodable, CaseIterable {
             case connected, signalsMissing, reloadYabai, ipcOff, couldntCheck
@@ -360,8 +360,8 @@ struct SceneFile: Decodable {
 
 extension SceneFile.Setup: Decodable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, notch, inApplications, workspaceCheck,
-             suggested
+        case step, placement, preset, menuBarHides, accessibility, automation, calendars, battery, inApplications, workspaceCheck,
+             suggested, storeWidgets
     }
 
     /// Steps, placements and presets go by the names the app gives them, such as `tryIt` or `belowMenuBar`.
@@ -384,10 +384,10 @@ extension SceneFile.Setup: Decodable {
         automation = try values.decodeIfPresent(Bool.self, forKey: .automation) ?? true
         calendars = try values.decodeIfPresent(Bool.self, forKey: .calendars) ?? true
         battery = try values.decodeIfPresent(Bool.self, forKey: .battery) ?? true
-        notch = try values.decodeIfPresent(Bool.self, forKey: .notch) ?? true
         inApplications = try values.decodeIfPresent(Bool.self, forKey: .inApplications) ?? true
         workspaceCheck = try values.decodeIfPresent(WorkspaceCheck.self, forKey: .workspaceCheck)
         suggested = try values.decodeIfPresent([PackageIndex.Entry].self, forKey: .suggested) ?? []
+        storeWidgets = try values.decodeIfPresent([PackageIndex.Entry].self, forKey: .storeWidgets)
     }
 }
 

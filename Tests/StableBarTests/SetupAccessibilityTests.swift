@@ -5,30 +5,34 @@ import Testing
 @testable import StableBar
 
 @Suite @MainActor struct SetupAccessibilityTests {
+    /// Each preset's card names its widgets in bar order. Below the menu bar they leave out what the menu bar shows, and
+    /// on a Mac without a battery, Battery.
     @Test(arguments: SetupPreferences.Preset.allCases, [false, true])
     func presetLabelsNameWidgets(preset: SetupPreferences.Preset, hasBattery: Bool) {
         let expected: (heading: String, top: [String], below: [String]) = switch preset {
+        case .everyday: ("Everyday.",
+                        ["Apple menu", "App menus", "Now playing", "Weather", "Sound", "Battery", "Date and time", "Menu bar items"],
+                        ["Now playing", "Weather", "Sound", "Battery"])
         case .minimal: ("Minimal.",
-                       ["Apple menu", "App menus", "Sound", "Clock", "Menu bar items"],
-                       ["Workspaces", "System", "Sound"])
+                       ["Apple menu", "App menus", "Battery", "Date and time", "Menu bar items"],
+                       ["Workspaces", "Battery"])
         case .developer: ("Developer.",
-                         ["Apple menu", "Workspaces", "App menus", "System", "Sound", "Battery", "Clock", "Menu bar items"],
-                         ["Workspaces", "System", "Sound", "Battery"])
+                         ["Apple menu", "Workspaces", "App menus", "Development servers", "AI usage", "System", "Battery", "Date and time",
+                          "Menu bar items"],
+                         ["Workspaces", "Development servers", "AI usage", "System", "Battery"])
         case .workday: ("Workday.",
-                       ["Apple menu", "App menus", "Meetings", "Sound", "Battery", "Clock", "Menu bar items"],
-                       ["Workspaces", "System", "Meetings", "Sound", "Battery"])
-        case .notch: ("Notch.",
-                     ["Apple menu", "App menus", "Sound", "Battery", "Clock", "Menu bar items"],
-                     ["Workspaces", "System", "Sound", "Battery"])
-        case .everything: ("Everything.",
-                          ["Apple menu", "Workspaces", "App menus", "Meetings", "System", "Sound", "Battery", "Clock", "Menu bar items"],
-                          ["Workspaces", "System", "Meetings", "Sound", "Battery"])
+                       ["Apple menu", "App menus", "Meetings", "Dock badges", "Microphone & camera", "Sound", "Battery", "Date and time",
+                        "Menu bar items"],
+                       ["Meetings", "Dock badges", "Microphone & camera", "Sound", "Battery"])
+        case .dashboard: ("Dashboard.",
+                         ["Apple menu", "Workspaces", "App menus", "Now playing", "Weather", "System", "Battery", "Sound", "Date and time",
+                          "Menu bar items"],
+                         ["Workspaces", "Now playing", "Weather", "System", "Battery", "Sound"])
         }
         for placement in [SetupPreferences.Placement.top, .belowMenuBar] {
             let widgets = (placement == .top ? expected.top : expected.below).filter { hasBattery || $0 != "Battery" }
-            let sets = preset.shownWidgetSets(workspaces: .spaces, placement: placement, hasBattery: hasBattery)
-            #expect(preset.accessibilityLabel(widgetSets: sets, placement: placement)
-                    == "\(expected.heading) Widgets: \(widgets.joined(separator: ", ")).")
+            let sets = preset.preferences(workspaces: .spaces, placement: placement, hasBattery: hasBattery).widgetSets
+            #expect(preset.accessibilityLabel(widgetSets: sets) == "\(expected.heading) Widgets: \(widgets.joined(separator: ", ")).")
         }
     }
 

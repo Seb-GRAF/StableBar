@@ -862,12 +862,14 @@ func setupPresetsKeepTheChosenPlacement(preset: SetupPreferences.Preset) {
     let choices = SetupPreferences(appearance: .dark, placement: .belowMenuBar, clock: .twelveHour,
                                    theme: .package(id: "slate", version: "1"), widgetSets: [.meetings], workspaces: .yabai,
                                    keepWindowsClear: true, keepNotificationsClear: true, deferMeetings: true,
-                                   packages: [.init(id: "ai-usage", version: "1", settings: [:])])
+                                   packages: [.init(id: "ai-usage", version: "1", settings: [:])],
+                                   storeWidgets: [.init(id: "dock-badges", version: "1", settings: [:])])
     let replacement = SetupPreferences(appearance: .light, placement: .top, clock: .twentyFourHour,
                                         theme: .package(id: "glass", version: nil), widgetSets: [.system], workspaces: .spaces,
                                         keepWindowsClear: false, keepNotificationsClear: false,
-                                        packages: [.init(id: "weather", version: "1", settings: [:])])
-    let presetFields: Set<String> = ["widgetSets"]
+                                        packages: [.init(id: "weather", version: "1", settings: [:])],
+                                        storeWidgets: [.init(id: "now-playing", version: "1", settings: [:])])
+    let presetFields: Set<String> = ["widgetSets", "storeWidgets"]
     let otherFields: Set<String> = ["appearance", "placement", "clock", "theme", "workspaces", "keepWindowsClear", "keepNotificationsClear",
                                     "deferMeetings", "packages"]
     func fields(_ preferences: SetupPreferences) -> [String: String] {
@@ -912,6 +914,19 @@ private let bundledStarter: Data = {
     return try! Data(contentsOf: repository.appending(path: "Resources/config.json"))
 }()
 
+/// `data` as the bar loads it, over the included themes, whose tokens setup's widgets can name.
+private func loadedWithThemes(_ data: Data) throws -> Configuration {
+    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    var loader = ConfigurationLoader()
+    loader.themesDirectory = repository.appending(path: "Resources/themes")
+    return try loader.load(repository.appending(path: "Resources/config.json"), data: data)
+}
+
+private func widgetIDs(_ data: Data) throws -> [String] {
+    try JSONDecoder().decode([String: ConfigurationValue].self, from: data)["widgets"]!.decoded([[String: ConfigurationValue]].self)
+        .map { try $0["id"]!.decoded(String.self) }
+}
+
 /// The bundled starter's document without its theme, which a loader can't read in tests: they have no bundled themes.
 private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
     var document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
@@ -919,9 +934,6 @@ private func starterWithoutTheme() throws -> [String: ConfigurationValue] {
     return document
 }
 
-private func widgetIDs(_ data: Data) throws -> [String] {
-    try JSONDecoder().decode(Configuration.self, from: data).widgets.map(\.id)
-}
 
 @Test func setupsMenuBarStarterIsTheBundledStarter() throws {
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
@@ -1045,31 +1057,42 @@ private func widgetIDs(_ data: Data) throws -> [String] {
     #expect(try widgetIDs(SetupPreferences(placement: .top).applying(to: data)) == ["mine"])
 }
 
-/// A preset chosen while the bar sits below the menu bar still brings Menu bar items when the bar then moves to
-/// the top edge, as its tile shows there.
-@Test func setupPresetsChosenBelowTheMenuBarBringMenuBarItemsToTheTopEdge() throws {
-    let bar = Data(#"{"widgets":[{"id":"mine","type":"text","position":"left","text":"Hi"},{"id":"sound","type":"audio","position":"right"}]}"#.utf8)
-    for preset in SetupPreferences.Preset.allCases {
-        var preferences = preset.preferences(workspaces: .spaces, placement: .belowMenuBar)
-        #expect(try !widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
-        preferences.placement = .top
-        #expect(try widgetIDs(preferences.applying(to: bar)).contains("menu-bar-items"))
-    }
+/// A preset chosen while the bar sits below the menu bar becomes its top-edge bar when the bar then moves there: the
+/// Apple menu, the app's menus, the date and time and Menu bar items come back.
+@Test @MainActor func setupPresetsChosenBelowTheMenuBarFollowTheBarToTheTopEdge() async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appending(path: "config.json")
+    try Data(#"{"widgets":[]}"#.utf8).write(to: url)
+    let store = BarStore(configurationURL: url)
+    defer { store.stop() }
+    var hides = false
+    let system = SetupSystem(automationAccess: { _ in .allowed }, setMenuBarHidden: { hides = $0 }, menuBarHides: { hides },
+                             isTrusted: { true }, calendarAccess: { .fullAccess },
+                             defaults: try #require(UserDefaults(suiteName: UUID().uuidString)), workspaceSource: { _ in .spaces })
+    let session = SetupSession(store: store, system: system)
+    await session.place(.belowMenuBar)
+    session.toggle(.everyday)
+    #expect(session.preferences.widgetSets == [.sound, .batteryLevel])
+    await session.place(.top)
+    #expect(session.preferences.widgetSets == [.appleMenu, .appMenu(expandsOnHover: false), .sound, .batteryLevel, .dateAndTime, .menuBarItems])
+    #expect(store.configuration?.widgets.map(\.id) == ["apple", "app-menu", "sound", "battery", "date", "clock", "menu-bar-items"])
 }
 
-@Test func setupPresetsBelowTheMenuBarLeaveOutMenuBarItems() {
-    for preset in SetupPreferences.Preset.allCases {
-        #expect(!preset.shownWidgetSets(workspaces: .spaces, placement: .belowMenuBar).contains(.menuBarItems))
-        #expect(preset.shownWidgetSets(workspaces: .spaces, placement: .top).contains(.menuBarItems))
+/// An unchanged starter, on the top edge or below the menu bar, becomes exactly the preset's bar where the bar sits:
+/// the starter's clock gives way to the date and the time, and a widget the preset doesn't have, such as Minimal's Sound,
+/// goes.
+@Test(arguments: SetupPreferences.Preset.allCases)
+func anUnchangedStarterBecomesThePresetsBar(preset: SetupPreferences.Preset) throws {
+    let below = try SetupPreferences(placement: .belowMenuBar, workspaces: .spaces).applying(to: bundledStarter)
+    for starter in [bundledStarter, try SetupPreferences.withMacsClock(bundledStarter), below] {
+        for placement in [SetupPreferences.Placement.top, .belowMenuBar] {
+            let preferences = preset.preferences(workspaces: .spaces, placement: placement)
+            let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: preferences.applying(to: starter))
+            #expect(document["widgets"] == .array(preferences.widgetSets.flatMap(\.widgets).map(ConfigurationValue.object)))
+        }
     }
-}
-
-@Test func setupPresetsBelowTheMenuBarBuildOnTheBelowStarter() throws {
-    let developer = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .belowMenuBar)
-    #expect(try widgetIDs(developer.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "sound", "battery"])
-    let everything = SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .belowMenuBar)
-    // System is already on the starter; what a preset adds goes in front of Sound, as on any bar.
-    #expect(try widgetIDs(everything.applying(to: bundledStarter)) == ["workspaces", "system-monitor", "meeting", "sound", "battery"])
 }
 
 @Test func setupPresetsOnTheTopEdgeGiveTheSameBarFromEitherStarter() throws {
@@ -1092,12 +1115,12 @@ private func widgetIDs(_ data: Data) throws -> [String] {
 @Test func setupTreatsABarWithWidgetsFromElsewhereAsChanged() throws {
     let document = try JSONDecoder().decode([String: ConfigurationValue].self, from: bundledStarter)
     var resolved = document
-    resolved["widgets"] = .array((SetupPreferences.bundledMenuBarStarter + SetupPreferences.WidgetSet.meetings.widgets).map(ConfigurationValue.object))
+    resolved["widgets"] = .array((SetupPreferences.bundledMenuBarStarter + SetupPreferences.WidgetSet.privacy.widgets).map(ConfigurationValue.object))
     let configuration = try JSONDecoder().decode(Configuration.self, from: JSONEncoder().encode(resolved))
     let edits = try SetupPreferences.Preset.workday.preferences(workspaces: .spaces, placement: .belowMenuBar)
         .edits(in: configuration, document: document)
     let added = edits.filter { $0.action == .add }.compactMap { $0.properties?["id"] }
-    #expect(!added.contains(.string("meeting")))
+    #expect(!added.contains(.string("privacy")))
     #expect(!added.contains(.string("workspaces")))
 }
 
@@ -1189,20 +1212,6 @@ func setupKeepsStarterWidgetsChangedByOverrides(inProfile: Bool) throws {
     #expect(try JSONDecoder().decode(Configuration.self, from: updated).workspaceSource == .yabai)
 }
 
-@Test(arguments: SetupPreferences.Placement.allCases, [false, true])
-func setupOffersTheNotchPresetOnlyWithANotchOnTheTopEdge(placement: SetupPreferences.Placement, hasNotchedDisplay: Bool) {
-    let expected: [SetupPreferences.Preset] = placement == .top && hasNotchedDisplay
-        ? SetupPreferences.Preset.allCases : [.minimal, .developer, .workday, .everything]
-    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay) == expected)
-    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: .developer) == expected)
-}
-
-@Test(arguments: SetupPreferences.Placement.allCases, [false, true])
-func setupKeepsTheSelectedNotchPresetOffered(placement: SetupPreferences.Placement, hasNotchedDisplay: Bool) {
-    #expect(SetupPreferences.Preset.offered(on: placement, hasNotchedDisplay: hasNotchedDisplay, keeping: .notch)
-        == SetupPreferences.Preset.allCases)
-}
-
 @Test func setupKeepsItsButtonsAboveABottomDock() {
     let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
     #expect(SetupWindow.dockHeight(frame: screen, visibleFrame: CGRect(x: 0, y: 76, width: 1440, height: 791)) == 76)
@@ -1233,23 +1242,42 @@ func setupKeepsTheSelectedNotchPresetOffered(placement: SetupPreferences.Placeme
     #expect(document["workspaceSource"] == nil)
 }
 
-@Test(arguments: [false, true])
-func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throws {
-    let repository = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let data = starter ? try Data(contentsOf: repository.appending(path: "Resources/config.json")) : Data(#"""
-    { "widgets": [
-      {"id":"apple","type":"appleMenu","position":"left"},
-      {"id":"app-menu","type":"appMenu","position":"left"},
-      {"id":"clock","type":"clock","position":"right"}
-    ] }
-    """#.utf8)
-    let updated = try SetupPreferences.Preset.everything.preferences(workspaces: .spaces, placement: .current)
-        .applying(to: data)
-    let configuration = try JSONDecoder().decode(Configuration.self, from: updated)
-    #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "meeting", "system-monitor", "sound", "battery",
-                                                "clock", "menu-bar-items"])
-    #expect(configuration.widgets[0].content == .appleMenu(click: .menu))
+/// On a bar you changed, a preset adds its widgets beside yours and removes none. A clock of your own keeps out the
+/// preset's date and time, so the bar doesn't show the date twice; beside the preset's own time, the date joins it.
+@Test func setupPresetsAddToAChangedBarWithoutRemovingAnything() throws {
+    func bar(clock: String) -> Data {
+        Data(#"""
+        { "widgets": [
+          {"id":"apple","type":"appleMenu","position":"left"},
+          {"id":"app-menu","type":"appMenu","position":"left"},
+          {"id":"mine","type":"text","position":"right","text":"Hi"},
+          \#(clock)
+        ] }
+        """#.utf8)
+    }
+    let developer = SetupPreferences.Preset.developer.preferences(workspaces: .spaces, placement: .current)
+    let mine = try developer.applying(to: bar(clock: #"{"id":"clock","type":"clock","position":"right","format":"EEE d MMM  HH:mm"}"#))
+    let configuration = try JSONDecoder().decode(Configuration.self, from: mine)
+    #expect(configuration.widgets.map(\.id) == ["apple", "workspaces", "app-menu", "mine", "system-monitor", "battery", "clock",
+                                                "menu-bar-items"])
+    #expect(configuration.widgets.first { $0.id == "clock" }?.content == .clock(format: "EEE d MMM  HH:mm"))
     #expect(configuration.workspaceSource == .spaces)
+    let time = #"{"id":"clock","type":"clock","position":"right","format":"\#(SetupPreferences.timeFormat())","role":"time","details":true}"#
+    #expect(try widgetIDs(developer.applying(to: bar(clock: time)))
+            == ["apple", "workspaces", "app-menu", "mine", "system-monitor", "battery", "date", "clock", "menu-bar-items"])
+}
+
+/// Setup's 12- or 24-hour choice changes the hours of the time beside the date, and leaves the date alone.
+@Test func setupHourChoiceChangesOnlyTheTimeBesideTheDate() throws {
+    var preferences = SetupPreferences.Preset.everyday.preferences(workspaces: .spaces, placement: .top)
+    preferences.clock = .twelveHour
+    let twelve = try preferences.applying(to: bundledStarter)
+    let date = SetupPreferences.dateFormat("EEEdMMM", or: "EEE d MMM")
+    for (data, time) in [(twelve, "h:mm a"), (try SetupPreferences(clock: .twentyFourHour).applying(to: twelve), "HH:mm")] {
+        let widgets = try JSONDecoder().decode(Configuration.self, from: data).widgets
+        #expect(widgets.first { $0.id == "date" }?.content == .clock(format: date))
+        #expect(widgets.first { $0.id == "clock" }?.content == .clock(format: time))
+    }
 }
 
 @Test func setupReenablesMatchingWidgetsAndKeepsConflictingIDs() throws {
@@ -1282,7 +1310,7 @@ func setupEndsTheBarWithSoundBatteryTheClockAndMenuBarItems(starter: Bool) throw
 @Test func setupDefersMeetingsWithoutTurningOffExistingCalendars() throws {
     let preferences = SetupPreferences(widgetSets: [.meetings], deferMeetings: true)
     let new = try preferences.applying(to: Data(#"{"widgets":[]}"#.utf8))
-    let newConfiguration = try JSONDecoder().decode(Configuration.self, from: new)
+    let newConfiguration = try loadedWithThemes(new)
     #expect(newConfiguration.widgets[0].id == "meeting")
     #expect(!newConfiguration.widgets[0].enabled)
     #expect(newConfiguration.activeProviders.isEmpty)
@@ -1513,17 +1541,17 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
 }
 
 /// On a Mac without an internal battery, Battery would only ever show a plug and "AC", so the presets leave it out,
-/// both from what they add and from what their tiles show.
+/// however they draw it.
 @Test func presetsLeaveBatteryOutOnAMacWithoutABattery() {
     for preset in SetupPreferences.Preset.allCases {
         for placement in [SetupPreferences.Placement.top, .belowMenuBar] {
-            #expect(!preset.preferences(workspaces: .spaces, placement: placement, hasBattery: false).widgetSets.contains(.battery))
-            #expect(!preset.shownWidgetSets(workspaces: .spaces, placement: placement, hasBattery: false).contains(.battery))
+            func ids(hasBattery: Bool) -> [ConfigurationValue?] {
+                preset.preferences(workspaces: .spaces, placement: placement, hasBattery: hasBattery).widgetSets.flatMap(\.widgets).map { $0["id"] }
+            }
+            #expect(!ids(hasBattery: false).contains(.string("battery")))
+            #expect(ids(hasBattery: true).contains(.string("battery")))
         }
     }
-    let developer = SetupPreferences.Preset.developer
-    #expect(developer.preferences(workspaces: .spaces, placement: .top, hasBattery: true).widgetSets.contains(.battery))
-    #expect(developer.shownWidgetSets(workspaces: .spaces, placement: .top, hasBattery: true).contains(.battery))
 }
 
 /// Setup asks macOS once whether the Mac has a battery, and choosing a preset, as its tile does, follows what it said.
@@ -1542,7 +1570,7 @@ func setupNamesEachProfileThatControlsPlacement(profiles: String, controlling: [
                                  workspaceSource: { _ in .spaces })
         let session = SetupSession(store: store, system: system)
         #expect(session.hasBattery == hasBattery)
-        #expect(session.shownWidgetSets(.developer).contains(.battery) == hasBattery)
+        #expect(session.widgetSets(.developer).contains(.battery) == hasBattery)
         session.toggle(.developer)
         #expect(session.preset == .developer)
         #expect(session.preferences.widgetSets.contains(.battery) == hasBattery)

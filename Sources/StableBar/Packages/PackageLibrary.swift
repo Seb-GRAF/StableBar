@@ -834,4 +834,10 @@ extension PackageCatalog {
                 || suggestion.apps.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
         }.flatMap(\.packages))
     }
+
+    /// The Store's widgets this Mac can use: one the Store suggests for some tools or apps needs `suggested` to name it.
+    func storeWidgets(suggested: Set<String>) -> [PackageIndex.Entry] {
+        let needsTools = Set(suggestions.flatMap(\.packages))
+        return widgets.filter { $0.sourceID == PackageSource.storeID && (!needsTools.contains($0.id) || suggested.contains($0.id)) }
+    }
 }

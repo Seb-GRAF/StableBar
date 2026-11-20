@@ -4,6 +4,8 @@ import Foundation
 struct ThemePreview: Sendable {
     let light: Configuration
     let dark: Configuration
+    /// The theme's tokens, which widgets drawn in its look can name.
+    let tokens: [String: ConfigurationValue]
 
     init(choice: ThemeChoice, themesDirectory: URL?) throws {
         var loader = ConfigurationLoader()
@@ -22,6 +24,7 @@ struct ThemePreview: Sendable {
         }
         light = try drawn("light")
         dark = try drawn("dark")
+        tokens = try layer.values["tokens"]?.decoded([String: ConfigurationValue].self) ?? [:]
     }
 
     func configuration(for appearance: BarAppearance) -> Configuration {

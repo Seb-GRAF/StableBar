@@ -125,7 +125,6 @@ struct SetupTourView: View {
         // setup's own change lands.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             currentMenuBarHeight = menuBarHeight()
-            session.refreshDisplays()
         }
         .onChange(of: session.menuBarHides) { currentMenuBarHeight = menuBarHeight() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -452,6 +451,10 @@ struct SetupTourView: View {
                             Text("Presets add widgets and never remove yours.").font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
                         } content: {
                             presets
+                            if session.storeUnreachable {
+                                Text("The Store can't be reached, so presets add only their built-in widgets.")
+                                    .font(.system(size: 12)).foregroundStyle(.white.opacity(0.45))
+                            }
                             if !session.suggestions.isEmpty { suggestions }
                         }
                         section("Theme") {
@@ -473,7 +476,10 @@ struct SetupTourView: View {
                             themes
                         }
                     }
-                    .task { await session.loadSuggestions() }
+                    .task {
+                        await session.loadStoreWidgets()
+                        await session.loadSuggestions()
+                    }
                 case .touches: access
                 case .permissions: permissions
                 default: hints
@@ -553,54 +559,44 @@ struct SetupTourView: View {
     }
 
     private var presets: some View {
-        HStack(spacing: 12) {
-            ForEach(session.offeredPresets, id: \.self) { preset in
+        let preview = previews[session.store.configurationStore.selectedThemeKey]
+        return VStack(spacing: 6) {
+            ForEach(SetupPreferences.Preset.allCases, id: \.self) { preset in
                 let selected = session.preset == preset
-                let sets = session.shownWidgetSets(preset)
+                let leftOut = session.leftOut(preset)
                 SetupTile(selected: selected) {
-                    session.toggle(preset)
+                    Task {
+                        await session.loadStoreWidgets()
+                        session.toggle(preset)
+                        await session.reviewStoreWidgets()
+                    }
                 } label: {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Image(systemName: preset.symbol).font(.system(size: 15))
-                            Spacer()
-                            if selected { Image(systemName: "checkmark.circle.fill").font(.system(size: 15)) }
-                        }
-                        .frame(height: 20)
-                        .accessibilityHidden(true)
-                        Text(preset.title).font(.system(size: 15, weight: .semibold)).padding(.top, 10)
-                        Spacer(minLength: 12)
-                        HStack(spacing: 4) {
-                            if session.presetPlacement == .belowMenuBar {
-                                // Below the menu bar, the starter has Workspaces, System and Sound.
-                                let workspaces = SetupPreferences.WidgetSet.workspaces(session.workspaceSource)
-                                Image(systemName: workspaces.symbol).opacity(sets.contains(workspaces) ? 1 : 0.45)
-                                Spacer(minLength: 2)
-                                Image(systemName: SetupPreferences.WidgetSet.system.symbol).opacity(sets.contains(.system) ? 1 : 0.45)
-                                ForEach(sets.filter { if case .workspaces = $0 { false } else { $0 != .system && $0 != .menuBarItems } },
-                                        id: \.self) { Image(systemName: $0.symbol) }
-                            } else {
-                                Image(systemName: "apple.logo").opacity(0.45)
-                                ForEach(sets.filter { if case .workspaces = $0 { true } else { false } }, id: \.self) { Image(systemName: $0.symbol) }
-                                Image(systemName: "menubar.rectangle").opacity(0.45)
-                                Spacer(minLength: 2)
-                                ForEach(sets.filter { if case .workspaces = $0 { false } else { $0 != .menuBarItems } }, id: \.self) { Image(systemName: $0.symbol) }
-                                Image(systemName: "clock").opacity(0.45)
-                                if sets.contains(.menuBarItems) { Image(systemName: SetupPreferences.WidgetSet.menuBarItems.symbol) }
+                    HStack(spacing: 14) {
+                        Image(systemName: preset.symbol).font(.system(size: 15)).frame(width: 20).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(preset.title).font(.system(size: 15, weight: .semibold))
+                            if !leftOut.isEmpty {
+                                Text("Without \(ListFormatter.localizedString(byJoining: leftOut))")
+                                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55)).fixedSize(horizontal: false, vertical: true)
                             }
                         }
-                        .font(.system(size: 8.5, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .padding(.horizontal, 7)
-                        .frame(height: 22)
-                        .background(.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 6))
-                        .accessibilityHidden(true)
+                        .frame(width: session.storeUnreachable ? 240 : 130, alignment: .leading)
+                        if let preview {
+                            SetupSampleBar(look: preview.configuration(for: barAppearance), widgets: session.sampleWidgets(preset, tokens: preview.tokens))
+                                .frame(height: 30)
+                                .background(SampleWallpaper())
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .environment(\.colorScheme, barAppearance.colorScheme)
+                                .accessibilityHidden(true)
+                        }
+                        Image(systemName: "checkmark.circle.fill").font(.system(size: 15)).opacity(selected ? 1 : 0).accessibilityHidden(true)
                     }
-                    .padding(14)
-                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 140, maxHeight: 140, alignment: .topLeading)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
                 }
-                .help("Adds \(ListFormatter.localizedString(byJoining: sets.map(\.title))).")
-                .accessibilityLabel(preset.accessibilityLabel(widgetSets: sets, placement: session.presetPlacement))
+                .disabled(session.downloading != nil)
+                .help(preset.pitch)
+                .accessibilityLabel(preset.accessibilityLabel(widgetSets: session.widgetSets(preset)))
             }
         }
     }
@@ -650,15 +646,18 @@ struct SetupTourView: View {
         }
     }
 
-    /// The review Add here shows, for a suggestion picked under Found on your Mac.
-    private func suggestionReview(_ review: (inspection: WidgetPackageInspection, sourceID: String)) -> some View {
+    /// The review Add here shows, for a suggestion picked under Found on your Mac or a preset's Store widget.
+    private func suggestionReview(_ review: (inspection: WidgetPackageInspection, sourceID: String, settings: [String: ConfigurationValue]?)) -> some View {
         ZStack {
             Color.black.opacity(0.55)
             VStack(alignment: .leading, spacing: 10) {
                 PackagesView(store: session.store, reviewing: review.inspection, reviewingSourceID: review.sourceID,
-                             onEnable: { session.add($0, settings: $1) }, onAdded: { session.review = nil },
+                             reviewingSettings: review.settings,
+                             onEnable: { session.add($0, settings: $1) }, onAdded: { Task { await session.endReview() } },
                              onWorkingChanged: { reviewIsWorking = $0 })
-                Button("Back") { session.review = nil }
+                    // A preset's next Store widget opens a review of its own.
+                    .id(review.inspection.manifest.versionKey)
+                Button("Back") { Task { await session.endReview() } }
                     .keyboardShortcut(.cancelAction)
                     .disabled(reviewIsWorking)
             }
@@ -669,11 +668,15 @@ struct SetupTourView: View {
         }
     }
 
+    private var barAppearance: BarAppearance {
+        session.store.configuration?.bar.appearance ?? (session.store.configurationStore.context.appearance == "dark" ? .dark : .light)
+    }
+
     private var themes: some View {
         let choices = session.themes
         let selected = session.store.configurationStore.selectedThemeKey
         let index = choices.firstIndex { $0.key == selected } ?? 0
-        let appearance = session.store.configuration?.bar.appearance ?? (session.store.configurationStore.context.appearance == "dark" ? .dark : .light)
+        let appearance = barAppearance
         return HStack(spacing: 16) {
             roundButton("chevron.left", label: "Previous theme") {
                 choose(choices[(index + choices.count - 1) % choices.count])
@@ -718,12 +721,17 @@ struct SetupTourView: View {
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 Group {
-                    if let look = previews[choice.key]?.configuration(for: appearance) {
-                        GeometryReader { proxy in
-                            ThemeSampleBar(look: look)
-                                .frame(width: proxy.size.width * 2)
-                                .scaleEffect(0.5)
-                                .frame(width: proxy.size.width, height: proxy.size.height)
+                    if let preview = previews[choice.key] {
+                        let look = preview.configuration(for: appearance)
+                        if let preset = session.preset {
+                            SetupSampleBar(look: look, widgets: session.sampleWidgets(preset, tokens: preview.tokens))
+                        } else {
+                            GeometryReader { proxy in
+                                ThemeSampleBar(look: look)
+                                    .frame(width: proxy.size.width * 2)
+                                    .scaleEffect(0.5)
+                                    .frame(width: proxy.size.width, height: proxy.size.height)
+                            }
                         }
                     }
                 }
@@ -1310,6 +1318,29 @@ private struct SetupBackdrop: View {
             .scaleEffect(1.4 + 0.08 * sin(t / 7 + phase))
             .rotationEffect(.degrees(12 * sin(t / 11 + phase)))
             .offset(x: size.width * 0.06 * sin(t / 9 + phase), y: size.height * 0.06 * cos(t / 8 + phase))
+    }
+}
+
+/// A sample bar of `widgets` in `look`, scaled down to fit.
+private struct SetupSampleBar: View {
+    let look: Configuration
+    let widgets: [WidgetConfiguration]
+    @State private var barWidth: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geometry in
+            let scale = min(0.7, geometry.size.width / barWidth)
+            ThemeSampleBar(look: look, widgets: widgets)
+                .frame(width: geometry.size.width / scale)
+                .scaleEffect(scale)
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .background {
+                    ThemeSampleBar(look: look, widgets: widgets)
+                        .fixedSize()
+                        .hidden()
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { barWidth = $0 }
+                }
+        }
     }
 }
 
